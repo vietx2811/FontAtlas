@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "font_name": "Source Code Pro Regular",
+    "file_path": "fonts/samples/source_code_pro.ttf"
+  },
+  "basic_metrics": {
+    "font_name": "Source Code Pro Regular",
+    "units_per_em": 1000,
+    "x_height": 486,
+    "cap_height": 660,
+    "x_height_ratio": 0.7363636363636363,
+    "ascender": 984,
+    "descender": -273,
+    "bounding_box": [
+      -193,
+      -454,
+      793,
+      1060
+    ],
+    "width_mean": 0.6000000000000001,
+    "width_variance": 1.1102230246251565e-16,
+    "width_min": 0.6,
+    "width_max": 0.6
+  },
+  "unicode_coverage": {
+    "total_glyphs": 1334,
+    "unicode_ranges": {
+      "Basic Latin": 0.9895833333333334,
+      "Latin-1 Supplement": 0.75,
+      "Latin Extended-A": 1.0,
+      "Latin Extended-B": 0.23076923076923078,
+      "Vietnamese": 0.8686868686868687
+    },
+    "supports_vietnamese": false,
+    "supports_latin_extended": true
+  },
+  "metadata_layer": {
+    "font_internal": {
+      "copyright": "© 2023 Adobe (http://www.adobe.com/), with Reserved Font Name ‘Source’",
+      "family": "Source Code Pro",
+      "subfamily": "Regular",
+      "full_name": "Source Code Pro Regular",
+      "version": "Version 1.026;hotconv 1.1.0;makeotfexe 2.6.0",
+      "license_url": "https://openfontlicense.org",
+      "source": "Font name table (embedded)"
+    }
+  }
+}

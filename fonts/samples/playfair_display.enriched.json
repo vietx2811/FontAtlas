@@ -1,0 +1,74 @@
+{
+  "metadata": {
+    "font_name": "Playfair Display Regular",
+    "file_path": "fonts/samples/playfair_display.ttf"
+  },
+  "basic_metrics": {
+    "font_name": "Playfair Display Regular",
+    "units_per_em": 1000,
+    "x_height": 514,
+    "cap_height": 708,
+    "x_height_ratio": 0.7259887005649718,
+    "ascender": 1082,
+    "descender": -251,
+    "bounding_box": [
+      -267,
+      -241,
+      1211,
+      1159
+    ],
+    "width_mean": 0.5757500000000001,
+    "width_variance": 0.14509570780376974,
+    "width_min": 0.267,
+    "width_max": 0.905
+  },
+  "unicode_coverage": {
+    "total_glyphs": 659,
+    "unicode_ranges": {
+      "Basic Latin": 0.9895833333333334,
+      "Latin-1 Supplement": 0.7421875,
+      "Latin Extended-A": 1.0,
+      "Latin Extended-B": 0.14423076923076922,
+      "Vietnamese": 0.8686868686868687
+    },
+    "supports_vietnamese": false,
+    "supports_latin_extended": true
+  },
+  "metadata_layer": {
+    "google_fonts": {
+      "family": "Playfair",
+      "category": "Serif",
+      "designers": [
+        "Claus Eggers Sørensen"
+      ],
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "cyrillic-ext",
+        "latin",
+        "latin-ext",
+        "vietnamese"
+      ],
+      "variants": [],
+      "date_added": "2023-04-12",
+      "version": "unknown",
+      "last_modified": "2025-09-10",
+      "popularity_rank": 328,
+      "stroke": "Serif",
+      "classifications": [
+        "Display"
+      ],
+      "source": "Google Fonts Metadata JSON",
+      "is_google_font": true
+    },
+    "font_internal": {
+      "copyright": "Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name \"Playfair Display\".",
+      "family": "Playfair Display",
+      "subfamily": "Regular",
+      "full_name": "Playfair Display Regular",
+      "version": "Version 1.203",
+      "license_url": "http://scripts.sil.org/OFL",
+      "source": "Font name table (embedded)"
+    }
+  }
+}

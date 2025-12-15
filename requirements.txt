@@ -1,0 +1,49 @@
+# FontAtlas Backend Dependencies
+
+# Core font parsing
+fonttools>=4.47.0
+
+# Geometric analysis
+shapely>=2.0.2
+
+# OpenCLIP for perceptual embeddings
+open-clip-torch>=3.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+Pillow>=10.0.0
+
+# CLI libraries for interactive menu
+rich>=13.7.0
+typer>=0.12.0
+questionary>=2.0.0
+
+# Vector database
+qdrant-client>=1.7.0
+
+# Phase 3: Custom anatomy metrics
+scipy>=1.11.0              # Distance transform
+scikit-image>=0.21.0       # Skeletonization, morphology
+numpy>=1.24.0              # Ensure version for Phase 3
+
+# API framework
+fastapi>=0.108.0
+uvicorn[standard]>=0.25.0
+pydantic>=2.5.0
+
+# Data processing
+numpy>=1.26.0
+pandas>=2.1.0
+
+# Web scraping (metadata crawling)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+httpx>=0.25.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+
+# Development
+pytest>=7.4.0
+black>=23.12.0
+ruff>=0.1.9

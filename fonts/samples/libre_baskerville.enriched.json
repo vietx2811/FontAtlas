@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "font_name": "Libre Baskerville Regular",
+    "file_path": "fonts/samples/libre_baskerville.ttf"
+  },
+  "basic_metrics": {
+    "font_name": "Libre Baskerville Regular",
+    "units_per_em": 1000,
+    "x_height": 530,
+    "cap_height": 770,
+    "x_height_ratio": 0.6883116883116883,
+    "ascender": 970,
+    "descender": -270,
+    "bounding_box": [
+      -280,
+      -270,
+      1594,
+      1182
+    ],
+    "width_mean": 0.6914038461538462,
+    "width_variance": 0.19341110655557828,
+    "width_min": 0.304,
+    "width_max": 1.176
+  },
+  "unicode_coverage": {
+    "total_glyphs": 789,
+    "unicode_ranges": {
+      "Basic Latin": 0.9895833333333334,
+      "Latin-1 Supplement": 0.7421875,
+      "Latin Extended-A": 0.984375,
+      "Latin Extended-B": 0.7259615384615384,
+      "Vietnamese": 0.8787878787878788
+    },
+    "supports_vietnamese": false,
+    "supports_latin_extended": true
+  },
+  "metadata_layer": {
+    "font_internal": {
+      "copyright": "Copyright 2012 The Libre Baskerville Project Authors (https://github.com/impallari/Libre-Baskerville)",
+      "family": "Libre Baskerville",
+      "subfamily": "Regular",
+      "full_name": "Libre Baskerville Regular",
+      "version": "Version 2.005",
+      "license_url": "https://openfontlicense.org",
+      "source": "Font name table (embedded)"
+    }
+  }
+}

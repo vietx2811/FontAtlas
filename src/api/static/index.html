@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FontAtlas - Anatomy-Based Font Pairing</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔤 FontAtlas</h1>
+            <p class="subtitle">Anatomy-Based Font Pairing System</p>
+            <nav>
+                <a href="#fonts">Fonts</a>
+                <a href="#pairing">Find Pairs</a>
+                <a href="#anatomy">Anatomy</a>
+                <a href="/docs" target="_blank">API Docs</a>
+            </nav>
+        </header>
+
+        <!-- Font Browser Section -->
+        <section id="fonts">
+            <h2>📚 Font Library</h2>
+
+            <!-- Directory Selector -->
+            <div class="directory-selector">
+                <label for="font-directory">📁 Font Directory:</label>
+                <div class="directory-controls">
+                    <select id="font-directory" onchange="loadFontsFromDirectory()">
+                        <option value="../fonts/samples">../fonts/samples (default)</option>
+                    </select>
+                    <input type="text" id="custom-path" placeholder="Paste full directory path here..." />
+                    <button onclick="addCustomPath()" class="btn-primary">Add & Load</button>
+                    <button onclick="scanCurrentDirectory()" class="btn-warning">⚡ Scan & Analyze</button>
+                    <button onclick="indexToQdrant()" class="btn-success">🚀 Index to Qdrant</button>
+                    <button onclick="refreshDirectories()" class="btn-secondary">🔄</button>
+                </div>
+
+                <!-- Scan options -->
+                <div style="margin-top: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                        <input type="checkbox" id="force-rescan" style="cursor: pointer;">
+                        <span>Force rescan (regenerate existing profiles)</span>
+                    </label>
+                </div>
+
+                <!-- Progress Bar -->
+                <div id="scan-progress" class="scan-progress" style="display: none;">
+                    <div class="progress-header">
+                        <span id="progress-status">Scanning...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div id="progress-file" class="progress-file"></div>
+                </div>
+            </div>
+
+            <div id="font-list" class="font-grid">
+                <p>Loading fonts...</p>
+            </div>
+        </section>
+
+        <!-- Pairing Finder Section -->
+        <section id="pairing">
+            <h2>🔍 Find Complementary Pairs</h2>
+            <div class="pairing-controls">
+                <select id="query-font">
+                    <option value="">Select a font...</option>
+                </select>
+                <button onclick="findPairs()">Find Pairs</button>
+            </div>
+            <div id="pairing-results"></div>
+        </section>
+
+        <!-- Anatomy Explorer Section -->
+        <section id="anatomy">
+            <h2>📊 Anatomy Metrics</h2>
+            <div class="anatomy-controls">
+                <select id="anatomy-font">
+                    <option value="">Select a font...</option>
+                </select>
+                <button onclick="showAnatomy()">Show Metrics</button>
+            </div>
+            <div id="anatomy-display"></div>
+        </section>
+
+        <footer>
+            <p>FontAtlas v0.1.0 - Phase 3 | Custom Anatomy Metrics Active</p>
+            <p>Powered by Qdrant + OpenCLIP + Custom Geometry Analysis</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

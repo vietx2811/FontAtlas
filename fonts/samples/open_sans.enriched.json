@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "font_name": "Open Sans Regular",
+    "file_path": "fonts/samples/open_sans.ttf"
+  },
+  "basic_metrics": {
+    "font_name": "Open Sans Regular",
+    "units_per_em": 2048,
+    "x_height": 1096,
+    "cap_height": 1462,
+    "x_height_ratio": 0.7496580027359782,
+    "ascender": 2189,
+    "descender": -600,
+    "bounding_box": [
+      -1124,
+      -557,
+      2460,
+      2146
+    ],
+    "width_mean": 0.5753361628605769,
+    "width_variance": 0.15858071954985925,
+    "width_min": 0.25244140625,
+    "width_max": 0.92578125
+  },
+  "unicode_coverage": {
+    "total_glyphs": 1010,
+    "unicode_ranges": {
+      "Basic Latin": 0.9895833333333334,
+      "Latin-1 Supplement": 0.75,
+      "Latin Extended-A": 1.0,
+      "Latin Extended-B": 0.10096153846153846,
+      "Vietnamese": 0.8686868686868687
+    },
+    "supports_vietnamese": false,
+    "supports_latin_extended": true
+  },
+  "metadata_layer": {
+    "font_internal": {
+      "copyright": "Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)",
+      "family": "Open Sans",
+      "subfamily": "Regular",
+      "full_name": "Open Sans Regular",
+      "version": "Version 3.003",
+      "license_url": "http://scripts.sil.org/OFL",
+      "source": "Font name table (embedded)"
+    }
+  }
+}

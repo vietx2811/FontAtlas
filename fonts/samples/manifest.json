@@ -1,0 +1,26 @@
+{
+  "fonts": [
+    {
+      "family": "Roboto",
+      "desc": "geometric sans, low contrast"
+    },
+    {
+      "family": "Playfair Display",
+      "desc": "transitional serif, high contrast"
+    },
+    {
+      "family": "Source Code Pro",
+      "desc": "monospace"
+    },
+    {
+      "family": "Open Sans",
+      "desc": "humanist sans"
+    },
+    {
+      "family": "Libre Baskerville",
+      "desc": "transitional serif"
+    }
+  ],
+  "source": "Google Fonts CSS API",
+  "total": 5
+}
