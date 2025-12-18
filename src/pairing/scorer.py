@@ -79,8 +79,12 @@ class PairingScorer:
         Returns:
             Score 0.0-1.0
         """
-        var_a = font_a.get('basic_metrics', {}).get('width_variance', 0)
-        var_b = font_b.get('basic_metrics', {}).get('width_variance', 0)
+        var_a = font_a.get('basic_metrics', {}).get('width_variance')
+        var_b = font_b.get('basic_metrics', {}).get('width_variance')
+        
+        # Handle None values
+        if var_a is None or var_b is None:
+            return 0.5  # Neutral score when data missing
         
         diff = abs(var_a - var_b)
         
@@ -235,7 +239,7 @@ class PairingScorer:
             Tuple of (final_score, component_scores_dict)
         """
         # Calculate individual scores
-        x_height_score = cls.calculate_x_height_score(font_a, font_b)
+        x_height_score = cls.score_x_height_similarity(font_a, font_b)
         width_score = cls.calculate_width_variance_score(font_a, font_b)
         perceptual_score = cls.calculate_perceptual_score(font_a, font_b)
         

@@ -1,0 +1,538 @@
+# FontAtlas - UX/UI Feature Specification
+
+**Purpose:** Comprehensive specification for UI/UX redesign  
+**Version:** 2.0 (Post-Qdrant Enhancement)  
+**Target:** Figma Design Agent
+
+---
+
+## 🎯 Application Overview
+
+**FontAtlas** is a professional font analysis and pairing tool for designers and typographers.
+
+**Core Value Props:**
+- **Analyze** font anatomy with scientific precision
+- **Classify** fonts automatically (serif, sans, display, etc.)
+- **Pair** fonts using AI-powered complementary matching
+- **Compare** fonts side-by-side with metrics
+- **Browse** large font collections efficiently
+
+---
+
+## 📊 Feature Inventory
+
+### 1. Font Collection Browser
+
+**Purpose:** Explore and manage font collections
+
+**Features:**
+- List all fonts in a directory (grid or list view)
+- Switch between multiple font directories
+- Browse filesystem to add new directories
+- Search/filter fonts by name or category
+- Sort by name, category, or custom metrics
+
+**Data Displayed per Font:**
+- Font name (actual rendered font preview)
+- Sample text: "Aa Bb Cc 123"
+- Category badge (serif, sans-serif, display, monospace, script, decorative)
+- Key metrics preview:
+  - X-height ratio (e.g., "0.722")
+  - Width variance (e.g., "0.15")
+  - Stroke contrast (e.g., "1.8")
+  - Aperture openness (e.g., "0.55")
+
+**User Interactions:**
+- Click font card → View detailed anatomy
+- Hover font → Quick preview tooltip
+- Right-click → Context menu (pair with this, compare, favorite)
+
+**States:**
+- Loading: Skeleton cards with shimmer
+- Empty: "No fonts found - scan a directory"
+- Error: "Failed to load - try refreshing"
+
+---
+
+### 2. Directory Management
+
+**Features:**
+- Dropdown selector for saved directories
+- Browse button to explore filesystem
+- Path display with breadcrumb navigation
+- Recently used directories (localStorage)
+- Font count badge per directory
+
+**Data Displayed:**
+- Directory path (human-readable)
+- Font count: "30 fonts"
+- Profile status: "25 analyzed, 5 pending"
+
+**User Interactions:**
+- Select directory → Auto-load fonts
+- Browse → Open file picker modal
+- Add custom path → Validate & save
+
+---
+
+### 3. Font Scanning & Indexing
+
+**Features:**
+- Scan TTF files to generate complete profiles
+- Force rescan existing profiles
+- Index profiles to Qdrant vector database
+- Real-time progress tracking
+- Batch operations with error handling
+
+**Data Displayed:**
+- Current file being processed
+- Progress: "15/30 fonts (50%)"
+- Step indicator: "4/6 Analyzing stroke contrast"
+- Time estimate: "~2 min remaining"
+- Errors: List with dismissible notifications
+
+**User Interactions:**
+- "Scan Directory" button → Start scan
+- "Force Rescan" checkbox → Re-analyze existing
+- "Index to Qdrant" button → Build vector DB
+- Cancel button → Stop operation
+- View errors → Expand error log
+
+**States:**
+- Idle: Buttons enabled
+- Scanning: Progress bar + current file
+- Indexing: Spinner + count
+- Complete: Success message (auto-dismiss 3s)
+- Error: Red notification with retry
+
+---
+
+### 4. Font Anatomy View
+
+**Purpose:** Deep dive into font characteristics
+
+**Features:**
+- Full font specimen display
+- Detailed metrics breakdown
+- Anatomical feature visualization
+- Classification explanation
+- Vietnamese support indicator
+
+**Data Sections:**
+
+#### Basic Metrics
+- **X-height:** 520 units (0.722 ratio)
+  - Source: actual | estimated | virtual
+  - Visual: Bar chart comparing to cap height
+- **Cap height:** 720 units
+- **Width variance:** 0.15
+  - Visual: Range slider showing distribution
+- **Units per EM:** 1000
+
+#### Anatomy Metrics
+- **Stroke contrast:** 1.8 (Low Contrast)
+  - Visual: Sample glyphs showing thick/thin
+  - By-glyph breakdown: expandable table
+- **Aperture openness:** 0.55 (Moderate)
+  - Visual: C, e, a, c glyphs highlighted
+  - Classification rationale
+
+#### Classification
+- **Category:** Sans-Serif
+  - Confidence: 85%
+  - Reasoning: "Low stroke contrast (1.8), open apertures..."
+- **Google Fonts category:** sans-serif (if available)
+
+#### Unicode Coverage
+- Total glyphs: 250
+- Supports Vietnamese: ✅ Yes
+- Supports Latin Extended: ✅ Yes
+
+#### Font Specimen
+- Alphabet: A-Z a-z 0-9
+- Pangram: "The quick brown fox..."
+- Sample text paragraph (rendered in actual font)
+
+**User Interactions:**
+- Expand/collapse sections
+- Hover metric → Tooltip with definition
+- Click glyph → Enlarge view
+- Compare button → Add to comparison
+
+---
+
+### 5. Font Pairing Engine
+
+**Purpose:** Find complementary font pairs
+
+**Features:**
+- AI-powered pairing suggestions
+- Multi-factor scoring algorithm
+- Side-by-side comparison
+- Explanation of pairing rationale
+- Save favorite pairs
+
+**Data Displayed:**
+
+#### Query Font (Hero)
+- Large preview with sample text
+- Key metrics summary
+- Current category
+
+#### Pair Results (Cards)
+- Paired font preview
+- Pairing score: 0.85/1.0 ⭐⭐⭐⭐
+- Component breakdown:
+  - X-height harmony: 0.92
+  - Width contrast: 0.88
+  - Stroke contrast: 0.75
+  - Aperture balance: 0.80
+  - Perceptual similarity: 0.78
+  - Category bonus: 1.2x
+- Quick explanation: "Excellent contrast in width..."
+
+**User Interactions:**
+- Select font → "Find Pairs" button
+- Adjust result count: 3 | 5 | 10
+- Click pair → View detailed comparison
+- Save pair → Add to favorites
+- Try pair → Live preview with sample layout
+
+**States:**
+- Searching: "Finding pairs..." spinner
+- Results: Grid of 3-10 pairs
+- No results: "No good pairs found (try different font)"
+- Error: Retry with fallback
+
+---
+
+### 6. Font Comparison
+
+**Purpose:** Side-by-side metric comparison
+
+**Features:**
+- Compare 2-4 fonts simultaneously
+- Metric diff highlighting
+- Visual overlay comparison
+- Export comparison report
+
+**Data Layout:**
+- Split-screen or table view
+- Metrics rows with bars/charts
+- Diff indicators (↑↓ better/worse)
+- Sample text at same size
+
+**User Interactions:**
+- Add font → Search dropdown
+- Remove font → X button
+- Toggle view → Grid/Table/Overlay
+- Export → PDF or PNG
+
+---
+
+### 7. Settings & Preferences
+
+**Features:**
+- Default directory
+- Display preferences (grid size, sort order)
+- Performance options (cache size)
+- Export settings
+
+---
+
+## 🎨 Visual Design Requirements
+
+### Design Language: **Editorial Minimalism**
+**Keywords:** Clean, Sleek, Neutral, Sophisticated, Typography-focused
+
+### Color System (Neutral Palette)
+- **Base:**
+  - Background: Pure white (#FFFFFF) or Off-white (#FAFAFA)
+  - Surface: Light gray (#F5F5F5)
+  - Borders: Soft gray (#E0E0E0)
+  
+- **Text:**
+  - Primary: Charcoal (#1A1A1A)
+  - Secondary: Medium gray (#666666)
+  - Tertiary: Light gray (#999999)
+  
+- **Accents (Minimal):**
+  - Focus/Active: Refined black (#000000)
+  - Success: Subtle green (#2D5016)
+  - Error: Muted red (#8B0000)
+  - Warning: Warm amber (#B45309)
+
+- **Category badges (Monochromatic):**
+  - All categories use **grayscale differentiation**
+  - Serif: 90% black
+  - Sans-serif: 70% black
+  - Display: 50% black
+  - Monospace: 30% black
+  - Script: 15% black (very light)
+  - Decorative: 5% black (almost white)
+  - OR use subtle border variations instead of fills
+
+### Typography
+- **Interface font:** SF Pro, Inter, or Helvetica Neue
+- **Code/metrics:** SF Mono or JetBrains Mono
+- **Headings:** Editorial weight hierarchy (Light → Regular → Medium)
+- **Body:** 15-16px, generous line-height (1.6)
+- **Previews:** Actual font rendered
+
+### Component Patterns (Subtle & Refined)
+- **Cards:** 
+  - NO drop shadows
+  - 1px border in soft gray
+  - Generous padding (24-32px)
+  - Minimal corner radius (2-4px max)
+  
+- **Badges:** 
+  - Outlined, not filled
+  - Hairline borders (0.5px)
+  - Small caps typography
+  
+- **Progress:** 
+  - Hairline track
+  - Solid fill (no gradients)
+  - Smooth 400ms easing
+  
+- **Buttons:**
+  - Ghost: Underline on hover only
+  - Primary: Black fill, white text
+  - Secondary: 1px black border
+  - NO rounded pill buttons
+  
+- **Modals:** 
+  - Subtle backdrop (5% black overlay)
+  - NO blur (performance + cleanliness)
+  - Centered, max 600px width
+
+### Animation Philosophy: **Profound Subtlety**
+
+**Principles:**
+1. **Imperceptible at rest** - Only evident in motion
+2. **Purposeful** - Every animation serves UX
+3. **Consistent timing** - System-wide curves
+4. **No decoration** - Functional only
+
+**Animation Specs:**
+- **Duration:** 300-400ms (slower = more profound)
+- **Easing:** Custom cubic-bezier(0.4, 0.0, 0.2, 1) - Material deceleration
+- **Stagger:** 50ms delay between elements
+- **Opacity transitions:** 200ms fade
+- **Transform:** translateY(8px) on enter
+
+**What to Animate:**
+- ✅ Modal/panel slide-ins
+- ✅ Card hover lift (2px, subtle)
+- ✅ Progress bar fill
+- ✅ Data state transitions (loading → content)
+- ✅ Page transitions (crossfade)
+- ❌ NO bounce effects
+- ❌ NO scale transforms (except hover at 1.01x max)
+- ❌ NO color transitions on hover
+- ❌ NO spinning loaders (use linear progress)
+
+### Layout (Editorial Grid)
+- **Generous whitespace:** 80-120px margins
+- **Sidebar:** Fixed 240px, subtle divider line
+- **Main area:** Max 1400px centered
+- **Grid:** Asymmetric (2-col + 1-col pattern)
+- **Top bar:** Minimal, 64px height
+- **Detail panel:** Full-height slide-in (400px)
+
+---
+
+## 🔄 User Flows
+
+### Primary Flow: Find Font Pair
+1. User opens app → Sees font grid
+2. Clicks font card → Anatomy view opens
+3. Clicks "Find Pairs" → Loading state
+4. Results appear (5 pairs) → Sorted by score
+5. Clicks top pair → Comparison view
+6. Reviews metrics → Satisfied
+7. Saves pair → Added to favorites
+
+### Secondary Flow: Analyze New Fonts
+1. User has new font directory
+2. Clicks "Browse" → File picker
+3. Selects folder → Directory added
+4. Clicks "Scan" → Progress shows
+5. Scanning completes → Fonts appear
+6. Clicks "Index to Qdrant" → Fast loading enabled
+
+### Tertiary Flow: Compare Multiple Fonts
+1. User browsing fonts
+2. Right-clicks font → "Add to comparison"
+3. Selects 2 more fonts → Comparison icon shows badge (3)
+4. Clicks comparison icon → Comparison view
+5. Reviews side-by-side → Makes decision
+6. Clears comparison → Back to browsing
+
+---
+
+## 📱 Responsive Considerations
+
+### Desktop (1920x1080)
+- 4-6 font cards per row
+- Sidebar always visible
+- Detail panel as slide-in
+
+### Laptop (1440x900)
+- 3-4 cards per row
+- Collapsible sidebar
+- Detail as overlay
+
+### Tablet (768px)
+- 2 cards per row
+- Bottom nav
+- Full-screen details
+
+---
+
+## 🎭 Interaction States
+
+### Font Card States
+1. **Default:** Subtle shadow, white bg
+2. **Hover:** Lift (4px), stronger shadow
+3. **Active:** Border accent color
+4. **Loading:** Skeleton shimmer
+5. **Error:** Red border, warning icon
+
+### Button States
+1. **Default:** Solid color
+2. **Hover:** Darken 10%
+3. **Active:** Press down
+4. **Disabled:** 40% opacity, no pointer
+5. **Loading:** Spinner replacing icon
+
+### Data States
+1. **Loading:** Skeleton or spinner
+2. **Success:** Smooth fade-in
+3. **Error:** Red text + retry button
+4. **Empty:** Illustration + CTA
+
+---
+
+## 🏗️ Component Hierarchy
+
+```
+App
+├── TopBar
+│   ├── Logo
+│   ├── DirectorySelector
+│   ├── SearchBar
+│   └── UserActions (Settings, Help)
+├── Sidebar
+│   ├── Directories List
+│   ├── Recent Activity
+│   ├── Favorites
+│   └── Actions
+│       ├── Scan Button
+│       ├── Index Button
+│       └── Import/Export
+├── MainContent
+│   ├── FilterBar
+│   │   ├── Category Filter
+│   │   ├── Sort Dropdown
+│   │   └── View Toggle (Grid/List)
+│   └── FontGrid/FontList
+│       └── FontCard[]
+│           ├── Preview
+│           ├── Name
+│           ├── Category Badge
+│           └── Metrics Summary
+└── DetailPanel (Conditional)
+    ├── AnatomyView
+    ├── PairingView
+    └── ComparisonView
+```
+
+---
+
+## 🎯 Success Metrics (UX Goals)
+
+1. **Time to find pair:** < 30 seconds
+2. **Fonts visible:** 50+ on screen
+3. **Load time:** < 1 second (Qdrant)
+4. **Scan clarity:** Real-time progress
+5. **Error recovery:** 1-click retry
+
+---
+
+## 🎨 Design Inspiration & References
+
+**Visual Style:**
+- **Editorial:** Kinfolk magazine, Monocle layouts
+- **Typography:** Swiss design, Grid systems
+- **Minimalism:** Less but better (Dieter Rams)
+- **Refined:** SSENSE, APC e-commerce
+- **Professional:** Linear app, Figma interface
+
+**Animation References:**
+- **Stripe.com** - Subtle, purposeful motion
+- **Apple.com** - Deceleration curves
+- **Notion** - Smooth state transitions
+- **Superhuman** - Fast yet elegant
+- **Framer Motion** - Physics-based easing
+
+**Keywords:**
+- Neutral, Monochromatic, Editorial
+- Clean lines, Generous whitespace
+- Typography-driven, Content-first
+- Sophisticated, Professional, Timeless
+- Subtle motion, Profound simplicity
+
+---
+
+## 📐 Key Measurements (Editorial Scale)
+
+- **Font card:** 320x400px (generous)
+- **Preview text:** 56px size
+- **Metric labels:** 13px (readable)
+- **Spacing:** 24px base unit (airy)
+- **Border radius:** 2-4px (minimal)
+- **Border width:** 1px standard, 0.5px hairline
+- **Animation:** 300-400ms cubic-bezier(0.4, 0.0, 0.2, 1)
+- **Hover lift:** 2px translateY
+- **Grid gap:** 32px horizontal, 40px vertical
+
+---
+
+## 🚀 Future Features (Phase 2)
+
+- Font similarity clustering (UMAP visualization)
+- Custom pairing weights (adjust algorithm)
+- Batch export selected fonts
+- Font usage recommendations
+- Dark mode support
+- Keyboard shortcuts overlay
+
+---
+
+## 📝 Content Examples
+
+### Sample Font Names
+- Georgia, Interstate Bold, Montez Regular
+- Accent Graphic W00 Medium
+- Libre Baskerville Regular
+
+### Sample Categories
+- Serif, Sans-Serif, Display, Monospace, Script, Decorative
+
+### Sample Metrics
+- X-height ratio: 0.500 - 0.850
+- Width variance: 0.05 - 0.30
+- Stroke contrast: 1.0 - 5.0
+- Aperture: 0.30 - 0.80
+
+### Sample Pairing Scores
+- Excellent: 0.80 - 1.00 ⭐⭐⭐⭐⭐
+- Good: 0.60 - 0.79 ⭐⭐⭐⭐
+- Fair: 0.40 - 0.59 ⭐⭐⭐
+- Poor: < 0.40 ⭐⭐
+
+---
+
+This specification should provide everything needed to create a beautiful, functional UX/UI design! 🎨
