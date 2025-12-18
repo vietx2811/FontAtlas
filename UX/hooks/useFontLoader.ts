@@ -3,104 +3,105 @@
  * ===================
  * 
  * Loads font files dynamically using Tauri's FS plugin and FontFace API.
- * Caches loaded fonts to avoid reloading.
+ * Uses Blob URLs to avoid 'unsupported URL' errors while maintaining performance
+ * through lazy loading (isVisible).
  */
 
 import { useEffect, useState } from 'react';
+import { readFile } from '@tauri-apps/plugin-fs';
 
-// Global cache for loaded fonts
-const fontCache = new Map<string, string>();
-
-export function useFontLoader(fontId: string, filePath?: string): {
+export function useFontLoader(fontId: string, filePath?: string, isVisible: boolean = true): {
     fontFamily: string;
     isLoading: boolean;
 } {
     const [fontFamily, setFontFamily] = useState('sans-serif');
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
+        // 1. Reset/Skip if not visible
+        if (!isVisible) {
+            return;
+        }
+
         let mounted = true;
+        let objectUrl: string | null = null;
+
+        const fontFaceName = `font-${fontId}`;
+
+        // 2. Check if already loaded
+        if (checkFontLoaded(fontFaceName)) {
+            if (mounted) {
+                setFontFamily(fontFaceName);
+                setIsLoaded(true);
+            }
+            return;
+        }
+
+        if (!filePath) return;
 
         const loadFont = async () => {
-            const cacheKey = `font-${fontId}`;
-
-            // Check cache first
-            if (fontCache.has(cacheKey)) {
-                if (mounted) {
-                    setFontFamily(cacheKey);
-                    setIsLoading(false);
-                }
-                return;
-            }
+            setIsLoading(true);
 
             try {
-                // Check if we have a file path
-                if (!filePath) {
-                    if (mounted) setIsLoading(false);
-                    return;
-                }
-
-                // Check if running in Tauri
-                const isTauri = (window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__;
-
-                if (!isTauri) {
-                    // Browser mode - can't load local fonts
-                    if (mounted) setIsLoading(false);
-                    return;
-                }
-
-                // Read font file as binary
-                const { readFile } = await import('@tauri-apps/plugin-fs');
+                // 3. Read file content
                 const bytes = await readFile(filePath);
 
-                // Determine MIME type
-                const ext = filePath.toLowerCase().split('.').pop();
-                let mimeType = 'font/ttf';
-                if (ext === 'otf') mimeType = 'font/otf';
-                else if (ext === 'woff') mimeType = 'font/woff';
-                else if (ext === 'woff2') mimeType = 'font/woff2';
+                if (!mounted) return;
 
-                // Create blob URL
+                // 4. Create Blob URL
+                const mimeType = getMimeType(filePath);
                 const blob = new Blob([bytes], { type: mimeType });
-                const blobUrl = URL.createObjectURL(blob);
+                objectUrl = URL.createObjectURL(blob);
 
-                // Load via FontFace API
-                const fontFace = new FontFace(cacheKey, `url("${blobUrl}")`);
+                // 5. Load FontFace
+                const fontFace = new FontFace(fontFaceName, `url("${objectUrl}")`);
                 await fontFace.load();
                 document.fonts.add(fontFace);
 
-                // Cache for reuse
-                fontCache.set(cacheKey, blobUrl);
-
                 if (mounted) {
-                    setFontFamily(cacheKey);
+                    setFontFamily(fontFaceName);
                     setIsLoading(false);
+                    setIsLoaded(true);
                 }
+
             } catch (e) {
-                console.warn('Failed to load font:', fontId, e);
+                console.warn(`Failed to load font ${fontId} from ${filePath}:`, e);
                 if (mounted) setIsLoading(false);
             }
         };
 
         loadFont();
 
-        return () => { mounted = false; };
-    }, [fontId, filePath]);
+        // Cleanup
+        return () => {
+            mounted = false;
+            // Revoke immediately after loading to save memory, 
+            // relying on document.fonts to hold the data.
+            // Note: Keeping Object URL alive to ensuring rendering stability in Tauri.
+            // Revoking it too early can cause the font to disappear or fail to render.
+            // if (objectUrl) {
+            //    URL.revokeObjectURL(objectUrl);
+            // }
+        };
+    }, [fontId, filePath, isVisible]);
 
-    return { fontFamily, isLoading };
+    return {
+        fontFamily: isLoaded ? fontFamily : 'sans-serif',
+        isLoading: isVisible && !isLoaded
+    };
 }
 
-/**
- * Check if a font is already cached
- */
-export function isFontCached(fontId: string): boolean {
-    return fontCache.has(`font-${fontId}`);
+function checkFontLoaded(fontFamily: string): boolean {
+    return Array.from(document.fonts).some(f => f.family === fontFamily && f.status === 'loaded');
 }
 
-/**
- * Get cached font family name
- */
-export function getCachedFontFamily(fontId: string): string | null {
-    const key = `font-${fontId}`;
-    return fontCache.has(key) ? key : null;
+function getMimeType(path: string): string {
+    const ext = path.toLowerCase().split('.').pop();
+    switch (ext) {
+        case 'otf': return 'font/otf';
+        case 'woff': return 'font/woff';
+        case 'woff2': return 'font/woff2';
+        default: return 'font/ttf';
+    }
 }

@@ -14,18 +14,19 @@
       {
         "title": "FontAtlas - Font Discovery & Management",
         "width": 1400,
-        "height": 900,
+        "height": 920,
         "minWidth": 1000,
         "minHeight": 700,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "center": true
+        "center": true,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' blob: data:; img-src 'self' data: blob:; script-src 'self'"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' blob: data: asset: http://asset.localhost https://asset.localhost; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; script-src 'self'"
     }
   },
   "bundle": {

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './components/Sidebar';
 import { FontCard } from './components/FontCard';
 import { VirtualizedFontGrid } from './components/VirtualizedFontGrid';
@@ -14,6 +15,8 @@ import { MOCK_FONTS } from './constants';
 type ViewMode = 'grid' | 'map';
 
 const App: React.FC = () => {
+    // ... hooks
+
     // Library data hook (works with Tauri or web fallback)
     const {
         fonts: libraryFonts,
@@ -23,7 +26,9 @@ const App: React.FC = () => {
         refetch,
         search: searchFonts,
         scanFolder,
-        isDesktop
+        isDesktop,
+        loadMore,
+        filterByCategory
     } = useLibrary();
 
     // Transform library fonts to UI FontData format OR use mock fonts
@@ -60,26 +65,17 @@ const App: React.FC = () => {
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [isScanning, setIsScanning] = useState(false);
 
-    // Filter Logic
-    const filteredFonts = useMemo(() => {
-        return fonts.filter(font => {
-            const matchesCategory = selectedCategory === 'All' || font.category === selectedCategory;
-            const matchesSearch = font.name.toLowerCase().includes(searchQuery.toLowerCase());
-            return matchesCategory && matchesSearch;
-        });
-    }, [selectedCategory, searchQuery, fonts]);
-
     // Map data
     const mapNodes: FontMapNode[] = useMemo(() => {
         return generateMockMapData(
-            filteredFonts.map(f => ({
+            fonts.map(f => ({
                 id: f.id,
                 name: f.name,
                 category: f.category,
                 filePath: f.filePath
             }))
         );
-    }, [filteredFonts]);
+    }, [fonts]);
 
     // Handlers
     const handleSearch = useCallback(async (e: React.FormEvent) => {
@@ -88,6 +84,13 @@ const App: React.FC = () => {
             await searchFonts(searchQuery);
         }
     }, [searchQuery, searchFonts, isDesktop]);
+
+    const handleCategorySelect = useCallback(async (category: FontCategory | 'All') => {
+        setSelectedCategory(category);
+        if (isDesktop) {
+            await filterByCategory(category);
+        }
+    }, [filterByCategory, isDesktop]);
 
     // Folder scanning logic moved to Sidebar/useDirectories hook
 
@@ -105,7 +108,7 @@ const App: React.FC = () => {
             {/* Sidebar - fixed position */}
             <Sidebar
                 selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
+                onSelectCategory={handleCategorySelect}
                 fontCount={fonts.length}
                 onScanDirectory={scanFolder}
             />
@@ -113,9 +116,12 @@ const App: React.FC = () => {
             {/* Main Content - offset by sidebar width (w-64 = 16rem = 256px) */}
             <main className="md:ml-64 min-h-screen flex flex-col">
                 {/* Sticky Header/Action Bar */}
-                <header className="sticky top-0 z-20 flex items-center gap-4 px-6 py-3 border-b border-stone-200 bg-white/95 backdrop-blur-sm">
-                    {/* Search */}
-                    <div className="flex-1 max-w-md">
+                <header
+                    className="sticky top-0 z-20 px-6 py-3 border-b border-stone-200 bg-white/95 backdrop-blur-sm flex items-center gap-4"
+                    data-tauri-drag-region="true"
+                >
+                    {/* Search - Fixed width, no drag */}
+                    <div className="w-full max-w-md no-drag">
                         <form onSubmit={handleSearch} className="relative">
                             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                             <input
@@ -123,13 +129,13 @@ const App: React.FC = () => {
                                 placeholder="Search fonts..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 text-sm bg-stone-100 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400"
+                                className="w-full pl-9 pr-4 py-2 text-sm bg-stone-100 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-400 transition-all"
                             />
                         </form>
                     </div>
 
-                    {/* Filter Tabs - like mockup */}
-                    <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1">
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1 no-drag">
                         {['All', 'Serif', 'Sans', 'Mono', 'Display'].map((filter) => {
                             const getCategory = (f: string) => {
                                 if (f === 'All') return 'All';
@@ -142,7 +148,7 @@ const App: React.FC = () => {
                             return (
                                 <button
                                     key={filter}
-                                    onClick={() => setSelectedCategory(targetCategory)}
+                                    onClick={() => handleCategorySelect(targetCategory)}
                                     className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${selectedCategory === targetCategory
                                         ? 'bg-white shadow-sm text-stone-900'
                                         : 'text-stone-500 hover:text-stone-700'
@@ -155,7 +161,7 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-2 ml-4 no-drag">
                         {/* View toggle */}
                         <div className="flex bg-stone-100 rounded-lg p-0.5">
                             <button
@@ -173,8 +179,6 @@ const App: React.FC = () => {
                                 <Map size={16} />
                             </button>
                         </div>
-
-                        {/* Folder add moved to sidebar */}
 
                         <button
                             onClick={refetch}
@@ -198,10 +202,12 @@ const App: React.FC = () => {
                     {viewMode === 'grid' ? (
                         /* Grid View - Virtualized for performance */
                         <VirtualizedFontGrid
-                            fonts={filteredFonts}
+                            fonts={fonts}
                             selectedFontId={selectedFont?.id}
                             onFontSelect={handleFontSelect}
                             isLoading={isLoading}
+                            onLoadMore={loadMore}
+                            hasMore={fonts.length < fontCount}
                         />
                     ) : (
                         /* Map View */

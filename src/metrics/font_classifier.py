@@ -55,6 +55,23 @@ class FontClassifier:
         
         # Decision tree classification
         
+        # 0. Check PANOSE data if available (Golden Source)
+        panose = profile.get('panose')
+        if panose and len(panose) >= 2:
+            bFamilyType = panose[0]
+            bSerifStyle = panose[1]
+            
+            # Family Type: 2=Latin Text, 3=Latin Script, 4=Latin Decorative, 5=Latin Pictorial
+            if bFamilyType == 3: return 'script'
+            if bFamilyType == 4: return 'display' # or decorative
+            
+            # Serif Style (for Latin Text)
+            # 2-10 = Various Serifs
+            # 11-15 = Various Sans (Normal, Additive, Obtuse, etc)
+            if bFamilyType == 2:
+                if 2 <= bSerifStyle <= 10: return 'serif'
+                if 11 <= bSerifStyle <= 15: return 'sans-serif'
+        
         # 1. Check for Monospace (most distinctive)
         if width_variance is not None and width_variance < FontClassifier.MONOSPACE_WIDTH_VAR_MAX:
             return 'monospace'

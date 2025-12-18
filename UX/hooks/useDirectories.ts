@@ -102,13 +102,8 @@ export function useDirectories(
             setScanResult({ path, count: 0, success: false });
         } finally {
             setScanningPath(null);
-            // Only clear if NOT an error (error has its own timeout)
-            // But clearStatus wipes everything.
-            // We should rely on setError's timeout and simply NOT call clearStatus here if we errored.
-            // However, we don't track error state here easily.
-            // Better: Move setScanResult logic to be clear.
         }
-    }, [directories, onScanDirectory, saveDirectories, setStatus, clearStatus]);
+    }, [directories, onScanDirectory, saveDirectories, setStatus, clearStatus, setError]);
 
     // UI Action: Add Directory (via dialog)
     const addDirectory = useCallback(async () => {
@@ -155,16 +150,19 @@ export function useDirectories(
         }
 
         setIsClearing(true);
+        setStatus('Clearing library...');
         try {
             const deleted = await clearLibraryCallback();
             saveDirectories([]);
             setScanResult({ path: 'Library', count: deleted, success: true });
+            setStatus(`Cleared available fonts`, false);
+            setTimeout(clearStatus, 3000);
         } catch (e) {
             console.error('Failed to clear library:', e);
             setError(e instanceof Error ? e.message : 'Failed to clear library');
         } finally {
             setIsClearing(false);
-            // clearStatus(); // Don't wipe error
+            // Error cleared by timeout, Success cleared by timeout
         }
     }, [clearLibraryCallback, saveDirectories, setStatus, setError]);
 

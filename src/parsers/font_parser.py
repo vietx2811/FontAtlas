@@ -36,14 +36,87 @@ class FontParser:
         self.font = TTFont(self.font_path)
         self.font_name = self._get_font_name()
         
+    def _get_name_record(self, name_id: int) -> Optional[str]:
+        """Helper to get name record by ID."""
+        for record in self.font['name'].names:
+            if record.nameID == name_id:
+                return record.toUnicode()
+        return None
+
     def _get_font_name(self) -> str:
         """Extract human-readable font name from name table."""
-        name_table = self.font['name']
-        # Try to get full font name (nameID 4)
-        for record in name_table.names:
-            if record.nameID == 4:  # Full font name
-                return record.toUnicode()
-        return self.font_path.stem
+        # Try ID 4 (Full Name) -> ID 1 (Family Name)
+        name = self._get_name_record(4) or self._get_name_record(1) or self.font_path.stem
+        return name
+
+    def get_metadata(self) -> Dict:
+        """Extract explicit metadata."""
+        return {
+            'foundry': self._get_name_record(8),  # Manufacturer
+            'designer': self._get_name_record(9), # Designer
+            'license': self._get_name_record(13), # License
+            'version': self._get_name_record(5),  # Version string
+            'copyright': self._get_name_record(0), # Copyright
+        }
+
+    def get_weight_style(self) -> Dict:
+        """Extract weight and style information."""
+        os2 = self.font.get('OS/2')
+        head = self.font.get('head')
+        post = self.font.get('post')
+
+        # Weight
+        weight = 400
+        if os2:
+            weight = os2.usWeightClass
+
+        # Italic / Slant
+        is_italic = False
+        slant_angle = 0
+        
+        if head:
+           if (head.macStyle & 2): # Bit 1 is italic
+               is_italic = True
+        
+        if os2 and not is_italic:
+            if (os2.fsSelection & 1): # Bit 0 is italic
+                is_italic = True
+        
+        if post:
+            slant_angle = post.italicAngle
+            if slant_angle != 0 and not is_italic:
+                is_italic = True
+
+        return {
+            'weight': weight,
+            'is_italic': is_italic,
+            'slant_angle': slant_angle
+        }
+
+    def get_panose_data(self) -> Optional[List[int]]:
+        """Extract PANOSE classification numbers."""
+        os2 = self.font.get('OS/2')
+        if os2 and hasattr(os2, 'panose'):
+            # panose is an object with search capability only in some versions of fontTools?
+            # usually it has bFamilyType, bSerifStyle, etc.
+            # We want the raw 10 bytes if possible, or mapped values.
+            try:
+                p = os2.panose
+                return [
+                    p.bFamilyType,
+                    p.bSerifStyle,
+                    p.bWeight,
+                    p.bProportion,
+                    p.bContrast,
+                    p.bStrokeVariation,
+                    p.bArmStyle,
+                    p.bLetterForm,
+                    p.bMidline,
+                    p.bXHeight
+                ]
+            except:
+                return None
+        return None
     
     def get_basic_metrics(self) -> Dict:
         """
@@ -428,6 +501,9 @@ class FontParser:
             },
             'basic_metrics': self.get_basic_metrics(),
             'unicode_coverage': self.get_unicode_coverage(),
+            'metadata': self.get_metadata(), # Override/Extend standard metadata
+            'weight_style': self.get_weight_style(),
+            'panose': self.get_panose_data(),
         }
         
         return profile

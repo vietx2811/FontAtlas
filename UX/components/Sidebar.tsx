@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LayoutGrid, Settings, FolderOpen, Database, BarChart3, Info, Plus, Folder, ChevronRight, Cloud, HardDrive } from 'lucide-react';
 import { FontCategory } from '../types';
 import { CollectionsManager, type Collection } from './CollectionsManager';
@@ -47,16 +48,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
         <>
             <aside className="w-64 border-r border-stone-200 bg-white h-screen fixed left-0 top-0 flex flex-col z-30 hidden md:flex">
-                {/* Logo Header - matches main header: px-6 py-3 */}
-                <div className="flex items-center px-6 py-3 shrink-0">
+                {/* Drag Region for macOS Traffic Lights */}
+                <div
+                    className="absolute top-0 left-0 w-full h-10 z-50 bg-transparent cursor-default"
+                    data-tauri-drag-region="true"
+                />
+
+                {/* Logo Header - Added top padding to clear traffic lights if needed, or just align nicely */}
+                <div className="flex items-center px-6 pt-8 pb-3 shrink-0 relative z-40">
                     <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg mr-3 flex items-center justify-center">
                         <span className="text-white text-sm font-bold">F</span>
                     </div>
                     <span className="font-semibold text-lg text-stone-900 tracking-tight">FontAtlas</span>
                 </div>
 
-                {/* Main Nav - starts aligned with main content grid (after header border) */}
-                <div className="flex-1 overflow-y-auto pt-6 pb-4 px-4 space-y-6">
+                {/* Main Nav */}
+                <div className="flex-1 overflow-y-auto pt-2 pb-4 px-4 space-y-6">
 
                     {/* Library Section */}
                     <div>

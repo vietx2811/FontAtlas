@@ -8,8 +8,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Database, Cloud, HardDrive, Check, AlertCircle } from 'lucide-react';
 import { useSettings, type AppSettings } from '../hooks/useSettings';
+import { useStatus } from '../context/StatusContext';
 import { clearLibrary } from '../services/library';
 import { Loader2 } from 'lucide-react';
+import { ask, message } from '@tauri-apps/plugin-dialog';
 
 interface PreferencesPanelProps {
     isOpen: boolean;
@@ -21,6 +23,7 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
     const [isClearing, setIsClearing] = useState(false);
+    const { setStatus, setError, clearStatus } = useStatus();
 
     // Sync local state when settings change
     useEffect(() => {
@@ -66,21 +69,36 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
         }
     };
 
+    // ... (rest of logic)
+
     const handleClearLibrary = async () => {
-        if (!confirm('Clear all fonts from library? This will remove all scanned fonts. The font files will NOT be deleted.')) {
+        const yes = await ask('Clear all fonts from library? This will remove all scanned fonts. The font files will NOT be deleted.', {
+            title: 'Clear Entire Library',
+            kind: 'warning'
+        });
+
+        if (!yes) {
             return;
         }
 
         setIsClearing(true);
+        setStatus('Clearing library...');
         try {
             const deleted = await clearLibrary();
             console.log(`Cleared ${deleted} fonts from library`);
-            // We should ideally callback to refresh app state, but localStorage clear will handle Directories
-            // For now, reloading or refetching via context would be best, but simple confirm is okay
-            window.location.reload(); // Simple brute force update for now to clear all state
+            setStatus(`Library cleared`, false);
+            setTimeout(() => {
+                clearStatus();
+                window.location.reload();
+            }, 1000);
         } catch (e) {
             console.error('Failed to clear library:', e);
-            alert('Failed to clear library');
+            const msg = 'Failed to clear library. Please check console for details.';
+            setError(msg); // Global status
+            await message(msg, {
+                title: 'Error',
+                kind: 'error'
+            });
         } finally {
             setIsClearing(false);
         }

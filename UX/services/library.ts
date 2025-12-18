@@ -46,6 +46,10 @@ export interface LibraryFont {
     width_variance: number | null;
     stroke_contrast: number | null;
     aperture: number | null;
+    foundry: string | null;
+    weight: number;
+    is_italic: boolean;
+    supports_vietnamese: boolean;
 }
 
 // Collection (virtual folder)
@@ -59,13 +63,13 @@ export interface Collection {
 /**
  * Get all fonts from library
  */
-export async function getLibraryFonts(): Promise<LibraryFont[]> {
+export async function getLibraryFonts(limit: number = 100, offset: number = 0, category?: string): Promise<LibraryFont[]> {
     const invoke = await getInvoke();
     if (!invoke) {
         console.warn('Tauri not available');
         return [];
     }
-    return invoke('get_library_fonts');
+    return invoke('get_library_fonts', { limit, offset, category });
 }
 
 /**
@@ -90,7 +94,11 @@ export async function addFontToLibrary(
     xHeight?: number,
     widthVariance?: number,
     strokeContrast?: number,
-    aperture?: number
+    aperture?: number,
+    foundry?: string,
+    weight?: number,
+    isItalic?: boolean,
+    supportsVietnamese?: boolean
 ): Promise<LibraryFont> {
     const invoke = await getInvoke();
     if (!invoke) {
@@ -106,6 +114,10 @@ export async function addFontToLibrary(
         widthVariance: widthVariance || null,
         strokeContrast: strokeContrast || null,
         aperture: aperture || null,
+        foundry: foundry || null,
+        weight: weight || null,
+        isItalic: isItalic || false,
+        supportsVietnamese: supportsVietnamese || false,
     });
 }
 
@@ -156,26 +168,36 @@ export async function getCollections(): Promise<Collection[]> {
 /**
  * Scan directory and add all fonts to library
  */
-export async function scanAndAddDirectory(directoryPath: string): Promise<number> {
+export async function scanAndAddDirectory(directoryPath: string, onProgress?: (msg: string) => void): Promise<number> {
     const invoke = await getInvoke();
     if (!invoke) {
         throw new Error('Tauri required');
     }
 
+    if (onProgress) onProgress('Listing files...');
+
     // Scan for fonts
     const fonts = await invoke('scan_directory', { path: directoryPath }) as any[];
     console.log('Scanned fonts:', fonts);
 
+    if (onProgress) onProgress(`Found ${fonts.length} files. Processing...`);
+
     let added = 0;
     let cloudOnly = 0;
+    let processed = 0;
+    const total = fonts.length;
 
     for (const font of fonts) {
+        processed++;
         // Skip cloud-only fonts for now (not locally available)
         if (!font.is_local) {
             console.log('Cloud-only font (not downloaded):', font.name);
             cloudOnly++;
+            if (onProgress) onProgress(`Skipping cloud font (${processed}/${total}): ${font.name}`);
             continue;
         }
+
+        if (onProgress) onProgress(`Importing (${processed}/${total}): ${font.name}`);
 
         try {
             // Try to parse with sidecar (optional)
@@ -196,7 +218,11 @@ export async function scanAndAddDirectory(directoryPath: string): Promise<number
                 parsed?.anatomy_metrics?.x_height,
                 parsed?.anatomy_metrics?.width_variance,
                 parsed?.anatomy_metrics?.stroke_contrast,
-                parsed?.anatomy_metrics?.aperture
+                parsed?.anatomy_metrics?.aperture,
+                parsed?.foundry,
+                parsed?.weight,
+                parsed?.is_italic,
+                parsed?.supports_vietnamese
             );
             added++;
         } catch (e) {

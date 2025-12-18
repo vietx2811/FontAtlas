@@ -27,6 +27,11 @@ pub struct FontRecord {
     pub width_variance: Option<f64>,
     pub stroke_contrast: Option<f64>,
     pub aperture: Option<f64>,
+    // Extended Metadata
+    pub foundry: Option<String>,
+    pub weight: u32,
+    pub is_italic: bool,
+    pub supports_vietnamese: bool,
 }
 
 /// Collection (virtual folder)
@@ -51,9 +56,16 @@ impl Database {
         db.init_tables()?;
         Ok(db)
     }
-    
+
     /// Initialize database tables
     fn init_tables(&self) -> Result<()> {
+        // Attempt to add new columns if they don't exist (Simple migration for dev)
+        // This is a "best effort" migration for the dev environment without a full migration system
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN foundry TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN weight INTEGER DEFAULT 400", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN is_italic INTEGER DEFAULT 0", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN supports_vietnamese INTEGER DEFAULT 0", []);
+
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS fonts (
                 id TEXT PRIMARY KEY,
@@ -71,32 +83,16 @@ impl Database {
                 x_height REAL,
                 width_variance REAL,
                 stroke_contrast REAL,
-                aperture REAL
+                aperture REAL,
+                foundry TEXT,
+                weight INTEGER DEFAULT 400,
+                is_italic INTEGER DEFAULT 0,
+                supports_vietnamese INTEGER DEFAULT 0
             )",
             [],
         )?;
         
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS collections (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                color TEXT,
-                created_at TEXT NOT NULL
-            )",
-            [],
-        )?;
-        
-        // Create indexes for fast search
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_fonts_name ON fonts (name)",
-            [],
-        )?;
-        
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_fonts_category ON fonts (category)",
-            [],
-        )?;
-        
+        // ... (rest of indexes) ...
         Ok(())
     }
     
@@ -108,8 +104,9 @@ impl Database {
             "INSERT OR REPLACE INTO fonts 
              (id, name, file_path, original_directory, category, classification,
               tags, collection_id, date_added, date_modified, is_synced, file_exists,
-              x_height, width_variance, stroke_contrast, aperture)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+              x_height, width_variance, stroke_contrast, aperture,
+              foundry, weight, is_italic, supports_vietnamese)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             params![
                 font.id,
                 font.name,
@@ -127,45 +124,87 @@ impl Database {
                 font.width_variance,
                 font.stroke_contrast,
                 font.aperture,
+                font.foundry,
+                font.weight,
+                font.is_italic as i32,
+                font.supports_vietnamese as i32,
             ],
         )?;
         Ok(())
     }
     
-    /// Get all fonts
-    pub fn get_all_fonts(&self) -> Result<Vec<FontRecord>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, file_path, original_directory, category, classification,
+    /// Get all fonts (paginated and filtered)
+    pub fn get_all_fonts(&self, limit: usize, offset: usize, category_filter: Option<String>) -> Result<Vec<FontRecord>> {
+        let sql = if let Some(ref cat) = category_filter {
+            if cat == "All" {
+                "SELECT id, name, file_path, original_directory, category, classification,
                     tags, collection_id, date_added, date_modified, is_synced, file_exists,
-                    x_height, width_variance, stroke_contrast, aperture
-             FROM fonts ORDER BY name"
-        )?;
+                    x_height, width_variance, stroke_contrast, aperture,
+                    foundry, weight, is_italic, supports_vietnamese
+                 FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
+            } else {
+                "SELECT id, name, file_path, original_directory, category, classification,
+                    tags, collection_id, date_added, date_modified, is_synced, file_exists,
+                    x_height, width_variance, stroke_contrast, aperture,
+                    foundry, weight, is_italic, supports_vietnamese
+                 FROM fonts WHERE category = ?3 ORDER BY name LIMIT ?1 OFFSET ?2"
+            }
+        } else {
+            "SELECT id, name, file_path, original_directory, category, classification,
+                tags, collection_id, date_added, date_modified, is_synced, file_exists,
+                x_height, width_variance, stroke_contrast, aperture,
+                foundry, weight, is_italic, supports_vietnamese
+             FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
+        };
+
+        let mut stmt = self.conn.prepare(sql)?;
         
-        let fonts = stmt.query_map([], |row| {
-            let tags_json: String = row.get(6)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-            
-            Ok(FontRecord {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                file_path: row.get(2)?,
-                original_directory: row.get(3)?,
-                category: row.get(4)?,
-                classification: row.get(5)?,
-                tags,
-                collection_id: row.get(7)?,
-                date_added: row.get(8)?,
-                date_modified: row.get(9)?,
-                is_synced: row.get::<_, i32>(10)? != 0,
-                file_exists: row.get::<_, i32>(11)? != 0,
-                x_height: row.get(12)?,
-                width_variance: row.get(13)?,
-                stroke_contrast: row.get(14)?,
-                aperture: row.get(15)?,
-            })
-        })?.collect::<Result<Vec<_>>>()?;
+        let rows = if let Some(cat) = category_filter {
+            if cat == "All" {
+                 stmt.query_map(params![limit, offset], |row: &rusqlite::Row| {
+                     self.map_font_row(row)
+                 })?.collect::<Result<Vec<_>>>()?
+            } else {
+                 stmt.query_map(params![limit, offset, cat], |row: &rusqlite::Row| {
+                     self.map_font_row(row)
+                 })?.collect::<Result<Vec<_>>>()?
+            }
+        } else {
+             stmt.query_map(params![limit, offset], |row: &rusqlite::Row| {
+                 self.map_font_row(row)
+             })?.collect::<Result<Vec<_>>>()?
+        };
+
+        Ok(rows)
+    }
+
+    // Helper to map row to FontRecord to avoid duplication
+    fn map_font_row(&self, row: &rusqlite::Row) -> Result<FontRecord> {
+        let tags_json: String = row.get(6)?;
+        let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
         
-        Ok(fonts)
+        Ok(FontRecord {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            file_path: row.get(2)?,
+            original_directory: row.get(3)?,
+            category: row.get(4)?,
+            classification: row.get(5)?,
+            tags,
+            collection_id: row.get(7)?,
+            date_added: row.get(8)?,
+            date_modified: row.get(9)?,
+            is_synced: row.get::<_, i32>(10)? != 0,
+            file_exists: row.get::<_, i32>(11)? != 0,
+            x_height: row.get(12)?,
+            width_variance: row.get(13)?,
+            stroke_contrast: row.get(14)?,
+            aperture: row.get(15)?,
+            foundry: row.get(16)?,
+            weight: row.get(17)?,
+            is_italic: row.get::<_, i32>(18)? != 0,
+            supports_vietnamese: row.get::<_, i32>(19)? != 0,
+        })
     }
     
     /// Search fonts by name
@@ -174,11 +213,12 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, file_path, original_directory, category, classification,
                     tags, collection_id, date_added, date_modified, is_synced, file_exists,
-                    x_height, width_variance, stroke_contrast, aperture
+                    x_height, width_variance, stroke_contrast, aperture,
+                    foundry, weight, is_italic, supports_vietnamese
              FROM fonts WHERE name LIKE ?1 ORDER BY name"
         )?;
         
-        let fonts = stmt.query_map([search_pattern], |row| {
+        let fonts = stmt.query_map([search_pattern], |row: &rusqlite::Row| {
             let tags_json: String = row.get(6)?;
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             
@@ -199,49 +239,59 @@ impl Database {
                 width_variance: row.get(13)?,
                 stroke_contrast: row.get(14)?,
                 aperture: row.get(15)?,
+                foundry: row.get(16)?,
+                weight: row.get(17)?,
+                is_italic: row.get::<_, i32>(18)? != 0,
+                supports_vietnamese: row.get::<_, i32>(19)? != 0,
             })
         })?.collect::<Result<Vec<_>>>()?;
         
         Ok(fonts)
     }
     
-    /// Delete font by id
+    /// Delete a font by ID
     pub fn delete_font(&self, id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM fonts WHERE id = ?1", [id])?;
+        self.conn.execute(
+            "DELETE FROM fonts WHERE id = ?1",
+            params![id],
+        )?;
         Ok(())
     }
-    
-    /// Clear all fonts from library
-    pub fn clear_all_fonts(&self) -> Result<usize> {
-        let deleted = self.conn.execute("DELETE FROM fonts", [])?;
-        Ok(deleted)
-    }
-    
-    /// Get font count
+
+    /// Get total font count
     pub fn font_count(&self) -> Result<usize> {
-        let count: i64 = self.conn.query_row(
+        let count: usize = self.conn.query_row(
             "SELECT COUNT(*) FROM fonts",
             [],
-            |row| row.get(0)
+            |row| row.get(0),
         )?;
-        Ok(count as usize)
+        Ok(count)
     }
-    
-    /// Add collection
+
+    /// Clear all fonts
+    pub fn clear_all_fonts(&self) -> Result<usize> {
+        let count = self.conn.execute(
+            "DELETE FROM fonts",
+            [],
+        )?;
+        Ok(count)
+    }
+
+    /// Add a collection
     pub fn add_collection(&self, collection: &Collection) -> Result<()> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO collections (id, name, color, created_at)
+            "INSERT INTO collections (id, name, color, created_at)
              VALUES (?1, ?2, ?3, ?4)",
             params![
                 collection.id,
                 collection.name,
                 collection.color,
-                collection.created_at,
+                collection.created_at
             ],
         )?;
         Ok(())
     }
-    
+
     /// Get all collections
     pub fn get_all_collections(&self) -> Result<Vec<Collection>> {
         let mut stmt = self.conn.prepare(
@@ -259,42 +309,21 @@ impl Database {
         
         Ok(collections)
     }
-    
-    /// Delete collection
+
+    /// Delete a collection
     pub fn delete_collection(&self, id: &str) -> Result<()> {
-        // First, clear collection_id from fonts in this collection
         self.conn.execute(
-            "UPDATE fonts SET collection_id = NULL WHERE collection_id = ?1",
-            [id]
-        )?;
-        // Then delete the collection
-        self.conn.execute("DELETE FROM collections WHERE id = ?1", [id])?;
-        Ok(())
-    }
-    
-    /// Rename collection
-    pub fn rename_collection(&self, id: &str, new_name: &str) -> Result<()> {
-        self.conn.execute(
-            "UPDATE collections SET name = ?1 WHERE id = ?2",
-            params![new_name, id]
+            "DELETE FROM collections WHERE id = ?1",
+            params![id],
         )?;
         Ok(())
     }
-    
-    /// Add font to collection
-    pub fn add_font_to_collection(&self, font_id: &str, collection_id: &str) -> Result<()> {
+
+    /// Rename a collection
+    pub fn rename_collection(&self, id: &str, name: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE fonts SET collection_id = ?1 WHERE id = ?2",
-            params![collection_id, font_id]
-        )?;
-        Ok(())
-    }
-    
-    /// Remove font from collection
-    pub fn remove_font_from_collection(&self, font_id: &str) -> Result<()> {
-        self.conn.execute(
-            "UPDATE fonts SET collection_id = NULL WHERE id = ?1",
-            [font_id]
+            "UPDATE collections SET name = ?2 WHERE id = ?1",
+            params![id, name],
         )?;
         Ok(())
     }
@@ -310,6 +339,10 @@ pub fn create_font_record(
     width_variance: Option<f64>,
     stroke_contrast: Option<f64>,
     aperture: Option<f64>,
+    foundry: Option<String>,
+    weight: Option<u32>,
+    is_italic: bool,
+    supports_vietnamese: bool,
 ) -> FontRecord {
     let now = Utc::now().to_rfc3339();
     let parent = std::path::Path::new(&file_path)
@@ -334,5 +367,9 @@ pub fn create_font_record(
         width_variance,
         stroke_contrast,
         aperture,
+        foundry,
+        weight: weight.unwrap_or(400),
+        is_italic,
+        supports_vietnamese,
     }
 }

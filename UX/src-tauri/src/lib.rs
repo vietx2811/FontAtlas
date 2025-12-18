@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
+use rusqlite::Error as SqlError;
 
 use db::{Database, FontRecord, Collection, create_font_record};
 
@@ -148,6 +149,10 @@ pub struct FontParseResult {
     anatomy_metrics: Option<serde_json::Value>,
     classification: Option<String>,
     error: Option<String>,
+    foundry: Option<String>,
+    weight: Option<u32>,
+    is_italic: Option<bool>,
+    supports_vietnamese: Option<bool>,
 }
 
 /// Parse font using Python sidecar
@@ -221,17 +226,23 @@ async fn parse_font_with_sidecar(fontPath: String) -> Result<FontParseResult, St
 pub struct DbState(pub Mutex<Database>);
 
 /// Get all fonts from library
+/// Get all fonts from library (paginated)
 #[tauri::command]
-fn get_library_fonts(db: State<DbState>) -> Result<Vec<FontRecord>, String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.get_all_fonts().map_err(|e| e.to_string())
+fn get_library_fonts(db: State<DbState>, limit: Option<usize>, offset: Option<usize>, category: Option<String>) -> Result<Vec<FontRecord>, String> {
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    // Default to a reasonably large number if not specified, 
+    // but frontend should ideally specify. 
+    // If user wants ALL, they might pass a huge limit, but for "loading slow" fix we want small defaults.
+    let limit_val = limit.unwrap_or(50); 
+    let offset_val = offset.unwrap_or(0);
+    db.get_all_fonts(limit_val, offset_val, category).map_err(|e: SqlError| e.to_string())
 }
 
 /// Search fonts in library
 #[tauri::command]
 fn search_library(db: State<DbState>, query: String) -> Result<Vec<FontRecord>, String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.search_fonts(&query).map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.search_fonts(&query).map_err(|e: SqlError| e.to_string())
 }
 
 /// Add font to library
@@ -247,43 +258,48 @@ fn add_font_to_library(
     widthVariance: Option<f64>,
     strokeContrast: Option<f64>,
     aperture: Option<f64>,
+    foundry: Option<String>,
+    weight: Option<u32>,
+    isItalic: Option<bool>,
+    supportsVietnamese: Option<bool>,
 ) -> Result<FontRecord, String> {
     let font = create_font_record(
         name, filePath, category, classification,
-        xHeight, widthVariance, strokeContrast, aperture
+        xHeight, widthVariance, strokeContrast, aperture,
+        foundry, weight, isItalic.unwrap_or(false), supportsVietnamese.unwrap_or(false)
     );
     
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.add_font(&font).map_err(|e| e.to_string())?;
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.add_font(&font).map_err(|e: SqlError| e.to_string())?;
     Ok(font)
 }
 
 /// Delete font from library
 #[tauri::command]
 fn remove_font_from_library(db: State<DbState>, font_id: String) -> Result<(), String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.delete_font(&font_id).map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.delete_font(&font_id).map_err(|e: SqlError| e.to_string())
 }
 
 /// Get library font count
 #[tauri::command]
 fn get_font_count(db: State<DbState>) -> Result<usize, String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.font_count().map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.font_count().map_err(|e: SqlError| e.to_string())
 }
 
 /// Get all collections
 #[tauri::command]
 fn get_collections(db: State<DbState>) -> Result<Vec<Collection>, String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.get_all_collections().map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.get_all_collections().map_err(|e: SqlError| e.to_string())
 }
 
 /// Clear all fonts from library
 #[tauri::command]
 fn clear_library(db: State<DbState>) -> Result<usize, String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.clear_all_fonts().map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.clear_all_fonts().map_err(|e: SqlError| e.to_string())
 }
 
 /// Create a new collection
@@ -296,23 +312,23 @@ fn create_collection(db: State<DbState>, name: String, color: Option<String>) ->
         created_at: chrono::Utc::now().to_rfc3339(),
     };
     
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.add_collection(&collection).map_err(|e| e.to_string())?;
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.add_collection(&collection).map_err(|e: SqlError| e.to_string())?;
     Ok(collection)
 }
 
 /// Delete a collection
 #[tauri::command]
 fn delete_collection(db: State<DbState>, collection_id: String) -> Result<(), String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.delete_collection(&collection_id).map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.delete_collection(&collection_id).map_err(|e: SqlError| e.to_string())
 }
 
 /// Rename a collection
 #[tauri::command]
 fn rename_collection(db: State<DbState>, collection_id: String, name: String) -> Result<(), String> {
-    let db = db.0.lock().map_err(|e| e.to_string())?;
-    db.rename_collection(&collection_id, &name).map_err(|e| e.to_string())
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.rename_collection(&collection_id, &name).map_err(|e: SqlError| e.to_string())
 }
 
 

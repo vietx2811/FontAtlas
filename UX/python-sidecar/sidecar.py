@@ -11,6 +11,7 @@ import sys
 import json
 import os
 from pathlib import Path
+from typing import Dict, Any, Optional
 
 # Get absolute path to FontAtlas src directory
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -38,9 +39,13 @@ except ImportError as e:
     print(f"Warning: Could not import FontClassifier: {e}", file=sys.stderr)
     HAS_CLASSIFIER = False
 
+# Qdrant import will be lazy-loaded in _upsert_to_qdrant to speed up script startup
+HAS_QDRANT = True # Assumed true until proven otherwise during execution
+
 
 def parse_font(file_path: str) -> dict:
     """Parse font file and return complete profile"""
+    global HAS_QDRANT
     try:
         if HAS_PARSER:
             # Use full FontParser for comprehensive analysis
@@ -62,16 +67,44 @@ def parse_font(file_path: str) -> dict:
                     "aperture": 0,  # Not in FontParser yet
                 },
                 "classification": "Unknown",
-                "unicode_coverage": profile.get('unicode_coverage', {})
+                "unicode_coverage": profile.get('unicode_coverage', {}),
+                # New Metadata
+                "foundry": profile.get('metadata', {}).get('foundry'),
+                "weight": profile.get('weight_style', {}).get('weight', 400),
+                "is_italic": profile.get('weight_style', {}).get('is_italic', False),
+                # Flatted language support for easier DB insertion
+                "supports_vietnamese": profile.get('unicode_coverage', {}).get('supports_vietnamese', False),
+                "panose": profile.get('panose')
             }
             
             # Try classification
             if HAS_CLASSIFIER:
                 try:
-                    classifier = FontClassifier()
-                    result["classification"] = classifier.classify(profile)
+                    # Use static method classify_with_confidence if available, otherwise instance
+                    if hasattr(FontClassifier, 'classify_with_confidence'):
+                         cls_res = FontClassifier.classify_with_confidence(profile)
+                         result["classification"] = cls_res['category']
+                         result["classification_confidence"] = cls_res['confidence']
+                    else:
+                        classifier = FontClassifier()
+                        result["classification"] = classifier.classify(profile)
                 except Exception as e:
                     result["classifier_error"] = str(e)
+
+            # Upsert to Qdrant (Lazy attempt)
+            if HAS_QDRANT:
+                try:
+                    _upsert_to_qdrant(result)
+                    result["qdrant_status"] = "synced"
+                except ImportError:
+                    # If lazy import fails
+                    result["qdrant_status"] = "skipped_no_client_lib"
+                    HAS_QDRANT = False
+                except Exception as e:
+                    # Log error but don't fail the whole parse
+                    result["qdrant_status"] = f"error: {str(e)}"
+            else:
+                result["qdrant_status"] = "skipped_previously_failed"
             
             return result
         else:
@@ -126,6 +159,97 @@ def _get_font_name(font: TTFont) -> str:
                 return record.toUnicode()
     
     return "Unknown"
+
+
+def _upsert_to_qdrant(data: Dict[str, Any]):
+    """Upsert font metrics and metadata to Qdrant."""
+    # Lazy import to reduce startup time for the script
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import PointStruct, VectorParams, Distance
+    import httpx
+
+    # Connect to Qdrant with short timeout to prevent hanging
+    # Use localhost:6333 default from docker-compose
+    try:
+        client = QdrantClient(
+            url="http://localhost:6333", 
+            timeout=1.0 # 1 second timeout for connection
+        )
+        collection_name = "fonts"
+        
+        # Optimistic upsert: try to upload first
+        # If collection doesn't exist, we'll get an error, then we create it.
+        # This saves a network round-trip "get_collections" on every single file.
+        
+        # Prepare vector and payload first
+        metrics = data.get('anatomy_metrics', {})
+        weight = data.get('weight', 400)
+        
+        def safe_float(val, default=0.0):
+            try:
+                return float(val) if val is not None else default
+            except (ValueError, TypeError):
+                return default
+
+        vector = [
+            safe_float(weight) / 1000.0,
+            safe_float(metrics.get('width_variance'), 0.5), 
+            safe_float(metrics.get('stroke_contrast'), 1.0) / 5.0, 
+            safe_float(metrics.get('x_height'), 0.5),
+            safe_float(metrics.get('aperture'), 0.5)
+        ]
+        
+        # Generate stable ID from file path
+        import uuid
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data['file_path']))
+        
+        payload = {
+            "name": data['name'],
+            "path": data['file_path'],
+            "foundry": data.get('foundry'),
+            "category": data.get('classification'),
+            "weight": weight,
+            "is_italic": data.get('is_italic'),
+            "supports_vietnamese": data.get('supports_vietnamese'),
+        }
+
+        try:
+           client.upsert(
+                collection_name=collection_name,
+                points=[
+                    PointStruct(
+                        id=point_id,
+                        vector=vector,
+                        payload=payload
+                    )
+                ]
+            )
+        except Exception as e:
+            # Check if error is due to missing collection
+            # "Not found" or 404
+            err_str = str(e).lower()
+            if "not found" in err_str or "404" in err_str:
+                # Create collection and retry
+                client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(size=5, distance=Distance.COSINE)
+                )
+                client.upsert(
+                    collection_name=collection_name,
+                    points=[
+                        PointStruct(
+                            id=point_id,
+                            vector=vector,
+                            payload=payload
+                        )
+                    ]
+                )
+            else:
+                raise e
+
+    except Exception:
+        # Re-raise to be caught in main loop
+        raise
 
 
 def handle_command(command: dict) -> dict:

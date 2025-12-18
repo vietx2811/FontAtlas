@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { FontData } from '../types';
 import { MoreHorizontal, Maximize2 } from 'lucide-react';
 import { useFontLoader } from '../hooks/useFontLoader';
@@ -9,8 +9,27 @@ interface FontCardProps {
 }
 
 export const FontCard: React.FC<FontCardProps> = ({ font, onClick }) => {
-  // Load font dynamically
-  const { fontFamily, isLoading } = useFontLoader(font.id, font.filePath);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Intersection observer to trigger load only when visible
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1, rootMargin: '50px' }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Load font dynamically ONLY if visible
+  const { fontFamily, isLoading } = useFontLoader(font.id, font.filePath, isVisible);
 
   // Safe metric access with defaults
   const xHeight = font.metrics?.xHeightRatio ?? 0;
@@ -19,6 +38,7 @@ export const FontCard: React.FC<FontCardProps> = ({ font, onClick }) => {
 
   return (
     <div
+      ref={cardRef}
       className="group relative bg-white border border-stone-200 p-6 flex flex-col h-[320px] transition-all duration-300 hover:shadow-xl hover:shadow-stone-200/50 hover:-translate-y-1 cursor-pointer"
       onClick={() => onClick(font)}
     >
@@ -37,7 +57,10 @@ export const FontCard: React.FC<FontCardProps> = ({ font, onClick }) => {
 
       {/* Preview */}
       <div className="flex-1 flex items-center justify-center overflow-hidden mb-6">
-        {isLoading ? (
+        {!isVisible ? (
+          // Not loaded yet (off-screen)
+          <div className="text-stone-200 text-sm">Preview</div>
+        ) : isLoading ? (
           <div className="text-stone-300 text-sm animate-pulse">Loading...</div>
         ) : (
           <span

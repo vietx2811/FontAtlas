@@ -15,6 +15,8 @@ interface VirtualizedFontGridProps {
     selectedFontId?: string;
     onFontSelect: (font: FontData) => void;
     isLoading?: boolean;
+    onLoadMore?: () => void;
+    hasMore?: boolean;
 }
 
 // Number of fonts to render per batch
@@ -24,25 +26,38 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
     fonts,
     selectedFontId,
     onFontSelect,
-    isLoading = false
+    isLoading = false,
+    onLoadMore,
+    hasMore = false
 }) => {
     const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
     const loadMoreRef = useRef<HTMLDivElement>(null);
 
-    // Reset visible count when fonts change
+    // Reset visible count when fonts change (search filter, etc)
     useEffect(() => {
-        setVisibleCount(BATCH_SIZE);
-    }, [fonts]);
+        // If strict filtering reduced count, reset visible
+        if (visibleCount > fonts.length) {
+            setVisibleCount(Math.min(BATCH_SIZE, fonts.length));
+        }
+    }, [fonts, visibleCount]);
 
     // Intersection observer for infinite scroll
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting && visibleCount < fonts.length) {
-                    setVisibleCount(prev => Math.min(prev + BATCH_SIZE, fonts.length));
+                const target = entries[0];
+                if (target.isIntersecting) {
+                    // Case 1: Client-side lazy render (we have data, just hidden)
+                    if (visibleCount < fonts.length) {
+                        setVisibleCount(prev => Math.min(prev + BATCH_SIZE, fonts.length));
+                    }
+                    // Case 2: Server-side pagination (we need more data)
+                    else if (hasMore && onLoadMore && !isLoading) {
+                        onLoadMore();
+                    }
                 }
             },
-            { threshold: 0.1, rootMargin: '100px' }
+            { threshold: 0.1, rootMargin: '200px' }
         );
 
         if (loadMoreRef.current) {
@@ -50,25 +65,24 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
         }
 
         return () => observer.disconnect();
-    }, [visibleCount, fonts.length]);
+    }, [visibleCount, fonts.length, hasMore, onLoadMore, isLoading]);
 
     // Visible fonts
     const visibleFonts = useMemo(() => {
         return fonts.slice(0, visibleCount);
     }, [fonts, visibleCount]);
 
-    console.log('VirtualizedFontGrid: fonts.length=', fonts.length, 'isLoading=', isLoading, 'visibleCount=', visibleCount);
-
-    if (isLoading) {
+    // Initial Loading State
+    if (isLoading && fonts.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-stone-400">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-stone-400 mb-4" />
-                <p>Loading fonts...</p>
+                <p>Loading library...</p>
             </div>
         );
     }
 
-    if (fonts.length === 0) {
+    if (fonts.length === 0 && !isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full py-20 text-stone-400 text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-16 h-16 mb-6 rounded-2xl bg-stone-100 flex items-center justify-center">
@@ -97,16 +111,13 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
         );
     }
 
+    const showFooter = visibleCount < fonts.length || hasMore;
+
     return (
         <div className="w-full h-full">
             {/* Font count indicator */}
-            <div className="pb-3 text-sm text-stone-500">
-                Showing {visibleCount} of {fonts.length} fonts
-                {fonts.length > 50 && (
-                    <span className="ml-2 text-xs text-stone-400">
-                        (scroll for more)
-                    </span>
-                )}
+            <div className="pb-3 text-sm text-stone-500 flex justify-between">
+                <span>Showing {visibleFonts.length} of {fonts.length} loaded</span>
             </div>
 
             {/* Font Grid */}
@@ -121,14 +132,21 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
             </div>
 
             {/* Load more trigger */}
-            {visibleCount < fonts.length && (
-                <div
-                    ref={loadMoreRef}
-                    className="flex justify-center py-8 text-stone-400"
-                >
-                    <div className="animate-pulse">Loading more...</div>
-                </div>
-            )}
+            <div
+                ref={loadMoreRef}
+                className="flex justify-center py-8 text-stone-400 text-sm"
+            >
+                {showFooter ? (
+                    <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-stone-400" />
+                        <span>Loading more fonts...</span>
+                    </div>
+                ) : (
+                    <div className="opacity-50">
+                        End of library • {fonts.length} fonts total
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

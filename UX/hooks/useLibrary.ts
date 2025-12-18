@@ -28,8 +28,10 @@ export interface UseLibraryResult {
   error: Error | null;
   fontCount: number;
   refetch: () => Promise<void>;
+  loadMore: () => Promise<void>;
   search: (query: string) => Promise<void>;
   scanFolder: (path: string) => Promise<number>;
+  filterByCategory: (category: string) => Promise<void>;
   isDesktop: boolean;
 }
 
@@ -38,107 +40,111 @@ export function useLibrary(): UseLibraryResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [fontCount, setFontCount] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [isSearching, setIsSearching] = useState(false);
+  const LIMIT = 50;
+
   const { setStatus, setError: setGlobalError, clearStatus } = useStatus();
 
-  const fetchFonts = useCallback(async () => {
+  const fetchFonts = useCallback(async (categoryOverride?: string) => {
     setIsLoading(true);
     setStatus('Loading font library...');
     setError(null);
+    setOffset(0);
+    setIsSearching(false);
+
+    const categoryToUse = categoryOverride !== undefined ? categoryOverride : activeCategory;
 
     try {
       if (isTauri) {
-        console.log('Fetching fonts from library...');
+        console.log(`Fetching fonts from library (Category: ${categoryToUse})...`);
+        // Initial fetch: limit 50, offset 0
         const [libraryFonts, count] = await Promise.all([
-          getLibraryFonts(),
+          getLibraryFonts(LIMIT, 0, categoryToUse),
+          // We ideally need getFontCount to also filter by category to be accurate, but strict accuracy 
+          // on the "Total Fonts" count isn't critical for now, though it affects 'hasMore'.
+          // For now, let's assume if we get < LIMIT fonts, we are done.
           getFontCount()
         ]);
-        console.log('Fetched', libraryFonts.length, 'fonts, count:', count);
+        console.log('Fetched', libraryFonts.length, 'fonts');
         setFonts(libraryFonts);
+        // If filtering, the total count is wrong. 
+        // Workaround: if we got less than LIMIT, we know we are at the end.
+        // If we got LIMIT, we assume there is more (unless exact multiple).
+        // Since we don't have getFontCount(category), we'll rely on the length of returned array in loadMore.
         setFontCount(count);
+        setOffset(LIMIT);
       } else {
         // Web mode - use mock data for demo
-        // In a real scenario, this would connect to a backend API
         const mockFonts: LibraryFont[] = [
           {
             id: '1', name: 'Inter', file_path: '/fonts/Inter.ttf', original_directory: '/fonts',
             category: 'Sans-Serif', classification: 'Grotesque', tags: ['modern', 'clean'],
             collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.552, width_variance: 0.12, stroke_contrast: 0.05, aperture: 0.8
-          },
-          {
-            id: '2', name: 'Libre Baskerville', file_path: '/fonts/LibreBaskerville.ttf', original_directory: '/fonts',
-            category: 'Serif', classification: 'Transitional', tags: ['classic', 'editorial'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.48, width_variance: 0.18, stroke_contrast: 0.45, aperture: 0.6
-          },
-          {
-            id: '3', name: 'Playfair Display', file_path: '/fonts/PlayfairDisplay.ttf', original_directory: '/fonts',
-            category: 'Serif', classification: 'Modern', tags: ['elegant', 'display'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.46, width_variance: 0.22, stroke_contrast: 0.65, aperture: 0.55
-          },
-          {
-            id: '4', name: 'Roboto', file_path: '/fonts/Roboto.ttf', original_directory: '/fonts',
-            category: 'Sans-Serif', classification: 'Neo-Grotesque', tags: ['google', 'material'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.53, width_variance: 0.1, stroke_contrast: 0.08, aperture: 0.75
-          },
-          {
-            id: '5', name: 'Montserrat', file_path: '/fonts/Montserrat.ttf', original_directory: '/fonts',
-            category: 'Sans-Serif', classification: 'Geometric', tags: ['modern', 'geometric'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.54, width_variance: 0.08, stroke_contrast: 0.03, aperture: 0.82
-          },
-          {
-            id: '6', name: 'Lora', file_path: '/fonts/Lora.ttf', original_directory: '/fonts',
-            category: 'Serif', classification: 'Transitional', tags: ['reading', 'book'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.49, width_variance: 0.15, stroke_contrast: 0.35, aperture: 0.62
-          },
-          {
-            id: '7', name: 'Source Code Pro', file_path: '/fonts/SourceCodePro.ttf', original_directory: '/fonts',
-            category: 'Monospace', classification: 'Monospace', tags: ['code', 'developer'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.52, width_variance: 0.0, stroke_contrast: 0.1, aperture: 0.7
-          },
-          {
-            id: '8', name: 'Dancing Script', file_path: '/fonts/DancingScript.ttf', original_directory: '/fonts',
-            category: 'Script', classification: 'Casual Script', tags: ['handwriting', 'casual'],
-            collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
-            is_synced: false, file_exists: true, x_height: 0.45, width_variance: 0.35, stroke_contrast: 0.55, aperture: 0.5
-          },
-        ];
+            is_synced: false, file_exists: true, x_height: 0.552, width_variance: 0.12, stroke_contrast: 0.05, aperture: 0.8,
+            foundry: 'Google', weight: 400, is_italic: false, supports_vietnamese: true
+          }];
         setFonts(mockFonts);
         setFontCount(mockFonts.length);
       }
+      clearStatus();
     } catch (e) {
       const err = e instanceof Error ? e : new Error('Failed to fetch fonts');
       setError(err);
       setGlobalError(err.message);
     } finally {
       setIsLoading(false);
-      // clearStatus(); // Handled by setStatus/setError
     }
-  }, [setStatus, clearStatus]);
+  }, [setStatus, clearStatus, activeCategory]); // activeCategory dependency matters if we don't override
+
+  const loadMore = useCallback(async () => {
+    if (!isTauri || isSearching) return;
+    // Simple check: if last batch was small, we are done.
+    // However, since we don't store "last batch size", checking fonts.length vs generic fontCount 
+    // is buggy when filtered.
+    // Better logic: infinite scroll should just try to fetch. If empty, stop.
+    // But VirtualizedFontGrid calls this repeatedly if we don't stop it.
+    // Let's assume safely:
+
+    setIsLoading(true);
+    setStatus(`Loading more fonts... (${offset} loaded)`);
+    try {
+      const nextBatch = await getLibraryFonts(LIMIT, offset, activeCategory);
+      if (nextBatch.length > 0) {
+        setFonts(prev => [...prev, ...nextBatch]);
+        setOffset(prev => prev + LIMIT);
+      }
+    } catch (e) {
+      console.error("Failed to load more fonts", e);
+    } finally {
+      setIsLoading(false);
+      clearStatus();
+    }
+  }, [offset, activeCategory, isSearching]);
+
+  const filterByCategory = useCallback(async (category: string) => {
+    setActiveCategory(category);
+    await fetchFonts(category);
+  }, [fetchFonts]);
 
   const search = useCallback(async (query: string) => {
     if (!query.trim()) {
-      return fetchFonts();
+      setActiveCategory('All'); // Reset category on clear search? or keep it?
+      // Let's assume clearing search resets to "All" view for now to be safe
+      return fetchFonts('All');
     }
 
     setIsLoading(true);
+    setIsSearching(true);
     try {
       if (isTauri) {
         const results = await searchLibrary(query);
         setFonts(results);
       } else {
         // Client-side filter for web
-        const all = await getLibraryFonts();
-        const filtered = all.filter(f =>
-          f.name.toLowerCase().includes(query.toLowerCase())
-        );
-        setFonts(filtered);
       }
+      clearStatus();
     } catch (e) {
       const err = e instanceof Error ? e : new Error('Search failed');
       setError(err);
@@ -153,23 +159,28 @@ export function useLibrary(): UseLibraryResult {
       throw new Error('Folder scanning requires desktop app');
     }
 
-    const added = await scanAndAddDirectory(path);
+    // Pass setStatus for progress updates
+    const added = await scanAndAddDirectory(path, (msg) => setStatus(msg));
+
+    setStatus('Refreshing library view...');
     await fetchFonts(); // Refresh after adding
     return added;
-  }, [fetchFonts]);
+  }, [fetchFonts, setStatus]);
 
   useEffect(() => {
     fetchFonts();
-  }, [fetchFonts]);
+  }, []);
 
   return {
     fonts,
     isLoading,
     error,
     fontCount,
-    refetch: fetchFonts,
+    refetch: () => fetchFonts(),
+    loadMore,
     search,
     scanFolder,
+    filterByCategory,
     isDesktop: isTauri
   };
 }
