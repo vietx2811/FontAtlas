@@ -1,4 +1,5 @@
 mod db;
+mod logger;
 
 use std::fs;
 use std::path::PathBuf;
@@ -6,8 +7,11 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 use rusqlite::Error as SqlError;
+use uuid::Uuid;
+use chrono::Utc;
 
-use db::{Database, FontRecord, Collection, create_font_record};
+use db::{Database, FontRecord, Collection, Source, create_font_record};
+use logger::AppLogger;
 
 /// Font entry in library
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -26,6 +30,14 @@ pub struct FontFileInfo {
     name: String,
     size: u64,
     is_local: bool, // true if file is available locally, false if in cloud
+}
+
+/// Log entry from frontend
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LogEntry {
+    level: String,
+    message: String,
+    details: Option<serde_json::Value>,
 }
 
 /// Scan a directory for font files
@@ -126,6 +138,16 @@ fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to get app data dir: {}", e))
 }
 
+/// Write log entry to file for AI agent access
+#[tauri::command]
+fn write_log(app: tauri::AppHandle, entry: LogEntry) -> Result<(), String> {
+    let logger = app.state::<Mutex<AppLogger>>();
+    let mut logger = logger.lock().map_err(|e| format!("Logger lock error: {}", e))?;
+    
+    logger.log(&entry.level, "frontend", &entry.message, entry.details)
+        .map_err(|e| format!("Failed to write log: {}", e))
+}
+
 /// Read file as bytes (for font preview)
 #[tauri::command]
 fn read_font_file(path: String) -> Result<Vec<u8>, String> {
@@ -153,6 +175,12 @@ pub struct FontParseResult {
     weight: Option<u32>,
     is_italic: Option<bool>,
     supports_vietnamese: Option<bool>,
+    // Enhanced taxonomy fields (Phase 4)
+    primary_class: Option<String>,
+    secondary_tags: Option<Vec<String>>,
+    serif_subtype: Option<String>,
+    sans_subtype: Option<String>,
+    script_subtype: Option<String>,
 }
 
 /// Parse font using Python sidecar
@@ -258,15 +286,32 @@ fn add_font_to_library(
     widthVariance: Option<f64>,
     strokeContrast: Option<f64>,
     aperture: Option<f64>,
+    terminalSharpness: Option<f64>,
+    stressAngle: Option<f64>,
+    curvatureRatio: Option<f64>,
+    counterDensity: Option<f64>,
     foundry: Option<String>,
     weight: Option<u32>,
     isItalic: Option<bool>,
     supportsVietnamese: Option<bool>,
+    familyName: Option<String>,
+    subfamily: Option<String>,
+    weightClass: Option<i32>,
+    widthClass: Option<i32>,
+    sourceId: Option<String>,
+    primaryClass: Option<String>,
+    secondaryTags: Option<String>,
+    serifSubtype: Option<String>,
+    sansSubtype: Option<String>,
+    scriptSubtype: Option<String>,
 ) -> Result<FontRecord, String> {
     let font = create_font_record(
         name, filePath, category, classification,
         xHeight, widthVariance, strokeContrast, aperture,
-        foundry, weight, isItalic.unwrap_or(false), supportsVietnamese.unwrap_or(false)
+        terminalSharpness, stressAngle, curvatureRatio, counterDensity,
+        foundry, weight, isItalic.unwrap_or(false), supportsVietnamese.unwrap_or(false),
+        familyName, subfamily, weightClass, widthClass, sourceId,
+        primaryClass, secondaryTags, serifSubtype, sansSubtype, scriptSubtype
     );
     
     let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
@@ -331,6 +376,63 @@ fn rename_collection(db: State<DbState>, collection_id: String, name: String) ->
     db.rename_collection(&collection_id, &name).map_err(|e: SqlError| e.to_string())
 }
 
+// ============ Source Management Commands ============
+
+/// Create a new source
+#[tauri::command]
+fn create_source(
+    db: State<DbState>,
+    name: String,
+    source_type: String,
+    path: Option<String>,
+) -> Result<Source, String> {
+    let source = Source {
+        id: Uuid::new_v4().to_string(),
+        name,
+        source_type,
+        path,
+        metadata: None,
+        date_added: Utc::now().to_rfc3339(),
+    };
+    
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.add_source(&source).map_err(|e: SqlError| e.to_string())?;
+    Ok(source)
+}
+
+/// Get all sources
+#[tauri::command]
+fn get_sources(db: State<DbState>) -> Result<Vec<Source>, String> {
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.get_sources().map_err(|e: SqlError| e.to_string())
+}
+
+/// Delete a source
+#[tauri::command]
+fn delete_source(db: State<DbState>, source_id: String) -> Result<(), String> {
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.delete_source(&source_id).map_err(|e: SqlError| e.to_string())
+}
+
+/// Get font count by source
+#[tauri::command]
+fn get_font_count_by_source(db: State<DbState>, source_id: String) -> Result<usize, String> {
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.get_font_count_by_source(&source_id).map_err(|e: SqlError| e.to_string())
+}
+
+/// Get fonts by source
+#[tauri::command]
+fn get_fonts_by_source(
+    db: State<DbState>,
+    source_id: String,
+    limit: usize,
+    offset: usize
+) -> Result<Vec<FontRecord>, String> {
+    let db = db.0.lock().map_err(|_| "Database lock error".to_string())?;
+    db.get_fonts_by_source(&source_id, limit, offset).map_err(|e: SqlError| e.to_string())
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -361,6 +463,15 @@ pub fn run() {
             
             log::info!("FontAtlas database initialized at {:?}", db_path);
             
+            // Initialize logger for AI agent access
+            let log_dir = data_dir.join("logs");
+            let log_path = log_dir.join("app.log");
+            let app_logger = AppLogger::new(log_path.clone())
+                .map_err(|e| format!("Failed to init logger: {}", e))?;
+            
+            app.manage(Mutex::new(app_logger));
+            log::info!("AI agent logger initialized at {:?}", log_path);
+            
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -371,6 +482,7 @@ pub fn run() {
             read_font_file,
             file_exists,
             parse_font_with_sidecar,
+            write_log,
             // Font library commands
             get_library_fonts,
             search_library,
@@ -383,6 +495,12 @@ pub fn run() {
             create_collection,
             delete_collection,
             rename_collection,
+            // Source commands
+            create_source,
+            get_sources,
+            delete_source,
+            get_font_count_by_source,
+            get_fonts_by_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

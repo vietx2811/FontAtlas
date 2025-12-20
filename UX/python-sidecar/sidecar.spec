@@ -24,7 +24,7 @@ datas = [
 
 a = Analysis(
     ['sidecar.py'],
-    pathex=[],
+    pathex=['../../src'],  # Include parent src directory for parsers/metrics modules
     binaries=[],
     datas=datas,
     hiddenimports=hidden_imports,
@@ -34,8 +34,8 @@ a = Analysis(
     excludes=[
         'matplotlib',
         'pandas',
-        'scipy',
-        'PIL',
+        # scipy removed - needed by FontClassifier
+        # PIL removed - needed by FontClassifier
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

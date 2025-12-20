@@ -9,6 +9,7 @@ import { PreferencesPanel } from './PreferencesPanel';
 import { useSettings } from '../hooks/useSettings';
 import { useDirectories } from '../hooks/useDirectories';
 import { clearLibrary } from '../services/library';
+import { getSourcesWithCounts, type Source } from '../services/sources';
 import { Loader2, Trash2, RefreshCw } from 'lucide-react';
 
 interface SidebarProps {
@@ -18,6 +19,9 @@ interface SidebarProps {
     onSelectCollection?: (collection: Collection | null) => void;
     selectedCollectionId?: string | null;
     onScanDirectory?: (path: string) => Promise<number>;
+    selectedTags?: string[];
+    onSelectedTagsChange?: (tags: string[]) => void;
+    fonts?: Array<{ secondary_tags?: string | null }>; // For extracting available tags
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,7 +30,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     fontCount,
     onSelectCollection,
     selectedCollectionId,
-    onScanDirectory
+    onScanDirectory,
+    selectedTags = [],
+    onSelectedTagsChange,
+    fonts = []
 }) => {
     const [showCredits, setShowCredits] = useState(false);
     const [showPreferences, setShowPreferences] = useState(false);
@@ -44,6 +51,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     // Toggle state for directories section listing
     const [isDirsExpanded, setIsDirsExpanded] = useState(true);
+
+    // Sources state
+    const [sources, setSources] = useState<Source[]>([]);
+    const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+    // selectedTags now comes from props (App.tsx manages it)
+
+    // Extract available tags from fonts' secondary_tags (real data from database)
+    const availableTags = React.useMemo(() => {
+        const tagSet = new Set<string>();
+        fonts.forEach(font => {
+            if (font.secondary_tags) {
+                try {
+                    // secondary_tags is a JSON string like ["tag1","tag2"]
+                    const tags = typeof font.secondary_tags === 'string'
+                        ? JSON.parse(font.secondary_tags)
+                        : font.secondary_tags;
+                    if (Array.isArray(tags)) {
+                        tags.forEach((tag: string) => tagSet.add(tag));
+                    }
+                } catch (e) {
+                    // Skip malformed JSON
+                }
+            }
+        });
+        return Array.from(tagSet).sort();
+    }, [fonts]);
+
+    // Use extracted tags if available, fallback to common tags for empty library
+    const popularTags = availableTags.length > 0
+        ? availableTags
+        : ['clean', 'modern', 'luxury', 'elegant', 'classic', 'warm', 'tech', 'editorial'];
+
+    // Load sources on mount
+    React.useEffect(() => {
+        const loadSources = async () => {
+            try {
+                const sourcesData = await getSourcesWithCounts();
+                setSources(sourcesData);
+            } catch (error) {
+                console.error('Failed to load sources:', error);
+            }
+        };
+        loadSources();
+
+        // Reload when directories change
+    }, [directories]);
 
     return (
         <>
@@ -63,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Main Nav */}
-                <div className="flex-1 overflow-y-auto pt-2 pb-4 px-4 space-y-6">
+                <div className="flex-1 overflow-y-auto sidebar-scroll pt-2 pb-4 px-4 space-y-6">
 
                     {/* Library Section */}
                     <div>
@@ -197,19 +250,89 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </ul>
                     </div>
 
-                    {/* Tags Section */}
+                    {/* Sources Section */}
                     <div>
                         <div className="flex items-center justify-between mb-3 px-2">
-                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Tags</h3>
-                            <ChevronRight size={14} className="text-stone-300" />
+                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Sources</h3>
+                        </div>
+                        <ul className="space-y-1">
+                            {sources.length === 0 ? (
+                                <li className="px-3 py-2 text-xs text-stone-400 text-center">
+                                    No sources yet
+                                </li>
+                            ) : (
+                                sources.map(source => (
+                                    <li key={source.id}>
+                                        <button
+                                            onClick={() => setSelectedSourceId(
+                                                selectedSourceId === source.id ? null : source.id
+                                            )}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${selectedSourceId === source.id
+                                                ? 'bg-stone-100 text-stone-900'
+                                                : 'text-stone-600 hover:bg-stone-50'
+                                                }`}
+                                        >
+                                            <span className="flex items-center gap-3 truncate">
+                                                {source.source_type === 'directory' ? (
+                                                    <HardDrive size={16} className="flex-shrink-0" />
+                                                ) : (
+                                                    <Cloud size={16} className="flex-shrink-0" />
+                                                )}
+                                                <span className="truncate" title={source.name}>
+                                                    {source.name}
+                                                </span>
+                                            </span>
+                                            <span className="text-xs text-stone-400 ml-2">
+                                                {source.font_count || 0}
+                                            </span>
+                                        </button>
+                                    </li>
+                                ))
+                            )}
+                        </ul>
+                    </div>
+
+                    {/* Tag Filters Section */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3 px-2">
+                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Filter by Tags</h3>
+                            {selectedTags.length > 0 && (
+                                <button
+                                    onClick={() => onSelectedTagsChange?.(([]))}
+                                    className="text-[10px] text-stone-400 hover:text-stone-600 transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            )}
                         </div>
                         <div className="flex flex-wrap gap-1.5 px-2">
-                            {['Modern', 'Classic', 'Elegant', 'UI', 'Editorial'].map(tag => (
-                                <span key={tag} className="px-2 py-0.5 text-xs bg-stone-100 text-stone-500 rounded-full hover:bg-stone-200 cursor-pointer transition-colors">
-                                    {tag}
-                                </span>
-                            ))}
+                            {popularTags.map(tag => {
+                                const isActive = selectedTags.includes(tag);
+                                return (
+                                    <button
+                                        key={tag}
+                                        onClick={() => {
+                                            onSelectedTagsChange?.(
+                                                isActive
+                                                    ? selectedTags.filter(t => t !== tag)
+                                                    : [...selectedTags, tag]
+                                            );
+                                        }}
+                                        className={`px-2 py-0.5 text-xs rounded-full transition-all capitalize ${isActive
+                                            ? 'bg-amber-500/20 text-amber-600 border border-amber-500/30 font-medium'
+                                            : 'bg-stone-100 text-stone-500 border border-transparent hover:bg-stone-200 hover:border-stone-300'
+                                            }`}
+                                    >
+                                        {tag}
+                                    </button>
+                                );
+                            })}
                         </div>
+                        {selectedTags.length > 0 && (
+                            <div className="mt-2 px-2 text-xs text-stone-400">
+                                {selectedTags.length} tag{selectedTags.length > 1 ? 's' : ''} active
+                            </div>
+                        )}
                     </div>
 
                 </div>

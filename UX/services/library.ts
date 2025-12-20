@@ -50,6 +50,17 @@ export interface LibraryFont {
     weight: number;
     is_italic: boolean;
     supports_vietnamese: boolean;
+    family_name: string | null;
+    subfamily: string | null;
+    weight_class: number | null;
+    width_class: number | null;
+    source_id: string | null;
+    // Enhanced taxonomy (new classification system)
+    primary_class: string | null;
+    secondary_tags: string | null;  // JSON string of array
+    serif_subtype: string | null;
+    sans_subtype: string | null;
+    script_subtype: string | null;
 }
 
 // Collection (virtual folder)
@@ -95,10 +106,24 @@ export async function addFontToLibrary(
     widthVariance?: number,
     strokeContrast?: number,
     aperture?: number,
+    terminalSharpness?: number,
+    stressAngle?: number,
+    curvatureRatio?: number,
+    counterDensity?: number,
     foundry?: string,
     weight?: number,
     isItalic?: boolean,
-    supportsVietnamese?: boolean
+    supportsVietnamese?: boolean,
+    familyName?: string,
+    subfamily?: string,
+    weightClass?: number,
+    widthClass?: number,
+    sourceId?: string,
+    primaryClass?: string,
+    secondaryTags?: string[],  // Array that will be serialized to JSON
+    serifSubtype?: string,
+    sansSubtype?: string,
+    scriptSubtype?: string
 ): Promise<LibraryFont> {
     const invoke = await getInvoke();
     if (!invoke) {
@@ -114,10 +139,24 @@ export async function addFontToLibrary(
         widthVariance: widthVariance || null,
         strokeContrast: strokeContrast || null,
         aperture: aperture || null,
+        terminalSharpness: terminalSharpness || null,
+        stressAngle: stressAngle || null,
+        curvatureRatio: curvatureRatio || null,
+        counterDensity: counterDensity || null,
         foundry: foundry || null,
         weight: weight || null,
         isItalic: isItalic || false,
         supportsVietnamese: supportsVietnamese || false,
+        familyName: familyName || null,
+        subfamily: subfamily || null,
+        weightClass: weightClass || null,
+        widthClass: widthClass || null,
+        sourceId: sourceId || null,
+        primaryClass: primaryClass || null,
+        secondaryTags: secondaryTags ? JSON.stringify(secondaryTags) : null,
+        serifSubtype: serifSubtype || null,
+        sansSubtype: sansSubtype || null,
+        scriptSubtype: scriptSubtype || null,
     });
 }
 
@@ -176,6 +215,12 @@ export async function scanAndAddDirectory(directoryPath: string, onProgress?: (m
 
     if (onProgress) onProgress('Listing files...');
 
+    // Create source for this directory
+    const { createSource } = await import('./sources');
+    const folderName = directoryPath.split('/').pop() || 'Unknown Folder';
+    const source = await createSource(folderName, 'directory', directoryPath);
+    console.log('Created source:', source);
+
     // Scan for fonts
     const fonts = await invoke('scan_directory', { path: directoryPath }) as any[];
     console.log('Scanned fonts:', fonts);
@@ -219,10 +264,25 @@ export async function scanAndAddDirectory(directoryPath: string, onProgress?: (m
                 parsed?.anatomy_metrics?.width_variance,
                 parsed?.anatomy_metrics?.stroke_contrast,
                 parsed?.anatomy_metrics?.aperture,
+                parsed?.anatomy_metrics?.terminal_sharpness,
+                parsed?.anatomy_metrics?.stress_angle,
+                parsed?.anatomy_metrics?.curvature_ratio,
+                parsed?.anatomy_metrics?.counter_density,
                 parsed?.foundry,
                 parsed?.weight,
                 parsed?.is_italic,
-                parsed?.supports_vietnamese
+                parsed?.supports_vietnamese,
+                parsed?.family_name,
+                parsed?.subfamily,
+                parsed?.weight_class,
+                parsed?.width_class,
+                source.id,
+                // Enhanced taxonomy (Phase 4)
+                parsed?.primary_class,
+                parsed?.secondary_tags,  // Array from sidecar
+                parsed?.serif_subtype,
+                parsed?.sans_subtype,
+                parsed?.script_subtype
             );
             added++;
         } catch (e) {

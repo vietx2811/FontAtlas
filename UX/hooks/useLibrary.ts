@@ -83,7 +83,9 @@ export function useLibrary(): UseLibraryResult {
             category: 'Sans-Serif', classification: 'Grotesque', tags: ['modern', 'clean'],
             collection_id: null, date_added: new Date().toISOString(), date_modified: new Date().toISOString(),
             is_synced: false, file_exists: true, x_height: 0.552, width_variance: 0.12, stroke_contrast: 0.05, aperture: 0.8,
-            foundry: 'Google', weight: 400, is_italic: false, supports_vietnamese: true
+            foundry: 'Google', weight: 400, is_italic: false, supports_vietnamese: true,
+            family_name: 'Inter', subfamily: 'Regular', weight_class: 400, width_class: 5, source_id: null,
+            primary_class: null, secondary_tags: null, serif_subtype: null, sans_subtype: null, script_subtype: null
           }];
         setFonts(mockFonts);
         setFontCount(mockFonts.length);

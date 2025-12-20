@@ -38,7 +38,17 @@ const App: React.FC = () => {
                 id: font.id,
                 name: font.name,
                 family: font.name,
-                category: (font.category || FontCategory.SansSerif) as FontCategory,
+                // Map primary_class to FontCategory enum
+                category: (() => {
+                    const primaryClass = font.primary_class;
+                    if (primaryClass === 'serif') return FontCategory.Serif;
+                    if (primaryClass === 'sans') return FontCategory.SansSerif;
+                    if (primaryClass === 'script') return FontCategory.Script;
+                    if (primaryClass === 'monospace') return FontCategory.Monospace;
+                    if (primaryClass === 'display') return FontCategory.Display;
+                    if (primaryClass === 'symbol') return FontCategory.Decorative;
+                    return FontCategory.SansSerif; // Default fallback
+                })(),
                 filePath: font.file_path,
                 metrics: {
                     xHeightRatio: font.x_height || 0,
@@ -51,19 +61,54 @@ const App: React.FC = () => {
                 description: font.classification || '',
                 tags: font.tags || [],
                 fileSize: '',
-                dateAnalyzed: font.date_added
+                dateAnalyzed: font.date_added,
+                // Enhanced taxonomy (Phase 4)
+                primary_class: font.primary_class,
+                secondary_tags: font.secondary_tags,
+                serif_subtype: font.serif_subtype,
+                sans_subtype: font.sans_subtype,
+                script_subtype: font.script_subtype
             }));
         }
         // Return empty if no fonts found
         return [];
     }, [libraryFonts]);
-
     // UI State
     const [selectedCategory, setSelectedCategory] = useState<FontCategory | 'All'>('All');
+    const [selectedPrimaryClass, setSelectedPrimaryClass] = useState<string | 'All'>('All');
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedFont, setSelectedFont] = useState<FontData | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('grid');
     const [isScanning, setIsScanning] = useState(false);
+
+    // Filter fonts by taxonomy (primary_class + secondary_tags)
+    const filteredFonts = useMemo(() => {
+        return fonts.filter(font => {
+            const libFont = libraryFonts.find(lf => lf.id === font.id);
+            if (!libFont) return false;
+
+            // Filter by primary class
+            if (selectedPrimaryClass !== 'All') {
+                const primaryClass = (libFont as any).primary_class;
+                if (primaryClass !== selectedPrimaryClass) return false;
+            }
+
+            // Filter by tags
+            if (selectedTags.length > 0) {
+                try {
+                    const fontTags = JSON.parse((libFont as any).secondary_tags || '[]');
+                    const hasAnyTag = selectedTags.some(tag => fontTags.includes(tag));
+                    if (!hasAnyTag) return false;
+                } catch {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [fonts, libraryFonts, selectedPrimaryClass, selectedTags]);
+
 
     // Map data
     const mapNodes: FontMapNode[] = useMemo(() => {
@@ -109,8 +154,11 @@ const App: React.FC = () => {
             <Sidebar
                 selectedCategory={selectedCategory}
                 onSelectCategory={handleCategorySelect}
-                fontCount={fonts.length}
+                fontCount={filteredFonts.length}
                 onScanDirectory={scanFolder}
+                selectedTags={selectedTags}
+                onSelectedTagsChange={setSelectedTags}
+                fonts={libraryFonts}
             />
 
             {/* Main Content - offset by sidebar width (w-64 = 16rem = 256px) */}
@@ -134,22 +182,22 @@ const App: React.FC = () => {
                         </form>
                     </div>
 
-                    {/* Filter Tabs */}
+                    {/* Primary Class Filter (New Taxonomy) */}
                     <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-1 no-drag">
-                        {['All', 'Serif', 'Sans', 'Mono', 'Display'].map((filter) => {
-                            const getCategory = (f: string) => {
+                        {['All', 'Serif', 'Sans', 'Script', 'Mono'].map((filter) => {
+                            const getPrimaryClass = (f: string) => {
                                 if (f === 'All') return 'All';
-                                if (f === 'Sans') return FontCategory.SansSerif;
-                                if (f === 'Mono') return FontCategory.Monospace;
-                                return f as FontCategory;
+                                if (f === 'Sans') return 'sans';
+                                if (f === 'Mono') return 'monospace';
+                                return f.toLowerCase(); // serif → serif, script → script
                             };
-                            const targetCategory = getCategory(filter);
+                            const targetClass = getPrimaryClass(filter);
 
                             return (
                                 <button
                                     key={filter}
-                                    onClick={() => handleCategorySelect(targetCategory)}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${selectedCategory === targetCategory
+                                    onClick={() => setSelectedPrimaryClass(targetClass)}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors capitalize ${selectedPrimaryClass === targetClass
                                         ? 'bg-white shadow-sm text-stone-900'
                                         : 'text-stone-500 hover:text-stone-700'
                                         }`}
@@ -202,12 +250,12 @@ const App: React.FC = () => {
                     {viewMode === 'grid' ? (
                         /* Grid View - Virtualized for performance */
                         <VirtualizedFontGrid
-                            fonts={fonts}
+                            fonts={filteredFonts}
                             selectedFontId={selectedFont?.id}
                             onFontSelect={handleFontSelect}
                             isLoading={isLoading}
                             onLoadMore={loadMore}
-                            hasMore={fonts.length < fontCount}
+                            hasMore={filteredFonts.length < fontCount}
                         />
                     ) : (
                         /* Map View */

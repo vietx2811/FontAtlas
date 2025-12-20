@@ -27,11 +27,28 @@ pub struct FontRecord {
     pub width_variance: Option<f64>,
     pub stroke_contrast: Option<f64>,
     pub aperture: Option<f64>,
+    pub terminal_sharpness: Option<f64>,
+    pub stress_angle: Option<f64>,
+    pub curvature_ratio: Option<f64>,
+    pub counter_density: Option<f64>,
     // Extended Metadata
     pub foundry: Option<String>,
     pub weight: u32,
     pub is_italic: bool,
     pub supports_vietnamese: bool,
+    // Family Info
+    pub family_name: Option<String>,
+    pub subfamily: Option<String>,
+    pub weight_class: Option<i32>,
+    pub width_class: Option<i32>,
+    // Source
+    pub source_id: Option<String>,
+    // Taxonomy (new classification system)
+    pub primary_class: Option<String>,
+    pub secondary_tags: Option<String>,  // JSON string
+    pub serif_subtype: Option<String>,
+    pub sans_subtype: Option<String>,
+    pub script_subtype: Option<String>,
 }
 
 /// Collection (virtual folder)
@@ -41,6 +58,17 @@ pub struct Collection {
     pub name: String,
     pub color: Option<String>,
     pub created_at: String,
+}
+
+/// Source (directory, Google Fonts, etc.)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Source {
+    pub id: String,
+    pub name: String,
+    pub source_type: String,  // 'directory' | 'google_fonts' | 'adobe_fonts'
+    pub path: Option<String>,
+    pub metadata: Option<String>,  // JSON blob
+    pub date_added: String,
 }
 
 /// Database wrapper
@@ -65,6 +93,21 @@ impl Database {
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN weight INTEGER DEFAULT 400", []);
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN is_italic INTEGER DEFAULT 0", []);
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN supports_vietnamese INTEGER DEFAULT 0", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN terminal_sharpness REAL", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN stress_angle REAL", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN curvature_ratio REAL", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN counter_density REAL", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN family_name TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN subfamily TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN weight_class INTEGER", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN width_class INTEGER", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN source_id TEXT", []);
+        // Taxonomy columns
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN primary_class TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN secondary_tags TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN serif_subtype TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN sans_subtype TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN script_subtype TEXT", []);
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS fonts (
@@ -84,10 +127,37 @@ impl Database {
                 width_variance REAL,
                 stroke_contrast REAL,
                 aperture REAL,
+                terminal_sharpness REAL,
+                stress_angle REAL,
+                curvature_ratio REAL,
+                counter_density REAL,
                 foundry TEXT,
                 weight INTEGER DEFAULT 400,
                 is_italic INTEGER DEFAULT 0,
-                supports_vietnamese INTEGER DEFAULT 0
+                supports_vietnamese INTEGER DEFAULT 0,
+                family_name TEXT,
+                subfamily TEXT,
+                weight_class INTEGER,
+                width_class INTEGER,
+                source_id TEXT,
+                primary_class TEXT,
+                secondary_tags TEXT,
+                serif_subtype TEXT,
+                sans_subtype TEXT,
+                script_subtype TEXT
+            )",
+            [],
+        )?;
+        
+        // Create sources table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sources (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                path TEXT,
+                metadata TEXT,
+                date_added TEXT NOT NULL
             )",
             [],
         )?;
@@ -105,8 +175,11 @@ impl Database {
              (id, name, file_path, original_directory, category, classification,
               tags, collection_id, date_added, date_modified, is_synced, file_exists,
               x_height, width_variance, stroke_contrast, aperture,
-              foundry, weight, is_italic, supports_vietnamese)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+              terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+              foundry, weight, is_italic, supports_vietnamese,
+              family_name, subfamily, weight_class, width_class, source_id,
+              primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)",
             params![
                 font.id,
                 font.name,
@@ -124,10 +197,24 @@ impl Database {
                 font.width_variance,
                 font.stroke_contrast,
                 font.aperture,
+                font.terminal_sharpness,
+                font.stress_angle,
+                font.curvature_ratio,
+                font.counter_density,
                 font.foundry,
                 font.weight,
                 font.is_italic as i32,
                 font.supports_vietnamese as i32,
+                font.family_name,
+                font.subfamily,
+                font.weight_class,
+                font.width_class,
+                font.source_id,
+                font.primary_class,
+                font.secondary_tags,
+                font.serif_subtype,
+                font.sans_subtype,
+                font.script_subtype,
             ],
         )?;
         Ok(())
@@ -140,20 +227,29 @@ impl Database {
                 "SELECT id, name, file_path, original_directory, category, classification,
                     tags, collection_id, date_added, date_modified, is_synced, file_exists,
                     x_height, width_variance, stroke_contrast, aperture,
-                    foundry, weight, is_italic, supports_vietnamese
+                    terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                    foundry, weight, is_italic, supports_vietnamese,
+                    family_name, subfamily, weight_class, width_class, source_id,
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
                  FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
             } else {
                 "SELECT id, name, file_path, original_directory, category, classification,
                     tags, collection_id, date_added, date_modified, is_synced, file_exists,
                     x_height, width_variance, stroke_contrast, aperture,
-                    foundry, weight, is_italic, supports_vietnamese
+                    terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                    foundry, weight, is_italic, supports_vietnamese,
+                    family_name, subfamily, weight_class, width_class, source_id,
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
                  FROM fonts WHERE category = ?3 ORDER BY name LIMIT ?1 OFFSET ?2"
             }
         } else {
             "SELECT id, name, file_path, original_directory, category, classification,
                 tags, collection_id, date_added, date_modified, is_synced, file_exists,
                 x_height, width_variance, stroke_contrast, aperture,
-                foundry, weight, is_italic, supports_vietnamese
+                terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                foundry, weight, is_italic, supports_vietnamese,
+                family_name, subfamily, weight_class, width_class, source_id,
+                primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
              FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
         };
 
@@ -178,7 +274,6 @@ impl Database {
         Ok(rows)
     }
 
-    // Helper to map row to FontRecord to avoid duplication
     fn map_font_row(&self, row: &rusqlite::Row) -> Result<FontRecord> {
         let tags_json: String = row.get(6)?;
         let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
@@ -200,10 +295,24 @@ impl Database {
             width_variance: row.get(13)?,
             stroke_contrast: row.get(14)?,
             aperture: row.get(15)?,
-            foundry: row.get(16)?,
-            weight: row.get(17)?,
-            is_italic: row.get::<_, i32>(18)? != 0,
-            supports_vietnamese: row.get::<_, i32>(19)? != 0,
+            terminal_sharpness: row.get(16)?,
+            stress_angle: row.get(17)?,
+            curvature_ratio: row.get(18)?,
+            counter_density: row.get(19)?,
+            foundry: row.get(20)?,
+            weight: row.get(21)?,
+            is_italic: row.get::<_, i32>(22)? != 0,
+            supports_vietnamese: row.get::<_, i32>(23)? != 0,
+            family_name: row.get(24)?,
+            subfamily: row.get(25)?,
+            weight_class: row.get(26)?,
+            width_class: row.get(27)?,
+            source_id: row.get(28)?,
+            primary_class: row.get(29)?,
+            secondary_tags: row.get(30)?,
+            serif_subtype: row.get(31)?,
+            sans_subtype: row.get(32)?,
+            script_subtype: row.get(33)?,
         })
     }
     
@@ -214,36 +323,15 @@ impl Database {
             "SELECT id, name, file_path, original_directory, category, classification,
                     tags, collection_id, date_added, date_modified, is_synced, file_exists,
                     x_height, width_variance, stroke_contrast, aperture,
-                    foundry, weight, is_italic, supports_vietnamese
+                    terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                    foundry, weight, is_italic, supports_vietnamese,
+                    family_name, subfamily, weight_class, width_class, source_id,
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
              FROM fonts WHERE name LIKE ?1 ORDER BY name"
         )?;
         
         let fonts = stmt.query_map([search_pattern], |row: &rusqlite::Row| {
-            let tags_json: String = row.get(6)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
-            
-            Ok(FontRecord {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                file_path: row.get(2)?,
-                original_directory: row.get(3)?,
-                category: row.get(4)?,
-                classification: row.get(5)?,
-                tags,
-                collection_id: row.get(7)?,
-                date_added: row.get(8)?,
-                date_modified: row.get(9)?,
-                is_synced: row.get::<_, i32>(10)? != 0,
-                file_exists: row.get::<_, i32>(11)? != 0,
-                x_height: row.get(12)?,
-                width_variance: row.get(13)?,
-                stroke_contrast: row.get(14)?,
-                aperture: row.get(15)?,
-                foundry: row.get(16)?,
-                weight: row.get(17)?,
-                is_italic: row.get::<_, i32>(18)? != 0,
-                supports_vietnamese: row.get::<_, i32>(19)? != 0,
-            })
+            self.map_font_row(row)
         })?.collect::<Result<Vec<_>>>()?;
         
         Ok(fonts)
@@ -327,7 +415,93 @@ impl Database {
         )?;
         Ok(())
     }
+    
+    // ============ Source Management ============
+    
+    /// Add a source to the database
+    pub fn add_source(&self, source: &Source) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO sources 
+             (id, name, type, path, metadata, date_added)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                source.id,
+                source.name,
+                source.source_type,
+                source.path,
+                source.metadata,
+                source.date_added,
+            ],
+        )?;
+        Ok(())
+    }
+    
+    /// Get all sources
+    pub fn get_sources(&self) -> Result<Vec<Source>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, type, path, metadata, date_added
+             FROM sources ORDER BY name"
+        )?;
+        
+        let sources = stmt.query_map([], |row| {
+            Ok(Source {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                source_type: row.get(2)?,
+                path: row.get(3)?,
+                metadata: row.get(4)?,
+                date_added: row.get(5)?,
+            })
+        })?.collect::<Result<Vec<_>>>()?;
+        
+        Ok(sources)
+    }
+    
+    /// Delete a source by ID
+    pub fn delete_source(&self, id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM sources WHERE id = ?1",
+            [id],
+        )?;
+        Ok(())
+    }
+    
+    /// Get font count by source
+    pub fn get_font_count_by_source(&self, source_id: &str) -> Result<usize> {
+        let count: usize = self.conn.query_row(
+            "SELECT COUNT(*) FROM fonts WHERE source_id = ?1",
+            [source_id],
+            |row| row.get(0)
+        )?;
+        Ok(count)
+    }
+    
+    /// Get fonts by source with pagination
+    pub fn get_fonts_by_source(
+        &self,
+        source_id: &str,
+        limit: usize,
+        offset: usize
+    ) -> Result<Vec<FontRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, file_path, original_directory, category, classification,
+                    tags, collection_id, date_added, date_modified, is_synced, file_exists,
+                    x_height, width_variance, stroke_contrast, aperture,
+                    terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                    foundry, weight, is_italic, supports_vietnamese,
+                    family_name, subfamily, weight_class, width_class, source_id,
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+             FROM fonts WHERE source_id = ?1 ORDER BY name LIMIT ?2 OFFSET ?3"
+        )?;
+        
+        let fonts = stmt.query_map(params![source_id, limit, offset], |row| {
+            self.map_font_row(row)
+        })?.collect::<Result<Vec<_>>>()?;
+        
+        Ok(fonts)
+    }
 }
+
 
 /// Create a new font record from parsed data
 pub fn create_font_record(
@@ -339,10 +513,24 @@ pub fn create_font_record(
     width_variance: Option<f64>,
     stroke_contrast: Option<f64>,
     aperture: Option<f64>,
+    terminal_sharpness: Option<f64>,
+    stress_angle: Option<f64>,
+    curvature_ratio: Option<f64>,
+    counter_density: Option<f64>,
     foundry: Option<String>,
     weight: Option<u32>,
     is_italic: bool,
     supports_vietnamese: bool,
+    family_name: Option<String>,
+    subfamily: Option<String>,
+    weight_class: Option<i32>,
+    width_class: Option<i32>,
+    source_id: Option<String>,
+    primary_class: Option<String>,
+    secondary_tags: Option<String>,
+    serif_subtype: Option<String>,
+    sans_subtype: Option<String>,
+    script_subtype: Option<String>,
 ) -> FontRecord {
     let now = Utc::now().to_rfc3339();
     let parent = std::path::Path::new(&file_path)
@@ -367,9 +555,24 @@ pub fn create_font_record(
         width_variance,
         stroke_contrast,
         aperture,
+        terminal_sharpness,
+        stress_angle,
+        curvature_ratio,
+        counter_density,
         foundry,
         weight: weight.unwrap_or(400),
         is_italic,
         supports_vietnamese,
+        family_name,
+        subfamily,
+        weight_class,
+        width_class,
+        source_id,
+        // Taxonomy fields - use params or None
+        primary_class,
+        secondary_tags,
+        serif_subtype,
+        sans_subtype,
+        script_subtype,
     }
 }

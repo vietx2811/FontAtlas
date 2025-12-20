@@ -31,11 +31,11 @@ except ImportError as e:
     print(f"Warning: Could not import FontParser: {e}", file=sys.stderr)
     HAS_PARSER = False
 
-# Try to import classifier from metrics module
+# Try to import classifier - bundled locally to avoid heavy deps from metrics/__init__.py
 try:
-    from metrics.font_classifier import FontClassifier
+    from font_classifier import FontClassifier
     HAS_CLASSIFIER = True
-except ImportError as e:
+except Exception as e:
     print(f"Warning: Could not import FontClassifier: {e}", file=sys.stderr)
     HAS_CLASSIFIER = False
 
@@ -54,6 +54,7 @@ def parse_font(file_path: str) -> dict:
             
             # Extract metrics for the result
             basic_metrics = profile.get('basic_metrics', {})
+            anatomy_metrics = profile.get('anatomy_metrics', {})
             
             result = {
                 "success": True,
@@ -63,8 +64,12 @@ def parse_font(file_path: str) -> dict:
                 "anatomy_metrics": {
                     "x_height": basic_metrics.get('x_height_ratio', 0) or 0,
                     "width_variance": basic_metrics.get('width_variance', 0) or 0,
-                    "stroke_contrast": 0,  # Not in FontParser yet
-                    "aperture": 0,  # Not in FontParser yet
+                    "stroke_contrast": anatomy_metrics.get('stroke_contrast', 0) or 0,
+                    "aperture": anatomy_metrics.get('aperture', 0) or 0,
+                    "terminal_sharpness": anatomy_metrics.get('terminal_sharpness', 0) or 0,
+                    "stress_angle": anatomy_metrics.get('stress_angle', 0) or 0,
+                    "curvature_ratio": anatomy_metrics.get('curvature_ratio', 0) or 0,
+                    "counter_density": anatomy_metrics.get('counter_density', 0) or 0,
                 },
                 "classification": "Unknown",
                 "unicode_coverage": profile.get('unicode_coverage', {}),
@@ -72,6 +77,11 @@ def parse_font(file_path: str) -> dict:
                 "foundry": profile.get('metadata', {}).get('foundry'),
                 "weight": profile.get('weight_style', {}).get('weight', 400),
                 "is_italic": profile.get('weight_style', {}).get('is_italic', False),
+                # Family Info
+                "family_name": profile.get('family_info', {}).get('family_name'),
+                "subfamily": profile.get('family_info', {}).get('subfamily'),
+                "weight_class": profile.get('family_info', {}).get('weight_class', 400),
+                "width_class": profile.get('family_info', {}).get('width_class', 5),
                 # Flatted language support for easier DB insertion
                 "supports_vietnamese": profile.get('unicode_coverage', {}).get('supports_vietnamese', False),
                 "panose": profile.get('panose')
@@ -85,6 +95,15 @@ def parse_font(file_path: str) -> dict:
                          cls_res = FontClassifier.classify_with_confidence(profile)
                          result["classification"] = cls_res['category']
                          result["classification_confidence"] = cls_res['confidence']
+                         
+                         # Enhanced taxonomy (new system)
+                         if 'enhanced' in cls_res:
+                             enhanced = cls_res['enhanced']
+                             result["primary_class"] = enhanced.get('primary_class')
+                             result["secondary_tags"] = enhanced.get('secondary_tags')  # List
+                             result["serif_subtype"] = enhanced.get('serif_subtype')
+                             result["sans_subtype"] = enhanced.get('sans_subtype')
+                             result["script_subtype"] = enhanced.get('script_subtype')
                     else:
                         classifier = FontClassifier()
                         result["classification"] = classifier.classify(profile)
