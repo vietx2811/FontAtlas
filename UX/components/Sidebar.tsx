@@ -5,12 +5,11 @@ import { FontCategory } from '../types';
 import { CollectionsManager, type Collection } from './CollectionsManager';
 import { CreditsPage } from './CreditsPage';
 import { PreferencesPanel } from './PreferencesPanel';
-// import { DirectoriesPanel } from './DirectoriesPanel'; // Deprecated
 import { useSettings } from '../hooks/useSettings';
 import { useDirectories } from '../hooks/useDirectories';
 import { clearLibrary } from '../services/library';
 import { getSourcesWithCounts, type Source } from '../services/sources';
-import { Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, Trash2, RefreshCw, Heart } from 'lucide-react';
 
 interface SidebarProps {
     selectedCategory: FontCategory | 'All';
@@ -19,9 +18,10 @@ interface SidebarProps {
     onSelectCollection?: (collection: Collection | null) => void;
     selectedCollectionId?: string | null;
     onScanDirectory?: (path: string) => Promise<number>;
-    selectedTags?: string[];
-    onSelectedTagsChange?: (tags: string[]) => void;
-    fonts?: Array<{ secondary_tags?: string | null }>; // For extracting available tags
+    showFavoritesOnly?: boolean;
+    onShowFavoritesChange?: (show: boolean) => void;
+    selectedDirectory?: string | null;
+    onSelectDirectory?: (path: string | null) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -31,9 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onSelectCollection,
     selectedCollectionId,
     onScanDirectory,
-    selectedTags = [],
-    onSelectedTagsChange,
-    fonts = []
+    showFavoritesOnly = false,
+    onShowFavoritesChange,
+    selectedDirectory = null,
+    onSelectDirectory
 }) => {
     const [showCredits, setShowCredits] = useState(false);
     const [showPreferences, setShowPreferences] = useState(false);
@@ -45,8 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         addDirectory,
         removeDirectory,
         rescanDirectory,
-        scanningPath,
-        isClearing
+        scanningPath
     } = useDirectories(onScanDirectory, clearLibrary);
 
     // Toggle state for directories section listing
@@ -55,33 +55,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // Sources state
     const [sources, setSources] = useState<Source[]>([]);
     const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-    // selectedTags now comes from props (App.tsx manages it)
-
-    // Extract available tags from fonts' secondary_tags (real data from database)
-    const availableTags = React.useMemo(() => {
-        const tagSet = new Set<string>();
-        fonts.forEach(font => {
-            if (font.secondary_tags) {
-                try {
-                    // secondary_tags is a JSON string like ["tag1","tag2"]
-                    const tags = typeof font.secondary_tags === 'string'
-                        ? JSON.parse(font.secondary_tags)
-                        : font.secondary_tags;
-                    if (Array.isArray(tags)) {
-                        tags.forEach((tag: string) => tagSet.add(tag));
-                    }
-                } catch (e) {
-                    // Skip malformed JSON
-                }
-            }
-        });
-        return Array.from(tagSet).sort();
-    }, [fonts]);
-
-    // Use extracted tags if available, fallback to common tags for empty library
-    const popularTags = availableTags.length > 0
-        ? availableTags
-        : ['clean', 'modern', 'luxury', 'elegant', 'classic', 'warm', 'tech', 'editorial'];
 
     // Load sources on mount
     React.useEffect(() => {
@@ -94,25 +67,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }
         };
         loadSources();
-
-        // Reload when directories change
     }, [directories]);
 
     return (
         <>
-            <aside className="w-64 border-r border-stone-200 bg-white h-screen fixed left-0 top-0 flex flex-col z-30 hidden md:flex">
+            <aside className="w-64 border-r border-[var(--border)] bg-[var(--card)] h-screen fixed left-0 top-0 flex flex-col z-30 hidden md:flex">
                 {/* Drag Region for macOS Traffic Lights */}
                 <div
                     className="absolute top-0 left-0 w-full h-10 z-50 bg-transparent cursor-default"
                     data-tauri-drag-region="true"
                 />
 
-                {/* Logo Header - Added top padding to clear traffic lights if needed, or just align nicely */}
-                <div className="flex items-center px-6 pt-8 pb-3 shrink-0 relative z-40">
+                {/* Logo Header */}
+                <div className="flex items-center px-10 pt-10 pb-3 shrink-0 relative z-40">
                     <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg mr-3 flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">F</span>
+                        <span className="text-white text-sm font-bold shadow-sm">F</span>
                     </div>
-                    <span className="font-semibold text-lg text-stone-900 tracking-tight">FontAtlas</span>
+                    <span className="font-semibold text-lg text-[var(--foreground)] tracking-tight">FontAtlas</span>
                 </div>
 
                 {/* Main Nav */}
@@ -120,21 +91,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                     {/* Library Section */}
                     <div>
-                        <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold mb-3 px-2">Library</h3>
+                        <h3 className="text-[11px] uppercase tracking-widest text-[var(--muted)] font-bold mb-3 px-2 opacity-50">Library</h3>
                         <ul className="space-y-1">
                             <li>
                                 <button
                                     onClick={() => {
                                         onSelectCategory('All');
                                         onSelectCollection?.(null);
+                                        onShowFavoritesChange?.(false);
+                                        onSelectDirectory?.(null);
                                     }}
-                                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors ${selectedCategory === 'All' && !selectedCollectionId
-                                        ? 'bg-stone-900 text-white font-medium'
-                                        : 'text-stone-600 hover:bg-stone-100'
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors ${selectedCategory === 'All' && !selectedCollectionId && !showFavoritesOnly && !selectedDirectory
+                                        ? 'bg-[var(--foreground)] text-[var(--background)] font-medium'
+                                        : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)]'
                                         }`}
                                 >
                                     <span className="flex items-center gap-3"><LayoutGrid size={16} /> All Fonts</span>
-                                    <span className="text-xs opacity-60">{fontCount}</span>
+                                    <span className={`text-[10px] font-bold ${selectedCategory === 'All' ? 'opacity-80' : 'opacity-40'}`}>{fontCount}</span>
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    onClick={() => {
+                                        onShowFavoritesChange?.(true);
+                                        onSelectDirectory?.(null);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors ${showFavoritesOnly
+                                        ? 'bg-[var(--foreground)] text-[var(--background)] font-medium'
+                                        : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)]'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-3">
+                                        <Heart size={16} className={showFavoritesOnly ? "fill-[var(--background)]" : ""} />
+                                        Favorites
+                                    </span>
                                 </button>
                             </li>
                         </ul>
@@ -145,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div className="flex items-center justify-between mb-2 px-2 group">
                             <button
                                 onClick={() => setIsDirsExpanded(!isDirsExpanded)}
-                                className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-stone-400 font-semibold hover:text-stone-600 transition-colors"
+                                className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-[var(--muted)] font-bold opacity-50 hover:opacity-100 transition-opacity"
                             >
                                 <ChevronRight
                                     size={14}
@@ -155,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </button>
                             <button
                                 onClick={addDirectory}
-                                className="p-1 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded transition-colors"
+                                className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-3)] rounded transition-colors"
                                 title="Add Directory to Watch"
                             >
                                 <Plus size={14} />
@@ -167,28 +157,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 {directories.length > 0 ? (
                                     directories.map(dir => (
                                         <li key={dir.path} className="group relative">
-                                            <div className="w-full flex items-center justify-between px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-lg transition-colors group-hover:pr-14">
+                                            <button
+                                                onClick={() => {
+                                                    onSelectDirectory?.(selectedDirectory === dir.path ? null : dir.path);
+                                                    onShowFavoritesChange?.(false);
+                                                }}
+                                                className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors group-hover:pr-14 ${selectedDirectory === dir.path
+                                                    ? 'bg-[var(--surface-3)] text-[var(--foreground)]'
+                                                    : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)]'
+                                                    }`}
+                                            >
                                                 <span className="flex items-center gap-3 min-w-0" title={dir.path}>
-                                                    <Folder size={16} className="shrink-0 text-amber-500/70" />
+                                                    <Folder size={16} className={`shrink-0 ${selectedDirectory === dir.path ? 'text-[var(--foreground)]' : 'text-amber-500/70'}`} />
                                                     <span className="truncate">{dir.path.split('/').pop()}</span>
                                                 </span>
-                                                <span className="text-xs text-stone-300 font-mono group-hover:hidden">
+                                                <span className="text-[10px] font-bold opacity-40 group-hover:hidden">
                                                     {dir.fontCount}
                                                 </span>
-                                            </div>
+                                            </button>
 
                                             {/* Hover Actions */}
-                                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-stone-50 pl-2">
+                                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--surface-3)] rounded-md p-0.5 shadow-sm">
                                                 <button
                                                     onClick={() => rescanDirectory(dir)}
-                                                    className={`p-1.5 text-stone-400 hover:text-stone-600 rounded-md hover:bg-stone-200 ${scanningPath === dir.path ? 'animate-spin text-amber-500' : ''}`}
+                                                    className={`p-1.5 text-[var(--muted)] hover:text-[var(--foreground)] rounded-md ${scanningPath === dir.path ? 'animate-spin text-amber-500' : ''}`}
                                                     title="Rescan"
                                                 >
                                                     {scanningPath === dir.path ? <Loader2 size={12} /> : <RefreshCw size={12} />}
                                                 </button>
                                                 <button
                                                     onClick={() => removeDirectory(dir.path)}
-                                                    className="p-1.5 text-stone-400 hover:text-red-500 rounded-md hover:bg-red-50"
+                                                    className="p-1.5 text-[var(--muted)] hover:text-red-500 rounded-md"
                                                     title="Remove"
                                                 >
                                                     <Trash2 size={12} />
@@ -197,10 +196,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         </li>
                                     ))
                                 ) : (
-                                    <li className="px-3 py-4 text-center border-2 border-dashed border-stone-100 rounded-lg">
+                                    <li className="px-3 py-4 text-center border-2 border-dashed border-[var(--border)] rounded-lg">
                                         <button
                                             onClick={addDirectory}
-                                            className="text-xs text-stone-400 hover:text-stone-600 flex flex-col items-center gap-1 w-full"
+                                            className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] flex flex-col items-center gap-1 w-full"
                                         >
                                             <Plus size={16} />
                                             <span>Add Folder</span>
@@ -214,37 +213,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {/* Collections Section */}
                     <div>
                         <div className="flex items-center justify-between mb-3 px-2">
-                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Collections</h3>
-                            <button className="p-1 text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded transition-colors">
+                            <h3 className="text-[11px] uppercase tracking-widest text-[var(--muted)] font-bold opacity-50">Collections</h3>
+                            <button className="p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-3)] rounded transition-colors">
                                 <Plus size={14} />
                             </button>
                         </div>
                         <ul className="space-y-1">
                             <li>
-                                <button className="w-full flex items-center justify-between px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-lg transition-colors">
+                                <button className="w-full flex items-center justify-between px-3 py-2 text-sm text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)] rounded-lg transition-colors">
                                     <span className="flex items-center gap-3">
-                                        <span className="w-3 h-3 rounded-full bg-red-400"></span>
+                                        <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
                                         Favorites
                                     </span>
-                                    <span className="text-xs text-stone-400">12</span>
-                                </button>
-                            </li>
-                            <li>
-                                <button className="w-full flex items-center justify-between px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-lg transition-colors">
-                                    <span className="flex items-center gap-3">
-                                        <span className="w-3 h-3 rounded-full bg-teal-400"></span>
-                                        Work Projects
-                                    </span>
-                                    <span className="text-xs text-stone-400">8</span>
-                                </button>
-                            </li>
-                            <li>
-                                <button className="w-full flex items-center justify-between px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-lg transition-colors">
-                                    <span className="flex items-center gap-3">
-                                        <span className="w-3 h-3 rounded-full bg-blue-400"></span>
-                                        Editorial
-                                    </span>
-                                    <span className="text-xs text-stone-400">5</span>
+                                    <span className="text-[10px] font-bold opacity-40">12</span>
                                 </button>
                             </li>
                         </ul>
@@ -253,12 +234,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {/* Sources Section */}
                     <div>
                         <div className="flex items-center justify-between mb-3 px-2">
-                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Sources</h3>
+                            <h3 className="text-[11px] uppercase tracking-widest text-[var(--muted)] font-bold opacity-50">Sources</h3>
                         </div>
                         <ul className="space-y-1">
                             {sources.length === 0 ? (
-                                <li className="px-3 py-2 text-xs text-stone-400 text-center">
-                                    No sources yet
+                                <li className="px-3 py-2 text-[10px] text-[var(--muted)] opacity-50 text-center italic">
+                                    Local system only
                                 </li>
                             ) : (
                                 sources.map(source => (
@@ -268,21 +249,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                 selectedSourceId === source.id ? null : source.id
                                             )}
                                             className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${selectedSourceId === source.id
-                                                ? 'bg-stone-100 text-stone-900'
-                                                : 'text-stone-600 hover:bg-stone-50'
+                                                ? 'bg-[var(--surface-3)] text-[var(--foreground)]'
+                                                : 'text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)]'
                                                 }`}
                                         >
-                                            <span className="flex items-center gap-3 truncate">
+                                            <span className="flex items-center gap-3 truncate font-medium">
                                                 {source.source_type === 'directory' ? (
-                                                    <HardDrive size={16} className="flex-shrink-0" />
+                                                    <HardDrive size={15} className="flex-shrink-0 opacity-70" />
                                                 ) : (
-                                                    <Cloud size={16} className="flex-shrink-0" />
+                                                    <Cloud size={15} className="flex-shrink-0 opacity-70" />
                                                 )}
                                                 <span className="truncate" title={source.name}>
                                                     {source.name}
                                                 </span>
                                             </span>
-                                            <span className="text-xs text-stone-400 ml-2">
+                                            <span className="text-[10px] font-bold opacity-40 ml-2">
                                                 {source.font_count || 0}
                                             </span>
                                         </button>
@@ -292,86 +273,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </ul>
                     </div>
 
-                    {/* Tag Filters Section */}
-                    <div>
-                        <div className="flex items-center justify-between mb-3 px-2">
-                            <h3 className="text-[11px] uppercase tracking-widest text-stone-400 font-semibold">Filter by Tags</h3>
-                            {selectedTags.length > 0 && (
-                                <button
-                                    onClick={() => onSelectedTagsChange?.(([]))}
-                                    className="text-[10px] text-stone-400 hover:text-stone-600 transition-colors"
-                                >
-                                    Clear
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 px-2">
-                            {popularTags.map(tag => {
-                                const isActive = selectedTags.includes(tag);
-                                return (
-                                    <button
-                                        key={tag}
-                                        onClick={() => {
-                                            onSelectedTagsChange?.(
-                                                isActive
-                                                    ? selectedTags.filter(t => t !== tag)
-                                                    : [...selectedTags, tag]
-                                            );
-                                        }}
-                                        className={`px-2 py-0.5 text-xs rounded-full transition-all capitalize ${isActive
-                                            ? 'bg-amber-500/20 text-amber-600 border border-amber-500/30 font-medium'
-                                            : 'bg-stone-100 text-stone-500 border border-transparent hover:bg-stone-200 hover:border-stone-300'
-                                            }`}
-                                    >
-                                        {tag}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        {selectedTags.length > 0 && (
-                            <div className="mt-2 px-2 text-xs text-stone-400">
-                                {selectedTags.length} tag{selectedTags.length > 1 ? 's' : ''} active
-                            </div>
-                        )}
-                    </div>
 
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-stone-100 space-y-3">
+                <div className="p-4 border-t border-[var(--border)] space-y-4">
                     {/* Qdrant Status */}
                     <button
                         onClick={() => setShowPreferences(true)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-lg transition-colors"
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--surface-3)] hover:text-[var(--foreground)] rounded-lg transition-colors border border-transparent hover:border-[var(--border)]"
                     >
-                        <span className="flex items-center gap-2">
-                            {settings.qdrantMode === 'local' ? <HardDrive size={15} /> : <Cloud size={15} />}
-                            <span>Qdrant</span>
+                        <span className="flex items-center gap-2 font-medium">
+                            {settings.qdrantMode === 'local' ? <HardDrive size={14} /> : <Cloud size={14} />}
+                            <span>AI Engine</span>
                         </span>
-                        <span className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-stone-400">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] opacity-40 uppercase font-bold">
                                 {settings.qdrantMode === 'local' ? 'Local' : 'Remote'}
                             </span>
-                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        </span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
+                        </div>
                     </button>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center justify-between gap-2">
-                        <button className="flex items-center gap-2 px-3 py-2 text-sm text-stone-500 hover:bg-stone-50 rounded-lg transition-colors">
-                            <BarChart3 size={16} /> Analytics
+                    <div className="flex items-center justify-between gap-1 px-1">
+                        <button
+                            onClick={() => setShowPreferences(true)}
+                            className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-3)] rounded-lg transition-all"
+                            title="Analytics"
+                        >
+                            <BarChart3 size={15} />
                         </button>
                         <button
                             onClick={() => setShowPreferences(true)}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-stone-500 hover:bg-stone-50 rounded-lg transition-colors"
+                            className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-3)] rounded-lg transition-all"
+                            title="Preferences"
                         >
-                            <Settings size={16} />
+                            <Settings size={15} />
                         </button>
                         <button
                             onClick={() => setShowCredits(true)}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-stone-500 hover:bg-stone-50 rounded-lg transition-colors"
+                            className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-3)] rounded-lg transition-all"
+                            title="About"
                         >
-                            <Info size={16} />
+                            <Info size={15} />
                         </button>
                     </div>
                 </div>

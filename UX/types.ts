@@ -14,6 +14,11 @@ export interface FontMetrics {
   aperture: number;
   capHeight: number;
   unitsPerEm: number;
+  // Additional metrics for classification
+  curvature: number;
+  terminalSharpness: number;
+  stressAngle: number;
+  counterDensity: number;
 }
 
 export interface FontData {
@@ -35,6 +40,9 @@ export interface FontData {
   serif_subtype?: string | null;
   sans_subtype?: string | null;
   script_subtype?: string | null;
+  // Metadata
+  foundry?: string | null;
+  isFavorite: boolean;
 }
 
 export interface FontPairing {

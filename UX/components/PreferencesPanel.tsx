@@ -6,10 +6,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, Database, Cloud, HardDrive, Check, AlertCircle } from 'lucide-react';
+import { X, Database, Cloud, HardDrive, Check, AlertCircle, Sparkles } from 'lucide-react';
 import { useSettings, type AppSettings } from '../hooks/useSettings';
 import { useStatus } from '../context/StatusContext';
-import { clearLibrary } from '../services/library';
+import { clearLibrary, startBackgroundRescan } from '../services/library';
+
 import { Loader2 } from 'lucide-react';
 import { ask, message } from '@tauri-apps/plugin-dialog';
 
@@ -23,7 +24,9 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
     const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
     const [isClearing, setIsClearing] = useState(false);
+    const [isEmbedding, setIsEmbedding] = useState(false);
     const { setStatus, setError, clearStatus } = useStatus();
+
 
     // Sync local state when settings change
     useEffect(() => {
@@ -86,6 +89,8 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
         try {
             const deleted = await clearLibrary();
             console.log(`Cleared ${deleted} fonts from library`);
+            // Also clear directories from localStorage
+            localStorage.removeItem('fontatlas_directories');
             setStatus(`Library cleared`, false);
             setTimeout(() => {
                 clearStatus();
@@ -103,6 +108,36 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
             setIsClearing(false);
         }
     };
+
+    const handleGenerateVisualEmbeddings = async () => {
+        const yes = await ask(
+            'Synchronize and analyze all fonts in your library? \n\n' +
+            'This will parse font metrics and generate visual embeddings for AI-powered similarity search. ' +
+            'This runs in the background.',
+            {
+                title: 'Synchronize Library',
+                kind: 'info'
+            }
+        );
+
+        if (!yes) return;
+
+        setIsEmbedding(true);
+        setStatus('Starting library synchronization...');
+
+        try {
+            await startBackgroundRescan(true);
+            setStatus('Synchronization started in background', false);
+
+        } catch (e) {
+            console.error('Failed to start rescan:', e);
+            setError('Failed to start synchronization');
+        } finally {
+            setIsEmbedding(false);
+            setTimeout(clearStatus, 3000);
+        }
+    };
+
 
     if (!isOpen) return null;
 
@@ -209,6 +244,35 @@ export const PreferencesPanel: React.FC<PreferencesPanelProps> = ({ isOpen, onCl
                         >
                             Test Connection
                         </button>
+                    </div>
+
+                    {/* Toolbox - Background Tasks */}
+                    <div>
+                        <h3 className="text-sm font-medium text-stone-700 mb-3">Toolbox</h3>
+                        <div className="p-4 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl border border-violet-100">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center flex-shrink-0">
+                                    <Sparkles size={20} className="text-white" />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-medium text-violet-900 mb-1">Library Synchronization</h4>
+                                    <p className="text-xs text-violet-700 mb-3">
+                                        Analyze font metrics and generate 512D visual embeddings for AI-powered similarity search.
+                                        This runs in the background and will pick up where it left off.
+                                    </p>
+
+                                    <button
+                                        onClick={handleGenerateVisualEmbeddings}
+                                        disabled={isEmbedding}
+                                        className="px-3 py-2 text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-sm"
+                                    >
+                                        {isEmbedding ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                        {isEmbedding ? 'Starting...' : 'Sync & Analysis'}
+
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Library Management */}

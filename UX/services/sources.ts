@@ -90,7 +90,7 @@ export async function getFontCountBySource(sourceId: string): Promise<number> {
     if (!invoke) {
         return 0;
     }
-    return invoke('get_font_count_by_source', { source_id: sourceId });
+    return invoke('get_font_count_by_source', { sourceId: sourceId });
 }
 
 /**

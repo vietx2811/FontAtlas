@@ -14,9 +14,11 @@ interface VirtualizedFontGridProps {
     fonts: FontData[];
     selectedFontId?: string;
     onFontSelect: (font: FontData) => void;
+    onFindSimilar?: (font: FontData) => void;
     isLoading?: boolean;
     onLoadMore?: () => void;
     hasMore?: boolean;
+    columnCount?: number;
 }
 
 // Number of fonts to render per batch
@@ -26,9 +28,11 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
     fonts,
     selectedFontId,
     onFontSelect,
+    onFindSimilar,
     isLoading = false,
     onLoadMore,
-    hasMore = false
+    hasMore = false,
+    columnCount = 4
 }) => {
     const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
     const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -121,7 +125,10 @@ export const VirtualizedFontGrid: React.FC<VirtualizedFontGridProps> = ({
             </div>
 
             {/* Font Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div
+                className="grid gap-5"
+                style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+            >
                 {visibleFonts.map(font => (
                     <FontCard
                         key={font.id}

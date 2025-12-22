@@ -886,7 +886,285 @@ class FontParser:
         glyph_name = cmap[ord(char)]
         return self.get_glyph_outline(glyph_name)
     
+    def detect_serifs(self) -> Dict:
+        """
+        Detect whether font has serifs by analyzing outline complexity
+        of simple vertical characters like 'I' and 'l'.
+        
+        Method: Count outline commands. Sans 'I' has ~5 commands (simple rectangle),
+        while serif 'I' has 12+ (rectangle + serifs at top and bottom).
+        
+        Returns:
+            Dict with:
+                - has_serifs: bool (True = serif font, False = sans-serif)
+                - confidence: float (0.0-1.0)
+                - command_count: average commands for analyzed glyphs
+                - analyzed_chars: list of chars successfully analyzed
+        """
+        try:
+            cmap = self.font.getBestCmap()
+            if not cmap:
+                return {'has_serifs': None, 'confidence': 0.0, 'command_count': 0, 'analyzed_chars': []}
+            
+            # Test characters: simple verticals
+            # 'I' is best - just a vertical stroke that clearly shows serif presence
+            # 'l' (lowercase L) as backup
+            test_chars = ['I', 'l']
+            command_counts = []
+            analyzed_chars = []
+            
+            for char in test_chars:
+                if ord(char) not in cmap:
+                    continue
+                
+                outline = self.get_glyph_outline_for_char(char)
+                if not outline or len(outline) < 3:
+                    continue
+                
+                cmd_count = len(outline)
+                command_counts.append(cmd_count)
+                analyzed_chars.append(char)
+            
+            if not command_counts:
+                # Fallback: try other vertical chars
+                for char in ['H', 'n', 't']:
+                    if ord(char) not in cmap:
+                        continue
+                    outline = self.get_glyph_outline_for_char(char)
+                    if outline:
+                        # For H/n, divide by 2 since they have more complexity
+                        adjusted_count = len(outline) / 2
+                        command_counts.append(adjusted_count)
+                        analyzed_chars.append(char)
+            
+            if not command_counts:
+                return {'has_serifs': None, 'confidence': 0.0, 'command_count': 0, 'analyzed_chars': []}
+            
+            import numpy as np
+            avg_count = np.mean(command_counts)
+            
+            # Thresholds based on analysis:
+            # Sans 'I': 4-6 commands (simple rectangle)
+            # Serif 'I': 10-15+ commands (rectangle + serifs)
+            # Decorative/Script: 8-12+ with curves
+            
+            if avg_count <= 6:
+                has_serifs = False  # Simple, clean = sans
+                confidence = min(1.0, (7 - avg_count) / 3)  # Higher confidence for fewer commands
+            elif avg_count >= 10:
+                has_serifs = True   # Complex = has serifs/decorations
+                confidence = min(1.0, (avg_count - 9) / 5)
+            else:
+                # Ambiguous zone (7-9 commands) - likely decorative sans or light serif
+                has_serifs = None
+                confidence = 0.3
+            
+            return {
+                'has_serifs': has_serifs,
+                'confidence': float(confidence),
+                'command_count': float(avg_count),
+                'analyzed_chars': analyzed_chars
+            }
+            
+        except Exception as e:
+            return {'has_serifs': None, 'confidence': 0.0, 'command_count': 0, 'error': str(e), 'analyzed_chars': []}
+
+    
+    def _analyze_serif_presence(self, glyph_name: str, glyph_set) -> Optional[float]:
+        """
+        Analyze a single glyph for serif presence.
+        
+        Method: Compare width at baseline/terminal regions vs stem width.
+        Serifs cause significant width increase at terminals.
+        
+        Returns:
+            Serif ratio (terminal_width / stem_width), or None if analysis fails
+            > 1.3 indicates serifs present
+        """
+        try:
+            from fontTools.pens.boundsPen import BoundsPen
+            import numpy as np
+            
+            # Get overall bounds
+            pen = BoundsPen(glyph_set)
+            glyph_set[glyph_name].draw(pen)
+            bbox = pen.bounds
+            
+            if not bbox:
+                return None
+            
+            # Get outline commands
+            outline = self.get_glyph_outline(glyph_name)
+            if not outline:
+                return None
+            
+            # Collect all points from outline
+            points = []
+            current = (0, 0)
+            
+            for cmd, args in outline:
+                if cmd == 'moveTo':
+                    current = args[0]
+                    points.append(current)
+                elif cmd == 'lineTo':
+                    current = args[0]
+                    points.append(current)
+                elif cmd == 'curveTo':
+                    # Add control points and end point
+                    for pt in args:
+                        points.append(pt)
+                    current = args[-1]
+                elif cmd == 'qCurveTo':
+                    for pt in args:
+                        points.append(pt)
+                    current = args[-1]
+            
+            if len(points) < 4:
+                return None
+            
+            # Analyze horizontal extent at different y-levels
+            height = bbox[3] - bbox[1]  # yMax - yMin
+            if height <= 0:
+                return None
+            
+            # Sample horizontal widths at different heights
+            # Baseline region: bottom 15%
+            # Middle (stem) region: 35-65%
+            # Cap region: top 15%
+            baseline_y_max = bbox[1] + height * 0.15
+            middle_y_min = bbox[1] + height * 0.35
+            middle_y_max = bbox[1] + height * 0.65
+            cap_y_min = bbox[3] - height * 0.15
+            
+            def get_x_extent_in_region(y_min, y_max):
+                """Get min/max X coordinates of points in y-region."""
+                region_points = [p for p in points if y_min <= p[1] <= y_max]
+                if not region_points:
+                    return None
+                xs = [p[0] for p in region_points]
+                return max(xs) - min(xs) if xs else None
+            
+            baseline_width = get_x_extent_in_region(bbox[1], baseline_y_max)
+            stem_width = get_x_extent_in_region(middle_y_min, middle_y_max)
+            cap_width = get_x_extent_in_region(cap_y_min, bbox[3])
+            
+            if not stem_width or stem_width <= 0:
+                return None
+            
+            # Calculate ratios
+            ratios = []
+            if baseline_width and baseline_width > 0:
+                ratios.append(baseline_width / stem_width)
+            if cap_width and cap_width > 0:
+                ratios.append(cap_width / stem_width)
+            
+            if not ratios:
+                return None
+            
+            return float(np.mean(ratios))
+            
+        except Exception:
+            return None
+    
+    def detect_symmetry(self) -> Dict:
+        """
+        Detect vertical symmetry of uppercase letters H, A, I.
+        
+        Sans/Serif fonts have near-perfect symmetry (>0.95)
+        Script/Display fonts have lower symmetry (<0.92)
+        
+        Returns:
+            Dict with:
+                - symmetry_score: float (0-1, average symmetry)
+                - is_symmetric: bool (True if score > 0.92)
+                - characters: dict of per-character scores
+        """
+        import numpy as np
+        
+        def calculate_char_symmetry(char: str) -> Optional[float]:
+            """Calculate vertical symmetry score for a character."""
+            outline = self.get_glyph_outline_for_char(char)
+            if not outline or len(outline) < 4:
+                return None
+            
+            # Collect all on-curve points
+            points = []
+            for cmd, args in outline:
+                if cmd in ('moveTo', 'lineTo'):
+                    points.append(args[0])
+                elif cmd in ('curveTo', 'qCurveTo'):
+                    points.append(args[-1])  # End point
+            
+            if len(points) < 4:
+                return None
+            
+            # Find center X axis
+            xs = [p[0] for p in points]
+            center_x = (max(xs) + min(xs)) / 2
+            width = max(xs) - min(xs)
+            
+            if width <= 0:
+                return None
+            
+            # Split into left and right halves
+            left_points = [(p[0], p[1]) for p in points if p[0] < center_x]
+            right_points = [(p[0], p[1]) for p in points if p[0] > center_x]
+            
+            if len(left_points) < 2 or len(right_points) < 2:
+                return None
+            
+            # Mirror right points around center axis
+            mirrored_right = [(2 * center_x - p[0], p[1]) for p in right_points]
+            
+            # Sort by Y for comparison
+            left_sorted = sorted(left_points, key=lambda p: p[1])
+            right_sorted = sorted(mirrored_right, key=lambda p: p[1])
+            
+            # Calculate average distance between corresponding points
+            min_len = min(len(left_sorted), len(right_sorted))
+            if min_len < 2:
+                return None
+            
+            total_diff = 0
+            for i in range(min_len):
+                left_p = left_sorted[i]
+                # Find nearest mirrored point
+                min_dist = float('inf')
+                for right_p in right_sorted:
+                    dist = np.sqrt((left_p[0] - right_p[0])**2 + (left_p[1] - right_p[1])**2)
+                    min_dist = min(min_dist, dist)
+                total_diff += min_dist
+            
+            # Normalize by glyph width
+            symmetry_score = 1.0 - (total_diff / (min_len * width))
+            return max(0.0, min(1.0, symmetry_score))
+        
+        # Test symmetry on uppercase letters
+        test_chars = ['H', 'A', 'I']
+        char_scores = {}
+        
+        for char in test_chars:
+            score = calculate_char_symmetry(char)
+            if score is not None:
+                char_scores[char] = score
+        
+        if not char_scores:
+            return {
+                'symmetry_score': 0.5,
+                'is_symmetric': None,
+                'characters': {}
+            }
+        
+        avg_symmetry = float(np.mean(list(char_scores.values())))
+        
+        return {
+            'symmetry_score': round(avg_symmetry, 3),
+            'is_symmetric': avg_symmetry > 0.92,
+            'characters': char_scores
+        }
+
     def extract_full_profile(self) -> Dict:
+
         """
         Extract complete font profile (Phase 1A).
         
@@ -905,9 +1183,12 @@ class FontParser:
             'weight_style': self.get_weight_style(),
             'family_info': self.get_family_info(),
             'panose': self.get_panose_data(),
+            'serif_detection': self.detect_serifs(),  # Direct serif detection
+            'symmetry_detection': self.detect_symmetry(),  # NEW: H, A, I symmetry
         }
         
         return profile
+
     
     def save_profile(self, output_path: str):
         """Save font profile to JSON."""

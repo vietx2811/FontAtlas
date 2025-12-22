@@ -79,7 +79,11 @@ class FontClassifier:
         primary_class = FontClassifier._determine_primary_class(profile)
         result['primary_class'] = primary_class
         
-        # Step 2: Determine subtype
+        # Step 2: Determine FUNCTION class (Text / Display / Decorative)
+        function_class = FontClassifier._determine_function_class(profile, primary_class)
+        result['function_class'] = function_class
+        
+        # Step 3: Determine subtype (STRUCTURE subtypes)
         if primary_class == 'serif':
             subtype = FontClassifier._determine_serif_subtype(profile)
             result['serif_subtype'] = subtype
@@ -96,88 +100,259 @@ class FontClassifier:
             if subtype:
                 result['secondary_tags'].append(subtype)
         
-        # Step 3: Generate anatomy tags
+        # Step 4: Generate anatomy tags
         anatomy_tags = FontClassifier._generate_anatomy_tags(profile)
         result['secondary_tags'].extend(anatomy_tags)
         
-        # Step 4: Generate mood tags
+        # Step 5: Generate mood tags
         mood_tags = FontClassifier._generate_mood_tags(profile, primary_class)
         result['secondary_tags'].extend(mood_tags)
         
-        # Step 5: Determine suitable roles
+        # Step 6: Determine suitable roles
         result['suitable_roles'] = FontClassifier._determine_roles(result, profile)
         
         return result
+
     
     @staticmethod
     def _determine_primary_class(profile: Dict) -> str:
         """
-        Determine primary classification using ONLY metrics.
+        Determine primary classification.
         
-        Key insight from research:
-        - Curvature > 0.70 is the BEST script indicator
-        - High-contrast sans (display fonts) need curvature check to avoid serif misclassification
-        - PANOSE is used only for symbol fonts (bFamilyType=5)
+        Categories:
+        - symbol: Icon/dingbat fonts
+        - monospace: Fixed-width fonts
+        - blackletter: Gothic/Fraktur style
+        - script: Handwriting, cursive (very high curvature >0.90)
+        - display: Decorative, stylized (moderate complexity, not serif/sans)
+        - serif: Traditional with serifs
+        - sans: Clean, no serifs
         """
         basic = profile.get('basic_metrics', {})
         anatomy = profile.get('anatomy_metrics', {})
         panose = profile.get('panose')
+        serif_detection = profile.get('serif_detection', {})
         
         # Extract key metrics
         width_variance = basic.get('width_variance', 0.15)
         stroke_contrast = FontClassifier._get_metric(anatomy, 'stroke_contrast', 1.0)
         curvature = FontClassifier._get_metric(anatomy, 'curvature_ratio', 0.4)
-        aperture = FontClassifier._get_metric(anatomy, 'aperture', 0.5)
+        command_count = serif_detection.get('command_count', 0)
+        has_serifs = serif_detection.get('has_serifs')
+        serif_confidence = serif_detection.get('confidence', 0)
         
-        # 1. Symbol fonts via PANOSE only
+        # === 1. SYMBOL (via PANOSE) ===
         if panose and len(panose) >= 1:
             if panose[0] == 5:  # Symbol
                 return 'symbol'
+            # Blackletter: PANOSE bFamilyType=3 (Script) with specific characteristics
+            if panose[0] == 3 and len(panose) >= 3:
+                if panose[2] >= 9:  # bSerifStyle >= 9 suggests blackletter
+                    return 'blackletter'
         
-        # 2. Monospace (very low width variance is highly distinctive)
+        # === 2. MONOSPACE ===
         if width_variance is not None and width_variance < FontClassifier.MONOSPACE_WIDTH_VAR_MAX:
             return 'monospace'
         
-        # 3. Script detection (MULTI-FACTOR - before serif/sans)
-        # Using tiered approach for more reliable detection:
-        #   Tier 1: Very high curvature (>0.80) = definitely script
-        #   Tier 2: High curvature + high width variance = likely script
-        #   Tier 3: Moderate-high curvature (>0.60) with supporting factors
-        
-        # Tier 1: Very high curvature is a definite script indicator
-        if curvature > 0.80:
+        # === 3. SCRIPT (handwriting, cursive) ===
+        # Very high curvature (>0.90) = flowing, connected letterforms
+        if curvature > 0.90:
             return 'script'
         
-        # Tier 2: Combination of high curvature + high width variance
-        # Scripts have both flowing curves AND variable letterforms
-        if curvature > 0.55 and width_variance > 0.20:
+        # High curvature + low stroke_contrast = hand-drawn style
+        if curvature > 0.80 and stroke_contrast < 2.0:
             return 'script'
         
-        # Tier 3: Moderate-high curvature for brush-style fonts
-        # Fonts like LeviBrush (curv=0.63) have distinctive flowing forms
-        if curvature > 0.60:
+        # === 4. COMPLEX OUTLINES - Check symmetry to distinguish serif vs script ===
+        # Serif: complex outlines + SYMMETRIC (traditional structured forms)
+        # Script: complex outlines + ASYMMETRIC (flowing, hand-drawn)
+        # NOTE: Skip symmetry check for ITALIC fonts (naturally asymmetric due to slant)
+        
+        symmetry_detection = profile.get('symmetry_detection', {})
+        is_symmetric = symmetry_detection.get('is_symmetric')
+        symmetry_score = symmetry_detection.get('symmetry_score', 0.5)
+        
+        # Check if font is italic (italic fonts have lower symmetry naturally)
+        weight_style = profile.get('weight_style', {})
+        is_italic = weight_style.get('is_italic', False)
+        
+        if has_serifs is True and serif_confidence >= 0.3:
+            # Complex outlines detected
+            
+            # SKIP symmetry check for italic fonts - they're naturally asymmetric
+            # Italic serif should still be classified as serif, not script
+            if is_italic:
+                # For italic, use stroke_contrast to distinguish serif from script
+                if stroke_contrast >= 2.0:
+                    return 'serif'  # e.g., Playfair Display Italic
+                else:
+                    return 'script'  # True italic script fonts
+            
+            # NON-ITALIC: Use symmetry to separate serif from script
+            # Serif fonts have symmetric H, A, I (score > 0.92)
+            # Script/Display have asymmetric forms (score < 0.85)
+            
+            if is_symmetric is False or symmetry_score < 0.85:
+                # Asymmetric font with complex outlines = SCRIPT
+                # This correctly classifies Lobster (symmetry=0.707) as script
+                return 'script'
+            
+            # Symmetric with complex outlines = SERIF
+            # Typical serif: good stroke_contrast (2.5-4.5)
+            if stroke_contrast >= 2.5 and stroke_contrast <= 4.5:
+                return 'serif'
+            
+            # High contrast = likely serif (didone style)
+            if stroke_contrast > 4.5:
+                return 'serif'
+            
+            # Low contrast with complex outlines = slab or decorative serif
+            return 'serif'
+        
+        # === 5. SANS ===
+        if has_serifs is False:
+            return 'sans'
+        
+        # === 6. FALLBACK for ambiguous cases (has_serifs=None, command_count 7-9) ===
+        # Check symmetry - asymmetric fonts are likely script even if outline is ambiguous
+        if symmetry_score < 0.80 and is_symmetric is False:
+            # Low symmetry = script (e.g., Lobster Two with sym=0.66)
             return 'script'
         
-        # 4. Serif vs Sans classification
-        # Need to distinguish true serifs from high-contrast display sans
-        # True serif: has serifs (high contrast) + moderate curvature (not too angular)
-        # Display sans: may have high contrast but is angular (low curvature)
+        if curvature > 0.85:
+            return 'script'
         
-        # Very high contrast + moderate curvature = definitely serif
-        if stroke_contrast > 3.0 and curvature > 0.35:
+        if stroke_contrast > 3.5 and curvature > 0.35:
             return 'serif'
         
-        # High contrast + not too angular = likely serif
-        if stroke_contrast >= 2.5 and curvature > 0.40:
-            return 'serif'
-        
-        # Moderate contrast + rounded forms = serif
-        if stroke_contrast >= 2.0 and curvature > 0.50:
-            return 'serif'
-        
-        # Everything else is sans-serif
-        # (low contrast OR angular forms regardless of contrast)
         return 'sans'
+
+    @staticmethod
+    def _determine_function_class(profile: Dict, primary_class: str) -> str:
+        """
+        Determine FUNCTION classification: text, display, or decorative.
+        
+        FUNCTION determines how the font is used:
+        - text: Body text, long reading, UI
+        - display: Headlines, logos, hero text
+        - decorative: Expressive, experimental, short attention
+        
+        Based on user's matrix:
+        - Serif/Sans: can be text, display, or decorative
+        - Script/Blackletter: only display or decorative (not suitable for text)
+        """
+        # === Check font name for function keywords ===
+        metadata = profile.get('metadata', {})
+        font_name = metadata.get('font_name', '').lower()
+        family_info = profile.get('family_info', {})
+        family_name = family_info.get('family_name', '').lower() if isinstance(family_info, dict) else ''
+        full_name = f"{font_name} {family_name}"
+        
+        # Decorative keywords (check first - more specific)
+        decorative_keywords = ['decorative', 'ornament', 'fancy', 'novelty', 
+                              'fun', 'kids', 'comic', 'cartoon', 'pixel', 'retro',
+                              'dots', 'outline', 'shadow', 'inline', 'stencil',
+                              'bangers', 'creepster', 'nosifer', 'press start', '2p',
+                              'marker', 'rock salt', 'codystar', 'monoton']
+        
+        # Display keywords
+        display_keywords = ['display', 'poster', 'headline', 'banner', 'title', 
+                           'black', 'heavy', 'ultra', 'fat', 'big', 'large',
+                           'bebas', 'neue', 'oswald', 'condensed', 'narrow',
+                           'slab one', 'fatface', 'abril']
+        
+        # Check for decorative keywords first (more specific)
+        for keyword in decorative_keywords:
+            if keyword in full_name:
+                return 'decorative'
+        
+        # Check for display keywords
+        for keyword in display_keywords:
+            if keyword in full_name:
+                return 'display'
+        
+        # Script and Blackletter are NEVER text fonts
+        if primary_class in ('script', 'blackletter'):
+            # Check if it's decorative (very unusual) or just display
+            anatomy = profile.get('anatomy_metrics', {})
+            curvature = anatomy.get('curvature_ratio', 0)
+            serif_detection = profile.get('serif_detection', {})
+            command_count = serif_detection.get('command_count', 0)
+            
+            # High complexity = decorative
+            if command_count > 30 or curvature > 0.95:
+                return 'decorative'
+            return 'display'
+        
+        # Symbol fonts are decorative
+        if primary_class == 'symbol':
+            return 'decorative'
+        
+        # For Serif/Sans/Monospace: analyze characteristics
+        basic_metrics = profile.get('basic_metrics', {})
+        anatomy = profile.get('anatomy_metrics', {})
+        weight_style = profile.get('weight_style', {})
+        serif_detection = profile.get('serif_detection', {})
+        
+        # Get metrics
+        x_height_ratio = basic_metrics.get('x_height_ratio', 0.5)
+        weight_class = weight_style.get('weight_class', 400)
+        curvature = anatomy.get('curvature_ratio', 0)
+        stroke_contrast = anatomy.get('stroke_contrast', 1)
+        command_count = serif_detection.get('command_count', 0)
+        width_variance = basic_metrics.get('width_variance', 0.1)
+        
+        # === DECORATIVE indicators ===
+        # Very high command count (complex outlines like Codystar, Raleway Dots)
+        if command_count > 50:
+            return 'decorative'
+        
+        # Very high curvature with complex outlines
+        if curvature > 0.90 and command_count > 20:
+            return 'decorative'
+        
+        # Extreme weight (Display Black/Heavy fonts)
+        if weight_class >= 800:
+            return 'display'
+        
+        # === DISPLAY indicators ===
+        # Low x-height ratio (typically display fonts have larger caps)
+        if x_height_ratio and x_height_ratio < 0.45:
+            return 'display'
+        
+        # Very high stroke contrast (Didone-style display)
+        if stroke_contrast > 5.0:
+            return 'display'
+        
+        # Heavy weight (bold+)
+        if weight_class >= 700:
+            return 'display'
+        
+        # High curvature for serif/sans (unusual = display)
+        if primary_class in ('serif', 'sans') and curvature > 0.75:
+            return 'display'
+        
+        # === TEXT indicators ===
+        # Good x-height ratio (0.50-0.75 is optimal for reading)
+        if x_height_ratio and 0.48 <= x_height_ratio <= 0.75:
+            # Moderate weight (regular to medium)
+            if weight_class <= 600:
+                # Moderate stroke contrast
+                if stroke_contrast < 4.5:
+                    return 'text'
+        
+        # Default based on primary class
+        if primary_class == 'monospace':
+            return 'text'  # Monospace is typically for text/code
+        
+        # Serif/Sans with normal characteristics = text
+        if weight_class <= 500 and curvature < 0.60:
+            return 'text'
+        
+        return 'display'  # Default to display for uncertain cases
+
+
+
     
     @staticmethod
     def _determine_serif_subtype(profile: Dict) -> Optional[str]:

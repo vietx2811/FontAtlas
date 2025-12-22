@@ -43,7 +43,7 @@ except Exception as e:
 HAS_QDRANT = True # Assumed true until proven otherwise during execution
 
 
-def parse_font(file_path: str) -> dict:
+def parse_font(file_path: str, font_id: Optional[str] = None) -> dict:
     """Parse font file and return complete profile"""
     global HAS_QDRANT
     try:
@@ -84,7 +84,8 @@ def parse_font(file_path: str) -> dict:
                 "width_class": profile.get('family_info', {}).get('width_class', 5),
                 # Flatted language support for easier DB insertion
                 "supports_vietnamese": profile.get('unicode_coverage', {}).get('supports_vietnamese', False),
-                "panose": profile.get('panose')
+                "panose": profile.get('panose'),
+                "id": font_id
             }
             
             # Try classification
@@ -113,7 +114,7 @@ def parse_font(file_path: str) -> dict:
             # Upsert to Qdrant (Lazy attempt)
             if HAS_QDRANT:
                 try:
-                    _upsert_to_qdrant(result)
+                    _upsert_to_qdrant(result, font_id)
                     result["qdrant_status"] = "synced"
                 except ImportError:
                     # If lazy import fails
@@ -180,7 +181,145 @@ def _get_font_name(font: TTFont) -> str:
     return "Unknown"
 
 
-def _upsert_to_qdrant(data: Dict[str, Any]):
+def generate_visual_embedding(file_path: str, font_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Generate 512D visual embedding using OpenCLIP and upsert to Qdrant.
+    
+    This is an optional background process for enhanced visual similarity search.
+    """
+    import sys
+    import os
+    from pathlib import Path
+    from contextlib import redirect_stdout, redirect_stderr
+    import io
+    
+    try:
+        # Add FontAtlas src to path for embeddings module
+        FONTATLAS_ROOT = Path(__file__).parent.parent.parent
+        SRC_DIR = FONTATLAS_ROOT / 'src'
+        sys.path.insert(0, str(SRC_DIR))
+        
+        from embeddings.perceptual_embedder import PerceptualEmbedder
+        from embeddings.glyph_renderer import GlyphRenderer
+        
+        # Render glyphs (H O n a e g)
+        renderer = GlyphRenderer(file_path, size=128)
+        glyph_images = renderer.render_standard_set(image_size=(256, 256))
+        
+        if not glyph_images:
+            return {
+                "success": False,
+                "error": "Failed to render glyphs",
+                "file_path": file_path
+            }
+        
+        # Extract 512D embedding - suppress OpenCLIP's stdout/stderr during loading
+        stdout_buffer = io.StringIO()
+        stderr_buffer = io.StringIO()
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            embedder = PerceptualEmbedder(model_name='ViT-B-32', pretrained='openai')
+            embedding_data = embedder.embed_glyph_set(glyph_images)
+        
+        # Log any output from OpenCLIP to stderr for debugging
+        if stdout_output := stdout_buffer.getvalue():
+            print(f"OpenCLIP stdout: {stdout_output}", file=sys.stderr)
+        if stderr_output := stderr_buffer.getvalue():
+            print(f"OpenCLIP stderr: {stderr_output}", file=sys.stderr)
+        
+        perceptual_vector = embedding_data['aggregated_embedding']
+        
+        # Upsert to Qdrant with named vector
+        upsert_res = _upsert_visual_to_qdrant(file_path, perceptual_vector, font_id)
+        
+        if not upsert_res.get("success", False):
+            return {
+                "success": False,
+                "error": upsert_res.get("error", "Unknown Qdrant error"),
+                "file_path": file_path
+            }
+
+        return {
+            "success": True,
+            "file_path": file_path,
+            "font_id": font_id,
+            "embedding_dim": embedding_data['embedding_dim'],
+            "num_glyphs": embedding_data['num_glyphs']
+        }
+
+        
+    except ImportError as e:
+        return {
+            "success": False,
+            "error": f"OpenCLIP not available: {str(e)}",
+            "file_path": file_path
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file_path": file_path
+        }
+
+
+def _upsert_visual_to_qdrant(file_path: str, perceptual_vector: list, font_id: Optional[str] = None):
+    """Upsert 512D visual embedding to Qdrant with named vector 'perceptual'."""
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import PointVectors
+    import uuid
+    import os
+    
+    font_name = os.path.basename(file_path)
+    
+    try:
+        client = QdrantClient(url="http://localhost:6333", timeout=5.0)
+        collection_name = "font_profiles"
+        
+        # Use provided font_id if available, otherwise fallback to path-based UUID
+        point_id = font_id if font_id else str(uuid.uuid5(uuid.NAMESPACE_URL, file_path))
+        
+        try:
+            # Check if point exists first
+            existing = client.retrieve(collection_name=collection_name, ids=[point_id])
+            
+            if existing:
+                # Update the 'perceptual' named vector using update_vectors API
+                client.update_vectors(
+                    collection_name=collection_name,
+                    points=[
+                        PointVectors(
+                            id=point_id,
+                            vector={"perceptual": perceptual_vector}
+                        )
+                    ]
+                )
+                
+                # Also update payload to mark has_visual_embedding
+                client.set_payload(
+                    collection_name=collection_name,
+                    payload={"has_visual_embedding": True},
+                    points=[point_id]
+                )
+                print(f"[QDRANT] ✓ Upserted perceptual(512D) for {font_name} (id: {point_id[:8]}...)", file=sys.stderr)
+                return {"success": True}
+            else:
+                # Point is missing in Qdrant! Step 1 (metrics) may have failed.
+                print(f"[QDRANT] ✗ Point not found for {font_name} - metrics upsert may have failed", file=sys.stderr)
+                return {
+                    "success": False, 
+                    "error": f"Font point {point_id} not found in Qdrant. Step 1 (metrics) may have failed."
+                }
+                
+        except Exception as e:
+            print(f"[QDRANT] ✗ update_vectors failed for {font_name}: {e}", file=sys.stderr)
+            return {"success": False, "error": f"Qdrant update_vectors failed: {str(e)}"}
+                
+    except Exception as e:
+        print(f"[QDRANT] ✗ Connection failed: {e}", file=sys.stderr)
+        return {"success": False, "error": f"Qdrant connection failed: {str(e)}"}
+
+
+
+def _upsert_to_qdrant(data: Dict[str, Any], font_id: Optional[str] = None):
     """Upsert font metrics and metadata to Qdrant."""
     # Lazy import to reduce startup time for the script
     from qdrant_client import QdrantClient
@@ -192,9 +331,9 @@ def _upsert_to_qdrant(data: Dict[str, Any]):
     try:
         client = QdrantClient(
             url="http://localhost:6333", 
-            timeout=1.0 # 1 second timeout for connection
+            timeout=5.0 
         )
-        collection_name = "fonts"
+        collection_name = "font_profiles"
         
         # Optimistic upsert: try to upload first
         # If collection doesn't exist, we'll get an error, then we create it.
@@ -210,26 +349,43 @@ def _upsert_to_qdrant(data: Dict[str, Any]):
             except (ValueError, TypeError):
                 return default
 
+        # 9-dimensional vector with all metrics
         vector = [
-            safe_float(weight) / 1000.0,
-            safe_float(metrics.get('width_variance'), 0.5), 
-            safe_float(metrics.get('stroke_contrast'), 1.0) / 5.0, 
-            safe_float(metrics.get('x_height'), 0.5),
-            safe_float(metrics.get('aperture'), 0.5)
+            safe_float(weight) / 1000.0,                              # 0: weight (normalized)
+            safe_float(metrics.get('width_variance'), 0.5),           # 1: width_variance
+            safe_float(metrics.get('stroke_contrast'), 1.0) / 5.0,    # 2: stroke_contrast (normalized)
+            safe_float(metrics.get('x_height'), 0.5),                 # 3: x_height
+            safe_float(metrics.get('aperture'), 0.5),                 # 4: aperture
+            safe_float(metrics.get('curvature_ratio'), 0.4),          # 5: curvature_ratio
+            safe_float(metrics.get('terminal_sharpness'), 0.5),       # 6: terminal_sharpness
+            safe_float(metrics.get('stress_angle'), 90.0) / 180.0,    # 7: stress_angle (normalized)
+            safe_float(metrics.get('counter_density'), 0.5),          # 8: counter_density
         ]
         
-        # Generate stable ID from file path
-        import uuid
-        point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, data['file_path']))
+        # Use provided font_id if available, otherwise fallback to path-based UUID
+        point_id = font_id if font_id else str(uuid.uuid5(uuid.NAMESPACE_URL, data['file_path']))
         
         payload = {
             "name": data['name'],
             "path": data['file_path'],
             "foundry": data.get('foundry'),
             "category": data.get('classification'),
+            "primary_class": data.get('primary_class'),
             "weight": weight,
             "is_italic": data.get('is_italic'),
             "supports_vietnamese": data.get('supports_vietnamese'),
+            # Include all metrics in payload for filtering/display
+            "width_variance": safe_float(metrics.get('width_variance'), 0),
+            "stroke_contrast": safe_float(metrics.get('stroke_contrast'), 0),
+            "x_height": safe_float(metrics.get('x_height'), 0),
+            "aperture": safe_float(metrics.get('aperture'), 0),
+            "curvature_ratio": safe_float(metrics.get('curvature_ratio'), 0),
+            "terminal_sharpness": safe_float(metrics.get('terminal_sharpness'), 0),
+            "stress_angle": safe_float(metrics.get('stress_angle'), 0),
+            "counter_density": safe_float(metrics.get('counter_density'), 0),
+            # For font pairing feature
+            "suitable_roles": data.get('suitable_roles', []),  # ["body", "display", "accent", "ui"]
+            "secondary_tags": data.get('secondary_tags', []),  # Classification tags
         }
 
         try:
@@ -238,32 +394,40 @@ def _upsert_to_qdrant(data: Dict[str, Any]):
                 points=[
                     PointStruct(
                         id=point_id,
-                        vector=vector,
+                        vector={"metrics": vector},  # Named vector
                         payload=payload
                     )
                 ]
             )
+           print(f"[QDRANT] ✓ Upserted metrics for {data['name']} (id: {point_id[:8]}...)", file=sys.stderr)
         except Exception as e:
             # Check if error is due to missing collection
             # "Not found" or 404
             err_str = str(e).lower()
             if "not found" in err_str or "404" in err_str:
-                # Create collection and retry
+                # Create collection with NAMED vectors (metrics 9D + perceptual 512D)
+                print(f"[QDRANT] Creating collection '{collection_name}' with named vectors...", file=sys.stderr)
                 client.create_collection(
                     collection_name=collection_name,
-                    vectors_config=VectorParams(size=5, distance=Distance.COSINE)
+                    vectors_config={
+                        "metrics": VectorParams(size=9, distance=Distance.COSINE),
+                        "perceptual": VectorParams(size=512, distance=Distance.COSINE),
+                    }
                 )
+                print(f"[QDRANT] ✓ Collection created with metrics(9D) + perceptual(512D)", file=sys.stderr)
                 client.upsert(
                     collection_name=collection_name,
                     points=[
                         PointStruct(
                             id=point_id,
-                            vector=vector,
+                            vector={"metrics": vector},  # Named vector
                             payload=payload
                         )
                     ]
                 )
+                print(f"[QDRANT] ✓ Upserted metrics for {data['name']} (id: {point_id[:8]}...)", file=sys.stderr)
             else:
+                print(f"[QDRANT] ✗ Failed to upsert {data['name']}: {e}", file=sys.stderr)
                 raise e
 
     except Exception:
@@ -277,11 +441,18 @@ def handle_command(command: dict) -> dict:
     
     if cmd_type == 'parse':
         file_path = command.get('filepath')
-        return parse_font(file_path)
+        font_id = command.get('font_id')
+        return parse_font(file_path, font_id)
     
     elif cmd_type == 'embed':
         profile = command.get('profile')
         return generate_embedding(profile)
+    
+    elif cmd_type == 'embed_visual':
+        # Generate 512D visual embedding and upsert to Qdrant
+        file_path = command.get('filepath')
+        font_id = command.get('font_id')  # Optional: for tracking
+        return generate_visual_embedding(file_path, font_id)
     
     elif cmd_type == 'ping':
         return {"success": True, "message": "pong"}

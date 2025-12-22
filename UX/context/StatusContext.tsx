@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
 interface StatusContextType {
     status: string | null;
@@ -16,13 +16,13 @@ export const StatusProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [statusType, setStatusType] = useState<'info' | 'error'>('info');
     const [isBusy, setIsBusy] = useState(false);
 
-    const setStatus = (message: string, busy: boolean = true) => {
+    const setStatus = useCallback((message: string, busy: boolean = true) => {
         setStatusMessage(message);
         setStatusType('info');
         setIsBusy(busy);
-    };
+    }, []);
 
-    const setError = (message: string) => {
+    const setError = useCallback((message: string) => {
         setStatusMessage(message);
         setStatusType('error');
         setIsBusy(false);
@@ -30,16 +30,25 @@ export const StatusProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setTimeout(() => {
             setStatusMessage(prev => prev === message ? null : prev);
         }, 5000);
-    };
+    }, []);
 
-    const clearStatus = () => {
+    const clearStatus = useCallback(() => {
         setStatusMessage(null);
         setStatusType('info');
         setIsBusy(false);
-    };
+    }, []);
+
+    const contextValue = React.useMemo(() => ({
+        status,
+        statusType,
+        isBusy,
+        setStatus,
+        setError,
+        clearStatus
+    }), [status, statusType, isBusy, setStatus, setError, clearStatus]);
 
     return (
-        <StatusContext.Provider value={{ status, statusType, isBusy, setStatus, setError, clearStatus }}>
+        <StatusContext.Provider value={contextValue}>
             {children}
         </StatusContext.Provider>
     );

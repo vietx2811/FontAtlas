@@ -49,6 +49,7 @@ pub struct FontRecord {
     pub serif_subtype: Option<String>,
     pub sans_subtype: Option<String>,
     pub script_subtype: Option<String>,
+    pub is_favorite: bool,
 }
 
 /// Collection (virtual folder)
@@ -108,6 +109,7 @@ impl Database {
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN serif_subtype TEXT", []);
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN sans_subtype TEXT", []);
         let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN script_subtype TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE fonts ADD COLUMN is_favorite INTEGER DEFAULT 0", []);
 
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS fonts (
@@ -144,7 +146,8 @@ impl Database {
                 secondary_tags TEXT,
                 serif_subtype TEXT,
                 sans_subtype TEXT,
-                script_subtype TEXT
+                script_subtype TEXT,
+                is_favorite INTEGER DEFAULT 0
             )",
             [],
         )?;
@@ -178,8 +181,8 @@ impl Database {
               terminal_sharpness, stress_angle, curvature_ratio, counter_density,
               foundry, weight, is_italic, supports_vietnamese,
               family_name, subfamily, weight_class, width_class, source_id,
-              primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)",
+              primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)",
             params![
                 font.id,
                 font.name,
@@ -215,9 +218,34 @@ impl Database {
                 font.serif_subtype,
                 font.sans_subtype,
                 font.script_subtype,
+                font.is_favorite as i32,
             ],
         )?;
         Ok(())
+    }
+    
+    /// Get a font by ID
+    pub fn get_font(&self, id: &str) -> Result<Option<FontRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, file_path, original_directory, category, classification,
+                    tags, collection_id, date_added, date_modified, is_synced, file_exists,
+                    x_height, width_variance, stroke_contrast, aperture,
+                    terminal_sharpness, stress_angle, curvature_ratio, counter_density,
+                    foundry, weight, is_italic, supports_vietnamese,
+                    family_name, subfamily, weight_class, width_class, source_id,
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
+             FROM fonts WHERE id = ?1"
+        )?;
+        
+        let mut rows = stmt.query_map([id], |row| {
+            self.map_font_row(row)
+        })?;
+        
+        if let Some(row) = rows.next() {
+            return Ok(Some(row?));
+        }
+        
+        Ok(None)
     }
     
     /// Get all fonts (paginated and filtered)
@@ -230,7 +258,7 @@ impl Database {
                     terminal_sharpness, stress_angle, curvature_ratio, counter_density,
                     foundry, weight, is_italic, supports_vietnamese,
                     family_name, subfamily, weight_class, width_class, source_id,
-                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
                  FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
             } else {
                 "SELECT id, name, file_path, original_directory, category, classification,
@@ -239,7 +267,7 @@ impl Database {
                     terminal_sharpness, stress_angle, curvature_ratio, counter_density,
                     foundry, weight, is_italic, supports_vietnamese,
                     family_name, subfamily, weight_class, width_class, source_id,
-                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
                  FROM fonts WHERE category = ?3 ORDER BY name LIMIT ?1 OFFSET ?2"
             }
         } else {
@@ -249,7 +277,7 @@ impl Database {
                 terminal_sharpness, stress_angle, curvature_ratio, counter_density,
                 foundry, weight, is_italic, supports_vietnamese,
                 family_name, subfamily, weight_class, width_class, source_id,
-                primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+                primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
              FROM fonts ORDER BY name LIMIT ?1 OFFSET ?2"
         };
 
@@ -313,6 +341,7 @@ impl Database {
             serif_subtype: row.get(31)?,
             sans_subtype: row.get(32)?,
             script_subtype: row.get(33)?,
+            is_favorite: row.get::<_, i32>(34)? != 0,
         })
     }
     
@@ -326,7 +355,7 @@ impl Database {
                     terminal_sharpness, stress_angle, curvature_ratio, counter_density,
                     foundry, weight, is_italic, supports_vietnamese,
                     family_name, subfamily, weight_class, width_class, source_id,
-                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
              FROM fonts WHERE name LIKE ?1 ORDER BY name"
         )?;
         
@@ -360,6 +389,15 @@ impl Database {
     pub fn clear_all_fonts(&self) -> Result<usize> {
         let count = self.conn.execute(
             "DELETE FROM fonts",
+            [],
+        )?;
+        Ok(count)
+    }
+
+    /// Clear all sources
+    pub fn clear_all_sources(&self) -> Result<usize> {
+        let count = self.conn.execute(
+            "DELETE FROM sources",
             [],
         )?;
         Ok(count)
@@ -412,6 +450,15 @@ impl Database {
         self.conn.execute(
             "UPDATE collections SET name = ?2 WHERE id = ?1",
             params![id, name],
+        )?;
+        Ok(())
+    }
+
+    /// Toggle favorite status of a font
+    pub fn toggle_favorite(&self, id: &str, is_favorite: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE fonts SET is_favorite = ?2 WHERE id = ?1",
+            params![id, is_favorite as i32],
         )?;
         Ok(())
     }
@@ -490,7 +537,7 @@ impl Database {
                     terminal_sharpness, stress_angle, curvature_ratio, counter_density,
                     foundry, weight, is_italic, supports_vietnamese,
                     family_name, subfamily, weight_class, width_class, source_id,
-                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype
+                    primary_class, secondary_tags, serif_subtype, sans_subtype, script_subtype, is_favorite
              FROM fonts WHERE source_id = ?1 ORDER BY name LIMIT ?2 OFFSET ?3"
         )?;
         
@@ -574,5 +621,6 @@ pub fn create_font_record(
         serif_subtype,
         sans_subtype,
         script_subtype,
+        is_favorite: false,
     }
 }

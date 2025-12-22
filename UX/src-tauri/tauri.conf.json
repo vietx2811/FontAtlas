@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FontAtlas",
+  "productName": "Font Atlas",
   "version": "0.1.0",
   "identifier": "com.vietx.fontatlas",
   "build": {
@@ -12,7 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "FontAtlas - Font Discovery & Management",
+        "label": "main",
+        "title": "",
         "width": 1400,
         "height": 920,
         "minWidth": 1000,
@@ -20,7 +21,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
-        "transparent": false,
+        "transparent": true,
         "center": true,
         "titleBarStyle": "Overlay"
       }

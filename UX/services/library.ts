@@ -46,6 +46,11 @@ export interface LibraryFont {
     width_variance: number | null;
     stroke_contrast: number | null;
     aperture: number | null;
+    // Additional metrics
+    curvature_ratio: number | null;
+    terminal_sharpness: number | null;
+    stress_angle: number | null;
+    counter_density: number | null;
     foundry: string | null;
     weight: number;
     is_italic: boolean;
@@ -61,6 +66,7 @@ export interface LibraryFont {
     serif_subtype: string | null;
     sans_subtype: string | null;
     script_subtype: string | null;
+    is_favorite: boolean;
 }
 
 // Collection (virtual folder)
@@ -194,6 +200,62 @@ export async function clearLibrary(): Promise<number> {
 }
 
 /**
+ * Generate visual embedding for a single font (512D OpenCLIP)
+ * This is a background operation for enhanced visual similarity search
+ */
+export async function generateVisualEmbedding(
+    filePath: string,
+    fontId?: string
+): Promise<{ success: boolean; error?: string; embedding_dim?: number }> {
+    const invoke = await getInvoke();
+    if (!invoke) {
+        throw new Error('Tauri required');
+    }
+    return invoke('generate_visual_embedding', {
+        filePath: filePath,
+        fontId: fontId
+    });
+}
+
+/**
+ * Start background rescan of all fonts
+ */
+export async function startBackgroundRescan(force: boolean = false): Promise<string> {
+    const invoke = await getInvoke();
+    if (!invoke) {
+        throw new Error('Tauri required');
+    }
+    return invoke('start_background_rescan', { force });
+}
+
+
+
+
+/**
+ * Rescan a single font (force re-analyze)
+ */
+export async function rescanFont(fontId: string): Promise<any> {
+    const invoke = await getInvoke();
+    if (!invoke) {
+        throw new Error('Tauri required');
+    }
+    return invoke('rescan_font', { fontId });
+}
+
+/**
+ * Toggle favorite status of a font
+ */
+export async function toggleFavorite(fontId: string, isFavorite: boolean): Promise<void> {
+    const invoke = await getInvoke();
+    if (!invoke) {
+        throw new Error('Tauri required');
+    }
+    return invoke('toggle_favorite', { id: fontId, isFavorite });
+}
+
+
+
+/**
  * Get all collections
  */
 export async function getCollections(): Promise<Collection[]> {
@@ -245,44 +307,30 @@ export async function scanAndAddDirectory(directoryPath: string, onProgress?: (m
         if (onProgress) onProgress(`Importing (${processed}/${total}): ${font.name}`);
 
         try {
-            // Try to parse with sidecar (optional)
-            let parsed: any = null;
-            try {
-                parsed = await invoke('parse_font_with_sidecar', { fontPath: font.path });
-                console.log('Parsed font metrics:', font.name, parsed?.basic_metrics);
-            } catch (e) {
-                console.warn('Sidecar parsing failed for', font.name, '- adding without metrics');
-            }
-
-            // Add to library with or without parsed metrics
+            // Add to library with basic info only for speed
+            // Metrics and full analysis will be performed in the background
             await addFontToLibrary(
-                parsed?.name || font.name.replace(/\.(ttf|otf|woff|woff2)$/i, ''),
+                font.name.replace(/\.(ttf|otf|woff|woff2)$/i, ''),
                 font.path,
                 undefined,
-                parsed?.classification,
-                parsed?.anatomy_metrics?.x_height,
-                parsed?.anatomy_metrics?.width_variance,
-                parsed?.anatomy_metrics?.stroke_contrast,
-                parsed?.anatomy_metrics?.aperture,
-                parsed?.anatomy_metrics?.terminal_sharpness,
-                parsed?.anatomy_metrics?.stress_angle,
-                parsed?.anatomy_metrics?.curvature_ratio,
-                parsed?.anatomy_metrics?.counter_density,
-                parsed?.foundry,
-                parsed?.weight,
-                parsed?.is_italic,
-                parsed?.supports_vietnamese,
-                parsed?.family_name,
-                parsed?.subfamily,
-                parsed?.weight_class,
-                parsed?.width_class,
-                source.id,
-                // Enhanced taxonomy (Phase 4)
-                parsed?.primary_class,
-                parsed?.secondary_tags,  // Array from sidecar
-                parsed?.serif_subtype,
-                parsed?.sans_subtype,
-                parsed?.script_subtype
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                false,
+                false,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                source.id
             );
             added++;
         } catch (e) {
@@ -292,6 +340,14 @@ export async function scanAndAddDirectory(directoryPath: string, onProgress?: (m
 
     if (cloudOnly > 0) {
         console.log(`Skipped ${cloudOnly} cloud-only fonts. Download them in Finder to add.`);
+    }
+
+    // Trigger background analysis for metrics and embeddings
+    console.log('Triggering background analysis...');
+    try {
+        await startBackgroundRescan();
+    } catch (e) {
+        console.error('Failed to start background analysis:', e);
     }
 
     return added;
