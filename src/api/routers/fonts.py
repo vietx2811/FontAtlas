@@ -175,23 +175,61 @@ async def list_fonts(directory: Optional[str] = Query(DEFAULT_FONT_DIR, descript
     """
     List all available fonts with summary information.
     
+    ENHANCED: Queries Qdrant first for fast access, falls back to JSON if needed.
     Returns basic metrics and anatomy data for each font.
-    Can optionally specify a custom directory.
-    Handles both .complete.json profiles and raw .ttf files.
     """
-    profiles = load_font_profiles(directory)
+    from database.vector_db import FontAtlasVectorDB
     
     fonts = []
+    
+    try:
+        # Try Qdrant first (FAST PATH)
+        vector_db = FontAtlasVectorDB()
+        qdrant_fonts = vector_db.get_fonts_by_directory(directory)
+        
+        if qdrant_fonts:
+            # Convert Qdrant payload to FontSummary
+            for font_data in qdrant_fonts:
+                basic = font_data.get('basic_metrics', {})
+                anatomy = font_data.get('anatomy_metrics', {})
+                classification = font_data.get('classification', {})
+                
+                # Get category
+                auto_category = classification.get('auto_category')
+                google_category = font_data.get('google_fonts', {}).get('category', 'Unknown')
+                category = auto_category if auto_category else google_category
+                
+                # Extract metrics with safe defaults
+                x_height = basic.get('optical_x_ratio', 0.0) or 0.0
+                width_var = basic.get('width_variance', 0.0) or 0.0
+                stroke = anatomy.get('stroke_contrast', {}).get('mean_contrast', 1.0) or 1.0
+                aperture = anatomy.get('aperture_openness', {}).get('mean_aperture', 0.5) or 0.5
+                
+                fonts.append(FontSummary(
+                    id=Path(font_data['file_path']).stem,
+                    name=font_data.get('font_name', 'Unknown'),
+                    category=category,
+                    x_height=float(x_height),
+                    width_variance=float(width_var),
+                    stroke_contrast=float(stroke),
+                    aperture=float(aperture)
+                ))
+            
+            return FontListResponse(fonts=fonts, count=len(fonts))
+    
+    except Exception as e:
+        # Qdrant unavailable or error - fall back to JSON
+        print(f"Qdrant query failed, falling back to JSON: {e}")
+    
+    # FALLBACK: Load from JSON files (SLOW PATH)
+    profiles = load_font_profiles(directory)
+    
     for profile in profiles:
-        # Extract summary data
         font_id = profile.get('_id', 'unknown')
         name = profile.get('metadata', {}).get('font_name', 'Unknown')
-        
-        # Check if this is a TTF-only entry (no full profile)
         is_ttf_only = profile.get('_is_ttf_only', False)
         
         if is_ttf_only:
-            # Minimal info for TTF files without profiles
             fonts.append(FontSummary(
                 id=font_id,
                 name=name,
@@ -202,19 +240,14 @@ async def list_fonts(directory: Optional[str] = Query(DEFAULT_FONT_DIR, descript
                 aperture=0.0
             ))
         elif profile.get('basic_metrics') and profile.get('anatomy_metrics'):
-            # Full profile data
-            # Get category from classification (preferred) or Google Fonts (fallback)
             classification = profile.get('metadata_layer', {}).get('classification', {})
             auto_category = classification.get('auto_category')
             google_category = profile.get('metadata_layer', {}).get('google_fonts', {}).get('category', 'Unknown')
-            
-            # Prefer auto-classification, fallback to Google Fonts
             category = auto_category if auto_category else google_category
             
             basic_metrics = profile.get('basic_metrics', {})
             anatomy = profile.get('anatomy_metrics', {})
             
-            # Safe metric extraction with defaults
             x_height = basic_metrics.get('x_height_ratio')
             if x_height is None or not isinstance(x_height, (int, float)):
                 x_height = 0.0
@@ -319,15 +352,20 @@ async def get_scan_progress(task_id: str):
 active_indexers = {}
 
 @router.post("/index")
-async def index_to_qdrant(directory: str):
+async def index_to_qdrant(request: ScanRequest):
     """
     Index all font profiles from a directory into Qdrant.
+    
+    Args:
+        request: Contains directory path
     
     Returns a task ID for progress tracking.
     """
     import threading
     import uuid
-    from database.vector_db import FontVectorDB
+    from database.vector_db import FontAtlasVectorDB
+    
+    directory = request.directory
     
     # Generate task ID
     task_id = str(uuid.uuid4())
@@ -362,7 +400,7 @@ async def index_to_qdrant(directory: str):
                 return
             
             # Initialize Qdrant
-            vector_db = FontVectorDB()
+            vector_db = FontAtlasVectorDB()
             
             # Index each profile
             for i, profile_path in enumerate(profiles):
@@ -370,7 +408,7 @@ async def index_to_qdrant(directory: str):
                 progress['current_file'] = profile_path.name
                 
                 try:
-                    vector_db.upsert_font_profile(str(profile_path))
+                    vector_db.index_font_profile(str(profile_path))
                 except Exception as e:
                     progress['errors'].append(f"{profile_path.name}: {str(e)}")
             

@@ -1,0 +1,96 @@
+# Tauri Configuration Template
+# This will be generated when we run `cargo tauri init`
+
+{
+    "build": {
+        "beforeDevCommand": "npm run dev",
+        "beforeBuildCommand": "npm run build",
+        "devPath": "http://localhost:3000",
+        "distDir": "../dist"
+    },
+    "package": {
+        "productName": "FontAtlas",
+        "version": "0.1.0"
+    },
+    "tauri": {
+        "allowlist": {
+            "all": false,
+            "fs": {
+                "all": false,
+                "readFile": true,
+                "writeFile": true,
+                "readDir": true,
+                "scope": [
+                    "$HOME/Library/Fonts/**",
+                    "$HOME/**/*.ttf",
+                    "$HOME/**/*.otf"
+                ]
+            },
+            "dialog": {
+                "all": false,
+                "open": true,
+                "save": true
+            },
+            "path": {
+                "all": true
+            },
+            "shell": {
+                "all": false,
+                "sidecar": true,
+                "scope": [
+                    {
+                        "name": "fontatlas-parser",
+                        "sidecar": true,
+                        "args": true
+                    }
+                ]
+            }
+        },
+        "bundle": {
+            "active": true,
+            "targets": "all",
+            "identifier": "com.vietx.fontatlas",
+            "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/128x128@2x.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+            ],
+            "resources": [],
+            "externalBin": [
+                "binaries/fontatlas-parser"
+            ],
+            "copyright": "© 2024 Viet X",
+            "category": "Developer Tools",
+            "shortDescription": "Professional font manager with AI-powered organization",
+            "longDescription": "FontAtlas is a desktop font manager that helps designers organize, preview, and find perfect font pairings using AI-powered analysis and interactive visualization.",
+            "macOS": {
+                "entitlements": null,
+                "exceptionDomain": "",
+                "frameworks": [],
+                "providerShortName": null,
+                "signingIdentity": null
+            },
+            "windows": {
+                "certificateThumbprint": null,
+                "digestAlgorithm": "sha256",
+                "timestampUrl": ""
+            }
+        },
+        "security": {
+            "csp": null
+        },
+        "windows": [
+            {
+                "fullscreen": false,
+                "resizable": true,
+                "title": "FontAtlas",
+                "width": 1400,
+                "height": 900,
+                "minWidth": 1000,
+                "minHeight": 600
+            }
+        ]
+    }
+}

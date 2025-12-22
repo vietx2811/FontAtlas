@@ -76,24 +76,27 @@ class ComplementaryFinder:
             if candidate['font_name'] == query_name:
                 continue
             
-            # Reconstruct candidate profile from payload
+            # Reconstruct candidate profile from NEW payload structure
+            payload = candidate['payload']
+            basic_metrics = payload.get('basic_metrics', {})
+            anatomy_metrics = payload.get('anatomy_metrics', {})
+            classification = payload.get('classification', {})
+            
             candidate_profile = {
                 'metadata': {'font_name': candidate['font_name']},
                 'basic_metrics': {
-                    'x_height_ratio': candidate['payload'].get('x_height_ratio'),
-                    'width_variance': candidate['payload'].get('width_variance'),
-                    'width_mean': candidate['payload'].get('width_mean'),
+                    'x_height_ratio': basic_metrics.get('optical_x_ratio'),  # Use optical_x_ratio
+                    'width_variance': basic_metrics.get('width_variance'),
+                    'width_mean': basic_metrics.get('width_mean'),
                 },
-                'unicode_coverage': {
-                    'total_glyphs': candidate['payload'].get('total_glyphs'),
-                    'supports_vietnamese': candidate['payload'].get('supports_vietnamese'),
+                'anatomy_metrics': {
+                    'stroke_contrast': anatomy_metrics.get('stroke_contrast', {}),
+                    'aperture_openness': anatomy_metrics.get('aperture_openness', {}),
                 },
+                'unicode_coverage': payload.get('unicode_coverage', {}),
                 'metadata_layer': {
-                    'google_fonts': {
-                        'category': candidate['payload'].get('category'),
-                        'designers': candidate['payload'].get('designers', []),
-                        'popularity_rank': candidate['payload'].get('popularity_rank'),
-                    }
+                    'google_fonts': payload.get('google_fonts', {}),
+                    'classification': classification,
                 },
                 # Note: We don't have full perceptual vector in payload,
                 # but we have the similarity score from Qdrant
@@ -106,14 +109,17 @@ class ComplementaryFinder:
                 candidate_profile
             )
             
+            # Get font_id from file_path
+            font_id = Path(payload.get('file_path', '')).stem
+            
             # Filter by minimum score
             if pairing_score >= min_score:
                 scored_pairs.append({
+                    'font_id': font_id,
                     'font_name': candidate['font_name'],
                     'pairing_score': pairing_score,
-                    'components': components,
-                    'profile': candidate_profile,
-                    'qdrant_similarity': candidate['score'],
+                    'component_scores': components,
+                    'similarity_score': candidate['score'],
                 })
         
         # Sort by pairing score (descending)

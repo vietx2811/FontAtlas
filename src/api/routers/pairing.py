@@ -40,6 +40,9 @@ async def find_pairs(request: PairingRequest, directory: Optional[str] = Query(D
             limit=request.limit
         )
     except Exception as e:
+        import traceback
+        error_msg = f"Pairing search failed: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)  # Log to terminal
         raise HTTPException(status_code=500, detail=f"Pairing search failed: {str(e)}")
     
     # Format response
