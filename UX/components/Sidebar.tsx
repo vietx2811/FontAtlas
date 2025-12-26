@@ -79,12 +79,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
 
                 {/* Logo Header */}
-                <div className="flex items-center px-10 pt-10 pb-3 shrink-0 relative z-40">
+                {/* <div className="flex items-center px-10 pt-10 pb-3 shrink-0 relative z-40">
                     <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg mr-3 flex items-center justify-center">
                         <span className="text-white text-sm font-bold shadow-sm">F</span>
                     </div>
                     <span className="font-semibold text-lg text-[var(--foreground)] tracking-tight">FontAtlas</span>
-                </div>
+                </div> */}
 
                 {/* Main Nav */}
                 <div className="flex-1 overflow-y-auto sidebar-scroll pt-2 pb-4 px-4 space-y-6">
