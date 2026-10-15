@@ -52,3 +52,20 @@ htmlcov/
 
 # Artifacts (brain directory is external)
 .gemini/
+
+# Node / Vite (UX frontend)
+node_modules/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# Rust / Tauri
+target/
+UX/src-tauri/gen/schemas
+
+# Python virtualenvs
+.venv/
+
+# Python sidecar build output (PyInstaller); binaries in UX/binaries/ are tracked separately
+UX/python-sidecar/build/
+UX/python-sidecar/dist/
