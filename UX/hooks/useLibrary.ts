@@ -86,7 +86,8 @@ export function useLibrary(): UseLibraryResult {
             curvature_ratio: 0.5, terminal_sharpness: 0.5, stress_angle: 0.0, counter_density: 0.5,
             foundry: 'Google', weight: 400, is_italic: false, supports_vietnamese: true,
             family_name: 'Inter', subfamily: 'Regular', weight_class: 400, width_class: 5, source_id: null,
-            primary_class: null, secondary_tags: null, serif_subtype: null, sans_subtype: null, script_subtype: null
+            primary_class: null, secondary_tags: null, serif_subtype: null, sans_subtype: null, script_subtype: null,
+            is_favorite: false
           }];
         setFonts(mockFonts);
         setFontCount(mockFonts.length);
