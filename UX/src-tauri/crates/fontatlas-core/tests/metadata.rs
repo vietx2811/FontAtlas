@@ -92,3 +92,22 @@ fn variable_font_axes_are_listed() {
     let m = f.faces().unwrap()[0].metadata();
     assert!(m.axes.iter().any(|a| a.tag == "wght"));
 }
+
+#[test]
+fn script_coverage_from_opentype_script_tags() {
+    // Spec 4.2: độ phủ script. Giá trị đối chiếu bằng fontTools (ScriptList GSUB+GPOS, bỏ DFLT).
+    assert_eq!(
+        meta("open_sans.ttf").scripts,
+        ["cyrl", "grek", "hebr", "latn"]
+    );
+    assert_eq!(meta("playfair_display.ttf").scripts, ["latn"]);
+    assert_eq!(meta("libre_baskerville.ttf").scripts, ["grek", "latn"]);
+}
+
+#[test]
+fn os2_optical_size_absent_before_v5() {
+    // Spec 4.4 (opsz): OS/2 size range chỉ có từ OS/2 v5; mọi fixture là v4 → None, không mặc định 0.
+    for s in SAMPLES {
+        assert_eq!(meta(s).os2_optical_size_pt, None, "{s}");
+    }
+}

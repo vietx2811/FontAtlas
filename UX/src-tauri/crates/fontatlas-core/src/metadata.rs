@@ -56,6 +56,10 @@ pub struct Metadata {
     pub named_instances: Vec<String>,
     pub gsub_features: Vec<String>,
     pub gpos_features: Vec<String>,
+    /// Tag script OpenType (GSUB + GPOS ScriptList, bỏ DFLT), đã sort.
+    pub scripts: Vec<String>,
+    /// Dải optical size (pt) từ OS/2 v5; None nếu OS/2 < v5.
+    pub os2_optical_size_pt: Option<(f32, f32)>,
 }
 
 pub fn classify_license(description: Option<&str>, url: Option<&str>) -> LicenseClass {
@@ -95,6 +99,28 @@ pub(crate) fn outline_format(font: &FontRef) -> OutlineFormat {
     } else {
         OutlineFormat::None
     }
+}
+
+fn script_tags(font: &FontRef) -> Vec<String> {
+    let mut v = Vec::new();
+    if let Ok(sl) = font.gsub().and_then(|t| t.script_list()) {
+        v.extend(
+            sl.script_records()
+                .iter()
+                .map(|r| r.script_tag().to_string()),
+        );
+    }
+    if let Ok(sl) = font.gpos().and_then(|t| t.script_list()) {
+        v.extend(
+            sl.script_records()
+                .iter()
+                .map(|r| r.script_tag().to_string()),
+        );
+    }
+    v.retain(|t| t != "DFLT");
+    v.sort();
+    v.dedup();
+    v
 }
 
 pub(crate) fn feature_tags(font: &FontRef) -> (Vec<String>, Vec<String>) {
@@ -172,5 +198,13 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
             .collect(),
         gsub_features,
         gpos_features,
+        scripts: script_tags(font),
+        // OS/2 lưu theo TWIP (1/20 pt).
+        os2_optical_size_pt: os2.as_ref().and_then(|o| {
+            Some((
+                o.us_lower_optical_point_size()? as f32 / 20.0,
+                o.us_upper_optical_point_size()? as f32 / 20.0,
+            ))
+        }),
     }
 }
