@@ -1,5 +1,6 @@
 //! fontatlas-core: phân tích font thuần, không I/O DB.
 mod error;
+pub mod axes;
 pub mod geom;
 mod load;
 mod metadata;
