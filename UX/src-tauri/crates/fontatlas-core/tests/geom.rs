@@ -8,9 +8,13 @@ fn square(x0: f64, y0: f64, x1: f64, y1: f64, ccw: bool) -> BezPath {
     let mut p = BezPath::new();
     p.move_to((x0, y0));
     if ccw {
-        p.line_to((x1, y0)); p.line_to((x1, y1)); p.line_to((x0, y1));
+        p.line_to((x1, y0));
+        p.line_to((x1, y1));
+        p.line_to((x0, y1));
     } else {
-        p.line_to((x0, y1)); p.line_to((x1, y1)); p.line_to((x1, y0));
+        p.line_to((x0, y1));
+        p.line_to((x1, y1));
+        p.line_to((x1, y0));
     }
     p.close_path();
     p
@@ -48,7 +52,10 @@ fn glyph_ctx_draws_real_outline() {
     let ctx = GlyphCtx::new(faces[0].font().clone(), Default::default());
     let o = ctx.glyph('o', true).expect("có o");
     assert!(o.bbox.height() > 0.0 && o.adv > 0.0);
-    assert!(ctx.glyph('\u{E000}', true).is_none(), "ký tự không có trong cmap");
+    assert!(
+        ctx.glyph('\u{E000}', true).is_none(),
+        "ký tự không có trong cmap"
+    );
     let caps_only = GlyphCtx::new(faces[0].font().clone(), Default::default())
         .with_char_filter(|c| !c.is_lowercase());
     assert!(caps_only.glyph('o', true).is_none());
@@ -64,5 +71,9 @@ fn metric_constructors() {
     assert_eq!(e.value, None);
     assert_eq!(e.quality, Quality::Failed(FailReason::MissingGlyph));
     let nan = Metric::measured(f64::NAN, "x");
-    assert_eq!(nan.quality, Quality::Failed(FailReason::Degenerate), "NaN không bao giờ lọt ra ngoài");
+    assert_eq!(
+        nan.quality,
+        Quality::Failed(FailReason::Degenerate),
+        "NaN không bao giờ lọt ra ngoài"
+    );
 }

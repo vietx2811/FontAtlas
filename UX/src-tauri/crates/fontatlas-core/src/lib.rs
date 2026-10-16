@@ -1,19 +1,19 @@
 //! fontatlas-core: phân tích font thuần, không I/O DB.
 mod anatomy;
-mod error;
 pub mod axes;
+mod error;
 pub mod geom;
 mod load;
 mod metadata;
 mod metric;
 mod vietnamese;
 
+pub use anatomy::{Anatomy, MeasureAt, measure_with_filter};
 pub use error::CoreError;
 pub use load::{Container, Face, FontFile};
 pub use metadata::{AxisInfo, LicenseClass, Metadata, OutlineFormat, classify_license};
 pub use metric::{FailReason, Metric, Quality};
 pub use vietnamese::{ViStatus, VietnameseCoverage, vi_required_chars};
-pub use anatomy::{Anatomy, MeasureAt, measure_with_filter};
 
 use std::path::{Path, PathBuf};
 
@@ -51,7 +51,12 @@ pub fn analyze_bytes(raw: Vec<u8>) -> Result<FileReport, CoreError> {
             anatomy: f.measure(MeasureAt::Standard),
         })
         .collect();
-    Ok(FileReport { hash_hex: file.hash_hex(), container: file.container(), analyzer_version: ANALYZER_VERSION, faces })
+    Ok(FileReport {
+        hash_hex: file.hash_hex(),
+        container: file.container(),
+        analyzer_version: ANALYZER_VERSION,
+        faces,
+    })
 }
 
 pub fn analyze_path(path: &Path) -> Result<FileReport, CoreError> {
@@ -60,5 +65,8 @@ pub fn analyze_path(path: &Path) -> Result<FileReport, CoreError> {
 
 /// Song song theo file; lỗi một file không ảnh hưởng file khác; giữ thứ tự đầu vào.
 pub fn analyze_paths(paths: &[PathBuf]) -> Vec<(PathBuf, Result<FileReport, CoreError>)> {
-    paths.par_iter().map(|p| (p.clone(), analyze_path(p))).collect()
+    paths
+        .par_iter()
+        .map(|p| (p.clone(), analyze_path(p)))
+        .collect()
 }

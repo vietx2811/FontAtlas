@@ -45,18 +45,24 @@ impl FontFile {
         }
         let (data, container) = match &raw[0..4] {
             b"wOFF" => (
-                wuff::decompress_woff1(&raw).map_err(|e| CoreError::WoffDecode(format!("{e:?}")))?,
+                wuff::decompress_woff1(&raw)
+                    .map_err(|e| CoreError::WoffDecode(format!("{e:?}")))?,
                 Container::Woff1,
             ),
             b"wOF2" => (
-                wuff::decompress_woff2(&raw).map_err(|e| CoreError::WoffDecode(format!("{e:?}")))?,
+                wuff::decompress_woff2(&raw)
+                    .map_err(|e| CoreError::WoffDecode(format!("{e:?}")))?,
                 Container::Woff2,
             ),
             b"ttcf" => (raw, Container::Collection),
             [0, 1, 0, 0] | b"OTTO" | b"true" => (raw, Container::Sfnt),
             _ => return Err(CoreError::NotAFont),
         };
-        Ok(FontFile { hash, container, data })
+        Ok(FontFile {
+            hash,
+            container,
+            data,
+        })
     }
 
     pub fn hash(&self) -> &blake3::Hash {
@@ -75,7 +81,6 @@ impl FontFile {
         &self.data
     }
 }
-
 
 pub struct Face<'a> {
     index: u32,
@@ -99,8 +104,11 @@ impl FontFile {
                 .iter()
                 .enumerate()
                 .map(|(i, r)| {
-                    r.map(|font| Face { index: i as u32, font })
-                        .map_err(|e| CoreError::Parse(format!("face {i}: {e}")))
+                    r.map(|font| Face {
+                        index: i as u32,
+                        font,
+                    })
+                    .map_err(|e| CoreError::Parse(format!("face {i}: {e}")))
                 })
                 .collect(),
         }
@@ -136,15 +144,22 @@ fn validate_face(font: &FontRef, file_len: usize) -> Result<(), CoreError> {
     };
     for &tag in required {
         if font.table_data(Tag::new(tag)).is_none() {
-            return Err(CoreError::MissingTable(String::from_utf8_lossy(tag).into_owned()));
+            return Err(CoreError::MissingTable(
+                String::from_utf8_lossy(tag).into_owned(),
+            ));
         }
     }
     // Font bitmap-only (sbix/CBDT) hợp lệ khi không có outline → báo no_outlines ở tầng đo.
     if let Some(glyf) = font.table_data(Tag::new(b"glyf")) {
-        let loca = font.loca(None).map_err(|_| CoreError::MissingTable("loca".into()))?;
+        let loca = font
+            .loca(None)
+            .map_err(|_| CoreError::MissingTable("loca".into()))?;
         let last = loca.get_raw(loca.len()).unwrap_or(0) as usize;
         if last > glyf.len() {
-            return Err(CoreError::Truncated(format!("loca trỏ tới {last} > glyf {}", glyf.len())));
+            return Err(CoreError::Truncated(format!(
+                "loca trỏ tới {last} > glyf {}",
+                glyf.len()
+            )));
         }
     }
     Ok(())

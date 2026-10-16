@@ -28,12 +28,19 @@ fn missing_file_is_io_error() {
 
 #[test]
 fn decompresses_woff1_and_woff2_but_hashes_original() {
-    for (name, kind) in [("open_sans.woff", Container::Woff1), ("open_sans.woff2", Container::Woff2)] {
+    for (name, kind) in [
+        ("open_sans.woff", Container::Woff1),
+        ("open_sans.woff2", Container::Woff2),
+    ] {
         let raw = fixture_bytes(name);
         let f = FontFile::open(&fixture(name)).unwrap();
         assert_eq!(f.container(), kind, "{name}");
         assert_eq!(f.hash(), &blake3::hash(&raw), "{name}: băm file gốc");
-        assert_eq!(&f.data()[0..4], &[0, 1, 0, 0], "{name}: dữ liệu đã giải nén là SFNT");
+        assert_eq!(
+            &f.data()[0..4],
+            &[0, 1, 0, 0],
+            "{name}: dữ liệu đã giải nén là SFNT"
+        );
     }
 }
 
@@ -68,7 +75,10 @@ fn single_font_has_one_face_index_zero() {
 #[test]
 fn samples_validate_ok() {
     for s in SAMPLES {
-        FontFile::open(&fixture(s)).unwrap().validate().unwrap_or_else(|e| panic!("{s}: {e}"));
+        FontFile::open(&fixture(s))
+            .unwrap()
+            .validate()
+            .unwrap_or_else(|e| panic!("{s}: {e}"));
     }
 }
 
@@ -92,7 +102,9 @@ fn missing_head_is_detected() {
 
 #[test]
 fn ttc_faces_have_distinct_indices() {
-    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else { return };
+    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else {
+        return;
+    };
     let f = FontFile::open(&p).unwrap();
     assert_eq!(f.container(), Container::Collection);
     f.validate().unwrap();

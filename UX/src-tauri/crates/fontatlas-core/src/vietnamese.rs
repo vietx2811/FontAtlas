@@ -53,23 +53,35 @@ pub fn vi_required_chars() -> Vec<char> {
 }
 
 fn is_composite(font: &FontRef, gid: GlyphId) -> bool {
-    let (Ok(glyf), Ok(loca)) = (font.glyf(), font.loca(None)) else { return false };
+    let (Ok(glyf), Ok(loca)) = (font.glyf(), font.loca(None)) else {
+        return false;
+    };
     matches!(loca.get_glyf(gid, &glyf), Ok(Some(Glyph::Composite(_))))
 }
 
 pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
     let cmap = font.charmap();
     let chars = vi_required_chars();
-    let missing: Vec<char> = chars.iter().copied().filter(|c| cmap.map(*c).is_none()).collect();
+    let missing: Vec<char> = chars
+        .iter()
+        .copied()
+        .filter(|c| cmap.map(*c).is_none())
+        .collect();
     let present: Vec<GlyphId> = chars
         .iter()
         .filter(|c| !c.is_ascii())
         .filter_map(|c| cmap.map(*c))
         .collect();
     let precomposed_composite = present.iter().filter(|g| is_composite(font, **g)).count();
-    let combining_marks_missing: Vec<u32> =
-        VI_MARKS.iter().copied().filter(|m| char::from_u32(*m).and_then(|c| cmap.map(c)).is_none()).collect();
-    let bases_missing: Vec<char> = VI_BASES.chars().filter(|c| cmap.map(*c).is_none()).collect();
+    let combining_marks_missing: Vec<u32> = VI_MARKS
+        .iter()
+        .copied()
+        .filter(|m| char::from_u32(*m).and_then(|c| cmap.map(c)).is_none())
+        .collect();
+    let bases_missing: Vec<char> = VI_BASES
+        .chars()
+        .filter(|c| cmap.map(*c).is_none())
+        .collect();
     let (gsub, gpos) = crate::metadata::feature_tags(font);
     let gpos_mark = gpos.iter().any(|t| t == "mark");
     let gpos_mkmk = gpos.iter().any(|t| t == "mkmk");

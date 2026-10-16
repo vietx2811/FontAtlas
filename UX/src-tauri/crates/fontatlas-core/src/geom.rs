@@ -21,7 +21,11 @@ impl OutlinePen for KPen {
         self.0.quad_to((cx as f64, cy as f64), (x as f64, y as f64));
     }
     fn curve_to(&mut self, a: f32, b: f32, c: f32, d: f32, x: f32, y: f32) {
-        self.0.curve_to((a as f64, b as f64), (c as f64, d as f64), (x as f64, y as f64));
+        self.0.curve_to(
+            (a as f64, b as f64),
+            (c as f64, d as f64),
+            (x as f64, y as f64),
+        );
     }
     fn close(&mut self) {
         self.0.close_path();
@@ -44,8 +48,16 @@ pub struct GlyphCtx<'a> {
 
 impl<'a> GlyphCtx<'a> {
     pub fn new(font: FontRef<'a>, loc: Location) -> Self {
-        let ia = font.post().map(|p| p.italic_angle().to_f64()).unwrap_or(0.0);
-        GlyphCtx { font, loc, deskew: ia.to_radians().tan(), char_filter: None }
+        let ia = font
+            .post()
+            .map(|p| p.italic_angle().to_f64())
+            .unwrap_or(0.0);
+        GlyphCtx {
+            font,
+            loc,
+            deskew: ia.to_radians().tan(),
+            char_filter: None,
+        }
     }
 
     /// Ẩn bớt ký tự (dùng để test nhánh font chỉ có chữ hoa).
@@ -66,7 +78,8 @@ impl<'a> GlyphCtx<'a> {
         let og = self.font.outline_glyphs().get(gid)?;
         let mut pen = KPen(BezPath::new());
         let lr: LocationRef = (&self.loc).into();
-        og.draw(DrawSettings::unhinted(Size::unscaled(), lr), &mut pen).ok()?;
+        og.draw(DrawSettings::unhinted(Size::unscaled(), lr), &mut pen)
+            .ok()?;
         let mut path = pen.0;
         if path.elements().is_empty() {
             return None;
@@ -78,7 +91,10 @@ impl<'a> GlyphCtx<'a> {
         if !(bbox.width() > 0.0 && bbox.height() > 0.0) {
             return None;
         }
-        let adv = self.font.glyph_metrics(Size::unscaled(), lr).advance_width(gid)? as f64;
+        let adv = self
+            .font
+            .glyph_metrics(Size::unscaled(), lr)
+            .advance_width(gid)? as f64;
         Some(GlyphShape { path, bbox, adv })
     }
 }
@@ -130,7 +146,13 @@ pub(crate) fn vline(g: &GlyphShape, x: f64) -> Vec<(f64, f64)> {
 pub(crate) fn ink_area(g: &GlyphShape, y0: f64, y1: f64, n: usize) -> f64 {
     let dy = (y1 - y0) / n as f64;
     (0..n)
-        .map(|i| hline(g, y0 + dy * (i as f64 + 0.5)).iter().map(|(a, b)| b - a).sum::<f64>() * dy)
+        .map(|i| {
+            hline(g, y0 + dy * (i as f64 + 0.5))
+                .iter()
+                .map(|(a, b)| b - a)
+                .sum::<f64>()
+                * dy
+        })
         .sum()
 }
 

@@ -63,7 +63,10 @@ pub fn classify_license(description: Option<&str>, url: Option<&str>) -> License
         return LicenseClass::Unknown;
     }
     let s = format!("{} {}", description.unwrap_or(""), url.unwrap_or("")).to_lowercase();
-    if s.contains("open font license") || s.contains("openfontlicense") || s.contains("scripts.sil.org/ofl") {
+    if s.contains("open font license")
+        || s.contains("openfontlicense")
+        || s.contains("scripts.sil.org/ofl")
+    {
         LicenseClass::Ofl
     } else if s.contains("apache license") || s.contains("apache.org/licenses") {
         LicenseClass::Apache
@@ -73,7 +76,9 @@ pub fn classify_license(description: Option<&str>, url: Option<&str>) -> License
 }
 
 fn name(font: &FontRef, id: StringId) -> Option<String> {
-    font.localized_strings(id).english_or_first().map(|s| s.to_string())
+    font.localized_strings(id)
+        .english_or_first()
+        .map(|s| s.to_string())
 }
 
 fn has(font: &FontRef, tag: &[u8; 4]) -> bool {
@@ -96,10 +101,18 @@ pub(crate) fn feature_tags(font: &FontRef) -> (Vec<String>, Vec<String>) {
     let mut gsub = Vec::new();
     let mut gpos = Vec::new();
     if let Ok(fl) = font.gsub().and_then(|t| t.feature_list()) {
-        gsub.extend(fl.feature_records().iter().map(|r| r.feature_tag().to_string()));
+        gsub.extend(
+            fl.feature_records()
+                .iter()
+                .map(|r| r.feature_tag().to_string()),
+        );
     }
     if let Ok(fl) = font.gpos().and_then(|t| t.feature_list()) {
-        gpos.extend(fl.feature_records().iter().map(|r| r.feature_tag().to_string()));
+        gpos.extend(
+            fl.feature_records()
+                .iter()
+                .map(|r| r.feature_tag().to_string()),
+        );
     }
     for v in [&mut gsub, &mut gpos] {
         v.sort();
@@ -131,7 +144,10 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         width_class: os2.as_ref().map(|o| o.us_width_class()),
         fs_type: os2.as_ref().map(|o| o.fs_type()),
         panose: os2.as_ref().and_then(|o| o.panose_10().try_into().ok()),
-        italic_angle: font.post().map(|p| p.italic_angle().to_f64() as f32).unwrap_or(0.0),
+        italic_angle: font
+            .post()
+            .map(|p| p.italic_angle().to_f64() as f32)
+            .unwrap_or(0.0),
         outline_format: outline_format(font),
         color_tables: [b"COLR", b"CBDT", b"sbix", b"SVG "]
             .iter()
@@ -142,7 +158,12 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         axes: font
             .axes()
             .iter()
-            .map(|a| AxisInfo { tag: a.tag().to_string(), min: a.min_value(), default: a.default_value(), max: a.max_value() })
+            .map(|a| AxisInfo {
+                tag: a.tag().to_string(),
+                min: a.min_value(),
+                default: a.default_value(),
+                max: a.max_value(),
+            })
             .collect(),
         named_instances: font
             .named_instances()

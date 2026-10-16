@@ -10,7 +10,11 @@ pub struct Vertical {
 }
 
 pub fn vertical(ctx: &GlyphCtx) -> Option<Vertical> {
-    let xh = ctx.glyph('x', true).or_else(|| ctx.glyph('z', true))?.bbox.y1;
+    let xh = ctx
+        .glyph('x', true)
+        .or_else(|| ctx.glyph('z', true))?
+        .bbox
+        .y1;
     (xh > 0.0).then(|| Vertical {
         x_height: xh,
         cap_height: ctx.glyph('H', true).map(|g| g.bbox.y1),
@@ -22,15 +26,26 @@ pub fn vertical(ctx: &GlyphCtx) -> Option<Vertical> {
 /// Bề dày thân trái 'n' cắt ngang ở 35% x-height, chia x-height.
 pub fn stem_n_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
     const M: &str = "n_stem_at_35pct_xh";
-    let Some(n) = ctx.glyph('n', true) else { return Metric::failed(FailReason::MissingGlyph, M) };
-    Metric::from_opt(first_stem(&n, xh * 0.35).map(|s| s / xh), crate::Quality::Measured, FailReason::Degenerate, M)
+    let Some(n) = ctx.glyph('n', true) else {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    };
+    Metric::from_opt(
+        first_stem(&n, xh * 0.35).map(|s| s / xh),
+        crate::Quality::Measured,
+        FailReason::Degenerate,
+        M,
+    )
 }
 
 /// Diện tích mực 'n','o' ÷ (advance × x-height), trung bình.
 pub fn darkness_no(ctx: &GlyphCtx, xh: f64) -> Metric {
     const M: &str = "ink_area_n_o";
     let dark = |g: &GlyphShape| ink_area(g, 0.0, xh, 48) / (g.adv * xh);
-    let vals: Vec<f64> = ['n', 'o'].iter().filter_map(|c| ctx.glyph(*c, true)).map(|g| dark(&g)).collect();
+    let vals: Vec<f64> = ['n', 'o']
+        .iter()
+        .filter_map(|c| ctx.glyph(*c, true))
+        .map(|g| dark(&g))
+        .collect();
     if vals.is_empty() {
         return Metric::failed(FailReason::MissingGlyph, M);
     }

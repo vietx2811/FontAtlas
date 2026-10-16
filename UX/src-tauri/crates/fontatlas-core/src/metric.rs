@@ -29,7 +29,11 @@ pub struct Metric {
 impl Metric {
     fn with(v: f64, q: Quality, method: &'static str) -> Self {
         if v.is_finite() {
-            Metric { value: Some(v as f32), quality: q, method }
+            Metric {
+                value: Some(v as f32),
+                quality: q,
+                method,
+            }
         } else {
             Metric::failed(FailReason::Degenerate, method)
         }
@@ -41,7 +45,11 @@ impl Metric {
         Self::with(v, Quality::Estimated, method)
     }
     pub fn failed(reason: FailReason, method: &'static str) -> Self {
-        Metric { value: None, quality: Quality::Failed(reason), method }
+        Metric {
+            value: None,
+            quality: Quality::Failed(reason),
+            method,
+        }
     }
     /// Từ Option: None → Failed(reason).
     pub fn from_opt(v: Option<f64>, q: Quality, reason: FailReason, method: &'static str) -> Self {

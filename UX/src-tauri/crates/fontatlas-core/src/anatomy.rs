@@ -69,7 +69,11 @@ fn location(font: &FontRef, set: &[(String, f32)]) -> Location {
     font.axes().location(pairs)
 }
 
-pub fn measure_with_filter(font: &FontRef, at: MeasureAt, filter: Option<fn(char) -> bool>) -> Anatomy {
+pub fn measure_with_filter(
+    font: &FontRef,
+    at: MeasureAt,
+    filter: Option<fn(char) -> bool>,
+) -> Anatomy {
     let set = settings(font, &at);
     let fail_all = |r: FailReason| all_failed(set.clone(), r);
     if outline_format(font) == OutlineFormat::None {
@@ -87,11 +91,23 @@ pub fn measure_with_filter(font: &FontRef, at: MeasureAt, filter: Option<fn(char
         return caps_only(&ctx, upm, set);
     };
     let xh = v.x_height;
-    let em = |x: Option<f64>, m| Metric::from_opt(x.map(|x| x / upm), Quality::Measured, FailReason::MissingGlyph, m);
+    let em = |x: Option<f64>, m| {
+        Metric::from_opt(
+            x.map(|x| x / upm),
+            Quality::Measured,
+            FailReason::MissingGlyph,
+            m,
+        )
+    };
     Anatomy {
         x_height_em: Metric::measured(xh / upm, "x_bbox_top"),
         cap_height_em: em(v.cap_height, "H_bbox_top"),
-        x_height_cap: Metric::from_opt(v.cap_height.map(|c| xh / c), Quality::Measured, FailReason::MissingGlyph, "x_over_H"),
+        x_height_cap: Metric::from_opt(
+            v.cap_height.map(|c| xh / c),
+            Quality::Measured,
+            FailReason::MissingGlyph,
+            "x_over_H",
+        ),
         ascender_em: em(v.ascender, "d_bbox_top"),
         descender_em: em(v.descender, "p_bbox_bottom"),
         stem: vertical::stem_n_xh(&ctx, xh),
@@ -121,11 +137,18 @@ fn caps_only(ctx: &GlyphCtx, upm: f64, set: Vec<(String, f32)>) -> Anatomy {
         a.cap_height_em = Metric::measured(h.bbox.y1 / upm, "H_bbox_top");
         a.stem = Metric::from_opt(
             crate::geom::first_stem(&h, h.bbox.y1 * 0.35).map(|s| s / h.bbox.y1),
-            Quality::Measured, FailReason::Degenerate, "H_stem_over_cap",
+            Quality::Measured,
+            FailReason::Degenerate,
+            "H_stem_over_cap",
         );
     }
     if let Some(o) = ctx.glyph('O', true) {
-        a.contrast = Metric::from_opt(stroke::contrast_on(&o).map(|v| v.0), Quality::Measured, FailReason::Degenerate, "O_radial_thickness_max_min");
+        a.contrast = Metric::from_opt(
+            stroke::contrast_on(&o).map(|v| v.0),
+            Quality::Measured,
+            FailReason::Degenerate,
+            "O_radial_thickness_max_min",
+        );
     }
     a.contrast_h = stroke::contrast_h(ctx);
     a.slant_deg = stroke::slant_deg(ctx);
@@ -136,14 +159,26 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
     let f = |m| Metric::failed(r, m);
     Anatomy {
         location,
-        x_height_em: f("x_bbox_top"), cap_height_em: f("H_bbox_top"), x_height_cap: f("x_over_H"),
-        ascender_em: f("d_bbox_top"), descender_em: f("p_bbox_bottom"), stem: f("n_stem_at_35pct_xh"),
-        darkness: f("ink_area_n_o"), contrast: f("o_radial_thickness_max_min"), contrast_h: f("H_stem_over_bar"),
-        stress_deg: f("o_harmonic_fit"), aperture: f("c_angular_opening"),
-        aperture_e: f("e_min_vertical_gap_bar_to_terminal"), width: f("o_bbox_width_over_xh"),
-        mean_advance: f("mean_advance_a_z_over_xh"), width_cv: f("cv_advance_a_z"),
-        spacing: f("mean_sidebearings_a_z_over_xh"), slant_deg: f("l_or_I_midline_offset"),
-        serif_foot: f("baseline_foot_over_stem_median_iln"), counter: f("o_inner_over_outer_area"),
-        a_storeys: f("a_center_vertical_runs"), g_storeys: f("g_center_vertical_runs"),
+        x_height_em: f("x_bbox_top"),
+        cap_height_em: f("H_bbox_top"),
+        x_height_cap: f("x_over_H"),
+        ascender_em: f("d_bbox_top"),
+        descender_em: f("p_bbox_bottom"),
+        stem: f("n_stem_at_35pct_xh"),
+        darkness: f("ink_area_n_o"),
+        contrast: f("o_radial_thickness_max_min"),
+        contrast_h: f("H_stem_over_bar"),
+        stress_deg: f("o_harmonic_fit"),
+        aperture: f("c_angular_opening"),
+        aperture_e: f("e_min_vertical_gap_bar_to_terminal"),
+        width: f("o_bbox_width_over_xh"),
+        mean_advance: f("mean_advance_a_z_over_xh"),
+        width_cv: f("cv_advance_a_z"),
+        spacing: f("mean_sidebearings_a_z_over_xh"),
+        slant_deg: f("l_or_I_midline_offset"),
+        serif_foot: f("baseline_foot_over_stem_median_iln"),
+        counter: f("o_inner_over_outer_area"),
+        a_storeys: f("a_center_vertical_runs"),
+        g_storeys: f("g_center_vertical_runs"),
     }
 }

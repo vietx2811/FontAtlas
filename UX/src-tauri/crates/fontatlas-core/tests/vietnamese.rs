@@ -23,7 +23,11 @@ fn spike_verified_statuses() {
     let r = vi("roboto.ttf");
     assert_eq!(r.status, ViStatus::PrecomposedOnly);
     assert!(r.supports_vietnamese && r.missing.is_empty());
-    for s in ["open_sans.ttf", "playfair_display.ttf", "source_code_pro.ttf"] {
+    for s in [
+        "open_sans.ttf",
+        "playfair_display.ttf",
+        "source_code_pro.ttf",
+    ] {
         let v = vi(s);
         assert_eq!(v.status, ViStatus::Full, "{s}");
         assert!(v.gpos_mark && v.gpos_mkmk, "{s}");
@@ -53,7 +57,9 @@ fn stacked_marks_are_measured() {
 #[test]
 fn regression_avenir_next_supports_vietnamese() {
     // Quy tắc Python cũ báo sai False (âm tính giả).
-    let Some(p) = system_font(&["/System/Library/Fonts/Avenir Next.ttc"]) else { return };
+    let Some(p) = system_font(&["/System/Library/Fonts/Avenir Next.ttc"]) else {
+        return;
+    };
     let f = FontFile::open(&p).unwrap();
     // Spike (dữ liệu thật): 10/12 face đủ; riêng Heavy và Heavy Italic thiếu 94 ký tự.
     for face in f.faces().unwrap() {

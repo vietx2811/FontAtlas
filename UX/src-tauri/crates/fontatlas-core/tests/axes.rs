@@ -18,7 +18,11 @@ fn x_height_matches_os2_within_2_percent() {
         with_ctx(&fixture(s), 0, |ctx| {
             let v = vertical(ctx).expect(s);
             let os2 = ctx.font().os2().unwrap().sx_height().unwrap() as f64;
-            assert!((v.x_height - os2).abs() / os2 < 0.02, "{s}: {} vs {os2}", v.x_height);
+            assert!(
+                (v.x_height - os2).abs() / os2 < 0.02,
+                "{s}: {} vs {os2}",
+                v.x_height
+            );
             assert!(v.cap_height.unwrap() > v.x_height);
             assert!(v.descender.unwrap() < 0.0);
         });
@@ -43,7 +47,9 @@ fn weight_is_sane_and_measured() {
 #[test]
 fn helvetica_weights_increase() {
     // Spike: Helvetica Light/Regular/Bold = 0.116 / 0.168 / 0.261.
-    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else { return };
+    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else {
+        return;
+    };
     let file = FontFile::open(&p).unwrap();
     let mut by_name = std::collections::HashMap::new();
     for face in file.faces().unwrap() {
@@ -53,12 +59,16 @@ fn helvetica_weights_increase() {
             by_name.insert(ps, stem_n_xh(&ctx, xh).value.unwrap());
         }
     }
-    let (l, r, b) = (by_name["Helvetica-Light"], by_name["Helvetica"], by_name["Helvetica-Bold"]);
+    let (l, r, b) = (
+        by_name["Helvetica-Light"],
+        by_name["Helvetica"],
+        by_name["Helvetica-Bold"],
+    );
     assert!(l < r && r < b, "{l} {r} {b}");
 }
 
-use fontatlas_core::axes::stroke::*;
 use fontatlas_core::FailReason;
+use fontatlas_core::axes::stroke::*;
 
 fn val(m: fontatlas_core::Metric) -> f32 {
     m.value.unwrap_or_else(|| panic!("{:?}", m))
@@ -67,7 +77,12 @@ fn val(m: fontatlas_core::Metric) -> f32 {
 #[test]
 fn contrast_orders_didone_oldstyle_sans() {
     let c = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(contrast_o(ctx)));
-    let (pf, lb, rb, os) = (c("playfair_display.ttf"), c("libre_baskerville.ttf"), c("roboto.ttf"), c("open_sans.ttf"));
+    let (pf, lb, rb, os) = (
+        c("playfair_display.ttf"),
+        c("libre_baskerville.ttf"),
+        c("roboto.ttf"),
+        c("open_sans.ttf"),
+    );
     assert!(pf > 4.0 && lb > 1.8 && pf > lb, "pf {pf} lb {lb}");
     assert!(rb < 1.5 && os < 1.5, "sans {rb} {os}");
     let h = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(contrast_h(ctx)));
@@ -77,7 +92,10 @@ fn contrast_orders_didone_oldstyle_sans() {
 #[test]
 fn stress_only_with_contrast_and_estimated() {
     with_ctx(&fixture("roboto.ttf"), 0, |ctx| {
-        assert_eq!(stress_deg(ctx).quality, Quality::Failed(FailReason::LowContrast));
+        assert_eq!(
+            stress_deg(ctx).quality,
+            Quality::Failed(FailReason::LowContrast)
+        );
     });
     with_ctx(&fixture("playfair_display.ttf"), 0, |ctx| {
         let s = stress_deg(ctx);
@@ -96,10 +114,16 @@ fn aperture_c_humanist_open_grotesque_closed() {
 fn serif_foot_slant_counter_width() {
     for s in SAMPLES {
         with_ctx(&fixture(s), 0, |ctx| {
-            let xh = fontatlas_core::axes::vertical::vertical(ctx).unwrap().x_height;
+            let xh = fontatlas_core::axes::vertical::vertical(ctx)
+                .unwrap()
+                .x_height;
             let foot = val(serif_foot(ctx, xh));
             let serif = matches!(s, "playfair_display.ttf" | "libre_baskerville.ttf");
-            if serif { assert!(foot > 1.6, "{s} {foot}") } else if s != "source_code_pro.ttf" { assert!(foot < 1.25, "{s} {foot}") }
+            if serif {
+                assert!(foot > 1.6, "{s} {foot}")
+            } else if s != "source_code_pro.ttf" {
+                assert!(foot < 1.25, "{s} {foot}")
+            }
             assert!(val(slant_deg(ctx)).abs() < 1.5, "{s} đứng");
             let co = val(counter_o(ctx));
             assert!(co > 0.0 && co < 1.0, "{s}");
@@ -110,10 +134,16 @@ fn serif_foot_slant_counter_width() {
 
 #[test]
 fn oblique_slant_is_measured() {
-    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else { return };
+    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else {
+        return;
+    };
     let file = FontFile::open(&p).unwrap();
-    let face = file.faces().unwrap().into_iter()
-        .find(|f| f.metadata().postscript_name.as_deref() == Some("Helvetica-Oblique")).unwrap();
+    let face = file
+        .faces()
+        .unwrap()
+        .into_iter()
+        .find(|f| f.metadata().postscript_name.as_deref() == Some("Helvetica-Oblique"))
+        .unwrap();
     let ctx = GlyphCtx::new(face.font().clone(), Default::default());
     let s = val(slant_deg(&ctx));
     assert!((s + 12.0).abs() < 1.5, "Helvetica Oblique −12°: {s}");
@@ -132,7 +162,9 @@ fn storeys() {
 
 #[test]
 fn futura_single_storey_a() {
-    let Some(p) = system_font(&["/System/Library/Fonts/Supplemental/Futura.ttc"]) else { return };
+    let Some(p) = system_font(&["/System/Library/Fonts/Supplemental/Futura.ttc"]) else {
+        return;
+    };
     with_ctx(&p, 0, |ctx| assert_eq!(val(a_storeys(ctx)), 1.0));
 }
 
@@ -147,7 +179,9 @@ fn monospace_has_no_width_variation() {
 fn spacing_positive() {
     for s in SAMPLES {
         with_ctx(&fixture(s), 0, |ctx| {
-            let xh = fontatlas_core::axes::vertical::vertical(ctx).unwrap().x_height;
+            let xh = fontatlas_core::axes::vertical::vertical(ctx)
+                .unwrap()
+                .x_height;
             let v = val(spacing_lc_xh(ctx, xh));
             assert!(v > 0.0 && v < 0.6, "{s} {v}");
         });
@@ -156,11 +190,18 @@ fn spacing_positive() {
 
 #[test]
 fn aperture_e_estimated_and_humanist_wider() {
-    let e = |s: &str| with_ctx(&fixture(s), 0, |ctx| {
-        let xh = fontatlas_core::axes::vertical::vertical(ctx).unwrap().x_height;
-        aperture_e_xh(ctx, xh)
-    });
+    let e = |s: &str| {
+        with_ctx(&fixture(s), 0, |ctx| {
+            let xh = fontatlas_core::axes::vertical::vertical(ctx)
+                .unwrap()
+                .x_height;
+            aperture_e_xh(ctx, xh)
+        })
+    };
     let (os, rb) = (e("open_sans.ttf"), e("roboto.ttf"));
     assert_eq!(os.quality, Quality::Estimated);
-    assert!(os.value.unwrap() > rb.value.unwrap(), "Open Sans mở hơn Roboto: {os:?} {rb:?}");
+    assert!(
+        os.value.unwrap() > rb.value.unwrap(),
+        "Open Sans mở hơn Roboto: {os:?} {rb:?}"
+    );
 }

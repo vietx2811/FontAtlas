@@ -36,8 +36,12 @@ pub(crate) fn contrast_on(g: &GlyphShape) -> Option<(f64, f64)> {
         sy += t * a.sin();
     }
     let mut tilt = sy.atan2(sx).to_degrees() / 2.0;
-    if tilt > 90.0 { tilt -= 180.0; }
-    if tilt < -90.0 { tilt += 180.0; }
+    if tilt > 90.0 {
+        tilt -= 180.0;
+    }
+    if tilt < -90.0 {
+        tilt += 180.0;
+    }
     Some((tmax / tmin, tilt))
 }
 
@@ -45,13 +49,20 @@ pub fn contrast_o(ctx: &GlyphCtx) -> Metric {
     const M: &str = "o_radial_thickness_max_min";
     match ctx.glyph('o', true) {
         None => Metric::failed(FailReason::MissingGlyph, M),
-        Some(o) => Metric::from_opt(contrast_on(&o).map(|v| v.0), Quality::Measured, FailReason::Degenerate, M),
+        Some(o) => Metric::from_opt(
+            contrast_on(&o).map(|v| v.0),
+            Quality::Measured,
+            FailReason::Degenerate,
+            M,
+        ),
     }
 }
 
 pub fn contrast_h(ctx: &GlyphCtx) -> Metric {
     const M: &str = "H_stem_over_bar";
-    let Some(g) = ctx.glyph('H', true) else { return Metric::failed(FailReason::MissingGlyph, M) };
+    let Some(g) = ctx.glyph('H', true) else {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    };
     let v = (|| {
         let stem = first_stem(&g, g.bbox.y1 * 0.2)?;
         let bar = vline(&g, g.bbox.center().x)
@@ -65,7 +76,9 @@ pub fn contrast_h(ctx: &GlyphCtx) -> Metric {
 
 pub fn stress_deg(ctx: &GlyphCtx) -> Metric {
     const M: &str = "o_harmonic_fit";
-    let Some(o) = ctx.glyph('o', true) else { return Metric::failed(FailReason::MissingGlyph, M) };
+    let Some(o) = ctx.glyph('o', true) else {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    };
     match contrast_on(&o) {
         None => Metric::failed(FailReason::Degenerate, M),
         Some((c, _)) if c < 1.3 => Metric::failed(FailReason::LowContrast, M),
@@ -99,19 +112,29 @@ pub(crate) fn gap_origin(g: &GlyphShape, y: f64) -> Option<Point> {
 
 pub fn aperture_c_deg(ctx: &GlyphCtx) -> Metric {
     const M: &str = "c_angular_opening";
-    let Some(g) = ctx.glyph('c', true) else { return Metric::failed(FailReason::MissingGlyph, M) };
+    let Some(g) = ctx.glyph('c', true) else {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    };
     let v = gap_origin(&g, g.bbox.center().y).and_then(|o| angular_aperture(&g, o));
     Metric::from_opt(v, Quality::Measured, FailReason::Degenerate, M)
 }
 
 pub fn width_o_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
     const M: &str = "o_bbox_width_over_xh";
-    Metric::from_opt(ctx.glyph('o', true).map(|g| g.bbox.width() / xh), Quality::Measured, FailReason::MissingGlyph, M)
+    Metric::from_opt(
+        ctx.glyph('o', true).map(|g| g.bbox.width() / xh),
+        Quality::Measured,
+        FailReason::MissingGlyph,
+        M,
+    )
 }
 
 pub fn mean_adv_lc_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
     const M: &str = "mean_advance_a_z_over_xh";
-    let adv: Vec<f64> = ('a'..='z').filter_map(|c| ctx.glyph(c, false)).map(|g| g.adv).collect();
+    let adv: Vec<f64> = ('a'..='z')
+        .filter_map(|c| ctx.glyph(c, false))
+        .map(|g| g.adv)
+        .collect();
     let v = (!adv.is_empty()).then(|| adv.iter().sum::<f64>() / adv.len() as f64 / xh);
     Metric::from_opt(v, Quality::Measured, FailReason::MissingGlyph, M)
 }
@@ -119,13 +142,24 @@ pub fn mean_adv_lc_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
 /// Độ nghiêng đo thật (không dựng thẳng) trên 'l' hoặc 'I'; âm = nghiêng phải như italic.
 pub fn slant_deg(ctx: &GlyphCtx) -> Metric {
     const M: &str = "l_or_I_midline_offset";
-    let v = ctx.glyph('l', false).or_else(|| ctx.glyph('I', false)).and_then(|g| {
-        let (y1, y2) = (g.bbox.y0 + g.bbox.height() * 0.25, g.bbox.y0 + g.bbox.height() * 0.75);
-        let m1 = hline(&g, y1).first().map(|(a, b)| (a + b) / 2.0)?;
-        let m2 = hline(&g, y2).first().map(|(a, b)| (a + b) / 2.0)?;
-        Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
-    });
-    Metric::from_opt(v.map(|v| (v * 10.0).round() / 10.0), Quality::Measured, FailReason::MissingGlyph, M)
+    let v = ctx
+        .glyph('l', false)
+        .or_else(|| ctx.glyph('I', false))
+        .and_then(|g| {
+            let (y1, y2) = (
+                g.bbox.y0 + g.bbox.height() * 0.25,
+                g.bbox.y0 + g.bbox.height() * 0.75,
+            );
+            let m1 = hline(&g, y1).first().map(|(a, b)| (a + b) / 2.0)?;
+            let m2 = hline(&g, y2).first().map(|(a, b)| (a + b) / 2.0)?;
+            Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
+        });
+    Metric::from_opt(
+        v.map(|v| (v * 10.0).round() / 10.0),
+        Quality::Measured,
+        FailReason::MissingGlyph,
+        M,
+    )
 }
 
 /// Bề rộng mực sát baseline ÷ thân ở 35% xh, trung vị trên 'i','l','n'. Sans ≈ 1, serif ≥ 1.6.
@@ -138,13 +172,20 @@ pub fn serif_foot(ctx: &GlyphCtx, xh: f64) -> Metric {
         .filter(|v| v.is_finite())
         .collect();
     foot.sort_by(f64::total_cmp);
-    Metric::from_opt(foot.get(foot.len() / 2).copied(), Quality::Measured, FailReason::MissingGlyph, M)
+    Metric::from_opt(
+        foot.get(foot.len() / 2).copied(),
+        Quality::Measured,
+        FailReason::MissingGlyph,
+        M,
+    )
 }
 
 /// Diện tích lòng 'o' ÷ diện tích bao ngoài (tích phân scanline).
 pub fn counter_o(ctx: &GlyphCtx) -> Metric {
     const M: &str = "o_inner_over_outer_area";
-    let Some(g) = ctx.glyph('o', true) else { return Metric::failed(FailReason::MissingGlyph, M) };
+    let Some(g) = ctx.glyph('o', true) else {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    };
     let (mut inner, mut outer) = (0.0, 0.0);
     let n = 48;
     let dy = g.bbox.height() / n as f64;
