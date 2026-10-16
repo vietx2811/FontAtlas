@@ -52,18 +52,6 @@ fn corrupt_woff2_is_woff_decode() {
     assert_eq!(e.code(), "woff_decode");
 }
 
-/// Đổi tag một bảng trong table directory (giữ thứ tự sort: "head" → "heae").
-fn rename_table(mut d: Vec<u8>, from: &[u8; 4], to: &[u8; 4]) -> Vec<u8> {
-    let n = u16::from_be_bytes([d[4], d[5]]) as usize;
-    for i in 0..n {
-        let p = 12 + 16 * i;
-        if &d[p..p + 4] == from {
-            d[p..p + 4].copy_from_slice(to);
-        }
-    }
-    d
-}
-
 #[test]
 fn single_font_has_one_face_index_zero() {
     let f = FontFile::open(&fixture("roboto.ttf")).unwrap();

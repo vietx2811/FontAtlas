@@ -43,15 +43,15 @@ pub struct Metadata {
     pub license_description: Option<String>,
     pub license_url: Option<String>,
     pub license_class: LicenseClass,
-    pub units_per_em: u16,
+    pub units_per_em: Option<u16>,
     pub weight_class: Option<u16>,
     pub width_class: Option<u16>,
     pub fs_type: Option<u16>,
     pub panose: Option<[u8; 10]>,
-    pub italic_angle: f32,
+    pub italic_angle: Option<f32>,
     pub outline_format: OutlineFormat,
     pub color_tables: Vec<String>,
-    pub num_glyphs: u16,
+    pub num_glyphs: Option<u16>,
     pub axes: Vec<AxisInfo>,
     pub named_instances: Vec<String>,
     pub gsub_features: Vec<String>,
@@ -165,22 +165,19 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         license_class: classify_license(license_description.as_deref(), license_url.as_deref()),
         license_description,
         license_url,
-        units_per_em: font.head().map(|h| h.units_per_em()).unwrap_or(0),
+        units_per_em: font.head().ok().map(|h| h.units_per_em()),
         weight_class: os2.as_ref().map(|o| o.us_weight_class()),
         width_class: os2.as_ref().map(|o| o.us_width_class()),
         fs_type: os2.as_ref().map(|o| o.fs_type()),
         panose: os2.as_ref().and_then(|o| o.panose_10().try_into().ok()),
-        italic_angle: font
-            .post()
-            .map(|p| p.italic_angle().to_f64() as f32)
-            .unwrap_or(0.0),
+        italic_angle: font.post().ok().map(|p| p.italic_angle().to_f64() as f32),
         outline_format: outline_format(font),
         color_tables: [b"COLR", b"CBDT", b"sbix", b"SVG "]
             .iter()
             .filter(|t| has(font, t))
             .map(|t| String::from_utf8_lossy(*t).trim().to_string())
             .collect(),
-        num_glyphs: font.maxp().map(|m| m.num_glyphs()).unwrap_or(0),
+        num_glyphs: font.maxp().ok().map(|m| m.num_glyphs()),
         axes: font
             .axes()
             .iter()

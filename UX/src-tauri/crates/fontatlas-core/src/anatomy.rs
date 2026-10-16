@@ -83,10 +83,15 @@ pub fn measure_with_filter(
     if let Some(f) = filter {
         ctx = ctx.with_char_filter(f);
     }
-    let upm = font.head().map(|h| h.units_per_em() as f64).unwrap_or(0.0);
-    if upm <= 0.0 {
+    // Thiếu head hoặc upm = 0 → không đo được (không mặc định im lặng).
+    let Some(upm) = font
+        .head()
+        .ok()
+        .map(|h| h.units_per_em() as f64)
+        .filter(|u| *u > 0.0)
+    else {
         return fail_all(FailReason::Degenerate);
-    }
+    };
     let Some(v) = vertical::vertical(&ctx) else {
         return caps_only(&ctx, upm, set);
     };

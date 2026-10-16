@@ -115,10 +115,15 @@ pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
 }
 
 fn stacked_marks(font: &FontRef) -> (Option<f32>, Option<bool>) {
-    let upm = font.head().map(|h| h.units_per_em() as f64).unwrap_or(0.0);
-    if upm <= 0.0 {
+    // Thiếu head hoặc upm = 0 → không đo được (không mặc định im lặng).
+    let Some(upm) = font
+        .head()
+        .ok()
+        .map(|h| h.units_per_em() as f64)
+        .filter(|u| *u > 0.0)
+    else {
         return (None, None);
-    }
+    };
     let ctx = GlyphCtx::new(font.clone(), Default::default());
     let top = VI_STACKED_UPPER
         .chars()

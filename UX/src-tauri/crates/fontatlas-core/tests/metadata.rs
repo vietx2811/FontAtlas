@@ -17,9 +17,9 @@ fn basic_names_and_metrics() {
             .unwrap_or("")
             .starts_with("PlayfairDisplay")
     );
-    assert!(m.units_per_em >= 16);
+    assert!(m.units_per_em.unwrap() >= 16);
     assert_eq!(m.outline_format, OutlineFormat::Glyf);
-    assert!(m.num_glyphs > 100);
+    assert!(m.num_glyphs.unwrap() > 100);
     let r = meta("roboto.ttf");
     assert_eq!(r.family.as_deref(), Some("Roboto"));
     assert_eq!(r.weight_class, Some(400));
@@ -110,4 +110,21 @@ fn os2_optical_size_absent_before_v5() {
     for s in SAMPLES {
         assert_eq!(meta(s).os2_optical_size_pt, None, "{s}");
     }
+}
+
+#[test]
+fn missing_head_gives_none_not_zero() {
+    // Spec: không mặc định im lặng. Thiếu 'head' → units_per_em None; đo giải phẫu báo Degenerate.
+    let raw = rename_table(fixture_bytes("roboto.ttf"), b"head", b"heae");
+    let f = FontFile::from_bytes(raw).unwrap();
+    let face = &f.faces().unwrap()[0];
+    let m = face.metadata();
+    assert_eq!(m.units_per_em, None);
+    assert_eq!(m.italic_angle, Some(0.0), "post vẫn còn");
+    assert!(m.num_glyphs.is_some());
+    let a = face.measure(fontatlas_core::MeasureAt::Standard);
+    assert_eq!(
+        a.x_height_em.quality,
+        fontatlas_core::Quality::Failed(fontatlas_core::FailReason::Degenerate)
+    );
 }
