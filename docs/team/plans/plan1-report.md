@@ -6,8 +6,8 @@ Máy: Apple M4 Pro, 12 luồng, rustc 1.96. Ký hiệu: **[ĐÃ CHẠY]** = số
 ## 1. Kết quả
 
 - Crate `UX/src-tauri/crates/fontatlas-core` có đủ Task 1–11. Riêng trục đầu nét (terminal) hoãn sang plan sau, theo quyết định của Lead (mục "Trục hoãn").
-- [ĐÃ CHẠY] `cargo test -p fontatlas-core`: **47 passed, 0 failed, 1 ignored** (`perf_system_fonts`, chạy tay).
-  - load 10, metadata 5, geom 5, vietnamese 5, axes 13, anatomy 4, analyze 4 (+1 ignored), robustness 1.
+- [ĐÃ CHẠY] `cargo test -p fontatlas-core`: **50 passed, 0 failed, 1 ignored** (`perf_system_fonts`, chạy tay).
+  - unit 1, load 10, metadata 7, geom 5, vietnamese 5, axes 13, anatomy 4, analyze 4 (+1 ignored), robustness 1.
   - Các test phụ thuộc font hệ thống macOS tự bỏ qua trên máy khác.
 - [ĐÃ CHẠY] `cargo clippy -p fontatlas-core --all-targets -- -D warnings`: sạch.
 - [ĐÃ CHẠY] `cargo fmt -p fontatlas-core` đã áp dụng.
@@ -31,7 +31,9 @@ Máy: Apple M4 Pro, 12 luồng, rustc 1.96. Ký hiệu: **[ĐÃ CHẠY]** = số
 | c62745d | `Anatomy`, `measure()`, vị trí chuẩn VF, nhánh chữ hoa, không outline |
 | d3a7385 | `analyze_bytes/path/paths` (rayon), example `dump` |
 | 06b9b11 | sửa: chấp nhận font bitmap Apple (`bhed`) trong `validate` |
-| (commit cuối) | test độ bền, `cargo fmt`, báo cáo này |
+| 144f82a | test độ bền, `cargo fmt`, báo cáo này |
+| caa1532 | review I1: `Metadata::scripts`, `os2_optical_size_pt` |
+| 4b88a34 | review I2: cô lập panic theo file trong `analyze_paths` |
 
 ## 3. Hiệu năng [ĐÃ CHẠY] (release, page cache đã nóng)
 
@@ -86,6 +88,32 @@ Nhận xét:
 **Lưu ý cho plan sau (chưa sửa):**
 - Apple Color Emoji có bảng `glyf` rỗng cùng `sbix`, nên `outline_format = Glyf`. Vì vậy `Anatomy` báo `Failed(NoLatinLowercase)` thay vì `NoOutlines`. Kết quả vẫn là Failed và không panic, nhưng lý do chưa chính xác.
 - Metadata của font bitmap Apple có `units_per_em = 0`, vì read-fonts không đọc `bhed`.
+
+## 6. Review cuối (reviewer subagent Opus, context mới)
+
+Kết luận: 0 Critical, 2 Important, 10 Minor. Reviewer tự viết crate thăm dò (chỉ đọc) và xác nhận 5 mục Review Focus đều đạt:
+- file cắt cụt trả `truncated` hoặc `missing_table`;
+- New York đo ở vị trí chuẩn ra contrast 2.10, location `[wght 400, opsz 14]`;
+- TTC tách đúng từng face;
+- emoji và bitmap không panic.
+
+**Đã sửa (TDD, RED→GREEN, toàn bộ 50/50 qua):**
+- **I1:** spec 4.2 và 4.4 yêu cầu độ phủ script và dải size của OS/2, plan bỏ sót. Đã thêm `Metadata::scripts` (tag script OpenType) và `os2_optical_size_pt`.
+  - Giới hạn: không fixture nào có OS/2 v5, nên mới chỉ kiểm nhánh `None`.
+  - `scripts` là mức thô (tag OT). Độ phủ theo cmap và ngôn ngữ để cho plan sau.
+- **I2:** một panic trong dependency khi parse dữ liệu lạ sẽ làm rayon dừng cả lô. Đã bọc `catch_unwind` cho từng file, panic thành `CoreError::Parse("panic: …")`.
+
+**Minor hoãn lại**, cần quyết định ở plan sau:
+- M1: cắt trong table directory báo `missing_table` thay vì `truncated`.
+- M2: `units_per_em`, `italic_angle`, `num_glyphs` mặc định 0 khi thiếu bảng (nên đổi thành `Option`).
+- M3: Apple Color Emoji (glyf rỗng + sbix) báo `no_latin_lowercase` thay vì `no_outlines`.
+- M4: nhánh chữ hoa ghi `stem` (thân H ÷ cap) và `contrast` (trên `O`) vào cùng trường với số đo trên `n`/`o`. Chuẩn hoá phân vị ở Plan 3 phải tách theo `method`.
+- M5: `charmap()` và `outline_glyphs()` bị dựng lại ở mỗi lần gọi `glyph()`; nên cache trong `GlyphCtx`.
+- M6: `a_storeys` và `g_storeys` trả Measured 1.0 khi đường giữa cắt 0 đoạn.
+- M7: số f64 hữu hạn nhưng lớn hơn `f32::MAX` thành `inf` sau khi ép kiểu.
+- M8: `MeasureAt::Location` không kiểm tra và không kẹp tag cùng giá trị.
+- M9: `loca.get_raw(..).unwrap_or(0)` âm thầm trả 0.
+- M10: `stacked_marks` đo ở instance mặc định, không ở vị trí chuẩn.
 
 ## Trục hoãn
 
