@@ -116,6 +116,7 @@ impl FontFile {
 }
 
 const REQUIRED: [&[u8; 4]; 5] = [b"head", b"hhea", b"maxp", b"cmap", b"hmtx"];
+const REQUIRED_APPLE_BITMAP: [&[u8; 4]; 3] = [b"bhed", b"maxp", b"cmap"];
 
 fn validate_face(font: &FontRef, file_len: usize) -> Result<(), CoreError> {
     for rec in font.table_directory.table_records() {
@@ -127,7 +128,13 @@ fn validate_face(font: &FontRef, file_len: usize) -> Result<(), CoreError> {
             )));
         }
     }
-    for tag in REQUIRED {
+    // Font bitmap Apple (bdat/bloc) dùng 'bhed' thay 'head' và không có hhea/hmtx.
+    let required: &[&[u8; 4]] = if font.table_data(Tag::new(b"bhed")).is_some() {
+        &REQUIRED_APPLE_BITMAP
+    } else {
+        &REQUIRED
+    };
+    for &tag in required {
         if font.table_data(Tag::new(tag)).is_none() {
             return Err(CoreError::MissingTable(String::from_utf8_lossy(tag).into_owned()));
         }

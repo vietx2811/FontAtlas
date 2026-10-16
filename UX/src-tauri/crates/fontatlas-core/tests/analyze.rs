@@ -45,3 +45,16 @@ fn perf_system_fonts() {
     let faces: usize = out.iter().filter_map(|(_, r)| r.as_ref().ok()).map(|r| r.faces.len()).sum();
     eprintln!("{} file, {faces} face, {:?}", paths.len(), t.elapsed());
 }
+
+#[test]
+fn apple_bitmap_font_with_bhed_is_accepted() {
+    // Font bitmap Apple dùng 'bhed' thay 'head'; là file hợp lệ, chỉ không có outline.
+    let Some(p) = system_font(&["/System/Library/Fonts/Supplemental/NISC18030.ttf"]) else { return };
+    let r = analyze_path(&p).unwrap_or_else(|e| panic!("{e} ({})", e.code()));
+    let f = &r.faces[0];
+    assert!(f.metadata.family.is_some());
+    assert_eq!(
+        f.anatomy.x_height_em.quality,
+        fontatlas_core::Quality::Failed(fontatlas_core::FailReason::NoOutlines)
+    );
+}
