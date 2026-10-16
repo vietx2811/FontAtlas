@@ -118,3 +118,49 @@ fn oblique_slant_is_measured() {
     let s = val(slant_deg(&ctx));
     assert!((s + 12.0).abs() < 1.5, "Helvetica Oblique −12°: {s}");
 }
+
+use fontatlas_core::axes::detail::*;
+
+#[test]
+fn storeys() {
+    let a = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(a_storeys(ctx)));
+    let g = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(g_storeys(ctx)));
+    assert_eq!(a("roboto.ttf"), 2.0);
+    assert_eq!(g("roboto.ttf"), 1.0);
+    assert_eq!(g("libre_baskerville.ttf"), 2.0);
+}
+
+#[test]
+fn futura_single_storey_a() {
+    let Some(p) = system_font(&["/System/Library/Fonts/Supplemental/Futura.ttc"]) else { return };
+    with_ctx(&p, 0, |ctx| assert_eq!(val(a_storeys(ctx)), 1.0));
+}
+
+#[test]
+fn monospace_has_no_width_variation() {
+    let cv = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(width_cv(ctx)));
+    assert!(cv("source_code_pro.ttf") < 0.02);
+    assert!(cv("roboto.ttf") > 0.1);
+}
+
+#[test]
+fn spacing_positive() {
+    for s in SAMPLES {
+        with_ctx(&fixture(s), 0, |ctx| {
+            let xh = fontatlas_core::axes::vertical::vertical(ctx).unwrap().x_height;
+            let v = val(spacing_lc_xh(ctx, xh));
+            assert!(v > 0.0 && v < 0.6, "{s} {v}");
+        });
+    }
+}
+
+#[test]
+fn aperture_e_estimated_and_humanist_wider() {
+    let e = |s: &str| with_ctx(&fixture(s), 0, |ctx| {
+        let xh = fontatlas_core::axes::vertical::vertical(ctx).unwrap().x_height;
+        aperture_e_xh(ctx, xh)
+    });
+    let (os, rb) = (e("open_sans.ttf"), e("roboto.ttf"));
+    assert_eq!(os.quality, Quality::Estimated);
+    assert!(os.value.unwrap() > rb.value.unwrap(), "Open Sans mở hơn Roboto: {os:?} {rb:?}");
+}
