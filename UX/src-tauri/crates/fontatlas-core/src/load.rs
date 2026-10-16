@@ -142,3 +142,9 @@ fn validate_face(font: &FontRef, file_len: usize) -> Result<(), CoreError> {
     }
     Ok(())
 }
+
+impl Face<'_> {
+    pub fn metadata(&self) -> crate::metadata::Metadata {
+        crate::metadata::metadata(&self.font)
+    }
+}
