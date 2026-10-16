@@ -148,3 +148,9 @@ impl Face<'_> {
         crate::metadata::metadata(&self.font)
     }
 }
+
+impl Face<'_> {
+    pub fn vietnamese(&self) -> crate::vietnamese::VietnameseCoverage {
+        crate::vietnamese::coverage(&self.font)
+    }
+}

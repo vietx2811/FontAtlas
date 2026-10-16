@@ -4,8 +4,10 @@ pub mod geom;
 mod load;
 mod metadata;
 mod metric;
+mod vietnamese;
 
 pub use error::CoreError;
 pub use load::{Container, Face, FontFile};
 pub use metadata::{AxisInfo, LicenseClass, Metadata, OutlineFormat, classify_license};
 pub use metric::{FailReason, Metric, Quality};
+pub use vietnamese::{ViStatus, VietnameseCoverage, vi_required_chars};
