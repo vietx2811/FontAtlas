@@ -67,6 +67,32 @@ pub fn analyze_path(path: &Path) -> Result<FileReport, CoreError> {
 pub fn analyze_paths(paths: &[PathBuf]) -> Vec<(PathBuf, Result<FileReport, CoreError>)> {
     paths
         .par_iter()
-        .map(|p| (p.clone(), analyze_path(p)))
+        .map(|p| (p.clone(), guarded(|| analyze_path(p))))
         .collect()
+}
+
+/// Bắt panic (từ dependency parse dữ liệu lạ) thành lỗi `parse` của riêng file đó.
+fn guarded(f: impl FnOnce() -> Result<FileReport, CoreError>) -> Result<FileReport, CoreError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|p| {
+        let msg = p
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| p.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        Err(CoreError::Parse(format!("panic: {msg}")))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn panic_in_one_file_becomes_parse_error() {
+        // Panic trong dependency (skrifa/kurbo/wuff) không được làm hỏng cả lô.
+        let r = guarded(|| panic!("boom"));
+        let e = r.unwrap_err();
+        assert_eq!(e.code(), "parse");
+        assert!(e.to_string().contains("boom"), "{e}");
+    }
 }
