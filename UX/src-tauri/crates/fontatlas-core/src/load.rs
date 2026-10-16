@@ -154,3 +154,9 @@ impl Face<'_> {
         crate::vietnamese::coverage(&self.font)
     }
 }
+
+impl Face<'_> {
+    pub fn measure(&self, at: crate::anatomy::MeasureAt) -> crate::anatomy::Anatomy {
+        crate::anatomy::measure_with_filter(&self.font, at, None)
+    }
+}
