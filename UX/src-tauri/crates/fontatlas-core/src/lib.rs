@@ -3,4 +3,4 @@ mod error;
 mod load;
 
 pub use error::CoreError;
-pub use load::{Container, FontFile};
+pub use load::{Container, Face, FontFile};

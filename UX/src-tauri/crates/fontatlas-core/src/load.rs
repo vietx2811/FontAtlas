@@ -1,6 +1,8 @@
 //! Nạp file: nhận diện container (SFNT / TTC / WOFF / WOFF2), giải nén, băm.
 use std::path::Path;
 
+use read_fonts::{FileRef, FontRef, TableProvider, types::Tag};
+
 use crate::error::CoreError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -72,4 +74,71 @@ impl FontFile {
     pub fn data(&self) -> &[u8] {
         &self.data
     }
+}
+
+
+pub struct Face<'a> {
+    index: u32,
+    font: FontRef<'a>,
+}
+
+impl<'a> Face<'a> {
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+    pub fn font(&self) -> &FontRef<'a> {
+        &self.font
+    }
+}
+
+impl FontFile {
+    pub fn faces(&self) -> Result<Vec<Face<'_>>, CoreError> {
+        match FileRef::new(&self.data).map_err(|e| CoreError::Parse(e.to_string()))? {
+            FileRef::Font(font) => Ok(vec![Face { index: 0, font }]),
+            FileRef::Collection(c) => c
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    r.map(|font| Face { index: i as u32, font })
+                        .map_err(|e| CoreError::Parse(format!("face {i}: {e}")))
+                })
+                .collect(),
+        }
+    }
+
+    /// read-fonts đọc lười: bảng cụt vẫn "parse được" → phải tự kiểm tra (rủi ro R1 của spike).
+    pub fn validate(&self) -> Result<(), CoreError> {
+        for face in self.faces()? {
+            validate_face(&face.font, self.data.len())?;
+        }
+        Ok(())
+    }
+}
+
+const REQUIRED: [&[u8; 4]; 5] = [b"head", b"hhea", b"maxp", b"cmap", b"hmtx"];
+
+fn validate_face(font: &FontRef, file_len: usize) -> Result<(), CoreError> {
+    for rec in font.table_directory.table_records() {
+        let end = u64::from(rec.offset()) + u64::from(rec.length());
+        if end > file_len as u64 {
+            return Err(CoreError::Truncated(format!(
+                "bảng {} kết thúc ở {end} > {file_len}",
+                rec.tag()
+            )));
+        }
+    }
+    for tag in REQUIRED {
+        if font.table_data(Tag::new(tag)).is_none() {
+            return Err(CoreError::MissingTable(String::from_utf8_lossy(tag).into_owned()));
+        }
+    }
+    // Font bitmap-only (sbix/CBDT) hợp lệ khi không có outline → báo no_outlines ở tầng đo.
+    if let Some(glyf) = font.table_data(Tag::new(b"glyf")) {
+        let loca = font.loca(None).map_err(|_| CoreError::MissingTable("loca".into()))?;
+        let last = loca.get_raw(loca.len()).unwrap_or(0) as usize;
+        if last > glyf.len() {
+            return Err(CoreError::Truncated(format!("loca trỏ tới {last} > glyf {}", glyf.len())));
+        }
+    }
+    Ok(())
 }

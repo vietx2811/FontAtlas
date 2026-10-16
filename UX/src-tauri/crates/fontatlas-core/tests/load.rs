@@ -44,3 +44,59 @@ fn corrupt_woff2_is_woff_decode() {
     let e = FontFile::from_bytes(raw).unwrap_err();
     assert_eq!(e.code(), "woff_decode");
 }
+
+/// Đổi tag một bảng trong table directory (giữ thứ tự sort: "head" → "heae").
+fn rename_table(mut d: Vec<u8>, from: &[u8; 4], to: &[u8; 4]) -> Vec<u8> {
+    let n = u16::from_be_bytes([d[4], d[5]]) as usize;
+    for i in 0..n {
+        let p = 12 + 16 * i;
+        if &d[p..p + 4] == from {
+            d[p..p + 4].copy_from_slice(to);
+        }
+    }
+    d
+}
+
+#[test]
+fn single_font_has_one_face_index_zero() {
+    let f = FontFile::open(&fixture("roboto.ttf")).unwrap();
+    let faces = f.faces().unwrap();
+    assert_eq!(faces.len(), 1);
+    assert_eq!(faces[0].index(), 0);
+}
+
+#[test]
+fn samples_validate_ok() {
+    for s in SAMPLES {
+        FontFile::open(&fixture(s)).unwrap().validate().unwrap_or_else(|e| panic!("{s}: {e}"));
+    }
+}
+
+#[test]
+fn truncated_file_is_detected() {
+    let mut raw = fixture_bytes("roboto.ttf");
+    raw.truncate(5000);
+    let f = FontFile::from_bytes(raw).unwrap();
+    let e = f.validate().unwrap_err();
+    assert_eq!(e.code(), "truncated", "{e}");
+}
+
+#[test]
+fn missing_head_is_detected() {
+    let raw = rename_table(fixture_bytes("roboto.ttf"), b"head", b"heae");
+    let f = FontFile::from_bytes(raw).unwrap();
+    let e = f.validate().unwrap_err();
+    assert_eq!(e.code(), "missing_table");
+    assert!(e.to_string().contains("head"));
+}
+
+#[test]
+fn ttc_faces_have_distinct_indices() {
+    let Some(p) = system_font(&["/System/Library/Fonts/Helvetica.ttc"]) else { return };
+    let f = FontFile::open(&p).unwrap();
+    assert_eq!(f.container(), Container::Collection);
+    f.validate().unwrap();
+    let idx: Vec<u32> = f.faces().unwrap().iter().map(|x| x.index()).collect();
+    assert!(idx.len() > 1);
+    assert_eq!(idx, (0..idx.len() as u32).collect::<Vec<_>>());
+}
