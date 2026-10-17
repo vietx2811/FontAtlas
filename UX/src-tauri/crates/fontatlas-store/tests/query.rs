@@ -180,3 +180,21 @@ fn face_row_json_matches_contract_fixture() {
         assert!(got.get(k).is_some(), "thiếu khoá camelCase {k}");
     }
 }
+
+#[test]
+fn word_prefix_matches_rank_before_substring_matches() {
+    let (_d, mut s) = seeded();
+    let base = report("open_sans.ttf");
+    // "adept" chứa "dep" giữa từ và đứng trước "dep sans" theo bảng chữ cái
+    s.ingest(vec![item(1, "/lib/adept.ttf", &fake_report(&base, "adept", "Adept Grotesk"))], 11).unwrap();
+    for descending in [false, true] {
+        let got = fams(&s, &FaceQuery { text: Some("dep".into()), descending, ..Default::default() });
+        assert_eq!(got.first().map(String::as_str), Some("Đẹp Sans"), "desc={descending}: {got:?}");
+        let pos = |f: &str| got.iter().position(|x| x == f).unwrap();
+        assert!(pos("Đẹp Sans") < pos("Source Code Pro"));
+        assert!(pos("Đẹp Sans") < pos("Adept Grotesk"));
+    }
+    // trong nhóm chuỗi con vẫn theo sort người dùng chọn
+    let asc = fams(&s, &text("dep"));
+    assert!(asc.iter().position(|x| x == "Adept Grotesk") < asc.iter().position(|x| x == "Source Code Pro"));
+}

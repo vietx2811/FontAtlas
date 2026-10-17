@@ -16,7 +16,8 @@ pub fn vi_fold(s: &str) -> String {
 /// Cách khớp tên: FTS trigram (≥ 3 ký tự sau gập) hoặc LIKE tiền tố từ.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TextMatch {
-    Fts(String),
+    /// Khớp chuỗi con bằng FTS; `start`/`word` dùng để xếp khớp đầu từ lên trước.
+    Fts { phrase: String, start: String, word: String },
     Prefix { start: String, word: String },
 }
 
@@ -26,11 +27,12 @@ pub(crate) fn text_match(query: &str) -> Option<TextMatch> {
     if f.is_empty() {
         return None;
     }
-    if f.chars().count() >= 3 {
-        return Some(TextMatch::Fts(format!("\"{f}\"")));
-    }
     let e = f.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-    Some(TextMatch::Prefix { start: format!("{e}%"), word: format!("% {e}%") })
+    let (start, word) = (format!("{e}%"), format!("% {e}%"));
+    if f.chars().count() >= 3 {
+        return Some(TextMatch::Fts { phrase: format!("\"{f}\""), start, word });
+    }
+    Some(TextMatch::Prefix { start, word })
 }
 
 #[cfg(test)]
@@ -39,7 +41,10 @@ mod tests {
 
     #[test]
     fn text_match_picks_fts_or_prefix() {
-        assert_eq!(text_match("Đẹp"), Some(TextMatch::Fts("\"dep\"".into())));
+        assert_eq!(
+            text_match("Đẹp"),
+            Some(TextMatch::Fts { phrase: "\"dep\"".into(), start: "dep%".into(), word: "% dep%".into() })
+        );
         assert_eq!(
             text_match("PL"),
             Some(TextMatch::Prefix { start: "pl%".into(), word: "% pl%".into() })
@@ -50,7 +55,7 @@ mod tests {
     #[test]
     fn text_match_neutralises_syntax() {
         // dấu " bị bỏ, % _ \ được escape cho LIKE ... ESCAPE '\'
-        assert_eq!(text_match("a\"b*c"), Some(TextMatch::Fts("\"ab*c\"".into())));
+        assert!(matches!(text_match("a\"b*c"), Some(TextMatch::Fts { phrase, .. }) if phrase == "\"ab*c\""));
         assert_eq!(
             text_match("_%"),
             Some(TextMatch::Prefix { start: "\\_\\%%".into(), word: "% \\_\\%%".into() })

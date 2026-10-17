@@ -87,9 +87,9 @@ fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     let mut p: Vec<Value> = Vec::new();
     let in_list = |n: usize| vec!["?"; n].join(",");
     match q.text.as_deref().and_then(text_match) {
-        Some(TextMatch::Fts(m)) => {
+        Some(TextMatch::Fts { phrase, .. }) => {
             w.push("f.face_id IN (SELECT rowid FROM faces_fts WHERE faces_fts MATCH ?)".into());
-            p.push(Value::Text(m));
+            p.push(Value::Text(phrase));
         }
         Some(TextMatch::Prefix { start, word }) => {
             w.push("(f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\')".into());
@@ -147,7 +147,21 @@ fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     (w.join(" AND "), p)
 }
 
-fn order_by(q: &FaceQuery) -> String {
+/// Khớp đầu từ đứng trước khớp chuỗi con, rồi mới tới sort người dùng chọn. Trả kèm tham số.
+fn order_by(q: &FaceQuery) -> (String, Vec<Value>) {
+    let rank = match q.text.as_deref().and_then(text_match) {
+        Some(TextMatch::Fts { start, word, .. }) => Some((
+            "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
+                .to_string(),
+            vec![Value::Text(start), Value::Text(word)],
+        )),
+        _ => None,
+    };
+    let (head, params) = rank.unwrap_or_default();
+    (format!("{head}{}", user_order(q)), params)
+}
+
+fn user_order(q: &FaceQuery) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
     match q.sort {
         SortKey::Family => format!("f.family_key {dir}, f.weight_class, f.is_italic, f.face_id"),
@@ -165,6 +179,7 @@ impl Store {
             refs.as_slice(),
             |r| r.get(0),
         )?;
+        let (order, order_params) = order_by(q);
         let limit = match q.limit {
             0 => DEFAULT_LIMIT,
             n => n.min(MAX_LIMIT),
@@ -179,12 +194,12 @@ impl Store {
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
                     fi.first_seen_at, fi.size
              FROM faces f JOIN files fi ON fi.file_id = f.file_id
-             WHERE {w} ORDER BY {} LIMIT {limit} OFFSET {}",
-            order_by(q),
+             WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset
         );
+        let all: Vec<&dyn ToSql> = refs.iter().copied().chain(order_params.iter().map(|v| v as &dyn ToSql)).collect();
         let mut st = self.conn.prepare(&sql)?;
-        let rows = st.query_map(refs.as_slice(), |r| {
+        let rows = st.query_map(all.as_slice(), |r| {
             Ok((
                 r.get::<_, i64>(0)?,
                 r.get::<_, Vec<u8>>(1)?,
