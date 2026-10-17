@@ -6,6 +6,8 @@ pub mod model;
 pub mod render;
 pub use model::{Manifest, bundled_manifest, ModelStatus, ModelStore, READ_TIMEOUT, sha256_file};
 pub mod whiten;
+pub mod worker;
+pub use worker::{EmbedWorker, Progress, WorkerConfig};
 #[cfg(feature = "fit")]
 pub use whiten::fit;
 pub use whiten::Whitening;

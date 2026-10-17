@@ -121,3 +121,73 @@ pub fn identity_whitening_bytes(raw_dim: usize, dim: usize) -> Vec<u8> {
     }
     b
 }
+
+// ---- helper cho worker/source: store tạm có font thật đã rescan ----
+use fontatlas_store::{FaceKey, SourceKind, Store};
+
+/// Thư mục tạm: `fonts/` chứa bản sao fixture, `data/` là store đã rescan.
+pub fn store_dir_with(fixtures: &[(&str, usize)]) -> tempfile::TempDir {
+    store_dir_from(
+        fixtures
+            .iter()
+            .map(|(f, pad)| {
+                let mut b = fixture_bytes(f);
+                b.extend(std::iter::repeat_n(0u8, *pad)); // thêm byte 0 cuối file → hash khác, font vẫn đọc được
+                (format!("{pad}_{f}"), b)
+            })
+            .collect(),
+    )
+}
+
+pub fn store_dir_from(files: Vec<(String, Vec<u8>)>) -> tempfile::TempDir {
+    let d = tempfile::tempdir().unwrap();
+    let fonts = d.path().join("fonts");
+    std::fs::create_dir_all(&fonts).unwrap();
+    for (name, b) in files {
+        std::fs::write(fonts.join(name), b).unwrap();
+    }
+    let mut s = Store::open(&d.path().join("data")).unwrap().0;
+    let id = s.add_source(SourceKind::Directory, "t", Some(&fonts)).unwrap();
+    s.rescan_source(id).unwrap();
+    d
+}
+
+pub fn open_data(d: &tempfile::TempDir) -> Store {
+    Store::open(&d.path().join("data")).unwrap().0
+}
+
+pub fn add_font_and_rescan(dir: &std::path::Path, fixture: &str) {
+    std::fs::copy(self::fixture(fixture), dir.join("fonts").join(fixture)).unwrap();
+    let mut s = Store::open(&dir.join("data")).unwrap().0;
+    let id = s.sources().unwrap()[0].id;
+    s.rescan_source(id).unwrap();
+}
+
+pub fn key_of(s: &Store, family: &str) -> FaceKey {
+    s.conn()
+        .query_row(
+            "SELECT fi.hash, fa.face_index FROM faces fa JOIN files fi USING(file_id) WHERE fa.family_name=?1",
+            [family],
+            |r| {
+                let h: Vec<u8> = r.get(0)?;
+                Ok(FaceKey { hash: h.try_into().unwrap(), face_index: r.get::<_, i64>(1)? as u32 })
+            },
+        )
+        .unwrap()
+}
+
+pub fn state_of(s: &Store, k: FaceKey, raw: &str) -> (String, Option<String>) {
+    s.conn()
+        .query_row(
+            "SELECT status, error_code FROM pipeline_state WHERE hash=?1 AND face_index=?2 AND stage='embedding' AND version=?3",
+            (&k.hash[..], k.face_index, raw),
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap()
+}
+
+pub fn count_status(s: &Store, status: &str) -> i64 {
+    s.conn()
+        .query_row("SELECT count(*) FROM pipeline_state WHERE stage='embedding' AND status=?1", [status], |r| r.get(0))
+        .unwrap()
+}

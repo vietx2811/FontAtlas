@@ -213,3 +213,13 @@ fn settings_go_to_user_db_only() {
     assert_eq!(v, "1");
     let _ = Path::new(""); // giữ import
 }
+
+#[test]
+fn failed_is_not_requeued_by_enqueue() {
+    let (_d, mut s) = store_with(&["roboto.ttf"]);
+    s.enqueue_embeddings(RAW).unwrap();
+    let j = s.claim_embedding_batch(RAW, 1).unwrap();
+    s.finish_embeddings(RAW, MV, &[(j[0].key, JobResult::Failed { code: "stale_file", detail: "x".into() })]).unwrap();
+    assert_eq!(s.enqueue_embeddings(RAW).unwrap().pending, 0); // thử lại chỉ qua retry_failed
+    assert_eq!(state_of(&s, j[0].key, RAW).0, "failed");
+}

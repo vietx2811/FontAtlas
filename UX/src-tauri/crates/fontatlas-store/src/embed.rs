@@ -98,6 +98,7 @@ impl Store {
     }
 
     /// Xếp hàng mọi face chưa có vector `raw_version` (không lọc giấy phép). Tắt embedding → không làm gì.
+    /// Dòng `failed`/`skipped` cùng version giữ nguyên; thử lại lỗi chỉ qua `retry_failed`.
     pub fn enqueue_embeddings(&mut self, raw_version: &str) -> Result<EnqueueStats, StoreError> {
         let mut stats = EnqueueStats::default();
         if !self.embed_enabled()? {
@@ -124,7 +125,7 @@ impl Store {
                 continue;
             }
             let same = version.as_deref() == Some(raw_version);
-            let keep = same && matches!(status.as_deref(), Some("pending" | "running" | "skipped"));
+            let keep = same && matches!(status.as_deref(), Some("pending" | "running" | "skipped" | "failed"));
             if keep {
                 stats.pending += (status.as_deref() == Some("pending")) as usize;
                 continue;

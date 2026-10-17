@@ -26,6 +26,7 @@ ureq = "3"
 
 [dev-dependencies]
 png = "=0.18.1"
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
 tempfile = "3.27"
 tiny_http = "0.12"
 

@@ -1336,6 +1336,7 @@ dependencies = [
  "png 0.18.1",
  "rayon",
  "read-fonts",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",
