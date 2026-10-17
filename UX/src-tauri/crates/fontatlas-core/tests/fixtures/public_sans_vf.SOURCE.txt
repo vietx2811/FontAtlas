@@ -1,0 +1,5 @@
+public_sans_vf.ttf
+Nguồn: google/fonts@47d54ca1ebb14fd864695f1d39dc734f39017c33:ofl/publicsans/PublicSans[wght].ttf
+Giấy phép: SIL Open Font License 1.1 (OFL-1.1)
+sha256: d75a7dc1a27eb9e336d5b33f55489d2ecb5621bf694d5c43b2415bce2ca830a8
+Trục: wght 100–900. Dùng chung với Plan 3 (cùng URL/SHA → trùng byte).
