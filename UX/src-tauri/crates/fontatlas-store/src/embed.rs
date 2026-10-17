@@ -12,6 +12,9 @@ pub const SETTING_EMBED_ENABLED: &str = "embed_enabled";
 pub const SETTING_LICENSE_NOTICE_ACK: &str = "license_notice_ack";
 const STAGE: &str = "embedding";
 
+/// (hash, face_index, đã có vector, status, version) của một face khi xếp hàng.
+type QueueRow = (Vec<u8>, i64, bool, Option<String>, Option<String>);
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EnqueueStats {
     pub pending: usize,
@@ -106,7 +109,7 @@ impl Store {
         }
         let now = now_ms();
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let rows: Vec<(Vec<u8>, i64, bool, Option<String>, Option<String>)> = {
+        let rows: Vec<QueueRow> = {
             let mut st = tx.prepare(
                 "SELECT fi.hash, fa.face_index,
                         EXISTS(SELECT 1 FROM embeddings e WHERE e.hash=fi.hash AND e.face_index=fa.face_index

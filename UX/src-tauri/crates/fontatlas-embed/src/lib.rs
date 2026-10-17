@@ -46,7 +46,7 @@ fn short(sha: &str) -> &str {
 /// Chia họ thành nửa "tune"/"test" cố định: byte đầu của blake3(lowercase(family)) chẵn → tune.
 pub fn family_split(family: &str) -> &'static str {
     let h = blake3::hash(family.to_lowercase().as_bytes());
-    if h.as_bytes()[0] % 2 == 0 { "tune" } else { "test" }
+    if h.as_bytes()[0].is_multiple_of(2) { "tune" } else { "test" }
 }
 
 #[derive(Debug, thiserror::Error)]
