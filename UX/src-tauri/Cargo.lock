@@ -1627,6 +1627,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fontatlas-preview"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "fontatlas-core",
+ "png 0.18.1",
+ "rayon",
+ "read-fonts",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tiny-skia",
+ "unicode-normalization",
+ "url",
+]
+
+[[package]]
 name = "fontatlas-store"
 version = "0.1.0"
 dependencies = [

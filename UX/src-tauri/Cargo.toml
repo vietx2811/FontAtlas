@@ -33,5 +33,5 @@ qdrant-client = "1.7"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
 
 [workspace]
-members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval"]
+members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview"]
 resolver = "2"

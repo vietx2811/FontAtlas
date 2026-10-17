@@ -1,0 +1,24 @@
+[package]
+name = "fontatlas-preview"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Vẽ preview PNG alpha-mask cho lưới thư viện; cache SQLite LRU; handler custom protocol"
+
+[dependencies]
+fontatlas-core = { path = "../fontatlas-core" }
+blake3 = "=1.8.7"
+png = "=0.18.1"
+rayon = "1.12"
+read-fonts = "=0.45.1"
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+skrifa = "=0.48.0"
+thiserror = "2"
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+unicode-normalization = "0.1.25"
+url = "2.5"
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3.27"
