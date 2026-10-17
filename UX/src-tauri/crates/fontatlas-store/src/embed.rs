@@ -140,6 +140,17 @@ impl Store {
         Ok(stats)
     }
 
+    /// Face `failed/missing_file` của version này mà nay đã có lại vị trí (ổ ngoài cắm lại) → `pending`.
+    pub fn requeue_missing_embeddings(&mut self, raw_version: &str) -> Result<usize, StoreError> {
+        Ok(self.conn.execute(
+            "UPDATE pipeline_state SET status='pending', error_code=NULL, error_detail=NULL, updated_at=?2
+             WHERE stage='embedding' AND status='failed' AND error_code='missing_file' AND version=?1
+               AND EXISTS(SELECT 1 FROM files f JOIN file_locations l USING(file_id)
+                          WHERE f.hash=pipeline_state.hash AND l.missing=0)",
+            params![raw_version, now_ms()],
+        )?)
+    }
+
     /// Sau khi app tắt đột ngột: mọi dòng `running` về `pending`.
     pub fn reset_running_embeddings(&mut self) -> Result<usize, StoreError> {
         Ok(self.conn.execute(

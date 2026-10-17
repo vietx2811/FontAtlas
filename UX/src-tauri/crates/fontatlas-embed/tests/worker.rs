@@ -163,3 +163,114 @@ fn picks_up_faces_added_during_run() {
     w.join().unwrap();
     assert_eq!(open_data(&d).count_embeddings(RAW).unwrap(), 2);
 }
+
+// ---- fix pass sau review cuối ----
+
+/// Encoder không được gọi tới (panic nếu gọi).
+struct PanicEncoder;
+impl Encode for PanicEncoder {
+    fn raw_dim(&self) -> usize {
+        768
+    }
+    fn encode(&mut self, _: &[Vec<f32>], _: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
+        panic!("không được chạy model");
+    }
+}
+
+/// Encoder lỗi hệ thống (không phải lỗi của từng face).
+struct FailingEncoder;
+impl Encode for FailingEncoder {
+    fn raw_dim(&self) -> usize {
+        768
+    }
+    fn encode(&mut self, _: &[Vec<f32>], _: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Err(EmbedError::Model("ort: cấp phát thất bại".into()))
+    }
+}
+
+/// Whitening "khác": đơn vị nhân 2 (sau L2 vẫn như identity, nhưng sha/version khác).
+fn other_whitening() -> Whitening {
+    let mut b = identity_whitening_bytes(768, 128);
+    let n = b.len();
+    b[n - 4..].copy_from_slice(&0.5f32.to_le_bytes()); // đổi một phần tử của W → sha khác
+    Whitening::from_bytes(&b).unwrap()
+}
+
+#[test]
+fn whitening_only_change_rewhitens_without_model() {
+    let d = store_dir_with(&[("roboto.ttf", 0), ("playfair_display.ttf", 0)]);
+    EmbedWorker::start(cfg(&d), tiny(), Box::new(|_| {})).unwrap().join().unwrap();
+    let mut c2 = cfg(&d);
+    c2.whitening = Some(other_whitening());
+    let w = EmbedWorker::start(c2, Box::new(PanicEncoder), Box::new(|_| {})).unwrap();
+    let mv2 = w.model_version().unwrap().to_string();
+    w.join().unwrap();
+    let s = open_data(&d);
+    assert_eq!(s.count_embeddings(&mv2).unwrap(), 2);
+    assert_eq!(s.count_embeddings(RAW).unwrap(), 2);
+}
+
+#[test]
+fn failed_missing_file_retried_on_next_start() {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    {
+        let mut s = open_data(&d);
+        s.enqueue_embeddings(RAW).unwrap();
+        s.conn().execute("UPDATE file_locations SET missing=1", []).unwrap(); // ổ ngoài rút ra
+        assert!(s.claim_embedding_batch(RAW, 4).unwrap().is_empty());
+        s.conn().execute("UPDATE file_locations SET missing=0", []).unwrap(); // cắm lại
+    }
+    EmbedWorker::start(cfg(&d), tiny(), Box::new(|_| {})).unwrap().join().unwrap();
+    assert_eq!(open_data(&d).count_embeddings(RAW).unwrap(), 1);
+}
+
+#[test]
+fn encoder_error_stops_run_and_releases_batch() {
+    let d = store_dir_with(&(0..6).map(|i| ("roboto.ttf", i)).collect::<Vec<_>>());
+    let r = EmbedWorker::start(cfg(&d), Box::new(FailingEncoder), Box::new(|_| {})).unwrap().join();
+    assert!(r.is_err());
+    let s = open_data(&d);
+    assert_eq!((count_status(&s, "failed"), count_status(&s, "running"), count_status(&s, "pending")), (0, 0, 6));
+}
+
+#[test]
+fn whitening_with_wrong_dims_rejected_at_start() {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    let mut c = cfg(&d);
+    c.whitening = Some(Whitening::from_bytes(&identity_whitening_bytes(512, 128)).unwrap());
+    assert!(matches!(EmbedWorker::start(c, tiny(), Box::new(|_| {})), Err(EmbedError::Model(_))));
+}
+
+/// Encoder giữ khoá ghi của library.db lâu hơn busy_timeout (5 s) → `finish` lỗi.
+struct LockingEncoder {
+    inner: Box<dyn Encode>,
+    db: std::path::PathBuf,
+}
+impl Encode for LockingEncoder {
+    fn raw_dim(&self) -> usize {
+        768
+    }
+    fn encode(&mut self, t: &[Vec<f32>], c: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
+        let db = self.db.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let conn = rusqlite::Connection::open(db).unwrap();
+            conn.execute_batch("BEGIN EXCLUSIVE").unwrap();
+            tx.send(()).unwrap();
+            std::thread::sleep(Duration::from_millis(6500));
+            conn.execute_batch("COMMIT").unwrap();
+        });
+        rx.recv().unwrap();
+        self.inner.encode(t, c)
+    }
+}
+
+#[test]
+fn store_error_after_claim_releases_batch() {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    let db = d.path().join("data").join(fontatlas_store::LIBRARY_FILE);
+    let r = EmbedWorker::start(cfg(&d), Box::new(LockingEncoder { inner: tiny(), db }), Box::new(|_| {})).unwrap().join();
+    assert!(r.is_err());
+    let s = open_data(&d);
+    assert_eq!((count_status(&s, "running"), count_status(&s, "pending")), (0, 1));
+}

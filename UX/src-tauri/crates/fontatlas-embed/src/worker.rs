@@ -11,7 +11,7 @@ use fontatlas_core::{FontFile, standard_location};
 use fontatlas_store::{EmbedJob, FaceKey, JobResult, Store};
 use rayon::prelude::*;
 
-use crate::{BATCH, CANVAS, EmbedError, Encode, Whitening, render_input, to_tensor};
+use crate::{BATCH, CANVAS, DIM, EmbedError, Encode, RAW_DIM, Whitening, render_input, to_tensor};
 
 const PARK: Duration = Duration::from_millis(50);
 
@@ -49,6 +49,11 @@ impl EmbedWorker {
         let store = Store::open(&cfg.store_dir)?.0;
         if !store.embed_enabled()? {
             return Err(EmbedError::Disabled);
+        }
+        if let Some(w) = &cfg.whitening
+            && (w.raw_dim != RAW_DIM || w.dim != DIM)
+        {
+            return Err(EmbedError::Model(format!("whitening {}→{} không khớp {RAW_DIM}→{DIM}", w.raw_dim, w.dim)));
         }
         let model_version = cfg
             .whitening
@@ -125,7 +130,9 @@ impl Run {
     fn run(&mut self) -> Result<(), EmbedError> {
         let raw = self.cfg.raw_version.clone();
         self.store.reset_running_embeddings()?;
+        self.store.requeue_missing_embeddings(&raw)?;
         let st = self.store.enqueue_embeddings(&raw)?;
+        self.rewhiten(&raw)?;
         (self.emit)(Progress::Started { pending: st.pending });
         let mut total_done = 0;
         loop {
@@ -150,15 +157,21 @@ impl Run {
             }
             if jobs.is_empty() {
                 if self.cfg.whitening.is_some() {
+                    self.rewhiten(&raw)?;
                     self.store.gc_embeddings(&[&raw, &self.mv])?;
                 }
                 (self.emit)(Progress::Finished { total_done });
                 return Ok(());
             }
-            match self.batch(&raw, &jobs)? {
+            let keys: Vec<FaceKey> = jobs.iter().map(|j| j.key).collect();
+            let r = self.batch(&raw, &jobs);
+            if r.is_err() {
+                // Lỗi hệ thống (encoder/store): trả lô về `pending`, không đánh lỗi từng face.
+                let _ = self.store.release_embeddings(&raw, &keys);
+            }
+            match r? {
                 Some(done) => total_done += done,
                 None => {
-                    let keys: Vec<FaceKey> = jobs.iter().map(|j| j.key).collect();
                     self.store.release_embeddings(&raw, &keys)?;
                     (self.emit)(Progress::Cancelled);
                     return Ok(());
@@ -167,7 +180,16 @@ impl Run {
         }
     }
 
-    /// `None` = bị huỷ giữa lúc encode (chưa ghi gì).
+    /// Face có vector thô nhưng thiếu vector whitening hiện tại (whitening mới, hoặc lần trước chạy không whitening):
+    /// whiten lại từ vector thô, không chạy model.
+    fn rewhiten(&mut self, raw: &str) -> Result<(), EmbedError> {
+        if let Some(w) = &self.cfg.whitening {
+            self.store.rewhiten(raw, &self.mv, &|v| w.apply(v))?;
+        }
+        Ok(())
+    }
+
+    /// `None` = bị huỷ giữa lúc encode (chưa ghi gì). `Err` = lỗi hệ thống, lô chưa ghi.
     fn batch(&mut self, raw: &str, jobs: &[EmbedJob]) -> Result<Option<usize>, EmbedError> {
         let prepared: Vec<Result<Vec<f32>, JobResult>> = self.pool.install(|| {
             jobs.par_iter()
@@ -179,41 +201,34 @@ impl Run {
                 .collect()
         });
         let tensors: Vec<Vec<f32>> = prepared.iter().filter_map(|p| p.as_ref().ok().cloned()).collect();
-        let mut encoded = if tensors.is_empty() {
-            Ok(Vec::new())
+        let vecs = if tensors.is_empty() {
+            Vec::new()
         } else {
-            self.encoder.encode(&tensors, &self.cancel)
+            match self.encoder.encode(&tensors, &self.cancel) {
+                Err(EmbedError::Cancelled) => return Ok(None),
+                Err(e) => return Err(e),
+                Ok(v) if v.len() != tensors.len() => {
+                    return Err(EmbedError::Model(format!("encoder trả {} vector cho {} ảnh", v.len(), tensors.len())));
+                }
+                Ok(v) => v,
+            }
         };
-        if matches!(encoded, Err(EmbedError::Cancelled)) {
-            return Ok(None);
-        }
-        if let Ok(v) = &encoded
-            && v.len() != tensors.len()
-        {
-            encoded = Err(EmbedError::Model(format!("encoder trả {} vector cho {} ảnh", v.len(), tensors.len())));
-        }
-        let mut vecs = match encoded {
-            Ok(v) => Ok(v.into_iter()),
-            Err(e) => Err(e.to_string()),
-        };
+        let mut vecs = vecs.into_iter();
         let (mut done, mut failed, mut skipped) = (0, 0, 0);
         let mut results = Vec::with_capacity(jobs.len());
         for (j, p) in jobs.iter().zip(prepared) {
             let res = match p {
                 Err(r) => r,
-                Ok(_) => match &mut vecs {
-                    Err(e) => JobResult::Failed { code: "inference", detail: e.clone() },
-                    Ok(it) => {
-                        let v = it.next().unwrap_or_default();
-                        match &self.cfg.whitening {
-                            None => JobResult::Done { raw: v, white: None },
-                            Some(w) => match w.apply(&v) {
-                                Some(white) => JobResult::Done { raw: v, white: Some(white) },
-                                None => JobResult::Failed { code: "inference", detail: "vector không hợp lệ".into() },
-                            },
-                        }
+                Ok(_) => {
+                    let v = vecs.next().unwrap_or_default();
+                    match &self.cfg.whitening {
+                        None => JobResult::Done { raw: v, white: None },
+                        Some(w) => match w.apply(&v) {
+                            Some(white) => JobResult::Done { raw: v, white: Some(white) },
+                            None => JobResult::Failed { code: "inference", detail: "vector không hợp lệ".into() },
+                        },
                     }
-                },
+                }
             };
             match res {
                 JobResult::Done { .. } => done += 1,

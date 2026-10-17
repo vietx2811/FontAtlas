@@ -223,3 +223,15 @@ fn failed_is_not_requeued_by_enqueue() {
     assert_eq!(s.enqueue_embeddings(RAW).unwrap().pending, 0); // thử lại chỉ qua retry_failed
     assert_eq!(state_of(&s, j[0].key, RAW).0, "failed");
 }
+
+#[test]
+fn requeue_missing_only_when_location_is_back() {
+    let (_d, mut s) = store_with(&["roboto.ttf"]);
+    s.enqueue_embeddings(RAW).unwrap();
+    s.conn().execute("UPDATE file_locations SET missing=1", []).unwrap();
+    s.claim_embedding_batch(RAW, 4).unwrap(); // → failed/missing_file
+    assert_eq!(s.requeue_missing_embeddings(RAW).unwrap(), 0); // ổ vẫn chưa cắm
+    s.conn().execute("UPDATE file_locations SET missing=0", []).unwrap();
+    assert_eq!(s.requeue_missing_embeddings(RAW).unwrap(), 1);
+    assert_eq!(state_of(&s, keys(&s)[0], RAW).0, "pending");
+}
