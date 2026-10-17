@@ -10,6 +10,7 @@ pub mod render;
 mod text;
 
 pub use error::PreviewError;
+pub use render::{Rendered, cmap_sample, render_face};
 pub use text::{TextSource, canvas_size, check_px, normalize_text, pick_text};
 
 /// Tăng khi đổi cách vẽ: khoá cache và URL (`r=`) đổi theo.
