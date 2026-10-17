@@ -79,3 +79,43 @@ pub fn fts_hits(s: &Store, phrase: &str) -> i64 {
         .query_row("SELECT count(*) FROM faces_fts WHERE faces_fts MATCH ?1", [format!("\"{phrase}\"")], |r| r.get(0))
         .expect("MATCH")
 }
+
+pub const LEGACY_FONTS_DDL: &str = "CREATE TABLE fonts (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, file_path TEXT NOT NULL UNIQUE, original_directory TEXT,
+    category TEXT, classification TEXT, tags TEXT, collection_id TEXT, date_added TEXT NOT NULL,
+    date_modified TEXT NOT NULL, is_synced INTEGER DEFAULT 0, file_exists INTEGER DEFAULT 1,
+    x_height REAL, width_variance REAL, stroke_contrast REAL, aperture REAL, terminal_sharpness REAL,
+    stress_angle REAL, curvature_ratio REAL, counter_density REAL, foundry TEXT, weight INTEGER DEFAULT 400,
+    is_italic INTEGER DEFAULT 0, supports_vietnamese INTEGER DEFAULT 0, family_name TEXT, subfamily TEXT,
+    weight_class INTEGER, width_class INTEGER, source_id TEXT, primary_class TEXT, secondary_tags TEXT,
+    serif_subtype TEXT, sans_subtype TEXT, script_subtype TEXT, is_favorite INTEGER DEFAULT 0);
+CREATE TABLE sources (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, path TEXT,
+    metadata TEXT, date_added TEXT NOT NULL);";
+pub const LEGACY_COLLECTIONS_DDL: &str =
+    "CREATE TABLE collections (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT, created_at TEXT NOT NULL);";
+
+pub struct LegacyFont<'a> {
+    pub id: &'a str, pub path: &'a str, pub family: &'a str, pub subfamily: &'a str,
+    pub tags: &'a str, pub collection: Option<&'a str>, pub favorite: bool, pub source: Option<&'a str>,
+}
+
+/// Dựng DB cũ giống app hiện tại. `with_collections=false` mô phỏng lỗi B1 (bảng không tồn tại).
+pub fn make_legacy_db(path: &Path, with_collections: bool, src_dir: &Path, fonts: &[LegacyFont]) {
+    let c = rusqlite::Connection::open(path).unwrap();
+    c.execute_batch(LEGACY_FONTS_DDL).unwrap();
+    if with_collections {
+        c.execute_batch(LEGACY_COLLECTIONS_DDL).unwrap();
+        c.execute("INSERT INTO collections VALUES ('col-1','Bộ cũ','#ff0000','2026-01-01T00:00:00Z')", []).unwrap();
+    }
+    c.execute("INSERT INTO sources VALUES ('src-1','Thư mục cũ','directory',?1,NULL,'2026-01-01T00:00:00Z')",
+        [src_dir.to_string_lossy()]).unwrap();
+    for f in fonts {
+        c.execute(
+            "INSERT INTO fonts(id,name,file_path,original_directory,tags,collection_id,date_added,date_modified,
+                               family_name,subfamily,source_id,is_favorite)
+             VALUES (?1,?2,?3,?4,?5,?6,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',?7,?8,?9,?10)",
+            rusqlite::params![f.id, f.family, f.path, src_dir.to_string_lossy(), f.tags, f.collection,
+                              f.family, f.subfamily, f.source, f.favorite as i32],
+        ).unwrap();
+    }
+}
