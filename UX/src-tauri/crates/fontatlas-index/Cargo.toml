@@ -1,0 +1,15 @@
+[package]
+name = "fontatlas-index"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Hồ sơ trục chuẩn hoá, Similar và Pairing có giải thích"
+
+[dependencies]
+fontatlas-core = { path = "../fontatlas-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3.27"
