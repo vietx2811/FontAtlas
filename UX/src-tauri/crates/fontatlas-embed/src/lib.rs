@@ -4,7 +4,7 @@ use serde::Serialize;
 pub mod encoder;
 pub mod model;
 pub mod render;
-pub use model::{Manifest, ModelStatus, ModelStore, READ_TIMEOUT, sha256_file};
+pub use model::{Manifest, bundled_manifest, ModelStatus, ModelStore, READ_TIMEOUT, sha256_file};
 pub mod whiten;
 #[cfg(feature = "fit")]
 pub use whiten::fit;

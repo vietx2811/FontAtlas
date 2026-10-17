@@ -1,0 +1,8 @@
+{
+  "file": "siglip2_base_p16_224_75de2d5_b4.onnx",
+  "url": "",
+  "sha256": "584d14edb97ba802f4662a7fb0d353642decaca3f34a3ba4d0b24a610dac6698",
+  "size": 371694332,
+  "license": "Apache-2.0",
+  "notice_files": ["model-NOTICE.txt", "model-LICENSE-Apache-2.0.txt"]
+}

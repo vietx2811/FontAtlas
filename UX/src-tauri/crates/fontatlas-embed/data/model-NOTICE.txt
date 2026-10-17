@@ -1,0 +1,14 @@
+FontAtlas — mô hình nhúng ảnh (image encoder)
+
+Tệp: siglip2_base_p16_224_75de2d5_b4.onnx
+Nguồn: google/siglip2-base-patch16-224 (Google) tại Hugging Face,
+       revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2
+Giấy phép gốc: Apache License 2.0 (xem model-LICENSE-Apache-2.0.txt)
+
+Thay đổi: chỉ chuyển định dạng sang ONNX (encoder ảnh = get_image_features,
+lô tĩnh 4, opset 17, fp32). Không đổi trọng số.
+
+Export lại:
+  python tools/embed/export_siglip2.py --revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2 \
+      --batch 4 --out siglip2_base_p16_224_75de2d5_b4.onnx
+  (torch 2.14.1, transformers 5.19.0; sha256 có thể khác nếu đổi phiên bản torch/onnx)

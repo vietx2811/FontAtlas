@@ -28,3 +28,7 @@ ureq = "3"
 png = "=0.18.1"
 tempfile = "3.27"
 tiny_http = "0.12"
+
+[[bin]]
+name = "whitenfit"
+required-features = ["fit"]

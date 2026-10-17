@@ -33,6 +33,11 @@ pub enum ModelStatus {
     Corrupt,
 }
 
+/// Manifest phát hành kèm app (url rỗng cho tới khi chủ app duyệt nơi host).
+pub fn bundled_manifest() -> Manifest {
+    serde_json::from_str(include_str!("../data/model-manifest.json")).expect("data/model-manifest.json hợp lệ")
+}
+
 pub struct ModelStore {
     dir: PathBuf,
     m: Manifest,
