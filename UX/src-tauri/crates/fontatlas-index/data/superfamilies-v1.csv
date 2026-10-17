@@ -1,0 +1,26 @@
+# Bảng superfamily tay v1 — CHỈ từ tập tune (seed 20261016). Không thêm family chỉ có trong test/test-vi.
+group,family,source
+merriweather,Merriweather,P01
+merriweather,Merriweather Sans,P01
+roboto,Roboto,P03;P04;P22
+roboto,Roboto Slab,P03;P22
+roboto,Roboto Condensed,P04
+source,Source Serif 4,P05
+source,Source Sans 3,P05
+ibm-plex,IBM Plex Serif,P06
+ibm-plex,IBM Plex Sans,P06;P33
+ibm-plex,IBM Plex Mono,P33
+quattrocento,Quattrocento,P07
+quattrocento,Quattrocento Sans,P07
+alike,Alike Angular,P08
+alike,Alike,P08
+josefin,Josefin Slab,P09
+josefin,Josefin Sans,P09
+nunito,Nunito,P14
+nunito,Nunito Sans,P14
+barlow,Barlow Condensed,P15
+barlow,Barlow,P15
+red-hat,Red Hat Display,P16
+red-hat,Red Hat Text,P16
+pt,PT Serif,P25;P50
+pt,PT Sans,P25;P50

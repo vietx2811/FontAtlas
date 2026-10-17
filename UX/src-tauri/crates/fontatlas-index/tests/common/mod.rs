@@ -86,3 +86,156 @@ pub fn find(
 ) -> fontatlas_index::AxisLabel {
     v.into_iter().find(|l| l.axis == a).expect("đủ 8 nhãn")
 }
+
+use fontatlas_index::{FamilyFacts, Gate, PairAssessment, PairAxis, Relation};
+
+pub const FACTS_OK: FamilyFacts = FamilyFacts {
+    has_regular: true,
+    has_bold: true,
+};
+
+/// Reference giả: q tuyến tính hợp lý cho mọi trục (method mặc định), d_fam = 0.476.
+pub fn test_reference() -> ReferenceTable {
+    let range = |a: AxisId| -> (f32, f32) {
+        match a {
+            AxisId::XHeightEm => (0.35, 0.60),
+            AxisId::XHeightCap => (0.55, 0.80),
+            AxisId::AscenderEm => (0.60, 0.85),
+            AxisId::StemNXh => (0.03, 0.50),
+            AxisId::Darkness => (0.10, 0.80),
+            AxisId::Contrast => (1.0, 8.0),
+            AxisId::StressDeg => (-30.0, 30.0),
+            AxisId::Aperture => (0.0, 180.0),
+            AxisId::ApertureE => (0.0, 0.6),
+            AxisId::Width => (0.6, 1.3),
+            AxisId::MeanAdvance => (0.7, 1.4),
+            AxisId::WidthCv => (0.0, 0.4),
+            AxisId::Spacing => (0.05, 0.35),
+            AxisId::SlantDeg => (-25.0, 5.0),
+            AxisId::SerifFoot => (0.5, 3.5),
+            AxisId::Counter => (0.05, 0.7),
+        }
+    };
+    ReferenceTable {
+        version: "ref-test".into(),
+        source: "test".into(),
+        analyzer_version: fontatlas_core::ANALYZER_VERSION.into(),
+        faces: 500,
+        quantiles: AxisId::ALL
+            .iter()
+            .map(|a| {
+                let (lo, hi) = range(*a);
+                AxisQuantiles {
+                    axis: a.key().into(),
+                    method: a.default_method().into(),
+                    n: 500,
+                    q: (0..=100)
+                        .map(|i| lo + (hi - lo) * i as f32 / 100.0)
+                        .collect(),
+                }
+            })
+            .collect(),
+        d_fam: 0.476,
+        d_fam_pairs: 294,
+    }
+}
+
+/// Giá trị ở phân vị u (0–1) của trục trong test_reference.
+pub fn value_in_reference_range(a: AxisId, u: f32) -> f32 {
+    let r = test_reference();
+    let q = &r.quantiles[a.index()].q;
+    q[0] + (q[100] - q[0]) * u
+}
+
+/// Đủ 16 trục với giá trị trung tính; stress và aperture_e Estimated như core.
+pub fn synth_full(family: &str, style: &str, stem: f32) -> FaceProfile {
+    let vals: [(AxisId, f32); 16] = [
+        (AxisId::XHeightEm, 0.5),
+        (AxisId::XHeightCap, 0.7),
+        (AxisId::AscenderEm, 0.75),
+        (AxisId::StemNXh, stem),
+        (AxisId::Darkness, 0.35),
+        (AxisId::Contrast, 1.2),
+        (AxisId::StressDeg, 0.0),
+        (AxisId::Aperture, 100.0),
+        (AxisId::ApertureE, 0.3),
+        (AxisId::Width, 1.0),
+        (AxisId::MeanAdvance, 1.0),
+        (AxisId::WidthCv, 0.28),
+        (AxisId::Spacing, 0.15),
+        (AxisId::SlantDeg, 0.0),
+        (AxisId::SerifFoot, 1.0),
+        (AxisId::Counter, 0.5),
+    ];
+    let axes: Vec<(AxisId, f32, Q, &str)> = vals
+        .iter()
+        .map(|(a, v)| {
+            let q = if matches!(a, AxisId::StressDeg | AxisId::ApertureE) {
+                Q::Estimated
+            } else {
+                Q::Measured
+            };
+            (*a, *v, q, a.default_method())
+        })
+        .collect();
+    let mut p = synth(family, &axes);
+    p.style = style.into();
+    p.key = key_of(family, style);
+    p
+}
+
+pub fn synth_with(family: &str, over: &[(AxisId, f32)]) -> FaceProfile {
+    let mut p = synth_full(family, "Regular", 0.15);
+    for (a, v) in over {
+        set_value(&mut p, *a, *v);
+    }
+    p
+}
+
+pub fn set_value(p: &mut FaceProfile, a: AxisId, v: f32) {
+    p.readings[a.index()].value = Some(v);
+}
+
+pub fn set_q(p: &mut FaceProfile, a: AxisId, q: Q) {
+    p.readings[a.index()].q = q;
+}
+
+pub fn key_of(family: &str, style: &str) -> FaceKey {
+    FaceKey {
+        hash: format!("{family}/{style}"),
+        index: 0,
+    }
+}
+
+/// Đánh giá rỗng: 8 nhãn Unsure, không clash, cổng Thử nghiệm.
+pub fn blank_assessment() -> PairAssessment {
+    PairAssessment {
+        labels: PairAxis::ALL
+            .iter()
+            .map(|a| fontatlas_index::AxisLabel {
+                axis: *a,
+                relation: Relation::Unsure,
+                delta: None,
+                a: None,
+                b: None,
+                role_reversed: false,
+            })
+            .collect(),
+        clashes: Vec::new(),
+        related: false,
+        same_designer: false,
+        global_distance: None,
+        gate: Gate::Experimental,
+        block: None,
+        body_warnings: Vec::new(),
+        heading_overflow: false,
+        insufficient_data: false,
+        weight_hint: None,
+    }
+}
+
+pub fn set_label(x: &mut PairAssessment, a: PairAxis, r: Relation) {
+    if let Some(l) = x.labels.iter_mut().find(|l| l.axis == a) {
+        l.relation = r;
+    }
+}
