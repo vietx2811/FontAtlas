@@ -143,3 +143,24 @@ fn failure_inside_import_transaction_leaves_nothing() {
         assert_eq!(count(&e.s, &format!("SELECT count(*) FROM u.{t}")), 0, "{t} phải rỗng sau rollback");
     }
 }
+
+#[test]
+fn nested_legacy_sources_keep_parent_regardless_of_id_order() {
+    let d = tmp();
+    let root = d.path().join("Fonts");
+    let sub = root.join("Sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    let old = d.path().join("fontatlas.db");
+    {
+        let c = rusqlite::Connection::open(&old).unwrap();
+        c.execute_batch(LEGACY_FONTS_DDL).unwrap();
+        // "src-10" < "src-2" theo chuỗi: con được đọc trước cha
+        c.execute("INSERT INTO sources VALUES ('src-10','Con','directory',?1,NULL,'t')", [sub.to_string_lossy()]).unwrap();
+        c.execute("INSERT INTO sources VALUES ('src-2','Cha','directory',?1,NULL,'t')", [root.to_string_lossy()]).unwrap();
+    }
+    let mut s = open_store(&d.path().join("db"));
+    let r = s.import_legacy(&old).unwrap();
+    let paths: Vec<String> = s.sources().unwrap().into_iter().filter_map(|x| x.path).collect();
+    assert_eq!(paths, vec![root.to_string_lossy().to_string()]);
+    assert_eq!((r.sources, r.skipped_sources), (1, 1));
+}

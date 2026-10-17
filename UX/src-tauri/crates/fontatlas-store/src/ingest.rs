@@ -265,7 +265,9 @@ impl Store {
             match &it.analysis {
                 Analysis::Report(r) => sum.faces_written += write_report(&tx, file_id, &it.hash, r, seen_at)?,
                 Analysis::Failed { code, detail } => {
-                    set_state(&tx, &it.hash, -1, "load", "failed", ANALYZER_VERSION, Some((code, detail)), seen_at)?;
+                    // lỗi đọc file (ổ rút giữa chừng, EIO) là tạm thời: để pending cho lần quét sau thử lại
+                    let status = if code == "io" { "pending" } else { "failed" };
+                    set_state(&tx, &it.hash, -1, "load", status, ANALYZER_VERSION, Some((code, detail)), seen_at)?;
                     sum.failed += 1;
                 }
                 Analysis::Known => sum.relinked += 1,

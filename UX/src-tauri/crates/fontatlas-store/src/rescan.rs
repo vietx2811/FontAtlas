@@ -45,10 +45,19 @@ fn is_font(p: &Path) -> bool {
 
 /// Đi cây thư mục: không theo symlink, bỏ mục ẩn, bỏ thư mục không đọc được; sắp theo đường dẫn.
 pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
+    walk_fonts_report(root).0
+}
+
+/// Như `walk_fonts`, kèm các thư mục không đọc được (font bên trong không được coi là đã xoá).
+fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
     let mut out = Vec::new();
+    let mut failed = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            failed.push(dir);
+            continue;
+        };
         for e in rd.flatten() {
             if e.file_name().to_string_lossy().starts_with('.') {
                 continue;
@@ -70,7 +79,7 @@ pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
         }
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    out
+    (out, failed)
 }
 
 fn hash_file(p: &Path) -> std::io::Result<[u8; 32]> {
@@ -101,7 +110,7 @@ impl Store {
             [],
             |r| r.get(0),
         )?;
-        let files = walk_fonts(&root);
+        let (files, failed_dirs) = walk_fonts_report(&root);
         stats.seen = files.len();
 
         // vị trí đã biết của nguồn: path → (size, mtime, có kết quả mới nhất)
@@ -146,6 +155,7 @@ impl Store {
                 (f, h)
             }).collect();
         let mut items: Vec<IngestItem> = Vec::new();
+        let mut unreadable_known: Vec<String> = Vec::new();
         let mut to_analyze: Vec<(ScannedFile, [u8; 32])> = Vec::new();
         {
             let mut fresh = self.conn.prepare(
@@ -154,10 +164,13 @@ impl Store {
             )?;
             for (f, h) in hashed {
                 match h {
-                    Err(e) => stats.unreadable.push((
-                        f.path.to_string_lossy().to_string(),
-                        format!("io: {}", e.kind()),
-                    )),
+                    Err(e) => {
+                        let p = f.path.to_string_lossy().to_string();
+                        if known.contains_key(&p) {
+                            unreadable_known.push(p.clone());
+                        }
+                        stats.unreadable.push((p, format!("io: {}", e.kind())));
+                    }
                     Ok(h) => {
                         let n: i64 = fresh.query_row(params![&h[..], ANALYZER_VERSION], |r| r.get(0))?;
                         if n > 0 {
@@ -194,10 +207,33 @@ impl Store {
             self.ingest_counting(batch, started, &mut stats)?;
         }
 
-        stats.missing = self.conn.execute(
-            "UPDATE file_locations SET missing=1 WHERE source_id=?1 AND missing=0 AND scan_gen < ?2",
-            params![source_id, generation],
-        )?;
+        // file đã biết nhưng không đọc được lần này: vẫn coi là còn
+        for p in &unreadable_known {
+            self.conn.execute(
+                "UPDATE file_locations SET scan_gen=?2 WHERE path=?1",
+                params![p, generation],
+            )?;
+        }
+        // ổ rút giữa lúc quét → không đánh missing gì
+        if !root_available(&root) {
+            stats.status = RescanStatus::SourceUnavailable;
+            return Ok(stats);
+        }
+        let stale: Vec<(i64, String)> = {
+            let mut st = self.conn.prepare(
+                "SELECT location_id, path FROM file_locations WHERE source_id=?1 AND missing=0 AND scan_gen < ?2",
+            )?;
+            st.query_map(params![source_id, generation], |r| Ok((r.get(0)?, r.get(1)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let tx = self.conn.transaction()?;
+        for (id, p) in stale {
+            if failed_dirs.iter().any(|d| Path::new(&p).starts_with(d)) {
+                continue; // nằm trong thư mục không đọc được: không biết đã xoá hay chưa
+            }
+            stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
+        }
+        tx.commit()?;
         Ok(stats)
     }
 

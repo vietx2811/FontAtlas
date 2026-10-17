@@ -44,20 +44,29 @@ fn first_scan_then_unchanged_scan() {
 }
 
 #[test]
-fn rename_relinks_without_reanalysis_and_keeps_favorite() {
+fn rename_relinks_without_reanalysis_and_keeps_user_data() {
     let (_d, fonts, mut s, src) = setup();
     s.rescan_source(src).unwrap();
     let row = s.query_faces(&FaceQuery { text: Some("roboto".into()), ..Default::default() }).unwrap().items.remove(0);
     let k = FaceKey::from_hex(&row.hash_hex, row.face_index).unwrap();
     s.set_favorite(&k, true).unwrap();
+    let c = s.create_collection("C", None).unwrap();
+    s.add_to_collection(c, &[k]).unwrap();
+    let t = s.tag("tiêu đề").unwrap();
+    s.tag_faces(t, &[k]).unwrap();
     std::fs::create_dir_all(fonts.join("moved")).unwrap();
     std::fs::rename(fonts.join("roboto.ttf"), fonts.join("moved/Roboto Renamed.ttf")).unwrap();
     let st = s.rescan_source(src).unwrap();
     assert_eq!((st.relinked, st.analyzed, st.missing), (1, 0, 1));
+    let old_missing: i64 = s.conn().query_row(
+        "SELECT missing FROM file_locations WHERE path=?1", [fonts.join("roboto.ttf").to_string_lossy()], |r| r.get(0)).unwrap();
+    assert_eq!(old_missing, 1);
     let fav = s.query_faces(&FaceQuery { favorites_only: true, ..Default::default() }).unwrap().items;
     assert_eq!(fav.len(), 1);
     assert!(fav[0].path.as_deref().unwrap().ends_with("Roboto Renamed.ttf"));
     assert!(!fav[0].missing);
+    assert_eq!(s.query_faces(&FaceQuery { collection_id: Some(c), ..Default::default() }).unwrap().total, 1);
+    assert_eq!(s.query_faces(&FaceQuery { tag_ids: vec![t], ..Default::default() }).unwrap().total, 1);
 }
 
 #[test]
@@ -192,4 +201,51 @@ fn missing_does_not_depend_on_clock() {
     s.conn().execute("UPDATE file_locations SET last_seen_at = 9999999999999", []).unwrap(); // đồng hồ "tương lai"
     std::fs::remove_file(fonts.join("roboto.ttf")).unwrap();
     assert_eq!(s.rescan_source(src).unwrap().missing, 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_subfolder_does_not_mark_its_fonts_missing() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_d, fonts, mut s, src) = setup();
+    s.rescan_source(src).unwrap();
+    let sub = fonts.join("sub");
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let st = s.rescan_source(src);
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let st = st.unwrap();
+    assert_eq!(st.missing, 0, "thư mục con không đọc được không có nghĩa là font bị xoá");
+    assert_eq!(total(&s), 6);
+}
+
+#[cfg(unix)]
+#[test]
+fn unreadable_known_file_is_not_marked_missing() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_d, fonts, mut s, src) = setup();
+    s.rescan_source(src).unwrap();
+    let f = fonts.join("roboto.ttf");
+    let mut bytes = std::fs::read(&f).unwrap();
+    bytes.push(0); // đổi size/mtime để buộc băm lại
+    std::fs::write(&f, &bytes).unwrap();
+    std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let st = s.rescan_source(src);
+    std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let st = st.unwrap();
+    assert_eq!(st.unreadable.len(), 1);
+    assert_eq!(st.missing, 0);
+    assert_eq!(total(&s), 6);
+}
+
+#[test]
+fn transient_io_failure_is_retried_on_next_scan() {
+    use fontatlas_store::{Analysis, IngestItem};
+    let (_d, fonts, mut s, src) = setup();
+    let f = walk_fonts(&fonts).into_iter().find(|x| x.path.ends_with("roboto.ttf")).unwrap();
+    let h = *blake3::hash(&std::fs::read(&f.path).unwrap()).as_bytes();
+    let io = IngestItem { source_id: src, file: f, hash: h, analysis: Analysis::Failed { code: "io".into(), detail: "EIO".into() } };
+    s.ingest(vec![io], 1).unwrap();
+    assert!(s.problem_files().unwrap().is_empty(), "lỗi io tạm thời không phải lỗi font");
+    let st = s.rescan_source(src).unwrap();
+    assert_eq!(st.analyzed, 6, "roboto phải được phân tích lại tự động");
 }

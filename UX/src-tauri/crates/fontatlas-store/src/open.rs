@@ -10,6 +10,7 @@ use crate::schema::{LIBRARY_MIGRATIONS, USER_MIGRATIONS, USER_VERSION, migrate, 
 pub const LIBRARY_FILE: &str = "library.db";
 pub const USER_FILE: &str = "user.db";
 pub const BACKUP_DIR: &str = "backups";
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(5000);
 
 pub(crate) fn now_ms() -> i64 {
     SystemTime::now()
@@ -47,6 +48,7 @@ impl Store {
         }
         {
             let uc = Connection::open(&user_path)?;
+            uc.busy_timeout(BUSY_TIMEOUT)?;
             rep.user_backup = migrate(&uc, "user", USER_MIGRATIONS, Some(&dir.join(BACKUP_DIR)))?;
             uc.execute_batch("PRAGMA journal_mode=WAL;")?;
         }
@@ -80,6 +82,7 @@ impl Store {
 
 fn open_library(path: &Path) -> Result<Connection, StoreError> {
     let c = Connection::open(path)?;
+    c.busy_timeout(BUSY_TIMEOUT)?;
     let tables: i64 = c.query_row("SELECT count(*) FROM sqlite_schema", [], |r| r.get(0))?;
     if tables == 0 {
         // page_size phải đặt trước bảng đầu tiên và trước khi bật WAL.
@@ -93,7 +96,12 @@ fn open_library(path: &Path) -> Result<Connection, StoreError> {
 /// library.db là dữ liệu dẫn xuất: mới hơn app, migration lỗi hay file hỏng đều dựng lại.
 fn library_is_broken(e: &StoreError) -> bool {
     match e {
-        StoreError::NewerSchema { .. } | StoreError::Migration { .. } => true,
+        StoreError::NewerSchema { .. } => true,
+        // bận/khoá (process khác đang giữ DB) không phải hỏng: trả lỗi, không dựng lại
+        StoreError::Migration { source: rusqlite::Error::SqliteFailure(f, _), .. } => {
+            !matches!(f.code, ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+        }
+        StoreError::Migration { .. } => true,
         StoreError::Sqlite(rusqlite::Error::SqliteFailure(f, _)) => {
             matches!(f.code, ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt)
         }
@@ -111,4 +119,23 @@ fn move_aside(lib_path: &Path) -> Result<(), StoreError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn busy_or_locked_migration_is_not_broken() {
+        for code in [ErrorCode::DatabaseBusy, ErrorCode::DatabaseLocked] {
+            let source = rusqlite::Error::SqliteFailure(rusqlite::ffi::Error { code, extended_code: 5 }, None);
+            let e = StoreError::Migration { db: "library", from: 1, to: 2, source };
+            assert!(!library_is_broken(&e), "{code:?} không được làm dựng lại library");
+        }
+        let corrupt = StoreError::Sqlite(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error { code: ErrorCode::DatabaseCorrupt, extended_code: 11 },
+            None,
+        ));
+        assert!(library_is_broken(&corrupt));
+    }
 }

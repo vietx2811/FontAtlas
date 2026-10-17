@@ -25,6 +25,8 @@ pub struct LegacyImport {
     pub collections: usize,
     pub recovered_collections: usize,
     pub bad_tags: usize,
+    /// Nguồn cũ bị bỏ vì lồng trong/chứa một nguồn đã có.
+    pub skipped_sources: usize,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
@@ -189,8 +191,13 @@ impl Store {
         let mut rep = LegacyImport { fonts: old.fonts.len(), ..Default::default() };
         let tx = self.conn.transaction()?;
 
-        // nguồn: bỏ nguồn thư mục không có path và nguồn lồng trong nguồn khác
-        for (id, name, kind, path) in &old.sources {
+        // nguồn: cha trước con (theo số thành phần đường dẫn) để nguồn lồng nhau luôn giữ cha;
+        // bỏ nguồn thư mục không có path
+        let mut ordered: Vec<_> = old.sources.iter().collect();
+        ordered.sort_by_key(|(id, _, _, path)| {
+            (path.as_deref().map(|p| norm_path(Path::new(p)).components().count()).unwrap_or(0), id.clone())
+        });
+        for (id, name, kind, path) in ordered {
             let kind = SourceKind::parse(kind).unwrap_or(SourceKind::Directory);
             if path.is_none() && matches!(kind, SourceKind::Directory | SourceKind::System) {
                 continue;
@@ -215,6 +222,7 @@ impl Store {
                 let others = st.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
                 let nested = others.iter().map(|o| norm_path(Path::new(o))).any(|o| o.starts_with(&new) || new.starts_with(&o));
                 if nested {
+                    rep.skipped_sources += 1;
                     continue;
                 }
             }
