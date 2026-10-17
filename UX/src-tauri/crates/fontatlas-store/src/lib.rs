@@ -1,4 +1,5 @@
 //! fontatlas-store: library.db (dẫn xuất) + user.db (người dùng).
+mod embed;
 mod error;
 mod fold;
 mod ingest;
@@ -9,6 +10,7 @@ mod rescan;
 mod schema;
 mod user;
 
+pub use embed::{EmbedJob, EmbedReader, EnqueueStats, JobResult, SETTING_EMBED_ENABLED, SETTING_LICENSE_NOTICE_ACK};
 pub use error::StoreError;
 pub use fold::vi_fold;
 pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyResolve};
