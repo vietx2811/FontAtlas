@@ -264,3 +264,32 @@ pub fn synthetic_50k(seed: u64) -> Vec<FaceProfile> {
         })
         .collect()
 }
+
+/// 8 nhãn Harmony (có số đo), cổng An toàn.
+pub fn all_harmony_assessment() -> PairAssessment {
+    let mut x = blank_assessment();
+    for ax in PairAxis::ALL {
+        set_label_values(&mut x, ax, Relation::Harmony, 0.5, 0.5);
+    }
+    x.gate = Gate::Safe;
+    x
+}
+
+pub fn set_label_values(x: &mut PairAssessment, a: PairAxis, r: Relation, va: f32, vb: f32) {
+    if let Some(l) = x.labels.iter_mut().find(|l| l.axis == a) {
+        l.relation = r;
+        l.a = Some(va);
+        l.b = Some(vb);
+    }
+}
+
+/// Tổ hợp (trục, quan hệ) hợp lệ: Weight không có Clash; WeightHint chỉ cho Weight;
+/// ContrastWithSerif chỉ cho Contrast.
+pub fn valid_combo(a: PairAxis, r: Relation) -> bool {
+    match r {
+        Relation::WeightHint => a == PairAxis::Weight,
+        Relation::ContrastWithSerif => a == PairAxis::Contrast,
+        Relation::Clash => a != PairAxis::Weight,
+        _ => true,
+    }
+}
