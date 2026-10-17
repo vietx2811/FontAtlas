@@ -1,0 +1,97 @@
+//! Thư viện tham chiếu: phân vị từng trục theo cặp (trục, method), cộng D_fam.
+use serde::{Deserialize, Serialize};
+
+use crate::profile::{AxisId, FaceProfile};
+
+/// Bảng có ít mẫu hơn ngưỡng này thì không chuẩn hoá.
+pub const MIN_SAMPLES: u32 = 30;
+
+#[derive(Debug, thiserror::Error)]
+pub enum IndexError {
+    #[error("reference: {0}")]
+    Reference(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AxisQuantiles {
+    pub axis: String,
+    pub method: String,
+    pub n: u32,
+    /// Đúng 101 giá trị (phân vị 0..100), không giảm.
+    pub q: Vec<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReferenceTable {
+    pub version: String,
+    pub source: String,
+    pub analyzer_version: String,
+    pub faces: u32,
+    pub quantiles: Vec<AxisQuantiles>,
+    /// Khoảng cách toàn cục trung vị giữa các face cùng family (R1/R7).
+    pub d_fam: f32,
+    pub d_fam_pairs: u32,
+}
+
+impl ReferenceTable {
+    pub fn from_json(s: &str) -> Result<Self, IndexError> {
+        let t: ReferenceTable =
+            serde_json::from_str(s).map_err(|e| IndexError::Reference(e.to_string()))?;
+        for aq in &t.quantiles {
+            let ok = aq.q.len() == 101
+                && aq.q.iter().all(|v| v.is_finite())
+                && aq.q.windows(2).all(|w| w[0] <= w[1]);
+            if !ok {
+                return Err(IndexError::Reference(format!(
+                    "{}/{}: cần 101 giá trị hữu hạn, không giảm",
+                    aq.axis, aq.method
+                )));
+            }
+        }
+        if !t.d_fam.is_finite() {
+            return Err(IndexError::Reference("d_fam không hữu hạn".into()));
+        }
+        Ok(t)
+    }
+
+    fn table(&self, axis: AxisId, method: &str) -> Option<&[f32]> {
+        self.quantiles
+            .iter()
+            .find(|q| q.axis == axis.key() && q.method == method && q.n >= MIN_SAMPLES)
+            .map(|q| q.q.as_slice())
+    }
+
+    /// Phân vị 0–1 của `v` theo bảng (trục, method); hạng giữa khi trùng giá trị.
+    pub fn percentile(&self, axis: AxisId, method: &str, v: f32) -> Option<f32> {
+        if !v.is_finite() {
+            return None;
+        }
+        let q = self.table(axis, method)?;
+        let (first, last) = (*q.first()?, *q.last()?);
+        // Đoạn giá trị trùng v → giữa đoạn.
+        let eq: Vec<usize> = (0..q.len()).filter(|&i| (q[i] - v).abs() <= 1e-6).collect();
+        if let (Some(lo), Some(hi)) = (eq.first(), eq.last()) {
+            return Some((lo + hi) as f32 / 200.0);
+        }
+        if v < first {
+            return Some(0.0);
+        }
+        if v > last {
+            return Some(1.0);
+        }
+        let i = (0..q.len() - 1).rev().find(|&i| q[i] < v)?;
+        let span = q[i + 1] - q[i];
+        let frac = if span > 0.0 { (v - q[i]) / span } else { 0.0 };
+        Some((i as f32 + frac) / 100.0)
+    }
+
+    /// Phân vị của 16 trục (None khi thiếu giá trị hoặc thiếu bảng của method).
+    pub fn normalize(&self, p: &FaceProfile) -> [Option<f32>; 16] {
+        let mut out = [None; 16];
+        for (i, a) in AxisId::ALL.iter().enumerate() {
+            let r = p.get(*a);
+            out[i] = r.value.and_then(|v| self.percentile(*a, &r.method, v));
+        }
+        out
+    }
+}
