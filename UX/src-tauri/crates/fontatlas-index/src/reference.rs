@@ -10,6 +10,10 @@ pub const MIN_SAMPLES: u32 = 30;
 pub enum IndexError {
     #[error("reference: {0}")]
     Reference(String),
+    #[error("không có face {0:?}")]
+    NotFound(crate::profile::FaceKey),
+    #[error("face {0:?} không đủ trục để so")]
+    NotComparable(crate::profile::FaceKey),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

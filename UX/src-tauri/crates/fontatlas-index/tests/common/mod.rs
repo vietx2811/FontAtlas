@@ -239,3 +239,28 @@ pub fn set_label(x: &mut PairAssessment, a: PairAxis, r: Relation) {
         l.relation = r;
     }
 }
+
+use fontatlas_index::{Index, SuperfamilyTable};
+
+/// Index với reference giả + bảng superfamily phát hành kèm.
+pub fn index_of(profiles: Vec<FaceProfile>) -> Index {
+    Index::new(profiles, test_reference(), SuperfamilyTable::bundled())
+}
+
+/// 50.000 profile giả, mỗi trục rải đều trong khoảng của reference (LCG cố định).
+pub fn synthetic_50k(seed: u64) -> Vec<FaceProfile> {
+    let mut s = seed;
+    let mut next = || {
+        s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+        (s >> 33) as f32 / (1u64 << 31) as f32
+    };
+    (0..50_000)
+        .map(|i| {
+            let mut p = synth_full(&format!("F{i}"), "Regular", 0.15);
+            for a in AxisId::ALL {
+                set_value(&mut p, a, value_in_reference_range(a, next()));
+            }
+            p
+        })
+        .collect()
+}
