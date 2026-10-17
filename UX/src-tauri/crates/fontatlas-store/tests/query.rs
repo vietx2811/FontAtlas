@@ -146,3 +146,37 @@ fn perf_50k_faces_under_50ms() {
         assert!(ms < 50.0, "S6: < 50 ms trên 50.000 font");
     }
 }
+
+#[test]
+fn row_carries_file_size_in_bytes() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let r = report("open_sans.ttf");
+    let mut it = item(1, "/fonts/OpenSans.ttf", &r);
+    it.file.size = 12345;
+    s.ingest(vec![it], 1000).unwrap();
+    let row = s.query_faces(&FaceQuery::default()).unwrap().items.remove(0);
+    assert_eq!(row.file_size, 12345);
+}
+
+/// Hợp đồng JSON TS↔Rust cho Plan 5. Sinh lại: UPDATE_FIXTURES=1 cargo test -p fontatlas-store --test query face_row_json
+#[test]
+fn face_row_json_matches_contract_fixture() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let r = report("open_sans.ttf");
+    let mut it = item(1, "/fonts/OpenSans.ttf", &r);
+    it.file.size = 12345;
+    s.ingest(vec![it], 1_700_000_000_000).unwrap();
+    let row = s.query_faces(&FaceQuery::default()).unwrap().items.remove(0);
+    let got = serde_json::to_value(&row).unwrap();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/face_row.json");
+    if std::env::var_os("UPDATE_FIXTURES").is_some() {
+        std::fs::write(&path, serde_json::to_string_pretty(&got).unwrap() + "\n").unwrap();
+    }
+    let want: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("fixture face_row.json")).unwrap();
+    assert_eq!(got, want);
+    for k in ["faceId", "hashHex", "faceIndex", "family", "fileSize", "viStatus", "isFavorite", "addedAt"] {
+        assert!(got.get(k).is_some(), "thiếu khoá camelCase {k}");
+    }
+}

@@ -66,6 +66,8 @@ pub struct FaceRow {
     pub vi_missing: u32,
     pub license_class: String,
     pub path: Option<String>,
+    /// Kích thước file gốc (byte) — cho ngân sách nạp FontFace.
+    pub file_size: u64,
     pub missing: bool,
     pub is_favorite: bool,
     pub added_at: i64,
@@ -175,7 +177,7 @@ impl Store {
                       ORDER BY l.missing, l.location_id LIMIT 1),
                     NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0),
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
-                    fi.first_seen_at
+                    fi.first_seen_at, fi.size
              FROM faces f JOIN files fi ON fi.file_id = f.file_id
              WHERE {w} ORDER BY {} LIMIT {limit} OFFSET {}",
             order_by(q),
@@ -202,6 +204,7 @@ impl Store {
                     vi_missing: r.get(12)?,
                     license_class: r.get(13)?,
                     path: r.get(14)?,
+                    file_size: r.get::<_, i64>(18)?.max(0) as u64,
                     missing: r.get(15)?,
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
