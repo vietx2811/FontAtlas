@@ -4,7 +4,8 @@ use read_fonts::{FontRef, TableProvider, tables::glyf::Glyph, types::GlyphId};
 use serde::Serialize;
 use skrifa::MetadataProvider;
 
-use crate::geom::GlyphCtx;
+use crate::geom::{GlyphCtx, GlyphShape, first_stem, ink_area};
+use crate::metric::{FailReason, Metric, Quality};
 
 /// 67 chữ thường có dấu/đặc thù (12 nguyên âm cơ sở × thanh + ă â ê ô ơ ư đ).
 const VI_LOWER: &str = "àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ";
@@ -42,6 +43,28 @@ pub struct VietnameseCoverage {
     pub stacked_marks_top_em: Option<f32>,
     /// Đỉnh dấu chồng vượt hhea.ascender → dễ va dòng khi leading chặt.
     pub stacked_marks_overflow: Option<bool>,
+    /// Cách đặt dấu và độ đậm dấu (Estimated cho tới khi kiểm định).
+    pub marks: ViMarks,
+}
+
+/// Vị trí dấu thanh so với dấu mũ trên 'ấ' (sắc) và 'ầ' (huyền).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StackStyle {
+    /// Cả sắc và huyền nằm bên phải mũ.
+    Right,
+    /// Sắc bên phải, huyền bên trái.
+    BothSides,
+    /// Cả hai chồng thẳng lên trên mũ.
+    Stacked,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ViMarks {
+    pub stack_style: Option<StackStyle>,
+    pub stack_style_quality: Quality,
+    pub mark_weight_ratio: Metric,
 }
 
 pub fn vi_required_chars() -> Vec<char> {
@@ -111,7 +134,129 @@ pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
         dong_sign: cmap.map('₫').is_some(),
         stacked_marks_top_em,
         stacked_marks_overflow,
+        marks: vi_marks(font),
     }
+}
+
+const MARK_RATIO_METHOD: &str = "acute_area_over_diag_div_n_stem";
+
+/// bbox từng contour nằm trên x-height (đáy > 1,05·xh) — coi là dấu.
+fn mark_contours(g: &GlyphShape, xh: f64) -> Vec<kurbo::Rect> {
+    let mut out = Vec::new();
+    let mut cur = kurbo::BezPath::new();
+    let mut flush = |p: &mut kurbo::BezPath| {
+        if !p.elements().is_empty() {
+            let r = kurbo::Shape::bounding_box(&*p);
+            if r.y0 > 1.05 * xh && r.width() > 0.0 && r.height() > 0.0 {
+                out.push(r);
+            }
+        }
+        *p = kurbo::BezPath::new();
+    };
+    for el in g.path.elements() {
+        if matches!(el, kurbo::PathEl::MoveTo(_)) {
+            flush(&mut cur);
+        }
+        cur.push(*el);
+    }
+    flush(&mut cur);
+    out
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Side {
+    Right,
+    Left,
+    Stacked,
+}
+
+/// Vị trí dấu thanh so với dấu mũ trong một glyph; Err = lý do thất bại.
+fn tone_side(ctx: &GlyphCtx, ch: char, xh: f64) -> Result<Side, FailReason> {
+    let g = ctx.glyph(ch, true).ok_or(FailReason::MissingGlyph)?;
+    let marks = mark_contours(&g, xh);
+    if marks.len() < 2 {
+        return Err(FailReason::Degenerate);
+    }
+    // Mũ = contour dấu rộng nhất; thanh = contour còn lại có tâm xa tâm mũ nhất.
+    let (hi, hat) = marks
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.width().total_cmp(&b.1.width()))
+        .ok_or(FailReason::Degenerate)?;
+    let hc = hat.center();
+    let tone = marks
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != hi)
+        .map(|(_, r)| r)
+        .max_by(|a, b| {
+            (a.center() - hc)
+                .hypot()
+                .total_cmp(&(b.center() - hc).hypot())
+        })
+        .ok_or(FailReason::Degenerate)?;
+    let tc = tone.center();
+    if tone.y0 >= hat.y1 - 0.1 * hat.height() && (tc.x - hc.x).abs() < 0.5 * hat.width() {
+        Ok(Side::Stacked)
+    } else if tc.x > hc.x {
+        Ok(Side::Right)
+    } else {
+        Ok(Side::Left)
+    }
+}
+
+pub(crate) fn vi_marks(font: &FontRef) -> ViMarks {
+    let ctx = GlyphCtx::new(font.clone(), crate::anatomy::standard_location(font));
+    let Some(xh) = ctx.glyph('x', true).map(|g| g.bbox.y1).filter(|v| *v > 0.0) else {
+        let f = FailReason::NoLatinLowercase;
+        return ViMarks {
+            stack_style: None,
+            stack_style_quality: Quality::Failed(f),
+            mark_weight_ratio: Metric::failed(f, MARK_RATIO_METHOD),
+        };
+    };
+    let (stack_style, stack_style_quality) = match (
+        tone_side(&ctx, '\u{1EA5}', xh),
+        tone_side(&ctx, '\u{1EA7}', xh),
+    ) {
+        (Ok(acute), Ok(grave)) => {
+            let s = match (acute, grave) {
+                (Side::Right, Side::Right) => StackStyle::Right,
+                (Side::Right, Side::Left) => StackStyle::BothSides,
+                (Side::Stacked, Side::Stacked) => StackStyle::Stacked,
+                _ => StackStyle::Other,
+            };
+            // Chưa kiểm định với nhãn tay → Estimated.
+            (Some(s), Quality::Estimated)
+        }
+        (Err(e), _) | (_, Err(e)) => (None, Quality::Failed(e)),
+    };
+    ViMarks {
+        stack_style,
+        stack_style_quality,
+        mark_weight_ratio: mark_weight_ratio(&ctx, xh),
+    }
+}
+
+/// Bề dày dấu sắc trên 'á' (diện tích mực ÷ đường chéo bbox dấu) ÷ thân 'n' ở 35% xh.
+fn mark_weight_ratio(ctx: &GlyphCtx, xh: f64) -> Metric {
+    let (Some(a), Some(n)) = (ctx.glyph('\u{E1}', true), ctx.glyph('n', true)) else {
+        return Metric::failed(FailReason::MissingGlyph, MARK_RATIO_METHOD);
+    };
+    let marks = mark_contours(&a, xh);
+    let Some(r) = marks.into_iter().reduce(|p, q| p.union(q)) else {
+        return Metric::failed(FailReason::Degenerate, MARK_RATIO_METHOD);
+    };
+    let diag = r.width().hypot(r.height());
+    let v = first_stem(&n, xh * 0.35)
+        .filter(|s| *s > 0.0 && diag > 0.0)
+        .map(|stem| ink_area(&a, r.y0, r.y1, 64) / diag / stem);
+    Metric::from_opt(
+        v,
+        Quality::Estimated,
+        FailReason::Degenerate,
+        MARK_RATIO_METHOD,
+    )
 }
 
 fn stacked_marks(font: &FontRef) -> (Option<f32>, Option<bool>) {

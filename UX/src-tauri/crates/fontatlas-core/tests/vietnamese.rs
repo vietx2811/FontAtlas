@@ -73,3 +73,72 @@ fn regression_avenir_next_supports_vietnamese() {
         }
     }
 }
+
+use fontatlas_core::{Quality, StackStyle, analyze_path};
+
+#[test]
+fn stack_style_detected_on_vi_fixtures() {
+    for f in [
+        "roboto.ttf",
+        "open_sans.ttf",
+        "playfair_display.ttf",
+        "source_code_pro.ttf",
+        "public_sans_vf.ttf",
+    ] {
+        let r = analyze_path(&fixture(f)).unwrap();
+        let m = &r.faces[0].vietnamese.marks;
+        assert!(m.stack_style.is_some(), "{f}: {m:?}");
+        assert_eq!(m.stack_style_quality, Quality::Estimated, "{f}");
+    }
+}
+
+#[test]
+fn stack_style_none_when_glyphs_missing() {
+    // Libre Baskerville không có ấ/ầ → không đoán.
+    let r = analyze_path(&fixture("libre_baskerville.ttf")).unwrap();
+    let m = &r.faces[0].vietnamese.marks;
+    assert_eq!(m.stack_style, None);
+    assert!(matches!(m.stack_style_quality, Quality::Failed(_)));
+}
+
+#[test]
+fn mark_weight_ratio_plausible_and_estimated() {
+    for f in [
+        "roboto.ttf",
+        "open_sans.ttf",
+        "playfair_display.ttf",
+        "source_code_pro.ttf",
+    ] {
+        let r = analyze_path(&fixture(f)).unwrap();
+        let m = r.faces[0].vietnamese.marks.mark_weight_ratio;
+        let v = m.value.unwrap_or_else(|| panic!("{f}: {m:?}"));
+        assert!((0.2..2.5).contains(&v), "{f}: {v}");
+        assert_eq!(m.quality, Quality::Estimated);
+        assert_eq!(m.method, "acute_area_over_diag_div_n_stem");
+    }
+}
+
+#[test]
+fn analyzer_version_bumped() {
+    // một hằng số duy nhất; nơi khác đọc từ hằng này, không ghi cứng
+    assert_ne!(fontatlas_core::ANALYZER_VERSION, "core-0.1.0");
+    let r = analyze_path(&fixture("roboto.ttf")).unwrap();
+    assert_eq!(r.analyzer_version, fontatlas_core::ANALYZER_VERSION);
+}
+
+#[test]
+fn vi_marks_measured_at_standard_location() {
+    // VF: đo ở wght=400 giống Anatomy; ratio phải giống khi đo lại ở Location wght=400
+    let r = analyze_path(&fixture("public_sans_vf.ttf")).unwrap();
+    let m = r.faces[0].vietnamese.marks.mark_weight_ratio;
+    assert!(m.value.is_some(), "{m:?}");
+    assert_eq!(
+        r.faces[0]
+            .anatomy
+            .location
+            .iter()
+            .find(|(t, _)| t == "wght")
+            .map(|x| x.1),
+        Some(400.0)
+    );
+}

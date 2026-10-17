@@ -13,14 +13,14 @@ pub use error::CoreError;
 pub use load::{Container, Face, FontFile};
 pub use metadata::{AxisInfo, LicenseClass, Metadata, OutlineFormat, classify_license};
 pub use metric::{FailReason, Metric, Quality};
-pub use vietnamese::{ViStatus, VietnameseCoverage, vi_required_chars};
+pub use vietnamese::{StackStyle, ViMarks, ViStatus, VietnameseCoverage, vi_required_chars};
 
 use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 use serde::Serialize;
 
-pub const ANALYZER_VERSION: &str = "core-0.1.0";
+pub const ANALYZER_VERSION: &str = "core-0.2.0";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FaceReport {
