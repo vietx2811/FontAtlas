@@ -69,6 +69,11 @@ fn location(font: &FontRef, set: &[(String, f32)]) -> Location {
     font.axes().location(pairs)
 }
 
+/// Vị trí đo chuẩn (wght=400, wdth=100, opsz=14, có kẹp) — dùng chung cho Anatomy và embedding.
+pub fn standard_location(font: &FontRef) -> Location {
+    location(font, &settings(font, &MeasureAt::Standard))
+}
+
 pub fn measure_with_filter(
     font: &FontRef,
     at: MeasureAt,

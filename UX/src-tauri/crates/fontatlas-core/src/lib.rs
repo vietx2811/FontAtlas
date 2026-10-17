@@ -8,7 +8,7 @@ mod metadata;
 mod metric;
 mod vietnamese;
 
-pub use anatomy::{Anatomy, MeasureAt, measure_with_filter};
+pub use anatomy::{Anatomy, MeasureAt, measure_with_filter, standard_location};
 pub use error::CoreError;
 pub use load::{Container, Face, FontFile};
 pub use metadata::{AxisInfo, LicenseClass, Metadata, OutlineFormat, classify_license};

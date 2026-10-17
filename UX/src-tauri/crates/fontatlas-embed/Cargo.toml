@@ -1,0 +1,30 @@
+[package]
+name = "fontatlas-embed"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+description = "Embedding ảnh font: render chuỗi mẫu, SigLIP 2 qua ONNX Runtime, whitening, hàng đợi nền"
+
+[features]
+fit = ["dep:nalgebra"]
+
+[dependencies]
+blake3 = "=1.8.7"
+fontatlas-core = { path = "../fontatlas-core" }
+fontatlas-store = { path = "../fontatlas-store" }
+nalgebra = { version = "=0.35.0", optional = true }
+ort = { version = "=2.0.0-rc.14", default-features = false, features = ["std", "download-binaries", "tls-native", "api-31"] }
+rayon = "1.12"
+read-fonts = "=0.45.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+skrifa = "=0.48.0"
+thiserror = "2"
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+ureq = "3"
+
+[dev-dependencies]
+png = "=0.18.1"
+tempfile = "3.27"
+tiny_http = "0.12"

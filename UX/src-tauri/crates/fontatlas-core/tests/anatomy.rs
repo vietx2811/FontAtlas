@@ -90,3 +90,14 @@ fn non_latin_or_no_outline_does_not_panic() {
         }
     }
 }
+
+#[test]
+fn standard_location_is_public_and_consistent() {
+    for name in SAMPLES {
+        let f = fontatlas_core::FontFile::from_bytes(fixture_bytes(name)).unwrap();
+        let faces = f.faces().unwrap();
+        let _ = fontatlas_core::standard_location(faces[0].font());
+        let a = faces[0].measure(fontatlas_core::MeasureAt::Standard);
+        assert_eq!(a.location.is_empty(), faces[0].metadata().axes.is_empty(), "{name}");
+    }
+}
