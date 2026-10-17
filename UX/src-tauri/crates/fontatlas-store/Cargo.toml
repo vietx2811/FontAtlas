@@ -1,0 +1,19 @@
+[package]
+name = "fontatlas-store"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Kho SQLite của FontAtlas: library.db + user.db, migration, FTS, rescan, di chuyển DB cũ"
+
+[dependencies]
+blake3 = "=1.8.7"
+fontatlas-core = { path = "../fontatlas-core" }
+rayon = "1.12"
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+unicode-normalization = "0.1.25"
+
+[dev-dependencies]
+tempfile = "3.27"
