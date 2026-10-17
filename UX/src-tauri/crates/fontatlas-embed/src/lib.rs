@@ -1,7 +1,9 @@
 //! fontatlas-embed: embedding ảnh font (SigLIP 2 qua ONNX Runtime), whitening, hàng đợi nền.
 use serde::Serialize;
 
+pub mod encoder;
 pub mod render;
+pub use encoder::{Encode, OrtEncoder};
 pub use render::{Gray224, coverage_ratio, render_input, to_tensor};
 
 /// Model, runtime, chuỗi render: thành phần của `raw_version`.
