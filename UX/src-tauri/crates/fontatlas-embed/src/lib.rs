@@ -3,6 +3,10 @@ use serde::Serialize;
 
 pub mod encoder;
 pub mod render;
+pub mod whiten;
+#[cfg(feature = "fit")]
+pub use whiten::fit;
+pub use whiten::Whitening;
 pub use encoder::{Encode, OrtEncoder};
 pub use render::{Gray224, coverage_ratio, render_input, to_tensor};
 

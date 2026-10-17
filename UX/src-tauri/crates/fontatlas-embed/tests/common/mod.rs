@@ -104,3 +104,20 @@ pub fn lcg_clusters(n: usize, dim: usize, centers: usize, seed: u64) -> Vec<Vec<
         })
         .collect()
 }
+
+/// File whitening "đơn vị": μ = 0, W = [I_dim; 0] (raw_dim × dim) — dùng cho test không cần fit.
+pub fn identity_whitening_bytes(raw_dim: usize, dim: usize) -> Vec<u8> {
+    let header = serde_json::json!({"version":"white-identity","raw_dim":raw_dim,"dim":dim,"shrink":0.0,"source":"test","split":"tune","n":0}).to_string();
+    let mut b = b"FAWHITEN".to_vec();
+    b.extend_from_slice(&(header.len() as u32).to_le_bytes());
+    b.extend_from_slice(header.as_bytes());
+    for _ in 0..raw_dim {
+        b.extend_from_slice(&0f32.to_le_bytes());
+    }
+    for r in 0..raw_dim {
+        for c in 0..dim {
+            b.extend_from_slice(&(if r == c { 1f32 } else { 0f32 }).to_le_bytes());
+        }
+    }
+    b
+}
