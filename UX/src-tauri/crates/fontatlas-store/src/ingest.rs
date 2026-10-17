@@ -123,18 +123,20 @@ fn face_cols(f: &FaceReport) -> FaceCols {
         &m.postscript_name,
         &m.manufacturer,
         &m.designer,
-    ] {
-        if let Some(s) = v {
-            let k = vi_fold(s);
-            if !k.is_empty() && !parts.contains(&k) {
-                parts.push(k);
-            }
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let k = vi_fold(v);
+        if !k.is_empty() && !parts.contains(&k) {
+            parts.push(k);
         }
     }
     FaceCols { family_key: vi_fold(&family), family, subfamily, is_italic, search_text: parts.join(" ") }
 }
 
 /// Ghi trạng thái pipeline; `attempts` tăng khi thất bại, về 0 khi khác.
+#[allow(clippy::too_many_arguments)] // ánh xạ thẳng các cột của pipeline_state
 pub(crate) fn set_state(
     tx: &Transaction,
     hash: &[u8; 32],
