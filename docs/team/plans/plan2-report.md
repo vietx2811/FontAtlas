@@ -34,3 +34,13 @@ Máy đo: Apple M4 Pro, 24 GB, macOS 27.2, rustc 1.96.0.
 - `Store` không `Sync`: Plan 6 bọc `Mutex` hoặc mở thêm một `Store` đọc cho UI (WAL cho phép đọc song song).
 - Thứ tự khởi động cho Plan 6: `Store::open` → `import_legacy` (nếu có `fontatlas.db` và chưa có `u.settings.legacy_import`) → `rescan_source` mọi nguồn thư mục → `resolve_legacy`.
 - `RescanStatus::SourceUnavailable` (ổ ngoài đã rút): UI nên hiện "Nguồn không truy cập được", không coi là font bị xoá.
+
+## Review toàn nhánh (subagent Opus, sau Task 8)
+Kết luận: 0 Critical, 4 Important, 11 Minor. Đã sửa cả 4 Important (commit 593e2b8), mỗi mục có test đỏ trước rồi xanh; suite 63/63 qua, clippy sạch.
+- I1: nguồn cũ lồng nhau đọc theo thứ tự id chuỗi có thể giữ con bỏ cha → sắp theo độ sâu đường dẫn, thêm `LegacyImport.skipped_sources`.
+- I2: thư mục con hoặc file không đọc được (hoặc ổ rút giữa lúc quét) bị đánh missing → bỏ qua vị trí dưới thư mục lỗi, giữ file đã biết không đọc được, kiểm lại gốc trước bước đánh missing (nhánh "rút ổ giữa lúc quét" chưa có test tự động).
+- I3: lỗi `io` tạm thời bị ghi `failed` vĩnh viễn → ghi `pending`, lần quét sau tự thử lại.
+- I4: `SQLITE_BUSY` khi migration library bị coi là hỏng → dựng lại library; giờ đặt `busy_timeout` ngay sau khi mở và không coi bận/khoá là hỏng.
+- Thêm: test Review Focus 1 kiểm cả collection, tag và vị trí cũ `missing=1`.
+
+Minor để lại (cho Plan 6 hoặc sau): `remove_source` ghi hai file trong một transaction (không nguyên tử khi crash); rescan không tự gọi `gc`; rescan giữ mọi kết quả trong RAM rồi mới ghi; rescan giữ `&mut self` suốt phần I/O; lọc theo nguồn chưa gắn "không missing" với đúng nguồn đó; `total` và trang không chung read transaction; transaction DEFERRED (nên IMMEDIATE khi có kết nối thứ hai); so path DB cũ chỉ NFC chưa canonicalize; TTC không khớp rơi về face 0; file `library.broken-*` không được dọn.
