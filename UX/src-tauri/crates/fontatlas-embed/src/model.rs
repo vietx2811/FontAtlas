@@ -88,7 +88,7 @@ pub fn vision_header(json: &[u8]) -> Result<(Vec<u8>, u64, u64), EmbedError> {
         out.insert(k.clone(), x);
     }
     let mut h = serde_json::to_vec(&out).map_err(|e| bad(&e.to_string()))?;
-    while (8 + h.len()) % 8 != 0 {
+    while !(8 + h.len()).is_multiple_of(8) {
         h.push(b' ');
     }
     let mut bytes = (h.len() as u64).to_le_bytes().to_vec();

@@ -51,16 +51,6 @@ impl Read for Slow {
     }
 }
 
-fn body(n: usize) -> Vec<u8> {
-    let mut s: u64 = 7;
-    (0..n)
-        .map(|_| {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
-            (s >> 56) as u8
-        })
-        .collect()
-}
-
 /// safetensors F32 theo đúng thứ tự cho trước (offset liền nhau), header đệm space cho chia hết 8.
 fn fake_safetensors(tensors: &[(String, Vec<usize>, Vec<f32>)]) -> Vec<u8> {
     let mut hdr = serde_json::Map::new();
@@ -72,7 +62,7 @@ fn fake_safetensors(tensors: &[(String, Vec<usize>, Vec<f32>)]) -> Vec<u8> {
         hdr.insert(k.clone(), serde_json::json!({"dtype": "F32", "shape": shape, "data_offsets": [a, data.len()]}));
     }
     let mut h = serde_json::to_vec(&serde_json::Value::Object(hdr)).unwrap();
-    while (8 + h.len()) % 8 != 0 {
+    while !(8 + h.len()).is_multiple_of(8) {
         h.push(b' ');
     }
     let mut out = (h.len() as u64).to_le_bytes().to_vec();
@@ -237,6 +227,7 @@ fn full_file_with_wrong_source_sha_rejected() {
 #[test]
 fn bad_segment_checksum_rejected() {
     let src = fake_model();
+    #[allow(clippy::ptr_arg)] // cùng kiểu với `grow` (fn con trỏ)
     fn flip_last(b: &mut Vec<u8>, _: usize) {
         let n = b.len();
         b[n - 1] ^= 0xff;
