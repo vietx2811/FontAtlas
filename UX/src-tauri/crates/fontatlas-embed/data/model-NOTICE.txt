@@ -1,14 +1,13 @@
 FontAtlas — mô hình nhúng ảnh (image encoder)
 
-Tệp: siglip2_base_p16_224_75de2d5_b4.onnx
+Tệp: siglip2_base_p16_224_75de2d5_vision.safetensors
 Nguồn: google/siglip2-base-patch16-224 (Google) tại Hugging Face,
-       revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2
+       revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2, tệp model.safetensors
+       (1.500.800.904 byte, sha256 612923381c76ec5a9bed335d1c48827e3f2e506ac31b044b63b2031fadee6a0b)
 Giấy phép gốc: Apache License 2.0 (xem model-LICENSE-Apache-2.0.txt)
 
-Thay đổi: chỉ chuyển định dạng sang ONNX (encoder ảnh = get_image_features,
-lô tĩnh 4, opset 17, fp32). Không đổi trọng số.
+Thay đổi: chỉ giữ các tensor `vision_model.*` (tháp ảnh); header safetensors được viết lại
+với offset mới. Không đổi giá trị trọng số. FontAtlas tải trực tiếp từ nguồn trên
+(HTTP Range) và tự ghép tệp này trên máy người dùng; không phân phối lại qua máy chủ khác.
 
-Export lại:
-  python tools/embed/export_siglip2.py --revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2 \
-      --batch 4 --out siglip2_base_p16_224_75de2d5_b4.onnx
-  (torch 2.14.1, transformers 5.19.0; sha256 có thể khác nếu đổi phiên bản torch/onnx)
+Dựng lại: cargo run --release -p fontatlas-embed --example make_manifest -- model.safetensors

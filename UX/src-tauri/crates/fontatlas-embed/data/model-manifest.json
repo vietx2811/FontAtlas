@@ -1,8 +1,20 @@
 {
-  "file": "siglip2_base_p16_224_75de2d5_b4.onnx",
-  "url": "",
-  "sha256": "584d14edb97ba802f4662a7fb0d353642decaca3f34a3ba4d0b24a610dac6698",
-  "size": 371694332,
+  "file": "siglip2_base_p16_224_75de2d5_vision.safetensors",
+  "sha256": "9c0ed2787f99ae29931262bb670c76f11cf6863d5d37448a27a0ed99a1185c39",
+  "size": 371561688,
   "license": "Apache-2.0",
-  "notice_files": ["model-NOTICE.txt", "model-LICENSE-Apache-2.0.txt"]
+  "notice_files": [
+    "model-NOTICE.txt",
+    "model-LICENSE-Apache-2.0.txt"
+  ],
+  "source": {
+    "url": "https://huggingface.co/google/siglip2-base-patch16-224/resolve/75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2/model.safetensors",
+    "size": 1500800904,
+    "sha256": "612923381c76ec5a9bed335d1c48827e3f2e506ac31b044b63b2031fadee6a0b",
+    "header_len": 49016,
+    "header_sha256": "167617e55db5fb474d2078c2644c8cf53bc326a7a79b738054dd1f6acdd00777",
+    "vision_offset": 1129264008,
+    "vision_len": 371536896,
+    "vision_sha256": "18961e504f32bb65c0c1bb0ae3d0b23b7b2d587c733644d3df1be655b4a52fb5"
+  }
 }

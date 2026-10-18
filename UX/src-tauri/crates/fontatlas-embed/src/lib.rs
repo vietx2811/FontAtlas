@@ -6,7 +6,7 @@ pub use candle_enc::{Backend, CandleEncoder, select_backend};
 pub mod encoder;
 pub mod model;
 pub mod render;
-pub use model::{Manifest, bundled_manifest, ModelStatus, ModelStore, READ_TIMEOUT, sha256_file};
+pub use model::{Manifest, ModelStatus, ModelStore, READ_TIMEOUT, Source, VISION_PREFIX, bundled_manifest, make_manifest, sha256_file, vision_header};
 pub mod whiten;
 pub mod source;
 pub use source::StoreEmbeddingSource;
