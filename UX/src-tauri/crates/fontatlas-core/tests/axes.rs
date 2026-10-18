@@ -218,7 +218,7 @@ fn terminal_normal_ball_above_sans() {
 
 #[test]
 fn terminal_normal_is_estimated() {
-    let m = with_ctx(&fixture("roboto.ttf"), 0, |ctx| terminal_c_normal(ctx));
+    let m = with_ctx(&fixture("roboto.ttf"), 0, terminal_c_normal);
     assert_eq!(m.quality, Quality::Estimated);
     assert_eq!(m.method, "c_upper_terminal_normal_over_thin");
 }

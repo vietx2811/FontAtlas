@@ -102,7 +102,7 @@ pub fn terminal_c_normal(ctx: &GlyphCtx) -> Metric {
     let pts: Vec<(i32, f64, f64)> = (50..=99)
         .filter_map(|p| {
             let x = g.bbox.x0 + dx * p as f64;
-            let r = vline(&g, x).into_iter().filter(|r| r.0 > cy).last()?;
+            let r = vline(&g, x).into_iter().rfind(|r| r.0 > cy)?;
             Some((p, (r.0 + r.1) / 2.0, r.1 - r.0))
         })
         .collect();

@@ -74,7 +74,7 @@ fn regression_avenir_next_supports_vietnamese() {
     }
 }
 
-use fontatlas_core::{Quality, StackStyle, analyze_path};
+use fontatlas_core::{Quality, analyze_path};
 
 #[test]
 fn stack_style_detected_on_vi_fixtures() {
