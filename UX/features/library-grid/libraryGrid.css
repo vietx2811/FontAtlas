@@ -1,0 +1,5 @@
+/* Preview PNG alpha-mask: màu theo theme qua var(--foreground), không tải lại ảnh khi đổi theme. */
+.fa-preview-mask { background-color: var(--foreground); -webkit-mask-image: var(--preview-url); mask-image: var(--preview-url); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+/* Phương án dự phòng previewMode='img': ảnh đen trên nền trong, đảo màu ở theme tối. */
+.fa-preview-img { display: block; }
+.dark .fa-preview-img { filter: invert(1); }
