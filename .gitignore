@@ -69,3 +69,7 @@ UX/src-tauri/gen/schemas
 # Python sidecar build output (PyInstaller); binaries in UX/binaries/ are tracked separately
 UX/python-sidecar/build/
 UX/python-sidecar/dist/
+
+# Harness S2 (Plan 5)
+UX/features/library-grid/perf/.data/
+UX/features/library-grid/perf/wk

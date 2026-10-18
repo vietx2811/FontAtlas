@@ -10,7 +10,8 @@
     "tauri": "cargo tauri",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "perf:s2": "python3 features/library-grid/perf/run_s2.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
