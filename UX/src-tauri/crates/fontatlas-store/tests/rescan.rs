@@ -249,3 +249,30 @@ fn transient_io_failure_is_retried_on_next_scan() {
     let st = s.rescan_source(src).unwrap();
     assert_eq!(st.analyzed, 6, "roboto phải được phân tích lại tự động");
 }
+
+#[test]
+fn gc_removes_orphan_embeddings_analyses_and_state_but_keeps_community() {
+    let (_d, _fonts, mut s, src) = setup();
+    s.rescan_source(src).unwrap();
+    s.conn().execute_batch(
+        "INSERT INTO community_snapshots(snapshot_id,name,version,format_version,sha256,imported_at)
+           VALUES (1,'gf','1',1,zeroblob(32),0);
+         INSERT INTO embeddings(hash,face_index,model_version,source,snapshot_id,dim,dtype,vec,created_at)
+           SELECT hash, 0, 'm@1', 'local', NULL, 4, 'f32', zeroblob(16), 0 FROM files;
+         INSERT INTO embeddings(hash,face_index,model_version,source,snapshot_id,dim,dtype,vec,created_at)
+           SELECT hash, 0, 'm@1', 'community', 1, 4, 'f32', zeroblob(16), 0 FROM files;
+         PRAGMA u.wal_checkpoint(TRUNCATE);",
+    ).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM embeddings WHERE source='local'"), 6);
+    let dir = s.dir().to_path_buf();
+    let before = (fingerprint(&dir.join("user.db")), fingerprint(&dir.join("user.db-wal")));
+    // mô phỏng xoá nguồn ở phía library (remove_source cũng gọi gc)
+    s.conn().execute("DELETE FROM file_locations WHERE source_id=?1", [src]).unwrap();
+    s.gc().unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM files"), 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM embeddings WHERE source='local'"), 0, "embedding local mồ côi phải bị xoá");
+    assert_eq!(count(&s, "SELECT count(*) FROM analyses WHERE source='local'"), 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM pipeline_state"), 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM embeddings WHERE source='community'"), 6, "dữ liệu cộng đồng khoá theo hash, không phải rác");
+    assert_eq!((fingerprint(&dir.join("user.db")), fingerprint(&dir.join("user.db-wal"))), before, "gc không được ghi user.db");
+}

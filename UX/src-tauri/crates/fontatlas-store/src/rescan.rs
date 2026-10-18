@@ -263,7 +263,13 @@ impl Store {
             "DELETE FROM files WHERE NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = files.file_id)",
             [],
         )?;
-        tx.execute("DELETE FROM analyses WHERE source='local' AND hash NOT IN (SELECT hash FROM files)", [])?;
+        // dữ liệu dẫn xuất khoá theo hash (không có FK): xoá cái mồ côi; dữ liệu cộng đồng giữ lại
+        for t in ["analyses", "embeddings"] {
+            tx.execute(
+                &format!("DELETE FROM {t} WHERE source <> 'community' AND hash NOT IN (SELECT hash FROM files)"),
+                [],
+            )?;
+        }
         tx.execute("DELETE FROM pipeline_state WHERE hash NOT IN (SELECT hash FROM files)", [])?;
         tx.commit()?;
         Ok(n)
