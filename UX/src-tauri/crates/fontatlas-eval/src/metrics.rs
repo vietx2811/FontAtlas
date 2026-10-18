@@ -214,7 +214,7 @@ pub fn markdown(sim: &SimilarReport, pairs: &[(String, LabelSource, PairCounts)]
         sim.same_family_r1 * 100.0,
         sim.same_family_r5 * 100.0
     ));
-    s.push_str("| bad/clash/good chi tiết | |\n|---|---|\n");
+    s.push_str("| nhóm Similar | kết quả |\n|---|---|\n");
     for (id, o) in &sim.rows {
         s.push_str(&format!("| {id} | {o:?} |\n"));
     }

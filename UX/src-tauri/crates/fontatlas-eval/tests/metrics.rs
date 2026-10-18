@@ -3,7 +3,7 @@ use common::*;
 use fontatlas_eval::{
     Corpus, Expected, LabelSource, Outcome, PairRow, SimilarSet, pairing_report, similar_report,
 };
-use fontatlas_index::Role;
+use fontatlas_index::{ClashKind, Gate, Index, ReferenceTable, Role, SuperfamilyTable};
 
 fn row(id: &str, a: &str, b: &str, exp: Expected, split: &str) -> PairRow {
     PairRow {
@@ -106,4 +106,18 @@ fn must_not_violation_beats_hit() {
         similar_report(&ix, &c, &[set]).rows[0].1,
         Outcome::MustNotViolated
     ));
+}
+
+#[test]
+fn fixture_pairs_regression() {
+    let c = Corpus::load(&[core_fixture_dir()], false);
+    let ix = Index::new(c.profiles.clone(), ReferenceTable::bundled(), SuperfamilyTable::bundled());
+    let k = |f: &str| c.resolve(f, "Regular").unwrap().key.clone();
+    let pr = ix.assess_pair(&k("Playfair Display"), Role::Heading, &k("Roboto"), Role::Body, false).unwrap();
+    assert_ne!(pr.gate, Gate::Blocked);
+    assert!(!pr.clashes.contains(&ClashKind::Global));
+    let ro = ix.assess_pair(&k("Roboto"), Role::Heading, &k("Open Sans"), Role::Body, false).unwrap();
+    assert!(!ro.clashes.is_empty(), "{:?}", ro.labels);
+    let lb = ix.assess_pair(&k("Libre Baskerville"), Role::Heading, &k("Roboto"), Role::Body, true).unwrap();
+    assert_eq!(lb.gate, Gate::Blocked);
 }
