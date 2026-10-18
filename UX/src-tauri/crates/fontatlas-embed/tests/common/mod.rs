@@ -191,3 +191,38 @@ pub fn count_status(s: &Store, status: &str) -> i64 {
         .query_row("SELECT count(*) FROM pipeline_state WHERE stage='embedding' AND status=?1", [status], |r| r.get(0))
         .unwrap()
 }
+
+// ---- encoder thật tí hon (candle) cho test ----
+use candle_transformers::models::siglip::VisionConfig;
+use fontatlas_embed::{Backend, CandleEncoder, Encode};
+
+/// Phải khớp config trong tools/embed/make_tiny_siglip.py.
+pub fn tiny_vision_config() -> VisionConfig {
+    VisionConfig {
+        hidden_size: 32,
+        intermediate_size: 64,
+        num_hidden_layers: 2,
+        num_attention_heads: 4,
+        num_channels: 3,
+        image_size: 224,
+        patch_size: 16,
+        hidden_act: candle_nn::Activation::GeluPytorchTanh,
+        layer_norm_eps: 1e-6,
+    }
+}
+
+/// SigLIP tí hon (32 chiều) lặp thành 768 chiều để khớp whitening 768→128 của worker.
+pub struct Tiny768(pub CandleEncoder);
+
+impl Encode for Tiny768 {
+    fn raw_dim(&self) -> usize {
+        768
+    }
+    fn encode(&mut self, t: &[Vec<f32>], c: &std::sync::atomic::AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Ok(self.0.encode(t, c)?.into_iter().map(|v| v.repeat(768 / v.len())).collect())
+    }
+}
+
+pub fn tiny_768() -> Box<dyn Encode> {
+    Box::new(Tiny768(CandleEncoder::load_with(&data("tiny_siglip.safetensors"), Backend::Cpu, &tiny_vision_config()).unwrap()))
+}

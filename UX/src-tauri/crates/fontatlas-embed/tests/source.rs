@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use fontatlas_embed::{EmbedWorker, OrtEncoder, StoreEmbeddingSource, Whitening, WorkerConfig};
+use fontatlas_embed::{EmbedWorker, StoreEmbeddingSource, Whitening, WorkerConfig};
 
 fn run(d: &tempfile::TempDir) -> String {
     let cfg = WorkerConfig {
@@ -9,7 +9,7 @@ fn run(d: &tempfile::TempDir) -> String {
         whitening: Some(Whitening::from_bytes(&identity_whitening_bytes(768, 128)).unwrap()),
         render_threads: 2,
     };
-    let enc = Box::new(OrtEncoder::load(&data("tiny_encoder.onnx"), 1).unwrap());
+    let enc = tiny_768();
     let w = EmbedWorker::start(cfg, enc, Box::new(|_| {})).unwrap();
     let mv = w.model_version().unwrap().to_string();
     w.join().unwrap();

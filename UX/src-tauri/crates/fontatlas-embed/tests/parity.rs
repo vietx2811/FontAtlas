@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
 use common::*;
-use fontatlas_embed::{Encode, Gray224, OrtEncoder, Whitening, bundled_manifest, to_tensor};
+use fontatlas_embed::{CandleEncoder, Encode, Gray224, Whitening, bundled_manifest, to_tensor};
 
 #[test]
 fn bundled_assets_valid() {
@@ -19,9 +19,9 @@ fn bundled_assets_valid() {
 }
 
 #[test]
-#[ignore = "cần model thật: FONTATLAS_MODEL=<đường dẫn ONNX>"]
+#[ignore = "cần model thật: FONTATLAS_SIGLIP=<model.safetensors>"]
 fn real_model_matches_pytorch_on_golden_pngs() {
-    let mut e = OrtEncoder::load(Path::new(&std::env::var("FONTATLAS_MODEL").unwrap()), 4).unwrap();
+    let mut e = CandleEncoder::load_best(Path::new(&std::env::var("FONTATLAS_SIGLIP").unwrap())).unwrap();
     let refs: serde_json::Map<String, serde_json::Value> =
         serde_json::from_str(include_str!("data/torch_ref.json")).unwrap();
     for chunk in SAMPLES_LATIN.chunks(4) {

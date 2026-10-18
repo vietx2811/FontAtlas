@@ -1,14 +1,14 @@
 //! Dựng file whitening từ kho font mở (Google Fonts OFL/Apache), chỉ nửa họ "tune".
 //! Tuỳ chọn --report-test: đo thêm R@1/R@5 cùng họ (chỉ ảnh) trên nửa "test", thô và đã whiten.
 //!
-//! whitenfit --fonts <DIR> --model <ONNX> --out <BIN> --source "<mô tả nguồn>" [--report-test] [--threads N]
+//! whitenfit --fonts <DIR> --model <model.safetensors> --out <BIN> --source "<mô tả nguồn>" [--report-test]
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use fontatlas_core::{FontFile, LicenseClass, standard_location};
-use fontatlas_embed::{BATCH, DIM, EmbedError, Encode, OrtEncoder, RAW_DIM, Whitening, family_split, fit, render_input, to_tensor};
+use fontatlas_embed::{BATCH, DIM, EmbedError, CandleEncoder, Encode, RAW_DIM, Whitening, family_split, fit, render_input, to_tensor};
 use rayon::prelude::*;
 
 struct Face {
@@ -73,7 +73,6 @@ fn main() -> Result<(), EmbedError> {
     let out = PathBuf::from(arg("--out").expect("--out"));
     let source = arg("--source").expect("--source");
     let report = std::env::args().any(|a| a == "--report-test");
-    let threads: usize = arg("--threads").and_then(|t| t.parse().ok()).unwrap_or(4);
 
     let t0 = Instant::now();
     let files = fontatlas_store::walk_fonts(&fonts);
@@ -109,7 +108,7 @@ fn main() -> Result<(), EmbedError> {
     let t_render = t0.elapsed().as_secs_f64();
     eprintln!("files {} faces {} (render lỗi/no_glyphs {no_glyphs}) render {t_render:.1}s", files.len(), faces.len());
 
-    let mut enc = OrtEncoder::load(&model, threads)?;
+    let mut enc = CandleEncoder::load_best(&model)?;
     let t1 = Instant::now();
     let mut raw: Vec<Vec<f32>> = Vec::with_capacity(faces.len());
     let stop = AtomicBool::new(false);
@@ -133,7 +132,7 @@ fn main() -> Result<(), EmbedError> {
     w = Whitening::from_bytes(&bytes)?;
     let mut summary = serde_json::json!({
         "files": files.len(), "faces": faces.len(), "tune_faces": tune.len(), "no_glyphs": no_glyphs,
-        "render_s": t_render, "encode_ms_per_face": ms_per, "threads": threads,
+        "render_s": t_render, "encode_ms_per_face": ms_per, "device": enc.device_id(),
         "whitening": {"version": w.version, "sha256": w.sha256, "bytes": bytes.len()},
     });
     if report {

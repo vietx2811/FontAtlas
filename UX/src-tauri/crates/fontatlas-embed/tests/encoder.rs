@@ -2,59 +2,89 @@ mod common;
 use std::sync::atomic::AtomicBool;
 
 use common::*;
-use fontatlas_embed::{EmbedError, Encode, OrtEncoder};
+use fontatlas_embed::{Backend, CandleEncoder, EmbedError, Encode, select_backend};
 
-fn expected(t: &[f32]) -> Vec<f32> {
-    let hw = 224 * 224;
-    // cộng bằng f64: cộng dồn 50.176 số f32 giống nhau lệch tới ~5e-4
-    let m: Vec<f64> = (0..3).map(|c| t[c * hw..(c + 1) * hw].iter().map(|v| *v as f64).sum::<f64>() / hw as f64).collect();
-    (0..768).map(|j| (m[j % 3] * (j + 1) as f64 / 768.0) as f32).collect()
+const PIXELS: usize = 3 * 224 * 224;
+
+fn tiny(b: Backend) -> CandleEncoder {
+    CandleEncoder::load_with(&data("tiny_siglip.safetensors"), b, &tiny_vision_config()).unwrap()
 }
 
-#[test]
-fn tiny_model_matches_formula_and_pads() {
-    let mut e = OrtEncoder::load(&data("tiny_encoder.onnx"), 2).unwrap();
-    assert_eq!(e.raw_dim(), 768);
-    let ts: Vec<Vec<f32>> = (0..3).map(|i| tensor_of_gray((i * 80) as u8)).collect(); // 3 < 4 → pad
-    let out = e.encode(&ts, &AtomicBool::new(false)).unwrap();
-    assert_eq!(out.len(), 3);
-    for (t, o) in ts.iter().zip(&out) {
-        let ex = expected(t);
-        // Bản ORT tĩnh của pyke (macOS arm64) tính MatMul ở độ chính xác ~bf16 (lệch tương đối tới ~4e-3),
-        // Python ORT thì khớp tuyệt đối → dung sai tương đối 5e-3. Parity model thật kiểm ở tests/parity.rs.
-        for (j, (a, b)) in o.iter().zip(&ex).enumerate() {
-            assert!((a - b).abs() <= 5e-3 * b.abs() + 1e-5, "t0={} j={j} got {a} want {b}", t[0]);
-        }
+fn inputs() -> Vec<Vec<f32>> {
+    let x0 = (0..PIXELS).map(|i| (i % 251) as f32 / 125.0 - 1.0).collect();
+    let x1 = (0..PIXELS).map(|i| ((31 * i) % 241) as f32 / 120.0 - 1.0).collect();
+    vec![x0, x1]
+}
+
+fn refs() -> Vec<Vec<f32>> {
+    let r: serde_json::Value = serde_json::from_str(include_str!("data/tiny_siglip_ref.json")).unwrap();
+    ["x0", "x1"].iter().map(|k| serde_json::from_value(r[*k].clone()).unwrap()).collect()
+}
+
+fn assert_close(out: &[Vec<f32>], want: &[Vec<f32>]) {
+    for (o, r) in out.iter().zip(want) {
+        assert_eq!(o.len(), 32);
+        let c = cos(o, r);
+        let max_abs = o.iter().zip(r).map(|(a, b)| (a - b).abs()).fold(0.0, f32::max);
+        assert!(c >= 0.9999 && max_abs < 1e-3, "cos {c} max_abs {max_abs}");
     }
 }
 
 #[test]
+fn tiny_cpu_matches_torch() {
+    let mut e = tiny(Backend::Cpu);
+    assert_eq!((e.raw_dim(), e.device_id()), (32, "cpu"));
+    assert_close(&e.encode(&inputs(), &AtomicBool::new(false)).unwrap(), &refs());
+}
+
+#[test]
+fn tiny_selected_backend_matches_torch() {
+    let b = select_backend();
+    if cfg!(target_os = "macos") {
+        assert_eq!(b, Backend::Metal, "máy dev macOS có GPU");
+    }
+    let mut e = tiny(b);
+    assert_close(&e.encode(&inputs(), &AtomicBool::new(false)).unwrap(), &refs());
+}
+
+#[test]
+fn partial_batch_same_as_single() {
+    let mut e = tiny(Backend::Cpu);
+    let xs = inputs();
+    let both = e.encode(&xs, &AtomicBool::new(false)).unwrap();
+    let one = e.encode(&xs[1..], &AtomicBool::new(false)).unwrap();
+    assert!(cos(&both[1], &one[0]) > 0.99999);
+}
+
+#[test]
 fn batch_limits() {
-    let mut e = OrtEncoder::load(&data("tiny_encoder.onnx"), 1).unwrap();
-    assert!(e.encode(&vec![tensor_of_gray(255); 5], &AtomicBool::new(false)).is_err());
-    assert!(e.encode(&[], &AtomicBool::new(false)).unwrap().is_empty());
+    let mut e = tiny(Backend::Cpu);
+    let c = AtomicBool::new(false);
+    assert!(matches!(e.encode(&[], &c), Err(EmbedError::Model(_))));
+    assert!(matches!(e.encode(&vec![vec![0.0; PIXELS]; 5], &c), Err(EmbedError::Model(_))));
 }
 
 #[test]
 fn cancelled_before_run() {
-    let mut e = OrtEncoder::load(&data("tiny_encoder.onnx"), 1).unwrap();
-    assert!(matches!(e.encode(&[tensor_of_gray(255)], &AtomicBool::new(true)), Err(EmbedError::Cancelled)));
+    let mut e = tiny(Backend::Cpu);
+    assert!(matches!(e.encode(&inputs(), &AtomicBool::new(true)), Err(EmbedError::Cancelled)));
 }
 
 #[test]
-fn wrong_output_shape_rejected() {
-    assert!(matches!(OrtEncoder::load(&data("tiny_bad_shape.onnx"), 1), Err(EmbedError::Model(_))));
+fn wrong_tensor_length_is_error() {
+    let mut e = tiny(Backend::Cpu);
+    assert!(matches!(e.encode(&[vec![0.0; 10]], &AtomicBool::new(false)), Err(EmbedError::Model(_))));
 }
 
 #[test]
 fn garbage_file_rejected() {
     let p = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(p.path(), b"not onnx").unwrap();
-    assert!(matches!(OrtEncoder::load(p.path(), 1), Err(EmbedError::Model(_))));
+    std::fs::write(p.path(), b"khong phai safetensors").unwrap();
+    assert!(matches!(CandleEncoder::load(p.path(), Backend::Cpu), Err(EmbedError::Model(_))));
 }
 
 #[test]
-fn wrong_tensor_length_is_error() {
-    let mut e = OrtEncoder::load(&data("tiny_encoder.onnx"), 1).unwrap();
-    assert!(e.encode(&[vec![0.0; 10]], &AtomicBool::new(false)).is_err());
+fn wrong_shapes_for_config_rejected() {
+    // file tí hon (hidden 32) nạp bằng config base (hidden 768) → lệch shape
+    assert!(matches!(CandleEncoder::load(&data("tiny_siglip.safetensors"), Backend::Cpu), Err(EmbedError::Model(_))));
 }

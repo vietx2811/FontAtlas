@@ -1,12 +1,15 @@
-//! Encoder ảnh bằng candle: tháp vision SigLIP (có head MAP) = `get_image_features`, 768 chiều.
+//! Encoder ảnh bằng candle: tháp vision SigLIP (có head MAP) = `get_image_features`.
+//! Huỷ: candle không ngắt được giữa một forward, nên cờ huỷ được kiểm trước và sau mỗi lô (≤ BATCH ảnh);
+//! độ trễ huỷ tối đa một lô (~0,1 s).
 use std::path::Path;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use candle_core::{DType, Device, Module, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::siglip;
 
-use crate::{BATCH, CANVAS, EmbedError, Encode, RAW_DIM};
+use crate::{BATCH, CANVAS, EmbedError, Encode};
 
 const PIXELS: usize = 3 * (CANVAS as usize) * (CANVAS as usize);
 
@@ -20,23 +23,51 @@ pub struct CandleEncoder {
     model: siglip::VisionModel,
     device: Device,
     id: &'static str,
+    raw_dim: usize,
 }
 
 fn m(e: candle_core::Error) -> EmbedError {
     EmbedError::Model(e.to_string())
 }
 
+fn metal_works() -> bool {
+    let Ok(d) = Device::new_metal(0) else { return false };
+    Tensor::ones((4, 4), DType::F32, &d)
+        .and_then(|t| t.matmul(&t))
+        .and_then(|t| t.sum_all())
+        .and_then(|t| t.to_scalar::<f32>())
+        .is_ok_and(|v| v == 64.0)
+}
+
+/// Metal trên macOS nếu khởi tạo và chạy được một phép nhân nhỏ; còn lại CPU. Kết quả được nhớ trong tiến trình.
+pub fn select_backend() -> Backend {
+    static B: OnceLock<Backend> = OnceLock::new();
+    *B.get_or_init(|| if cfg!(target_os = "macos") && metal_works() { Backend::Metal } else { Backend::Cpu })
+}
+
 impl CandleEncoder {
+    /// Model SigLIP 2 base patch16-224.
     pub fn load(path: &Path, backend: Backend) -> Result<Self, EmbedError> {
+        Self::load_with(path, backend, &siglip::Config::base_patch16_224().vision_config)
+    }
+
+    /// Thiết bị tốt nhất; nạp trên Metal lỗi thì nạp lại trên CPU.
+    pub fn load_best(path: &Path) -> Result<Self, EmbedError> {
+        match select_backend() {
+            Backend::Metal => Self::load(path, Backend::Metal).or_else(|_| Self::load(path, Backend::Cpu)),
+            Backend::Cpu => Self::load(path, Backend::Cpu),
+        }
+    }
+
+    pub fn load_with(path: &Path, backend: Backend, cfg: &siglip::VisionConfig) -> Result<Self, EmbedError> {
         let (device, id) = match backend {
             Backend::Cpu => (Device::Cpu, "cpu"),
             Backend::Metal => (Device::new_metal(0).map_err(m)?, "metal"),
         };
-        // SAFETY: mmap file model chỉ đọc; file đã kiểm sha256 và không bị ghi trong lúc app chạy.
+        // SAFETY: mmap file model chỉ đọc; file đã kiểm sha256 và app không ghi đè nó khi đang nạp.
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }.map_err(m)?;
-        let cfg = siglip::Config::base_patch16_224().vision_config;
-        let model = siglip::VisionModel::new(&cfg, true, vb.pp("vision_model")).map_err(m)?;
-        Ok(CandleEncoder { model, device, id })
+        let model = siglip::VisionModel::new(cfg, true, vb.pp("vision_model")).map_err(m)?;
+        Ok(CandleEncoder { model, device, id, raw_dim: cfg.hidden_size })
     }
 
     pub fn device_id(&self) -> &'static str {
@@ -53,20 +84,18 @@ impl Encode for CandleEncoder {
             return Err(EmbedError::Cancelled);
         }
         let n = tensors.len();
-        let flat: Vec<f32> = tensors.concat();
-        let x = Tensor::from_vec(flat, (n, 3, CANVAS as usize, CANVAS as usize), &self.device).map_err(m)?;
-        let y = self.model.forward(&x).map_err(m)?;
-        let out: Vec<Vec<f32>> = y.to_dtype(DType::F32).map_err(m)?.to_vec2().map_err(m)?;
+        let x = Tensor::from_vec(tensors.concat(), (n, 3, CANVAS as usize, CANVAS as usize), &self.device).map_err(m)?;
+        let out: Vec<Vec<f32>> = self.model.forward(&x).and_then(|y| y.to_vec2()).map_err(m)?;
         if cancel.load(Ordering::SeqCst) {
             return Err(EmbedError::Cancelled);
         }
-        if out.len() != n || out.iter().any(|v| v.len() != RAW_DIM) {
+        if out.len() != n || out.iter().any(|v| v.len() != self.raw_dim) {
             return Err(EmbedError::Model("đầu ra sai kích thước".into()));
         }
         Ok(out)
     }
 
     fn raw_dim(&self) -> usize {
-        RAW_DIM
+        self.raw_dim
     }
 }

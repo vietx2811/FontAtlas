@@ -4,7 +4,7 @@ use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
 use common::*;
-use fontatlas_embed::{EmbedError, EmbedWorker, Encode, OrtEncoder, Progress, Whitening, WorkerConfig};
+use fontatlas_embed::{EmbedError, EmbedWorker, Encode, Progress, Whitening, WorkerConfig};
 use fontatlas_store::SETTING_EMBED_ENABLED;
 
 const RAW: &str = "raw-test|render-v2";
@@ -19,7 +19,7 @@ fn cfg(d: &tempfile::TempDir) -> WorkerConfig {
 }
 
 fn tiny() -> Box<dyn Encode> {
-    Box::new(OrtEncoder::load(&data("tiny_encoder.onnx"), 1).unwrap())
+    tiny_768()
 }
 
 /// Encoder chậm: báo vào barrier khi bắt đầu lô đầu tiên, rồi chờ `delay` (kiểm huỷ mỗi 10 ms).

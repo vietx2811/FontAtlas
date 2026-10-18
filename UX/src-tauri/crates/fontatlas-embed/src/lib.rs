@@ -2,7 +2,7 @@
 use serde::Serialize;
 
 pub mod candle_enc;
-pub use candle_enc::{Backend, CandleEncoder};
+pub use candle_enc::{Backend, CandleEncoder, select_backend};
 pub mod encoder;
 pub mod model;
 pub mod render;
@@ -15,7 +15,7 @@ pub use worker::{EmbedWorker, Progress, WorkerConfig};
 #[cfg(feature = "fit")]
 pub use whiten::fit;
 pub use whiten::Whitening;
-pub use encoder::{Encode, OrtEncoder};
+pub use encoder::Encode;
 pub use render::{Gray224, coverage_ratio, render_input, to_tensor};
 
 /// Model, runtime, chuỗi render: thành phần của `raw_version`.

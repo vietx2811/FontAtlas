@@ -16,7 +16,6 @@ candle-transformers = "=0.11.0"
 fontatlas-core = { path = "../fontatlas-core" }
 fontatlas-store = { path = "../fontatlas-store" }
 nalgebra = { version = "=0.35.0", optional = true }
-ort = { version = "=2.0.0-rc.14", default-features = false, features = ["std", "download-binaries", "tls-native", "api-31"] }
 rayon = "1.12"
 read-fonts = "=0.45.1"
 serde = { version = "1", features = ["derive"] }
