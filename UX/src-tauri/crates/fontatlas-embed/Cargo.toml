@@ -3,7 +3,7 @@ name = "fontatlas-embed"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
-description = "Embedding ảnh font: render chuỗi mẫu, SigLIP 2 qua ONNX Runtime, whitening, hàng đợi nền"
+description = "Embedding ảnh font: render chuỗi mẫu, SigLIP 2 qua candle, whitening, hàng đợi nền"
 
 [features]
 fit = ["dep:nalgebra"]

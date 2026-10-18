@@ -1,4 +1,4 @@
-//! fontatlas-embed: embedding ảnh font (SigLIP 2 qua ONNX Runtime), whitening, hàng đợi nền.
+//! fontatlas-embed: embedding ảnh font (SigLIP 2 qua candle), whitening, hàng đợi nền.
 use serde::Serialize;
 
 pub mod candle_enc;
