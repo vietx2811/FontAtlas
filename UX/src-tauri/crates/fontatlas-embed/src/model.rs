@@ -55,6 +55,22 @@ fn bad(m: &str) -> EmbedError {
     EmbedError::Model(format!("safetensors: {m}"))
 }
 
+/// Thứ tự trường cố định (khớp file đã ghim: data_offsets, dtype, shape).
+#[derive(Serialize)]
+struct TensorEntry {
+    data_offsets: [u64; 2],
+    dtype: String,
+    shape: Vec<u64>,
+}
+
+#[derive(Serialize)]
+struct HeaderOut {
+    #[serde(rename = "__metadata__", skip_serializing_if = "Option::is_none")]
+    metadata: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(flatten)]
+    tensors: std::collections::BTreeMap<String, TensorEntry>,
+}
+
 /// Từ JSON header của file nguồn → header của file cục bộ (đã kèm 8 byte độ dài, đệm space chia hết 8)
 /// và đoạn dữ liệu `[start, end)` (tương đối với vùng dữ liệu) chứa mọi tensor `vision_model.*`.
 /// Đoạn phải liền, không lẫn tensor khác.
@@ -78,15 +94,24 @@ pub fn vision_header(json: &[u8]) -> Result<(Vec<u8>, u64, u64), EmbedError> {
     if vis.iter().map(|t| t.2 - t.1).sum::<u64>() != end - start || other.iter().any(|&(a, b)| a < end && b > start) {
         return Err(bad("tensor vision không nằm liền một đoạn"));
     }
-    let mut out = std::collections::BTreeMap::new();
-    if let Some(meta) = v.get("__metadata__") {
-        out.insert("__metadata__".to_string(), meta.clone());
-    }
+    // Ghi tường minh (struct + BTreeMap) để byte header không phụ thuộc feature `preserve_order` của serde_json:
+    // sha file cục bộ được ghim trong manifest.
+    let mut tensors = std::collections::BTreeMap::new();
     for (k, a, b) in vis {
-        let mut x = v[k.as_str()].clone();
-        x["data_offsets"] = serde_json::json!([a - start, b - start]);
-        out.insert(k.clone(), x);
+        let x = &v[k.as_str()];
+        let dtype = x.get("dtype").and_then(|d| d.as_str()).ok_or_else(|| bad(&format!("dtype của {k}")))?;
+        let shape: Vec<u64> = x
+            .get("shape")
+            .and_then(|s| s.as_array())
+            .and_then(|s| s.iter().map(|d| d.as_u64()).collect())
+            .ok_or_else(|| bad(&format!("shape của {k}")))?;
+        tensors.insert(k.clone(), TensorEntry { data_offsets: [a - start, b - start], dtype: dtype.to_string(), shape });
     }
+    let metadata: Option<std::collections::BTreeMap<String, String>> = match v.get("__metadata__") {
+        None => None,
+        Some(m) => Some(serde_json::from_value(m.clone()).map_err(|e| bad(&format!("__metadata__: {e}")))?),
+    };
+    let out = HeaderOut { metadata, tensors };
     let mut h = serde_json::to_vec(&out).map_err(|e| bad(&e.to_string()))?;
     while !(8 + h.len()).is_multiple_of(8) {
         h.push(b' ');

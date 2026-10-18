@@ -51,12 +51,24 @@ impl CandleEncoder {
         Self::load_with(path, backend, &siglip::Config::base_patch16_224().vision_config)
     }
 
-    /// Thiết bị tốt nhất; nạp trên Metal lỗi thì nạp lại trên CPU.
+    /// Thiết bị tốt nhất; Metal nạp lỗi hoặc chạy thử hỏng (kernel lỗi, NaN) thì dùng CPU.
     pub fn load_best(path: &Path) -> Result<Self, EmbedError> {
         match select_backend() {
-            Backend::Metal => Self::load(path, Backend::Metal).or_else(|_| Self::load(path, Backend::Cpu)),
+            Backend::Metal => Self::load(path, Backend::Metal)
+                .and_then(Self::verified)
+                .or_else(|_| Self::load(path, Backend::Cpu)),
             Backend::Cpu => Self::load(path, Backend::Cpu),
         }
+    }
+
+    /// Chạy thử một ảnh trắng qua đủ mọi kernel (conv, attention, gelu, layernorm, head MAP);
+    /// đầu ra phải đúng số chiều và hữu hạn.
+    pub fn verified(mut self) -> Result<Self, EmbedError> {
+        let out = self.encode(&[vec![1.0; PIXELS]], &AtomicBool::new(false))?;
+        if out.len() != 1 || out[0].iter().any(|x| !x.is_finite()) {
+            return Err(EmbedError::Model(format!("chạy thử trên {} cho kết quả không hợp lệ", self.id)));
+        }
+        Ok(self)
     }
 
     pub fn load_with(path: &Path, backend: Backend, cfg: &siglip::VisionConfig) -> Result<Self, EmbedError> {
@@ -64,7 +76,8 @@ impl CandleEncoder {
             Backend::Cpu => (Device::Cpu, "cpu"),
             Backend::Metal => (Device::new_metal(0).map_err(m)?, "metal"),
         };
-        // SAFETY: mmap file model chỉ đọc; file đã kiểm sha256 và app không ghi đè nó khi đang nạp.
+        // SAFETY: mmap chỉ sống trong lúc nạp: `VisionModel::new` chép trọng số vào tensor của thiết bị và `vb`
+        // (cùng mmap) bị huỷ khi hàm trả về. `ModelStore::ensure` không bao giờ ghi đè tại chỗ (ghi `.part` rồi rename).
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }.map_err(m)?;
         let model = siglip::VisionModel::new(cfg, true, vb.pp("vision_model")).map_err(m)?;
         Ok(CandleEncoder { model, device, id, raw_dim: cfg.hidden_size })

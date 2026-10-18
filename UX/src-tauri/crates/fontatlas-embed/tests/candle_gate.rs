@@ -59,5 +59,5 @@ fn cpu_and_metal_agree() {
     let b = encode_all(&mut CandleEncoder::load(&model(), Backend::Metal).unwrap());
     let min = a.iter().zip(&b).map(|(x, y)| cos(x, y)).fold(f32::INFINITY, f32::min);
     println!("cpu↔metal cos min {min:.7}");
-    assert!(min >= 0.999);
+    assert!(min >= 0.9999, "ngưỡng dùng chung version CPU/Metal (ruling Task 4)");
 }

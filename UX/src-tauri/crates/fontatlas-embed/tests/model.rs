@@ -386,3 +386,21 @@ fn offline_extract_equals_downloaded_file() {
     fontatlas_embed::extract_vision_file(&d.path().join("src"), &d.path().join("out")).unwrap();
     assert_eq!(sha256_file(&d.path().join("out")).unwrap(), manifest_for(&src, "http://x").sha256);
 }
+
+#[test]
+fn vision_header_bytes_are_pinned() {
+    // Thứ tự khoá trong JSON nguồn kiểu HF (dtype, shape, data_offsets); đầu ra phải cố định từng byte,
+    // kể cả khi serde_json bật preserve_order (sha file cục bộ được ghim trong manifest).
+    let src = br#"{"__metadata__":{"format":"pt"},"text_model.t":{"dtype":"F32","shape":[1],"data_offsets":[0,4]},"vision_model.b":{"dtype":"F32","shape":[1],"data_offsets":[12,16]},"vision_model.a":{"dtype":"F32","shape":[2],"data_offsets":[4,12]}}"#;
+    let (h, a, b) = fontatlas_embed::vision_header(src).unwrap();
+    assert_eq!((a, b), (4, 16));
+    let json = r#"{"__metadata__":{"format":"pt"},"vision_model.a":{"data_offsets":[0,8],"dtype":"F32","shape":[2]},"vision_model.b":{"data_offsets":[8,12],"dtype":"F32","shape":[1]}}"#;
+    let mut want = json.as_bytes().to_vec();
+    while !(8 + want.len()).is_multiple_of(8) {
+        want.push(b' ');
+    }
+    let mut full = (want.len() as u64).to_le_bytes().to_vec();
+    full.extend(want);
+    assert_eq!(String::from_utf8_lossy(&h[8..]), String::from_utf8_lossy(&full[8..]));
+    assert_eq!(h, full);
+}

@@ -88,3 +88,26 @@ fn wrong_shapes_for_config_rejected() {
     // file tí hon (hidden 32) nạp bằng config base (hidden 768) → lệch shape
     assert!(matches!(CandleEncoder::load(&data("tiny_siglip.safetensors"), Backend::Cpu), Err(EmbedError::Model(_))));
 }
+
+/// Bản sao model tí hon với một trọng số NaN (giả Metal/GPU trả kết quả hỏng).
+fn nan_model(dir: &std::path::Path) -> std::path::PathBuf {
+    let mut ts = candle_core::safetensors::load(data("tiny_siglip.safetensors"), &candle_core::Device::Cpu).unwrap();
+    let k = "vision_model.post_layernorm.weight";
+    let n = ts[k].dims1().unwrap();
+    ts.insert(k.into(), candle_core::Tensor::from_vec(vec![f32::NAN; n], n, &candle_core::Device::Cpu).unwrap());
+    let p = dir.join("nan.safetensors");
+    candle_core::safetensors::save(&ts, &p).unwrap();
+    p
+}
+
+#[test]
+fn verified_rejects_non_finite_output() {
+    let d = tempfile::tempdir().unwrap();
+    let e = CandleEncoder::load_with(&nan_model(d.path()), Backend::Cpu, &tiny_vision_config()).unwrap();
+    assert!(matches!(e.verified(), Err(EmbedError::Model(_))));
+}
+
+#[test]
+fn verified_accepts_good_model() {
+    assert!(tiny(Backend::Cpu).verified().is_ok());
+}
