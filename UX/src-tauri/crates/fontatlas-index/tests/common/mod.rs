@@ -58,6 +58,11 @@ pub fn synth(family: &str, axes: &[(AxisId, f32, Q, &str)]) -> FaceProfile {
         vi_missing: 0,
         vi_overflow: None,
         readings,
+        terminal: Reading {
+            value: None,
+            q: Q::Failed,
+            method: "c_upper_terminal_normal_over_thin".into(),
+        },
         embedding: None,
     }
 }

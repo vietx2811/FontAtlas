@@ -1,4 +1,4 @@
-//! eval --fonts <DIR>... [--system-fonts] --similar <CSV> --pairing <CSV> [--reference <JSON>]
+//! eval --fonts <DIR>... [--system-fonts] --similar <CSV> --pairing <CSV> [--reference <JSON> (mặc định: bản nhúng)]
 //!      [--show-tune] [--no-expand]
 //! In bảng markdown cho split test và test-vi. Thoát 0 (chế độ báo cáo); CSV hỏng → 2.
 use std::path::PathBuf;
@@ -74,10 +74,8 @@ fn main() {
                 eprintln!("reference {}: {e}", p.display());
                 std::process::exit(2)
             }),
-        None => {
-            eprintln!("cần --reference <JSON> (bản nhúng có từ Task 10)");
-            std::process::exit(2)
-        }
+        // Mặc định: bảng nhúng reference-v1.
+        None => ReferenceTable::bundled(),
     };
     let corpus = Corpus::load(&fonts, expand);
     eprintln!(

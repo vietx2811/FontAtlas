@@ -59,3 +59,11 @@ fn vf_profile_has_wght_range() {
             .is_empty()
     );
 }
+
+#[test]
+fn profile_reads_terminal_but_not_in_similar_axes() {
+    let p = profile("playfair_display.ttf");
+    assert_eq!(p.terminal.q, Q::Estimated);
+    assert_eq!(p.terminal.method, "c_upper_terminal_normal_over_thin");
+    assert_eq!(p.readings.len(), 16, "terminal không vào 16 chiều Similar");
+}

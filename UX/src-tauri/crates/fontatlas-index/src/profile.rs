@@ -153,6 +153,8 @@ pub struct FaceProfile {
     pub vi_overflow: Option<bool>,
     /// 16 giá trị theo `AxisId::ALL`.
     pub readings: Vec<Reading>,
+    /// Đầu nét (Estimated): không thuộc 16 chiều Similar, không là PairAxis ở Plan 3.
+    pub terminal: Reading,
     /// Do Plan 4 cung cấp.
     pub embedding: Option<Vec<f32>>,
 }
@@ -194,6 +196,7 @@ impl FaceProfile {
                     method: a.default_method().into(),
                 })
                 .collect(),
+            terminal: no_terminal(),
             embedding: None,
         }
     }
@@ -263,8 +266,23 @@ impl FaceProfile {
             vi_missing,
             vi_overflow,
             readings,
+            // JSON cũ (core-0.1.0) chưa có trường này → Failed, không loại cả profile.
+            terminal: anatomy
+                .get("terminal")
+                .and_then(reading)
+                .unwrap_or_else(no_terminal),
             embedding: None,
         })
+    }
+}
+
+pub const TERMINAL_METHOD: &str = "c_upper_terminal_normal_over_thin";
+
+fn no_terminal() -> Reading {
+    Reading {
+        value: None,
+        q: Q::Failed,
+        method: TERMINAL_METHOD.into(),
     }
 }
 

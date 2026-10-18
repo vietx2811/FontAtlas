@@ -56,3 +56,23 @@ fn rejects_bad_quantiles() {
       "quantiles":[{"axis":"contrast","method":"m","n":50,"q":[3.0,2.0]}]}"#;
     assert!(ReferenceTable::from_json(j).is_err()); // không đủ 101 hoặc giảm dần
 }
+
+#[test]
+fn bundled_reference_is_valid() {
+    let r = ReferenceTable::bundled();
+    assert!(r.version.starts_with("ref-"));
+    assert_eq!(r.analyzer_version, fontatlas_core::ANALYZER_VERSION);
+    assert!(r.faces >= 1000, "{}", r.faces);
+    assert!(r.d_fam > 0.2 && r.d_fam < 1.5, "{}", r.d_fam);
+    for a in [
+        AxisId::Contrast,
+        AxisId::StemNXh,
+        AxisId::Aperture,
+        AxisId::XHeightEm,
+    ] {
+        assert!(
+            r.percentile(a, a.default_method(), 1.0).is_some()
+                || r.percentile(a, a.default_method(), 100.0).is_some()
+        );
+    }
+}

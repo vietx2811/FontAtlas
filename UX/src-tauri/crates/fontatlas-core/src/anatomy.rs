@@ -41,6 +41,8 @@ pub struct Anatomy {
     pub counter: Metric,
     pub a_storeys: Metric,
     pub g_storeys: Metric,
+    /// Đầu nét trên 'c' (Estimated). |Spearman r với contrast| = 0.447 trên google/fonts (Plan 3).
+    pub terminal: Metric,
 }
 
 fn settings(font: &FontRef, at: &MeasureAt) -> Vec<(String, f32)> {
@@ -136,6 +138,7 @@ pub fn measure_with_filter(
         counter: stroke::counter_o(&ctx),
         a_storeys: detail::a_storeys(&ctx),
         g_storeys: detail::g_storeys(&ctx),
+        terminal: detail::terminal_c_normal(&ctx),
         location: set,
     }
 }
@@ -190,5 +193,6 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
         counter: f("o_inner_over_outer_area"),
         a_storeys: f("a_center_vertical_runs"),
         g_storeys: f("g_center_vertical_runs"),
+        terminal: f("c_upper_terminal_normal_over_thin"),
     }
 }

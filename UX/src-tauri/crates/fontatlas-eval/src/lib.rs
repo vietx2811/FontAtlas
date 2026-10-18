@@ -2,6 +2,7 @@
 mod corpus;
 mod csvio;
 mod metrics;
+mod refstats;
 
 pub use corpus::Corpus;
 pub use csvio::{
@@ -11,3 +12,4 @@ pub use metrics::{
     LabelCounts, LabelSource, Outcome, PairCounts, SimilarReport, markdown, pairing_report,
     similar_report,
 };
+pub use refstats::{build_reference, d_fam, quantiles, spearman};

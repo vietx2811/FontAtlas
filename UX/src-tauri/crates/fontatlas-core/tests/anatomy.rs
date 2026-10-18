@@ -101,3 +101,22 @@ fn standard_location_is_public_and_consistent() {
         assert_eq!(a.location.is_empty(), faces[0].metadata().axes.is_empty(), "{name}");
     }
 }
+
+#[test]
+fn terminal_in_anatomy_is_estimated() {
+    // Task 10 (Plan 3): |Spearman r(terminal, contrast)| = 0.447 < 0.7 trên google/fonts → vào Anatomy.
+    let f = FontFile::open(&fixture("playfair_display.ttf")).unwrap();
+    let a = f.faces().unwrap()[0].measure(MeasureAt::Standard);
+    assert_eq!(a.terminal.quality, Quality::Estimated);
+    assert_eq!(a.terminal.method, "c_upper_terminal_normal_over_thin");
+    assert!(a.terminal.value.unwrap() > 3.0);
+    let caps = measure_with_filter(
+        f.faces().unwrap()[0].font(),
+        MeasureAt::Standard,
+        Some(|c: char| !c.is_lowercase()),
+    );
+    assert_eq!(
+        caps.terminal.quality,
+        Quality::Failed(FailReason::NoLatinLowercase)
+    );
+}

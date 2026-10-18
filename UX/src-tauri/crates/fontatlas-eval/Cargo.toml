@@ -17,3 +17,7 @@ thiserror = "2"
 [[bin]]
 name = "eval"
 path = "src/bin/eval.rs"
+
+[[bin]]
+name = "refbuild"
+path = "src/bin/refbuild.rs"

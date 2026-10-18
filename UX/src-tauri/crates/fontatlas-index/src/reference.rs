@@ -58,6 +58,15 @@ impl ReferenceTable {
         Ok(t)
     }
 
+    /// Bảng phát hành kèm crate (google/fonts ofl+apache ở SHA ghim). File hỏng → panic,
+    /// bắt bởi test `bundled_reference_is_valid` trước khi phát hành.
+    pub fn bundled() -> Self {
+        match Self::from_json(include_str!("../data/reference-v1.json")) {
+            Ok(t) => t,
+            Err(e) => panic!("reference-v1.json hỏng: {e}"),
+        }
+    }
+
     fn table(&self, axis: AxisId, method: &str) -> Option<&[f32]> {
         self.quantiles
             .iter()
