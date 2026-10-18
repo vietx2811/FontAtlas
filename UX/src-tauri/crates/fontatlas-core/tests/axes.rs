@@ -205,3 +205,20 @@ fn aperture_e_estimated_and_humanist_wider() {
         "Open Sans mở hơn Roboto: {os:?} {rb:?}"
     );
 }
+
+#[test]
+fn terminal_normal_ball_above_sans() {
+    let t = |s: &str| with_ctx(&fixture(s), 0, |ctx| val(terminal_c_normal(ctx)));
+    let pf = t("playfair_display.ttf");
+    for s in ["roboto.ttf", "open_sans.ttf", "source_code_pro.ttf"] {
+        assert!(pf > t(s), "playfair {pf} vs {s} {}", t(s));
+    }
+    assert!(t("open_sans.ttf") < 1.6);
+}
+
+#[test]
+fn terminal_normal_is_estimated() {
+    let m = with_ctx(&fixture("roboto.ttf"), 0, |ctx| terminal_c_normal(ctx));
+    assert_eq!(m.quality, Quality::Estimated);
+    assert_eq!(m.method, "c_upper_terminal_normal_over_thin");
+}
