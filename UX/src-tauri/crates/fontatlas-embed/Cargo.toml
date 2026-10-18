@@ -10,6 +10,9 @@ fit = ["dep:nalgebra"]
 
 [dependencies]
 blake3 = "=1.8.7"
+candle-core = "=0.11.0"
+candle-nn = "=0.11.0"
+candle-transformers = "=0.11.0"
 fontatlas-core = { path = "../fontatlas-core" }
 fontatlas-store = { path = "../fontatlas-store" }
 nalgebra = { version = "=0.35.0", optional = true }
@@ -23,6 +26,11 @@ skrifa = "=0.48.0"
 thiserror = "2"
 tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
 ureq = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+candle-core = { version = "=0.11.0", features = ["accelerate", "metal"] }
+candle-nn = { version = "=0.11.0", features = ["accelerate", "metal"] }
+candle-transformers = { version = "=0.11.0", features = ["accelerate", "metal"] }
 
 [dev-dependencies]
 png = "=0.18.1"
