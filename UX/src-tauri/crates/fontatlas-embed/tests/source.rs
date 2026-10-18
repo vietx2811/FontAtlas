@@ -36,3 +36,53 @@ fn other_versions_invisible() {
     let src = StoreEmbeddingSource::open(&d.path().join("data"), "khong-co").unwrap();
     assert!(src.load_all().unwrap().is_empty());
 }
+
+/// Thêm nguồn thứ hai (thư mục riêng chứa một fixture), quét, trả source_id.
+fn add_second_source(d: &tempfile::TempDir, fixture: &str) -> i64 {
+    let dir = d.path().join("fonts2");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(fixture), fixture_bytes(fixture)).unwrap();
+    let mut s = open_data(d);
+    let id = s.add_source(fontatlas_store::SourceKind::Directory, "t2", Some(&dir)).unwrap();
+    s.rescan_source(id).unwrap();
+    id
+}
+
+#[test]
+fn removed_font_embeddings_gone_from_source_after_gc() {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    let src2 = add_second_source(&d, "playfair_display.ttf");
+    let mv = run(&d);
+    let raw = "raw-test|render-v2";
+    let data = d.path().join("data");
+    assert_eq!(StoreEmbeddingSource::open(&data, &mv).unwrap().load_all().unwrap().len(), 2);
+    let gone = key_of(&open_data(&d), "Playfair Display");
+    open_data(&d).remove_source(src2).unwrap(); // gọi gc()
+    for v in [mv.as_str(), raw] {
+        let all = StoreEmbeddingSource::open(&data, v).unwrap().load_all().unwrap();
+        assert_eq!(all.len(), 1, "{v}");
+        assert!(all.iter().all(|(k, _)| *k != gone), "{v}: vector của font đã xoá vẫn còn");
+    }
+    assert_eq!(StoreEmbeddingSource::open(&data, &mv).unwrap().fetch(&[gone]).unwrap(), vec![None]);
+}
+
+#[test]
+fn finish_after_font_removed_writes_nothing() {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    let src2 = add_second_source(&d, "playfair_display.ttf");
+    let raw = "raw-test|render-v2";
+    let mut s = open_data(&d);
+    s.enqueue_embeddings(raw).unwrap();
+    let jobs = s.claim_embedding_batch(raw, 4).unwrap();
+    assert_eq!(jobs.len(), 2);
+    s.remove_source(src2).unwrap(); // font bị xoá khi lô đang chạy
+    let results: Vec<_> = jobs
+        .iter()
+        .map(|j| (j.key, fontatlas_store::JobResult::Done { raw: vec![0.5; 768], white: Some(vec![0.5; 128]) }))
+        .collect();
+    assert_eq!(s.finish_embeddings(raw, "mv", &results).unwrap(), 1, "chỉ ghi face còn trong thư viện");
+    s.gc().unwrap();
+    let data = d.path().join("data");
+    assert_eq!(StoreEmbeddingSource::open(&data, raw).unwrap().load_all().unwrap().len(), 1);
+    assert_eq!(StoreEmbeddingSource::open(&data, "mv").unwrap().load_all().unwrap().len(), 1);
+}
