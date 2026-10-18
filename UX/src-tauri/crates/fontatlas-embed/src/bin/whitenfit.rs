@@ -73,6 +73,8 @@ fn main() -> Result<(), EmbedError> {
     let out = PathBuf::from(arg("--out").expect("--out"));
     let source = arg("--source").expect("--source");
     let report = std::env::args().any(|a| a == "--report-test");
+    let wversion = arg("--version").unwrap_or_else(|| "white-v2".into());
+    let compare_cpu: usize = arg("--compare-cpu").and_then(|n| n.parse().ok()).unwrap_or(0);
 
     let t0 = Instant::now();
     let files = fontatlas_store::walk_fonts(&fonts);
@@ -124,15 +126,40 @@ fn main() -> Result<(), EmbedError> {
         raw.extend(enc.encode(&ts, &stop)?);
     }
     let ms_per = t1.elapsed().as_secs_f64() * 1e3 / faces.len().max(1) as f64;
+    // Cùng ảnh trên CPU: kiểm vector CPU ↔ thiết bị chính có dùng chung version được không.
+    let mut cpu_cos = serde_json::Value::Null;
+    if compare_cpu > 0 && enc.device_id() != "cpu" {
+        let mut cpu = fontatlas_embed::CandleEncoder::load(&model, fontatlas_embed::Backend::Cpu)?;
+        let n = compare_cpu.min(faces.len());
+        let mut cs = Vec::with_capacity(n);
+        for (ci, chunk) in faces[..n].chunks(BATCH).enumerate() {
+            let ts: Vec<Vec<f32>> = chunk
+                .iter()
+                .map(|f| {
+                    let mut t = vec![0.0; 3 * 224 * 224];
+                    to_tensor(&f.img, &mut t);
+                    t
+                })
+                .collect();
+            for (j, v) in cpu.encode(&ts, &stop)?.iter().enumerate() {
+                let r = &raw[ci * BATCH + j];
+                let dot: f32 = v.iter().zip(r).map(|(a, b)| a * b).sum();
+                let nn = v.iter().map(|a| a * a).sum::<f32>().sqrt() * r.iter().map(|a| a * a).sum::<f32>().sqrt();
+                cs.push(dot / nn);
+            }
+        }
+        let min = cs.iter().cloned().fold(f32::INFINITY, f32::min);
+        cpu_cos = serde_json::json!({"n": n, "min": min, "mean": cs.iter().sum::<f32>() / cs.len().max(1) as f32});
+    }
     let tune: Vec<Vec<f32>> = faces.iter().zip(&raw).filter(|(f, _)| f.split == "tune").map(|(_, r)| r.clone()).collect();
     let mut w = fit(&tune, DIM, 0.1)?;
-    let header = serde_json::json!({"version":"white-v1","raw_dim":RAW_DIM,"dim":DIM,"shrink":0.1,"source":source,"split":"tune","n":tune.len()});
+    let header = serde_json::json!({"version":wversion,"raw_version":fontatlas_embed::raw_version(&fontatlas_embed::sha256_file(&model)?),"raw_dim":RAW_DIM,"dim":DIM,"shrink":0.1,"source":source,"split":"tune","n":tune.len()});
     let bytes = w.to_bytes(&header);
     std::fs::write(&out, &bytes)?;
     w = Whitening::from_bytes(&bytes)?;
     let mut summary = serde_json::json!({
         "files": files.len(), "faces": faces.len(), "tune_faces": tune.len(), "no_glyphs": no_glyphs,
-        "render_s": t_render, "encode_ms_per_face": ms_per, "device": enc.device_id(),
+        "render_s": t_render, "encode_ms_per_face": ms_per, "device": enc.device_id(), "cpu_vs_device_cos": cpu_cos,
         "whitening": {"version": w.version, "sha256": w.sha256, "bytes": bytes.len()},
     });
     if report {

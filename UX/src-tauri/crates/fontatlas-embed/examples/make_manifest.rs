@@ -1,5 +1,5 @@
 //! Tính data/model-manifest.json từ model.safetensors chính thức đã có trong máy (không cần mạng).
-//! cargo run --release --example make_manifest -- <model.safetensors> > data/model-manifest.json
+//! cargo run --release --example make_manifest -- <model.safetensors> [--extract <vision.safetensors>] > data/model-manifest.json
 use std::path::Path;
 
 const URL: &str =
@@ -15,5 +15,12 @@ fn main() {
         vec!["model-NOTICE.txt".into(), "model-LICENSE-Apache-2.0.txt".into()],
     )
     .unwrap();
+    let a: Vec<String> = std::env::args().collect();
+    if let Some(i) = a.iter().position(|x| x == "--extract") {
+        let dst = Path::new(&a[i + 1]);
+        fontatlas_embed::extract_vision_file(Path::new(&src), dst).unwrap();
+        assert_eq!(fontatlas_embed::sha256_file(dst).unwrap(), m.sha256, "file ghép phải khớp manifest");
+        eprintln!("đã ghép {}", dst.display());
+    }
     println!("{}", serde_json::to_string_pretty(&m).unwrap());
 }

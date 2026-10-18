@@ -6,7 +6,7 @@ pub use candle_enc::{Backend, CandleEncoder, select_backend};
 pub mod encoder;
 pub mod model;
 pub mod render;
-pub use model::{Manifest, ModelStatus, ModelStore, READ_TIMEOUT, Source, VISION_PREFIX, bundled_manifest, make_manifest, sha256_file, vision_header};
+pub use model::{Manifest, ModelStatus, ModelStore, READ_TIMEOUT, Source, VISION_PREFIX, bundled_manifest, extract_vision_file, make_manifest, sha256_file, vision_header};
 pub mod whiten;
 pub mod source;
 pub use source::StoreEmbeddingSource;
@@ -20,7 +20,8 @@ pub use render::{Gray224, coverage_ratio, render_input, to_tensor};
 
 /// Model, runtime, chuỗi render: thành phần của `raw_version`.
 pub const MODEL_NAME: &str = "siglip2-base-p16-224@75de2d5";
-pub const RUNTIME_ID: &str = "ort1.31-cpu";
+/// CPU và Metal dùng chung version: cos ≥ 0,9999 giữa hai thiết bị (test cpu_and_metal_agree, whitenfit --compare-cpu).
+pub const RUNTIME_ID: &str = "candle0.11";
 pub const RENDER_ID: &str = "render-v2";
 
 pub const SAMPLE_LINES: [&str; 3] = ["Hamburg", "Người Việt", "Rgaeo 0123"];
@@ -33,9 +34,9 @@ pub const DIM: usize = 128;
 pub const NORM_MEAN: f32 = 0.5;
 pub const NORM_STD: f32 = 0.5;
 
-/// Version của vector thô (không gồm whitening).
+/// Version của vector thô (không gồm whitening). `model_sha256` = sha của file safetensors vision cục bộ.
 pub fn raw_version(model_sha256: &str) -> String {
-    format!("{MODEL_NAME}|onnx-fp32-b{BATCH}@{}|{RUNTIME_ID}|{RENDER_ID}", short(model_sha256))
+    format!("{MODEL_NAME}|st-vision@{}|{RUNTIME_ID}|{RENDER_ID}", short(model_sha256))
 }
 
 /// Version của vector đã whiten = raw_version + whitening.
@@ -115,7 +116,7 @@ mod tests {
     #[test]
     fn versions_compose() {
         let raw = raw_version(&"ab".repeat(32));
-        assert_eq!(raw, format!("siglip2-base-p16-224@75de2d5|onnx-fp32-b4@{}|ort1.31-cpu|render-v2", "ab".repeat(6)));
+        assert_eq!(raw, format!("siglip2-base-p16-224@75de2d5|st-vision@{}|candle0.11|render-v2", "ab".repeat(6)));
         assert_eq!(model_version(&raw, "white-v1", &"cd".repeat(32)), format!("{raw}|white-v1@{}", "cd".repeat(6)));
     }
 

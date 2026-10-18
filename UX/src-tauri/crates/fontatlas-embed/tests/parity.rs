@@ -8,7 +8,7 @@ use fontatlas_embed::{CandleEncoder, Encode, Gray224, ModelStore, Whitening, bun
 #[test]
 fn bundled_assets_valid() {
     let w = Whitening::bundled();
-    assert_eq!((w.raw_dim, w.dim), (768, 128));
+    assert_eq!((w.raw_dim, w.dim, w.version.as_str()), (768, 128, "white-v2"));
     let m = bundled_manifest();
     assert_eq!((m.sha256.len(), m.license.as_str()), (64, "Apache-2.0"));
     assert!(m.source.url.starts_with("https://huggingface.co/google/siglip2-base-patch16-224/resolve/75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2/"));

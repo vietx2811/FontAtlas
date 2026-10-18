@@ -377,3 +377,12 @@ fn range_survives_redirect_like_hf_cdn() {
     assert_eq!(sha256_file(&p).unwrap(), m.sha256);
     assert_eq!((redir.requests(), srv.requests()), (2, 2));
 }
+
+#[test]
+fn offline_extract_equals_downloaded_file() {
+    let src = fake_model();
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("src"), &src).unwrap();
+    fontatlas_embed::extract_vision_file(&d.path().join("src"), &d.path().join("out")).unwrap();
+    assert_eq!(sha256_file(&d.path().join("out")).unwrap(), manifest_for(&src, "http://x").sha256);
+}

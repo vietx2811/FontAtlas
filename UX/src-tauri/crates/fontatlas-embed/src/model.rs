@@ -242,6 +242,24 @@ impl<'a> Extract<'a> {
     }
 }
 
+/// Ghép file vision cục bộ từ file nguồn đã có trong máy (tool dev: whitenfit, đo đạc). Giống hệt file `ensure` tải về.
+pub fn extract_vision_file(src: &Path, dst: &Path) -> Result<(), EmbedError> {
+    let mut f = File::open(src)?;
+    let mut out = File::create(dst)?;
+    let mut ex = Extract::new(None, Some(&mut out));
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        ex.feed(&buf[..n])?;
+    }
+    ex.finish()?;
+    out.sync_all()?;
+    Ok(())
+}
+
 /// Tính manifest từ file nguồn đã có trong máy (tool phát hành: examples/make_manifest.rs).
 pub fn make_manifest(src: &Path, url: &str, file: &str, license: &str, notice_files: Vec<String>) -> Result<Manifest, EmbedError> {
     let mut f = File::open(src)?;

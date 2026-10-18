@@ -57,10 +57,10 @@ impl Whitening {
         Ok(Whitening { version, sha256, raw_dim, dim, mean, w })
     }
 
-    /// Ma trận phát hành kèm app (white-v1, fit trên nửa tune của Google Fonts OFL/Apache @47d54ca).
+    /// Ma trận phát hành kèm app (white-v2, fit bằng candle trên nửa tune của Google Fonts OFL/Apache @47d54ca).
     /// File nhúng lúc build; test `bundled_assets_valid` bảo đảm nó hợp lệ.
     pub fn bundled() -> Self {
-        Self::from_bytes(include_bytes!("../data/whitening-v1.bin")).expect("data/whitening-v1.bin hợp lệ")
+        Self::from_bytes(include_bytes!("../data/whitening-v2.bin")).expect("data/whitening-v2.bin hợp lệ")
     }
 
     /// L2(thô) → trừ μ → nhân W → L2. Sai chiều hoặc chuẩn 0 → None.
