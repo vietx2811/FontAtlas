@@ -125,7 +125,11 @@ impl Index {
 
     /// Trọng số ảnh, kẹp vào [0, MAX_EMBED_WEIGHT]; không hữu hạn → mặc định.
     pub fn set_embed_weight(&mut self, w: f32) {
-        self.embed_w = if w.is_finite() { w.clamp(0.0, MAX_EMBED_WEIGHT) } else { EMBED_WEIGHT };
+        self.embed_w = if w.is_finite() {
+            w.clamp(0.0, MAX_EMBED_WEIGHT)
+        } else {
+            EMBED_WEIGHT
+        };
     }
 
     pub fn embed_weight(&self) -> f32 {
@@ -173,18 +177,30 @@ impl Index {
             w,
         )?;
         Some(match self.q8.cos(i, j) {
-            Some(c) => (combine(d, c, self.embed_w), d, j, SimilarSource::AxesAndImage),
+            Some(c) => (
+                combine(d, c, self.embed_w),
+                d,
+                j,
+                SimilarSource::AxesAndImage,
+            ),
             None => (d, d, j, SimilarSource::Axes),
         })
     }
 
     /// Xếp lại bằng f32: đọc vector của query + ứng viên có ảnh, tính lại khoảng cách kết hợp.
     fn rerank_exact(&self, qi: usize, cands: &mut [Cand]) {
-        let Some(src) = self.exact.as_ref() else { return };
+        let Some(src) = self.exact.as_ref() else {
+            return;
+        };
         if !self.q8.has(qi) {
             return;
         }
-        let idx: Vec<usize> = cands.iter().enumerate().filter(|(_, c)| c.3 == SimilarSource::AxesAndImage).map(|(n, _)| n).collect();
+        let idx: Vec<usize> = cands
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.3 == SimilarSource::AxesAndImage)
+            .map(|(n, _)| n)
+            .collect();
         let mut keys = vec![self.profiles[qi].key.clone()];
         keys.extend(idx.iter().map(|&n| self.profiles[cands[n].2].key.clone()));
         let got = src.fetch(&keys);

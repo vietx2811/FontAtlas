@@ -14,10 +14,10 @@ pub use profile::{AxisId, FaceKey, FaceProfile, Q, Reading, Role};
 pub use reference::{AxisQuantiles, IndexError, MIN_SAMPLES, ReferenceTable};
 
 pub const SCORER_VERSION: &str = "pair-0.1.0";
+pub use embed_index::{ExactEmbeddings, RERANK_CANDIDATES};
 pub use explain::{
     Lang, all_templates, axis_name, explain_pair, explain_similar, fmt_num, pair_axis_name,
 };
-pub use embed_index::{ExactEmbeddings, RERANK_CANDIDATES};
 pub use index::Index;
 pub use pairing::{
     Block, BodyWarning, ClashKind, FamilyFacts, Gate, PairAssessment, PairContext, RankKey, Side,

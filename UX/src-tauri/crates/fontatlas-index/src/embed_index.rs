@@ -39,7 +39,9 @@ impl Q8 {
         let mut inv = vec![0f32; n];
         let mut has = vec![false; n];
         for (i, v) in embs.iter().enumerate() {
-            let Some(v) = v.as_deref().filter(|v| v.len() == dim && valid(v)) else { continue };
+            let Some(v) = v.as_deref().filter(|v| v.len() == dim && valid(v)) else {
+                continue;
+            };
             let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
             let maxabs = v.iter().fold(0f32, |m, x| m.max(x.abs()));
             let s = maxabs / 127.0;
@@ -60,7 +62,10 @@ impl Q8 {
         if !(self.has[i] && self.has[j]) {
             return None;
         }
-        let (a, b) = (&self.q[i * self.dim..(i + 1) * self.dim], &self.q[j * self.dim..(j + 1) * self.dim]);
+        let (a, b) = (
+            &self.q[i * self.dim..(i + 1) * self.dim],
+            &self.q[j * self.dim..(j + 1) * self.dim],
+        );
         let dot: i32 = a.iter().zip(b).map(|(x, y)| *x as i32 * *y as i32).sum();
         Some((dot as f32 * self.inv[i] * self.inv[j]).clamp(-1.0, 1.0))
     }
