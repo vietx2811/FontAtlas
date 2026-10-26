@@ -54,6 +54,10 @@ impl Q8 {
         Q8 { dim, q, inv, has }
     }
 
+    pub(crate) fn dim(&self) -> usize {
+        self.dim
+    }
+
     pub(crate) fn has(&self, i: usize) -> bool {
         self.has[i]
     }

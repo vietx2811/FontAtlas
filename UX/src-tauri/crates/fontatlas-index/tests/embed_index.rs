@@ -278,3 +278,85 @@ fn s6_similar_with_images_50k_under_50ms() {
     assert!(h.iter().all(|x| x.source == SimilarSource::AxesAndImage));
     assert!(ms < 50.0, "{ms} ms");
 }
+
+/// Vector có cos đúng `c` với `q` (q, u đơn vị; u được trực giao hoá).
+fn at_cos(q: &[f32], u: &[f32], c: f32) -> Vec<f32> {
+    let d = dot(q, u);
+    let mut o: Vec<f32> = u.iter().zip(q).map(|(x, y)| x - d * y).collect();
+    let n = dot(&o, &o).sqrt();
+    o.iter_mut().for_each(|x| *x /= n);
+    q.iter()
+        .zip(&o)
+        .map(|(a, b)| c * a + (1.0 - c * c).sqrt() * b)
+        .collect()
+}
+
+/// Query có ảnh: ứng viên chưa có ảnh (đang chờ embed) không được chen lên trên nhờ thang khoảng cách khác.
+#[test]
+fn imaged_query_unembedded_candidate_does_not_jump_ahead() {
+    let q = unit(1);
+    let mut ps = vec![];
+    let mut a = synth_full("A", "Regular", 0.15);
+    a.embedding = Some(q.clone());
+    ps.push(a);
+    let mut x = synth_full("X", "Regular", 0.15); // trục y hệt, ảnh khá giống (cos 0,7)
+    x.embedding = Some(at_cos(&q, &unit(2), 0.7));
+    ps.push(x);
+    ps.push(synth_full("Y", "Regular", 0.16)); // trục gần, CHƯA có ảnh
+    for i in 0..40 {
+        ps.push(with_emb(
+            synth_full(&format!("F{i}"), "Regular", 0.15),
+            100 + i,
+        )); // ảnh ngẫu nhiên, cos ≈ 0
+    }
+    let exact = exact_of(&ps);
+    let mut ix = index_of(ps);
+    ix.set_exact_source(Box::new(MemExact(exact)));
+    let h = ix
+        .similar(
+            &key_of("A", "Regular"),
+            &GroupWeights::default(),
+            3,
+            &|_| true,
+        )
+        .unwrap();
+    assert_eq!(h[0].key, key_of("X", "Regular"), "{:?}", keys(&h));
+    let y = ix
+        .similar(
+            &key_of("A", "Regular"),
+            &GroupWeights::default(),
+            42,
+            &|_| true,
+        )
+        .unwrap();
+    let y = y.iter().find(|z| z.key == key_of("Y", "Regular")).unwrap();
+    assert_eq!(y.source, SimilarSource::Axes);
+}
+
+/// Nguồn f32 trả vector khác số chiều của Index (vd. nhầm vector thô 768) → bỏ qua, giữ kết quả int8.
+#[test]
+fn exact_vectors_of_wrong_dim_are_ignored() {
+    let ps: Vec<FaceProfile> = (0..200)
+        .map(|i| with_emb(synth_full(&format!("F{i}"), "Regular", 0.15), i))
+        .collect();
+    let wrong: HashMap<FaceKey, Vec<f32>> = ps
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.key.clone(), lcg_unit(64, 9000 + i as u64)))
+        .collect();
+    let q = key_of("F0", "Regular");
+    let plain = keys(
+        &index_of(ps.clone())
+            .similar(&q, &GroupWeights::default(), 10, &|_| true)
+            .unwrap(),
+    );
+    let mut ix = index_of(ps);
+    ix.set_exact_source(Box::new(MemExact(wrong)));
+    assert_eq!(
+        keys(
+            &ix.similar(&q, &GroupWeights::default(), 10, &|_| true)
+                .unwrap()
+        ),
+        plain
+    );
+}

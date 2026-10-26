@@ -204,9 +204,16 @@ impl Index {
         let mut keys = vec![self.profiles[qi].key.clone()];
         keys.extend(idx.iter().map(|&n| self.profiles[cands[n].2].key.clone()));
         let got = src.fetch(&keys);
-        let Some(Some(qv)) = got.first() else { return };
+        // Chỉ dùng vector đúng số chiều của Index (tránh nhầm sang không gian khác, vd. vector thô 768).
+        let dim = self.q8.dim();
+        let Some(Some(qv)) = got
+            .first()
+            .filter(|v| v.as_ref().is_some_and(|v| v.len() == dim))
+        else {
+            return;
+        };
         for (&n, v) in idx.iter().zip(got.iter().skip(1)) {
-            if let Some(c) = embed_cos(Some(qv), v.as_deref()) {
+            if let Some(c) = embed_cos(Some(qv), v.as_deref().filter(|v| v.len() == dim)) {
                 cands[n].0 = combine(cands[n].1, c, self.embed_w);
             }
         }
@@ -252,10 +259,31 @@ impl Index {
         if self.vectors[qi].iter().filter(|v| v.is_some()).count() < MIN_SHARED_DIMS {
             return Err(IndexError::NotComparable(q.clone()));
         }
-        let mut cands: Vec<Cand> = (0..self.profiles.len())
-            .filter(|&j| j != qi && filter(&self.profiles[j]))
-            .filter_map(|j| self.distance(qi, j, w))
-            .collect();
+        let mut cands: Vec<Cand> = Vec::new();
+        let mut img_cos: Vec<f32> = Vec::new();
+        for j in 0..self.profiles.len() {
+            if j == qi || !filter(&self.profiles[j]) {
+                continue;
+            }
+            if let Some(c) = self.distance(qi, j, w) {
+                if c.3 == SimilarSource::AxesAndImage
+                    && let Some(x) = self.q8.cos(qi, j)
+                {
+                    img_cos.push(x);
+                }
+                cands.push(c);
+            }
+        }
+        // Query có ảnh: ứng viên chưa có ảnh (vd. đang chờ embed) nhận cos trung tính = trung vị cos của
+        // query với các ứng viên có ảnh, để hai nhóm cùng một thang khoảng cách. Nguồn vẫn là Axes.
+        if !img_cos.is_empty() {
+            let mid = img_cos.len() / 2;
+            let (_, m, _) = img_cos.select_nth_unstable_by(mid, |a, b| a.total_cmp(b));
+            let c_hat = *m;
+            for c in cands.iter_mut().filter(|c| c.3 == SimilarSource::Axes) {
+                c.0 = combine(c.1, c_hat, self.embed_w);
+            }
+        }
         let by = |a: &Cand, b: &Cand| {
             a.0.total_cmp(&b.0)
                 .then_with(|| self.profiles[a.2].key.cmp(&self.profiles[b.2].key))

@@ -274,12 +274,26 @@ fn main() {
             let comb = same_family(&ix, &corpus, &q_test, &all);
             let axes = same_family(&axes_ix, &corpus, &q_test, &all);
             let img = image_only_same_family(&corpus, &embs, &comb.keys, &all);
+            // Cùng điều kiện: chỉ truy vấn test có ảnh (chế độ "Chỉ ảnh" không có phương án dự phòng).
+            let q_img = |p: &FaceProfile| q_test(p) && embs.contains_key(&p.key);
+            let comb_i = same_family(&ix, &corpus, &q_img, &all);
+            let axes_i = same_family(&axes_ix, &corpus, &q_img, &all);
+            let img_i = image_only_same_family(&corpus, &embs, &comb_i.keys, &all);
             let (ha, na, ma) = hits(&similar_report(&axes_ix, &corpus, &test_sets));
             let (hc, nc, mc) = hits(&similar_report(&ix, &corpus, &test_sets));
             extra.push_str("### S4 — cùng họ, truy vấn thuộc họ `test` (gallery: cả corpus)\n\n| chế độ | R@1 | R@5 | truy vấn |\n|---|---|---|---|\n");
             extra.push_str(&row("Số đo", &axes));
             extra.push_str(&row("Chỉ ảnh", &img));
             extra.push_str(&row("Số đo + Hình ảnh", &comb));
+            extra.push_str(&format!(
+                "\nChỉ truy vấn test CÓ ảnh ({} / {}; {} truy vấn không có ảnh):\n\n| chế độ | R@1 | R@5 | truy vấn |\n|---|---|---|---|\n",
+                comb_i.queries,
+                comb.queries,
+                comb.queries - comb_i.queries
+            ));
+            extra.push_str(&row("Số đo", &axes_i));
+            extra.push_str(&row("Chỉ ảnh", &img_i));
+            extra.push_str(&row("Số đo + Hình ảnh", &comb_i));
             extra.push_str(&format!(
                 "\n| similar_sets test | nhóm đạt | vi phạm must_not |\n|---|---|---|\n| Số đo | {ha}/{na} | {ma} |\n| Số đo + Hình ảnh | {hc}/{nc} | {mc} |\n\n"
             ));

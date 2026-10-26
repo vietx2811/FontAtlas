@@ -94,6 +94,13 @@ Số chỉ-trục khớp đúng mốc Plan 3. Theo cách đo này, R@5 89,6% v�
 ## Nhận xét trung thực và rủi ro còn mở
 1. **Ở w = 0,8, trục gần như không thêm gì cho việc tìm cùng họ.** Kết hợp ≈ chỉ ảnh: R@1 kém 0,1 điểm, R@5 hơn 0,5 điểm. Vai trò của trục lúc này là giải thích, lọc, và làm phương án dự phòng khi thiếu ảnh. Trục thua ảnh rõ ở các bộ đếm "cùng họ" vì độ đậm/độ nghiêng khác nhau trong cùng họ làm trục xa nhau.
 2. **R@5 trên test chỉ dư 0,1 điểm**, và trên toàn corpus thì chưa đạt (89,6%). Đổi corpus hoặc renderer có thể làm rơi xuống dưới ngưỡng.
-3. **Thang khoảng cách bị trộn.** Khi truy vấn có ảnh, ứng viên không có ảnh (khoảng 8,5% corpus) mang khoảng cách chỉ-trục, còn ứng viên có ảnh mang khoảng cách kết hợp. Hai thang này phân bố khác nhau. Phần lớn font không có ảnh là font CJK/không Latin, vốn đã khó so trục, nên ảnh hưởng thực tế chưa đo.
+3. **Đã sửa sau review — thang khoảng cách bị trộn.** Khi truy vấn có ảnh, ứng viên chưa có ảnh (ví dụ đang chờ embed) nay nhận cos trung tính, bằng trung vị cos của truy vấn với các ứng viên có ảnh. Nhờ vậy chúng không còn chen lên đầu. Có test `imaged_query_unembedded_candidate_does_not_jump_ahead`. Chạy lại toàn bộ sweep và test, số liệu không đổi.
+   - Thêm bảng chỉ gồm truy vấn test CÓ ảnh: 3.372/3.372, tức 0 truy vấn thiếu ảnh. Vì vậy phép so "Chỉ ảnh" và "Kết hợp" ở trên đã cùng điều kiện.
+   - Bước xếp lại f32 bỏ qua vector lệch số chiều với Index (test `exact_vectors_of_wrong_dim_are_ignored`).
+   - S6 sau khi sửa: Similar có ảnh 1,6–1,7 ms.
 4. `family_split` dùng `profile.family` (typographic family). whitenfit cũng dùng tên đó, nên nhất quán.
-5. Trần 0,8 là quyết định sản phẩm, không phải tối ưu số liệu. Nếu Lead muốn ưu tiên R@k thì cần nới trần (đường cong vẫn đang tăng).
+5. **Còn mở (minor, hoãn):**
+   - cache của eval chưa gắn version renderer và không embed bù các face thiếu;
+   - S6 "có xếp lại f32" đo bằng nguồn trong bộ nhớ; nguồn SQLite thật (khoảng 401 dòng mỗi truy vấn) cần đo lại ở Plan 6;
+   - Q8 chưa chặn vector có độ lớn cực đoan.
+6. Trần 0,8 là quyết định sản phẩm, không phải tối ưu số liệu. Nếu Lead muốn ưu tiên R@k thì cần nới trần (đường cong vẫn đang tăng).
