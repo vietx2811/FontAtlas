@@ -65,13 +65,19 @@ pub struct PreviewCache {
 
 impl PreviewCache {
     pub fn open(path: &Path, budgets: Budgets) -> Result<PreviewCache, PreviewError> {
-        let mut c = match Self::try_open(path, budgets) {
+        let opened = Connection::open(path).map_err(PreviewError::from).and_then(|c| Self::setup(c, budgets));
+        let mut c = match opened {
             Ok(c) => c,
-            Err(_) => {
-                // File hỏng: đổi tên để còn chẩn đoán, rồi tạo mới (cache dựng lại được).
+            // File hỏng thật: đổi tên để còn chẩn đoán, rồi tạo mới (cache dựng lại được).
+            Err(e) if is_corrupt(&e) => {
                 rename_broken(path);
-                Self::try_open(path, budgets)?
+                match Connection::open(path).map_err(PreviewError::from).and_then(|c| Self::setup(c, budgets)) {
+                    Ok(c) => c,
+                    Err(e) => Self::in_memory(budgets, &e)?,
+                }
             }
+            // Lỗi khác (quyền, đĩa đầy, BUSY khi chạy hai instance): không đụng file, dùng cache trong bộ nhớ.
+            Err(e) => Self::in_memory(budgets, &e)?,
         };
         for p in [Pool::Default, Pool::Custom] {
             if c.totals[p.idx()] > budgets.of(p) {
@@ -81,8 +87,13 @@ impl PreviewCache {
         Ok(c)
     }
 
-    fn try_open(path: &Path, budgets: Budgets) -> Result<PreviewCache, PreviewError> {
-        let conn = Connection::open(path)?;
+    /// Cache không bao giờ làm hỏng việc hiển thị: mở file không được thì dùng bộ nhớ.
+    fn in_memory(budgets: Budgets, cause: &PreviewError) -> Result<PreviewCache, PreviewError> {
+        eprintln!("preview cache: dùng bộ nhớ vì không mở được file ({cause})");
+        Self::setup(Connection::open_in_memory()?, budgets)
+    }
+
+    fn setup(conn: Connection, budgets: Budgets) -> Result<PreviewCache, PreviewError> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.execute_batch(DDL)?;
@@ -181,7 +192,15 @@ impl PreviewCache {
     }
 }
 
-/// `previews.db` → `previews.broken-{ms}.db` (kèm -wal, -shm nếu có).
+fn is_corrupt(e: &PreviewError) -> bool {
+    matches!(
+        e,
+        PreviewError::Cache(rusqlite::Error::SqliteFailure(f, _))
+            if matches!(f.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase)
+    )
+}
+
+/// `previews.db` → `previews.broken-{ms}.db` (kèm -wal, -shm nếu có). Chỉ giữ một bản broken gần nhất.
 fn rename_broken(path: &Path) {
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -189,6 +208,14 @@ fn rename_broken(path: &Path) {
         .unwrap_or(0);
     let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "previews".into());
     let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    if let Ok(rd) = std::fs::read_dir(if dir.as_os_str().is_empty() { Path::new(".") } else { &dir }) {
+        let prefix = format!("{stem}.broken-");
+        for e in rd.flatten() {
+            if e.file_name().to_string_lossy().starts_with(&prefix) {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
     let target = dir.join(format!("{stem}.broken-{ms}.db"));
     let with = |p: &Path, suf: &str| PathBuf::from(format!("{}{suf}", p.display()));
     let _ = std::fs::rename(path, &target);

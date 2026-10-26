@@ -102,3 +102,29 @@ fn corrupt_cache_is_renamed_and_recreated() {
         .filter(|n| n.starts_with("previews.broken-") && n.ends_with(".db")).collect();
     assert_eq!(broken.len(), 1, "{broken:?}");
 }
+
+#[test]
+fn unopenable_cache_falls_back_to_memory_without_renaming() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("khong-co-thu-muc").join("previews.db"); // thư mục cha không tồn tại → CANTOPEN
+    let mut c = PreviewCache::open(&p, Budgets::DEFAULT).unwrap();
+    c.put(&k(0), Pool::Custom, b"x").unwrap();
+    assert!(c.get(&k(0)).unwrap().is_some(), "cache trong bộ nhớ vẫn dùng được");
+    assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 0, "không tạo hay đổi tên file nào");
+}
+
+#[test]
+fn keeps_at_most_one_broken_file() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("previews.db");
+    for _ in 0..2 {
+        std::fs::write(&p, b"rac rac rac rac rac rac").unwrap();
+        drop(PreviewCache::open(&p, Budgets::DEFAULT).unwrap());
+        std::thread::sleep(std::time::Duration::from_millis(5)); // tên broken theo ms khác nhau
+        let _ = std::fs::remove_file(d.path().join("previews.db-wal"));
+        let _ = std::fs::remove_file(d.path().join("previews.db-shm"));
+    }
+    let broken = std::fs::read_dir(d.path()).unwrap().filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with("previews.broken-")).count();
+    assert_eq!(broken, 1);
+}
