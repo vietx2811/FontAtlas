@@ -1,8 +1,9 @@
 //! Kho font để đánh giá: phân tích thư mục, mở rộng variable font ra các độ đậm có tên, tra theo tên.
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use fontatlas_core::{FaceReport, FontFile, MeasureAt, analyze_bytes};
-use fontatlas_index::{AxisId, FaceProfile};
+use fontatlas_index::{AxisId, FaceKey, FaceProfile};
 use rayon::prelude::*;
 
 const EXTS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
@@ -16,11 +17,21 @@ const VF_WEIGHTS: [(f32, &str); 6] = [
     (900.0, "Black"),
 ];
 
+/// Nguồn của một profile: file, face trong file, vị trí trục (VF mở rộng) — để render đúng instance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Origin {
+    pub path: PathBuf,
+    pub face_index: u32,
+    /// `None` = vị trí chuẩn của font (như app).
+    pub loc: Option<Vec<(String, f32)>>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Corpus {
     pub profiles: Vec<FaceProfile>,
     /// Số file không phân tích được.
     pub failed_files: usize,
+    pub origins: HashMap<FaceKey, Origin>,
 }
 
 fn walk(p: &Path, out: &mut Vec<PathBuf>) {
@@ -61,7 +72,7 @@ fn upright(p: &FaceProfile) -> bool {
 }
 
 /// Phân tích một file; VF (khi `expand`) được thay bằng các profile ở từng độ đậm.
-fn load_file(path: &Path, expand: bool) -> Option<Vec<FaceProfile>> {
+fn load_file(path: &Path, expand: bool) -> Option<Vec<(FaceProfile, Origin)>> {
     let raw = std::fs::read(path).ok()?;
     let report = analyze_bytes(raw.clone()).ok()?;
     let file = FontFile::from_bytes(raw).ok()?;
@@ -83,6 +94,7 @@ fn load_file(path: &Path, expand: bool) -> Option<Vec<FaceProfile>> {
                             loc.push((tag.to_string(), v.clamp(a.min, a.max)));
                         }
                     }
+                    let r_loc = loc.clone();
                     let anatomy = face.measure(MeasureAt::Location(loc));
                     let r = FaceReport {
                         index: fr.index,
@@ -94,10 +106,22 @@ fn load_file(path: &Path, expand: bool) -> Option<Vec<FaceProfile>> {
                     p.style = name.to_string();
                     p.weight_class = Some(target as u16);
                     p.key.index = fr.index * 1000 + target as u32;
-                    out.push(p);
+                    let o = Origin {
+                        path: path.to_path_buf(),
+                        face_index: fr.index,
+                        loc: Some(r_loc),
+                    };
+                    out.push((p, o));
                 }
             }
-            _ => out.push(FaceProfile::from_report(&report.hash_hex, fr)),
+            _ => out.push((
+                FaceProfile::from_report(&report.hash_hex, fr),
+                Origin {
+                    path: path.to_path_buf(),
+                    face_index: fr.index,
+                    loc: None,
+                },
+            )),
         }
     }
     Some(out)
@@ -110,18 +134,23 @@ impl Corpus {
             walk(d, &mut files);
         }
         files.sort();
-        let per: Vec<Option<Vec<FaceProfile>>> = files
+        let per: Vec<Option<Vec<(FaceProfile, Origin)>>> = files
             .par_iter()
             .map(|p| load_file(p, expand_variable))
             .collect();
         let failed_files = per.iter().filter(|x| x.is_none()).count();
-        let mut profiles: Vec<FaceProfile> = per.into_iter().flatten().flatten().collect();
+        let mut pairs: Vec<(FaceProfile, Origin)> = per.into_iter().flatten().flatten().collect();
         // Trùng (cùng hash, index) khi một file xuất hiện ở nhiều thư mục.
-        profiles.sort_by(|a, b| a.key.cmp(&b.key));
-        profiles.dedup_by(|a, b| a.key == b.key);
+        pairs.sort_by(|a, b| a.0.key.cmp(&b.0.key));
+        pairs.dedup_by(|a, b| a.0.key == b.0.key);
+        let origins = pairs
+            .iter()
+            .map(|(p, o)| (p.key.clone(), o.clone()))
+            .collect();
         Corpus {
-            profiles,
+            profiles: pairs.into_iter().map(|x| x.0).collect(),
             failed_files,
+            origins,
         }
     }
 
@@ -160,6 +189,10 @@ impl Corpus {
                 .then(a.2.key.cmp(&b.2.key))
         });
         scored.first().map(|x| x.2)
+    }
+
+    pub fn origin(&self, k: &FaceKey) -> Option<&Origin> {
+        self.origins.get(k)
     }
 
     /// Mọi face của family (cho "Family|*").

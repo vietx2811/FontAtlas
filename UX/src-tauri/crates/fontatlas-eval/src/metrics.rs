@@ -1,7 +1,8 @@
 //! Chỉ số S4 (Similar) và S5 (Pairing: good / clash / bad riêng, H1 dòng riêng).
 use std::collections::HashMap;
 
-use fontatlas_index::{FaceKey, Gate, GroupWeights, Index};
+use fontatlas_index::{FaceKey, FaceProfile, Gate, GroupWeights, Index, embed_cos};
+use rayon::prelude::*;
 
 use crate::corpus::Corpus;
 use crate::csvio::{Expected, PairRow, SimilarSet};
@@ -131,6 +132,104 @@ pub fn similar_report(ix: &Index, c: &Corpus, sets: &[SimilarSet]) -> SimilarRep
         same_family_r5: ratio(r5),
         queries: q,
     }
+}
+
+/// Cùng họ: face cùng họ đầu tiên ở hạng 1 / trong top 5.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FamilyRecall {
+    pub r1: f32,
+    pub r5: f32,
+    pub queries: usize,
+    /// Các truy vấn đã tính (Index so được) — dùng lại cho chế độ chỉ ảnh.
+    pub keys: Vec<FaceKey>,
+}
+
+type Pred<'a> = &'a (dyn Fn(&FaceProfile) -> bool + Sync);
+
+fn recall(pos: &[Option<usize>], keys: Vec<FaceKey>) -> FamilyRecall {
+    let q = pos.len();
+    let r1 = pos.iter().filter(|p| **p == Some(0)).count();
+    let r5 = pos.iter().filter(|p| p.is_some_and(|x| x < 5)).count();
+    let ratio = |x: usize| if q == 0 { 0.0 } else { x as f32 / q as f32 };
+    FamilyRecall {
+        r1: ratio(r1),
+        r5: ratio(r5),
+        queries: q,
+        keys,
+    }
+}
+
+/// Cùng họ có lọc: truy vấn là face thoả `query` mà họ của nó còn ≥ 2 face thoả `gallery`;
+/// ứng viên chỉ lấy trong `gallery`. Truy vấn Index không so được (NotComparable) bị bỏ như Plan 3.
+pub fn same_family(ix: &Index, c: &Corpus, query: Pred, gallery: Pred) -> FamilyRecall {
+    let mut fam_count: HashMap<String, usize> = HashMap::new();
+    for p in c.profiles.iter().filter(|p| gallery(p)) {
+        *fam_count.entry(p.family.to_lowercase()).or_default() += 1;
+    }
+    let w = GroupWeights::default();
+    let res: Vec<(FaceKey, Option<usize>)> = c
+        .profiles
+        .par_iter()
+        .filter(|p| {
+            query(p)
+                && fam_count
+                    .get(&p.family.to_lowercase())
+                    .copied()
+                    .unwrap_or(0)
+                    >= 2
+        })
+        .filter_map(|p| {
+            let fam = p.family.to_lowercase();
+            let hits = ix.similar(&p.key, &w, 5, &|x| gallery(x)).ok()?;
+            let pos = hits.iter().position(|h| {
+                ix.profile(&h.key)
+                    .is_some_and(|x| x.family.to_lowercase() == fam)
+            });
+            Some((p.key.clone(), pos))
+        })
+        .collect();
+    let pos: Vec<Option<usize>> = res.iter().map(|x| x.1).collect();
+    recall(&pos, res.into_iter().map(|x| x.0).collect())
+}
+
+/// Chỉ ảnh (cos embedding) trên đúng các truy vấn `queries`; truy vấn không có ảnh tính là trượt.
+pub fn image_only_same_family(
+    c: &Corpus,
+    embs: &HashMap<FaceKey, Vec<f32>>,
+    queries: &[FaceKey],
+    gallery: Pred,
+) -> FamilyRecall {
+    let fam: HashMap<&FaceKey, String> = c
+        .profiles
+        .iter()
+        .map(|p| (&p.key, p.family.to_lowercase()))
+        .collect();
+    let gal: Vec<(&FaceKey, &Vec<f32>)> = c
+        .profiles
+        .iter()
+        .filter(|p| gallery(p))
+        .filter_map(|p| Some((&p.key, embs.get(&p.key)?)))
+        .collect();
+    let pos: Vec<Option<usize>> = queries
+        .par_iter()
+        .map(|q| {
+            let qv = embs.get(q)?;
+            let mut s: Vec<(f32, &FaceKey)> = gal
+                .iter()
+                .filter(|(k, _)| *k != q)
+                .filter_map(|(k, v)| Some((embed_cos(Some(qv), Some(v))?, *k)))
+                .collect();
+            let n = s.len().min(5);
+            if n == 0 {
+                return None;
+            }
+            s.select_nth_unstable_by(n - 1, |a, b| b.0.total_cmp(&a.0).then(a.1.cmp(b.1)));
+            s.truncate(n);
+            s.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(b.1)));
+            s.iter().position(|(_, k)| fam.get(k) == fam.get(q))
+        })
+        .collect();
+    recall(&pos, queries.to_vec())
 }
 
 pub fn pairing_report(

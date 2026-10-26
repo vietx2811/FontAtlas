@@ -111,13 +111,41 @@ fn must_not_violation_beats_hit() {
 #[test]
 fn fixture_pairs_regression() {
     let c = Corpus::load(&[core_fixture_dir()], false);
-    let ix = Index::new(c.profiles.clone(), ReferenceTable::bundled(), SuperfamilyTable::bundled());
+    let ix = Index::new(
+        c.profiles.clone(),
+        ReferenceTable::bundled(),
+        SuperfamilyTable::bundled(),
+    );
     let k = |f: &str| c.resolve(f, "Regular").unwrap().key.clone();
-    let pr = ix.assess_pair(&k("Playfair Display"), Role::Heading, &k("Roboto"), Role::Body, false).unwrap();
+    let pr = ix
+        .assess_pair(
+            &k("Playfair Display"),
+            Role::Heading,
+            &k("Roboto"),
+            Role::Body,
+            false,
+        )
+        .unwrap();
     assert_ne!(pr.gate, Gate::Blocked);
     assert!(!pr.clashes.contains(&ClashKind::Global));
-    let ro = ix.assess_pair(&k("Roboto"), Role::Heading, &k("Open Sans"), Role::Body, false).unwrap();
+    let ro = ix
+        .assess_pair(
+            &k("Roboto"),
+            Role::Heading,
+            &k("Open Sans"),
+            Role::Body,
+            false,
+        )
+        .unwrap();
     assert!(!ro.clashes.is_empty(), "{:?}", ro.labels);
-    let lb = ix.assess_pair(&k("Libre Baskerville"), Role::Heading, &k("Roboto"), Role::Body, true).unwrap();
+    let lb = ix
+        .assess_pair(
+            &k("Libre Baskerville"),
+            Role::Heading,
+            &k("Roboto"),
+            Role::Body,
+            true,
+        )
+        .unwrap();
     assert_eq!(lb.gate, Gate::Blocked);
 }

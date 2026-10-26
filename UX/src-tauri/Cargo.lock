@@ -1605,10 +1605,12 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "fontatlas-core",
+ "fontatlas-embed",
  "fontatlas-index",
  "rayon",
  "serde",
  "serde_json",
+ "skrifa",
  "thiserror 2.0.17",
 ]
 
