@@ -5,8 +5,9 @@ use crate::profile::{AxisId, FaceKey};
 
 /// Số chiều tối thiểu cả hai bên cùng có để so được.
 pub const MIN_SHARED_DIMS: usize = 8;
-/// Trọng số phần ảnh khi cả hai có embedding (mặc định; eval chỉnh trên tập tune).
-pub const EMBED_WEIGHT: f32 = 0.5;
+/// Trọng số phần ảnh khi cả hai có embedding. Chọn trên nửa tune của Google Fonts @47d54ca
+/// (eval, R@1+R@5 cùng họ tăng đều tới trần: w 0,5 → 67,0/85,6 %; 0,8 → 70,7/89,1 %).
+pub const EMBED_WEIGHT: f32 = 0.8;
 /// Trần trọng số ảnh: phần trục luôn còn ≥ 1 − MAX_EMBED_WEIGHT.
 pub const MAX_EMBED_WEIGHT: f32 = 0.8;
 
