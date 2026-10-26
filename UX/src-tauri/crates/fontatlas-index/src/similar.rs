@@ -5,8 +5,15 @@ use crate::profile::{AxisId, FaceKey};
 
 /// Số chiều tối thiểu cả hai bên cùng có để so được.
 pub const MIN_SHARED_DIMS: usize = 8;
-/// Trọng số phần ảnh khi cả hai có embedding.
+/// Trọng số phần ảnh khi cả hai có embedding (mặc định; eval chỉnh trên tập tune).
 pub const EMBED_WEIGHT: f32 = 0.5;
+/// Trần trọng số ảnh: phần trục luôn còn ≥ 1 − MAX_EMBED_WEIGHT.
+pub const MAX_EMBED_WEIGHT: f32 = 0.8;
+
+/// Khoảng cách kết hợp: (1 − w)·d_trục + w·(1 − cos)/2.
+pub fn combine(d_axis: f32, cos: f32, w: f32) -> f32 {
+    (1.0 - w) * d_axis + w * (1.0 - cos) / 2.0
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

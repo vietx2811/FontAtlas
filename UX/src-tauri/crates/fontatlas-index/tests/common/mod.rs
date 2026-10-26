@@ -298,3 +298,31 @@ pub fn valid_combo(a: PairAxis, r: Relation) -> bool {
         _ => true,
     }
 }
+
+// ---- embedding (Plan 4 Task 10) ----
+
+/// LCG: seed = seed·6364136223846793005 + 1, giá trị (seed >> 33)/2³¹ − 0.5, rồi L2.
+pub fn lcg_unit(dim: usize, seed: u64) -> Vec<f32> {
+    let mut s = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let v: Vec<f32> = (0..dim)
+        .map(|_| {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            (s >> 33) as f32 / (1u64 << 31) as f32 - 0.5
+        })
+        .collect();
+    let n = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    v.into_iter().map(|x| x / n).collect()
+}
+
+pub fn dot(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+
+/// Nguồn f32 trong bộ nhớ cho bước xếp lại.
+pub struct MemExact(pub std::collections::HashMap<FaceKey, Vec<f32>>);
+
+impl fontatlas_index::ExactEmbeddings for MemExact {
+    fn fetch(&self, k: &[FaceKey]) -> Vec<Option<Vec<f32>>> {
+        k.iter().map(|x| self.0.get(x).cloned()).collect()
+    }
+}
