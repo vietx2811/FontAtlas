@@ -18,8 +18,8 @@ pub use explain::{
 };
 pub use index::Index;
 pub use pairing::{
-    Block, BodyWarning, ClashKind, FamilyFacts, Gate, PairAssessment, PairContext, Side, assess,
-    global_distance, rank_key,
+    Block, BodyWarning, ClashKind, FamilyFacts, Gate, PairAssessment, PairContext, RankKey, Side,
+    assess, global_distance, rank_key,
 };
 pub use similar::{
     EMBED_WEIGHT, Group, GroupWeights, MIN_SHARED_DIMS, SimilarHit, SimilarSource, axis_distance,

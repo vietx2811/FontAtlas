@@ -307,13 +307,9 @@ pub fn assess(
     }
 }
 
-/// Khoá xếp hạng từ điển (tăng dần là tốt hơn). Không có điểm tổng.
-#[allow(clippy::type_complexity)]
-pub fn rank_key(
-    x: &PairAssessment,
-    b_name: &str,
-    embed_cos: Option<f32>,
-) -> (
+/// Khoá xếp hạng: (cổng, số va chạm, −trục cấu trúc hoà hợp, không liên quan,
+/// −tương phản biểu cảm, −cos ảnh, tên).
+pub type RankKey = (
     Gate,
     usize,
     Reverse<usize>,
@@ -321,7 +317,10 @@ pub fn rank_key(
     Reverse<i32>,
     Reverse<i32>,
     String,
-) {
+);
+
+/// Khoá xếp hạng từ điển (tăng dần là tốt hơn). Không có điểm tổng.
+pub fn rank_key(x: &PairAssessment, b_name: &str, embed_cos: Option<f32>) -> RankKey {
     let struct_harmony = x
         .labels
         .iter()

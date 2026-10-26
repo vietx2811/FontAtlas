@@ -1,8 +1,10 @@
 //! Index trong bộ nhớ: chuẩn hoá mọi profile một lần, Similar (quét toàn bộ) và ứng viên ghép cặp.
 use std::collections::HashMap;
 
+use rayon::prelude::*;
+
 use crate::pair_axes::Thresholds;
-use crate::pairing::{FamilyFacts, Gate, PairAssessment, PairContext, assess, rank_key};
+use crate::pairing::{FamilyFacts, Gate, PairAssessment, PairContext, RankKey, assess, rank_key};
 use crate::profile::{AxisId, FaceKey, FaceProfile, Q, Role};
 use crate::reference::{IndexError, ReferenceTable};
 use crate::similar::{
@@ -258,18 +260,11 @@ impl Index {
     ) -> Result<Vec<(FaceKey, PairAssessment)>, IndexError> {
         let qi = self.idx(q)?;
         let pq = &self.profiles[qi];
-        let ctx = self.ctx(project_vi);
-        let mut out: Vec<(usize, PairAssessment)> = Vec::new();
-        for (j, pc) in self.profiles.iter().enumerate() {
-            if j == qi {
-                continue;
-            }
-            let facts = self.body_facts(pq, q_role, pc, cand_role);
-            let x = assess(pq, q_role, pc, cand_role, facts.as_ref(), &ctx);
-            if x.gate != Gate::Blocked {
-                out.push((j, x));
-            }
+        // H1 lọc trước: face truy vấn thiếu tiếng Việt → mọi cặp Blocked; ứng viên thiếu → Blocked.
+        if project_vi && pq.vi_missing > 0 {
+            return Ok(Vec::new());
         }
+        let ctx = self.ctx(project_vi);
         let name = |j: usize| format!("{} {}", self.profiles[j].family, self.profiles[j].style);
         let cos = |j: usize| {
             embed_cos(
@@ -277,14 +272,28 @@ impl Index {
                 self.profiles[j].embedding.as_deref(),
             )
         };
-        let mut keyed: Vec<_> = out
-            .into_iter()
-            .map(|(j, x)| (rank_key(&x, &name(j), cos(j)), j, x))
+        // Song song theo ứng viên; collect giữ thứ tự nên kết quả xác định.
+        let mut keyed: Vec<_> = self
+            .profiles
+            .par_iter()
+            .enumerate()
+            .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0))
+            .filter_map(|(j, pc)| {
+                let facts = self.body_facts(pq, q_role, pc, cand_role);
+                let x = assess(pq, q_role, pc, cand_role, facts.as_ref(), &ctx);
+                (x.gate != Gate::Blocked).then(|| (rank_key(&x, &name(j), cos(j)), j, x))
+            })
             .collect();
-        keyed.sort_by(|a, b| {
+        let by = |a: &(RankKey, usize, PairAssessment), b: &(RankKey, usize, PairAssessment)| {
             a.0.cmp(&b.0)
                 .then_with(|| self.profiles[a.1].key.cmp(&self.profiles[b.1].key))
-        });
+        };
+        // Thứ tự toàn phần → chọn top-k rồi sort riêng phần đó cho ra đúng top-k của sort toàn bộ.
+        if k > 0 && keyed.len() > k {
+            keyed.select_nth_unstable_by(k - 1, by);
+            keyed.truncate(k);
+        }
+        keyed.sort_by(by);
         Ok(keyed
             .into_iter()
             .take(k)

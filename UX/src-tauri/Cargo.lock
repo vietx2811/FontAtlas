@@ -1617,6 +1617,7 @@ name = "fontatlas-index"
 version = "0.1.0"
 dependencies = [
  "fontatlas-core",
+ "rayon",
  "serde",
  "serde_json",
  "tempfile",
