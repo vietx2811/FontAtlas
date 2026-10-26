@@ -320,7 +320,22 @@ pub type RankKey = (
 );
 
 /// Khoá xếp hạng từ điển (tăng dần là tốt hơn). Không có điểm tổng.
+/// Phần số của khoá xếp hạng (mọi trường trừ tên) — so nhanh, không cấp phát.
+pub(crate) type RankParts = (
+    Gate,
+    usize,
+    Reverse<usize>,
+    bool,
+    Reverse<i32>,
+    Reverse<i32>,
+);
+
 pub fn rank_key(x: &PairAssessment, b_name: &str, embed_cos: Option<f32>) -> RankKey {
+    let (g, c, h, r, e, cos) = rank_parts(x, embed_cos);
+    (g, c, h, r, e, cos, b_name.to_string())
+}
+
+pub(crate) fn rank_parts(x: &PairAssessment, embed_cos: Option<f32>) -> RankParts {
     let struct_harmony = x
         .labels
         .iter()
@@ -345,6 +360,5 @@ pub fn rank_key(x: &PairAssessment, b_name: &str, embed_cos: Option<f32>) -> Ran
         !(x.related || x.same_designer),
         Reverse(max_expr),
         Reverse(cos),
-        b_name.to_string(),
     )
 }

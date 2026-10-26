@@ -76,3 +76,79 @@ fn bundled_reference_is_valid() {
         );
     }
 }
+
+/// Thuật toán cũ (dò tuần tự, cấp phát) — để chứng minh bản tìm nhị phân cho kết quả y hệt.
+fn percentile_linear(q: &[f32], v: f32) -> Option<f32> {
+    if !v.is_finite() {
+        return None;
+    }
+    let (first, last) = (*q.first()?, *q.last()?);
+    let eq: Vec<usize> = (0..q.len()).filter(|&i| (q[i] - v).abs() <= 1e-6).collect();
+    if let (Some(lo), Some(hi)) = (eq.first(), eq.last()) {
+        return Some((lo + hi) as f32 / 200.0);
+    }
+    if v < first {
+        return Some(0.0);
+    }
+    if v > last {
+        return Some(1.0);
+    }
+    let i = (0..q.len() - 1).rev().find(|&i| q[i] < v)?;
+    let span = q[i + 1] - q[i];
+    let frac = if span > 0.0 { (v - q[i]) / span } else { 0.0 };
+    Some((i as f32 + frac) / 100.0)
+}
+
+#[test]
+fn percentile_matches_linear_scan_on_bundled_reference() {
+    let r = ReferenceTable::bundled();
+    let mut s: u64 = 20261027;
+    let mut rnd = || {
+        s = s
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (s >> 33) as f32 / (1u64 << 31) as f32
+    };
+    let mut checked = 0;
+    for aq in &r.quantiles {
+        let Some(axis) = AxisId::ALL.iter().copied().find(|a| a.key() == aq.axis) else {
+            continue;
+        };
+        let (lo, hi) = (aq.q[0], aq.q[100]);
+        let mut vals: Vec<f32> = Vec::new();
+        for &x in &aq.q {
+            vals.extend([
+                x,
+                x + 1e-6,
+                x - 1e-6,
+                x + 5e-7,
+                x - 5e-7,
+                x.next_up(),
+                x.next_down(),
+            ]);
+        }
+        for _ in 0..2000 {
+            vals.push(lo - 0.1 * (hi - lo) + rnd() * 1.2 * (hi - lo));
+        }
+        vals.extend([
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            lo - 1.0,
+            hi + 1.0,
+        ]);
+        for v in vals {
+            let a = r.percentile(axis, &aq.method, v);
+            let b = percentile_linear(&aq.q, v);
+            assert_eq!(
+                a.map(f32::to_bits),
+                b.map(f32::to_bits),
+                "{}/{} v={v}",
+                aq.axis,
+                aq.method
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 30_000, "{checked}");
+}

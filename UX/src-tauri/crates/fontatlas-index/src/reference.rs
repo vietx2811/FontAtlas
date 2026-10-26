@@ -81,10 +81,12 @@ impl ReferenceTable {
         }
         let q = self.table(axis, method)?;
         let (first, last) = (*q.first()?, *q.last()?);
-        // Đoạn giá trị trùng v → giữa đoạn.
-        let eq: Vec<usize> = (0..q.len()).filter(|&i| (q[i] - v).abs() <= 1e-6).collect();
-        if let (Some(lo), Some(hi)) = (eq.first(), eq.last()) {
-            return Some((lo + hi) as f32 / 200.0);
+        // Đoạn giá trị trùng v (|q−v| ≤ 1e-6) → giữa đoạn. q không giảm và q−v đơn điệu theo q,
+        // nên đoạn liền nhau: tìm nhị phân, không cấp phát.
+        let lo = q.partition_point(|x| x - v < -1e-6);
+        let hi = q.partition_point(|x| x - v <= 1e-6);
+        if lo < hi {
+            return Some((lo + hi - 1) as f32 / 200.0);
         }
         if v < first {
             return Some(0.0);
@@ -92,7 +94,8 @@ impl ReferenceTable {
         if v > last {
             return Some(1.0);
         }
-        let i = (0..q.len() - 1).rev().find(|&i| q[i] < v)?;
+        // Chỉ số lớn nhất có q[i] < v.
+        let i = q.partition_point(|x| *x < v).checked_sub(1)?;
         let span = q[i + 1] - q[i];
         let frac = if span > 0.0 { (v - q[i]) / span } else { 0.0 };
         Some((i as f32 + frac) / 100.0)

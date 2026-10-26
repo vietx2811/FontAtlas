@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use rayon::prelude::*;
 
 use crate::pair_axes::Thresholds;
-use crate::pairing::{FamilyFacts, Gate, PairAssessment, PairContext, RankKey, assess, rank_key};
+use crate::pairing::{
+    FamilyFacts, Gate, PairAssessment, PairContext, RankParts, assess, rank_parts,
+};
 use crate::profile::{AxisId, FaceKey, FaceProfile, Q, Role};
 use crate::reference::{IndexError, ReferenceTable};
 use crate::similar::{
@@ -19,6 +21,10 @@ pub struct Index {
     confs: Vec<[f32; 16]>,
     by_key: HashMap<FaceKey, usize>,
     families: HashMap<String, FamilyFacts>,
+    /// FamilyFacts của họ từng profile (tính sẵn cho pair_candidates).
+    facts: Vec<FamilyFacts>,
+    /// "Family Style" từng profile — khoá phụ khi xếp hạng.
+    names: Vec<String>,
     reference: ReferenceTable,
     superfamilies: SuperfamilyTable,
     thresholds: Thresholds,
@@ -70,7 +76,22 @@ impl Index {
             f.has_regular |= r;
             f.has_bold |= b;
         }
+        let facts = profiles
+            .iter()
+            .map(|p| {
+                families.get(&p.family).copied().unwrap_or(FamilyFacts {
+                    has_regular: false,
+                    has_bold: false,
+                })
+            })
+            .collect();
+        let names = profiles
+            .iter()
+            .map(|p| format!("{} {}", p.family, p.style))
+            .collect();
         Index {
+            facts,
+            names,
             profiles,
             vectors,
             confs,
@@ -265,27 +286,38 @@ impl Index {
             return Ok(Vec::new());
         }
         let ctx = self.ctx(project_vi);
-        let name = |j: usize| format!("{} {}", self.profiles[j].family, self.profiles[j].style);
         let cos = |j: usize| {
             embed_cos(
                 pq.embedding.as_deref(),
                 self.profiles[j].embedding.as_deref(),
             )
         };
+        // FamilyFacts của bên Body (giống body_facts, nhưng tra mảng tính sẵn).
+        let facts = |j: usize| {
+            if cand_role == Role::Body {
+                Some(self.facts[j])
+            } else if q_role == Role::Body {
+                Some(self.facts[qi])
+            } else {
+                None
+            }
+        };
         // Song song theo ứng viên; collect giữ thứ tự nên kết quả xác định.
-        let mut keyed: Vec<_> = self
+        let mut keyed: Vec<(RankParts, usize, PairAssessment)> = self
             .profiles
             .par_iter()
             .enumerate()
             .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0))
             .filter_map(|(j, pc)| {
-                let facts = self.body_facts(pq, q_role, pc, cand_role);
-                let x = assess(pq, q_role, pc, cand_role, facts.as_ref(), &ctx);
-                (x.gate != Gate::Blocked).then(|| (rank_key(&x, &name(j), cos(j)), j, x))
+                let x = assess(pq, q_role, pc, cand_role, facts(j).as_ref(), &ctx);
+                (x.gate != Gate::Blocked).then(|| (rank_parts(&x, cos(j)), j, x))
             })
             .collect();
-        let by = |a: &(RankKey, usize, PairAssessment), b: &(RankKey, usize, PairAssessment)| {
+        // Cùng thứ tự với rank_key (phần số, rồi tên), rồi key.
+        let by = |a: &(RankParts, usize, PairAssessment),
+                  b: &(RankParts, usize, PairAssessment)| {
             a.0.cmp(&b.0)
+                .then_with(|| self.names[a.1].cmp(&self.names[b.1]))
                 .then_with(|| self.profiles[a.1].key.cmp(&self.profiles[b.1].key))
         };
         // Thứ tự toàn phần → chọn top-k rồi sort riêng phần đó cho ra đúng top-k của sort toàn bộ.
