@@ -63,16 +63,20 @@ describe('PagedFaces', () => {
     expect(api.calls).toHaveLength(2);
   });
 
-  it('surfaces errors and retries the page on next ensureRange', async () => {
+  it('surfaces errors, does not refetch a failed page on its own, and retries on retry()', async () => {
     let fail = true;
     const api = { queryFaces: vi.fn(async (q: FaceQuery) => { if (fail) throw new Error('db'); return { total: 1, offset: q.offset ?? 0, items: [makeRow(0)] }; }) };
     const p = new PagedFaces(api, {});
     await flush();
     expect(p.getSnapshot().error).toBe('db');
+    p.ensureRange(0, 10); p.ensureRange(0, 10);
+    await flush();
+    expect(api.queryFaces).toHaveBeenCalledTimes(1); // không vòng lặp lỗi → render → fetch
     fail = false;
-    p.ensureRange(0, 10);
+    p.retry();
     await flush();
     expect(p.getSnapshot()).toMatchObject({ error: null, total: 1 });
+    expect(api.queryFaces).toHaveBeenCalledTimes(2);
   });
 
   it('disposed_instance_ignores_responses', async () => {

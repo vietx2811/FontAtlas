@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { List, type RowComponentProps } from 'react-window';
 import type { LibraryApi } from './api';
 import { DEFAULT_PREVIEW_MODE, FaceCell, type PreviewMode } from './FaceCell';
@@ -20,10 +20,10 @@ type Applied = { rendererVersion: string; generation: number; text: string; px: 
 type RowProps = {
   cols: number; total: number; paged: PagedFaces | null; version: number; applied: Applied | null;
   api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null;
-  blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void;
+  blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
 };
 
-function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect }: RowComponentProps<RowProps>) {
+function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale }: RowComponentProps<RowProps>) {
   const cells = [];
   for (let c = 0; c < cols; c++) {
     const i = index * cols + c;
@@ -35,7 +35,7 @@ function Row({ index, style, cols, total, paged, applied, api, px, text, mode, s
       : null;
     cells.push(
       <FaceCell key={row ? row.faceId : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
-        selected={!!row && row.faceId === selectedFaceId} blobs={blobs} loader={loader} onSelect={onSelect} />,
+        selected={!!row && row.faceId === selectedFaceId} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale} />,
     );
   }
   return <div role="row" style={{ ...style, display: 'flex' }}>{cells}</div>;
@@ -77,14 +77,31 @@ export function LibraryGrid({
 
   // Thế hệ preview do backend sở hữu: lấy giá trị đầu qua previewInfo, xin mới khi chữ/cỡ đổi.
   const [applied, setApplied] = useState<Applied | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const want = useRef({ text: sampleText, px });
   want.current = { text: sampleText, px };
+  const [infoTry, setInfoTry] = useState(0);
   useEffect(() => {
     let alive = true;
-    api.previewInfo().then(info => {
-      if (alive) setApplied({ rendererVersion: info.rendererVersion, generation: info.generation, ...want.current });
-    });
+    api.previewInfo().then(
+      info => {
+        if (!alive) return;
+        setPreviewError(null);
+        setApplied({ rendererVersion: info.rendererVersion, generation: info.generation, ...want.current });
+      },
+      err => { if (alive) setPreviewError(err?.message ?? String(err)); },
+    );
     return () => { alive = false; };
+  }, [api, infoTry]);
+  // Ô gặp 410: lấy lại thế hệ hiện tại của backend (gộp nhiều ô thành một lần gọi).
+  const refreshing = useRef(false);
+  const onStale = useCallback(() => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    api.previewInfo().then(
+      info => setApplied(a => (a && info.generation > a.generation ? { ...a, generation: info.generation, rendererVersion: info.rendererVersion } : a)),
+      err => setPreviewError(err?.message ?? String(err)),
+    ).finally(() => { refreshing.current = false; });
   }, [api]);
   const pending = useRef<string | null>(null);
   useEffect(() => {
@@ -93,10 +110,16 @@ export function LibraryGrid({
     if (pending.current === key) return;
     pending.current = key;
     let alive = true;
-    api.bumpGeneration().then(g => {
-      if (pending.current === key) pending.current = null;
-      if (alive) setApplied(a => (a ? { ...a, generation: g, text: sampleText, px } : a));
-    });
+    api.bumpGeneration().then(
+      g => {
+        if (pending.current === key) pending.current = null;
+        if (alive) setApplied(a => (a ? { ...a, generation: g, text: sampleText, px } : a));
+      },
+      err => {
+        if (pending.current === key) pending.current = null;
+        if (alive) setPreviewError(err?.message ?? String(err));
+      },
+    );
     return () => { alive = false; if (pending.current === key) pending.current = null; };
   }, [api, applied, sampleText, px]);
 
@@ -108,8 +131,18 @@ export function LibraryGrid({
 
   return (
     <div ref={box} role="grid" aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
-      {snap.error ? (
-        <p role="alert">Lỗi tải thư viện: {snap.error}</p>
+      {previewError && (
+        <div role="alert">
+          Không tải được preview: {previewError}{' '}
+          <button type="button" onClick={() => { setPreviewError(null); setInfoTry(n => n + 1); }}>Thử lại</button>
+        </div>
+      )}
+      {snap.error && snap.total !== null && (
+        // Lỗi ở một trang khi đã có dữ liệu: giữ lưới, cho thử lại.
+        <div role="alert">Lỗi tải thư viện: {snap.error} <button type="button" onClick={() => paged?.retry()}>Thử lại</button></div>
+      )}
+      {snap.error && snap.total === null ? (
+        <div role="alert">Lỗi tải thư viện: {snap.error} <button type="button" onClick={() => paged?.retry()}>Thử lại</button></div>
       ) : snap.total === 0 ? (
         <p>Không có font nào khớp</p>
       ) : (
@@ -121,7 +154,7 @@ export function LibraryGrid({
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: size.height, width: size.width }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

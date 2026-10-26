@@ -36,7 +36,7 @@ const fold = (s: string) => s.normalize('NFD').replace(/\p{Mn}/gu, '').replace(/
 
 export function createMockLibraryApi(
   rows: FaceRow[],
-  o: { latencyMs?: number; toUrl?: (n: string) => string; fail?: () => Error | null } = {},
+  o: { latencyMs?: number; toUrl?: (n: string) => string; fail?: (q: FaceQuery) => Error | null } = {},
 ): MockApi {
   const calls: FaceQuery[] = [];
   let generation = 0; // sống qua nhiều lần mount, như backend
@@ -47,7 +47,7 @@ export function createMockLibraryApi(
     async queryFaces(q) {
       calls.push(q);
       if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs));
-      const err = o.fail?.();
+      const err = o.fail?.(q);
       if (err) throw err;
       const t = q.text ? fold(q.text) : '';
       const hits = t ? sorted.filter(r => fold(r.family).includes(t)) : sorted;

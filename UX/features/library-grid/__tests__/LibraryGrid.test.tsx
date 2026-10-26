@@ -191,6 +191,44 @@ describe('LibraryGrid', () => {
     expect(screen.getByText('Không có font nào khớp')).toBeInTheDocument();
   });
 
+  it('recovers when the backend generation moved on elsewhere (410)', async () => {
+    const api = createMockLibraryApi(rows);
+    const realInfo = api.previewInfo.bind(api);
+    let first = true;
+    // Trả thế hệ 0 nhưng backend đã sang 1 (ví dụ một lần bump treo của grid cũ tới sau).
+    api.previewInfo = async () => { const i = await realInfo(); if (first) { first = false; await api.bumpGeneration(); } return i; };
+    const loader = stubLoader(); const { b } = blobs(u => (u.includes('g=0') ? 410 : 200));
+    render(ui(api, {}, { loader, b }));
+    await settle();
+    expect(cells()[0]).toHaveAttribute('data-state', 'ready');
+    expect(cells()[0].getAttribute('data-shown-url')).toMatch(/g=1/);
+  });
+
+  it('shows an error when preview info cannot be loaded', async () => {
+    const api = createMockLibraryApi(rows);
+    api.previewInfo = async () => { throw new Error('ipc'); };
+    const { b } = blobs();
+    render(<LibraryGrid api={api} query={{}} width={1300} height={800} loader={stubLoader()} blobs={b} />);
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('Không tải được preview');
+  });
+
+  it('a failed page keeps the grid and can be retried', async () => {
+    let failing = true;
+    const api = createMockLibraryApi(rows, { fail: q => ((q.offset ?? 0) >= 200 && failing ? new Error('bận') : null) });
+    const { b } = blobs();
+    render(<LibraryGrid api={api} query={{}} width={1300} height={8000} loader={stubLoader()} blobs={b} />); // cao → cần trang 1
+    await settle();
+    expect(cells().length).toBeGreaterThan(0);
+    expect(screen.getByRole('alert')).toHaveTextContent('bận');
+    expect(api.calls.filter(c => c.offset === 200)).toHaveLength(1); // không tự fetch lại liên tục
+    failing = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    await settle();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(api.calls.filter(c => c.offset === 200)).toHaveLength(2);
+  });
+
   it('shows the backend error state', async () => {
     const api = createMockLibraryApi(rows, { fail: () => new Error('db hỏng') });
     const { b } = blobs();

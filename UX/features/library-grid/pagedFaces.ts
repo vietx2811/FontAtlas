@@ -16,9 +16,12 @@ export class PagedFaces {
   private query: GridQuery;
   private pages = new Map<number, FaceRow[]>();
   private inflight = new Set<number>();
+  /** Trang lỗi: không tự fetch lại (tránh vòng lặp lỗi → render → fetch); chỉ thử lại qua retry() hoặc đổi query. */
+  private failed = new Set<number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
   private snap: PagedSnapshot = { total: null, version: 0, error: null };
+  private lastRange: [number, number] = [0, 0];
 
   constructor(private api: Pick<LibraryApi, 'queryFaces'>, query: GridQuery) {
     this.query = query;
@@ -45,20 +48,31 @@ export class PagedFaces {
     this.epoch++;
     this.pages.clear();
     this.inflight.clear();
+    this.failed.clear();
     this.emit({ total: null, error: null });
     this.fetchPage(0);
   }
 
   ensureRange(start: number, stop: number) {
     if (this.disposed) return;
+    this.lastRange = [start, stop];
     const first = Math.floor(Math.max(0, start - PAGE_SIZE / 2) / PAGE_SIZE);
     let last = Math.floor((stop + PAGE_SIZE / 2) / PAGE_SIZE);
     const total = this.snap.total;
     if (total !== null) last = Math.min(last, Math.max(0, Math.floor((total - 1) / PAGE_SIZE)));
     if (total === 0) return;
     for (let n = first; n <= last; n++) {
-      if (!this.pages.has(n) && !this.inflight.has(n)) this.fetchPage(n);
+      if (!this.pages.has(n) && !this.inflight.has(n) && !this.failed.has(n)) this.fetchPage(n);
     }
+  }
+
+  /** Thử lại các trang còn thiếu quanh vùng đang xem (sau lỗi). */
+  retry() {
+    if (this.disposed) return;
+    this.failed.clear();
+    this.emit({ error: null });
+    if (this.snap.total === null && !this.inflight.has(0) && !this.pages.has(0)) this.fetchPage(0);
+    this.ensureRange(...this.lastRange);
   }
 
   rowAt(i: number): FaceRow | undefined {
@@ -84,6 +98,7 @@ export class PagedFaces {
       err => {
         if (this.disposed || e !== this.epoch) return;
         this.inflight.delete(n);
+        this.failed.add(n);
         this.emit({ error: err?.message ?? String(err) });
       },
     );

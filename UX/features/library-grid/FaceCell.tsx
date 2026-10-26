@@ -12,11 +12,13 @@ export type CellState = 'loading' | 'ready' | 'error' | 'live';
 type Props = {
   row: FaceRow | undefined; url: string | null; px: PxBucket; text: string; selected: boolean;
   mode: PreviewMode; blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void;
+  /** Gặp 410: thế hệ backend đã đi tiếp → grid lấy lại thế hệ hiện tại. */
+  onStale?(): void;
 };
 
 const NON_ASCII = /[^\x00-\x7F]/;
 
-export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect }: Props): React.JSX.Element {
+export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale }: Props): React.JSX.Element {
   const { width: cw, height: ch } = cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
@@ -47,7 +49,7 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
       err => {
         done = true;
         if (!alive) return;
-        if (err instanceof PreviewHttpError && err.status === 410) return; // URL mới sắp tới
+        if (err instanceof PreviewHttpError && err.status === 410) { onStale?.(); return; } // xin thế hệ mới, URL mới sẽ tới
         setState('error');
       },
     );
