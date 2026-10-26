@@ -73,6 +73,27 @@ describe('FontFaceLoader', () => {
     expect(f.added.size).toBe(2);
   });
 
+  it('release evicts when over budget without waiting for the next load', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps, { BUDGET_BYTES: 1000 });
+    const a = makeRow(1, { fileSize: 700 }), b = makeRow(2, { fileSize: 700 });
+    l.acquire(a); l.acquire(b); await f.settle(); // cả hai đang dùng → 1400 > 1000
+    expect(l.stats().readyBytes).toBe(1400);
+    l.release(a);
+    expect(l.stats()).toMatchObject({ readyBytes: 700, evictions: 1 });
+  });
+
+  it('dispose removes every face, cancels pending work and refuses new acquires', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps);
+    const a = makeRow(1);
+    l.acquire(a); await f.settle();
+    const pending = l.acquire(makeRow(2)); // đang tải
+    l.dispose();
+    expect(f.added.size).toBe(0);
+    expect(await pending).toBeNull();
+    expect(await l.acquire(makeRow(3))).toBeNull();
+    expect(f.sources).toHaveLength(2);
+  });
+
   it('load error resolves null and is not retried', async () => {
     const f = fake({ fail: true }); const l = new FontFaceLoader(f.deps);
     const r = makeRow(1);

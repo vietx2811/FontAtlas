@@ -54,6 +54,7 @@ export class FontFaceLoader {
   private evictions = 0;
   private cancels = 0;
   private idleTimer: unknown = null;
+  private disposed = false;
   private opts: { BUDGET_BYTES: number; MAX_ACTIVE: number; V_MAX: number; IDLE_MS: number };
 
   constructor(private deps: LoaderDeps, opts: Partial<typeof LOADER> = {}) {
@@ -62,7 +63,7 @@ export class FontFaceLoader {
 
   acquire(row: LoaderRow): Promise<string | null> {
     const url = this.deps.fontUrl(row);
-    if (url === null) return Promise.resolve(null); // gồm faceIndex > 0
+    if (url === null || this.disposed) return Promise.resolve(null); // gồm faceIndex > 0
     const key = familyName(row);
     const hit = this.entries.get(key);
     if (hit) {
@@ -93,7 +94,22 @@ export class FontFaceLoader {
       if (i >= 0) this.queue.splice(i, 1);
       this.cancels++;
       e.resolve(null);
+    } else if (e.refs === 0 && e.state === 'ready') {
+      this.evict(); // vượt ngân sách thì gỡ ngay, không chờ lần tải sau
     }
+  }
+
+  /** Gỡ mọi FontFace khỏi document.fonts, huỷ việc đang chờ; sau đó acquire luôn trả null. */
+  dispose() {
+    this.disposed = true;
+    if (this.idleTimer !== null) { this.deps.clearTimer(this.idleTimer); this.idleTimer = null; }
+    for (const e of this.entries.values()) {
+      if (e.state === 'ready') this.deps.fonts.delete(e.face);
+      else e.resolve(null);
+    }
+    this.entries.clear();
+    this.queue = [];
+    this.readyBytes = 0;
   }
 
   onScroll() {
@@ -119,6 +135,7 @@ export class FontFaceLoader {
       const face = this.deps.createFace(key, `url("${e.url}")`);
       face.load().then(
         () => {
+          if (this.disposed) { e.resolve(null); return; }
           this.deps.fonts.add(face);
           e.face = face;
           e.state = 'ready';

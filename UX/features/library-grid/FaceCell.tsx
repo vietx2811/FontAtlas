@@ -11,7 +11,7 @@ export type CellState = 'loading' | 'ready' | 'error' | 'live';
 
 type Props = {
   row: FaceRow | undefined; url: string | null; px: PxBucket; text: string; selected: boolean;
-  mode: PreviewMode; blobs: PreviewBlobs; loader: FontFaceLoader; onSelect(row: FaceRow): void;
+  mode: PreviewMode; blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void;
 };
 
 const NON_ASCII = /[^\x00-\x7F]/;
@@ -66,15 +66,15 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
     if (shownRef.current) { blobs.release(shownRef.current.src); shownRef.current = null; }
   }, [blobs]);
 
-  const canLive = !!row && row.faceIndex === 0;
+  const canLive = !!row && row.faceIndex === 0 && !!loader;
   const startLive = () => {
-    if (!row || acquired.current) return;
+    if (!row || !loader || acquired.current) return;
     acquired.current = true;
     loader.acquire(row).then(fam => { if (fam && (hovering.current || selected)) setLive(fam); });
   };
   const stopLive = () => {
     if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
-    if (acquired.current && row) { loader.release(row); acquired.current = false; }
+    if (acquired.current && row && loader) { loader.release(row); acquired.current = false; }
     setLive(null);
   };
   useEffect(() => {

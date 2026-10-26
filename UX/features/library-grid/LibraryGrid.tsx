@@ -20,7 +20,7 @@ type Applied = { rendererVersion: string; generation: number; text: string; px: 
 type RowProps = {
   cols: number; total: number; paged: PagedFaces | null; version: number; applied: Applied | null;
   api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null;
-  blobs: PreviewBlobs; loader: FontFaceLoader; onSelect(row: FaceRow): void;
+  blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void;
 };
 
 function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect }: RowComponentProps<RowProps>) {
@@ -61,12 +61,19 @@ export function LibraryGrid({
   const box = useRef<HTMLDivElement>(null);
   const size = useSize(box, { width, height });
   const { paged, snap } = usePagedFaces(api, query);
-  // Các đối tượng này không có tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
+  // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
   const [velocity] = useState(() => new ScrollVelocity());
-  const [ownLoader] = useState(() => (loaderProp ? null : new FontFaceLoader(browserLoaderDeps(api, velocity))));
   const [ownBlobs] = useState(() => (blobsProp ? null : new PreviewBlobs()));
-  const loader = loaderProp ?? ownLoader!;
   const blobs = blobsProp ?? ownBlobs!;
+  // Loader tự tạo giữ FontFace trong document.fonts → tạo và huỷ trong cùng một effect.
+  const [ownLoader, setOwnLoader] = useState<FontFaceLoader | null>(null);
+  useEffect(() => {
+    if (loaderProp) return;
+    const l = new FontFaceLoader(browserLoaderDeps(api, velocity));
+    setOwnLoader(l);
+    return () => { l.dispose(); setOwnLoader(null); };
+  }, [api, velocity, loaderProp]);
+  const loader = loaderProp ?? ownLoader;
 
   // Thế hệ preview do backend sở hữu: lấy giá trị đầu qua previewInfo, xin mới khi chữ/cỡ đổi.
   const [applied, setApplied] = useState<Applied | null>(null);
@@ -116,7 +123,7 @@ export function LibraryGrid({
           style={{ height: size.height, width: size.width }}
           rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
-          onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader.onScroll(); }}
+          onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />
       )}
     </div>

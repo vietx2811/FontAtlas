@@ -176,6 +176,16 @@ describe('LibraryGrid', () => {
     expect(onSelect.mock.calls[0][0].faceId).toBe(2);
   });
 
+  it('disposes its own FontFaceLoader on unmount', async () => {
+    const spy = vi.spyOn(FontFaceLoader.prototype, 'dispose');
+    const api = createMockLibraryApi(rows.slice(0, 3)); const { b } = blobs();
+    const r = render(<LibraryGrid api={api} query={{}} width={1300} height={800} blobs={b} />);
+    await settle();
+    r.unmount();
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
   it('shows the empty state', async () => {
     await mount({ query: { text: 'khong co font nao' } });
     expect(screen.getByText('Không có font nào khớp')).toBeInTheDocument();
