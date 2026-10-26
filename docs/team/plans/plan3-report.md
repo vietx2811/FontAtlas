@@ -122,7 +122,7 @@ Bốn hàng còn lại lệch 1 bậc: V05, P21, P34, P58.
 
 ## 7. Kiểm thử
 
-- `cargo test` đều qua: core 59 (+1 ignored), store 66 (+2 ignored), index 48 (+2 ignored, S6), eval 12. Chi tiết sau rebase ở mục 9.
+- Trước rebase, `cargo test` đều qua: core 59 (+1 ignored), store 66 (+2 ignored), index 48 (+2 ignored, S6), eval 12. Sau rebase xem mục 9.
 - `cargo clippy --all-targets -- -D warnings` sạch trên core, store, index, eval.
 - CI: `.github/workflows/index-eval.yml`. Job `test` không cần mạng; job `eval-report` chỉ báo cáo (`continue-on-error`).
 
@@ -144,6 +144,22 @@ Bốn hàng còn lại lệch 1 bậc: V05, P21, P34, P58.
    - Test tiếng Việt của plan import `StackStyle` mà không dùng, đã bỏ import.
 4. **Phát hiện, chưa sửa:** Public Sans khi không mở rộng VF có style "Thin" (tên instance mặc định), dù được đo ở wght 400. Nên lấy tên style theo vị trí đo ở Plan 6.
 
-## 9. Rebase lên `dev/mvp`
+## 9. Rebase lên `dev/mvp` (295e930) [ĐÃ CHẠY]
 
-(xem mục cuối, cập nhật sau khi rebase)
+Thực hiện bằng cherry-pick lần lượt 13 commit lên `dev/mvp`, thay cho `git rebase`. Lý do:
+- `dev/mvp` (Plan 4) cũng thêm `pub fn standard_location` và fixture `public_sans_vf.ttf`.
+- Rebase thẳng làm hàm bị định nghĩa hai lần từ commit Task 1 trở đi, tức là các commit giữa không biên dịch được.
+
+Cách giải:
+- Commit Task 1 bỏ bản `standard_location` của mình, dùng bản của `dev/mvp`. Thân hàm giống hệt.
+- Commit Task 10 giữ cả hai test trong `tests/anatomy.rs`.
+- `[workspace].members` gồm `core, store, embed, index, eval`. `Cargo.lock` được tạo lại bằng `cargo update -w` ở mỗi bước.
+- Fixture `public_sans_vf.ttf` trùng từng byte với bản của Plan 4, nên không có xung đột.
+- Nhánh dự phòng trỏ vào HEAD cũ: `backup/index-pre-rebase` (6c6e507), chỉ ở local.
+
+Sau rebase:
+- `ANALYZER_VERSION` chỉ có một giá trị: `core-0.2.0`.
+- `cargo test -p fontatlas-core -p fontatlas-store -p fontatlas-embed -p fontatlas-index -p fontatlas-eval`: **257 passed, 0 failed, 10 ignored**.
+  - Phần ignored gồm test hiệu năng S6 và các test của embed cần mô hình hoặc GPU.
+- `cargo clippy --all-targets -- -D warnings` sạch trên cả 5 crate.
+- S6 đo lại ở bản release: `similar` 1,3 ms; `pair_candidates` **45,1 ms**, càng sát ngưỡng 50 ms.
