@@ -139,6 +139,16 @@ describe('LibraryGrid', () => {
     expect(loader.release).toHaveBeenCalledTimes(1);
   });
 
+  it('live font renders at the same size as the preview (no jump, no clipping)', async () => {
+    await mount({ px: 48 });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const c = cells()[0];
+    fireEvent.pointerEnter(c);
+    await act(async () => { await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS); });
+    const span = c.querySelector('span[data-live]') as HTMLElement;
+    expect(span.style.fontSize).toBe('24px'); // ảnh vẽ ở 48 px trên canvas 2× → 24 css px
+  });
+
   it('hover_on_ttc_face_keeps_preview', async () => {
     const { loader } = await mount({}, [makeRow(0, { faceIndex: 1 })]);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

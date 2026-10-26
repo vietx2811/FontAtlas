@@ -109,7 +109,8 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
       </div>
       <div style={{ width: cw, height: ch, maxWidth: '100%' }}>
         {live ? (
-          <span style={{ fontFamily: `"${live}"`, fontSize: (px * 3) / 4, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
+          // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
+          <span data-live style={{ fontFamily: `"${live}"`, fontSize: px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
         ) : state === 'error' ? (
           <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
