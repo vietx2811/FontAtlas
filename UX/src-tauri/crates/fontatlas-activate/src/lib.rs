@@ -7,6 +7,7 @@ mod fake;
 #[cfg(target_os = "macos")]
 mod mac;
 mod paths;
+mod service;
 mod types;
 mod windows;
 
@@ -15,7 +16,11 @@ pub use fake::FakeEngine;
 #[cfg(target_os = "macos")]
 pub use mac::MacCoreTextEngine;
 pub use paths::{FileProbe, canonical_path, classify_owner, probe_file};
-pub use types::{ActivationError, EngineError, Owner};
+pub use service::ActivationService;
+pub use types::{
+    ActivationError, ActivationReport, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome, FileResult,
+    Owner, Progress, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED,
+};
 pub use windows::WindowsGdiEngine;
 
 /// Engine của nền tảng đang chạy: macOS → CoreText; nơi khác → stub Windows (`Unsupported`).

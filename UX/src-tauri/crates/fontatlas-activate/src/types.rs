@@ -64,3 +64,83 @@ impl ActivationError {
         }
     }
 }
+
+/// `"1"` → scope mặc định `Persistent` ("Giữ kích hoạt khi tắt app"); khác → `Session`.
+pub const SETTING_ACTIVATION_KEEP: &str = "activation_keep_after_quit";
+/// `"1"` sau khi onboarding đã hỏi về kích hoạt.
+pub const SETTING_ACTIVATION_ONBOARDED: &str = "activation_onboarded";
+/// Ghi vào mỗi dòng `activation_state`.
+pub const ENGINE_VERSION: u32 = 1;
+
+/// Khi có font trùng PostScript name: hỏi người dùng (mặc định) hay vẫn kích hoạt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConflictPolicy {
+    #[default]
+    Ask,
+    Proceed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conflict {
+    pub postscript_name: String,
+    pub existing_path: String,
+    pub owner: Owner,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum FileOutcome {
+    /// Chỉ `preflight` trả: không có xung đột, sẵn sàng kích hoạt.
+    Ready,
+    Activated,
+    AlreadyActive,
+    Deactivated,
+    AlreadyInactive,
+    /// Một thao tác khác đang chạy trên cùng file.
+    Busy,
+    NeedsConfirmation { conflicts: Vec<Conflict> },
+    MissingFile,
+    NotDownloaded,
+    Failed { code: String, message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileResult {
+    pub hash_hex: String,
+    pub path: Option<String>,
+    pub requested_faces: Vec<u32>,
+    /// Face khác của cùng file (TTC) cũng được kích hoạt / tắt theo.
+    pub extra_faces: Vec<u32>,
+    pub outcome: FileOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationReport {
+    pub results: Vec<FileResult>,
+    pub changed: usize,
+    pub needs_confirmation: usize,
+    pub failed: usize,
+}
+
+impl ActivationReport {
+    pub(crate) fn push(&mut self, r: FileResult) {
+        match r.outcome {
+            FileOutcome::Activated | FileOutcome::Deactivated => self.changed += 1,
+            FileOutcome::NeedsConfirmation { .. } => self.needs_confirmation += 1,
+            FileOutcome::Failed { .. } => self.failed += 1,
+            _ => {}
+        }
+        self.results.push(r);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Progress {
+    pub done: usize,
+    pub total: usize,
+    pub hash_hex: String,
+}

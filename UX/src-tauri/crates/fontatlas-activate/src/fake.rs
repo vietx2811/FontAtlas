@@ -18,6 +18,7 @@ struct FakeState {
     fail_next: Option<EngineError>,
     panic_on: HashSet<PathBuf>,
     barrier: Option<Arc<Barrier>>,
+    blocked: bool,
 }
 
 #[derive(Default)]
@@ -60,6 +61,11 @@ impl FakeEngine {
         self.st().barrier = Some(b);
     }
 
+    /// `true` khi một `register` đang chờ barrier của `block_register_until`.
+    pub fn is_blocked(&self) -> bool {
+        self.st().blocked
+    }
+
     /// Các đăng ký hiện có, theo thứ tự (path, scope).
     pub fn registrations(&self) -> Vec<(PathBuf, Scope)> {
         let mut v = self.st().regs.clone();
@@ -81,7 +87,9 @@ impl ActivationEngine for FakeEngine {
     fn register(&self, path: &Path, scope: Scope) -> Result<(), EngineError> {
         let barrier = self.st().barrier.take();
         if let Some(b) = barrier {
+            self.st().blocked = true;
             b.wait();
+            self.st().blocked = false;
         }
         let boom = self.st().panic_on.remove(path);
         if boom {
