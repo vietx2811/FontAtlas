@@ -6,7 +6,10 @@
 /* Layout: borderless translucent sidebar on window chrome (Claude / ChatGPT) · raised content sheet with grid + detail panel · floating sample composer at the bottom */
 :root {
   /* Existing FontAtlas tokens (UX/index.css) */
-  --chrome: #EFEEEC;              /* window background behind the sidebar (vibrancy stand-in) */
+  /* macOS sidebar material: in the app the window is transparent and NSVisualEffectView (Tauri windowEffects "sidebar")
+     paints this layer. Here a blurred wallpaper + translucent fill stands in for it. */
+  --wallpaper: radial-gradient(120% 90% at 10% 0%, #C9B8A6 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #8FA3B8 0%, transparent 60%), linear-gradient(160deg, #D8D2CA, #B9C2C9);
+  --chrome: rgba(240,238,235,.66);
   --chrome-hover: rgba(41,37,36,.06);
   --chrome-active: rgba(41,37,36,.09);
   --sheet: #FAFAFA;               /* content sheet */
@@ -32,7 +35,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --chrome: #141210; --chrome-hover: rgba(250,250,249,.06); --chrome-active: rgba(250,250,249,.10);
+    --wallpaper: radial-gradient(120% 90% at 10% 0%, #4A3B2E 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #26364A 0%, transparent 60%), linear-gradient(160deg, #1E1B19, #151A1F);
+    --chrome: rgba(28,26,24,.62); --chrome-hover: rgba(250,250,249,.06); --chrome-active: rgba(250,250,249,.10);
     --sheet: #1C1917; --fg: #FAFAF9; --card: #23201E; --border: #2E2A27;
     --muted: #A8A29E; --surface-2: #2A2623;
     --glass: rgba(20,18,16,.86); --composer: rgba(35,32,30,.88);
@@ -43,7 +47,8 @@
   }
 }
 :root[data-theme="dark"] {
-  --chrome: #141210; --chrome-hover: rgba(250,250,249,.06); --chrome-active: rgba(250,250,249,.10);
+  --wallpaper: radial-gradient(120% 90% at 10% 0%, #4A3B2E 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #26364A 0%, transparent 60%), linear-gradient(160deg, #1E1B19, #151A1F);
+  --chrome: rgba(28,26,24,.62); --chrome-hover: rgba(250,250,249,.06); --chrome-active: rgba(250,250,249,.10);
   --sheet: #1C1917; --fg: #FAFAF9; --card: #23201E; --border: #2E2A27;
   --muted: #A8A29E; --surface-2: #2A2623;
   --glass: rgba(20,18,16,.86); --composer: rgba(35,32,30,.88);
@@ -55,7 +60,7 @@
 
 html, body { height: 100%; min-width: 1000px; min-height: 700px; margin: 0; }
 body {
-  background: var(--chrome); color: var(--fg);
+  background: var(--wallpaper) fixed; background-color: #C8C2BA; color: var(--fg);
   font-family: var(--font-ui); font-size: var(--text-base);
   -webkit-font-smoothing: antialiased; overflow: auto;
 }
@@ -70,6 +75,8 @@ svg { flex: none; }
   height: 100%; position: relative;
   display: grid; grid-template-columns: var(--side-w) minmax(0,1fr);
   padding: 8px 8px 8px 0;
+  background: var(--chrome);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8); backdrop-filter: blur(40px) saturate(1.8);
   transition: grid-template-columns .22s ease;
 }
 .app.collapsed { grid-template-columns: 56px minmax(0,1fr); }
@@ -235,6 +242,11 @@ input[type=range] { width: 88px; accent-color: var(--accent); }
 /* ---------- Detail panel (inside the sheet, divided by a hairline) ---------- */
 .panel { width: 340px; min-height: 0; border-left: 1px solid var(--border); background: var(--sheet); display: flex; flex-direction: column; overflow: hidden; }
 .p-head { padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
+.p-meta { display: flex; flex-direction: column; gap: 3px; margin-top: -6px; min-width: 0; }
+.p-meta .by { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-meta .facts { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.p-meta .facts span + span::before { content: "·"; margin: 0 6px; opacity: .6; }
+.p-meta .path { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: var(--text-2xs); color: var(--muted); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-row { display: flex; align-items: center; gap: 8px; }
 .p-name { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--card); color: var(--fg); font: inherit; font-size: var(--text-sm); flex: 1; min-width: 0; }
@@ -367,6 +379,7 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
           <div class="p-name" id="pName"></div>
           <button class="switch" id="pSwitch" role="switch" aria-checked="false" title="Kích hoạt" aria-label="Kích hoạt font"></button>
           </div>
+        <div class="p-meta" id="pMeta"></div>
         <div class="p-row">
           <select id="pStyle" aria-label="Kiểu chữ"></select>
           <span class="chip" id="pClass"></span>
@@ -511,6 +524,30 @@ function renderGrid() {
   $('#viewCount').textContent = list.length;
 }
 
+/* ---------- Font file metadata (sample) ---------- */
+const DESIGNERS = {
+  'Be Vietnam Pro': 'Lâm Bảo, Tony Lê, ViệtAnh Nguyễn', 'Lora': 'Cyreal', 'Playfair Display': 'Claus Eggers Sørensen',
+  'Montserrat': 'Julieta Ulanovsky', 'Roboto Slab': 'Christian Robertson', 'JetBrains Mono': 'JetBrains, Philipp Nurullin',
+  'Dancing Script': 'Pablo Impallari', 'Oswald': 'Vernon Adams', 'Bricolage Grotesque': 'Mathieu Triay',
+  'EB Garamond': 'Georg Duffner, Octavio Pardo', 'Fraunces': 'Undercase Type', 'Josefin Sans': 'Santiago Orozco',
+  'Alegreya': 'Huerta Tipográfica', 'Space Mono': 'Colophon Foundry', 'DM Serif Display': 'Colophon Foundry',
+  'Syne': 'Bonjour Monde', 'Abril Fatface': 'TypeTogether', 'Montserrat Alt': 'Julieta Ulanovsky'
+};
+const SRC_PATH = { gf: '~/Library/Application Support/FontAtlas/google', local: '~/Library/Fonts', ext: '/Volumes/VXData/Fonts' };
+function meta(f) {
+  const slug = f.name.replace(/\s+/g, '');
+  const fmt = f.n > 10 ? 'Variable TTF' : f.src === 'local' ? 'OTF' : 'TTF';
+  const glyphs = 380 + f.id * 97 + (f.vi ? 0 : 240);
+  return {
+    by: DESIGNERS[f.name] || '—',
+    ver: (1 + (f.id % 4) * 0.1).toFixed(3),
+    fmt, glyphs,
+    size: Math.round(glyphs * 0.21 + f.n * 14) + ' KB',
+    lic: f.src === 'gf' ? 'OFL' : f.id % 3 ? 'OFL' : 'Thương mại',
+    path: `${SRC_PATH[f.src]}/${slug}${fmt.startsWith('Variable') ? '[wght]' : '-Regular'}.${fmt === 'OTF' ? 'otf' : 'ttf'}`
+  };
+}
+
 /* ---------- Panel ---------- */
 function renderPanel() {
   const f = byId(S.sel);
@@ -522,6 +559,11 @@ function renderPanel() {
   $('#pSwitch').setAttribute('aria-checked', f.active);
   $('#pStyle').innerHTML = f.styles.map(s => `<option>${s}</option>`).join('') + (f.n > f.styles.length ? `<option disabled>+${f.n - f.styles.length}</option>` : '');
   $('#pClass').textContent = f.cls;
+  const m = meta(f);
+  $('#pMeta').innerHTML = `
+    <div class="by">${m.by}</div>
+    <div class="facts"><span>v${m.ver}</span><span>${m.fmt}</span><span>${m.glyphs.toLocaleString('vi-VN')} glyph</span><span>${m.size}</span><span>${m.lic}</span></div>
+    <div class="path" title="${m.path}">${m.path}</div>`;
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
   const ff = `font-family:${f.css},serif`;
   const sample = esc(S.sample || 'Phở bò Hà Nội');
