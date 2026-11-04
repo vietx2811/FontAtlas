@@ -246,15 +246,33 @@ input[type=range] { width: 88px; accent-color: var(--accent); }
 .p-sub { font-size: var(--text-xs); color: var(--muted); margin-top: -7px; font-variant-numeric: tabular-nums; }
 .p-sec { display: flex; flex-direction: column; gap: 6px; }
 .p-label { font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
-.styles { display: flex; flex-wrap: wrap; gap: 4px; }
-.styles button {
-  height: 26px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--border);
-  background: var(--card); font-size: 13px; color: var(--fg); white-space: nowrap;
+/* style dropdown: options render in their own weight/style (native <select> can't on macOS) */
+.dd { position: relative; }
+.dd-btn {
+  width: 100%; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); text-align: left;
 }
-.styles button:hover { border-color: var(--accent); }
-.styles button[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--sheet); }
-.styles .more { font-family: var(--font-ui) !important; font-weight: 500 !important; font-style: normal !important; color: var(--muted); border-style: dashed; }
+.dd-btn:hover, .dd.open .dd-btn { border-color: var(--accent); }
+.dd-btn .cur { flex: 1; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-btn .cnt { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.dd-btn .chev { width: 8px; height: 8px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg) translate(-2px,-2px); transition: transform .15s; }
+.dd.open .chev { transform: rotate(-135deg) translate(-2px,-2px); }
+.dd-list {
+  position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; right: 0; max-height: 300px; overflow-y: auto;
+  padding: 4px; margin: 0; list-style: none;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow);
+}
+.dd-list li { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+.dd-list li:hover, .dd-list li.kb { background: var(--surface-2); }
+.dd-list li .ck { width: 14px; color: var(--accent-ink); font-family: var(--font-ui); font-size: 12px; }
+.dd-list li .wt { margin-left: auto; font-family: var(--font-ui); font-style: normal; font-weight: 400; font-size: var(--text-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.dd-list .sep { height: 1px; padding: 0; margin: 4px 6px; background: var(--border); cursor: default; }
+.meta-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 28px; font-size: var(--text-xs); color: var(--muted); border-top: 1px solid var(--border); }
+.meta-toggle:hover { color: var(--fg); background: var(--surface-2); }
+.meta-toggle .chev { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.meta-toggle[aria-expanded="true"] .chev { transform: rotate(-135deg) translateY(-2px); }
 .p-meta { margin: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); overflow: hidden; }
+.p-meta .meta-toggle { border-radius: 0; }
 .p-meta > div { display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; padding: 7px 10px; align-items: baseline; }
 .p-meta > div + div { border-top: 1px solid var(--border); }
 .p-meta dt { font-size: var(--text-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
@@ -588,16 +606,26 @@ function renderPanel() {
   $('#pSwitch').setAttribute('aria-checked', f.active);
   const m = meta(f);
   if (!m.styles.includes(S.style)) S.style = m.styles.includes('Regular') ? 'Regular' : m.styles[0];
-  const shown = S.allStyles ? m.styles : m.styles.slice(0, 6);
-  const sty = st => { const i = WEIGHTS.findIndex(w => st.startsWith(w)); return `font-family:${f.css},var(--font-ui);font-weight:${i < 0 ? 400 : (i + 1) * 100};font-style:${/Italic/.test(st) ? 'italic' : 'normal'}`; };
+  const weightOf = st => { const i = WEIGHTS.findIndex(w => st.startsWith(w)); return i < 0 ? 400 : (i + 1) * 100; };
+  const sty = st => `font-family:${f.css},var(--font-ui);font-weight:${weightOf(st)};font-style:${/Italic/.test(st) ? 'italic' : 'normal'}`;
   $('#pSub').textContent = `${f.cls} · ${m.fmt} · ${m.glyphs.toLocaleString('vi-VN')} glyph`;
+  // list order: romans by weight, then italics by weight
+  const romans = m.styles.filter(x => !/Italic/.test(x)).sort((a, b) => weightOf(a) - weightOf(b));
+  const italics = m.styles.filter(x => /Italic/.test(x)).sort((a, b) => weightOf(a) - weightOf(b));
+  const li = st => `<li role="option" data-style="${st}" aria-selected="${st === S.style}" style="${sty(st)}"><span class="ck">${st === S.style ? '✓' : ''}</span>${st}<span class="wt">${weightOf(st)}</span></li>`;
   $('#pStyles').innerHTML = `
-    <div class="p-label"><span>Kiểu</span><span>${m.styles.length}</span></div>
-    <div class="styles">${shown.map(st => `<button data-style="${st}" aria-pressed="${st === S.style}" style="${sty(st)}">${st}</button>`).join('')}${m.styles.length > shown.length ? `<button class="more" data-allstyles>+${m.styles.length - shown.length}</button>` : ''}</div>`;
+    <div class="dd ${S.ddOpen ? 'open' : ''}" id="styleDD">
+      <button class="dd-btn" id="ddBtn" aria-haspopup="listbox" aria-expanded="${!!S.ddOpen}" aria-label="Kiểu chữ">
+        <span class="cur" style="${sty(S.style)}">${S.style}</span><span class="cnt">${m.styles.length} kiểu</span><span class="chev" aria-hidden="true"></span>
+      </button>
+      ${S.ddOpen ? `<ul class="dd-list" role="listbox">${romans.map(li).join('')}${italics.length ? '<li class="sep" aria-hidden="true"></li>' + italics.map(li).join('') : ''}</ul>` : ''}
+    </div>`;
   const row = (k, v, cls = '') => `<div><dt>${k}</dt><dd class="${cls}" ${cls === 'mono' ? `title="${v}"` : ''}>${v}</dd></div>`;
   $('#pMeta').innerHTML =
-    row('Thiết kế', m.by) + row('Hãng', m.foundry) + row('Phiên bản', m.ver) +
-    row('Giấy phép', m.lic) + row('Bản quyền', m.copy, 'soft') + row('Tệp', m.path, 'mono');
+    row('Thiết kế', m.by) + row('Giấy phép', m.lic) +
+    (S.metaOpen ? row('Hãng', m.foundry) + row('Phiên bản', m.ver) + row('Bản quyền', m.copy, 'soft') + row('Tệp', m.path, 'mono') : '') +
+    `<button class="meta-toggle" data-metatoggle aria-expanded="${!!S.metaOpen}">${S.metaOpen ? 'Thu gọn' : 'Hãng · Phiên bản · Bản quyền · Tệp'}<span class="chev" aria-hidden="true"></span></button>`;
+  if (S.ddOpen) { const sel = $('.dd-list [aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: 'nearest' }); }
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
   const wi = WEIGHTS.findIndex(w => S.style.startsWith(w));
   const ff = `font-family:${f.css},serif;font-weight:${wi < 0 ? 400 : (wi + 1) * 100};font-style:${/Italic/.test(S.style) ? 'italic' : 'normal'}`;
@@ -668,16 +696,18 @@ document.addEventListener('click', e => {
   const star = t.closest('[data-star]');
   if (star) { const f = byId(+star.dataset.star); f.star = !f.star; renderSide(); renderGrid(); return; }
   const card = t.closest('.card');
-  if (card) { S.allStyles = false; S.sel = +card.dataset.id; markRecent(S.sel); renderSide(); renderGrid(); renderPanel(); return; }
+  if (card) { S.ddOpen = false; S.sel = +card.dataset.id; markRecent(S.sel); renderSide(); renderGrid(); renderPanel(); return; }
   const sec = t.closest('[data-sec]');
   if (sec) { const k = sec.dataset.sec; S.open[k] = !S.open[k]; const box = sec.parentElement; box.dataset.open = S.open[k]; sec.setAttribute('aria-expanded', S.open[k]); return; }
   const nav = t.closest('[data-view]');
   if (nav && !t.closest('.more')) { S.view = nav.dataset.view; renderSide(); renderGrid(); return; }
   const tag = t.closest('[data-tag]');
   if (tag) { S.tag = S.tag === tag.dataset.tag ? null : tag.dataset.tag; renderSide(); renderGrid(); return; }
+  if (t.closest('#ddBtn')) { S.ddOpen = !S.ddOpen; renderPanel(); return; }
   const st = t.closest('[data-style]');
-  if (st) { S.style = st.dataset.style; renderPanel(); return; }
-  if (t.closest('[data-allstyles]')) { S.allStyles = true; renderPanel(); return; }
+  if (st) { S.style = st.dataset.style; S.ddOpen = false; renderPanel(); $('#ddBtn').focus(); return; }
+  if (t.closest('[data-metatoggle]')) { S.metaOpen = !S.metaOpen; renderPanel(); return; }
+  if (S.ddOpen && !t.closest('#styleDD')) { S.ddOpen = false; renderPanel(); }
   const tab = t.closest('[data-tab]');
   if (tab) { S.tab = tab.dataset.tab; renderPanel(); return; }
   const go = t.closest('[data-go]');
@@ -686,6 +716,14 @@ document.addEventListener('click', e => {
   if (pre) { S.sample = pre.dataset.preset; $('#sampleInput').value = S.sample; renderGrid(); renderPanel(); return; }
 });
 document.addEventListener('keydown', e => {
+  if (S.ddOpen && ['Escape','ArrowDown','ArrowUp','Enter'].includes(e.key)) {
+    e.preventDefault();
+    if (e.key === 'Escape' || e.key === 'Enter') { S.ddOpen = false; renderPanel(); $('#ddBtn').focus(); return; }
+    const opts = [...document.querySelectorAll('.dd-list [data-style]')].map(o => o.dataset.style);
+    const i = opts.indexOf(S.style);
+    S.style = opts[Math.max(0, Math.min(opts.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+    renderPanel(); return;
+  }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#search').focus(); return; }
   if (e.target.id === 'stPause' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); S.paused = !S.paused; renderStatus(); return; }
   const card = e.target.closest && e.target.closest('.card');
