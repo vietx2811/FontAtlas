@@ -4,10 +4,14 @@
 //! - [`FakeEngine`]: bản trong bộ nhớ, mô phỏng ngữ nghĩa CoreText đo ở `docs/team/spikes/04_activation.md`.
 mod engine;
 mod fake;
+#[cfg(target_os = "macos")]
+mod mac;
 mod paths;
 mod types;
 
 pub use engine::{ActivationEngine, Scope};
 pub use fake::FakeEngine;
+#[cfg(target_os = "macos")]
+pub use mac::MacCoreTextEngine;
 pub use paths::{FileProbe, canonical_path, classify_owner, probe_file};
 pub use types::{ActivationError, EngineError, Owner};
