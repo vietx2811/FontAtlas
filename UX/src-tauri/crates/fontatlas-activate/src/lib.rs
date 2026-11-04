@@ -2,6 +2,7 @@
 //!
 //! - [`ActivationEngine`]: lớp nói chuyện với hệ điều hành (CoreText trên macOS; Windows là stub).
 //! - [`FakeEngine`]: bản trong bộ nhớ, mô phỏng ngữ nghĩa CoreText đo ở `docs/team/spikes/04_activation.md`.
+mod deactivate;
 mod engine;
 mod fake;
 #[cfg(target_os = "macos")]
@@ -18,7 +19,7 @@ pub use mac::MacCoreTextEngine;
 pub use paths::{FileProbe, canonical_path, classify_owner, probe_file};
 pub use service::ActivationService;
 pub use types::{
-    ActivationError, ActivationReport, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome, FileResult,
+    ActivationError, ActivationReport, Conflict, ConflictPolicy, DeactivatePolicy, ENGINE_VERSION, EngineError, FileOutcome, FileResult,
     Owner, Progress, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED,
 };
 pub use windows::WindowsGdiEngine;

@@ -380,3 +380,194 @@ fn activate_collection_activates_each_file_once() {
     assert_eq!(rep.results[0].requested_faces, vec![0, 1]);
     assert_eq!(svc.engine().registrations().len(), 1);
 }
+
+// ---------- Task 6: deactivate (đếm lý do) + set_scope ----------
+use fontatlas_activate::DeactivatePolicy;
+
+fn deactivate(
+    svc: &ActivationService<FakeEngine>,
+    env: &Env,
+    keys: &[fontatlas_store::FaceKey],
+    policy: DeactivatePolicy,
+) -> fontatlas_activate::ActivationReport {
+    svc.deactivate_faces(&env.store, keys, policy, &mut no_progress()).unwrap()
+}
+
+fn collection(env: &Env, name: &str, keys: &[fontatlas_store::FaceKey]) -> i64 {
+    let mut s = env.store.lock().unwrap();
+    let c = s.create_collection(name, None).unwrap();
+    s.add_to_collection(c, keys).unwrap();
+    c
+}
+
+fn activate_coll(svc: &ActivationService<FakeEngine>, env: &Env, c: i64) {
+    svc.activate_collection(&env.store, c, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+}
+
+fn deactivate_coll(svc: &ActivationService<FakeEngine>, env: &Env, c: i64) -> fontatlas_activate::ActivationReport {
+    svc.deactivate_collection(&env.store, c, &mut no_progress()).unwrap()
+}
+
+fn outcome_of(rep: &fontatlas_activate::ActivationReport, k: &fontatlas_store::FaceKey) -> FileOutcome {
+    let hex: String = k.hash.iter().map(|b| format!("{b:02x}")).collect();
+    rep.results.iter().find(|r| r.hash_hex == hex).unwrap().outcome.clone()
+}
+
+#[test]
+fn deactivate_uses_stored_path_even_if_file_deleted() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    std::fs::remove_file(env.fonts.join(LIBRE)).unwrap();
+    let rep = deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert_eq!(rep.changed, 1);
+    assert!(svc.engine().registrations().is_empty());
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!(r.state, DesiredState::Inactive);
+    assert_eq!(r.status, ActivationStatus::Unregistered);
+    assert!(r.active_path.is_some(), "giữ active_path");
+}
+
+#[test]
+fn deactivate_not_registered_is_ok() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let p = canon(&env.fonts.join(LIBRE));
+    use fontatlas_activate::ActivationEngine;
+    svc.engine().unregister(&p, Scope::Session).unwrap(); // bị gỡ ngoài app
+    let rep = deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+}
+
+#[test]
+fn deactivate_inactive_is_already_inactive() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    assert_eq!(deactivate(&svc, &env, &[k], DeactivatePolicy::Ask).results[0].outcome, FileOutcome::AlreadyInactive);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert_eq!(deactivate(&svc, &env, &[k], DeactivatePolicy::Ask).results[0].outcome, FileOutcome::AlreadyInactive);
+}
+
+#[test]
+fn two_overlapping_collections_keep_shared_file() {
+    let env = env_with(&[LIBRE, ROBOTO, "open_sans.ttf"]);
+    let svc = service(&env);
+    let (f1, f2, f3) = (key_of(&env, LIBRE), key_of(&env, ROBOTO), key_of(&env, "open_sans.ttf"));
+    let a = collection(&env, "A", &[f1, f2]);
+    let b = collection(&env, "B", &[f2, f3]);
+    activate_coll(&svc, &env, a);
+    activate_coll(&svc, &env, b);
+    assert_eq!(svc.engine().registrations().len(), 3);
+    let rep = deactivate_coll(&svc, &env, a);
+    assert_eq!(outcome_of(&rep, &f1), FileOutcome::Deactivated);
+    assert_eq!(outcome_of(&rep, &f2), FileOutcome::KeptActive { manual: false, collection_ids: vec![b] });
+    let mut left: Vec<_> = svc.engine().registrations().into_iter().map(|(p, _)| p).collect();
+    left.sort();
+    let mut want = vec![canon(&env.fonts.join(ROBOTO)), canon(&env.fonts.join("open_sans.ttf"))];
+    want.sort();
+    assert_eq!(left, want);
+    deactivate_coll(&svc, &env, b);
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn manual_plus_collection() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    activate(&svc, &env, &[f1], ConflictPolicy::Ask);
+    let a = collection(&env, "A", &[f1]);
+    activate_coll(&svc, &env, a);
+    let rep = deactivate_coll(&svc, &env, a);
+    assert_eq!(rep.results[0].outcome, FileOutcome::KeptActive { manual: true, collection_ids: vec![] });
+    assert_eq!(svc.engine().registrations().len(), 1);
+    assert_eq!(deactivate(&svc, &env, &[f1], DeactivatePolicy::Ask).results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn manual_deactivate_held_by_collection_asks() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = collection(&env, "A", &[f1]);
+    activate_coll(&svc, &env, a);
+    let rep = deactivate(&svc, &env, &[f1], DeactivatePolicy::Ask);
+    assert_eq!(rep.results[0].outcome, FileOutcome::HeldByCollections { collection_ids: vec![a] });
+    assert_eq!(svc.engine().registrations().len(), 1);
+    assert_eq!(row(&env, &f1.hash).unwrap().reasons, vec![ActivationReason::Collection(a)]);
+    let rep = deactivate(&svc, &env, &[f1], DeactivatePolicy::Force);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(row(&env, &f1.hash).unwrap().reasons.is_empty());
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn deactivate_collection_after_item_removed() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = collection(&env, "A", &[f1]);
+    activate_coll(&svc, &env, a);
+    env.store.lock().unwrap().remove_from_collection(a, &[f1]).unwrap();
+    let rep = deactivate_coll(&svc, &env, a);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn deactivate_all_clears_every_registration_both_scopes() {
+    let env = env_with(&[LIBRE, ROBOTO]);
+    let svc = service(&env);
+    let (f1, f2) = (key_of(&env, LIBRE), key_of(&env, ROBOTO));
+    svc.activate_faces(&env.store, &[f1], Some(Scope::Session), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    let a = collection(&env, "A", &[f2]);
+    svc.activate_collection(&env.store, a, Some(Scope::Persistent), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    let rep = svc.deactivate_all(&env.store, &mut no_progress()).unwrap();
+    assert_eq!(rep.changed, 2);
+    assert!(svc.engine().registrations().is_empty());
+    for k in [f1, f2] {
+        let r = row(&env, &k.hash).unwrap();
+        assert!(r.reasons.is_empty());
+        assert_eq!(r.state, DesiredState::Inactive);
+    }
+}
+
+#[test]
+fn set_scope_session_to_persistent_keeps_font_visible() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let rep = svc.set_scope(&env.store, None, Scope::Persistent).unwrap();
+    assert_eq!(rep.changed, 1);
+    let p = canon(&env.fonts.join(LIBRE));
+    assert_eq!(svc.engine().registrations(), vec![(p, Scope::Persistent)]);
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!(r.scope, Scope::Persistent);
+    assert_eq!(r.status, ActivationStatus::Registered);
+    // gọi lại: không còn gì để đổi
+    assert_eq!(svc.set_scope(&env.store, None, Scope::Persistent).unwrap().results.len(), 0);
+}
+
+#[test]
+fn set_scope_register_failure_keeps_old_scope() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    svc.engine().fail_next_register(EngineError::Rejected { code: 7, message: "x".into() });
+    let rep = svc.set_scope(&env.store, Some(&[k.hash]), Scope::Persistent).unwrap();
+    assert_eq!(rep.failed, 1);
+    let p = canon(&env.fonts.join(LIBRE));
+    assert_eq!(svc.engine().registrations(), vec![(p, Scope::Session)]);
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!(r.scope, Scope::Session);
+    assert_eq!(r.status, ActivationStatus::Registered);
+}

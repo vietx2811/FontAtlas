@@ -72,6 +72,14 @@ pub const SETTING_ACTIVATION_ONBOARDED: &str = "activation_onboarded";
 /// Ghi vào mỗi dòng `activation_state`.
 pub const ENGINE_VERSION: u32 = 1;
 
+/// Tắt thủ công một font mà collection còn giữ: hỏi lại (mặc định) hay gỡ khỏi mọi lý do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DeactivatePolicy {
+    #[default]
+    Ask,
+    Force,
+}
+
 /// Khi có font trùng PostScript name: hỏi người dùng (mặc định) hay vẫn kích hoạt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConflictPolicy {
@@ -100,6 +108,10 @@ pub enum FileOutcome {
     /// Một thao tác khác đang chạy trên cùng file.
     Busy,
     NeedsConfirmation { conflicts: Vec<Conflict> },
+    /// Tắt thủ công nhưng collection vẫn giữ font này (policy `Ask`): không đổi gì, UI hỏi lại.
+    HeldByCollections { collection_ids: Vec<i64> },
+    /// Đã gỡ lý do được yêu cầu nhưng font vẫn bật vì lý do khác (thủ công / collection khác).
+    KeptActive { manual: bool, collection_ids: Vec<i64> },
     MissingFile,
     NotDownloaded,
     Failed { code: String, message: String },
