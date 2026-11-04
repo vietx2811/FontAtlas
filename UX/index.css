@@ -31,6 +31,8 @@
 /* THEME VARIABLES (Logo-Aligned Color System) */
 /* ============================================================ */
 :root {
+    /* Nền vùng nội dung (sheet) — đặc, nằm trên nền vibrancy trong suốt */
+    --sheet: var(--background);
     /* Primary - Match logo dark gray */
     --primary: #5A5A5A;
     --primary-hover: #4A4A4A;

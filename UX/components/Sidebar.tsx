@@ -71,12 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     return (
         <>
-            <aside className="w-64 border-r border-[var(--border)] bg-[var(--card)] h-screen fixed left-0 top-0 flex flex-col z-30 hidden md:flex">
-                {/* Drag Region for macOS Traffic Lights */}
-                <div
-                    className="absolute top-0 left-0 w-full h-10 z-50 bg-transparent cursor-default"
-                    data-tauri-drag-region="true"
-                />
+            {/* Khung (WindowShell) lo vị trí, nền vibrancy và hàng kéo cửa sổ. */}
+            <aside className="h-full flex flex-col">
 
                 {/* Logo Header */}
                 {/* <div className="flex items-center px-10 pt-10 pb-3 shrink-0 relative z-40">

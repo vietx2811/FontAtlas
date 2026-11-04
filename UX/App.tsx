@@ -20,6 +20,7 @@ import { PreviewPanel } from './components/PreviewPanel';
 import { useLibrary } from './hooks/useLibrary';
 import { FontData, FontCategory } from './types';
 import { FontMap, generateMockMapData, type FontMapNode } from './components/FontMap';
+import { WindowShell } from './components/shell/WindowShell';
 
 // --- Error Boundary ---
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -227,7 +228,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">
+        <WindowShell sidebar={
             <Sidebar
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
@@ -238,10 +239,10 @@ const App: React.FC = () => {
                 selectedDirectory={selectedDirectory}
                 onSelectDirectory={setSelectedDirectory}
             />
-
-            <main className="flex-1 md:ml-64 flex flex-col min-h-screen relative">
+        }>
+            <main className="flex flex-col min-h-full relative text-[var(--foreground)]">
                 {/* Fixed Header */}
-                <header className="fixed top-0 left-0 right-0 md:left-64 z-30 px-6 py-3 bg-[var(--background)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+                <header className="fixed top-0 right-0 left-[var(--sidebar-w)] z-30 px-6 py-3 bg-[var(--background)]/95 backdrop-blur-xl border-b border-[var(--border)]">
                     <div className="flex items-center gap-4">
                         {/* Search Bar */}
                         <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-white border border-[var(--border)] rounded-full shadow-sm">
@@ -364,7 +365,7 @@ const App: React.FC = () => {
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            className="fixed top-[60px] left-0 right-0 md:left-64 z-20 bg-white border-b border-stone-200 shadow-md px-6 py-4"
+                            className="fixed top-[60px] right-0 left-[var(--sidebar-w)] z-20 bg-white border-b border-stone-200 shadow-md px-6 py-4"
                         >
                             {/* Metric Sliders Row */}
                             <div className="flex items-center gap-8 mb-4 pb-4 border-b border-stone-100">
@@ -590,7 +591,7 @@ const App: React.FC = () => {
                     />
                 )}
             </AnimatePresence>
-        </div >
+        </WindowShell>
     );
 };
 
