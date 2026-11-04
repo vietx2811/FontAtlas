@@ -1,5 +1,4 @@
 <title>FontAtlas UI v1</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Be+Vietnam+Pro:wght@400;600&family=Lora:ital,wght@0,400;1,400&family=Playfair+Display:wght@400;700&family=Montserrat:wght@400;600&family=Roboto+Slab:wght@400;600&family=JetBrains+Mono:wght@400&family=Dancing+Script:wght@500&family=Oswald:wght@400;500&family=Bricolage+Grotesque:wght@400;600&family=EB+Garamond:ital@0;1&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Josefin+Sans:wght@400;600&family=Alegreya:wght@400&family=DM+Serif+Display&family=Syne:wght@500;700&family=Abril+Fatface&family=Space+Mono&display=swap">
@@ -54,11 +53,11 @@
   color-scheme: dark;
 }
 
-html, body { height: 100%; }
+html, body { height: 100%; min-width: 1000px; min-height: 700px; margin: 0; }
 body {
   background: var(--chrome); color: var(--fg);
   font-family: var(--font-ui); font-size: var(--text-base);
-  -webkit-font-smoothing: antialiased; overflow: hidden;
+  -webkit-font-smoothing: antialiased; overflow: auto;
 }
 * { box-sizing: border-box; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
@@ -70,9 +69,7 @@ svg { flex: none; }
 .app {
   height: 100%; position: relative;
   display: grid; grid-template-columns: var(--side-w) minmax(0,1fr);
-  padding-left: max(0px, env(safe-area-inset-left, 0px));
-  padding-right: max(8px, env(safe-area-inset-right, 0px));
-  padding-block: 8px;
+  padding: 8px 8px 8px 0;
   transition: grid-template-columns .22s ease;
 }
 .app.collapsed { grid-template-columns: 56px minmax(0,1fr); }
@@ -82,7 +79,7 @@ svg { flex: none; }
   position: relative; z-index: 30;
   width: var(--side-w); height: 100%;
   display: flex; flex-direction: column; min-height: 0;
-  padding: 0 8px 0 max(8px, env(safe-area-inset-left, 0px));
+  padding: 0 8px;
   background: transparent;
   transition: width .22s ease, background .22s ease, box-shadow .22s ease;
 }
@@ -219,7 +216,7 @@ svg { flex: none; }
 
 /* ---------- Floating sample composer ---------- */
 .composer {
-  position: absolute; z-index: 10; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  position: absolute; z-index: 10; left: 50%; bottom: 16px;
   transform: translateX(-50%); width: min(640px, calc(100% - 32px));
   display: flex; align-items: center; gap: 8px;
   padding: 8px 8px 8px 14px; border-radius: 18px;
@@ -251,7 +248,6 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
 .tab:hover { background: var(--surface-2); color: var(--fg); }
 .tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
 .tab .g { font-family: "Fraunces", Georgia, serif; font-size: 16px; line-height: 1; }
-.p-close { display: none; }
 .p-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 16px; }
 .big { font-size: 64px; line-height: 1.05; overflow-wrap: anywhere; }
 .para { font-size: 15px; line-height: 1.55; }
@@ -286,35 +282,17 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
 .pair .why b { color: var(--accent-ink); font-weight: 500; }
 .proto { position: absolute; right: 12px; bottom: 8px; font-size: var(--text-2xs); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
 
-/* ---------- Responsive ---------- */
-@media (max-width: 1080px) {
-  .panel { width: 300px; }
+/* ---------- Desktop only ----------
+   Tauri window: minWidth 1000 / minHeight 700 (UX/src-tauri/tauri.conf.json).
+   No phone/tablet layout. Below 1000px the prototype page scrolls instead of reflowing. */
+/* small desktop window (1000–1180): tighter sidebar and panel so the grid keeps 2+ columns */
+@media (max-width: 1180px) {
+  :root { --side-w: 216px; }
+  .panel { width: 272px; }
   .presets { display: none; }
-}
-/* narrow window: sidebar drops to the in-flow icon rail (never overlays); topbar title yields to search */
-@media (max-width: 960px) {
-  .app, .app.collapsed { grid-template-columns: 56px minmax(0,1fr); }
-  .side, .app.collapsed .side { width: 56px; overflow: hidden; }
-  .side :is(.lbl, .n, .more, .sec, .who, .side-top .spacer, .me .iconbtn, .pz) { display: none; }
-  .collapse-btn { pointer-events: none; opacity: .4; }
   .topbar .ttl { width: auto; }
-  .topbar .ttl h1 { display: none; }
-  .panel { width: 280px; }
 }
-@media (max-width: 640px) {
-  .sheet { grid-template-columns: minmax(0,1fr); }
-  .vi-toggle { display: none; }
-  .panel {
-    position: fixed; z-index: 20;
-    left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px));
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px)); top: 34%;
-    width: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
-  }
-  .panel[hidden] { display: none !important; }
-  .p-close { display: grid; }
-  .composer .size input { width: 64px; }
-}
-@media (max-width: 480px) { .composer .size { display: none; } }
+.vi-toggle { white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -388,8 +366,7 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
         <div class="p-row">
           <div class="p-name" id="pName"></div>
           <button class="switch" id="pSwitch" role="switch" aria-checked="false" title="Kích hoạt" aria-label="Kích hoạt font"></button>
-          <button class="iconbtn p-close" id="pClose" aria-label="Đóng" data-ico="x"></button>
-        </div>
+          </div>
         <div class="p-row">
           <select id="pStyle" aria-label="Kiểu chữ"></select>
           <span class="chip" id="pClass"></span>
@@ -635,7 +612,6 @@ document.addEventListener('keydown', e => {
   if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); card.click(); }
 });
 $('#pSwitch').onclick = () => { const f = byId(S.sel); f.active = !f.active; renderAll(); };
-$('#pClose').onclick = () => { S.sel = null; renderGrid(); renderPanel(); };
 $('#collapse').onclick = () => {
   app.classList.toggle('collapsed');
   const c = app.classList.contains('collapsed');
@@ -657,6 +633,5 @@ $('#themeBtn').onclick = () => {
 };
 
 hydrateIcons();
-if (matchMedia('(max-width: 640px)').matches) S.sel = null;
 renderAll();
 </script>
