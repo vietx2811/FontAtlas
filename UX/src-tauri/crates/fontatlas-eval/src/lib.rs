@@ -4,6 +4,7 @@ mod csvio;
 mod embeds;
 mod metrics;
 mod refstats;
+mod split;
 
 pub use corpus::{Corpus, Origin};
 pub use csvio::{
@@ -15,3 +16,4 @@ pub use metrics::{
     image_only_same_family, markdown, pairing_report, same_family, similar_report,
 };
 pub use refstats::{build_reference, d_fam, quantiles, spearman};
+pub use split::{SIMILAR_SPLIT_SEED, split_similar};

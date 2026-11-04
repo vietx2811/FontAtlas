@@ -1603,6 +1603,7 @@ dependencies = [
 name = "fontatlas-eval"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "csv",
  "fontatlas-core",
  "fontatlas-embed",
