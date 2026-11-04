@@ -1,0 +1,19 @@
+name: activate
+on: [push, pull_request]
+jobs:
+  mac:             # test logic bằng FakeEngine + test CoreText chỉ đọc; test sống (#[ignore]) không chạy ở CI
+    runs-on: macos-14
+    defaults: { run: { working-directory: UX/src-tauri } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - run: cargo test --locked -p fontatlas-store -p fontatlas-activate
+      - run: cargo clippy --locked -p fontatlas-activate --all-targets -- -D warnings
+  windows-compile: # Windows mới có stub: job này chứng minh crate biên dịch và test FakeEngine chạy được
+    runs-on: windows-latest
+    defaults: { run: { working-directory: UX/src-tauri } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked -p fontatlas-activate
