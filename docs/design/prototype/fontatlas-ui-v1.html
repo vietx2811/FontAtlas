@@ -240,27 +240,41 @@ input[type=range] { width: 88px; accent-color: var(--accent); }
 .presets button:hover { background: var(--surface-2); color: var(--fg); }
 
 /* ---------- Detail panel (inside the sheet, divided by a hairline) ---------- */
-.panel { width: 340px; min-height: 0; border-left: 1px solid var(--border); background: var(--sheet); display: flex; flex-direction: column; overflow: hidden; }
-.p-head { padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
-.p-meta { display: flex; flex-direction: column; gap: 3px; margin-top: -6px; min-width: 0; }
-.p-meta .by { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.p-meta .facts { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
-.p-meta .facts span + span::before { content: "·"; margin: 0 6px; opacity: .6; }
-.p-meta .path { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: var(--text-2xs); color: var(--muted); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel { width: 340px; min-height: 0; border-left: 1px solid var(--border); background: var(--sheet); display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+.p-head { padding: 14px 14px 14px; display: flex; flex-direction: column; gap: 14px; }
+/* header: name → classification line → styles → name-table card */
+.p-sub { font-size: var(--text-xs); color: var(--muted); margin-top: -7px; font-variant-numeric: tabular-nums; }
+.p-sec { display: flex; flex-direction: column; gap: 6px; }
+.p-label { font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+.styles { display: flex; flex-wrap: wrap; gap: 4px; }
+.styles button {
+  height: 26px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--card); font-size: 13px; color: var(--fg); white-space: nowrap;
+}
+.styles button:hover { border-color: var(--accent); }
+.styles button[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--sheet); }
+.styles .more { font-family: var(--font-ui) !important; font-weight: 500 !important; font-style: normal !important; color: var(--muted); border-style: dashed; }
+.p-meta { margin: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); overflow: hidden; }
+.p-meta > div { display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; padding: 7px 10px; align-items: baseline; }
+.p-meta > div + div { border-top: 1px solid var(--border); }
+.p-meta dt { font-size: var(--text-2xs); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.p-meta dd { margin: 0; min-width: 0; font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.p-meta dd.soft { color: var(--muted); font-size: var(--text-xs); }
+.p-meta dd.mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: var(--text-2xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-row { display: flex; align-items: center; gap: 8px; }
-.p-name { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-name { flex: 1; min-width: 0; font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--card); color: var(--fg); font: inherit; font-size: var(--text-sm); flex: 1; min-width: 0; }
 .chip { height: 22px; padding: 0 8px; border-radius: 99px; background: var(--surface-2); font-size: var(--text-xs); color: var(--muted); display: inline-flex; align-items: center; }
 .switch { width: 34px; height: 20px; border-radius: 99px; background: var(--border); position: relative; transition: background .15s; flex: none; }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
 .switch[aria-checked="true"] { background: var(--on); }
 .switch[aria-checked="true"]::after { transform: translateX(14px); }
-.tabs { display: flex; gap: 2px; padding: 4px 10px 8px; border-bottom: 1px solid var(--border); }
+.tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 8px 10px; border-block: 1px solid var(--border); background: var(--sheet); }
 .tab { flex: 1; height: 32px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--muted); }
 .tab:hover { background: var(--surface-2); color: var(--fg); }
 .tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
 .tab .g { font-family: "Fraunces", Georgia, serif; font-size: 16px; line-height: 1; }
-.p-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 16px; }
+.p-body { flex: none; padding: 14px; display: flex; flex-direction: column; gap: 16px; }
 .big { font-size: 64px; line-height: 1.05; overflow-wrap: anywhere; }
 .para { font-size: 15px; line-height: 1.55; }
 .waterfall { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 12px; }
@@ -379,11 +393,9 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
           <div class="p-name" id="pName"></div>
           <button class="switch" id="pSwitch" role="switch" aria-checked="false" title="Kích hoạt" aria-label="Kích hoạt font"></button>
           </div>
-        <div class="p-meta" id="pMeta"></div>
-        <div class="p-row">
-          <select id="pStyle" aria-label="Kiểu chữ"></select>
-          <span class="chip" id="pClass"></span>
-        </div>
+        <div class="p-sub" id="pSub"></div>
+        <div class="p-sec" id="pStyles"></div>
+        <dl class="p-meta" id="pMeta"></dl>
       </div>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="spec" title="Specimen" aria-label="Specimen"><span class="g">Aa</span></button>
@@ -533,6 +545,20 @@ const DESIGNERS = {
   'Alegreya': 'Huerta Tipográfica', 'Space Mono': 'Colophon Foundry', 'DM Serif Display': 'Colophon Foundry',
   'Syne': 'Bonjour Monde', 'Abril Fatface': 'TypeTogether', 'Montserrat Alt': 'Julieta Ulanovsky'
 };
+const FOUNDRY = {
+  'Be Vietnam Pro': 'Lâm Bảo Type', 'Lora': 'Cyreal', 'Montserrat': 'Julieta Ulanovsky', 'Montserrat Alt': 'Julieta Ulanovsky',
+  'JetBrains Mono': 'JetBrains', 'Fraunces': 'Undercase Type', 'Space Mono': 'Colophon Foundry', 'DM Serif Display': 'Colophon Foundry',
+  'Abril Fatface': 'TypeTogether', 'Syne': 'Bonjour Monde', 'Alegreya': 'Huerta Tipográfica', 'Roboto Slab': 'Google'
+};
+const WEIGHTS = ['Thin','ExtraLight','Light','Regular','Medium','SemiBold','Bold','ExtraBold','Black'];
+function styleList(f) {
+  if (f.n <= f.styles.length) return f.styles.slice(0, f.n);
+  const out = [];
+  const italic = f.n > 9;
+  const order = ['Regular','Medium','SemiBold','Bold','Light','ExtraBold','Black','ExtraLight','Thin'];
+  for (const w of order) { out.push(w); if (italic) out.push(w === 'Regular' ? 'Italic' : w + ' Italic'); if (out.length >= f.n) break; }
+  return out.slice(0, f.n);
+}
 const SRC_PATH = { gf: '~/Library/Application Support/FontAtlas/google', local: '~/Library/Fonts', ext: '/Volumes/VXData/Fonts' };
 function meta(f) {
   const slug = f.name.replace(/\s+/g, '');
@@ -543,7 +569,10 @@ function meta(f) {
     ver: (1 + (f.id % 4) * 0.1).toFixed(3),
     fmt, glyphs,
     size: Math.round(glyphs * 0.21 + f.n * 14) + ' KB',
-    lic: f.src === 'gf' ? 'OFL' : f.id % 3 ? 'OFL' : 'Thương mại',
+    lic: f.src === 'gf' || f.id % 3 ? 'SIL Open Font License 1.1' : 'Thương mại · EULA',
+    foundry: FOUNDRY[f.name] || (f.src === 'gf' ? 'Google Fonts' : '—'),
+    copy: `© ${2010 + (f.id * 7) % 14} The ${f.name.replace(' Alt', '')} Project Authors`,
+    styles: styleList(f),
     path: `${SRC_PATH[f.src]}/${slug}${fmt.startsWith('Variable') ? '[wght]' : '-Regular'}.${fmt === 'OTF' ? 'otf' : 'ttf'}`
   };
 }
@@ -557,15 +586,21 @@ function renderPanel() {
   $('#pName').textContent = f.name;
   $('#pName').style.fontFamily = f.css + ', var(--font-ui)';
   $('#pSwitch').setAttribute('aria-checked', f.active);
-  $('#pStyle').innerHTML = f.styles.map(s => `<option>${s}</option>`).join('') + (f.n > f.styles.length ? `<option disabled>+${f.n - f.styles.length}</option>` : '');
-  $('#pClass').textContent = f.cls;
   const m = meta(f);
-  $('#pMeta').innerHTML = `
-    <div class="by">${m.by}</div>
-    <div class="facts"><span>v${m.ver}</span><span>${m.fmt}</span><span>${m.glyphs.toLocaleString('vi-VN')} glyph</span><span>${m.size}</span><span>${m.lic}</span></div>
-    <div class="path" title="${m.path}">${m.path}</div>`;
+  if (!m.styles.includes(S.style)) S.style = m.styles.includes('Regular') ? 'Regular' : m.styles[0];
+  const shown = S.allStyles ? m.styles : m.styles.slice(0, 6);
+  const sty = st => { const i = WEIGHTS.findIndex(w => st.startsWith(w)); return `font-family:${f.css},var(--font-ui);font-weight:${i < 0 ? 400 : (i + 1) * 100};font-style:${/Italic/.test(st) ? 'italic' : 'normal'}`; };
+  $('#pSub').textContent = `${f.cls} · ${m.fmt} · ${m.glyphs.toLocaleString('vi-VN')} glyph`;
+  $('#pStyles').innerHTML = `
+    <div class="p-label"><span>Kiểu</span><span>${m.styles.length}</span></div>
+    <div class="styles">${shown.map(st => `<button data-style="${st}" aria-pressed="${st === S.style}" style="${sty(st)}">${st}</button>`).join('')}${m.styles.length > shown.length ? `<button class="more" data-allstyles>+${m.styles.length - shown.length}</button>` : ''}</div>`;
+  const row = (k, v, cls = '') => `<div><dt>${k}</dt><dd class="${cls}" ${cls === 'mono' ? `title="${v}"` : ''}>${v}</dd></div>`;
+  $('#pMeta').innerHTML =
+    row('Thiết kế', m.by) + row('Hãng', m.foundry) + row('Phiên bản', m.ver) +
+    row('Giấy phép', m.lic) + row('Bản quyền', m.copy, 'soft') + row('Tệp', m.path, 'mono');
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
-  const ff = `font-family:${f.css},serif`;
+  const wi = WEIGHTS.findIndex(w => S.style.startsWith(w));
+  const ff = `font-family:${f.css},serif;font-weight:${wi < 0 ? 400 : (wi + 1) * 100};font-style:${/Italic/.test(S.style) ? 'italic' : 'normal'}`;
   const sample = esc(S.sample || 'Phở bò Hà Nội');
   let html = '';
   if (S.tab === 'spec') {
@@ -633,13 +668,16 @@ document.addEventListener('click', e => {
   const star = t.closest('[data-star]');
   if (star) { const f = byId(+star.dataset.star); f.star = !f.star; renderSide(); renderGrid(); return; }
   const card = t.closest('.card');
-  if (card) { S.sel = +card.dataset.id; markRecent(S.sel); renderSide(); renderGrid(); renderPanel(); return; }
+  if (card) { S.allStyles = false; S.sel = +card.dataset.id; markRecent(S.sel); renderSide(); renderGrid(); renderPanel(); return; }
   const sec = t.closest('[data-sec]');
   if (sec) { const k = sec.dataset.sec; S.open[k] = !S.open[k]; const box = sec.parentElement; box.dataset.open = S.open[k]; sec.setAttribute('aria-expanded', S.open[k]); return; }
   const nav = t.closest('[data-view]');
   if (nav && !t.closest('.more')) { S.view = nav.dataset.view; renderSide(); renderGrid(); return; }
   const tag = t.closest('[data-tag]');
   if (tag) { S.tag = S.tag === tag.dataset.tag ? null : tag.dataset.tag; renderSide(); renderGrid(); return; }
+  const st = t.closest('[data-style]');
+  if (st) { S.style = st.dataset.style; renderPanel(); return; }
+  if (t.closest('[data-allstyles]')) { S.allStyles = true; renderPanel(); return; }
   const tab = t.closest('[data-tab]');
   if (tab) { S.tab = tab.dataset.tab; renderPanel(); return; }
   const go = t.closest('[data-go]');
