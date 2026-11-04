@@ -39,6 +39,15 @@ Các loại nhóm (`group_type`):
 
 **Chỉ số (spec S4):** R@k của `must_include` (mọi phần tử phải nằm trong top-k) và tỉ lệ vi phạm `must_not` trong top-k.
 
+**Vai trò của similar_sets: chỉ để bắt thoái lui, không làm ngưỡng chất lượng** (Lead duyệt 2026-11-04). Phần test chỉ có 18 nhóm, nên mỗi nhóm tương đương khoảng 5,6 điểm %. Một thay đổi làm giảm số nhóm đạt hoặc làm xuất hiện vi phạm `must_not` phải được giải thích từng nhóm. Không dùng con số này để duyệt hay chặn phát hành. Ngưỡng S4 dựa trên recall cùng họ trên các họ thuộc nửa test, với hàng nghìn truy vấn.
+
+**Chia tune/test** (`split_similar`, seed `similar-split-v1`):
+- các nhóm chung họ (`query` ∪ `must_include`) luôn nằm cùng một phía;
+- chia phân tầng theo `group_type`: mỗi tầng đưa khoảng 1/3 sang tune và luôn giữ ít nhất 1 nhóm test;
+- kết quả: 9 tune / 18 test. Chỉ dùng nhóm tune để chỉnh; test `csv_split_column_matches_rule` ghim cột `split` vào quy tắc.
+
+**`informed_by`:** cột này đánh dấu nhóm test đã bị thông tin từ phần tune khác chạm tới (hiện chỉ có S07: bảng superfamily-v1 có cặp Red Hat Text/Display, dựng từ pairing tune P16). Eval đánh dấu các nhóm này bằng † và in thêm số nhóm đạt khi không tính chúng. Test `groups_linked_by_superfamily_table_are_flagged` bắt buộc mọi nhóm test có liên kết qua bảng này phải được đánh dấu.
+
 **Lưu ý:** style khớp theo tên hoặc `usWeightClass`. Font Google Fonts nên dùng file variable gốc; spike này dùng bản tĩnh theo từng độ đậm tải qua CSS API.
 
 ## 2. pairing_judgements.csv

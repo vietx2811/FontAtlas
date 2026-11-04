@@ -18,6 +18,7 @@ Kết quả: **9 tune** (S01, S03, S05, S08, S13, S17, S21, S23, S27) và **18 t
 | similar_sets | Chỉ số đo | Số đo + Hình ảnh |
 |---|---|---|
 | test (18) | 1/18 | **4/18** (S07, S09, S11, S15) |
+| test, không tính † (17) | 1/17 | 3/17 |
 | tune (9) | 4/9 | 3/9 |
 | tổng (27), để so với số cũ | 5/27 | 7/27 |
 
@@ -25,6 +26,7 @@ Không có nhóm nào vi phạm must_not, ở cả hai phía. Con số S4 không
 
 ## Cần Lead lưu ý
 
-- **similar_sets tune nghiêng về trọng số ảnh thấp hơn.** Ở w ≤ 0,60 đạt 4/9, ở w ≥ 0,65 còn 3/9. Mất đúng một nhóm, trên tổng 9 nhóm, nên chưa đủ căn cứ để đổi trọng số khỏi 0,8. Trọng số vẫn chọn theo bài cùng họ trên tune. Nếu sau này bổ sung thêm nhóm similar, nên chọn trọng số bằng tiêu chí kết hợp.
-- **Rò chéo từ bảng superfamily-v1.** Bảng này dựng từ phần pairing tune và có nhóm `red-hat` (Display + Text). Đó lại đúng là cặp của **S07, một nhóm test**, và S07 là Hit. Bảng cũng gộp IBM Plex Serif với Plex Sans, trong khi S06 (test) liệt Plex Serif vào must_not. Hiện S06 Miss nhưng không vi phạm must_not. Tôi không sửa bảng vì đó là dữ liệu của Plan 3. Có hai cách: đánh dấu S07 là "có thông tin từ pairing tune", hoặc chuyển S06/S07 sang tune. Cách thứ hai sẽ phá quy tắc phân tầng, vì tầng optical chỉ có S07.
-- **Cỡ mẫu.** 18 nhóm test nên mỗi nhóm tương đương khoảng 5,6 điểm %. Chỉ nên dùng để phát hiện thoái lui, không đủ làm ngưỡng chất lượng.
+- **similar_sets tune nghiêng về trọng số ảnh thấp hơn.** Ở w ≤ 0,60 đạt 4/9, ở w ≥ 0,65 còn 3/9. Mất đúng một nhóm, trên tổng 9 nhóm, nên chưa đủ căn cứ để đổi trọng số khỏi 0,8. Trọng số vẫn chọn theo bài cùng họ trên tune. Nếu sau này bổ sung thêm nhóm similar, nên chọn trọng số bằng tiêu chí kết hợp. Lead duyệt giữ 0,8 và xem lại khi có thêm nhóm.
+- **Rò chéo từ bảng superfamily-v1 (Lead đã duyệt cách xử lý).** Bảng này dựng từ phần pairing tune và có nhóm `red-hat` (Display + Text), đúng cặp của **S07, một nhóm test** (S07 đang Hit). S07 vẫn để ở test và được gắn `informed_by = pairing-tune: superfamily-v1 red-hat (P16)`. Eval đánh dấu † và in thêm số nhóm đạt khi không tính S07: **Số đo + Hình ảnh còn 3/17, Số đo vẫn 1/17**.
+- **Plex Serif / S06.** superfamily-v1 xếp IBM Plex Serif cùng nhóm `ibm-plex` với Plex Sans (P06), trong khi S06 (test) đặt Plex Serif vào `must_not`. Nếu Similar ưu tiên superfamily, Plex Serif có thể bị đẩy lên top-k và tạo vi phạm. Hiện S06 Miss nhưng không vi phạm `must_not`. S06 không gắn `informed_by`, vì bảng không liên kết query với `must_include` (Plex Sans Condensed không có trong bảng). Đây là rủi ro chiều ngược lại: thông tin tune có thể làm hỏng một nhóm test. Cần theo dõi nếu sau này bảng thêm Plex Sans Condensed hoặc tăng trọng số superfamily.
+- **Cỡ mẫu.** 18 nhóm test nên mỗi nhóm tương đương khoảng 5,6 điểm %. Chỉ nên dùng để phát hiện thoái lui, không đủ làm ngưỡng chất lượng. Lead đã duyệt: ghi vào README eval.
