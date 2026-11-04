@@ -198,9 +198,52 @@ CREATE TABLE settings (
 ) WITHOUT ROWID;
 "#;
 
+/// v2 (Plan 7): activation_state có trạng thái thật + bảng lý do kích hoạt.
+/// Đổi tên bảng để giữ dữ liệu cũ, vì SQLite không sửa được `CHECK`.
+pub(crate) const USER_V2: &str = r#"
+CREATE TABLE activation_state_v2 (
+  hash           BLOB PRIMARY KEY CHECK (length(hash) = 32),
+  state          TEXT NOT NULL CHECK (state IN ('active','inactive')),
+  scope          TEXT NOT NULL CHECK (scope IN ('session','persistent')),
+  method         TEXT NOT NULL,              -- 'coretext' | 'gdi' | 'fake'
+  active_path    TEXT,                       -- chuỗi canonical đã đưa cho OS
+  status         TEXT NOT NULL DEFAULT 'unknown' CHECK (status IN
+                 ('registered','unregistered','conflict','missing_file','not_downloaded','error','unknown')),
+  conflict_ps    TEXT,
+  last_error     TEXT,
+  activated_at   INTEGER,
+  verified_at    INTEGER,
+  updated_at     INTEGER NOT NULL,
+  engine_version INTEGER NOT NULL DEFAULT 1
+) WITHOUT ROWID;
+INSERT INTO activation_state_v2 (hash,state,scope,method,active_path,updated_at)
+  SELECT hash,state,scope,method,active_path,updated_at FROM activation_state;
+DROP TABLE activation_state;
+ALTER TABLE activation_state_v2 RENAME TO activation_state;
+CREATE INDEX activation_state_status ON activation_state(scope, status);
+CREATE TABLE activation_reasons (
+  hash     BLOB NOT NULL REFERENCES activation_state(hash) ON DELETE CASCADE,
+  reason   TEXT NOT NULL CHECK (reason = 'manual'
+           OR (reason GLOB 'collection:[0-9]*' AND reason NOT GLOB 'collection:*[^0-9]*')),
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, reason)
+) WITHOUT ROWID;
+CREATE INDEX activation_reasons_reason ON activation_reasons(reason);
+INSERT INTO activation_reasons (hash, reason, added_at)
+  SELECT hash, 'manual', updated_at FROM activation_state WHERE state = 'active';
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2];
+
+/// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
+#[doc(hidden)]
+pub fn create_user_v1_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v1");
+    c.execute_batch(USER_V1).expect("USER_V1");
+    c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
+}
 pub const LIBRARY_VERSION: u32 = LIBRARY_MIGRATIONS.len() as u32;
 pub const USER_VERSION: u32 = USER_MIGRATIONS.len() as u32;
 
