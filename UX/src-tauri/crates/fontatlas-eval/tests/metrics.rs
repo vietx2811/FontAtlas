@@ -1,7 +1,8 @@
 mod common;
 use common::*;
 use fontatlas_eval::{
-    Corpus, Expected, LabelSource, Outcome, PairRow, SimilarSet, pairing_report, similar_report,
+    Corpus, Expected, LabelSource, Outcome, PairRow, SimilarReport, SimilarSet, markdown,
+    pairing_report, similar_report,
 };
 use fontatlas_index::{ClashKind, Gate, Index, ReferenceTable, Role, SuperfamilyTable};
 
@@ -101,6 +102,7 @@ fn must_not_violation_beats_hit() {
         k: c.profiles.len() - 1,
         group_type: "t".into(),
         split: "test".into(),
+        informed_by: String::new(),
     };
     assert!(matches!(
         similar_report(&ix, &c, &[set]).rows[0].1,
@@ -148,4 +150,26 @@ fn fixture_pairs_regression() {
         )
         .unwrap();
     assert_eq!(lb.gate, Gate::Blocked);
+}
+
+#[test]
+fn markdown_marks_informed_groups_and_counts_without_them() {
+    let sim = SimilarReport {
+        rows: vec![
+            ("A".into(), Outcome::Hit),
+            ("B".into(), Outcome::Hit),
+            ("C".into(), Outcome::Miss),
+        ],
+        informed: ["B".to_string()].into_iter().collect(),
+        same_family_r1: 0.0,
+        same_family_r5: 0.0,
+        queries: 0,
+    };
+    let md = markdown(&sim, &[]);
+    assert!(md.contains("| B | Hit | † |"), "{md}");
+    assert!(md.contains("| A | Hit |  |"), "{md}");
+    assert!(
+        md.contains("| nhóm đạt, không tính † | 1/2 (50%) |"),
+        "{md}"
+    );
 }

@@ -19,6 +19,8 @@ pub struct SimilarSet {
     pub k: usize,
     pub group_type: String,
     pub split: String,
+    /// Nhóm đã bị thông tin từ phần tune khác (vd. bảng superfamily dựng từ pairing tune) chạm tới; rỗng = sạch.
+    pub informed_by: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -113,6 +115,7 @@ pub fn load_similar(path: &Path) -> Result<Vec<SimilarSet>, EvalError> {
                     .map_err(|_| bad("k không phải số"))?,
                 group_type: field(r, "group_type", path)?.to_string(),
                 split: field(r, "split", path)?.to_string(),
+                informed_by: r.get("informed_by").cloned().unwrap_or_default(),
             })
         })
         .collect()

@@ -14,6 +14,7 @@ fn set(id: &str, ty: &str, query: &str, include: &[&str]) -> SimilarSet {
         k: 10,
         group_type: ty.into(),
         split: String::new(),
+        informed_by: String::new(),
     }
 }
 

@@ -1,5 +1,5 @@
 //! Chỉ số S4 (Similar) và S5 (Pairing: good / clash / bad riêng, H1 dòng riêng).
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use fontatlas_index::{FaceKey, FaceProfile, Gate, GroupWeights, Index, embed_cos};
 use rayon::prelude::*;
@@ -18,6 +18,8 @@ pub enum Outcome {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimilarReport {
     pub rows: Vec<(String, Outcome)>,
+    /// id nhóm có `informed_by` — đánh dấu † và có thêm một dòng đếm không tính chúng.
+    pub informed: BTreeSet<String>,
     /// Cùng họ tự động: face cùng họ đầu tiên ở hạng 1 / trong top 5.
     pub same_family_r1: f32,
     pub same_family_r5: f32,
@@ -128,6 +130,11 @@ pub fn similar_report(ix: &Index, c: &Corpus, sets: &[SimilarSet]) -> SimilarRep
     let ratio = |x: usize| if q == 0 { 0.0 } else { x as f32 / q as f32 };
     SimilarReport {
         rows,
+        informed: sets
+            .iter()
+            .filter(|s| !s.informed_by.is_empty())
+            .map(|s| s.id.clone())
+            .collect(),
         same_family_r1: ratio(r1),
         same_family_r5: ratio(r5),
         queries: q,
@@ -301,6 +308,24 @@ pub fn markdown(sim: &SimilarReport, pairs: &[(String, LabelSource, PairCounts)]
         "| nhóm đạt (Hit) | {} |\n",
         pct(count(Outcome::Hit), judged)
     ));
+    let clean = |o: Outcome| {
+        sim.rows
+            .iter()
+            .filter(|r| r.1 == o && !sim.informed.contains(&r.0))
+            .count()
+    };
+    s.push_str(&format!(
+        "| nhóm đạt, không tính † | {} |\n",
+        pct(
+            clean(Outcome::Hit),
+            judged
+                - sim
+                    .rows
+                    .iter()
+                    .filter(|r| r.1 != Outcome::NoData && sim.informed.contains(&r.0))
+                    .count()
+        )
+    ));
     s.push_str(&format!("| trượt (Miss) | {} |\n", count(Outcome::Miss)));
     s.push_str(&format!(
         "| vi phạm must_not | {} |\n",
@@ -313,9 +338,10 @@ pub fn markdown(sim: &SimilarReport, pairs: &[(String, LabelSource, PairCounts)]
         sim.same_family_r1 * 100.0,
         sim.same_family_r5 * 100.0
     ));
-    s.push_str("| nhóm Similar | kết quả |\n|---|---|\n");
+    s.push_str("| nhóm Similar | kết quả | † có thông tin từ tune khác |\n|---|---|---|\n");
     for (id, o) in &sim.rows {
-        s.push_str(&format!("| {id} | {o:?} |\n"));
+        let mark = if sim.informed.contains(id) { "†" } else { "" };
+        s.push_str(&format!("| {id} | {o:?} | {mark} |\n"));
     }
     for (split, src, c) in pairs {
         if *src == LabelSource::Owner && c.good.n + c.clash.n + c.bad.n == 0 {

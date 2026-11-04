@@ -97,6 +97,17 @@ fn hits(r: &SimilarReport) -> (usize, usize, usize) {
     )
 }
 
+/// "đạt/có dữ liệu" không tính nhóm † (informed_by).
+fn clean_hits(r: &SimilarReport) -> String {
+    let rows: Vec<_> = r
+        .rows
+        .iter()
+        .filter(|x| x.1 != Outcome::NoData && !r.informed.contains(&x.0))
+        .collect();
+    let h = rows.iter().filter(|x| x.1 == Outcome::Hit).count();
+    format!("{h}/{}", rows.len())
+}
+
 fn pct(x: f32) -> String {
     format!("{:.1}%", x * 100.0)
 }
@@ -279,8 +290,12 @@ fn main() {
             let comb_i = same_family(&ix, &corpus, &q_img, &all);
             let axes_i = same_family(&axes_ix, &corpus, &q_img, &all);
             let img_i = image_only_same_family(&corpus, &embs, &comb_i.keys, &all);
-            let (ha, na, ma) = hits(&similar_report(&axes_ix, &corpus, &test_sets));
-            let (hc, nc, mc) = hits(&similar_report(&ix, &corpus, &test_sets));
+            let (sa, sc) = (
+                similar_report(&axes_ix, &corpus, &test_sets),
+                similar_report(&ix, &corpus, &test_sets),
+            );
+            let ((ha, na, ma), (hc, nc, mc)) = (hits(&sa), hits(&sc));
+            let (ca, cc) = (clean_hits(&sa), clean_hits(&sc));
             extra.push_str("### S4 — cùng họ, truy vấn thuộc họ `test` (gallery: cả corpus)\n\n| chế độ | R@1 | R@5 | truy vấn |\n|---|---|---|---|\n");
             extra.push_str(&row("Số đo", &axes));
             extra.push_str(&row("Chỉ ảnh", &img));
@@ -295,7 +310,7 @@ fn main() {
             extra.push_str(&row("Chỉ ảnh", &img_i));
             extra.push_str(&row("Số đo + Hình ảnh", &comb_i));
             extra.push_str(&format!(
-                "\n| similar_sets test | nhóm đạt | vi phạm must_not |\n|---|---|---|\n| Số đo | {ha}/{na} | {ma} |\n| Số đo + Hình ảnh | {hc}/{nc} | {mc} |\n\n"
+                "\n| similar_sets test | nhóm đạt | không tính † | vi phạm must_not |\n|---|---|---|---|\n| Số đo | {ha}/{na} | {ca} | {ma} |\n| Số đo + Hình ảnh | {hc}/{nc} | {cc} | {mc} |\n\n"
             ));
             ix
         }
