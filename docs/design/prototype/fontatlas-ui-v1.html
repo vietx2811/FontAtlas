@@ -140,7 +140,7 @@ svg { flex: none; }
 .tag:hover { color: var(--fg); }
 .tag[aria-pressed="true"] { background: var(--fg); color: var(--chrome); }
 
-/* footer: model progress + profile, like Claude's account row */
+/* footer: model progress + theme + settings (không có tài khoản → không có hàng Profile) */
 .side-foot { display: flex; flex-direction: column; gap: 2px; padding-block: 6px 2px; }
 .model .n { display: inline; }
 .model .pz { display: none; width: 22px; height: 22px; place-items: center; border-radius: 5px; color: var(--muted); }
@@ -149,13 +149,11 @@ svg { flex: none; }
 .ring circle { fill: none; stroke-width: 2.4; }
 .ring .bgc { stroke: var(--border); }
 .ring .fgc { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .4s; }
-.me { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 4px 0 6px; border-radius: var(--radius-sm); white-space: nowrap; }
-.avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--chrome-active); font-size: 12px; flex: none; }
-.me .who { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
-.me .who small { color: var(--muted); font-size: 12px; }
+.foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 40px; padding: 0 4px; }
+.app.collapsed .foot-actions { flex-direction: column; height: auto; padding-block: 4px; }
 
 /* collapsed rail: hide text unless peeking */
-.app.collapsed .side :is(.lbl, .n, .more, .sec, .who, .side-top .spacer, .me .iconbtn, .pz) { display: none; }
+.app.collapsed .side :is(.lbl, .n, .more, .sec, .side-top .spacer, .pz) { display: none; }
 
 /* ---------- Content sheet ---------- */
 .sheet {
@@ -358,9 +356,7 @@ select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 
         <span class="pz" id="stPause" role="button" tabindex="0" aria-label="Tạm dừng phân tích"></span>
         <span class="n" id="stEta"></span>
       </button>
-      <div class="me">
-        <span class="avatar" aria-hidden="true">V</span>
-        <span class="who">Việt X <small>· Pro</small></span>
+      <div class="foot-actions">
         <button class="iconbtn" id="themeBtn" title="Sáng / tối" aria-label="Đổi giao diện sáng tối" data-ico="moon"></button>
         <button class="iconbtn" title="Cài đặt" aria-label="Cài đặt" data-ico="gear"></button>
       </div>
