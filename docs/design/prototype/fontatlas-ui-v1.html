@@ -1,0 +1,617 @@
+<title>FontAtlas UI v1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Be+Vietnam+Pro:wght@400;600&family=Lora:ital,wght@0,400;1,400&family=Playfair+Display:wght@400;700&family=Montserrat:wght@400;600&family=Roboto+Slab:wght@400;600&family=JetBrains+Mono:wght@400&family=Dancing+Script:wght@500&family=Oswald:wght@400;500&family=Bricolage+Grotesque:wght@400;600&family=EB+Garamond:ital@0;1&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Josefin+Sans:wght@400;600&family=Alegreya:wght@400&family=DM+Serif+Display&family=Syne:wght@500;700&family=Abril+Fatface&family=Space+Mono&display=swap">
+<style>
+/* Layout: floating sidebar card · specimen grid · detail panel · one-line status bar (RightFont shell, Typeface cards, Claude sidebar) */
+:root {
+  /* Existing FontAtlas tokens (UX/index.css) */
+  --bg: #FAFAFA;
+  --fg: #2A2A2A;
+  --card: #FFFFFF;
+  --border: #E7E5E4;
+  --muted: #78716C;
+  --muted-soft: #F5F5F4;
+  --surface-2: #F3F2F0;
+  --glass: rgba(255,255,255,.72);
+  --accent: #D4A574;
+  --accent-ink: #9A6B3C;
+  --accent-soft: #F5E6D3;
+  --on: #3FA66B;
+  --warn: #C2410C;
+  --shadow: 0 1px 2px rgba(41,37,36,.06), 0 8px 24px rgba(41,37,36,.06);
+
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --text-2xs: 10px; --text-xs: 11px; --text-sm: 12px; --text-base: 13px;
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C0A09; --fg: #FAFAF9; --card: #1C1917; --border: #292524;
+    --muted: #A8A29E; --muted-soft: #1F1C1A; --surface-2: #171412;
+    --glass: rgba(28,25,23,.78);
+    --accent: #E0B07E; --accent-ink: #E0B07E; --accent-soft: rgba(224,176,126,.14);
+    --on: #4ADE80; --warn: #FB923C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C0A09; --fg: #FAFAF9; --card: #1C1917; --border: #292524;
+  --muted: #A8A29E; --muted-soft: #1F1C1A; --surface-2: #171412;
+  --glass: rgba(28,25,23,.78);
+  --accent: #E0B07E; --accent-ink: #E0B07E; --accent-soft: rgba(224,176,126,.14);
+  --on: #4ADE80; --warn: #FB923C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-ui); font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { flex: none; }
+.ico { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Shell ---------- */
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  grid-template-rows: minmax(0,1fr) 30px;
+  padding-left: max(8px, env(safe-area-inset-left, 0px));
+  padding-right: max(8px, env(safe-area-inset-right, 0px));
+  padding-block: 8px 0;
+  gap: 0 8px;
+}
+
+/* ---------- Sidebar (Claude-style, floating card like RightFont) ---------- */
+.side {
+  grid-row: 1; width: 224px;
+  background: var(--glass); backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column; min-height: 0;
+  transition: width .2s ease;
+}
+.side-top { display: flex; align-items: center; gap: 4px; padding: 10px 10px 6px; }
+.logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--fg); color: var(--bg); font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 16px; }
+.side-top .spacer { flex: 1; }
+.iconbtn { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--muted); }
+.iconbtn:hover { background: var(--muted-soft); color: var(--fg); }
+.iconbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+
+.side-scroll { flex: 1; overflow-y: auto; padding: 4px 8px 8px; scrollbar-width: none; }
+.group { display: flex; flex-direction: column; gap: 1px; padding-block: 6px; }
+.group + .group { border-top: 1px solid var(--border); }
+.ghead { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 2px; font-size: var(--text-2xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ghead .iconbtn { width: 20px; height: 20px; opacity: 0; }
+.group:hover .ghead .iconbtn { opacity: 1; }
+.nav {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  height: 30px; padding: 0 8px; border-radius: var(--radius-sm);
+  text-align: left; color: var(--fg); white-space: nowrap;
+}
+.nav:hover { background: var(--muted-soft); }
+.nav[aria-current="true"] { background: var(--card); box-shadow: 0 0 0 1px var(--border); font-weight: 500; }
+.nav .ico { color: var(--muted); }
+.nav[aria-current="true"] .ico { color: var(--accent-ink); }
+.nav .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav .n { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.nav .more { opacity: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); }
+.nav:hover .more { opacity: 1; }
+.nav:hover .more + .n { display: none; }
+.swatch { width: 8px; height: 8px; border-radius: 3px; margin-inline: 4px; flex: none; }
+.ejected { color: var(--muted); }
+.ejected .lbl { text-decoration: line-through; text-decoration-color: var(--border); }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
+.tag { height: 22px; padding: 0 8px; border-radius: 99px; border: 1px solid var(--border); font-size: var(--text-xs); color: var(--muted); }
+.tag:hover { color: var(--fg); }
+.tag[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+.side-foot { border-top: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.ring { width: 16px; height: 16px; }
+.ring circle { fill: none; stroke-width: 2.4; }
+.ring .bgc { stroke: var(--border); }
+.ring .fgc { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .4s; }
+
+/* collapsed rail */
+.app.collapsed .side { width: 52px; }
+.app.collapsed .side .lbl,
+.app.collapsed .side .n,
+.app.collapsed .side .more,
+.app.collapsed .side .ghead,
+.app.collapsed .side .tags,
+.app.collapsed .side-top .spacer,
+.app.collapsed .side-top .newbtn,
+.app.collapsed .side .src-extra { display: none; }
+.app.collapsed .side-top { flex-direction: column; }
+.app.collapsed .nav { justify-content: center; padding: 0; }
+.app.collapsed .swatch { margin: 0; width: 10px; height: 10px; }
+
+/* ---------- Main ---------- */
+.main { grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.toolbar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 2px 4px 10px;
+}
+.sample {
+  flex: 1 1 260px; min-width: 0; height: 34px;
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.sample input { flex: 1; min-width: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: 14px; outline: none; }
+.sample .ico { color: var(--muted); }
+.seg { display: flex; align-items: center; gap: 2px; height: 34px; padding: 3px; border-radius: var(--radius-md); background: var(--surface-2); }
+.seg .iconbtn { height: 28px; }
+.size { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--muted); }
+.size .a1 { font-size: 10px; } .size .a2 { font-size: 15px; }
+input[type=range] { width: 92px; accent-color: var(--accent); }
+.vi-toggle { height: 34px; padding: 0 10px; border-radius: var(--radius-md); background: var(--surface-2); font-weight: 600; font-size: var(--text-sm); color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.vi-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.searchbox { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; width: 160px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--muted); }
+.searchbox input { width: 100%; min-width: 0; border: 0; background: none; color: var(--fg); font: inherit; outline: none; }
+
+.grid-wrap { flex: 1; overflow-y: auto; padding: 0 4px 12px; min-height: 0; }
+.grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(var(--cell, 200px), 1fr)); }
+.card {
+  position: relative; text-align: left;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 12px 12px 10px; min-height: 132px;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.card[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.spec { font-size: var(--spec, 34px); line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; color: var(--fg); }
+.meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-2xs); color: var(--muted); min-width: 0; }
+.meta .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
+.vi { font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 3px; }
+.vi.ok { color: var(--on); }
+.vi.miss { color: var(--warn); }
+.star { position: absolute; top: 6px; right: 22px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
+.card:hover .star, .star.on { opacity: 1; }
+.star.on { color: var(--accent); }
+.star.on .ico { fill: currentColor; }
+
+/* list mode */
+.grid.list { grid-template-columns: 1fr; gap: 0; }
+.grid.list .card { flex-direction: row-reverse; align-items: center; min-height: 0; border-radius: 0; border-width: 0 0 1px; padding: 10px 40px 10px 8px; background: transparent; }
+.grid.list .card[aria-selected="true"] { background: var(--accent-soft); box-shadow: none; }
+.grid.list .meta { width: 180px; flex: none; }
+.grid.list .spec { flex: 1; -webkit-line-clamp: 1; }
+.grid.list .dot { top: 50%; margin-top: -3px; }
+.grid.list .star { top: 50%; margin-top: -11px; }
+
+.empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+
+/* ---------- Detail panel ---------- */
+.panel {
+  grid-row: 1; width: 340px; min-height: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.p-head { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border); }
+.p-row { display: flex; align-items: center; gap: 8px; }
+.p-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-close { display: none; }
+select { height: 28px; padding: 0 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--card); color: var(--fg); font: inherit; font-size: var(--text-sm); flex: 1; min-width: 0; }
+.chip { height: 22px; padding: 0 8px; border-radius: 99px; background: var(--surface-2); font-size: var(--text-xs); color: var(--muted); display: inline-flex; align-items: center; }
+.switch { width: 34px; height: 20px; border-radius: 99px; background: var(--border); position: relative; transition: background .15s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch[aria-checked="true"] { background: var(--on); }
+.switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+.tabs { display: flex; gap: 2px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.tab { flex: 1; height: 32px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--muted); font-size: 15px; }
+.tab:hover { background: var(--muted-soft); color: var(--fg); }
+.tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.tab .g { font-family: "Fraunces", Georgia, serif; font-size: 16px; line-height: 1; }
+
+.p-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 16px; }
+.big { font-size: 64px; line-height: 1.05; overflow-wrap: anywhere; }
+.para { font-size: 15px; line-height: 1.55; color: var(--fg); }
+.waterfall { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 12px; }
+.waterfall div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-row { display: flex; align-items: baseline; gap: 10px; }
+.wf-row span:first-child { width: 22px; flex: none; font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+
+.stack { font-size: 46px; line-height: 1.6; letter-spacing: .02em; }
+.cov { display: flex; align-items: center; gap: 10px; }
+.bar { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.num { font-variant-numeric: tabular-nums; font-size: var(--text-sm); color: var(--muted); min-width: 52px; text-align: right; }
+.missing { display: flex; flex-wrap: wrap; gap: 4px; }
+.missing span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 6px; border: 1px dashed var(--warn); color: var(--warn); font-size: 15px; }
+
+.axes { display: flex; flex-direction: column; gap: 12px; }
+.axis { display: grid; grid-template-columns: 18px 1fr 40px; align-items: center; gap: 10px; }
+.axis .sym { font-size: 14px; color: var(--accent-ink); text-align: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--text-2xs); color: var(--muted); }
+.anatomy { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 12px 4px; position: relative; overflow: hidden; }
+.anatomy .glyph { font-size: 92px; line-height: 1; }
+.anatomy .ln { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--accent); }
+.anatomy .ln b { position: absolute; right: 6px; top: -14px; font-size: var(--text-2xs); font-weight: 400; color: var(--accent-ink); }
+
+.sim { display: flex; flex-direction: column; gap: 6px; }
+.sim button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); text-align: left; }
+.sim button:hover { border-color: var(--accent); }
+.sim .s { flex: 1; min-width: 0; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim .pct { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.pair { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.pair h4 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.15; }
+.pair p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.pair .why { display: flex; gap: 8px; font-size: var(--text-2xs); color: var(--muted); padding-top: 6px; border-top: 1px solid var(--border); margin-top: 4px; }
+.pair .why b { color: var(--accent-ink); font-weight: 500; }
+
+/* ---------- Status bar ---------- */
+.status {
+  grid-column: 1 / -1; grid-row: 2;
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums;
+  padding: 0 6px env(safe-area-inset-bottom, 0px);
+  white-space: nowrap; overflow: hidden;
+}
+.status .mini { width: 120px; height: 3px; border-radius: 99px; background: var(--border); overflow: hidden; flex: none; }
+.status .mini i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.status .sp { flex: 1; }
+.status .iconbtn { width: 22px; height: 22px; }
+.status .proto { padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: var(--text-2xs); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .searchbox { width: 120px; }
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: auto minmax(0,1fr); }
+  .app .side { width: 52px; }
+  .app .side .lbl, .app .side .n, .app .side .more, .app .side .ghead, .app .side .tags,
+  .app .side-top .spacer, .app .side-top .newbtn, .app .side .src-extra, .collapse-btn { display: none; }
+  .app .side-top { flex-direction: column; }
+  .app .nav { justify-content: center; padding: 0; }
+  .panel {
+    position: fixed; z-index: 20;
+    left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px));
+    bottom: calc(36px + env(safe-area-inset-bottom, 0px)); top: 30%;
+    width: auto; box-shadow: var(--shadow);
+  }
+  .panel[hidden] { display: none !important; }
+  .p-close { display: grid; }
+  .searchbox, .size { display: none; }
+  .status .mini { width: 60px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <nav class="side" aria-label="Thư viện">
+    <div class="side-top">
+      <div class="logo" aria-hidden="true">A</div>
+      <span class="spacer"></span>
+      <button class="iconbtn newbtn" title="Thêm thư mục font" aria-label="Thêm thư mục font" data-ico="plus"></button>
+      <button class="iconbtn collapse-btn" id="collapse" title="Thu gọn" aria-label="Thu gọn sidebar" data-ico="panel"></button>
+    </div>
+    <div class="side-scroll" id="sideNav"></div>
+    <div class="side-foot">
+      <button class="nav" title="Phân tích ảnh đang chạy">
+        <svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="bgc" cx="10" cy="10" r="7.5"/><circle class="fgc" id="ring" cx="10" cy="10" r="7.5" stroke-dasharray="47.1" stroke-dashoffset="47.1"/></svg>
+        <span class="lbl">Model</span><span class="n" id="ringPct">0%</span>
+      </button>
+      <button class="nav" id="themeBtn" title="Sáng / tối" aria-label="Đổi giao diện sáng tối"><span data-ico="moon"></span><span class="lbl">Giao diện</span></button>
+      <button class="nav" title="Cài đặt" aria-label="Cài đặt"><span data-ico="sliders"></span><span class="lbl">Cài đặt</span></button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="toolbar">
+      <label class="sample" for="sampleInput" title="Chữ mẫu">
+        <span data-ico="type"></span>
+        <input id="sampleInput" value="Phở bò Hà Nội" autocomplete="off" aria-label="Chữ mẫu">
+      </label>
+      <div class="size" title="Cỡ chữ mẫu">
+        <span class="a1" aria-hidden="true">A</span>
+        <input type="range" id="sizeRange" min="18" max="72" value="34" aria-label="Cỡ chữ mẫu">
+        <span class="a2" aria-hidden="true">A</span>
+      </div>
+      <div class="seg" role="group" aria-label="Kiểu hiển thị">
+        <button class="iconbtn" id="viewGrid" aria-pressed="true" title="Lưới" aria-label="Lưới" data-ico="grid"></button>
+        <button class="iconbtn" id="viewList" aria-pressed="false" title="Danh sách" aria-label="Danh sách" data-ico="list"></button>
+      </div>
+      <button class="vi-toggle" id="viToggle" aria-pressed="false" title="Chỉ font đủ dấu tiếng Việt">Ặ<span style="font-weight:500">vi</span></button>
+      <label class="searchbox" for="search" title="Tìm">
+        <span data-ico="search"></span>
+        <input id="search" placeholder="Tìm" autocomplete="off" aria-label="Tìm font">
+      </label>
+    </div>
+    <div class="grid-wrap">
+      <div class="grid" id="grid" role="listbox" aria-label="Font"></div>
+    </div>
+  </main>
+
+  <!-- Detail panel -->
+  <aside class="panel" id="panel" aria-label="Chi tiết font">
+    <div class="p-head">
+      <div class="p-row">
+        <div class="p-name" id="pName"></div>
+        <button class="switch" id="pSwitch" role="switch" aria-checked="false" title="Kích hoạt" aria-label="Kích hoạt font"></button>
+        <button class="iconbtn p-close" id="pClose" aria-label="Đóng" data-ico="x"></button>
+      </div>
+      <div class="p-row">
+        <select id="pStyle" aria-label="Kiểu chữ"></select>
+        <span class="chip" id="pClass"></span>
+      </div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="spec" title="Specimen" aria-label="Specimen"><span class="g">Aa</span></button>
+      <button class="tab" role="tab" data-tab="vi" title="Tiếng Việt" aria-label="Tiếng Việt"><span class="g">Ặ</span></button>
+      <button class="tab" role="tab" data-tab="anat" title="Giải phẫu" aria-label="Giải phẫu" data-ico="ruler"></button>
+      <button class="tab" role="tab" data-tab="sim" title="Tương tự" aria-label="Tương tự" data-ico="sim"></button>
+      <button class="tab" role="tab" data-tab="pair" title="Ghép cặp" aria-label="Ghép cặp" data-ico="link"></button>
+    </div>
+    <div class="p-body" id="pBody" role="tabpanel"></div>
+  </aside>
+
+  <!-- Status bar -->
+  <footer class="status" id="status">
+    <span data-ico="spark"></span>
+    <span id="stText"></span>
+    <span class="mini"><i id="stBar"></i></span>
+    <span id="stEta"></span>
+    <button class="iconbtn" id="stPause" title="Tạm dừng" aria-label="Tạm dừng phân tích" data-ico="pause"></button>
+    <span class="sp"></span>
+    <span id="stCount"></span>
+    <span class="proto" title="Prototype, dữ liệu mẫu">mẫu</span>
+  </footer>
+</div>
+
+<script>
+/* ---------- Icons ---------- */
+const ICONS = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',
+  all: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  power: '<path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  drive: '<rect x="3" y="13" width="18" height="6" rx="2"/><path d="M5.5 13l2-7h9l2 7"/><path d="M7 16h.01"/>',
+  eject: '<path d="M12 5l7 8H5z"/><path d="M5 18h14"/>',
+  more: '<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  moon: '<path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z"/>',
+  type: '<path d="M5 6.5V5h14v1.5M12 5v14M9.5 19h5"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  ruler: '<path d="M4 16.5L16.5 4 20 7.5 7.5 20z"/><path d="M8 12.5l1.5 1.5M10.5 10l1.5 1.5M13 7.5l1.5 1.5"/>',
+  sim: '<circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  pause: '<path d="M9 5v14M15 5v14"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  tag: '<path d="M3.5 12V4.5h7.5L20 13.5 13.5 20z"/><circle cx="8" cy="8.5" r="1.2"/>'
+};
+const ico = (n, extra = '') => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[n] || ''}</svg>`;
+const hydrateIcons = (root = document) => root.querySelectorAll('[data-ico]').forEach(el => { if (!el.querySelector('svg')) el.insertAdjacentHTML('afterbegin', ico(el.dataset.ico)); });
+
+/* ---------- Sample data (prototype) ---------- */
+// axes: c = contrast ●, a = aperture ◐, x = x-height ◆, w = width ○  (0..100)
+const FONTS = [
+  { id: 1,  name: 'Be Vietnam Pro',     css: '"Be Vietnam Pro"',     cls: 'Sans',    styles: ['Regular','SemiBold','Bold','Italic'], n: 18, vi: 0,   active: true,  star: true,  recent: 1, src: 'gf',    col: ['brand'],   tags: ['ui'],      ax: { c: 12, a: 70, x: 74, w: 58 } },
+  { id: 2,  name: 'Lora',               css: '"Lora"',               cls: 'Serif',   styles: ['Regular','Italic','Bold'],            n: 8,  vi: 0,   active: true,  star: false, recent: 2, src: 'gf',    col: ['book'],    tags: ['body'],    ax: { c: 46, a: 58, x: 66, w: 52 } },
+  { id: 3,  name: 'Playfair Display',   css: '"Playfair Display"',   cls: 'Display', styles: ['Regular','Bold','Black Italic'],      n: 12, vi: 0,   active: false, star: true,  recent: 0, src: 'gf',    col: ['book'],    tags: ['heading'], ax: { c: 88, a: 42, x: 70, w: 50 } },
+  { id: 4,  name: 'Montserrat',         css: '"Montserrat"',         cls: 'Sans',    styles: ['Regular','SemiBold','Bold'],          n: 18, vi: 0,   active: true,  star: false, recent: 3, src: 'gf',    col: ['brand','omurai'], tags: ['heading','ui'], ax: { c: 8, a: 62, x: 70, w: 72 } },
+  { id: 5,  name: 'Roboto Slab',        css: '"Roboto Slab"',        cls: 'Slab',    styles: ['Regular','SemiBold'],                 n: 9,  vi: 0,   active: false, star: false, recent: 0, src: 'local', col: [],          tags: ['body'],    ax: { c: 10, a: 60, x: 72, w: 60 } },
+  { id: 6,  name: 'JetBrains Mono',     css: '"JetBrains Mono"',     cls: 'Mono',    styles: ['Regular','Bold'],                     n: 16, vi: 0,   active: true,  star: false, recent: 4, src: 'local', col: [],          tags: ['code'],    ax: { c: 6, a: 72, x: 76, w: 64 } },
+  { id: 7,  name: 'Dancing Script',     css: '"Dancing Script"',     cls: 'Script',  styles: ['Medium'],                             n: 4,  vi: 0,   active: false, star: false, recent: 0, src: 'gf',    col: ['omurai'],  tags: ['display'], ax: { c: 40, a: 48, x: 52, w: 46 } },
+  { id: 8,  name: 'Oswald',             css: '"Oswald"',             cls: 'Sans',    styles: ['Regular','Medium'],                   n: 6,  vi: 0,   active: false, star: false, recent: 0, src: 'ext',   col: ['omurai'],  tags: ['heading'], ax: { c: 14, a: 50, x: 78, w: 30 } },
+  { id: 9,  name: 'Bricolage Grotesque',css: '"Bricolage Grotesque"',cls: 'Sans',    styles: ['Regular','SemiBold'],                 n: 7,  vi: 0,   active: false, star: true,  recent: 5, src: 'gf',    col: ['brand'],   tags: ['heading'], ax: { c: 22, a: 56, x: 72, w: 62 } },
+  { id: 10, name: 'EB Garamond',        css: '"EB Garamond"',        cls: 'Serif',   styles: ['Regular','Italic'],                   n: 10, vi: 0,   active: false, star: false, recent: 0, src: 'local', col: ['book'],    tags: ['body'],    ax: { c: 54, a: 50, x: 58, w: 48 } },
+  { id: 11, name: 'Fraunces',           css: '"Fraunces"',           cls: 'Serif',   styles: ['Regular','SemiBold'],                 n: 18, vi: 0,   active: true,  star: false, recent: 6, src: 'gf',    col: ['omurai'],  tags: ['heading'], ax: { c: 64, a: 46, x: 68, w: 56 } },
+  { id: 12, name: 'Josefin Sans',       css: '"Josefin Sans"',       cls: 'Sans',    styles: ['Regular','SemiBold'],                 n: 14, vi: 0,   active: false, star: false, recent: 0, src: 'ext',   col: [],          tags: ['display'], ax: { c: 10, a: 66, x: 50, w: 60 } },
+  { id: 13, name: 'Alegreya',           css: '"Alegreya"',           cls: 'Serif',   styles: ['Regular'],                            n: 12, vi: 0,   active: false, star: false, recent: 0, src: 'local', col: ['book'],    tags: ['body'],    ax: { c: 50, a: 54, x: 60, w: 46 } },
+  { id: 14, name: 'Space Mono',         css: '"Space Mono"',         cls: 'Mono',    styles: ['Regular'],                            n: 4,  vi: 0,   active: false, star: false, recent: 0, src: 'ext',   col: [],          tags: ['code'],    ax: { c: 16, a: 64, x: 70, w: 66 } },
+  { id: 15, name: 'DM Serif Display',   css: '"DM Serif Display"',   cls: 'Display', styles: ['Regular','Italic'],                   n: 2,  vi: 67,  active: false, star: false, recent: 0, src: 'local', col: [],          tags: ['heading'], ax: { c: 82, a: 40, x: 72, w: 54 } },
+  { id: 16, name: 'Syne',               css: '"Syne"',               cls: 'Display', styles: ['Medium','Bold'],                      n: 5,  vi: 134, active: false, star: false, recent: 0, src: 'ext',   col: [],          tags: ['display'], ax: { c: 18, a: 58, x: 66, w: 80 } },
+  { id: 17, name: 'Abril Fatface',      css: '"Abril Fatface"',      cls: 'Display', styles: ['Regular'],                            n: 1,  vi: 134, active: false, star: false, recent: 0, src: 'local', col: [],          tags: ['display'], ax: { c: 92, a: 36, x: 68, w: 62 } },
+  { id: 18, name: 'Montserrat Alt',     css: '"Montserrat"',         cls: 'Sans',    styles: ['Regular'],                            n: 1,  vi: 0,   active: false, star: false, recent: 0, src: 'local', col: [],          tags: [],          ax: { c: 8, a: 62, x: 70, w: 74 } }
+];
+const COLLECTIONS = [ { id: 'brand', name: 'Sừng Quăn', color: '#D4A574' }, { id: 'omurai', name: 'Omurai menu', color: '#7BA88A' }, { id: 'book', name: 'Sách thơ', color: '#8B9BC8' } ];
+const SOURCES = [ { id: 'gf', name: 'Google Fonts', ico: 'folder' }, { id: 'local', name: '~/Library/Fonts', ico: 'folder' }, { id: 'ext', name: 'VXData', ico: 'drive', ejected: true } ];
+const TAGS = ['heading','body','ui','display','code'];
+const VI_MISSING = 'Ặ ẵ ẳ ậ ẫ ẩ ợ ỡ ở ự ữ ử ỷ ỹ'.split(' ');
+
+const PAIRS = { Display: ['Be Vietnam Pro','Lora','Josefin Sans'], Serif: ['Montserrat','Be Vietnam Pro','Bricolage Grotesque'], Sans: ['Lora','Fraunces','EB Garamond'], Slab: ['Be Vietnam Pro','Josefin Sans','Montserrat'], Mono: ['Fraunces','Be Vietnam Pro','Lora'], Script: ['Montserrat','Josefin Sans','Lora'] };
+
+/* ---------- State ---------- */
+const S = { view: 'all', tag: null, vi: false, q: '', list: false, sel: 1, tab: 'spec', sample: 'Phở bò Hà Nội', size: 34, paused: false, done: 412, total: 1280 };
+const byId = id => FONTS.find(f => f.id === id);
+const byName = n => FONTS.find(f => f.name === n);
+const $ = s => document.querySelector(s);
+
+/* ---------- Sidebar ---------- */
+function count(fn) { return FONTS.filter(fn).length; }
+function navBtn(key, icon, label, n, opts = {}) {
+  const cur = S.view === key;
+  const lead = opts.swatch ? `<span class="swatch" style="background:${opts.swatch}"></span>` : ico(icon);
+  return `<button class="nav ${opts.cls || ''}" data-view="${key}" aria-current="${cur}" title="${label}">${lead}<span class="lbl">${label}</span>${opts.more ? `<span class="more" aria-hidden="true">${ico('more')}</span>` : ''}<span class="n">${n}</span></button>`;
+}
+function renderSide() {
+  const top = [
+    navBtn('all', 'all', 'Tất cả', FONTS.length),
+    navBtn('star', 'star', 'Yêu thích', count(f => f.star)),
+    navBtn('recent', 'clock', 'Gần đây', count(f => f.recent)),
+    navBtn('active', 'power', 'Đang bật', count(f => f.active))
+  ].join('');
+  const cols = COLLECTIONS.map(c => navBtn('col:' + c.id, '', c.name, count(f => f.col.includes(c.id)), { swatch: c.color, more: true })).join('');
+  const srcs = SOURCES.map(s => navBtn('src:' + s.id, s.ejected ? 'eject' : s.ico, s.name, count(f => f.src === s.id), { cls: s.ejected ? 'ejected' : '', more: true })).join('');
+  const tags = TAGS.map(t => `<button class="tag" data-tag="${t}" aria-pressed="${S.tag === t}">#${t}</button>`).join('');
+  $('#sideNav').innerHTML = `
+    <div class="group">${top}</div>
+    <div class="group"><div class="ghead">Dự án<button class="iconbtn" aria-label="Thêm dự án" title="Thêm dự án">${ico('plus')}</button></div>${cols}</div>
+    <div class="group"><div class="ghead">Nguồn<button class="iconbtn" aria-label="Thêm nguồn" title="Thêm nguồn">${ico('plus')}</button></div>${srcs}</div>
+    <div class="group"><div class="ghead">Thẻ</div><div class="tags">${tags}</div></div>`;
+}
+
+/* ---------- Grid ---------- */
+function visible() {
+  return FONTS.filter(f => {
+    if (S.view === 'star' && !f.star) return false;
+    if (S.view === 'recent' && !f.recent) return false;
+    if (S.view === 'active' && !f.active) return false;
+    if (S.view.startsWith('col:') && !f.col.includes(S.view.slice(4))) return false;
+    if (S.view.startsWith('src:') && f.src !== S.view.slice(4)) return false;
+    if (S.tag && !f.tags.includes(S.tag)) return false;
+    if (S.vi && f.vi) return false;
+    if (S.q && !f.name.toLowerCase().includes(S.q.toLowerCase())) return false;
+    return true;
+  }).sort((a, b) => S.view === 'recent' ? a.recent - b.recent : 0);
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function viMark(f) {
+  return f.vi ? `<span class="vi miss" title="Thiếu ${f.vi} ký tự tiếng Việt">−${f.vi}</span>` : `<span class="vi ok" title="Đủ dấu tiếng Việt">●</span>`;
+}
+function renderGrid() {
+  const list = visible();
+  const g = $('#grid');
+  g.classList.toggle('list', S.list);
+  g.style.setProperty('--spec', S.size + 'px');
+  g.style.setProperty('--cell', Math.round(140 + S.size * 2.6) + 'px');
+  const txt = esc(S.sample || 'Ặa');
+  g.innerHTML = list.length ? list.map(f => `
+    <div class="card" role="option" tabindex="0" data-id="${f.id}" aria-selected="${S.sel === f.id}">
+      ${f.active ? '<span class="dot" title="Đang bật"></span>' : ''}
+      <button class="star ${f.star ? 'on' : ''}" data-star="${f.id}" aria-label="Yêu thích" title="Yêu thích">${ico('star')}</button>
+      <div class="spec" style="font-family:${f.css},serif">${txt}</div>
+      <div class="meta"><span class="nm">${f.name}</span><span>${f.n}</span>${viMark(f)}</div>
+    </div>`).join('') : `<div class="empty">Không có font nào</div>`;
+  $('#stCount').textContent = `${list.length} / ${FONTS.length}`;
+}
+
+/* ---------- Panel ---------- */
+function renderPanel() {
+  const f = byId(S.sel);
+  const panel = $('#panel');
+  if (!f) { panel.hidden = true; return; }
+  panel.hidden = false;
+  $('#pName').textContent = f.name;
+  $('#pName').style.fontFamily = f.css + ', var(--font-ui)';
+  $('#pSwitch').setAttribute('aria-checked', f.active);
+  $('#pStyle').innerHTML = f.styles.map(s => `<option>${s}</option>`).join('') + (f.n > f.styles.length ? `<option disabled>+${f.n - f.styles.length}</option>` : '');
+  $('#pClass').textContent = f.cls;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === S.tab));
+  const ff = `font-family:${f.css},serif`;
+  const sample = esc(S.sample || 'Phở bò Hà Nội');
+  let html = '';
+  if (S.tab === 'spec') {
+    html = `
+      <div class="big" style="${ff}">${sample}</div>
+      <div class="para" style="${ff}">Hà Nội mùa thu, cây cơm nguội vàng, cây bàng lá đỏ, nằm kề bên nhau, phố xưa nhà cổ, mái ngói thâm nâu.</div>
+      <div class="waterfall" style="${ff}">
+        ${[48, 32, 24, 18, 14, 11].map(s => `<div class="wf-row"><span>${s}</span><span style="font-size:${s}px">Đẹp như Hà Nội</span></div>`).join('')}
+      </div>`;
+  } else if (S.tab === 'vi') {
+    const total = 134, have = total - f.vi, pct = Math.round(have / total * 100);
+    html = `
+      <div class="stack" style="${ff}">Ắ Ằ Ẳ Ẵ Ặ<br>ấ ầ ẩ ẫ ậ<br>Ơ ơ Ư ư Đ đ</div>
+      <div class="cov"><span class="vi ${f.vi ? 'miss' : 'ok'}">${f.vi ? '◌' : '●'}</span><span class="bar"><i style="width:${pct}%"></i></span><span class="num">${have}/${total}</span></div>
+      ${f.vi ? `<div class="missing">${VI_MISSING.slice(0, Math.min(14, Math.ceil(f.vi / 9))).map(c => `<span>${c}</span>`).join('')}</div>` : ''}
+      <div class="para" style="${ff};font-size:18px">Tiếng Việt có dấu: Quỳnh, Nguyễn, Hưng Yên, Thừa Thiên Huế.</div>`;
+  } else if (S.tab === 'anat') {
+    const A = [['●', 'Tương phản nét', f.ax.c], ['◐', 'Độ mở', f.ax.a], ['◆', 'Chiều cao x', f.ax.x], ['○', 'Độ rộng', f.ax.w]];
+    html = `
+      <div class="anatomy" style="${ff}">
+        <span class="glyph">Hxg</span>
+        <span class="ln" style="top:28px"><b>cap</b></span>
+        <span class="ln" style="top:${28 + Math.round(64 * (1 - f.ax.x / 100) * 0.9)}px"><b>x</b></span>
+        <span class="ln" style="top:88px"><b>base</b></span>
+      </div>
+      <div class="axes">${A.map(([s, l, v]) => `<div class="axis" title="${l}"><span class="sym">${s}</span><span class="bar"><i style="width:${v}%"></i></span><span class="num">${v}</span></div>`).join('')}</div>
+      <div class="legend">${A.map(([s, l]) => `<span>${s} ${l}</span>`).join('')}</div>`;
+  } else if (S.tab === 'sim') {
+    const d = (a, b) => Math.abs(a.ax.c - b.ax.c) + Math.abs(a.ax.a - b.ax.a) + Math.abs(a.ax.x - b.ax.x) + Math.abs(a.ax.w - b.ax.w);
+    const sims = FONTS.filter(o => o.id !== f.id).map(o => ({ o, s: Math.max(0, 100 - Math.round(d(f, o) / 2.4)) })).sort((a, b) => b.s - a.s).slice(0, 6);
+    html = `<div class="sim">${sims.map(({ o, s }) => `<button data-go="${o.id}" title="${o.name}"><span class="s" style="font-family:${o.css},serif">${sample}</span><span class="pct">${s}%</span>${viMark(o)}</button>`).join('')}</div>`;
+  } else if (S.tab === 'pair') {
+    const ps = (PAIRS[f.cls] || PAIRS.Sans).map(byName).filter(Boolean);
+    const why = [['● tương phản', 'lệch'], ['◆ chiều cao x', 'gần'], ['◐ độ mở', 'gần']];
+    html = ps.map((p, i) => `
+      <div class="pair">
+        <h4 style="${ff}">Phở bò Hà Nội</h4>
+        <p style="font-family:${p.css},serif">Nước dùng trong, thơm quế hồi, bánh phở mềm. Mở cửa từ 6 giờ sáng ở phố Lý Quốc Sư.</p>
+        <div class="why"><span>${p.name}</span><span class="sp" style="flex:1"></span><b>${why[i][0]}</b><span>${why[i][1]}</span></div>
+      </div>`).join('');
+  }
+  $('#pBody').innerHTML = html;
+}
+
+/* ---------- Status ---------- */
+function renderStatus() {
+  const pct = Math.round(S.done / S.total * 100);
+  $('#stText').textContent = `${S.done.toLocaleString('vi-VN')}/${S.total.toLocaleString('vi-VN')}`;
+  $('#stBar').style.width = pct + '%';
+  const left = Math.max(0, Math.round((S.total - S.done) / 42));
+  $('#stEta').textContent = S.done >= S.total ? 'xong' : S.paused ? 'đã dừng' : `~${left} phút`;
+  $('#ring').setAttribute('stroke-dashoffset', (47.1 * (1 - pct / 100)).toFixed(1));
+  $('#ringPct').textContent = pct + '%';
+  const pb = $('#stPause');
+  pb.innerHTML = ico(S.paused ? 'play' : 'pause');
+  pb.title = S.paused ? 'Tiếp tục' : 'Tạm dừng';
+}
+setInterval(() => { if (!S.paused && S.done < S.total) { S.done = Math.min(S.total, S.done + 3); renderStatus(); } }, 700);
+
+/* ---------- Events ---------- */
+function renderAll() { renderSide(); renderGrid(); renderPanel(); renderStatus(); }
+document.addEventListener('click', e => {
+  const t = e.target;
+  const star = t.closest('[data-star]');
+  if (star) { const f = byId(+star.dataset.star); f.star = !f.star; renderSide(); renderGrid(); return; }
+  const card = t.closest('.card');
+  if (card) { S.sel = +card.dataset.id; markRecent(S.sel); renderSide(); renderGrid(); renderPanel(); return; }
+  const nav = t.closest('[data-view]');
+  if (nav && !t.closest('.more')) { S.view = nav.dataset.view; renderSide(); renderGrid(); return; }
+  const tag = t.closest('[data-tag]');
+  if (tag) { S.tag = S.tag === tag.dataset.tag ? null : tag.dataset.tag; renderSide(); renderGrid(); return; }
+  const tab = t.closest('[data-tab]');
+  if (tab) { S.tab = tab.dataset.tab; renderPanel(); return; }
+  const go = t.closest('[data-go]');
+  if (go) { S.sel = +go.dataset.go; renderGrid(); renderPanel(); return; }
+});
+function markRecent(id) { const f = byId(id); if (!f.recent) { FONTS.forEach(x => { if (x.recent) x.recent++; }); f.recent = 1; } }
+document.addEventListener('keydown', e => {
+  const card = e.target.closest && e.target.closest('.card');
+  if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); card.click(); }
+});
+$('#pSwitch').onclick = () => { const f = byId(S.sel); f.active = !f.active; renderAll(); };
+$('#pClose').onclick = () => { S.sel = null; renderGrid(); renderPanel(); };
+$('#collapse').onclick = () => { const a = $('#app'); a.classList.toggle('collapsed'); $('#collapse').title = a.classList.contains('collapsed') ? 'Mở rộng' : 'Thu gọn'; };
+$('#viToggle').onclick = () => { S.vi = !S.vi; $('#viToggle').setAttribute('aria-pressed', S.vi); renderGrid(); };
+$('#viewGrid').onclick = () => { S.list = false; $('#viewGrid').setAttribute('aria-pressed', true); $('#viewList').setAttribute('aria-pressed', false); renderGrid(); };
+$('#viewList').onclick = () => { S.list = true; $('#viewGrid').setAttribute('aria-pressed', false); $('#viewList').setAttribute('aria-pressed', true); renderGrid(); };
+$('#sampleInput').oninput = e => { S.sample = e.target.value; renderGrid(); renderPanel(); };
+$('#sizeRange').oninput = e => { S.size = +e.target.value; renderGrid(); };
+$('#search').oninput = e => { S.q = e.target.value; renderGrid(); };
+$('#stPause').onclick = () => { S.paused = !S.paused; renderStatus(); };
+$('#themeBtn').onclick = () => {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+};
+
+hydrateIcons();
+if (matchMedia('(max-width: 860px)').matches) S.sel = null;
+renderAll();
+</script>
