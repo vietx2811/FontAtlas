@@ -1559,6 +1559,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fontatlas-activate"
+version = "0.1.0"
+dependencies = [
+ "fontatlas-core",
+ "fontatlas-store",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "fontatlas-core"
 version = "0.1.0"
 dependencies = [

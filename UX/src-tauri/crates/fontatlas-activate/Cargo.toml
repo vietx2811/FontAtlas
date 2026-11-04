@@ -1,0 +1,16 @@
+[package]
+name = "fontatlas-activate"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Kích hoạt font cho mọi app (CoreText tại chỗ, theo scope); đối soát với hệ điều hành"
+
+[dependencies]
+fontatlas-store = { path = "../fontatlas-store" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+fontatlas-core = { path = "../fontatlas-core" }
+serde_json = "1"
+tempfile = "3.27"
