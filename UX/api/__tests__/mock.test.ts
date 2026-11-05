@@ -113,3 +113,57 @@ describe('mock api', () => {
     expect(distinct.size).toBeGreaterThanOrEqual(8);
   });
 });
+
+describe('mock analysis data (tabs of the detail panel)', () => {
+  it('get_face carries 19 axis readings with a mix of measured / estimated / failed and a percentile only when measured or estimated', async () => {
+    const api = createMockApi();
+    const r = (await api.queryFaces({ text: 'Inter', limit: 1 })).items[0];
+    const d = await api.getFace({ hashHex: r.hashHex, faceIndex: 0 }, 'vi');
+    expect(d.axes).toHaveLength(19);
+    const q = new Set(d.axes.map(a => a.quality));
+    expect(q.has('measured')).toBe(true);
+    for (const a of d.axes) {
+      if (a.quality === 'failed') { expect(a.percentile).toBeNull(); expect(a.reason).toBeTruthy(); }
+      else if (['terminal', 'a_storeys', 'g_storeys'].includes(a.key)) expect(a.percentile).toBeNull(); // phân loại, không có phân vị
+      else expect(a.percentile).toBeGreaterThanOrEqual(0);
+    }
+    expect(d.axes.map(a => a.key)).toEqual(expect.arrayContaining(['x_height', 'cap_height', 'terminal', 'a_storeys', 'g_storeys']));
+  });
+
+  it('is deterministic per face and the Vietnamese block follows the row (missing list length = viMissing)', async () => {
+    const api = createMockApi();
+    const rows = (await api.queryFaces({})).items;
+    const bad = rows.find(r => r.viMissing > 0)!;
+    const a = await api.getFace({ hashHex: bad.hashHex, faceIndex: 0 }, 'vi');
+    const b = await api.getFace({ hashHex: bad.hashHex, faceIndex: 0 }, 'vi');
+    expect(a.axes).toEqual(b.axes);
+    expect(a.vietnamese.missing).toHaveLength(bad.viMissing);
+    expect(a.vietnamese.total).toBeGreaterThan(100);
+  });
+
+  it('similar: 3 hits in similarTop, never the face itself, with same/differ and a source', async () => {
+    const api = createMockApi();
+    const r = (await api.queryFaces({ text: 'Roboto', limit: 1 })).items[0];
+    const d = await api.getFace({ hashHex: r.hashHex, faceIndex: 0 }, 'vi');
+    expect(d.similarTop).toHaveLength(3);
+    const hits = await api.similar({ hashHex: r.hashHex, faceIndex: 0 }, { k: 5 });
+    expect(hits).toHaveLength(5);
+    expect(hits.every(h => h.row.faceId !== r.faceId && h.same.length > 0 && h.differ.length > 0)).toBe(true);
+    expect(new Set(hits.map(h => h.source)).size).toBeGreaterThanOrEqual(1);
+  });
+
+  it('pair_candidates: mode changes which relations appear; safe never contains ◆; empty when the heading lacks Vietnamese and project_vi is on', async () => {
+    const api = createMockApi();
+    const good = (await api.queryFaces({ text: 'Playfair', limit: 1 })).items[0];
+    const base = { role: 'heading' as const, projectVi: true, k: 8, collectionId: null, lang: 'vi' as const };
+    const safe = await api.pairCandidates({ hashHex: good.hashHex, faceIndex: 0 }, { ...base, mode: 'safe' });
+    expect(safe.length).toBeGreaterThan(0);
+    expect(safe.every(c => c.labels.every(l => l.symbol !== '◆'))).toBe(true);
+    expect(safe.every(c => !c.row.family.includes('Playfair'))).toBe(true);
+    const exp = await api.pairCandidates({ hashHex: good.hashHex, faceIndex: 0 }, { ...base, mode: 'experimental' });
+    expect(exp.some(c => c.labels.some(l => l.symbol === '◆'))).toBe(true);
+    const bad = (await api.queryFaces({})).items.find(r => r.viMissing > 0)!;
+    expect(await api.pairCandidates({ hashHex: bad.hashHex, faceIndex: 0 }, { ...base, mode: 'safe' })).toEqual([]);
+    expect((await api.pairCandidates({ hashHex: bad.hashHex, faceIndex: 0 }, { ...base, mode: 'safe', projectVi: false })).length).toBeGreaterThan(0);
+  });
+});

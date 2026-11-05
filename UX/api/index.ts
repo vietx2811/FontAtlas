@@ -1,8 +1,8 @@
 // Mọi lệnh backend đi qua một interface; tên phương thức = tên lệnh 6a (camelCase).
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
-  ActivationStateDto, CollectionDto, FaceDetailDto, FaceKeyDto, FamilyStyleDto, SettingsDto,
-  SourceDto, TagDto, UiStateDto,
+  ActivationStateDto, CollectionDto, FaceDetailDto, FaceKeyDto, FamilyStyleDto, PairCandidateDto, PairOptsDto, SettingsDto,
+  SimilarHitDto, SimilarOptsDto, SourceDto, TagDto, UiStateDto,
 } from './types';
 
 export * from './types';
@@ -33,6 +33,8 @@ export interface Api extends LibraryApi {
   setUiState(state: UiStateDto): Promise<void>;
   // Phân tích
   getFace(face: FaceKeyDto, lang: 'vi' | 'en'): Promise<FaceDetailDto>;
+  similar(face: FaceKeyDto, opts: SimilarOptsDto): Promise<SimilarHitDto[]>;
+  pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Cài đặt
   /** Chỉ khoá `ui.*` (≤ 60 ký tự sau tiền tố), giá trị ≤ 64 KB; sai → CmdError('invalid_arg'). */
   getSetting(key: string): Promise<string | null>;

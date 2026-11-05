@@ -2,6 +2,7 @@
 import { cssSize, type FaceRow, type PxBucket } from '../features/library-grid/types';
 import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
+import { VI_TOTAL, axesFor, pairFor, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
   type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
@@ -151,9 +152,18 @@ export function createMockApi(o: MockOptions = {}): Api {
           version: 'Version 2.001', copyright: `© 2024 The ${row.family} Project Authors`, vendorUrl: null,
           variableAxes: [], namedInstances: [], scripts: ['latn', 'vietnamese'], opszRange: null, features: { gsub: ['ccmp', 'liga'], gpos: ['kern', 'mark'] },
         },
-        vietnamese: { status: row.viStatus, supports: row.supportsVi, missing: row.viMissing ? 'ẰẲẴẶẸẺẼỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ'.slice(0, row.viMissing).split('') : [], stackedMarksOverflow: false, stackStyle: null },
+        vietnamese: {
+          status: row.viStatus, supports: row.supportsVi, missing: viMissingFor(row.viMissing), total: VI_TOTAL,
+          precomposedComposite: row.viMissing === 0, gposMark: true, gposMkmk: row.faceId % 2 === 0, gsubCcmp: true, dongSign: true,
+          stackedMarksTopEm: 1.08, stackedMarksOverflow: row.faceId % 4 === 1, stackStyle: row.faceId % 4 === 1 ? 'tight' : null,
+          markWeightRatio: { key: 'mark_weight_ratio', value: 0.82, quality: 'measured', reason: null, method: 'outline', percentile: 55 },
+        },
+        axes: axesFor(row),
+        similarTop: similarFor(row, rows, 3),
       });
     },
+    async similar(k, o) { const r = findRow(k); return ok(similarFor(r, rows, o.k)); },
+    async pairCandidates(k, o) { const r = findRow(k); return ok(pairFor(r, rows, o)); },
     getSettings: () => ok(settings),
     async getSetting(key) { return uiSettings.get(key) ?? null; },
     async setSetting(key, value) {
