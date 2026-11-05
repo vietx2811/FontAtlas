@@ -22,9 +22,16 @@ describe('who sees onboarding', () => {
   it('finished or skipped ("done") never comes back by itself', () => {
     expect(needsOnboarding(s({ step: 'done' }))).toBe(false);
   });
-  it('an existing user (data present, nothing saved) is not treated as a first run', () => {
-    expect(needsOnboarding(s({ hasSources: true }))).toBe(false);
+  it('anyone who has not acknowledged the license sees onboarding, even with sources already (e.g. imported from the old DB)', () => {
+    expect(needsOnboarding(s({ hasSources: true }))).toBe(true);
+    expect(isFirstRun(s({ hasSources: true }))).toBe(true);
+  });
+  it('an acknowledged user with nothing in progress does not', () => {
     expect(needsOnboarding(s({ licenseNoticeAck: true }))).toBe(false);
+    expect(needsOnboarding(s({ licenseNoticeAck: true, hasSources: true }))).toBe(false);
+  });
+  it('skipped (done) without acknowledging: left alone; the license notice comes back at first scan/Similar (spec 2.2 O5), not here', () => {
+    expect(needsOnboarding(s({ step: 'done' }))).toBe(false);
   });
   it('an unknown saved step falls back to the first', () => {
     expect(startStep(s({ step: 'zz' }))).toBe('o1');
@@ -39,6 +46,14 @@ describe('step order', () => {
     expect(visibleSteps(base)).not.toContain('o2');
     expect(visibleSteps(s({ legacy }))).toContain('o2');
     expect(visibleSteps(s({ legacy: { ...legacy, imported: { fonts: 1, sources: 1, collections: 0, recoveredCollections: 0, badTags: 0, skippedSources: 0 } } }))).not.toContain('o2');
+  });
+  it('sources imported from the old database: no "add folders" step, but license, model and activation stay', () => {
+    const imported = { ...legacy, imported: { fonts: 1240, sources: 2, collections: 3, recoveredCollections: 0, badTags: 0, skippedSources: 0 } };
+    const v = visibleSteps(s({ legacy: imported, hasSources: true }));
+    expect(v).not.toContain('o3');
+    expect(v).toEqual(expect.arrayContaining(['o4', 'o5', 'o6', 'o7', 'end']));
+    expect(nextStep('o1', s({ legacy: imported, hasSources: true }))).toBe('o4');
+    expect(visibleSteps(s({ hasSources: true }))).toContain('o3'); // có nguồn nhưng không từ import: vẫn cho thêm
   });
   it('O4 needs a source', () => {
     expect(visibleSteps(base)).not.toContain('o4');
