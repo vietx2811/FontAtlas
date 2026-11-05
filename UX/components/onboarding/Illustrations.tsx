@@ -73,7 +73,7 @@ export function Illustration({ step }: { step: Step | S }): React.JSX.Element | 
   const art = (ART as Record<string, { label: string; node: ReactNode }>)[step];
   if (!art) return null;
   return (
-    <svg className="fa-illus" role="img" aria-label={art.label} viewBox="0 0 240 120" width="240" height="120">
+    <svg className="fa-illus" role="img" aria-label={art.label} viewBox="0 -14 240 134" width="240" height="134">
       {art.node}
     </svg>
   );
