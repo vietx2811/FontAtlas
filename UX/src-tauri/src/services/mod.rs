@@ -2,6 +2,7 @@
 pub mod activation;
 pub mod boot;
 pub mod keys;
+pub mod library;
 pub mod model;
 pub mod onboarding;
 pub mod scan;

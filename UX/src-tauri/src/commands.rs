@@ -11,9 +11,10 @@ use tauri::ipc::Channel;
 
 use crate::dto::activation::ActivationCapsDto;
 use crate::dto::events::{BootEvent, ScanEvent};
-use crate::dto::library::{ScanStatusDto, SourceDto};
+use crate::dto::library::*;
+use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
-use crate::services::{boot, onboarding, sources};
+use crate::services::{boot, library, onboarding, sources, system};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -48,6 +49,30 @@ macro_rules! command_list {
             async scan_cancel() -> Result<(), CmdError>;
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
             async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
+            async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
+            async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
+            async set_favorite(face: FaceKeyDto, on: bool) -> Result<(), CmdError>;
+            async list_collections() -> Result<Vec<CollectionDto>, CmdError>;
+            async create_collection(name: String, color: Option<String>) -> Result<CollectionDto, CmdError>;
+            async rename_collection(id: i64, name: String) -> Result<(), CmdError>;
+            async delete_collection(id: i64) -> Result<(), CmdError>;
+            async add_to_collection(id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
+            async remove_from_collection(id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
+            async list_tags() -> Result<Vec<TagDto>, CmdError>;
+            async tags_of(face: FaceKeyDto) -> Result<Vec<TagDto>, CmdError>;
+            async create_tag(name: String) -> Result<TagDto, CmdError>;
+            async tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
+            async untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
+            async list_problems() -> Result<Vec<ProblemDto>, CmdError>;
+            async retry_problems() -> Result<u32, CmdError>;
+            async reveal_in_finder(face: FaceKeyDto) -> Result<(), CmdError>;
+            async backup_user_db() -> Result<String, CmdError>;
+            async disk_free(target: String) -> Result<u64, CmdError>;
+            async get_ui_state() -> Result<UiStateDto, CmdError>;
+            async set_ui_state(state: UiStateDto) -> Result<(), CmdError>;
+            async get_setting(key: String) -> Result<Option<String>, CmdError>;
+            async set_setting(key: String, value: String) -> Result<(), CmdError>;
+            async detect_font_managers() -> Result<Vec<FontManagerDto>, CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -135,6 +160,43 @@ pub async fn legacy_retry(state: State<'_, Arc<AppState>>) -> Result<LegacyState
     blocking(&state, boot::legacy_import).await
 }
 
+macro_rules! cmd {
+    ($(#[$m:meta])* $name:ident ( $($arg:ident : $ty:ty),* ) -> $ret:ty => |$s:ident| $body:expr) => {
+        $(#[$m])*
+        #[tauri::command]
+        pub async fn $name(state: State<'_, Arc<AppState>> $(, $arg: $ty)*) -> Result<$ret, CmdError> {
+            blocking(&state, move |$s| $body).await
+        }
+    };
+}
+
+cmd!(query_faces(q: FaceQueryDto) -> FacePageDto => |s| library::query_faces(s, &q));
+cmd!(get_family_styles(family: String) -> Vec<FamilyStyleDto> => |s| library::get_family_styles(s, &family));
+cmd!(set_favorite(face: FaceKeyDto, on: bool) -> () => |s| library::set_favorite(s, &face, on));
+cmd!(list_collections() -> Vec<CollectionDto> => |s| library::list_collections(s));
+cmd!(create_collection(name: String, color: Option<String>) -> CollectionDto => |s| library::create_collection(s, &name, color.as_deref()));
+cmd!(rename_collection(id: i64, name: String) -> () => |s| library::rename_collection(s, id, &name));
+cmd!(delete_collection(id: i64) -> () => |s| library::delete_collection(s, id));
+cmd!(add_to_collection(id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::add_to_collection(s, id, &faces));
+cmd!(remove_from_collection(id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::remove_from_collection(s, id, &faces));
+cmd!(list_tags() -> Vec<TagDto> => |s| library::list_tags(s));
+cmd!(tags_of(face: FaceKeyDto) -> Vec<TagDto> => |s| library::tags_of(s, &face));
+cmd!(create_tag(name: String) -> TagDto => |s| library::create_tag(s, &name));
+cmd!(tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::tag_faces(s, tag_id, &faces));
+cmd!(untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::untag_faces(s, tag_id, &faces));
+cmd!(list_problems() -> Vec<ProblemDto> => |s| library::list_problems(s));
+cmd!(retry_problems() -> u32 => |s| library::retry_problems(s));
+cmd!(reveal_in_finder(face: FaceKeyDto) -> () => |s| system::reveal_in_finder(s, &face, &|p| {
+    tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
+}));
+cmd!(backup_user_db() -> String => |s| system::backup_user_db(s));
+cmd!(disk_free(target: String) -> u64 => |s| system::disk_free(s, &target));
+cmd!(get_ui_state() -> UiStateDto => |s| system::get_ui_state(s));
+cmd!(set_ui_state(state: UiStateDto) -> () => |s| system::set_ui_state(s, &state));
+cmd!(get_setting(key: String) -> Option<String> => |s| system::get_setting(s, &key));
+cmd!(set_setting(key: String, value: String) -> () => |s| system::set_setting(s, &key, &value));
+cmd!(detect_font_managers() -> Vec<FontManagerDto> => |_s| Ok(system::detect_font_managers()));
+
 #[tauri::command]
 pub async fn list_sources(state: State<'_, Arc<AppState>>) -> Result<Vec<SourceDto>, CmdError> {
     blocking(&state, |s| sources::list_sources(s)).await
@@ -200,7 +262,9 @@ pub fn async_violations(table: &[CommandSig], src: &str) -> Vec<String> {
         if !c.is_async && !SYNC_OK.contains(&c.name) {
             v.push(format!("{} khai báo sync nhưng không nằm trong SYNC_OK", c.name));
         }
-        if c.is_async && !src.contains(&async_def) {
+        // `cmd!(tên(` sinh `pub async fn tên(`
+        let via_macro = format!("cmd!({}(", c.name);
+        if c.is_async && !src.contains(&async_def) && !src.contains(&via_macro) {
             v.push(format!("{} khai báo async trong bảng nhưng hàm không phải `pub async fn`", c.name));
         }
         if !c.is_async && !src.contains(&sync_def) {
