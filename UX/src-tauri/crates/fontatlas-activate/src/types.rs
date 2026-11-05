@@ -156,3 +156,17 @@ pub struct Progress {
     pub total: usize,
     pub hash_hex: String,
 }
+
+/// Một dòng trạng thái kích hoạt cho UI (lệnh `activation_state` của Plan 6a).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationStateDto {
+    pub hash_hex: String,
+    pub state: fontatlas_store::DesiredState,
+    pub scope: fontatlas_store::ActivationScope,
+    pub status: fontatlas_store::ActivationStatus,
+    pub reasons: Vec<fontatlas_store::ActivationReason>,
+    pub active_path: Option<String>,
+    pub conflict_ps: Option<String>,
+    pub last_error: Option<String>,
+}

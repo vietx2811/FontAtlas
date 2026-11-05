@@ -125,3 +125,103 @@ fn live_provider_paths_are_canonical() {
     let prov = e.providers(FIXTURE_PS).unwrap();
     assert!(prov.contains(&canon), "{prov:?} không chứa {}", canon.display());
 }
+
+// ---------- Task 8: service end-to-end với CoreText thật ----------
+mod common;
+
+use std::sync::Mutex;
+
+use fontatlas_activate::{ActivationService, ConflictPolicy, DeactivatePolicy, FileOutcome, Owner};
+use fontatlas_store::{FaceKey, Store};
+
+/// Gỡ mọi thứ service đã đăng ký khi ra khỏi phạm vi (kể cả khi panic).
+struct CleanupAll<'a> {
+    svc: &'a ActivationService<MacCoreTextEngine>,
+    store: &'a Mutex<Store>,
+}
+
+impl Drop for CleanupAll<'_> {
+    fn drop(&mut self) {
+        let _ = self.svc.deactivate_all(self.store, &mut |_| {});
+    }
+}
+
+/// Env có đúng một file fixture tên `file_name` trong thư mục nguồn; `None` = bỏ qua (cổng an toàn).
+fn live_env(file_name: &str) -> Option<common::Env> {
+    let env = common::env_with(&[]);
+    live_copy(&env.fonts, file_name)?;
+    common::rescan(&env);
+    Some(env)
+}
+
+fn first_key(env: &common::Env) -> FaceKey {
+    let s = env.store.lock().unwrap();
+    let h: Vec<u8> = s.conn().query_row("SELECT hash FROM main.files LIMIT 1", [], |r| r.get(0)).unwrap();
+    FaceKey { hash: h.try_into().unwrap(), face_index: 0 }
+}
+
+#[test]
+#[ignore = "live CoreText: chạy khi người dùng đồng ý"]
+fn live_service_roundtrip_session() {
+    let Some(env) = live_env("libre.ttf") else { return };
+    let svc = ActivationService::new(MacCoreTextEngine);
+    let _c = CleanupAll { svc: &svc, store: &env.store };
+    let k = first_key(&env);
+    let rep = svc.activate_faces(&env.store, &[k], Some(Scope::Session), ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Activated, "{:?}", rep.results[0].outcome);
+    assert!(visible());
+    assert_eq!(svc.shutdown(&env.store).unwrap(), 1);
+    assert!(!visible());
+    let rec = svc.reconcile(&env.store, &mut |_| {}).unwrap();
+    assert_eq!(rec.reregistered, 1);
+    assert!(visible());
+    svc.deactivate_all(&env.store, &mut |_| {}).unwrap();
+    assert!(!visible());
+}
+
+#[test]
+#[ignore = "live CoreText: chạy khi người dùng đồng ý"]
+fn live_vietnamese_filename_roundtrip() {
+    let Some(env) = live_env("Phở Đậm.ttf") else { return };
+    let svc = ActivationService::new(MacCoreTextEngine);
+    let _c = CleanupAll { svc: &svc, store: &env.store };
+    let k = first_key(&env);
+    let rep = svc.activate_faces(&env.store, &[k], Some(Scope::Session), ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Activated, "{:?}", rep.results[0].outcome);
+    assert!(visible());
+    std::fs::remove_file(env.fonts.join("Phở Đậm.ttf")).unwrap();
+    let rep = svc.deactivate_faces(&env.store, &[k], DeactivatePolicy::Ask, &mut |_| {}).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated, "{:?}", rep.results[0].outcome);
+    assert!(!visible());
+}
+
+#[test]
+#[ignore = "live CoreText: chạy khi người dùng đồng ý"]
+fn live_preflight_of_active_file_has_no_conflict() {
+    let Some(env) = live_env("libre.ttf") else { return };
+    let svc = ActivationService::new(MacCoreTextEngine);
+    let _c = CleanupAll { svc: &svc, store: &env.store };
+    let k = first_key(&env);
+    svc.activate_faces(&env.store, &[k], Some(Scope::Session), ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    let pre = svc.preflight(&env.store, &[k]).unwrap();
+    assert_eq!(pre.results[0].outcome, FileOutcome::AlreadyActive, "{:?}", pre.results[0].outcome);
+}
+
+#[test]
+#[ignore = "live CoreText: chạy khi người dùng đồng ý"]
+fn live_duplicate_ps_name_is_flagged() {
+    let Some(env) = live_env("libre.ttf") else { return };
+    let svc = ActivationService::new(MacCoreTextEngine);
+    let _c = CleanupAll { svc: &svc, store: &env.store };
+    let a = first_key(&env);
+    // Bản copy B: khác hash (giả), cùng PS name.
+    let b = common::ingest_fake(&env, "b.ttf", "live-dup", &[FIXTURE_PS]);
+    svc.activate_faces(&env.store, &[a], Some(Scope::Session), ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    let pre = svc.preflight(&env.store, &[FaceKey { hash: b, face_index: 0 }]).unwrap();
+    match &pre.results[0].outcome {
+        FileOutcome::NeedsConfirmation { conflicts } => {
+            assert!(conflicts.iter().any(|c| c.owner == Owner::FontAtlas), "{conflicts:?}");
+        }
+        o => panic!("{o:?}"),
+    }
+}

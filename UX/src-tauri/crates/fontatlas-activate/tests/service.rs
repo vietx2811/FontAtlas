@@ -571,3 +571,19 @@ fn set_scope_register_failure_keeps_old_scope() {
     assert_eq!(r.scope, Scope::Session);
     assert_eq!(r.status, ActivationStatus::Registered);
 }
+
+#[test]
+fn state_lists_rows_with_reasons() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let st = svc.state(&env.store).unwrap();
+    assert_eq!(st.len(), 1);
+    let hex: String = k.hash.iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(st[0].hash_hex, hex);
+    assert_eq!(st[0].state, DesiredState::Active);
+    assert_eq!(st[0].status, ActivationStatus::Registered);
+    assert_eq!(st[0].reasons, vec![ActivationReason::Manual]);
+    assert_eq!(st[0].active_path.as_deref(), Some(canon(&env.fonts.join(LIBRE)).to_str().unwrap()));
+}

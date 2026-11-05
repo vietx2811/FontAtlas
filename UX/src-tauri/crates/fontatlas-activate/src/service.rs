@@ -16,7 +16,7 @@ use fontatlas_store::{
 use crate::engine::{ActivationEngine, Scope};
 use crate::paths::{FileProbe, canonical_path, classify_owner, probe_file};
 use crate::types::{
-    ActivationError, ActivationReport, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome,
+    ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome,
     FileResult, Owner, Progress, SETTING_ACTIVATION_KEEP,
 };
 
@@ -131,6 +131,24 @@ impl<E: ActivationEngine> ActivationService<E> {
 
     pub fn engine(&self) -> &E {
         &self.engine
+    }
+
+    /// Mọi dòng kích hoạt kèm lý do, cho UI.
+    pub fn state(&self, store: &Mutex<Store>) -> Result<Vec<ActivationStateDto>, ActivationError> {
+        Ok(relock(store)
+            .activation_rows()?
+            .into_iter()
+            .map(|r| ActivationStateDto {
+                hash_hex: hex(&r.hash),
+                state: r.state,
+                scope: r.scope,
+                status: r.status,
+                reasons: r.reasons,
+                active_path: r.active_path,
+                conflict_ps: r.conflict_ps,
+                last_error: r.last_error,
+            })
+            .collect())
     }
 
     /// Scope mặc định theo `SETTING_ACTIVATION_KEEP`.
