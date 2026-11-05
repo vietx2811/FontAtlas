@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { pickBlocks, rerollBlocks, type Block } from './glyphs';
+import { FAMILIES, canvasMeasure, installedFamilies, pickBlocks, rerollBlocks, type Block } from './glyphs';
 import './scanBlocks.css';
 
 export const BEAT_MS = 1400;
@@ -18,12 +18,19 @@ export function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-type Props = { seed: number; scanning: boolean; progress: number | null; done: boolean; count?: number };
+/** Họ font thực sự có trên máy (đo một lần). */
+export function useInstalledFamilies(override?: readonly string[]): readonly string[] {
+  const [list] = useState(() => override ?? installedFamilies(FAMILIES, canvasMeasure()));
+  return override ?? list;
+}
+
+type Props = { seed: number; scanning: boolean; progress: number | null; done: boolean; count?: number; /** Chỉ dùng cho test. */ families?: readonly string[] };
 
 /** Bước quét: vài khối vuông mỗi khối một chữ (xoay nhẹ, đổi chữ/font theo nhịp), thanh tiến độ, xong thì vòng tròn xanh có dấu tick. */
-export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props): React.JSX.Element {
+export function ScanBlocks({ seed, scanning, progress, done, count = 9, families }: Props): React.JSX.Element {
   const reduced = usePrefersReducedMotion();
-  const [blocks, setBlocks] = useState<Block[]>(() => pickBlocks(seed, count));
+  const available = useInstalledFamilies(families);
+  const [blocks, setBlocks] = useState<Block[]>(() => pickBlocks(seed, count, available));
   const [fading, setFading] = useState<ReadonlySet<number>>(new Set());
   const tick = useRef(0);
   const live = scanning && !done;
@@ -34,7 +41,7 @@ export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props)
     const beat = setInterval(() => {
       tick.current += 1;
       setBlocks(prev => {
-        const next = rerollBlocks(prev, seed, tick.current);
+        const next = rerollBlocks(prev, seed, tick.current, available);
         setFading(new Set(next.flatMap((b, i) => (b.char !== prev[i].char || b.family !== prev[i].family ? [i] : []))));
         return next;
       });
@@ -42,7 +49,7 @@ export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props)
       clear = setTimeout(() => setFading(new Set()), FADE_MS);
     }, BEAT_MS);
     return () => { clearInterval(beat); clearTimeout(clear); };
-  }, [live, seed]);
+  }, [live, seed, available]);
 
   const pct = progress === null ? null : Math.round(Math.min(1, Math.max(0, progress)) * 100);
   return (

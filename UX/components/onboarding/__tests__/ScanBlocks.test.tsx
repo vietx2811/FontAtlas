@@ -65,6 +65,17 @@ describe('ScanBlocks', () => {
   });
 });
 
+describe('ScanBlocks fonts', () => {
+  it('uses only the families it is given, at most twice each', () => {
+    const fams = ['Helvetica Neue', 'Georgia', 'Menlo', 'Didot', 'Avenir Next', 'Palatino'];
+    render(<ScanBlocks seed={4} scanning progress={0.1} done={false} families={fams} />);
+    const used = screen.getAllByTestId('scan-block').map(b => (b as HTMLElement).style.fontFamily.replace(/^"|".*$/g, '').split('"')[0]);
+    for (const f of used) expect(fams).toContain(f);
+    const counts = used.reduce<Record<string, number>>((m, f) => ({ ...m, [f]: (m[f] ?? 0) + 1 }), {});
+    expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
+  });
+});
+
 describe('usePrefersReducedMotion', () => {
   it('reads the media query', () => {
     mockMatchMedia(true);
