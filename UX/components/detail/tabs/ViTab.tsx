@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { FaceDetailDto } from '../../../api';
+import { ZeroState } from '../../zero/ZeroState';
 
 const LOWER = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
 /** 67 chữ thường + 67 chữ hoa = 134 ký tự (UX 03 §6.2). */
@@ -14,6 +15,7 @@ export function ViTab({ detail, css }: { detail: FaceDetailDto; css: CSSProperti
   const missing = new Set(v.missing);
   const total = v.total || VI_CHARS.length;
   const have = total - VI_CHARS.filter(c => missing.has(c)).length;
+  if (have / total < 0.1) return <ZeroState compact glyph="ạ" text="Font này không có chữ Latin tiếng Việt" />;
   return (
     <>
       <div className="fa-vi-stack" data-testid="vi-stack" style={css}>{STACK.map(l => <div key={l}>{l}</div>)}</div>

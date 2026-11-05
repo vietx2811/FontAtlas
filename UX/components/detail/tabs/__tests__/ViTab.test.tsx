@@ -50,4 +50,13 @@ describe('ViTab', () => {
     expect(screen.getByTestId('vi-stack').textContent).toContain('Ắ');
     expect(container.textContent).not.toMatch(/%/);
   });
+
+  it('a font with no Latin/Vietnamese letters says so instead of showing 134 empty cells', async () => {
+    const d = await detailOf(r => r.viMissing === 0);
+    const none = { ...d, vietnamese: { ...d.vietnamese, supports: false, missing: [...VI_CHARS] } };
+    render(<ViTab detail={none} css={{}} />);
+    expect(screen.getByTestId('zero-state').textContent).toMatch(/không có chữ Latin/);
+    expect(screen.queryAllByTestId('vi-cell-missing')).toHaveLength(0);
+    expect(screen.queryByRole('meter')).toBeNull();
+  });
 });

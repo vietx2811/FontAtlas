@@ -184,4 +184,13 @@ describe('Sidebar', () => {
     act(() => useScanStore.setState({ scanning: false }));
     expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull();
   });
+
+  it('opens the folder picker when another part of the UI asks for it', async () => {
+    const pickFolder = vi.fn(async () => null);
+    await mount({ pickFolder });
+    expect(pickFolder).not.toHaveBeenCalled();
+    act(() => useUiStore.getState().requestAddFolder());
+    await settle();
+    expect(pickFolder).toHaveBeenCalledTimes(1);
+  });
 });

@@ -49,7 +49,7 @@ describe('SimilarTab', () => {
   it('explains when a font has too few measurements', async () => {
     const d = { ...(await detail()), similarTop: [] };
     render(<SimilarTab api={createMockApi()} detail={d} />);
-    expect(screen.getByText(/quá ít số đo/)).toBeTruthy();
+    expect(screen.getByTestId('zero-state').textContent).toMatch(/quá ít số đo/);
   });
 
   describe('image-analysis strip (UX 03 §3.3)', () => {

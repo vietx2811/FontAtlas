@@ -87,7 +87,14 @@ describe('PairTab', () => {
     render(<PairTab api={api} detail={detail} css={{}} />);
     await settle();
     expect(screen.getByText(/Không có ứng viên ở chế độ An toàn/)).toBeTruthy();
-    expect(screen.getByText(/Không có ứng viên/).textContent).toMatch(/Có kiểm soát/);
+    expect(screen.getByText(/Không có ứng viên ở chế độ An toàn/)).toBeTruthy();
+    vi.spyOn(api, 'pairCandidates').mockResolvedValue([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Thử Có kiểm soát' })); // gợi ý bước kế tiếp
+    await settle();
+    expect(screen.getByRole('button', { name: 'Có kiểm soát', pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử Thử nghiệm' }));
+    await settle();
+    expect(screen.getByRole('button', { name: 'Tắt dự án tiếng Việt' })).toBeTruthy();
   });
 
   it('previews heading and body text, with no numeric score anywhere', async () => {

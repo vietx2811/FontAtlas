@@ -14,6 +14,11 @@ describe('applyDevPreset (dev-only state from the URL hash)', () => {
     expect([s.style, s.panelTab, s.infoExpanded, s.sampleSize, s.query]).toEqual(['Bold', 'vi', true, 50, 'sans']);
   });
 
+  it('opens a sidebar view', async () => {
+    await applyDevPreset(createMockApi(), '#view=star');
+    expect(useUiStore.getState().view).toBe('star');
+  });
+
   it('does nothing for an empty or unknown hash', async () => {
     await applyDevPreset(createMockApi(), '');
     await applyDevPreset(createMockApi(), '#sel=Nope');

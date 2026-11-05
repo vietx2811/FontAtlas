@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useScanStore } from '../../../store/scan';
+import { fireEvent, within } from '@testing-library/react';
 import { useUiStore } from '../../../store/ui';
 import { Library } from '../Library';
 
@@ -117,5 +118,67 @@ describe('Library', () => {
     await settle();
     expect(spy.mock.calls.length).toBeGreaterThan(before);
     expect(spy.mock.calls.at(-1)![0]).toMatchObject({ offset: 0 });
+  });
+
+  describe('zero states', () => {
+    const empty = () => ({ total: 0, offset: 0, items: [] });
+    const zero = () => screen.getByTestId('zero-state');
+
+    it('no sources: invites to add a folder (asks the sidebar to open the picker)', async () => {
+      const api = createMockApi();
+      vi.spyOn(api, 'queryFaces').mockResolvedValue(empty());
+      vi.spyOn(api, 'listSources').mockResolvedValue([]);
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      expect(zero().textContent).toMatch(/Kéo thư mục/);
+      const before = useUiStore.getState().addFolderRequest;
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Thêm thư mục font' }));
+      expect(useUiStore.getState().addFolderRequest).toBe(before + 1);
+    });
+
+    it('a search with no hits names the text; the action clears query, vi filter and tag', async () => {
+      const api = createMockApi();
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      act(() => { useUiStore.getState().setQuery('zzzz'); useUiStore.getState().setViOnly(true); useUiStore.getState().setTag('3'); }); await settle();
+      expect(zero().textContent).toContain('“zzzz”');
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Xoá bộ lọc' }));
+      expect(useUiStore.getState()).toMatchObject({ query: '', viOnly: false, tag: null });
+    });
+
+    it('favorites, recent and active show their one-liners', async () => {
+      const api = createMockApi();
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      for (const [view, re] of [['star', /ngôi sao/], ['recent', /gần đây/], ['active', /công tắc/]] as const) {
+        act(() => useUiStore.getState().setView(view)); await settle();
+        expect(zero().textContent, view).toMatch(re);
+      }
+    });
+
+    it('an empty project goes back to the library; an empty tag can be dropped', async () => {
+      const api = createMockApi();
+      const col = await api.createCollection('Menu', null);
+      const tag = await api.createTag('serif');
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      act(() => useUiStore.getState().setView(`col:${col.id}`)); await settle();
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Thêm font' }));
+      expect(useUiStore.getState().view).toBe('all');
+      act(() => useUiStore.getState().setTag(String(tag.id))); await settle();
+      expect(zero().textContent).toMatch(/gắn thẻ này/);
+    });
+
+    it('an unplugged drive explains itself and offers a rescan of that source', async () => {
+      const api = createMockApi();
+      const spy = vi.spyOn(api, 'rescanSources');
+      vi.spyOn(api, 'queryFaces').mockResolvedValue(empty());
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      act(() => useUiStore.getState().setView('src:3')); await settle();
+      expect(zero().textContent).toMatch(/chưa kết nối/);
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Quét lại khi cắm' }));
+      expect(spy).toHaveBeenCalledWith([3]);
+    });
   });
 });

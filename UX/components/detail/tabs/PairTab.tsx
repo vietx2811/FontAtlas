@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole } from '../../../api';
 import { useUiStore } from '../../../store/ui';
 import { useFontFamily } from '../useFontFamily';
+import { ZeroState } from '../../zero/ZeroState';
 import { AXIS_META } from './AnatomyTab';
 import { PARAGRAPH } from './SpecimenTab';
 
@@ -56,16 +57,13 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
 
       {error && <p role="alert" className="fa-soon">Không tải được ứng viên: {error}</p>}
 
-      {!cand && !error && (
-        lacksVi ? (
-          <div className="fa-soon">
-            <p>Font tiêu đề này thiếu ký tự tiếng Việt, nên không có ứng viên khi “Dự án dùng tiếng Việt” đang bật.</p>
-            <button type="button" className="fa-link" onClick={() => setPanelTab('vi')}>Xem ký tự thiếu</button>
-          </div>
-        ) : (
-          <p className="fa-soon">Không có ứng viên ở chế độ {modeName}. Thử “Có kiểm soát” hoặc tắt “Dự án dùng tiếng Việt”.</p>
-        )
-      )}
+      {!cand && !error && (() => {
+        if (lacksVi) return <ZeroState compact glyph="ạ" text="Font tiêu đề này thiếu ký tự tiếng Việt" action={{ id: 'see', label: 'Xem ký tự thiếu' }} onAction={() => setPanelTab('vi')} />;
+        const nextMode = mode === 'safe' ? 'controlled' : mode === 'controlled' ? 'experimental' : null;
+        const nextName = MODES.find(([m]) => m === nextMode)?.[1];
+        const action = nextMode ? { id: 'mode', label: `Thử ${nextName}` } : projectVi ? { id: 'vi', label: 'Tắt dự án tiếng Việt' } : undefined;
+        return <ZeroState compact glyph="ơ" text={`Không có ứng viên ở chế độ ${modeName}`} action={action} onAction={id => (id === 'mode' ? setMode(nextMode!) : setProjectVi(false))} />;
+      })()}
 
       {cand && (
         <>

@@ -3,12 +3,13 @@
 import type { Api } from '../api';
 import type { MockOptions } from '../api/mock';
 import { useModelStore } from './model';
-import { faceKey, useUiStore, type PanelTab } from './ui';
+import { faceKey, useUiStore, type PanelTab, type View } from './ui';
 
 export async function applyDevPreset(api: Api, hash: string): Promise<void> {
   const p = new URLSearchParams(hash.replace(/^#/, ''));
   const ui = useUiStore.getState();
   if (p.get('enable') === '1') { await api.setSettings({ embedEnabled: true }); useModelStore.setState({ embedEnabled: true }); }
+  const view = p.get('view'); if (view) ui.setView(view as View);
   const q = p.get('q'); if (q) ui.setQuery(q);
   const size = Number(p.get('size')); if (size) ui.setSampleSize(size);
   const sel = p.get('sel');

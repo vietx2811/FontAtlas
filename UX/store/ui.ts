@@ -34,6 +34,8 @@ export interface UiState {
   infoExpanded: boolean;
   /** Các file đang bật: hashHex → các faceIndex của file (activation_state); nạp bằng refreshActive. */
   active: ReadonlyMap<string, readonly number[]>;
+  /** Tăng mỗi lần có nơi nào đó (trạng thái trống) muốn mở hộp chọn thư mục; Sidebar lắng nghe. */
+  addFolderRequest: number;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
 }
@@ -54,6 +56,7 @@ export interface UiActions {
   toggleInfo(): void;
   /** Đọc get_ui_state, rồi ghi ngược (debounce) mỗi khi một trường bền đổi. */
   hydrate(api: Api): Promise<void>;
+  requestAddFolder(): void;
   refreshActive(api: Api): Promise<void>;
 }
 
@@ -105,7 +108,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, ...initial,
 
     setView: v => set({ view: v, tag: null }),
     setTag: t => set({ tag: t }),
@@ -124,6 +127,7 @@ export function createUiStore(): UiStore {
     setPanelTab: t => set({ panelTab: t }),
     toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     toggleSection: k => set(s => ({ openSections: { ...s.openSections, [k]: !s.openSections[k] } })),
+    requestAddFolder: () => set(s => ({ addFolderRequest: s.addFolderRequest + 1 })),
     toggleInfo: () => set(s => ({ infoExpanded: !s.infoExpanded })),
 
     async refreshActive(api) {

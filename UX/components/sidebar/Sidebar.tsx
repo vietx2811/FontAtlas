@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { THEME_KEY } from '../../theme';
 import { useScanStore } from '../../store/scan';
@@ -36,6 +36,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
   const scanned = useScanStore(s => s.written);
+  const addRequest = useUiStore(s => s.addFolderRequest);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
   const [sources, setSources] = useState<SourceDto[]>([]);
@@ -83,6 +84,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     catch (e) { setNotice({ text: `Không thay được nguồn: ${(e as Error).message}` }); }
   };
   const onAddFont = async () => { const p = await pickFolder(); if (p) await addPath(p); };
+  const lastAddRequest = useRef(addRequest);
+  useEffect(() => { if (addRequest !== lastAddRequest.current) { lastAddRequest.current = addRequest; void onAddFont(); } }); // eslint-disable-line react-hooks/exhaustive-deps
   const onDrop = useCallback((paths: string[]) => {
     const [first] = paths;
     if (!first) return;

@@ -18,6 +18,8 @@ export type LibraryGridProps = {
   /** Hàng đệm ở đáy (px) cho ô nổi che thẻ cuối. */
   bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
+  /** Thay cho dòng "Không có font nào khớp" khi kết quả rỗng. */
+  emptyState?: React.ReactNode;
 };
 
 type Applied = { rendererVersion: string; generation: number; text: string; px: PxBucket };
@@ -66,7 +68,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, selectedKey = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', bottomInset = 0, isActive, isFavorite, onToggleFavorite,
+  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
@@ -164,7 +166,7 @@ export function LibraryGrid({
       {snap.error && snap.total === null ? (
         <div role="alert">Lỗi tải thư viện: {snap.error} <button type="button" onClick={() => paged?.retry()}>Thử lại</button></div>
       ) : snap.total === 0 ? (
-        <p>Không có font nào khớp</p>
+        emptyState ?? <p>Không có font nào khớp</p>
       ) : (
         <List
           data-testid="library-grid-scroller"

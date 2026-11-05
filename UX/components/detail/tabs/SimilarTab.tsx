@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Api, FaceDetailDto, SimilarSource } from '../../../api';
 import { useModelStore, useModelUi, type ModelStore } from '../../../store/model';
 import { faceKey, useUiStore } from '../../../store/ui';
+import { ZeroState } from '../../zero/ZeroState';
 import { AXIS_META } from './AnatomyTab';
 
 export const SOURCE_BADGE: Record<SimilarSource, string> = { axes: 'Số đo', axes_and_image: 'Số đo + Hình ảnh', image: 'Hình ảnh' };
@@ -38,7 +39,16 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
 export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; detail: FaceDetailDto; store?: ModelStore }): React.JSX.Element {
   const select = useUiStore(s => s.select);
   const strip = <ImageStrip api={api} store={store} />;
-  if (detail.similarTop.length === 0) return <>{strip}<p className="fa-soon">Font này có quá ít số đo để tìm font tương tự.</p></>;
+  const ui = useModelUi(store);
+  if (detail.similarTop.length === 0) {
+    return (
+      <>
+        {strip}
+        <ZeroState compact glyph="ơ" text="Font này có quá ít số đo để tìm font tương tự"
+          action={ui.imageReady ? undefined : { id: 'enable', label: 'Bật phân tích hình ảnh' }} onAction={() => void store.getState().enable(api)} />
+      </>
+    );
+  }
   return (
     <>
     {strip}
