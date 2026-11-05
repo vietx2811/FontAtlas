@@ -48,3 +48,21 @@
 .fa-soon, .fa-panel-error { color: var(--muted); font-size: var(--text-sm); }
 .fa-panel-error { padding: 14px; }
 .fa-panel-error button { color: var(--accent-ink); font-weight: 500; }
+
+.fa-para { margin: 0; font-size: 15px; line-height: 1.55; }
+.fa-waterfall { display: flex; flex-direction: column; gap: 6px; }
+.fa-wf-row { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; overflow: hidden; }
+.fa-wf-size { width: 22px; flex: none; font: 10px var(--font-ui); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fa-vi-stack { font-size: 30px; line-height: 1.5; text-align: center; letter-spacing: .06em; }
+.fa-vi-cov { display: flex; align-items: center; gap: 10px; }
+.fa-vi-bar { flex: 1; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.fa-vi-bar i { display: block; height: 100%; background: var(--on); border-radius: 99px; }
+.fa-vi-num { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fa-vi-warn { padding: 8px 10px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--fg); font-size: var(--text-xs); line-height: 1.45; }
+.fa-vi-warn code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--text-2xs); color: var(--muted); }
+.fa-vi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; }
+.fa-vi-cell { position: relative; display: grid; place-items: center; height: 34px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); font-size: 17px; }
+.fa-vi-cell.miss { border: 1px dashed var(--warn); background: transparent; color: var(--muted); }
+.fa-vi-cell small { position: absolute; bottom: 0; font: 8px var(--font-ui); color: var(--warn); }
+.fa-vi-caps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-xs); color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

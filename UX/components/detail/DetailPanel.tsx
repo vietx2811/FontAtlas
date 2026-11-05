@@ -3,6 +3,8 @@ import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
 import { FontInfoCard } from './FontInfoCard';
 import { StyleDropdown, styleLabel } from './StyleDropdown';
+import { SpecimenTab } from './tabs/SpecimenTab';
+import { ViTab } from './tabs/ViTab';
 import { useFaceDetail } from './useFaceDetail';
 import { useFontFamily } from './useFontFamily';
 import './detail.css';
@@ -27,6 +29,9 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const shown = detail ? styles.find(s => s.face.hashHex === detail.row.hashHex && s.face.faceIndex === detail.row.faceIndex) : undefined;
   const label = style ?? (shown ? styleLabel(shown) : null) ?? detail?.row.subfamily ?? null;
   const chosen = styles.find(s => styleLabel(s) === label);
+  const bodyCss: React.CSSProperties = {
+    fontFamily: family ? `"${family}", var(--font-ui)` : undefined, fontWeight: chosen?.weight ?? undefined, fontStyle: chosen?.italic ? 'italic' : undefined,
+  };
   const toggle = async () => {
     if (!face) return;
     try { await (isActive ? api.activationDeactivate([face]) : api.activationActivate([face])); await refreshActive(api); }
@@ -54,9 +59,10 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
           <button key={id} type="button" role="tab" aria-label={name} title={name} aria-selected={tab === id} onClick={() => setPanelTab(id)}><span className="g">{glyph}</span></button>
         ))}
       </div>
-      <div className="fa-p-body" role="tabpanel" data-style={label ?? ''} data-tab={tab}
-        style={{ fontFamily: family ? `"${family}", var(--font-ui)` : undefined, fontWeight: chosen?.weight ?? undefined, fontStyle: chosen?.italic ? 'italic' : undefined }}>
-        {tab === 'spec' ? <div className="fa-big">{sample.trim() || 'Phở bò Hà Nội'}</div> : <div className="fa-soon">Tab này nằm ở T9.</div>}
+      <div className="fa-p-body" role="tabpanel" data-style={label ?? ''} data-tab={tab}>
+        {tab === 'spec' && <SpecimenTab sample={sample} css={bodyCss} />}
+        {tab === 'vi' && detail && <ViTab detail={detail} css={bodyCss} />}
+        {tab !== 'spec' && tab !== 'vi' && <div className="fa-soon">Tab này nằm ở T9.</div>}
       </div>
     </aside>
   );
