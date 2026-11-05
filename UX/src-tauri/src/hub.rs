@@ -1,6 +1,6 @@
 //! Phát một sự kiện tới mọi đăng ký (nhiều cửa sổ nhận cùng chuỗi sự kiện).
 #[allow(unused_imports)]
-use crate::dto::events::BootEvent;
+use crate::dto::events::{BootEvent, ScanEvent};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -52,6 +52,7 @@ impl<E: Clone + Send + 'static> ProgressHub<E> {
 #[derive(Default)]
 pub struct Hubs {
     pub boot: ProgressHub<BootEvent>,
+    pub scan: ProgressHub<ScanEvent>,
 }
 
 #[cfg(test)]

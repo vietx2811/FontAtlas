@@ -10,9 +10,10 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::activation::ActivationCapsDto;
-use crate::dto::events::BootEvent;
+use crate::dto::events::{BootEvent, ScanEvent};
+use crate::dto::library::{ScanStatusDto, SourceDto};
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
-use crate::services::{boot, onboarding};
+use crate::services::{boot, onboarding, sources};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -38,6 +39,15 @@ macro_rules! command_list {
             async set_onboarding_step(step: Option<String>) -> Result<(), CmdError>;
             async legacy_import() -> Result<LegacyStateDto, CmdError>;
             async legacy_retry() -> Result<LegacyStateDto, CmdError>;
+            async list_sources() -> Result<Vec<SourceDto>, CmdError>;
+            async add_source(path: String) -> Result<SourceDto, CmdError>;
+            async remove_source(source_id: i64) -> Result<(), CmdError>;
+            async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
+            async scan_pause() -> Result<(), CmdError>;
+            async scan_resume() -> Result<(), CmdError>;
+            async scan_cancel() -> Result<(), CmdError>;
+            sync scan_status() -> Result<ScanStatusDto, CmdError>;
+            async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -123,6 +133,57 @@ pub async fn legacy_import(state: State<'_, Arc<AppState>>) -> Result<LegacyStat
 #[tauri::command]
 pub async fn legacy_retry(state: State<'_, Arc<AppState>>) -> Result<LegacyStateDto, CmdError> {
     blocking(&state, boot::legacy_import).await
+}
+
+#[tauri::command]
+pub async fn list_sources(state: State<'_, Arc<AppState>>) -> Result<Vec<SourceDto>, CmdError> {
+    blocking(&state, |s| sources::list_sources(s)).await
+}
+
+#[tauri::command]
+pub async fn add_source(state: State<'_, Arc<AppState>>, path: String) -> Result<SourceDto, CmdError> {
+    blocking(&state, move |s| sources::add_source(s, &path)).await
+}
+
+#[tauri::command]
+pub async fn remove_source(state: State<'_, Arc<AppState>>, source_id: i64) -> Result<(), CmdError> {
+    blocking(&state, move |s| sources::remove_source(s, source_id)).await
+}
+
+#[tauri::command]
+pub async fn rescan_sources(state: State<'_, Arc<AppState>>, source_ids: Option<Vec<i64>>) -> Result<(), CmdError> {
+    blocking(&state, move |s| sources::rescan_sources(s, source_ids)).await
+}
+
+#[tauri::command]
+pub async fn scan_pause(state: State<'_, Arc<AppState>>) -> Result<(), CmdError> {
+    state.scans.pause(&state);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn scan_resume(state: State<'_, Arc<AppState>>) -> Result<(), CmdError> {
+    state.scans.resume(&state);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn scan_cancel(state: State<'_, Arc<AppState>>) -> Result<(), CmdError> {
+    state.scans.cancel_current();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, CmdError> {
+    Ok(state.scans.status())
+}
+
+#[tauri::command]
+pub async fn scan_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ScanEvent>) -> Result<(), CmdError> {
+    state.hubs.scan.subscribe(Box::new(move |e| {
+        let _ = on_event.send(e);
+    }));
+    Ok(())
 }
 
 #[tauri::command]

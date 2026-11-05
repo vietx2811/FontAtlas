@@ -4,4 +4,6 @@ pub mod boot;
 pub mod keys;
 pub mod model;
 pub mod onboarding;
+pub mod scan;
+pub mod sources;
 pub mod system;
