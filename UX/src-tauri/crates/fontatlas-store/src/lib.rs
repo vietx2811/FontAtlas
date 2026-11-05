@@ -7,6 +7,7 @@ mod fold;
 mod ingest;
 mod legacy;
 mod open;
+mod pairs;
 mod query;
 mod rescan;
 mod schema;
@@ -26,5 +27,6 @@ pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, Scan
 pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, RescanStats, RescanStatus, ScanPhase, ScanProgress, walk_fonts};
 pub use query::{DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, MAX_LIMIT, SortKey, ViFilter};
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
-pub use schema::{LIBRARY_VERSION, USER_VERSION};
+pub use pairs::{NewPair, SavedPair};
+pub use schema::{LIBRARY_VERSION, USER_VERSION, create_user_v1_for_test, create_user_v2_for_test};
 pub use user::{Collection, Source, SourceKind, Tag};

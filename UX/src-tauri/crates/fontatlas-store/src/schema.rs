@@ -249,16 +249,42 @@ INSERT INTO activation_reasons (hash, reason, added_at)
   SELECT hash, 'manual', updated_at FROM activation_state WHERE state = 'active';
 "#;
 
+/// v3 (Plan 6a): cặp font đã lưu.
+pub(crate) const USER_V3: &str = r#"
+CREATE TABLE pairs (
+  pair_id       INTEGER PRIMARY KEY,
+  a_hash        BLOB NOT NULL CHECK (length(a_hash) = 32), a_face INTEGER NOT NULL,
+  a_role        TEXT NOT NULL CHECK (a_role IN ('heading','body','code')),
+  b_hash        BLOB NOT NULL CHECK (length(b_hash) = 32), b_face INTEGER NOT NULL,
+  b_role        TEXT NOT NULL CHECK (b_role IN ('heading','body','code')),
+  mode          TEXT CHECK (mode IN ('safe','controlled','experimental','blocked')),
+  preset        TEXT,
+  sample_text   TEXT,
+  collection_id INTEGER REFERENCES collections ON DELETE SET NULL,
+  note          TEXT,
+  created_at    INTEGER NOT NULL
+);
+CREATE INDEX pairs_collection ON pairs(collection_id);
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3];
 
-/// Chỉ cho unit test của crate: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
-#[cfg(test)]
-pub(crate) fn create_user_v1_for_test(path: &Path) {
+/// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
+#[doc(hidden)]
+pub fn create_user_v1_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user v1");
     c.execute_batch(USER_V1).expect("USER_V1");
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
+}
+/// Chỉ cho test: tạo user.db ở v2 (Plan 7) để kiểm migration lên v3.
+#[doc(hidden)]
+pub fn create_user_v2_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v2");
+    c.execute_batch(USER_V1).expect("USER_V1");
+    c.execute_batch(USER_V2).expect("USER_V2");
+    c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
 }
 pub const LIBRARY_VERSION: u32 = LIBRARY_MIGRATIONS.len() as u32;
 pub const USER_VERSION: u32 = USER_MIGRATIONS.len() as u32;
