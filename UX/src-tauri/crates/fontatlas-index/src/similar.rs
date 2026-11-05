@@ -52,6 +52,16 @@ pub struct SimilarOptions {
     pub k: usize,
 }
 
+/// Một họ trong kết quả Similar gom theo họ: face đại diện (gần nhất) + mọi face của họ.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FamilyGroup {
+    pub family: String,
+    pub representative: SimilarHit,
+    /// Mọi face của họ qua bộ lọc (kể cả đại diện), theo thứ tự thư viện.
+    pub faces: Vec<FaceKey>,
+    pub count: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GroupWeights {
     pub proportion: f32,

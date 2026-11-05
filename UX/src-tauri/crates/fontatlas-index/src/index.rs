@@ -11,8 +11,8 @@ use crate::pairing::{
 use crate::profile::{AxisId, FaceKey, FaceProfile, Q, Role};
 use crate::reference::{IndexError, ReferenceTable};
 use crate::similar::{
-    EMBED_WEIGHT, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit, SimilarOptions,
-    SimilarSource, axis_distance, combine, embed_cos,
+    EMBED_WEIGHT, FamilyGroup, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit,
+    SimilarOptions, SimilarSource, axis_distance, combine, embed_cos,
 };
 use crate::superfamily::SuperfamilyTable;
 
@@ -179,12 +179,7 @@ impl Index {
         )?;
         let cos = if ew > 0.0 { self.q8.cos(i, j) } else { None };
         Some(match cos {
-            Some(c) => (
-                combine(d, c, ew),
-                d,
-                j,
-                SimilarSource::AxesAndImage,
-            ),
+            Some(c) => (combine(d, c, ew), d, j, SimilarSource::AxesAndImage),
             None => (d, d, j, SimilarSource::Axes),
         })
     }
@@ -248,6 +243,72 @@ impl Index {
             .map(|x| x.1)
             .collect();
         (same, differ)
+    }
+
+    /// Similar gom theo họ (`FaceProfile.family` = typographic family trước, rồi family): mỗi họ một mục
+    /// gồm face đại diện gần nhất và danh sách face của họ; BỎ họ của font đang chọn (cả superfamily nếu
+    /// cùng typographic family). Phân trang theo họ (`offset`, `limit` đếm họ). `o.k` bị bỏ qua;
+    /// xếp toàn bộ ứng viên trước khi gom họ để mọi trang dùng chung một thứ tự.
+    pub fn similar_families(
+        &self,
+        q: &FaceKey,
+        o: &SimilarOptions,
+        filter: &dyn Fn(&FaceProfile) -> bool,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<FamilyGroup>, IndexError> {
+        let qi = self.idx(q)?;
+        let own = self.profiles[qi].family.clone();
+        let pool = self.profiles.len();
+        let f2 = |p: &FaceProfile| p.family != own && filter(p);
+        let hits = match self.similar_with(q, &SimilarOptions { k: pool, ..*o }, &f2) {
+            Ok(h) => h,
+            Err(IndexError::NotComparable(_))
+                if o.embed_weight != Some(0.0) && self.has_image(q) =>
+            {
+                self.similar_image_only(q, pool, &f2)?
+            }
+            Err(e) => return Err(e),
+        };
+        let mut order: Vec<String> = Vec::new();
+        let mut reps: HashMap<String, SimilarHit> = HashMap::new();
+        for h in hits {
+            let Some(p) = self.profile(&h.key) else {
+                continue;
+            };
+            if !reps.contains_key(&p.family) {
+                order.push(p.family.clone());
+                reps.insert(p.family.clone(), h);
+            }
+        }
+        let wanted: std::collections::HashSet<&String> =
+            order.iter().skip(offset).take(limit).collect();
+        let mut members: HashMap<&str, Vec<FaceKey>> = HashMap::new();
+        for p in &self.profiles {
+            if wanted.contains(&p.family) && filter(p) {
+                members
+                    .entry(p.family.as_str())
+                    .or_default()
+                    .push(p.key.clone());
+            }
+        }
+        Ok(order
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .filter_map(|fam| {
+                let rep = reps.remove(fam)?;
+                let mut faces = members.remove(fam.as_str()).unwrap_or_default();
+                faces.sort();
+                faces.dedup();
+                Some(FamilyGroup {
+                    family: fam.clone(),
+                    count: faces.len().max(1),
+                    representative: rep,
+                    faces,
+                })
+            })
+            .collect())
     }
 
     pub fn similar(
@@ -368,7 +429,10 @@ impl Index {
             keys.extend(cands.iter().map(|c| self.profiles[c.2].key.clone()));
             let got = src.fetch(&keys);
             let dim = self.q8.dim();
-            if let Some(Some(qv)) = got.first().filter(|v| v.as_ref().is_some_and(|v| v.len() == dim)) {
+            if let Some(Some(qv)) = got
+                .first()
+                .filter(|v| v.as_ref().is_some_and(|v| v.len() == dim))
+            {
                 for (c, v) in cands.iter_mut().zip(got.iter().skip(1)) {
                     if let Some(x) = embed_cos(Some(qv), v.as_deref().filter(|v| v.len() == dim)) {
                         c.0 = 1.0 - x;
@@ -499,7 +563,8 @@ impl Index {
             .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0) && filter(pc))
             .filter_map(|(j, pc)| {
                 let x = assess(pq, q_role, pc, cand_role, facts(j).as_ref(), &ctx);
-                (x.gate != Gate::Blocked && gate.is_none_or(|g| x.gate == g)).then(|| (rank_parts(&x, cos(j)), j, x))
+                (x.gate != Gate::Blocked && gate.is_none_or(|g| x.gate == g))
+                    .then(|| (rank_parts(&x, cos(j)), j, x))
             })
             .collect();
         // Cùng thứ tự với rank_key (phần số, rồi tên), rồi key.

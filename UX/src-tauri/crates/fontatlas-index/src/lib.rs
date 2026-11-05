@@ -25,7 +25,7 @@ pub use pairing::{
     assess, global_distance, rank_key,
 };
 pub use similar::{
-    EMBED_WEIGHT, Group, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit,
+    EMBED_WEIGHT, FamilyGroup, Group, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit,
     SimilarOptions, SimilarSource, axis_distance, combine, embed_cos,
 };
 pub use superfamily::{

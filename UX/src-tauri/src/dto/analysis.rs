@@ -11,6 +11,9 @@ pub struct AxisReadingDto {
     pub key: String,
     #[ts(type = "number | string | null")]
     pub value: Option<serde_json::Value>,
+    /// Giá trị số gốc, kể cả khi `value` là lớp serif; không đổi dấu hay làm tròn.
+    pub raw_value: Option<f64>,
+    pub unit: Option<String>,
     /// "measured" | "estimated" | "failed"
     pub quality: String,
     pub reason: Option<String>,
@@ -40,6 +43,38 @@ pub struct SimilarHitDto {
     pub differ: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SimilarFamilyDto {
+    pub family: String,
+    pub representative: SimilarHitDto,
+    pub faces: Vec<FaceKeyDto>,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SimilarFamilyPageDto {
+    pub total: u32,
+    pub offset: u32,
+    pub items: Vec<SimilarFamilyDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AxisStatsDto {
+    pub axis: String,
+    pub unit: String,
+    pub count: u32,
+    pub min: Option<f32>,
+    pub max: Option<f32>,
+    pub p1: Option<f32>,
+    pub p99: Option<f32>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export, rename_all = "camelCase")]
@@ -52,7 +87,12 @@ pub struct GroupWeightsDto {
 
 impl Default for GroupWeightsDto {
     fn default() -> Self {
-        GroupWeightsDto { proportion: 1.0, weight: 1.0, structure: 1.0, detail: 1.0 }
+        GroupWeightsDto {
+            proportion: 1.0,
+            weight: 1.0,
+            structure: 1.0,
+            detail: 1.0,
+        }
     }
 }
 
@@ -72,7 +112,14 @@ pub struct SimilarOptsDto {
 
 impl Default for SimilarOptsDto {
     fn default() -> Self {
-        SimilarOptsDto { weights: Default::default(), use_image: true, k: 12, vi_only: false, source_ids: vec![], weight_range: None }
+        SimilarOptsDto {
+            weights: Default::default(),
+            use_image: true,
+            k: 12,
+            vi_only: false,
+            source_ids: vec![],
+            weight_range: None,
+        }
     }
 }
 
