@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { CmdError, type BootEvent } from '../../../api';
@@ -24,8 +24,7 @@ describe('BootGate', () => {
     expect(screen.queryByTestId('app')).toBeNull();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Xong');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' })); });
-    await settle();
-    expect(screen.getByTestId('app')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('app')).toBeTruthy(), { timeout: 3000 }); // không phụ thuộc số lượt chờ khi máy bận
   });
 
   it('shows what the backend is doing until it is ready, then moves on', async () => {
