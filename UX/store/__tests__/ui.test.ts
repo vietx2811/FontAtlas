@@ -3,7 +3,7 @@ import { createMockApi } from '../../api/mock';
 import { createUiStore, toGridQuery, faceKey, PERSIST_DEBOUNCE_MS, RECENT_MAX, RECENT_DEBOUNCE_MS } from '../ui';
 
 describe('toGridQuery', () => {
-  const base = { view: 'all', tag: null, query: '', viOnly: false, recentViews: [], active: new Set<string>() } as const;
+  const base = { view: 'all', tag: null, query: '', viOnly: false, recentViews: [], active: new Map<string, readonly number[]>() } as const;
   it('maps every sidebar view to query_faces params', () => {
     expect(toGridQuery({ ...base })).toEqual({});
     expect(toGridQuery({ ...base, view: 'star' })).toEqual({ favoritesOnly: true });
@@ -19,9 +19,9 @@ describe('toGridQuery', () => {
       faceKeys: [{ hashHex: 'bb', faceIndex: 0 }, { hashHex: 'aa', faceIndex: 1 }], sort: 'match',
     });
   });
-  it('active = faceKeys of the activated hashes (face 0), combinable with the vi-only and text filters', () => {
-    expect(toGridQuery({ ...base, view: 'active', active: new Set(['h1', 'h2']), viOnly: true, query: 'x' })).toEqual({
-      faceKeys: [{ hashHex: 'h1', faceIndex: 0 }, { hashHex: 'h2', faceIndex: 0 }], sort: 'match', text: 'x', vi: 'full',
+  it('active = faceKeys built from the `faces` of each activated file (TTC: every face), combinable with the vi-only and text filters', () => {
+    expect(toGridQuery({ ...base, view: 'active', active: new Map([['h1', [0]], ['h2', [0, 1]]]), viOnly: true, query: 'x' })).toEqual({
+      faceKeys: [{ hashHex: 'h1', faceIndex: 0 }, { hashHex: 'h2', faceIndex: 0 }, { hashHex: 'h2', faceIndex: 1 }], sort: 'match', text: 'x', vi: 'full',
     });
   });
   it('an empty recent/active list is an empty faceKeys list, never "no filter"', () => {
@@ -29,7 +29,7 @@ describe('toGridQuery', () => {
     expect(toGridQuery({ ...base, view: 'active' })).toEqual({ faceKeys: [], sort: 'match' });
   });
   it('caps faceKeys at 2000 (6a limit)', () => {
-    const active = new Set(Array.from({ length: 2500 }, (_, i) => `h${i}`));
+    const active = new Map(Array.from({ length: 2500 }, (_, i) => [`h${i}`, [0]] as [string, number[]]));
     expect(toGridQuery({ ...base, view: 'active', active })!.faceKeys).toHaveLength(2000);
   });
 });

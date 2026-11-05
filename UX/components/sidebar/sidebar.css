@@ -63,3 +63,13 @@
 .fa-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .fa-modal-actions button { height: 32px; padding: 0 14px; border-radius: 8px; font-size: 13px; background: var(--surface-2); }
 .fa-modal-actions button.primary { background: var(--accent-ink); color: var(--sheet); }
+
+.fa-notices { position: fixed; z-index: 90; top: 54px; right: 16px; display: flex; flex-direction: column; gap: 8px; width: min(360px, calc(100vw - 32px)); }
+.fa-toast { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 13px; line-height: 1.45; color: var(--fg); }
+.fa-toast.error { border-color: var(--warn); }
+.fa-toast span { flex: 1; }
+.fa-toast button { color: var(--accent-ink); font-weight: 500; }
+
+.fa-d3-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.fa-radio { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; }
+.fa-radio em { color: var(--muted); font-style: normal; font-size: 12px; }

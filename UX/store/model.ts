@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, EmbedStatusDto, ModelEvent, ModelStatusDto } from '../api';
+import { useNoticeStore } from './notices';
 
 export type EState = 'E0' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5' | 'E6' | 'E7' | 'E8' | 'E9' | 'E10' | 'E11';
 export type ModelAction = 'download' | 'stop' | 'retry' | 'redownload' | 'remove' | 'pause' | 'resume';
@@ -21,6 +22,15 @@ export type ModelUi = {
 };
 export type ModelUiInput = { embedEnabled: boolean; justFinished: boolean; e1Dismissed: boolean; model: ModelStatusDto | null; embed: EmbedStatusDto | null };
 
+/** Lỗi lệnh model → câu cho người dùng. */
+export function explainModelError(e: unknown): string {
+  const err = e as { code?: string; message?: string; detail?: { required?: number; free?: number } };
+  if (err.code === 'busy') return 'Model đang tải: hãy dừng lần tải hiện tại trước khi tải lại.';
+  if (err.code === 'insufficient_disk' && err.detail?.required != null) {
+    return `Không đủ chỗ trống: cần ${Math.round(err.detail.required / (1024 * 1024))} MB, còn ${Math.round((err.detail.free ?? 0) / (1024 * 1024))} MB.`;
+  }
+  return err.message ?? 'Không thực hiện được.';
+}
 export const fmtInt = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 export function formatEta(ms: number | null): string {
   if (ms === null) return '';
@@ -104,10 +114,15 @@ export function createModelStore(): ModelStore {
       async enable(api) {
         await api.setSettings({ embedEnabled: true });
         set({ embedEnabled: true, e1Dismissed: false });
-        if ((await api.modelStatus()).state !== 'ready') { await api.modelDownload(onModel(api)); await refresh(api); }
-        else await refresh(api);
+        try {
+          if ((await api.modelStatus()).state !== 'ready') await api.modelDownload(onModel(api));
+        } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: explainModelError(e) }); }
+        await refresh(api);
       },
       async act(api, id) {
+        try { await runAct(id); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: explainModelError(e) }); }
+        await refresh(api);
+        async function runAct(id: ModelAction) {
         if (id === 'download') await api.modelDownload(onModel(api));
         else if (id === 'stop') await api.modelCancel();
         else if (id === 'redownload') await api.modelRedownload(onModel(api));
@@ -115,7 +130,7 @@ export function createModelStore(): ModelStore {
         else if (id === 'pause') await api.embedPause();
         else if (id === 'resume') await api.embedResume();
         else if (id === 'retry') await api.embedResume();
-        await refresh(api);
+        }
       },
       dismissE1: () => set({ e1Dismissed: true }),
       clearFinished: () => set({ justFinished: false }),

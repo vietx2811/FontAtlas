@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useNoticeStore } from '../../../store/notices';
 import { faceKey, useUiStore } from '../../../store/ui';
 import { DetailPanel } from '../DetailPanel';
 
@@ -13,7 +14,7 @@ async function select(api: ReturnType<typeof createMockApi>, family: string, sub
 }
 
 describe('DetailPanel', () => {
-  beforeEach(() => useUiStore.setState(initial, true));
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
 
   it('renders nothing until a face is selected', async () => {
     const { container } = render(<DetailPanel api={createMockApi()} />);
@@ -98,5 +99,75 @@ describe('DetailPanel', () => {
     await settle();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Inter');
+  });
+
+  describe('activation flow (Plan 7 contract)', () => {
+    it('a clash with a system font opens D3; "Vẫn kích hoạt" is not allowed for system fonts; Huỷ leaves it off', async () => {
+      const api = createMockApi();
+      render(<DetailPanel api={api} />);
+      await select(api, 'Roboto', 'Regular');
+      await settle();
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await settle();
+      const dlg = screen.getByRole('dialog', { name: /trùng tên với font đang có trên máy/ });
+      expect(dlg.textContent).toMatch(/Roboto-Regular/);
+      expect(dlg.textContent).toMatch(/hệ thống macOS/);
+      expect((within(dlg).getByRole('radio', { name: /Vẫn kích hoạt/ }) as HTMLInputElement).disabled).toBe(true);
+      expect(dlg.textContent).toMatch(/font hệ thống luôn được ưu tiên/);
+      fireEvent.click(within(dlg).getByRole('button', { name: 'Huỷ' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('a clash with another manager lets you proceed anyway', async () => {
+      const api = createMockApi();
+      render(<DetailPanel api={api} />);
+      await select(api, 'Oswald', 'Regular');
+      await settle();
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await settle();
+      const dlg = screen.getByRole('dialog');
+      expect(dlg.textContent).toMatch(/RightFont/);
+      expect((within(dlg).getByRole('radio', { name: /Bỏ qua/ }) as HTMLInputElement).checked).toBe(true); // mặc định
+      fireEvent.click(within(dlg).getByRole('radio', { name: /Vẫn kích hoạt/ }));
+      await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tiếp tục' })); });
+      await settle();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('a file changed on disk shows an error notice and nothing turns on', async () => {
+      const api = createMockApi();
+      render(<DetailPanel api={api} />);
+      await select(api, 'Lobster', 'Regular');
+      await settle();
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await settle();
+      const n = useNoticeStore.getState().notices;
+      expect(n).toHaveLength(1);
+      expect(n[0]).toMatchObject({ kind: 'error' });
+      expect(n[0].text).toMatch(/đã thay đổi trên đĩa/);
+      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('turning off a font held by a project asks first, then forces', async () => {
+      const api = createMockApi();
+      const r = await select(api, 'Inter', 'Regular');
+      const col = await api.createCollection('Menu', null);
+      await api.addToCollection(col.id, [{ hashHex: r.hashHex, faceIndex: 0 }]);
+      await api.activationActivateCollection(col.id);
+      render(<DetailPanel api={api} />);
+      await act(async () => { await useUiStore.getState().refreshActive(api); });
+      await settle();
+      const sw = screen.getByRole('switch', { name: 'Kích hoạt font' });
+      expect(sw.getAttribute('aria-checked')).toBe('true');
+      await act(async () => { fireEvent.click(sw); });
+      await settle();
+      const dlg = screen.getByRole('dialog', { name: /đang được giữ bởi 1 dự án/ });
+      await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tắt luôn' })); });
+      await settle();
+      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+      expect(await api.activationState()).toEqual([]);
+    });
   });
 });

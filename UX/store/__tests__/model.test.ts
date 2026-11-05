@@ -153,3 +153,32 @@ describe('model store (mock Channel)', () => {
     expect(s.getState().ui().text).toBeNull();
   });
 });
+
+import { useNoticeStore } from '../notices';
+describe('model store errors become notices', () => {
+  beforeEach(() => { vi.useFakeTimers(); useNoticeStore.setState({ notices: [] }); });
+  afterEach(() => vi.useRealTimers());
+
+  it('redownload while a download runs says to stop first (busy)', async () => {
+    const api = createMockApi({ tickMs: 100 });
+    const s = createModelStore();
+    await s.getState().sync(api);
+    await s.getState().enable(api);
+    await s.getState().act(api, 'redownload');
+    const n = useNoticeStore.getState().notices;
+    expect(n).toHaveLength(1);
+    expect(n[0].text).toMatch(/đang tải/i);
+    expect(n[0].text).toMatch(/dừng/);
+    expect(s.getState().ui().code).toBe('E2');
+  });
+
+  it('insufficient_disk reports required and free space', async () => {
+    const { CmdError } = await import('../../api');
+    const api = createMockApi();
+    api.modelDownload = async () => { throw new CmdError('insufficient_disk', 'x', { required: 408 * MB, free: 100 * MB }); };
+    const s = createModelStore();
+    await s.getState().sync(api);
+    await s.getState().act(api, 'download');
+    expect(useNoticeStore.getState().notices[0].text).toMatch(/cần 408 MB, còn 100 MB/);
+  });
+});

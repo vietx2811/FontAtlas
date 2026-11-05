@@ -3,6 +3,7 @@ import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
 import { FontInfoCard } from './FontInfoCard';
 import { StyleDropdown, styleLabel } from './StyleDropdown';
+import { useActivationFlow } from '../activation/useActivationFlow';
 import { AnatomyTab } from './tabs/AnatomyTab';
 import { PairTab } from './tabs/PairTab';
 import { SimilarTab } from './tabs/SimilarTab';
@@ -22,8 +23,9 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const infoExpanded = useUiStore(s => s.infoExpanded);
   const sample = useUiStore(s => s.sample);
   const active = useUiStore(s => s.active);
-  const { setStyle, setPanelTab, toggleInfo, refreshActive } = useUiStore.getState();
+  const { setStyle, setPanelTab, toggleInfo } = useUiStore.getState();
   const { detail, styles, error, retry, face } = useFaceDetail(api);
+  const flow = useActivationFlow(api);
   const family = useFontFamily(api, detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null);
   const familyOf = useCallback(() => null, []); // font từng kiểu trong danh sách: dùng weight/italic CSS trên họ đã nạp
 
@@ -35,15 +37,12 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const bodyCss: React.CSSProperties = {
     fontFamily: family ? `"${family}", var(--font-ui)` : undefined, fontWeight: chosen?.weight ?? undefined, fontStyle: chosen?.italic ? 'italic' : undefined,
   };
-  const toggle = async () => {
-    if (!face) return;
-    try { await (isActive ? api.activationDeactivate([face]) : api.activationActivate([face])); await refreshActive(api); }
-    catch (e) { console.warn('activation failed', e); }
-  };
+  const toggle = () => { if (face) void flow.toggle([face], !isActive); };
   const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
 
   return (
     <aside className="fa-panel" aria-label="Chi tiết font">
+      {flow.dialog}
       {error ? (
         <div role="alert" className="fa-panel-error">Không đọc được font này: {error} <button type="button" onClick={retry}>Thử lại</button></div>
       ) : (

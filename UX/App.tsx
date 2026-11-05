@@ -6,6 +6,8 @@ import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
+import { NoticeStack } from './components/NoticeStack';
+import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
 
@@ -39,8 +41,15 @@ const App: React.FC = () => {
         return () => { dead = true; stop?.(); };
     }, [api]);
 
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
+        startActivationSync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('activation sync failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
+
     return (
         <ErrorBoundary>
+            <NoticeStack />
             <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
                 <div className="h-full flex text-[var(--foreground)]">
                     <main className="flex-1 min-w-0 h-full flex flex-col relative">

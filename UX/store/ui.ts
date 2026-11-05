@@ -32,8 +32,8 @@ export interface UiState {
   sidebarCollapsed: boolean;
   openSections: Record<SectionKey, boolean>;
   infoExpanded: boolean;
-  /** hashHex của các face đang bật (activation_state); nạp bằng refreshActive. */
-  active: ReadonlySet<string>;
+  /** Các file đang bật: hashHex → các faceIndex của file (activation_state); nạp bằng refreshActive. */
+  active: ReadonlyMap<string, readonly number[]>;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
 }
@@ -70,7 +70,7 @@ export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
   } else if (s.view === 'active') {
-    q.faceKeys = [...s.active].slice(0, FACE_KEYS_MAX).map(h => ({ hashHex: h, faceIndex: 0 }));
+    q.faceKeys = [...s.active].flatMap(([hashHex, faces]) => faces.map(faceIndex => ({ hashHex, faceIndex }))).slice(0, FACE_KEYS_MAX);
     q.sort = 'match';
   } else if (s.view === 'star') q.favoritesOnly = true;
   else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
@@ -105,7 +105,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Set<string>(), recentViews: [], ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], ...initial,
 
     setView: v => set({ view: v, tag: null }),
     setTag: t => set({ tag: t }),
@@ -128,7 +128,7 @@ export function createUiStore(): UiStore {
 
     async refreshActive(api) {
       const st = await api.activationState();
-      set({ active: new Set(st.filter(x => x.state === 'active').map(x => x.hashHex)) });
+      set({ active: new Map(st.filter(x => x.state === 'active').map(x => [x.hashHex, x.faces] as const)) });
     },
 
     async hydrate(api) {

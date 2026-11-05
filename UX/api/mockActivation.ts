@@ -7,6 +7,8 @@ import type { ActivateOptions, DeactivateOptions } from './index';
 
 /** Họ "Roboto" giả lập trùng tên với font hệ thống (cần xác nhận); "Lobster" giả lập file đã đổi trên đĩa. */
 export const CONFLICT_FAMILY = 'Roboto';
+/** Họ "Oswald" trùng với font của RightFont (được phép kích hoạt tiếp). */
+export const OTHER_MANAGER_FAMILY = 'Oswald';
 export const CHANGED_FAMILY = 'Lobster';
 
 type Entry = { reasons: ReasonDto[]; scope: 'session' | 'persistent' };
@@ -31,8 +33,10 @@ export function createActivationSim(d: Deps) {
     if (!e.reasons.some(x => same(x, r))) e.reasons.push(r);
     state.set(h, e);
   };
-  const conflictOf = (row: FaceRow | undefined) => row?.family === CONFLICT_FAMILY
-    ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: `/Library/Fonts/${row.family}.ttf`, owner: 'system' as const }] : [];
+  const conflictOf = (row: FaceRow | undefined) => {
+    const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY ? 'right_font' as const : null;
+    return row && owner ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: owner === 'system' ? `/Library/Fonts/${row.family}.ttf` : `~/Library/RightFont/${row.family}.ttf`, owner }] : [];
+  };
 
   const activateOne = (f: FaceKeyDto, reason: ReasonDto, o: ActivateOptions): FileOutcomeDto => {
     const row = d.rowOf(f);
