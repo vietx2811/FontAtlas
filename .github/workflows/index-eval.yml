@@ -6,7 +6,7 @@ jobs:
     defaults: { run: { working-directory: UX/src-tauri } }
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
       - run: cargo test -p fontatlas-core -p fontatlas-index -p fontatlas-eval
       - run: cargo clippy -p fontatlas-index -p fontatlas-eval -- -D warnings
   eval-report:     # cần mạng (google/fonts); chỉ báo cáo, không chặn merge
@@ -16,7 +16,7 @@ jobs:
     defaults: { run: { working-directory: UX/src-tauri } }
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
       - uses: actions/cache@v4
         with:
           path: ~/gf

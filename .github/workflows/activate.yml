@@ -6,7 +6,7 @@ jobs:
     defaults: { run: { working-directory: UX/src-tauri } }
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
         with: { components: clippy }
       - run: cargo test --locked -p fontatlas-store -p fontatlas-activate
       - run: cargo clippy --locked -p fontatlas-activate --all-targets -- -D warnings
@@ -15,5 +15,5 @@ jobs:
     defaults: { run: { working-directory: UX/src-tauri } }
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.96.0
       - run: cargo test --locked -p fontatlas-activate
