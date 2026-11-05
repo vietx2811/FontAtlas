@@ -367,8 +367,18 @@ impl<E: ActivationEngine> ActivationService<E> {
 
         // 6. Đăng ký cũ ở chỗ khác / scope khác → gỡ.
         if let (Some(o), Some(op)) = (&old, &old_path) {
-            if o.status == ActivationStatus::Registered && (op != &path || o.scope != scope) {
-                match self.engine.unregister(op, o.scope) {
+            // Unknown/Error cũng có thể đang đăng ký (crash / gỡ lỗi): gỡ ở cả hai scope, trừ đúng
+            // cặp (path, scope) sắp đăng ký. `NotRegistered` coi như đã gỡ.
+            let scopes = match o.status {
+                ActivationStatus::Registered => vec![o.scope],
+                ActivationStatus::Unknown | ActivationStatus::Error => vec![Scope::Session, Scope::Persistent],
+                _ => vec![],
+            };
+            for s in scopes {
+                if op == &path && s == scope {
+                    continue;
+                }
+                match self.engine.unregister(op, s) {
                     Ok(()) | Err(EngineError::NotRegistered) => {}
                     Err(e) => {
                         res.outcome = engine_failure(&e);

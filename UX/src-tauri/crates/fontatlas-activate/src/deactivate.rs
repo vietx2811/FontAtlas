@@ -75,7 +75,10 @@ impl<E: ActivationEngine> ActivationService<E> {
             .into_iter()
             .filter(|r| {
                 r.state == DesiredState::Active
-                    || matches!(r.status, ActivationStatus::Registered | ActivationStatus::Unknown)
+                    || matches!(
+                        r.status,
+                        ActivationStatus::Registered | ActivationStatus::Unknown | ActivationStatus::Error
+                    )
             })
             .map(|r| (r.hash, vec![]))
             .collect();
@@ -131,8 +134,10 @@ impl<E: ActivationEngine> ActivationService<E> {
                 return Ok(res);
             }
         }
-        let needs_unregister = row.state == DesiredState::Active
-            || matches!(row.status, ActivationStatus::Registered | ActivationStatus::Unknown);
+        // Dòng Unknown/Error có thể còn đăng ký ở bất kỳ scope nào (crash / gỡ lỗi lần trước).
+        let uncertain = matches!(row.status, ActivationStatus::Unknown | ActivationStatus::Error);
+        let needs_unregister =
+            row.state == DesiredState::Active || uncertain || row.status == ActivationStatus::Registered;
         let left = relock(store).with_tx(|tx| {
             let left: Vec<ActivationReason> = match what {
                 Lift::Manual(DeactivatePolicy::Ask) => {
@@ -162,19 +167,32 @@ impl<E: ActivationEngine> ActivationService<E> {
             res.outcome = FileOutcome::AlreadyInactive;
             return Ok(res);
         }
-        res.outcome = self.unregister_row(store, &mut row)?;
+        res.outcome = self.unregister_row(store, &mut row, uncertain)?;
         Ok(res)
     }
 
     /// Gỡ đăng ký theo `active_path` + `scope` đã lưu; ghi `Unregistered` (hoặc `Error`).
-    /// Dùng chung với `reconcile`.
+    /// `uncertain` (dòng Unknown/Error): thử cả scope còn lại, bỏ qua lỗi của nó, vì một lần
+    /// `set_scope` / kích hoạt bị ngắt có thể để đăng ký ở scope kia. Dùng chung với `reconcile`.
     pub(crate) fn unregister_row(
         &self,
         store: &Mutex<Store>,
         row: &mut ActivationRow,
+        uncertain: bool,
     ) -> Result<FileOutcome, ActivationError> {
         let result = match &row.active_path {
-            Some(p) => self.engine().unregister(std::path::Path::new(p), row.scope),
+            Some(p) => {
+                let p = std::path::Path::new(p);
+                let first = self.engine().unregister(p, row.scope);
+                if uncertain {
+                    let other = match row.scope {
+                        Scope::Session => Scope::Persistent,
+                        Scope::Persistent => Scope::Session,
+                    };
+                    let _ = self.engine().unregister(p, other);
+                }
+                first
+            }
             None => Ok(()),
         };
         let outcome = match result {
@@ -241,12 +259,20 @@ impl<E: ActivationEngine> ActivationService<E> {
             match self.engine().register(&path, scope) {
                 Ok(()) | Err(EngineError::AlreadyRegistered) => {
                     match self.engine().unregister(&path, old) {
-                        Ok(()) | Err(EngineError::NotRegistered) => {}
-                        Err(e) => row.last_error = Some(format!("engine.{}", e.code())),
+                        Ok(()) | Err(EngineError::NotRegistered) => {
+                            row.status = ActivationStatus::Registered;
+                            row.last_error = None;
+                            res.outcome = FileOutcome::Activated;
+                        }
+                        Err(e) => {
+                            // Không ghi đè: giữ bản ghi cũ (scope/path cũ, Error) để reconcile dọn đăng ký thừa.
+                            row.scope = old;
+                            row.status = ActivationStatus::Error;
+                            row.last_error = Some(format!("engine.{}", e.code()));
+                            res.outcome = engine_failure(&e);
+                        }
                     }
-                    row.status = ActivationStatus::Registered;
                     row.verified_at = Some(now_ms());
-                    res.outcome = FileOutcome::Activated;
                 }
                 Err(e) => {
                     row.scope = old; // scope cũ vẫn đang đăng ký

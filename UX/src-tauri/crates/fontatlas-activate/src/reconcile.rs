@@ -105,7 +105,8 @@ impl<E: ActivationEngine> ActivationService<E> {
             if !maybe_registered(&row) {
                 return Ok(FileOutcome::AlreadyInactive);
             }
-            let out = self.unregister_row(store, &mut row)?;
+            let uncertain = matches!(row.status, ActivationStatus::Unknown | ActivationStatus::Error);
+            let out = self.unregister_row(store, &mut row, uncertain)?;
             if out == FileOutcome::Deactivated {
                 rep.cleaned += 1;
             }
@@ -114,7 +115,8 @@ impl<E: ActivationEngine> ActivationService<E> {
         // Active nhưng hết lý do (sau bước 0) → tắt, và báo nếu là do bước 0.
         if row.reasons.is_empty() {
             row.state = DesiredState::Inactive;
-            let out = self.unregister_row(store, &mut row)?;
+            let uncertain = matches!(row.status, ActivationStatus::Unknown | ActivationStatus::Error);
+            let out = self.unregister_row(store, &mut row, uncertain)?;
             if out == FileOutcome::Deactivated {
                 rep.cleaned += 1;
             }
@@ -136,7 +138,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         }
 
         row.verified_at = Some(now_ms());
-        let was_unknown = row.status == ActivationStatus::Unknown;
+        let was_unknown = matches!(row.status, ActivationStatus::Unknown | ActivationStatus::Error);
         let target = relock(store).file_target(&row.hash)?;
         let located = target.as_ref().map(locate).unwrap_or(Located::Missing(None));
         let path = match located {

@@ -587,3 +587,107 @@ fn state_lists_rows_with_reasons() {
     assert_eq!(st[0].reasons, vec![ActivationReason::Manual]);
     assert_eq!(st[0].active_path.as_deref(), Some(canon(&env.fonts.join(LIBRE)).to_str().unwrap()));
 }
+
+// ---------- review fix: đăng ký mồ côi + dòng Error ----------
+fn force_status(env: &Env, k: &fontatlas_store::FaceKey, status: ActivationStatus) {
+    let mut s = env.store.lock().unwrap();
+    let mut r = s.activation_row(&k.hash).unwrap().unwrap();
+    r.status = status;
+    s.put_activation(&r).unwrap();
+}
+
+#[test]
+fn activate_unregisters_orphan_left_by_unknown_or_error_row() {
+    for orphan_status in [ActivationStatus::Unknown, ActivationStatus::Error] {
+        let env = env_with(&[LIBRE]);
+        let svc = service(&env);
+        let k = key_of(&env, LIBRE);
+        svc.activate_faces(&env.store, &[k], Some(Scope::Persistent), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+        force_status(&env, &k, orphan_status); // đăng ký (P, Persistent) vẫn còn trong hệ thống
+        std::fs::rename(env.fonts.join(LIBRE), env.fonts.join("moi.ttf")).unwrap();
+        rescan(&env);
+        teach(svc.engine(), &env);
+        let rep = svc.activate_faces(&env.store, &[k], Some(Scope::Session), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+        assert_eq!(rep.results[0].outcome, FileOutcome::Activated, "{orphan_status:?}");
+        let new = canon(&env.fonts.join("moi.ttf"));
+        assert_eq!(svc.engine().registrations(), vec![(new, Scope::Session)], "{orphan_status:?}: không để lại đăng ký cũ");
+    }
+}
+
+#[test]
+fn set_scope_old_scope_unregister_failure_keeps_old_record_and_reconcile_cleans() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let p = canon(&env.fonts.join(LIBRE));
+    svc.engine().fail_next_unregister(EngineError::Rejected { code: 5, message: "x".into() });
+    let rep = svc.set_scope(&env.store, None, Scope::Persistent).unwrap();
+    assert_eq!(rep.failed, 1);
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!((r.scope, r.status, r.state), (Scope::Session, ActivationStatus::Error, DesiredState::Active));
+    assert_eq!(r.active_path.as_deref(), Some(p.to_str().unwrap()));
+    assert!(r.last_error.is_some());
+    assert_eq!(svc.engine().registrations().len(), 2, "cả hai scope còn đăng ký");
+    svc.reconcile(&env.store, &mut no_progress()).unwrap();
+    assert_eq!(svc.engine().registrations(), vec![(p, Scope::Session)]);
+    assert_eq!(row(&env, &k.hash).unwrap().status, ActivationStatus::Registered);
+}
+
+#[test]
+fn deactivate_all_cleans_error_rows() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    force_status(&env, &k, ActivationStatus::Error);
+    let rep = svc.deactivate_all(&env.store, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn deactivate_faces_retries_inactive_error_row() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    // gỡ lần đầu thất bại → Inactive + Error, font vẫn đăng ký
+    svc.engine().fail_next_unregister(EngineError::Rejected { code: 5, message: "x".into() });
+    let first = deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert!(matches!(first.results[0].outcome, FileOutcome::Failed { .. }));
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!((r.state, r.status), (DesiredState::Inactive, ActivationStatus::Error));
+    assert_eq!(svc.engine().registrations().len(), 1);
+    let again = deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert_eq!(again.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn deactivate_after_interrupted_set_scope_removes_both_scopes() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask); // (P, Session)
+    svc.engine().panic_on_register(&canon(&env.fonts.join(LIBRE)));
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| svc.set_scope(&env.store, None, Scope::Persistent)));
+    assert_eq!(row(&env, &k.hash).unwrap().status, ActivationStatus::Unknown);
+    let rep = deactivate(&svc, &env, &[k], DeactivatePolicy::Ask);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty(), "scope cũ còn lại là đăng ký mồ côi");
+}
+
+#[test]
+fn deactivate_all_cleans_inactive_error_rows() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    svc.engine().fail_next_unregister(EngineError::Rejected { code: 5, message: "x".into() });
+    deactivate(&svc, &env, &[k], DeactivatePolicy::Ask); // Inactive + Error, vẫn đăng ký
+    assert_eq!(svc.engine().registrations().len(), 1);
+    let rep = svc.deactivate_all(&env.store, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+}
