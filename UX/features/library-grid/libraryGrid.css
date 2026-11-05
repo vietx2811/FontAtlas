@@ -1,7 +1,7 @@
 /* Preview PNG alpha-mask: màu theo theme qua var(--foreground), không tải lại ảnh khi đổi theme. */
-.fa-preview-mask { background-color: var(--foreground); -webkit-mask-image: var(--preview-url); mask-image: var(--preview-url); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
+.fa-preview-mask { flex: none; max-width: none; background-color: var(--foreground); -webkit-mask-image: var(--preview-url); mask-image: var(--preview-url); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 /* Phương án dự phòng previewMode='img': ảnh đen trên nền trong, đảo màu ở theme tối. */
-.fa-preview-img { display: block; }
+.fa-preview-img { display: block; flex: none; max-width: none; }
 .dark .fa-preview-img { filter: invert(1); }
 
 /* ---------- Vỏ thẻ theo prototype (Plan 6b T6) ---------- */
@@ -14,7 +14,8 @@
 .fa-cell:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .fa-cell[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .fa-cell-skeleton { background: var(--surface-2); border-color: transparent; }
-.fa-spec { max-width: 100%; overflow: hidden; flex: none; }
+/* Khung cắt phần tràn: ảnh luôn giữ đúng tỉ lệ (kích thước thật nằm ở phần tử con), chỉ khung này mới hẹp hơn. */
+.fa-spec { width: 100%; overflow: hidden; flex: none; }
 .fa-spec-error { font-size: 12px; color: var(--muted); }
 .fa-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-2xs); color: var(--muted); min-width: 0; }
 .fa-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

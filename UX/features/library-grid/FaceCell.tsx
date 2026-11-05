@@ -113,14 +113,14 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
         onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }}>
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
       </button>
-      <div className="fa-spec" data-preview-box style={{ width: cw, height: ch }}>
+      <div className="fa-spec" data-preview-box style={{ height: ch }}>
         {live ? (
           // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
           <span data-live style={{ fontFamily: `"${live}"`, fontSize: fontSize ?? px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
         ) : state === 'error' ? (
           <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: '100%', height: '100%', ['--preview-url' as string]: `url("${shown.blob}")` }} />
+          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")` }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />

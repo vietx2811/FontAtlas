@@ -138,7 +138,7 @@ export function LibraryGrid({
   if (fontSize) {
     const dispH = previewBox(px, fontSize).height;
     cols = layout === 'list' ? 1 : Math.max(1, Math.floor((size.width - 28) / (cellMinWidth(fontSize) + 8)));
-    boxHeight = layout === 'list' ? Math.max(48, dispH + 20) : Math.max(132, dispH + 78);
+    boxHeight = Math.ceil(layout === 'list' ? Math.max(48, dispH + 20) : Math.max(132, dispH + 78));
     rowH = boxHeight + 8;
   } else {
     const { width: cw, height: ch } = cssSize(px);

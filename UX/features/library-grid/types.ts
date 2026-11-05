@@ -82,9 +82,11 @@ export function bucketFor(fontSize: number): PxBucket {
   return PX_BUCKETS.reduce((best, b) => (Math.abs(b - 2 * fontSize) < Math.abs(best - 2 * fontSize) ? b : best));
 }
 
-/** Hộp ảnh hiển thị: co ảnh bucket về cỡ chữ người dùng chọn. */
+/**
+ * Hộp ảnh hiển thị: co ảnh bucket về cỡ chữ người dùng chọn, GIỮ NGUYÊN tỉ lệ của PNG (rộng 13·px, cao ⌊7·px/3⌋).
+ * Không làm tròn từng chiều để tỉ lệ không lệch; khung chứa sẽ cắt phần tràn chứ không bóp ảnh.
+ */
 export function previewBox(px: PxBucket, fontSize: number): { width: number; height: number } {
-  const { height } = cssSize(px);
-  const scale = fontSize / (px / 2);
-  return { width: Math.round(13 * fontSize), height: Math.round(height * scale) };
+  const width = 13 * fontSize;
+  return { width, height: (width * Math.floor((7 * px) / 3)) / (13 * px) };
 }

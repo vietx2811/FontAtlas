@@ -78,7 +78,7 @@ describe('FaceCell skin (prototype)', () => {
     const bump = vi.spyOn(api, 'bumpGeneration');
     const { rerender } = render(<LibraryGrid api={api} query={{}} width={1300} height={800} blobs={blobs()} fontSize={34} />);
     await settle();
-    const box = () => cells()[0].querySelector('[data-preview-box]') as HTMLElement;
+    const box = () => cells()[0].querySelector('[data-mask]') as HTMLElement;
     expect(box().style.width).toBe(`${13 * 34}px`);
     rerender(<LibraryGrid api={api} query={{}} width={1300} height={800} blobs={blobs()} fontSize={36} />);
     await settle();
