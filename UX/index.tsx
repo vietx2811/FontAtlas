@@ -2,7 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { setApi } from './api';
+import { createMockApi } from './api/mock';
 import { StatusProvider } from './context/StatusContext';
+
+// Đến khi 6a có UX/bindings thật, Api thật thay chỗ này.
+setApi(createMockApi());
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
