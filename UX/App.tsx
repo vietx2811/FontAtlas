@@ -8,6 +8,7 @@ import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
 import { BootGate } from './components/boot/BootGate';
 import { NoticeStack } from './components/NoticeStack';
+import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
@@ -39,6 +40,12 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
         useModelStore.getState().sync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('model sync failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
+
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
+        startScanSync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('scan sync failed', e));
         return () => { dead = true; stop?.(); };
     }, [api]);
 

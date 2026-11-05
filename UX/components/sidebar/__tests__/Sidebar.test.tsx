@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar, SidebarToggle } from '../Sidebar';
 
@@ -170,5 +171,17 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Giao diện/ }));
     expect(['light', 'dark']).toContain(document.documentElement.dataset.theme);
     document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('refreshes counts when a scan finishes, and shows scan progress in the footer', async () => {
+    const { api } = await mount();
+    const spy = vi.spyOn(api, 'listSources');
+    act(() => useScanStore.getState().bump());
+    await settle();
+    expect(spy).toHaveBeenCalled();
+    act(() => useScanStore.setState({ scanning: true, written: 120 }));
+    expect(screen.getByRole('status', { name: 'Đang quét' }).textContent).toMatch(/Đang quét · 120 font/);
+    act(() => useScanStore.setState({ scanning: false }));
+    expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull();
   });
 });

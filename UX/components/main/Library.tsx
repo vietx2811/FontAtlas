@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Api } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
 import type { FaceRow } from '../../features/library-grid';
+import { useScanStore } from '../../store/scan';
 import { COMPOSER_INSET } from './SampleComposer';
 import { faceKey, toGridQuery, useUiStore } from '../../store/ui';
 
@@ -20,6 +21,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const fontSize = useUiStore(s => s.sampleSize);
   const layout = useUiStore(s => s.layout);
   const active = useUiStore(s => s.active);
+  const scanVersion = useScanStore(s => s.version);
   const [reload, setReload] = useState(0); // bỏ sao trong view Yêu thích → nạp lại để thẻ biến mất ngay
   const [favs, setFavs] = useState<ReadonlyMap<number, boolean>>(new Map());
   useEffect(() => { useUiStore.getState().refreshActive(api).catch(e => console.warn('activation_state failed', e)); }, [api]);
@@ -35,5 +37,5 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
-  return <LibraryGrid key={reload} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect} />;
+  return <LibraryGrid key={`${reload}:${scanVersion}`} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect} />;
 }

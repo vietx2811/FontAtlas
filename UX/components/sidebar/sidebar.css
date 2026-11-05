@@ -73,3 +73,9 @@
 .fa-d3-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .fa-radio { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; }
 .fa-radio em { color: var(--muted); font-style: normal; font-size: 12px; }
+
+.fa-scan { display: flex; align-items: center; gap: 8px; padding: 4px 9px; font-size: var(--text-xs); color: var(--muted); }
+.fa-scan-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: fa-pulse 1.2s ease-in-out infinite; }
+@keyframes fa-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .fa-scan-dot { animation: none; } }
+.fa-side[data-collapsed="true"] .fa-scan { justify-content: center; font-size: 0; }

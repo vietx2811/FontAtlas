@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Library } from '../Library';
 
@@ -104,5 +105,17 @@ describe('Library', () => {
     await act(async () => { screen.getAllByRole('button', { name: 'Yêu thích' })[0].click(); });
     await settle();
     expect(screen.getAllByRole('gridcell')).toHaveLength(1);
+  });
+
+  it('reloads the grid when a scan adds fonts (no stale "0 fonts" after the scan finishes)', async () => {
+    const api = createMockApi();
+    const spy = vi.spyOn(api, 'queryFaces');
+    render(<Library api={api} width={1200} height={700} />);
+    await settle();
+    const before = spy.mock.calls.length;
+    act(() => useScanStore.getState().bump());
+    await settle();
+    expect(spy.mock.calls.length).toBeGreaterThan(before);
+    expect(spy.mock.calls.at(-1)![0]).toMatchObject({ offset: 0 });
   });
 });

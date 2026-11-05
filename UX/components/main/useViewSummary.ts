@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Api } from '../../api';
+import { useScanStore } from '../../store/scan';
 import { toGridQuery, useUiStore, type View } from '../../store/ui';
 
 const FIXED: Record<string, string> = { all: 'Tất cả', star: 'Yêu thích', recent: 'Gần đây', active: 'Đang bật' };
@@ -17,6 +18,7 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
   const tag = useUiStore(s => s.tag);
   const query = useUiStore(s => s.query);
   const viOnly = useUiStore(s => s.viOnly);
+  const scanVersion = useScanStore(s => s.version);
   const recentViews = useUiStore(s => s.recentViews);
   const active = useUiStore(s => s.active);
   const [out, setOut] = useState<{ title: string; count: number | null }>({ title: FIXED[view] ?? '', count: null });
@@ -28,6 +30,6 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
       .then(([title, count]) => { if (alive) setOut({ title, count }); })
       .catch(() => { if (alive) setOut(o => ({ ...o, count: null })); });
     return () => { alive = false; };
-  }, [api, view, tag, query, viOnly, recentViews, active]);
+  }, [api, view, tag, query, viOnly, recentViews, active, scanVersion]);
   return out;
 }

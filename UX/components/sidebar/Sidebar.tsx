@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { THEME_KEY } from '../../theme';
+import { useScanStore } from '../../store/scan';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -32,6 +33,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const tag = useUiStore(s => s.tag);
   const open = useUiStore(s => s.openSections);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
+  const scanVersion = useScanStore(s => s.version);
+  const scanning = useScanStore(s => s.scanning);
+  const scanned = useScanStore(s => s.written);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
   const [sources, setSources] = useState<SourceDto[]>([]);
@@ -52,7 +56,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     setSources(s); setCols(c); setTags(t);
     setCounts({ all: all.total, star: star.total, active: act.filter(x => x.state === 'active').length });
   }, [api]);
-  useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh]);
+  useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion]);
 
   const addPath = useCallback(async (path: string) => {
     try {
@@ -170,6 +174,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </NavSection>
       </div>
       <div className="fa-side-foot">
+        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button>
