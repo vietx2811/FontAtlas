@@ -1,0 +1,13 @@
+.fa-model { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 9px; border-radius: var(--radius-sm); font-size: var(--text-xs); color: var(--muted); }
+.fa-model.err { color: var(--warn); }
+.fa-model-text { flex: 1; min-width: 0; line-height: 1.3; }
+.fa-model-dot { width: 17px; text-align: center; flex: none; }
+.fa-model-actions { display: flex; gap: 4px; flex: none; }
+.fa-model-actions button { padding: 2px 6px; border-radius: 6px; color: var(--accent-ink); font-weight: 500; white-space: nowrap; }
+.fa-model-actions button:hover { background: var(--chrome-hover); }
+.fa-ring { flex: none; }
+.fa-ring circle { fill: none; stroke-width: 2.4; }
+.fa-ring .bgc { stroke: var(--border); }
+.fa-ring .fgc { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .4s; }
+.fa-side[data-collapsed="true"] .fa-model-text, .fa-side[data-collapsed="true"] .fa-model-actions { display: none; }
+.fa-side[data-collapsed="true"] .fa-model { justify-content: center; padding: 4px 0; }

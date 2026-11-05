@@ -10,6 +10,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -23,11 +24,18 @@
         "decorations": true,
         "transparent": true,
         "center": true,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "windowEffects": {
+          "effects": [
+            "sidebar"
+          ],
+          "state": "followsWindowActiveState"
+        }
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' blob: data: asset: http://asset.localhost https://asset.localhost; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; script-src 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: fontatlas-preview: http://fontatlas-preview.localhost; font-src 'self' fontatlas-font: http://fontatlas-font.localhost; connect-src 'self' ipc: http://ipc.localhost fontatlas-preview: http://fontatlas-preview.localhost",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: fontatlas-preview: http://fontatlas-preview.localhost; font-src 'self' fontatlas-font: http://fontatlas-font.localhost; connect-src 'self' ws://localhost:3000 http://localhost:3000 ipc: http://ipc.localhost fontatlas-preview: http://fontatlas-preview.localhost"
     }
   },
   "bundle": {
@@ -47,12 +55,13 @@
     "shortDescription": "Visual font discovery and pairing tool",
     "longDescription": "FontAtlas analyzes fonts using machine learning to help designers discover, organize, and pair fonts based on their visual characteristics.",
     "copyright": "© 2025 VietX",
-    "externalBin": [
-      "../binaries/fontatlas-parser"
-    ],
     "macOS": {
       "entitlements": "Entitlements.plist",
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "resources/en.lproj/InfoPlist.strings",
+        "Resources/vi.lproj/InfoPlist.strings": "resources/vi.lproj/InfoPlist.strings"
+      }
     }
   }
 }

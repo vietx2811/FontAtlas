@@ -1,0 +1,21 @@
+{
+  "addedAt": 1700000000000,
+  "faceId": 1,
+  "faceIndex": 0,
+  "family": "Open Sans",
+  "fileSize": 12345,
+  "fullName": "Open Sans Regular",
+  "hashHex": "a0972465a34c447136590da97229adf80ada97de1576b1d19109ef55b33ec31c",
+  "isFavorite": false,
+  "isItalic": false,
+  "isVariable": false,
+  "licenseClass": "ofl",
+  "missing": false,
+  "path": "/fonts/OpenSans.ttf",
+  "subfamily": "Regular",
+  "supportsVi": true,
+  "viMissing": 0,
+  "viStatus": "full",
+  "weightClass": 400,
+  "widthClass": 5
+}

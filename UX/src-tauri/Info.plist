@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>vi</string>
+    </array>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Font Atlas reads font files on external drives you add to your library. Nothing is uploaded.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>Font Atlas reads font files on network volumes you add to your library. Nothing is uploaded.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Font Atlas reads font files in a Desktop folder only if you add it to your library.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Font Atlas reads font files in a Documents folder only if you add it to your library.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Font Atlas reads font files in a Downloads folder only if you add it to your library.</string>
+    <key>NSFileProviderDomainUsageDescription</key>
+    <string>Font Atlas reads font files stored in cloud folders (iCloud Drive, OneDrive) that you add to your library.</string>
+</dict>
+</plist>

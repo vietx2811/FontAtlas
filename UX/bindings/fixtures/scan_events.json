@@ -1,0 +1,38 @@
+[
+  {
+    "sourceId": 1,
+    "type": "queued"
+  },
+  {
+    "progress": {
+      "done": 256,
+      "facesWritten": 256,
+      "phase": "analyzing",
+      "total": 1200
+    },
+    "sourceId": 1,
+    "type": "progress"
+  },
+  {
+    "count": 256,
+    "sourceId": 1,
+    "type": "facesAdded"
+  },
+  {
+    "sourceId": 1,
+    "stats": {
+      "analyzed": 1200,
+      "failed": 2,
+      "missing": 0,
+      "relinked": 0,
+      "seen": 1200,
+      "status": "ok",
+      "unchanged": 0,
+      "unreadable": []
+    },
+    "type": "finished"
+  },
+  {
+    "type": "idle"
+  }
+]

@@ -1,0 +1,172 @@
+//! Lỗi và kiểu dùng chung.
+use serde::Serialize;
+
+use fontatlas_store::StoreError;
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum EngineError {
+    #[error("file đã được đăng ký ở scope này")]
+    AlreadyRegistered,
+    #[error("file chưa được đăng ký ở scope này")]
+    NotRegistered,
+    #[error("nền tảng này chưa hỗ trợ kích hoạt font")]
+    Unsupported,
+    #[error("hệ điều hành từ chối ({code}): {message}")]
+    Rejected { code: i64, message: String },
+}
+
+impl EngineError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            EngineError::AlreadyRegistered => "already_registered",
+            EngineError::NotRegistered => "not_registered",
+            EngineError::Unsupported => "unsupported",
+            EngineError::Rejected { .. } => "rejected",
+        }
+    }
+}
+
+/// Ai có thể đang cung cấp một font trùng tên — suy đoán theo đường dẫn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Owner {
+    System,
+    UserInstalled,
+    AdobeFonts,
+    RightFont,
+    FontBase,
+    FontAtlas,
+    Other,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ActivationError {
+    #[error(transparent)]
+    Store(#[from] StoreError),
+    #[error(transparent)]
+    Engine(EngineError),
+    #[error("nền tảng này chưa hỗ trợ kích hoạt font")]
+    Unsupported,
+    #[error("không tìm thấy: {0}")]
+    NotFound(String),
+    #[error("hash không hợp lệ: {0}")]
+    BadHash(String),
+}
+
+impl ActivationError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            ActivationError::Store(_) => "store",
+            ActivationError::Engine(_) => "engine",
+            ActivationError::Unsupported => "unsupported",
+            ActivationError::NotFound(_) => "not_found",
+            ActivationError::BadHash(_) => "bad_hash",
+        }
+    }
+}
+
+/// `"1"` → scope mặc định `Persistent` ("Giữ kích hoạt khi tắt app"); khác → `Session`.
+pub const SETTING_ACTIVATION_KEEP: &str = "activation_keep_after_quit";
+/// `"1"` sau khi onboarding đã hỏi về kích hoạt.
+pub const SETTING_ACTIVATION_ONBOARDED: &str = "activation_onboarded";
+/// Ghi vào mỗi dòng `activation_state`.
+pub const ENGINE_VERSION: u32 = 1;
+
+/// Tắt thủ công một font mà collection còn giữ: hỏi lại (mặc định) hay gỡ khỏi mọi lý do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DeactivatePolicy {
+    #[default]
+    Ask,
+    Force,
+}
+
+/// Khi có font trùng PostScript name: hỏi người dùng (mặc định) hay vẫn kích hoạt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConflictPolicy {
+    #[default]
+    Ask,
+    Proceed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conflict {
+    pub postscript_name: String,
+    pub existing_path: String,
+    pub owner: Owner,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum FileOutcome {
+    /// Chỉ `preflight` trả: không có xung đột, sẵn sàng kích hoạt.
+    Ready,
+    Activated,
+    AlreadyActive,
+    Deactivated,
+    AlreadyInactive,
+    /// Một thao tác khác đang chạy trên cùng file.
+    Busy,
+    NeedsConfirmation { conflicts: Vec<Conflict> },
+    /// Tắt thủ công nhưng collection vẫn giữ font này (policy `Ask`): không đổi gì, UI hỏi lại.
+    HeldByCollections { collection_ids: Vec<i64> },
+    /// Đã gỡ lý do được yêu cầu nhưng font vẫn bật vì lý do khác (thủ công / collection khác).
+    KeptActive { manual: bool, collection_ids: Vec<i64> },
+    MissingFile,
+    NotDownloaded,
+    Failed { code: String, message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileResult {
+    pub hash_hex: String,
+    pub path: Option<String>,
+    pub requested_faces: Vec<u32>,
+    /// Face khác của cùng file (TTC) cũng được kích hoạt / tắt theo.
+    pub extra_faces: Vec<u32>,
+    pub outcome: FileOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationReport {
+    pub results: Vec<FileResult>,
+    pub changed: usize,
+    pub needs_confirmation: usize,
+    pub failed: usize,
+}
+
+impl ActivationReport {
+    pub(crate) fn push(&mut self, r: FileResult) {
+        match r.outcome {
+            FileOutcome::Activated | FileOutcome::Deactivated => self.changed += 1,
+            FileOutcome::NeedsConfirmation { .. } => self.needs_confirmation += 1,
+            FileOutcome::Failed { .. } => self.failed += 1,
+            _ => {}
+        }
+        self.results.push(r);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Progress {
+    pub done: usize,
+    pub total: usize,
+    pub hash_hex: String,
+}
+
+/// Một dòng trạng thái kích hoạt cho UI (lệnh `activation_state` của Plan 6a).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationStateDto {
+    pub hash_hex: String,
+    pub state: fontatlas_store::DesiredState,
+    pub scope: fontatlas_store::ActivationScope,
+    pub status: fontatlas_store::ActivationStatus,
+    pub reasons: Vec<fontatlas_store::ActivationReason>,
+    pub active_path: Option<String>,
+    pub conflict_ps: Option<String>,
+    pub last_error: Option<String>,
+}

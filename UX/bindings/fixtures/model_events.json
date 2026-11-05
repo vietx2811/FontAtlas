@@ -1,0 +1,13 @@
+[
+  {
+    "bytesPerSec": 10.0,
+    "done": 1,
+    "etaMs": 100,
+    "resumed": true,
+    "total": 2,
+    "type": "progress"
+  },
+  {
+    "type": "ready"
+  }
+]

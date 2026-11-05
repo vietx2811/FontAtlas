@@ -1,0 +1,868 @@
+{
+  "schema_version": "1.0.0",
+  "dictionary_version": "0.1.0-draft",
+  "created": "2026-10-16",
+  "status": "draft — chưa qua bộ đánh giá, chủ app chưa duyệt",
+  "knowledge_base": "docs/team/research/09_typography_pairing_knowledge.md",
+  "normalization": {
+    "method": "percentile_0_1",
+    "reference": "thư viện tham chiếu Google Fonts OFL phát hành kèm app (spec §4.4)",
+    "bands": { "very_low": [0.0, 0.15], "low": [0.0, 0.35], "mid": [0.3, 0.7], "high": [0.65, 1.0], "very_high": [0.85, 1.0] }
+  },
+  "axes": {
+    "x_height_em":  { "kind": "percentile", "meaning": "0 = x-height thấp, 1 = x-height cao", "quality": "measured" },
+    "stem":         { "kind": "percentile", "meaning": "stem_n_xh; 0 = mảnh, 1 = đậm", "quality": "measured" },
+    "darkness":     { "kind": "percentile", "meaning": "darkness_no; 0 = sáng/nhẹ, 1 = đen/nặng", "quality": "measured" },
+    "contrast":     { "kind": "percentile", "meaning": "contrast_o; 0 = nét đều, 1 = tương phản dày-mảnh rất cao", "quality": "measured" },
+    "stress_deg":   { "kind": "percentile", "meaning": "|góc trục nhấn|; 0 = thẳng đứng, 1 = nghiêng nhiều; null nếu contrast < 1.3", "quality": "estimated" },
+    "aperture":     { "kind": "percentile", "meaning": "aperture c; 0 = khép, 1 = mở", "quality": "measured" },
+    "aperture_e":   { "kind": "percentile", "meaning": "aperture e; 0 = khép, 1 = mở", "quality": "estimated" },
+    "width":        { "kind": "percentile", "meaning": "o/xh; 0 = hẹp, 1 = rộng", "quality": "measured" },
+    "width_cv":     { "kind": "percentile", "meaning": "phương sai độ rộng a–z; 0 = các chữ rộng đều nhau, 1 = rộng hẹp khác nhau nhiều (kiểu cổ)", "quality": "new" },
+    "spacing":      { "kind": "percentile", "meaning": "sidebearing ÷ xh; 0 = chặt, 1 = thoáng", "quality": "new" },
+    "slant_deg":    { "kind": "percentile", "meaning": "|độ nghiêng|; 0 = đứng, 1 = nghiêng nhiều", "quality": "measured" },
+    "serif_foot":   { "kind": "class", "values": ["sans", "serif", "uncertain"], "meaning": "sans < 1.2; serif > 1.6; 1.2–1.6 = uncertain (01_core_engine §3)", "quality": "measured" },
+    "counter":      { "kind": "percentile", "meaning": "lòng chữ o ÷ bao; 0 = kín/nhỏ, 1 = thoáng/lớn", "quality": "measured" },
+    "a_storeys":    { "kind": "class", "values": [1, 2], "meaning": "a một tầng hay hai tầng", "quality": "new" },
+    "g_storeys":    { "kind": "class", "values": [1, 2], "meaning": "g một tầng hay hai tầng", "quality": "new" },
+    "terminal":     { "kind": "percentile", "meaning": "độ sắc đầu nét; 0 = tròn/mềm, 1 = sắc/cắt phẳng", "quality": "estimated" }
+  },
+  "entries": [
+    {
+      "id": "warm",
+      "terms": { "vi": ["ấm", "ấm áp"], "en": ["warm"] },
+      "group": "tone",
+      "filters": [
+        { "axis": "aperture", "range": [0.55, 1.0], "strength": "preferred", "weight": 1.0 },
+        { "axis": "terminal", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.8 },
+        { "axis": "contrast", "range": [0.15, 0.6], "strength": "preferred", "weight": 0.6 },
+        { "axis": "stress_deg", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Độ mở rộng và đầu nét mềm gần với chữ viết tay bút dẹt (mô hình động); tương phản vừa phải tránh cảm giác lạnh, sắc.", "en": "Open apertures and soft terminals echo broad-nib writing (dynamic model); moderate contrast avoids a cold, sharp feel." },
+      "sources": ["09:A1", "09:A8", "09:F2", "spec §8 (ví dụ 'ấm')"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "cool",
+      "terms": { "vi": ["lạnh", "lạnh lùng", "mát"], "en": ["cool", "cold"] },
+      "group": "tone",
+      "filters": [
+        { "axis": "aperture", "range": [0.0, 0.45], "strength": "preferred", "weight": 1.0 },
+        { "axis": "terminal", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.8 },
+        { "axis": "stress_deg", "range": [0.0, 0.3], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width_cv", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Ngược với 'ấm': độ mở khép, đầu nét cắt sắc, trục đứng và độ rộng đều (mô hình tĩnh, grotesque).", "en": "Opposite of 'warm': closed apertures, sharp terminals, vertical stress and uniform widths (static model, grotesque)." },
+      "sources": ["09:A1", "09:A8"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "soft",
+      "terms": { "vi": ["mềm", "mềm mại", "dịu"], "en": ["soft", "gentle"] },
+      "group": "tone",
+      "filters": [
+        { "axis": "terminal", "range": [0.0, 0.3], "strength": "preferred", "weight": 1.0 },
+        { "axis": "contrast", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.5 },
+        { "axis": "counter", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đầu nét tròn là tín hiệu rõ nhất của cảm giác mềm; lòng chữ thoáng giúp không bị nặng.", "en": "Rounded terminals are the strongest cue for softness; open counters keep it light." },
+      "sources": ["09:A6", "09:F2"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "rigid",
+      "terms": { "vi": ["cứng", "cứng cáp", "góc cạnh"], "en": ["rigid", "angular", "hard"] },
+      "group": "tone",
+      "filters": [
+        { "axis": "terminal", "range": [0.7, 1.0], "strength": "preferred", "weight": 1.0 },
+        { "axis": "contrast", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width_cv", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["độ góc cạnh của đường cong (chưa đo)"],
+      "rationale": { "vi": "Đầu nét cắt thẳng, nhịp đều. Độ 'vuông' của đường cong (squarish) chưa đo được nên chỉ là gần đúng.", "en": "Flat-cut terminals and even rhythm. Curve squareness is not measured yet, so this is approximate." },
+      "sources": ["09:A6"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "classic",
+      "terms": { "vi": ["cổ điển", "kinh điển"], "en": ["classic", "classical"] },
+      "group": "era",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "preferred", "weight": 1.0 },
+        { "axis": "stress_deg", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "contrast", "range": [0.35, 0.8], "strength": "preferred", "weight": 0.5 },
+        { "axis": "width_cv", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "a_storeys", "equals": 2, "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["phân loại lịch sử (Old style/Transitional)"],
+      "rationale": { "vi": "Serif kiểu cũ: trục nhấn nghiêng, tương phản vừa, độ rộng chữ khác nhau theo tỉ lệ cổ điển. Spec §8 nêu 'serif cộng stress nghiêng'.", "en": "Old-style serif: angled stress, moderate contrast, classical varied proportions. Spec §8: 'serif plus angled stress'." },
+      "sources": ["09:B1", "09:A1", "09:A7", "spec §8"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "modern",
+      "terms": { "vi": ["hiện đại"], "en": ["modern"] },
+      "group": "era",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.8 },
+        { "axis": "contrast", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.6 },
+        { "axis": "width_cv", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.4 },
+        { "axis": "x_height_em", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Trong cách nói của designer, 'hiện đại' thường là sans nét đều, tỉ lệ đều. Lưu ý: trong phân loại lịch sử 'Modern' lại là Didone (tương phản cao) — xem mục 'didone'. App nên hỏi lại khi người dùng gõ 'modern serif'.", "en": "In designer usage 'modern' usually means a low-contrast sans with even proportions. Note: in historical classification 'Modern' means Didone (high contrast) — see 'didone'. Ask again when the user types 'modern serif'." },
+      "sources": ["09:B2", "09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "contemporary",
+      "terms": { "vi": ["đương đại", "thời thượng"], "en": ["contemporary", "trendy"] },
+      "group": "era",
+      "filters": [],
+      "needs_metadata": ["năm phát hành", "xu hướng (tag cộng đồng)"],
+      "unmappable": "Gắn với năm phát hành và xu hướng, không với hình dạng đo được. Cần metadata năm hoặc tag.",
+      "rationale": { "vi": "Xu hướng thay đổi theo thời gian (Google Fonts: liên tưởng văn hoá đổi theo thời gian).", "en": "Trends shift over time (Google Fonts: cultural associations change)." },
+      "sources": ["09:F2", "09:B3"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "retro_70s",
+      "terms": { "vi": ["retro 70s", "thập niên 70", "hoài cổ 70"], "en": ["retro 70s", "seventies"] },
+      "group": "era",
+      "filters": [
+        { "axis": "darkness", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.8 },
+        { "axis": "terminal", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.8 },
+        { "axis": "x_height_em", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "spacing", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.5 },
+        { "axis": "counter", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag 'display'/'retro'"],
+      "rationale": { "vi": "Chữ display thập niên 70: đậm, tròn, x-height lớn, đặt chặt (Google Fonts nhắc chữ display 'bell-bottomed' gợi thập niên 70). Hình dạng 'phình' chưa đo được.", "en": "1970s display type: heavy, rounded, large x-height, tight setting (Google Fonts mentions 'bell-bottomed' display faces evoking the 1970s). Swelling shapes are not measured." },
+      "sources": ["09:B3", "09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "vintage",
+      "terms": { "vi": ["hoài cổ", "vintage", "xưa"], "en": ["vintage", "old-fashioned"] },
+      "group": "era",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "preferred", "weight": 0.6 },
+        { "axis": "width_cv", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "x_height_em", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["phân loại lịch sử", "tag kết cấu in (letterpress, mòn)"],
+      "rationale": { "vi": "Rất rộng; chỉ bắt được phần 'tỉ lệ cổ, x-height thấp'. Hiệu ứng in mòn, letterpress là kết cấu bề mặt, không đo bằng outline.", "en": "Very broad; only captures 'old proportions, low x-height'. Worn/letterpress texture is surface, not outline." },
+      "sources": ["09:B1", "09:B3"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "art_deco",
+      "terms": { "vi": ["art deco", "deco"], "en": ["art deco"] },
+      "group": "era",
+      "filters": [
+        { "axis": "contrast", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "x_height_em", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.6 },
+        { "axis": "aperture", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag 'art deco'", "chi tiết hình học trang trí (chưa đo)"],
+      "rationale": { "vi": "Deco thường có x-height rất thấp, hình học, tương phản đậm-nhạt; phần trang trí hình học không đo được. Có hai nhánh (sans hình học nét đều và chữ tương phản cao), nên kết quả sẽ lẫn.", "en": "Deco often has a very low x-height, geometric shapes, strong thick-thin contrast; ornament is unmeasured. Two branches (monoline geometric and high-contrast) make results mixed." },
+      "sources": ["09:B1", "09:B3"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "indochine",
+      "terms": { "vi": ["Đông Dương", "Indochine", "thuộc địa Pháp"], "en": ["Indochine", "French colonial"] },
+      "group": "era",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "preferred", "weight": 0.5 },
+        { "axis": "contrast", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "stress_deg", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag do chủ app gán", "bộ ảnh tham chiếu bảng hiệu/ấn phẩm 1900–1950"],
+      "rationale": { "vi": "Giả thuyết: ấn phẩm và bảng hiệu thời Pháp thuộc hay dùng serif kiểu Didone tương phản cao, trục đứng, cộng chữ hẹp và nét Art Deco. Chưa có nguồn kiểm chứng; cần chủ app duyệt bằng ảnh tham chiếu.", "en": "Hypothesis: colonial-era print and signage often used high-contrast Didone-style serifs with vertical stress, plus condensed and Art Deco letters. No verified source; owner should review with reference images." },
+      "sources": ["SL"],
+      "subjectivity": "high",
+      "culture": "vn"
+    },
+    {
+      "id": "bao_cap",
+      "terms": { "vi": ["bao cấp", "thời bao cấp", "tem phiếu"], "en": ["Vietnamese subsidy era", "bao cap"] },
+      "group": "era",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.5 },
+        { "axis": "width", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.5 },
+        { "axis": "darkness", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.5 }
+      ],
+      "needs_metadata": ["tag do chủ app gán", "kết cấu in (in typo, mòn)"],
+      "rationale": { "vi": "Giả thuyết: chữ khẩu hiệu, tem phiếu thời bao cấp thường là sans hẹp, đậm, vẽ tay; tính 'vẽ tay' và độ mòn không đo được. Cần chủ app duyệt.", "en": "Hypothesis: subsidy-era slogans and coupons often used condensed, heavy, hand-painted sans; hand-painted irregularity and wear are not measurable. Owner review needed." },
+      "sources": ["SL"],
+      "subjectivity": "high",
+      "culture": "vn"
+    },
+    {
+      "id": "luxury",
+      "terms": { "vi": ["sang", "sang trọng", "cao cấp", "xa xỉ"], "en": ["luxury", "luxurious", "premium", "upscale"] },
+      "group": "status",
+      "filters": [
+        { "axis": "contrast", "range": [0.7, 1.0], "strength": "preferred", "weight": 1.0 },
+        { "axis": "x_height_em", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.8 },
+        { "axis": "stem", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.5 },
+        { "axis": "spacing", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Spec §8 nêu 'contrast cao cộng x-height thấp'. Nét mảnh và khoảng chữ thoáng thêm cảm giác tinh. Đây là quy ước ngành thời trang/mỹ phẩm, không phải quy luật.", "en": "Spec §8: 'high contrast plus low x-height'. Light strokes and generous spacing add refinement. An industry convention (fashion/cosmetics), not a law." },
+      "sources": ["spec §8", "09:F4"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "casual",
+      "terms": { "vi": ["bình dân", "đời thường", "giản dị"], "en": ["casual", "everyday", "down-to-earth"] },
+      "group": "status",
+      "filters": [
+        { "axis": "x_height_em", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.7 },
+        { "axis": "contrast", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.6 },
+        { "axis": "terminal", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.5 },
+        { "axis": "stem", "range": [0.45, 0.9], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đối lập 'sang': x-height cao, tương phản thấp, nét đủ đậm, đầu nét không sắc. Google Fonts dẫn ví dụ của Spiekermann: người bán trứng nên dùng chữ thân mật hơn.", "en": "Opposite of 'luxury': tall x-height, low contrast, solid weight, unsharp terminals. Google Fonts cites Spiekermann's egg-seller example of a more casual voice." },
+      "sources": ["09:F2", "09:F4"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "friendly",
+      "terms": { "vi": ["thân thiện", "gần gũi", "dễ thương"], "en": ["friendly", "approachable"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "terminal", "range": [0.0, 0.35], "strength": "preferred", "weight": 1.0 },
+        { "axis": "aperture", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.7 },
+        { "axis": "x_height_em", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "counter", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "a_storeys", "equals": 1, "strength": "preferred", "weight": 0.2 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đầu nét tròn, chữ mở, x-height cao. Google Fonts nêu trường hợp ghép font chính quá nghiêm với một font thân thiện hơn để thương hiệu gần gũi.", "en": "Rounded terminals, open forms, tall x-height. Google Fonts describes pairing a too-serious primary face with a friendlier one to make a brand approachable." },
+      "sources": ["09:F2", "Google Fonts 'Pairing typefaces' (augmenting a brand's personality)"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "serious",
+      "terms": { "vi": ["nghiêm túc", "trang trọng", "đáng tin"], "en": ["serious", "formal", "trustworthy"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "slant_deg", "range": [0.0, 0.2], "strength": "preferred", "weight": 0.6 },
+        { "axis": "terminal", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width_cv", "range": [0.0, 0.6], "strength": "preferred", "weight": 0.3 },
+        { "axis": "darkness", "range": [0.2, 0.7], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Bắt được rất yếu bằng hình dạng: chữ đứng, không quá đậm/mảnh, không trang trí. Google Fonts (dẫn Spiekermann): người hướng dẫn nhảy dù dùng sans được tin hơn — tức 'đáng tin' phụ thuộc ngữ cảnh.", "en": "Only weakly captured by shape: upright, moderate weight, unornamented. Google Fonts (citing Spiekermann): the sans-serif skydiving instructor seems more trustworthy — trust is context-dependent." },
+      "sources": ["09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "playful",
+      "terms": { "vi": ["vui tươi", "tinh nghịch", "vui nhộn"], "en": ["playful", "fun"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "width_cv", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "terminal", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.6 },
+        { "axis": "darkness", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["độ nảy baseline (bouncy)", "tag 'display'"],
+      "rationale": { "vi": "Phần 'vui' thường đến từ baseline nảy, chữ không đều — chưa đo. Chỉ gần đúng bằng độ rộng thay đổi và đầu nét tròn.", "en": "Playfulness often comes from bouncy baselines and irregular letters — unmeasured. Approximated via width variation and rounded terminals." },
+      "sources": ["09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "youthful",
+      "terms": { "vi": ["trẻ trung", "năng động"], "en": ["youthful", "energetic"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.5 },
+        { "axis": "x_height_em", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "darkness", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Rất chủ quan; chỉ là thiên hướng sans x-height cao, đủ đậm. Nên hiện bộ lọc để người dùng sửa.", "en": "Very subjective; only a lean toward tall-x-height, solid sans. Show filters so the user can edit." },
+      "sources": ["09:F1", "09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "feminine",
+      "terms": { "vi": ["nữ tính", "duyên dáng", "điệu đà"], "en": ["feminine", "graceful"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "contrast", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.7 },
+        { "axis": "stem", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.6 },
+        { "axis": "terminal", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag script/italic"],
+      "rationale": { "vi": "Quy ước ngành (mỹ phẩm, thời trang): nét mảnh, tương phản cao, đường cong. Là khuôn mẫu giới tính văn hoá; app phải ghi rõ chủ quan và không dùng làm nhãn giải thích cặp.", "en": "Industry convention (beauty, fashion): light strokes, high contrast, curves. A cultural gender stereotype; mark as subjective and never use as a pairing explanation." },
+      "sources": ["09:F2", "09:F4"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "strong",
+      "terms": { "vi": ["mạnh mẽ", "nam tính", "khoẻ khoắn"], "en": ["strong", "bold", "masculine", "sturdy"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "darkness", "range": [0.65, 1.0], "strength": "preferred", "weight": 1.0 },
+        { "axis": "contrast", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.5 },
+        { "axis": "terminal", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Độ đậm cao và nét đều là phần đo được của 'mạnh'. 'Nam tính' cũng là khuôn mẫu văn hoá, ghi chủ quan.", "en": "High weight and even strokes are the measurable part of 'strong'. 'Masculine' is also a cultural stereotype; marked subjective." },
+      "sources": ["09:F2"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "delicate",
+      "terms": { "vi": ["thanh mảnh", "tinh tế", "nhẹ nhàng"], "en": ["delicate", "refined", "light"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "stem", "range": [0.0, 0.3], "strength": "preferred", "weight": 1.0 },
+        { "axis": "darkness", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.6 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Chủ yếu là độ đậm thấp. Cảnh báo kèm theo: nét quá mảnh có thể hỏng trên màn hình (Monotype) và dấu tiếng Việt dễ quá mảnh (Trương).", "en": "Mostly low weight. Caveat: very thin weights can fail on screens (Monotype) and Vietnamese marks can get too thin (Trương)." },
+      "sources": ["09:G4", "09:H4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "elegant_refined",
+      "terms": { "vi": ["trang nhã", "thanh lịch"], "en": ["elegant", "refined"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "contrast", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.7 },
+        { "axis": "x_height_em", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.5 },
+        { "axis": "spacing", "range": [0.45, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Gần 'sang' nhưng nhẹ hơn. Lưu ý: hồ sơ người dùng ghi tránh từ 'elegant' khi AI mô tả; ở đây chỉ dùng để hiểu truy vấn người dùng gõ, không dùng trong câu giải thích.", "en": "Close to 'luxury' but milder. Note: the user persona avoids 'elegant' in AI descriptions; used only to parse queries, never in explanations." },
+      "sources": ["09:F4"],
+      "subjectivity": "high",
+      "culture": "intl",
+      "explanation_banned": true
+    },
+    {
+      "id": "rustic",
+      "terms": { "vi": ["mộc mạc", "quê", "dân dã"], "en": ["rustic", "homely"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "width_cv", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "contrast", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.4 },
+        { "axis": "serif_foot", "equals": "serif", "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["độ không đều của nét/đường viền (chưa đo)", "tag slab/handmade"],
+      "rationale": { "vi": "Thường gắn với slab hoặc chữ có nét không đều; phần không đều chưa đo được.", "en": "Often slab or irregular strokes; irregularity is not measured." },
+      "sources": ["09:F2"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "organic",
+      "terms": { "vi": ["tự nhiên", "hữu cơ", "organic"], "en": ["organic", "natural"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "aperture", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "stress_deg", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width_cv", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "terminal", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Gần mô hình động (humanist): mở, trục nghiêng, tỉ lệ thay đổi theo chữ.", "en": "Close to the dynamic (humanist) model: open, angled stress, varied proportions." },
+      "sources": ["09:A1", "09:A8"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "handmade",
+      "terms": { "vi": ["thủ công", "handmade", "làm tay"], "en": ["handmade", "handcrafted", "artisanal"] },
+      "group": "craft",
+      "filters": [
+        { "axis": "width_cv", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "terminal", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["phân loại script/handwriting/brush", "độ không đều của đường viền"],
+      "unmappable_partial": "Tính 'làm tay' nằm ở độ không đều của nét và đường viền, chưa đo. Cần metadata phân loại (script, handwriting) hoặc trục mới.",
+      "rationale": { "vi": "Chỉ bắt được gián tiếp qua độ rộng không đều.", "en": "Captured only indirectly through uneven widths." },
+      "sources": ["09:B2"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "handwritten",
+      "terms": { "vi": ["viết tay", "chữ viết tay"], "en": ["handwritten", "handwriting"] },
+      "group": "craft",
+      "filters": [
+        { "axis": "slant_deg", "range": [0.3, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["phân loại handwriting/script (Google Fonts category)"],
+      "unmappable_partial": "Phụ thuộc phân loại; trục outline không phân biệt được chữ viết tay với italic.",
+      "rationale": { "vi": "Google Fonts có nhóm Handwriting; nên lấy từ metadata.", "en": "Google Fonts has a Handwriting category; use metadata." },
+      "sources": ["09:B2"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "calligraphic",
+      "terms": { "vi": ["thư pháp", "bút lông", "calligraphy"], "en": ["calligraphic", "brush"] },
+      "group": "craft",
+      "filters": [
+        { "axis": "contrast", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 },
+        { "axis": "stress_deg", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["phân loại script/brush"],
+      "unmappable_partial": "Cần metadata. Thư pháp chữ Việt (chữ quốc ngữ viết bút lông) là phong cách riêng, không có trục.",
+      "rationale": { "vi": "Tương phản theo hướng bút là tín hiệu một phần.", "en": "Pen-angle contrast is a partial cue." },
+      "sources": ["09:A1"],
+      "subjectivity": "medium",
+      "culture": "vn"
+    },
+    {
+      "id": "technical",
+      "terms": { "vi": ["kỹ thuật", "công nghệ", "tech"], "en": ["technical", "tech", "engineered"] },
+      "group": "craft",
+      "filters": [
+        { "axis": "contrast", "range": [0.0, 0.25], "strength": "preferred", "weight": 0.8 },
+        { "axis": "aperture", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.4 },
+        { "axis": "width_cv", "range": [0.0, 0.3], "strength": "preferred", "weight": 0.6 },
+        { "axis": "terminal", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.5 }
+      ],
+      "needs_metadata": ["monospace (post.isFixedPitch)"],
+      "rationale": { "vi": "Nét đều, độ rộng gần như bằng nhau, đầu nét cắt phẳng. Monospace đọc từ metadata.", "en": "Monoline, near-uniform widths, flat-cut terminals. Monospace comes from metadata." },
+      "sources": ["09:A4", "09:A6"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "industrial",
+      "terms": { "vi": ["công nghiệp", "nhà máy"], "en": ["industrial"] },
+      "group": "craft",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.6 },
+        { "axis": "width", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.5 },
+        { "axis": "aperture", "range": [0.0, 0.4], "strength": "preferred", "weight": 0.5 },
+        { "axis": "darkness", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag DIN/stencil"],
+      "rationale": { "vi": "Grotesque/DIN: hẹp vừa, khép, nét đều. Stencil cần metadata.", "en": "Grotesque/DIN: somewhat narrow, closed, monoline. Stencil needs metadata." },
+      "sources": ["09:A1", "Google Fonts glossary Grotesque"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "geometric",
+      "terms": { "vi": ["hình học", "tròn trịa hình học"], "en": ["geometric"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "contrast", "range": [0.0, 0.25], "strength": "preferred", "weight": 0.7 },
+        { "axis": "width", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "a_storeys", "equals": 1, "strength": "preferred", "weight": 0.5 },
+        { "axis": "counter", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Mô hình hình học (bút tròn): gần như không tương phản, o tròn đều, a một tầng.", "en": "Geometric model (round pen): near-zero contrast, circular o, single-storey a." },
+      "sources": ["09:A1", "09:§4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "humanist",
+      "terms": { "vi": ["nhân văn", "humanist"], "en": ["humanist"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "aperture", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.8 },
+        { "axis": "stress_deg", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "a_storeys", "equals": 2, "strength": "preferred", "weight": 0.3 },
+        { "axis": "g_storeys", "equals": 2, "strength": "preferred", "weight": 0.2 },
+        { "axis": "width_cv", "range": [0.45, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Mô hình động: mở, trục nghiêng, a/g thường hai tầng, tỉ lệ thay đổi.", "en": "Dynamic model: open, angled stress, a/g often double-storey, varied proportions." },
+      "sources": ["09:A1", "09:§4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "grotesque",
+      "terms": { "vi": ["grotesque", "neo-grotesque", "kiểu Helvetica"], "en": ["grotesque", "neo-grotesque", "grotesk"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "required" },
+        { "axis": "aperture", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.8 },
+        { "axis": "stress_deg", "range": [0.0, 0.3], "strength": "preferred", "weight": 0.3 },
+        { "axis": "a_storeys", "equals": 2, "strength": "preferred", "weight": 0.3 },
+        { "axis": "g_storeys", "equals": 1, "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Mô hình tĩnh với sans: khép, đứng, a hai tầng, g một tầng (Helvetica aperture c 49°).", "en": "Static model in sans: closed, upright, double-storey a, single-storey g (Helvetica aperture c 49°)." },
+      "sources": ["09:A1", "09:§4", "01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "didone",
+      "terms": { "vi": ["didone", "kiểu Bodoni", "kiểu Didot"], "en": ["didone", "modern serif", "Bodoni-like"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "required" },
+        { "axis": "contrast", "range": [0.85, 1.0], "strength": "preferred", "weight": 1.0 },
+        { "axis": "stress_deg", "range": [0.0, 0.25], "strength": "preferred", "weight": 0.6 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Tương phản cực cao (Didot 7,2; Bodoni 72 6,2) và trục đứng.", "en": "Extreme contrast (Didot 7.2; Bodoni 72 6.2) and vertical stress." },
+      "sources": ["01_core_engine §3", "09:A5"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "serif",
+      "terms": { "vi": ["có chân", "serif"], "en": ["serif"] },
+      "group": "structure",
+      "filters": [ { "axis": "serif_foot", "equals": "serif", "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp bằng chân serif.", "en": "Measured directly via serif foot." },
+      "sources": ["09:D4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "sans",
+      "terms": { "vi": ["không chân", "sans", "sans-serif"], "en": ["sans", "sans-serif"] },
+      "group": "structure",
+      "filters": [ { "axis": "serif_foot", "equals": "sans", "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp.", "en": "Measured directly." },
+      "sources": ["09:D4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "slab",
+      "terms": { "vi": ["chân vuông", "slab", "chân khối"], "en": ["slab serif", "slab", "egyptian"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "required" },
+        { "axis": "contrast", "range": [0.0, 0.3], "strength": "preferred", "weight": 1.0 },
+        { "axis": "stem", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["hình dạng chân (vuông vs nhọn) chưa đo"],
+      "rationale": { "vi": "Google Fonts: slab có cấu trúc gần sans, tương phản thấp, chân serif dày như nét. Ở đây là serif + tương phản thấp.", "en": "Google Fonts: slabs are close to sans in construction, low contrast, serifs matching stroke weight. Here: serif + low contrast." },
+      "sources": ["Google Fonts 'Making sense of typographic classifications'"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "monoline",
+      "terms": { "vi": ["nét đều", "đơn nét"], "en": ["monoline", "low contrast"] },
+      "group": "structure",
+      "filters": [ { "axis": "contrast", "range": [0.0, 0.15], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp bằng contrast_o.", "en": "Measured via contrast_o." },
+      "sources": ["01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "high_contrast",
+      "terms": { "vi": ["tương phản cao", "đậm nhạt rõ"], "en": ["high contrast"] },
+      "group": "structure",
+      "filters": [ { "axis": "contrast", "range": [0.75, 1.0], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp.", "en": "Measured directly." },
+      "sources": ["09:A5"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "rounded",
+      "terms": { "vi": ["chữ tròn", "bo tròn", "tròn đầu"], "en": ["rounded", "round terminals"] },
+      "group": "structure",
+      "filters": [ { "axis": "terminal", "range": [0.0, 0.2], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đầu nét tròn (trục terminal, ước lượng).", "en": "Rounded terminals (terminal axis, estimated)." },
+      "sources": ["09:A6"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "condensed",
+      "terms": { "vi": ["chữ hẹp", "dẹp", "condensed"], "en": ["condensed", "narrow", "compressed"] },
+      "group": "structure",
+      "filters": [ { "axis": "width", "range": [0.0, 0.25], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp (Futura Condensed o/xh 0,63 so với Futura 1,07).", "en": "Measured directly (Futura Condensed o/xh 0.63 vs Futura 1.07)." },
+      "sources": ["01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "extended",
+      "terms": { "vi": ["chữ rộng", "bè", "extended"], "en": ["extended", "wide", "expanded"] },
+      "group": "structure",
+      "filters": [ { "axis": "width", "range": [0.75, 1.0], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp.", "en": "Measured directly." },
+      "sources": ["01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "heavy",
+      "terms": { "vi": ["đậm", "dày", "béo"], "en": ["heavy", "bold", "black", "fat"] },
+      "group": "structure",
+      "filters": [ { "axis": "darkness", "range": [0.7, 1.0], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp.", "en": "Measured directly." },
+      "sources": ["01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "light",
+      "terms": { "vi": ["mảnh", "nhẹ", "thin"], "en": ["light", "thin", "hairline"] },
+      "group": "structure",
+      "filters": [ { "axis": "stem", "range": [0.0, 0.25], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp. Cảnh báo dấu tiếng Việt quá mảnh (09:H4).", "en": "Measured directly. Warn about too-thin Vietnamese marks (09:H4)." },
+      "sources": ["09:H4"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "italic",
+      "terms": { "vi": ["nghiêng", "italic"], "en": ["italic", "slanted", "oblique"] },
+      "group": "structure",
+      "filters": [ { "axis": "slant_deg", "range": [0.5, 1.0], "strength": "required" } ],
+      "needs_metadata": ["italic thật vs oblique (cần so hình chữ a, e với bản đứng)"],
+      "rationale": { "vi": "Đo trực tiếp góc nghiêng.", "en": "Slant angle measured directly." },
+      "sources": ["01_core_engine §3"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "tall_x_height",
+      "terms": { "vi": ["x-height cao", "chữ thường to"], "en": ["tall x-height", "large x-height"] },
+      "group": "structure",
+      "filters": [ { "axis": "x_height_em", "range": [0.7, 1.0], "strength": "required" } ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Đo trực tiếp.", "en": "Measured directly." },
+      "sources": ["09:A2"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "airy",
+      "terms": { "vi": ["thoáng", "rộng rãi", "nhiều khoảng trắng"], "en": ["airy", "open", "loose"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "spacing", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.8 },
+        { "axis": "counter", "range": [0.55, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "aperture", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Khoảng chữ rộng, lòng chữ và độ mở thoáng.", "en": "Loose spacing, open counters and apertures." },
+      "sources": ["09:E2", "09:A8"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "compact",
+      "terms": { "vi": ["chặt", "gọn", "dày đặc"], "en": ["compact", "tight", "dense"] },
+      "group": "structure",
+      "filters": [
+        { "axis": "spacing", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.8 },
+        { "axis": "width", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Khoảng chữ chặt, chữ không rộng.", "en": "Tight spacing, narrower letters." },
+      "sources": ["09:E2"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "readable_small",
+      "terms": { "vi": ["dễ đọc", "đọc cỡ nhỏ", "chữ nội dung"], "en": ["readable", "legible", "text face", "good at small sizes"] },
+      "group": "function",
+      "filters": [
+        { "axis": "x_height_em", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.8 },
+        { "axis": "aperture", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.7 },
+        { "axis": "contrast", "range": [0.0, 0.6], "strength": "preferred", "weight": 0.6 },
+        { "axis": "spacing", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "stem", "range": [0.3, 0.75], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["opsz text nếu có"],
+      "rationale": { "vi": "Optical size nhỏ có contrast thấp hơn, x-height lớn hơn, chữ rộng hơn, khoảng chữ thoáng hơn (Google Fonts). Chữ nhỏ trên màn hình cần x-height lớn và khoảng chữ thoáng (Santa Maria).", "en": "Small optical sizes have lower contrast, larger x-heights, wider letters and looser spacing (Google Fonts). Small screen text benefits from large x-heights and looser spacing (Santa Maria)." },
+      "sources": ["09:G1", "09:G4", "09:D7"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "display",
+      "terms": { "vi": ["tiêu đề", "display", "chữ trang trí"], "en": ["display", "headline face"] },
+      "group": "function",
+      "filters": [
+        { "axis": "spacing", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["opsz display", "Google Fonts category Display", "tên chứa Display/Title/Headline"],
+      "unmappable_partial": "Chủ yếu là metadata (category, optical size, tên).",
+      "rationale": { "vi": "Bản display có chi tiết tinh hơn và khoảng chữ chặt hơn (Google Fonts optical sizes).", "en": "Display cuts have finer details and tighter spacing (Google Fonts optical sizes)." },
+      "sources": ["09:G1", "09:D7"],
+      "subjectivity": "low",
+      "culture": "intl"
+    },
+    {
+      "id": "clean",
+      "terms": { "vi": ["sạch", "gọn gàng", "rõ ràng"], "en": ["clean", "crisp"] },
+      "group": "personality",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.6 },
+        { "axis": "contrast", "range": [0.0, 0.35], "strength": "preferred", "weight": 0.6 },
+        { "axis": "width_cv", "range": [0.0, 0.5], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Monotype dùng 'clean and calm' như một nhóm mood; phần đo được là sans tương phản thấp, ít biến động.", "en": "Monotype uses 'clean and calm' as a mood; the measurable part is a low-contrast, regular sans." },
+      "sources": ["09:F3"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "minimal",
+      "terms": { "vi": ["tối giản", "minimal"], "en": ["minimal", "minimalist"] },
+      "group": "style",
+      "filters": [
+        { "axis": "contrast", "range": [0.0, 0.3], "strength": "preferred", "weight": 0.6 },
+        { "axis": "stem", "range": [0.1, 0.55], "strength": "preferred", "weight": 0.4 },
+        { "axis": "terminal", "range": [0.4, 1.0], "strength": "preferred", "weight": 0.2 }
+      ],
+      "needs_metadata": [],
+      "rationale": { "vi": "Tối giản chủ yếu là cách *dàn trang* (khoảng trắng), không phải font. Phần font: nét đều, không trang trí, không quá đậm.", "en": "Minimalism is mostly *layout* (white space), not the font. Font part: monoline, unornamented, not heavy." },
+      "sources": ["Google Fonts 'Emotive considerations' (arrangement over typeface)"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "korean_minimal",
+      "terms": { "vi": ["tối giản Hàn", "kiểu Hàn Quốc", "Hàn Quốc tối giản"], "en": ["Korean minimal", "K-minimal"] },
+      "group": "style",
+      "filters": [
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.6 },
+        { "axis": "stem", "range": [0.05, 0.4], "strength": "preferred", "weight": 0.6 },
+        { "axis": "contrast", "range": [0.0, 0.25], "strength": "preferred", "weight": 0.5 },
+        { "axis": "spacing", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "width", "range": [0.45, 0.9], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["tag do chủ app gán", "bộ ảnh tham chiếu (cafe, mỹ phẩm Hàn)"],
+      "rationale": { "vi": "Giả thuyết từ hồ sơ thẩm mỹ của chủ app: sans mảnh, nét đều, khoảng chữ thoáng, nhiều khoảng trắng; thường đi cùng chữ Hangul hình học. Chưa có nguồn kiểm chứng; chủ app nên duyệt bằng 10–20 ví dụ thật.", "en": "Hypothesis from the owner's aesthetic profile: light monoline sans, loose spacing, lots of white space, often next to geometric Hangul. Unverified; owner should review with 10–20 real examples." },
+      "sources": ["SL", "hồ sơ chủ app (Korean minimal)"],
+      "subjectivity": "high",
+      "culture": "vn"
+    },
+    {
+      "id": "vietnamese_folk",
+      "terms": { "vi": ["dân gian Việt", "Đông Hồ", "folk Việt"], "en": ["Vietnamese folk"] },
+      "group": "style",
+      "filters": [],
+      "needs_metadata": ["tag do chủ app gán", "bộ ảnh tham chiếu (tranh Đông Hồ, bao bì truyền thống)"],
+      "unmappable": "Gắn với minh hoạ, chất liệu, chữ vẽ tay; không có trục outline tương ứng. Cần tag thủ công.",
+      "rationale": { "vi": "Thuộc hồ sơ thẩm mỹ chủ app; chỉ có thể xử lý bằng tag do người dùng/cộng đồng gán.", "en": "Part of the owner's aesthetic profile; only manageable through user/community tags." },
+      "sources": ["SL", "hồ sơ chủ app (Vietnamese folk)"],
+      "subjectivity": "high",
+      "culture": "vn"
+    },
+    {
+      "id": "street_food_signage",
+      "terms": { "vi": ["vỉa hè", "bảng hiệu quán", "đường phố Sài Gòn", "chữ bảng hiệu"], "en": ["street food signage", "shop sign"] },
+      "group": "context",
+      "filters": [
+        { "axis": "darkness", "range": [0.6, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "width", "range": [0.0, 0.45], "strength": "preferred", "weight": 0.5 },
+        { "axis": "serif_foot", "equals": "sans", "strength": "preferred", "weight": 0.4 }
+      ],
+      "needs_metadata": ["tag do chủ app gán", "độ không đều kiểu chữ kẻ tay"],
+      "rationale": { "vi": "Giả thuyết: bảng hiệu quán thường kẻ tay, chữ hẹp, đậm, viết hoa có dấu → bắt buộc kiểm tra chữ hoa có dấu (09:H3). Chưa có nguồn.", "en": "Hypothesis: eatery signs are often hand-painted, condensed, heavy, all-caps with marks → must check accented capitals (09:H3). Unverified." },
+      "sources": ["SL", "09:H3"],
+      "subjectivity": "high",
+      "culture": "vn"
+    },
+    {
+      "id": "editorial",
+      "terms": { "vi": ["tạp chí", "báo chí", "editorial"], "en": ["editorial", "magazine"] },
+      "group": "context",
+      "filters": [
+        { "axis": "serif_foot", "equals": "serif", "strength": "preferred", "weight": 0.5 },
+        { "axis": "x_height_em", "range": [0.35, 0.8], "strength": "preferred", "weight": 0.3 }
+      ],
+      "needs_metadata": ["có optical size (Text/Display)", "số độ đậm và italic"],
+      "rationale": { "vi": "Editorial cần hệ chữ đủ vai trò: font nội dung đọc lâu, font tiêu đề, có italic và optical size (Butterick, Google Fonts). Phần 'cảm giác editorial' chủ yếu đến từ dàn trang.", "en": "Editorial needs a full system: a long-reading text face, a headline face, italics and optical sizes (Butterick, Google Fonts). The 'editorial feel' mostly comes from layout." },
+      "sources": ["09:C1", "09:G1", "09:G2", "09:D1"],
+      "subjectivity": "medium",
+      "culture": "intl"
+    },
+    {
+      "id": "menu_body",
+      "terms": { "vi": ["chữ thực đơn", "menu", "tên món"], "en": ["menu text", "menu"] },
+      "group": "context",
+      "filters": [
+        { "axis": "x_height_em", "range": [0.5, 1.0], "strength": "preferred", "weight": 0.6 },
+        { "axis": "aperture", "range": [0.45, 1.0], "strength": "preferred", "weight": 0.5 },
+        { "axis": "width", "range": [0.2, 0.7], "strength": "preferred", "weight": 0.3 }
+      ],
+      "hard_constraints": ["vi_status in [full, precomposed_only] và missing = 0"],
+      "needs_metadata": ["có chữ số đẹp (lining/oldstyle, tabular cho giá)"],
+      "rationale": { "vi": "Menu đọc trong ánh sáng yếu, cỡ nhỏ: cần x-height và độ mở như chữ nội dung; giá tiền cần chữ số đều. Tiếng Việt đủ là bắt buộc (09:H1).", "en": "Menus are read small and in dim light: text-face x-height and aperture; prices need even figures. Full Vietnamese is mandatory (09:H1)." },
+      "sources": ["09:G4", "09:H1", "SL"],
+      "subjectivity": "medium",
+      "culture": "vn"
+    },
+    {
+      "id": "packaging",
+      "terms": { "vi": ["bao bì", "nhãn sản phẩm"], "en": ["packaging", "label"] },
+      "group": "context",
+      "filters": [],
+      "needs_metadata": ["phụ thuộc phân khúc — nên ghép với từ khoá khác (sang, bình dân, thủ công)"],
+      "unmappable": "Bao bì là bối cảnh, không phải phong cách; app nên hỏi thêm phân khúc thay vì đoán.",
+      "rationale": { "vi": "Không có hồ sơ hình dạng chung cho mọi bao bì.", "en": "No common shape profile across packaging." },
+      "sources": ["09:F1"],
+      "subjectivity": "high",
+      "culture": "intl"
+    },
+    {
+      "id": "vietnamese_ready",
+      "terms": { "vi": ["đủ tiếng Việt", "gõ được tiếng Việt", "có dấu"], "en": ["Vietnamese support", "full Vietnamese"] },
+      "group": "function",
+      "filters": [],
+      "hard_constraints": ["vi_status in [full, precomposed_only]", "missing = 0"],
+      "needs_metadata": [],
+      "rationale": { "vi": "Ràng buộc cứng đo được (core engine §2).", "en": "Measurable hard constraint (core engine §2)." },
+      "sources": ["09:H1", "01_core_engine §2"],
+      "subjectivity": "low",
+      "culture": "vn"
+    }
+  ]
+}

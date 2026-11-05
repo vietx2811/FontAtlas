@@ -1,0 +1,21 @@
+[
+  {
+    "a": {
+      "faceIndex": 0,
+      "hashHex": "0303030303030303030303030303030303030303030303030303030303030303"
+    },
+    "aRole": "heading",
+    "b": {
+      "faceIndex": 0,
+      "hashHex": "0202020202020202020202020202020202020202020202020202020202020202"
+    },
+    "bRole": "body",
+    "collectionId": 4,
+    "createdAt": 1700000000000,
+    "id": 1,
+    "mode": "safe",
+    "note": null,
+    "preset": "poster",
+    "sampleText": "Phở bò Hà Nội"
+  }
+]

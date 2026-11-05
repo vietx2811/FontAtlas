@@ -1,0 +1,8 @@
+{
+  "code": "nested_source",
+  "detail": {
+    "existingId": 1,
+    "existingPath": "/Users/u/Fonts"
+  },
+  "message": "đường dẫn lồng với nguồn #1"
+}

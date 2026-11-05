@@ -1,0 +1,20 @@
+[
+  {
+    "hashHex": "abababababababababababababababababababababababababababababababab",
+    "state": "active",
+    "scope": "session",
+    "status": "registered",
+    "reasons": [
+      {
+        "kind": "manual"
+      },
+      {
+        "kind": "collection",
+        "collectionId": 3
+      }
+    ],
+    "activePath": "/Users/u/Fonts/Phở Đậm.ttf",
+    "conflictPs": null,
+    "lastError": null
+  }
+]

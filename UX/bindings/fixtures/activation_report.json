@@ -1,0 +1,159 @@
+{
+  "changed": 2,
+  "failed": 1,
+  "needsConfirmation": 1,
+  "results": [
+    {
+      "extraFaces": [],
+      "hashHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "outcome": {
+        "kind": "ready"
+      },
+      "path": "/Users/u/Fonts/f0.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [
+        1,
+        2
+      ],
+      "hashHex": "0101010101010101010101010101010101010101010101010101010101010101",
+      "outcome": {
+        "kind": "activated"
+      },
+      "path": "/Users/u/Fonts/f1.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0202020202020202020202020202020202020202020202020202020202020202",
+      "outcome": {
+        "kind": "already_active"
+      },
+      "path": "/Users/u/Fonts/f2.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+      "outcome": {
+        "kind": "deactivated"
+      },
+      "path": "/Users/u/Fonts/f3.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0404040404040404040404040404040404040404040404040404040404040404",
+      "outcome": {
+        "kind": "already_inactive"
+      },
+      "path": "/Users/u/Fonts/f4.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0505050505050505050505050505050505050505050505050505050505050505",
+      "outcome": {
+        "kind": "busy"
+      },
+      "path": "/Users/u/Fonts/f5.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0606060606060606060606060606060606060606060606060606060606060606",
+      "outcome": {
+        "conflicts": [
+          {
+            "existingPath": "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf",
+            "owner": "right_font",
+            "postscriptName": "LibreBaskerville-Regular"
+          }
+        ],
+        "kind": "needs_confirmation"
+      },
+      "path": "/Users/u/Fonts/f6.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "outcome": {
+        "collectionIds": [
+          3,
+          7
+        ],
+        "kind": "held_by_collections"
+      },
+      "path": "/Users/u/Fonts/f7.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0808080808080808080808080808080808080808080808080808080808080808",
+      "outcome": {
+        "collectionIds": [
+          7
+        ],
+        "kind": "kept_active",
+        "manual": true
+      },
+      "path": "/Users/u/Fonts/f8.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0909090909090909090909090909090909090909090909090909090909090909",
+      "outcome": {
+        "kind": "missing_file"
+      },
+      "path": "/Users/u/Fonts/f9.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+      "outcome": {
+        "kind": "not_downloaded"
+      },
+      "path": "/Users/u/Fonts/f10.ttf",
+      "requestedFaces": [
+        0
+      ]
+    },
+    {
+      "extraFaces": [],
+      "hashHex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "outcome": {
+        "code": "engine.rejected",
+        "kind": "failed",
+        "message": "hệ điều hành từ chối (999): x"
+      },
+      "path": "/Users/u/Fonts/f11.ttf",
+      "requestedFaces": [
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+name: index-eval
+on: [push, pull_request]
+jobs:
+  test:            # không cần mạng: chỉ fixture trong repo + reference-v1.json đã commit
+    runs-on: macos-14
+    defaults: { run: { working-directory: UX/src-tauri } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - run: cargo test -p fontatlas-core -p fontatlas-index -p fontatlas-eval
+      - run: cargo clippy -p fontatlas-index -p fontatlas-eval -- -D warnings
+  eval-report:     # cần mạng (google/fonts); chỉ báo cáo, không chặn merge
+    runs-on: macos-14
+    needs: test
+    continue-on-error: true
+    defaults: { run: { working-directory: UX/src-tauri } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: actions/cache@v4
+        with:
+          path: ~/gf
+          key: google-fonts-${{ hashFiles('tools/reference/GOOGLE_FONTS_SHA') }}
+      - run: bash ../../tools/reference/fetch_google_fonts.sh ~/gf
+      - name: eval (report only)
+        run: |
+          cargo run --release -p fontatlas-eval --bin eval -- --fonts ~/gf --system-fonts \
+            --similar ../../docs/team/eval/similar_sets.csv --pairing ../../docs/team/eval/pairing_judgements.csv \
+            >> "$GITHUB_STEP_SUMMARY"

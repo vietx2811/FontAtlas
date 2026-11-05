@@ -1,0 +1,47 @@
+{
+  "autoDeactivateFailed": [
+    {
+      "cause": "no_reason",
+      "faces": [
+        0,
+        1
+      ],
+      "hashHex": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+      "removedReasons": []
+    }
+  ],
+  "autoDeactivated": [
+    {
+      "cause": "collection_deleted",
+      "faces": [
+        0
+      ],
+      "hashHex": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "removedReasons": [
+        {
+          "collectionId": 5,
+          "kind": "collection"
+        }
+      ]
+    }
+  ],
+  "cleaned": 1,
+  "failed": 0,
+  "missing": 1,
+  "moved": 1,
+  "notDownloaded": 0,
+  "reregistered": 3,
+  "results": [
+    {
+      "extraFaces": [],
+      "hashHex": "0909090909090909090909090909090909090909090909090909090909090909",
+      "outcome": {
+        "kind": "activated"
+      },
+      "path": "/Users/u/Fonts/f9.ttf",
+      "requestedFaces": [
+        0
+      ]
+    }
+  ]
+}

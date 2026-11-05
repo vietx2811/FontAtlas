@@ -1,0 +1,55 @@
+{
+  "conflicts": [
+    {
+      "axis": "contrast",
+      "rangeA": [
+        0.699999988079071,
+        1.0
+      ],
+      "rangeB": [
+        0.0,
+        0.4000000059604645
+      ],
+      "termA": "luxury",
+      "termB": "casual"
+    }
+  ],
+  "dictionaryVersion": "0.1.0-draft",
+  "filters": [
+    {
+      "axis": "aperture",
+      "equals": null,
+      "range": [
+        0.550000011920929,
+        1.0
+      ],
+      "strength": "preferred",
+      "weight": 1.0
+    }
+  ],
+  "hard": [
+    "vi_supported"
+  ],
+  "matched": [
+    {
+      "culture": "intl",
+      "explanationBanned": false,
+      "group": "tone",
+      "id": "warm",
+      "rationaleEn": "Open apertures.",
+      "rationaleVi": "Độ mở rộng và đầu nét mềm.",
+      "subjectivity": "medium",
+      "text": "ấm"
+    }
+  ],
+  "partial": [],
+  "unknownWords": [
+    "xyz"
+  ],
+  "unmappable": [
+    [
+      "contemporary",
+      "Cần metadata năm."
+    ]
+  ]
+}

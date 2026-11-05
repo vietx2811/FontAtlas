@@ -1,39 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "quy\u1ec1n t\u1ed1i thi\u1ec3u c\u1ee7a c\u1eeda s\u1ed5 ch\u00ednh",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "dialog:default",
-    "dialog:allow-open",
-    "fs:default",
-    "fs:allow-read-text-file",
-    "fs:allow-read-file",
-    {
-      "identifier": "fs:allow-read-file",
-      "allow": [
-        {
-          "path": "$HOME/**"
-        },
-        {
-          "path": "/**"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:scope",
-      "allow": [
-        {
-          "path": "$HOME/**"
-        },
-        {
-          "path": "/**"
-        }
-      ]
-    }
+    "dialog:allow-open"
   ]
 }

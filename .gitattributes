@@ -1,0 +1,18 @@
+# Giữ LF trên mọi OS: fixture/golden JSON, txt và mã nguồn được so sánh byte-theo-byte trong test.
+* text=auto eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.yml text eol=lf
+*.py text eol=lf
+# Nhị phân: không bao giờ đổi EOL.
+*.ttf binary
+*.ttc binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.png binary
+*.onnx binary
+*.zip binary

@@ -1,0 +1,23 @@
+name: app-backend
+on: [push, pull_request]
+jobs:
+  app:
+    # macOS: kích hoạt font dùng CoreText; Windows chưa kiểm
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with: { components: clippy }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      # tauri::generate_context! cần UX/dist
+      - run: npm ci && npx vite build
+        working-directory: UX
+      - name: Test backend và sinh lại bindings
+        working-directory: UX/src-tauri
+        env: { UPDATE_BINDINGS: '1' }
+        run: cargo test -p app
+      - name: Bindings không được lệch
+        run: git diff --exit-code UX/bindings
+      - run: cargo clippy -p app --all-targets -- -D warnings
+        working-directory: UX/src-tauri

@@ -1,0 +1,40 @@
+/* Khung cửa sổ: trang trong suốt để hiệu ứng sidebar của macOS (windowEffects) lộ ra;
+   vùng nội dung (sheet) có nền đặc. */
+html, body, #root { background: transparent; height: 100%; }
+
+.fa-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+  transition: grid-template-columns 220ms ease;
+}
+
+.fa-shell-sidebar {
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Hàng trên của sidebar: kéo cửa sổ được, chừa chỗ cho đèn giao thông (titleBarStyle Overlay). */
+.fa-shell-titlebar {
+  flex: none;
+  height: 38px;
+  padding-left: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.fa-shell-sidebar-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.fa-shell-sheet {
+  background: var(--sheet);
+  min-width: 0;
+  height: 100vh;
+  overflow: auto;
+  position: relative;
+}

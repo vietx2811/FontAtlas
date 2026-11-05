@@ -1,0 +1,37 @@
+[
+  {
+    "differ": [
+      "width"
+    ],
+    "distance": 0.20999999344348907,
+    "face": {
+      "faceIndex": 0,
+      "hashHex": "0505050505050505050505050505050505050505050505050505050505050505"
+    },
+    "row": {
+      "addedAt": 1700000000005,
+      "faceId": 5,
+      "faceIndex": 0,
+      "family": "Libre Baskerville",
+      "fileSize": 176005,
+      "fullName": "Libre Baskerville Regular",
+      "hashHex": "0505050505050505050505050505050505050505050505050505050505050505",
+      "isFavorite": false,
+      "isItalic": false,
+      "isVariable": false,
+      "licenseClass": "ofl",
+      "missing": false,
+      "path": "/Users/u/Fonts/LibreBaskerville-Regular.ttf",
+      "subfamily": "Regular",
+      "supportsVi": true,
+      "viMissing": 0,
+      "viStatus": "full",
+      "weightClass": 400,
+      "widthClass": 5
+    },
+    "same": [
+      "contrast"
+    ],
+    "source": "axes_and_image"
+  }
+]

@@ -12,12 +12,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 1.1,
       aperture: 0.65,
       capHeight: 720,
-      unitsPerEm: 2048
+      unitsPerEm: 2048,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "A highly legible sans-serif designed for computer screens with a tall x-height.",
     tags: ['Ui', 'Modern', 'Neutral'],
     fileSize: "245 KB",
-    dateAnalyzed: "2023-10-15"
+    dateAnalyzed: "2023-10-15",
+    isFavorite: false
   },
   {
     id: '2',
@@ -30,12 +35,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 4.5,
       aperture: 0.45,
       capHeight: 700,
-      unitsPerEm: 1000
+      unitsPerEm: 1000,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "A transitional design. From the time of enlightenment in the late 18th century.",
     tags: ['Editorial', 'High Contrast', 'Classic'],
     fileSize: "180 KB",
-    dateAnalyzed: "2023-10-12"
+    dateAnalyzed: "2023-10-12",
+    isFavorite: false
   },
   {
     id: '3',
@@ -48,12 +58,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 1.0,
       aperture: 0.60,
       capHeight: 710,
-      unitsPerEm: 2048
+      unitsPerEm: 2048,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "A monospaced addition to the Roboto type family. Optimized for reading code.",
     tags: ['Code', 'Technical', 'Google'],
     fileSize: "150 KB",
-    dateAnalyzed: "2023-09-28"
+    dateAnalyzed: "2023-09-28",
+    isFavorite: false
   },
   {
     id: '4',
@@ -66,12 +81,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 8.2,
       aperture: 0.30,
       capHeight: 680,
-      unitsPerEm: 1000
+      unitsPerEm: 1000,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "Inspired by the heavy titling posters of 19th century Britain and France.",
     tags: ['Bold', 'Poster', 'Heavy'],
     fileSize: "210 KB",
-    dateAnalyzed: "2023-11-01"
+    dateAnalyzed: "2023-11-01",
+    isFavorite: false
   },
   {
     id: '5',
@@ -84,12 +104,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 1.2,
       aperture: 0.55,
       capHeight: 700,
-      unitsPerEm: 2000
+      unitsPerEm: 2000,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "Semi-rounded details give Lato a feeling of warmth, while the strong structure provides stability.",
     tags: ['Humanist', 'Friendly', 'Web'],
     fileSize: "195 KB",
-    dateAnalyzed: "2023-10-20"
+    dateAnalyzed: "2023-10-20",
+    isFavorite: false
   },
   {
     id: '6',
@@ -102,12 +127,17 @@ export const MOCK_FONTS: FontData[] = [
       strokeContrast: 2.1,
       aperture: 0.50,
       capHeight: 730,
-      unitsPerEm: 2048
+      unitsPerEm: 2048,
+      curvature: 0,
+      terminalSharpness: 0,
+      stressAngle: 0,
+      counterDensity: 0
     },
     description: "Designed to be a text face that is pleasant to read on screens.",
     tags: ['Reading', 'Screen', 'Sturdy'],
     fileSize: "220 KB",
-    dateAnalyzed: "2023-10-22"
+    dateAnalyzed: "2023-10-22",
+    isFavorite: false
   },
 ];
 

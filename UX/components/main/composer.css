@@ -1,0 +1,16 @@
+.fa-composer {
+  position: absolute; z-index: 10; left: 50%; bottom: 16px; transform: translateX(-50%);
+  width: min(640px, calc(100% - 32px)); display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px 8px 14px; border-radius: 18px;
+  background: var(--composer, color-mix(in srgb, var(--card) 86%, transparent));
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(0,0,0,.12);
+}
+.fa-composer input[type=text] { flex: 1; min-width: 0; border: 0; background: none; color: var(--fg); font: inherit; font-size: 16px; outline: none; height: 34px; }
+.fa-size { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: var(--text-xs); }
+.fa-size .a1 { font-size: 10px; } .fa-size .a2 { font-size: 15px; }
+.fa-size input[type=range] { width: 88px; accent-color: var(--accent); }
+.fa-presets { display: flex; gap: 2px; }
+.fa-presets button { height: 34px; padding: 0 8px; border-radius: 10px; color: var(--muted); font-size: 13px; }
+.fa-presets button:hover { background: var(--surface-2); color: var(--fg); }
+@media (max-width: 1180px) { .fa-presets { display: none; } }

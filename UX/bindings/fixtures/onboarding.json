@@ -1,0 +1,24 @@
+{
+  "activationOnboarded": false,
+  "activationSupported": true,
+  "embedEnabled": true,
+  "fontManagers": [
+    {
+      "activeCount": null,
+      "installed": true,
+      "name": "RightFont"
+    }
+  ],
+  "hasSources": false,
+  "keepActiveOnExit": false,
+  "legacy": {
+    "error": null,
+    "found": false,
+    "imported": null,
+    "preview": null,
+    "resolved": null
+  },
+  "licenseNoticeAck": false,
+  "modelState": "missing",
+  "step": "o3"
+}

@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
-        '/api': {
+        // Sidecar cũ: bỏ qua module nguồn UX/api/*.ts(x) để Vite tự phục vụ.
+        '^/api/(?!.*\\.tsx?(\\?|$))': {
           target: 'http://localhost:8000',
           changeOrigin: true,
         }

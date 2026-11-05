@@ -1,0 +1,3 @@
+roboto_punct_only.ttf — subset của ../../../fontatlas-core/tests/fixtures/roboto.ttf (Roboto, giấy phép như fixture gốc).
+Lệnh: uvx --from fonttools==4.55.0 pyftsubset roboto.ttf --unicodes="U+0021-002F" --output-file=roboto_punct_only.ttf
+Dùng để kiểm worker: chuỗi mẫu thiếu ký tự → Skipped{no_glyphs}.

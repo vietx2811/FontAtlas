@@ -1,0 +1,6 @@
+.fa-zero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 56px 24px; text-align: center; color: var(--muted); }
+.fa-zero.compact { padding: 24px 12px; }
+.fa-zero p { margin: 0; font-size: 13px; line-height: 1.5; max-width: 360px; }
+.fa-zero button { height: 30px; padding: 0 14px; border-radius: 8px; background: var(--surface-2); color: var(--fg); font-size: 13px; }
+.fa-zero button:hover { background: var(--chrome-active); }
+.fa-zero-actions { display: flex; gap: 8px; }
