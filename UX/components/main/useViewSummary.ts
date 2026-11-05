@@ -17,15 +17,17 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
   const tag = useUiStore(s => s.tag);
   const query = useUiStore(s => s.query);
   const viOnly = useUiStore(s => s.viOnly);
+  const recentViews = useUiStore(s => s.recentViews);
+  const active = useUiStore(s => s.active);
   const [out, setOut] = useState<{ title: string; count: number | null }>({ title: FIXED[view] ?? '', count: null });
 
   useEffect(() => {
     let alive = true;
-    const q = toGridQuery({ view, tag, query, viOnly });
-    Promise.all([titleOf(api, view), q ? api.queryFaces({ ...q, limit: 1 }).then(p => p.total) : Promise.resolve(null)])
+    const q = toGridQuery({ view, tag, query, viOnly, recentViews, active });
+    Promise.all([titleOf(api, view), api.queryFaces({ ...q, limit: 1 }).then(p => p.total)])
       .then(([title, count]) => { if (alive) setOut({ title, count }); })
       .catch(() => { if (alive) setOut(o => ({ ...o, count: null })); });
     return () => { alive = false; };
-  }, [api, view, tag, query, viOnly]);
+  }, [api, view, tag, query, viOnly, recentViews, active]);
   return out;
 }

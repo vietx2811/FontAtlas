@@ -5,11 +5,16 @@ import { DEFAULT_UI_STATE } from '../api';
 import type { GridQuery } from '../features/library-grid/types';
 
 export const PERSIST_DEBOUNCE_MS = 400;
+export const RECENT_MAX = 200;
+export const RECENT_DEBOUNCE_MS = 1000;
+export const RECENT_KEY = 'ui.recent_views'; // 6a: ^ui\.[a-z0-9_.-]{1,60}$ (không chữ hoa)
+const FACE_KEYS_MAX = 2000;
 export const SAMPLE_MIN = 18;
 export const SAMPLE_MAX = 72;
 export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
 
 export type View = 'all' | 'star' | 'recent' | 'active' | `col:${string}` | `src:${string}`;
+export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';
 
@@ -29,6 +34,8 @@ export interface UiState {
   infoExpanded: boolean;
   /** hashHex của các face đang bật (activation_state); nạp bằng refreshActive. */
   active: ReadonlySet<string>;
+  /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
+  recentViews: readonly RecentView[];
 }
 
 export interface UiActions {
@@ -56,11 +63,16 @@ export const parseFaceKey = (id: string): FaceKeyDto => {
   return { hashHex: id.slice(0, i), faceIndex: Number(id.slice(i + 1)) };
 };
 
-/** null = backend chưa lọc được view này (recent/active) → UI hiện trạng thái chờ, không hiện lưới sai. */
-export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'>): GridQuery | null {
+/** Gần đây/Đang bật đi qua `faceKeys` (6a b2cc0fd); danh sách rỗng là kết quả rỗng, không phải "không lọc". */
+export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'>): GridQuery {
   const q: GridQuery = {};
-  if (s.view === 'recent' || s.view === 'active') return null;
-  if (s.view === 'star') q.favoritesOnly = true;
+  if (s.view === 'recent') {
+    q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
+    q.sort = 'match';
+  } else if (s.view === 'active') {
+    q.faceKeys = [...s.active].slice(0, FACE_KEYS_MAX).map(h => ({ hashHex: h, faceIndex: 0 }));
+    q.sort = 'match';
+  } else if (s.view === 'star') q.favoritesOnly = true;
   else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
   else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
   if (s.tag !== null) q.tagIds = [Number(s.tag)];
@@ -93,7 +105,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Set<string>(), ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Set<string>(), recentViews: [], ...initial,
 
     setView: v => set({ view: v, tag: null }),
     setTag: t => set({ tag: t }),
@@ -102,7 +114,12 @@ export function createUiStore(): UiStore {
     setLayout: l => set({ layout: l }),
     setSample: s => set({ sample: s }),
     setSampleSize: n => set({ sampleSize: Math.min(SAMPLE_MAX, Math.max(SAMPLE_MIN, Math.round(n))) }),
-    select: id => set(s => (s.selectedId === id ? s : { selectedId: id, style: null })),
+    select: id => set(s => {
+      if (s.selectedId === id) return s;
+      if (id === null) return { selectedId: null, style: null };
+      const recentViews = [{ face: id, at: Date.now() }, ...s.recentViews.filter(r => r.face !== id)].slice(0, RECENT_MAX);
+      return { selectedId: id, style: null, recentViews };
+    }),
     setStyle: s => set({ style: s }),
     setPanelTab: t => set({ panelTab: t }),
     toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -117,9 +134,25 @@ export function createUiStore(): UiStore {
     async hydrate(api) {
       stop?.();
       set(fromDto(await api.getUiState()));
+      try {
+        const parsed = JSON.parse((await api.getSetting(RECENT_KEY)) ?? '[]');
+        set({ recentViews: Array.isArray(parsed) ? parsed.filter((r: RecentView) => typeof r?.face === 'string' && typeof r?.at === 'number').slice(0, RECENT_MAX) : [] });
+      } catch { set({ recentViews: [] }); }
+      let recentWritten = JSON.stringify(get().recentViews);
+      let recentTimer: ReturnType<typeof setTimeout> | undefined;
       let written = JSON.stringify(toDto(get()));
       let timer: ReturnType<typeof setTimeout> | undefined;
       const unsub = store.subscribe(() => {
+        const rjson = JSON.stringify(get().recentViews);
+        if (rjson !== recentWritten) {
+          clearTimeout(recentTimer);
+          recentTimer = setTimeout(() => {
+            const now = JSON.stringify(get().recentViews);
+            if (now === recentWritten) return;
+            recentWritten = now;
+            api.setSetting(RECENT_KEY, now).catch(e => console.warn('set_setting failed', e));
+          }, RECENT_DEBOUNCE_MS);
+        }
         clearTimeout(timer);
         timer = setTimeout(() => {
           const dto = toDto(get());
@@ -129,7 +162,7 @@ export function createUiStore(): UiStore {
           api.setUiState(dto).catch(e => console.warn('set_ui_state failed', e));
         }, PERSIST_DEBOUNCE_MS);
       });
-      stop = () => { unsub(); clearTimeout(timer); };
+      stop = () => { unsub(); clearTimeout(timer); clearTimeout(recentTimer); };
     },
   }));
   return store;

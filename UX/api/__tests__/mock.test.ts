@@ -41,7 +41,7 @@ describe('mock api', () => {
     const err = await api.addSource(`${s1.path}/sub`).catch(e => e);
     expect(err).toBeInstanceOf(CmdError);
     expect(err.code).toBe('nested_source');
-    expect(err.detail).toEqual({ existingId: s1.id });
+    expect(err.detail).toEqual({ existingId: s1.id, existingPath: s1.path });
   });
 
   it('adds a source and lists it; removes it again', async () => {
@@ -80,5 +80,36 @@ describe('mock api', () => {
     expect(d.file.numGlyphs).toBeGreaterThan(0);
     const err = await api.getFace({ hashHex: 'ff', faceIndex: 0 }, 'vi').catch(e => e);
     expect(err.code).toBe('not_found');
+  });
+
+  it('faceKeys restricts to those faces, in the given order with sort=match (Gần đây / Đang bật)', async () => {
+    const api = createMockApi();
+    const all = (await api.queryFaces({})).items;
+    const keys = [all[5], all[1], all[9]].map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex }));
+    const page = await api.queryFaces({ faceKeys: keys, sort: 'match' });
+    expect(page.items.map(r => r.faceId)).toEqual([all[5].faceId, all[1].faceId, all[9].faceId]);
+    expect(page.total).toBe(3);
+    expect((await api.queryFaces({ faceKeys: [] })).total).toBe(0);
+    const err = await api.queryFaces({ faceKeys: Array.from({ length: 2001 }, () => keys[0]) }).catch(e => e);
+    expect(err.code).toBe('invalid_arg');
+  });
+
+  it('get/set_setting accept only ui.* keys up to 64 KB', async () => {
+    const api = createMockApi();
+    expect(await api.getSetting('ui.recent_views')).toBeNull();
+    await api.setSetting('ui.recent_views', '[]');
+    expect(await api.getSetting('ui.recent_views')).toBe('[]');
+    expect((await api.setSetting('embed_enabled', '1').catch(e => e)).code).toBe('invalid_arg');
+    expect((await api.setSetting('ui.' + 'x'.repeat(61), '1').catch(e => e)).code).toBe('invalid_arg');
+    expect((await api.setSetting('ui.big', 'x'.repeat(65_537)).catch(e => e)).code).toBe('invalid_arg');
+    await api.setSetting('ui.max', 'x'.repeat(65_536));
+  });
+
+  it('previews use visibly different fonts per family (system fonts, so the dev grid is not one fallback)', async () => {
+    const api = createMockApi();
+    const items = (await api.queryFaces({})).items;
+    const fam = (i: number) => decodeURIComponent(api.previewUrl(items[i], { text: 'x', px: 48, generation: 0, rendererVersion: 'm' })).match(/font-family="([^"]+)"/)![1];
+    const distinct = new Set(items.map((_, i) => fam(i)));
+    expect(distinct.size).toBeGreaterThanOrEqual(8);
   });
 });

@@ -32,7 +32,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
     try { await (isActive ? api.activationDeactivate([face]) : api.activationActivate([face])); await refreshActive(api); }
     catch (e) { console.warn('activation failed', e); }
   };
-  const fmt = detail ? [detail.summary, `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
+  const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
 
   return (
     <aside className="fa-panel" aria-label="Chi tiết font">

@@ -4,8 +4,10 @@ export type FaceQuery = {
   text?: string; vi?: 'full' | 'supported'; license?: string[];
   variable?: boolean; italic?: boolean; sourceIds?: number[];
   favoritesOnly?: boolean; collectionId?: number; tagIds?: number[];
-  includeMissing?: boolean; sort?: 'family' | 'weight' | 'added';
+  includeMissing?: boolean; sort?: 'family' | 'weight' | 'added' | 'match';
   descending?: boolean; offset?: number; limit?: number;
+  /** 6a (b2cc0fd): chỉ các face này, ≤ 2000; sort='match' giữ thứ tự đưa vào. Dùng cho "Gần đây"/"Đang bật". */
+  faceKeys?: Array<{ hashHex: string; faceIndex: number }>;
 };
 
 export type FaceRow = {

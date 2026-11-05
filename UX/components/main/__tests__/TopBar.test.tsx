@@ -67,6 +67,11 @@ describe('TopBar', () => {
   beforeEach(() => useUiStore.setState(initial, true));
   const settle = async () => { for (let i = 0; i < 4; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 
+  it('search is for fonts only: short placeholder', () => {
+    render(<SearchField />);
+    expect(screen.getByPlaceholderText('Tìm font')).toBeTruthy();
+  });
+
   it('vi-toggle and layout segmented control write to the store', async () => {
     render(<TopBar api={createMockApi()} />);
     await settle();
@@ -93,6 +98,6 @@ describe('TopBar', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Dự án khách');
     act(() => useUiStore.getState().setView('active')); await settle();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Đang bật');
-    expect(screen.queryByTestId('view-count')).toBeNull(); // chưa lọc được → không hiện số giả
+    expect(screen.getByTestId('view-count').textContent).toBe('0'); // chưa có font nào đang bật
   });
 });

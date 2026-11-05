@@ -31,16 +31,19 @@ describe('Library', () => {
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'roboto', vi: 'full' }));
   });
 
-  it('shows a pending state, not a grid, for views the backend cannot filter yet', async () => {
+  it('Gần đây queries the viewed faces by key; Đang bật queries the activated ones', async () => {
     const api = createMockApi();
+    const [a, b] = (await api.queryFaces({ limit: 2 })).items;
+    await api.activationActivate([{ hashHex: b.hashHex, faceIndex: 0 }]);
     const spy = vi.spyOn(api, 'queryFaces');
     render(<Library api={api} width={1200} height={700} />);
     await settle();
-    spy.mockClear();
-    act(() => useUiStore.getState().setView('recent')); await settle();
-    expect(screen.getByTestId('library-pending')).toBeTruthy();
-    expect(screen.queryByRole('grid')).toBeNull();
-    expect(spy).not.toHaveBeenCalled();
+    act(() => { useUiStore.getState().select(`${a.hashHex}:0`); useUiStore.getState().setView('recent'); }); await settle();
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ faceKeys: [{ hashHex: a.hashHex, faceIndex: 0 }], sort: 'match' }));
+    expect(screen.getAllByRole('gridcell')).toHaveLength(1);
+    act(() => useUiStore.getState().setView('active')); await settle();
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ faceKeys: [{ hashHex: b.hashHex, faceIndex: 0 }] }));
+    expect(screen.getAllByRole('gridcell')).toHaveLength(1);
   });
 
   it('selecting a cell writes the face key into the store', async () => {
@@ -88,5 +91,18 @@ describe('Library', () => {
     act(() => useUiStore.getState().select(`${row.hashHex}:${row.faceIndex}`));
     expect(cell.getAttribute('aria-selected')).toBe('true');
     expect(screen.getAllByRole('gridcell')[0].getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('un-starring in the Yêu thích view drops the card right away', async () => {
+    const api = createMockApi();
+    const [a, b] = (await api.queryFaces({ limit: 2 })).items;
+    await api.setFavorite({ hashHex: a.hashHex, faceIndex: 0 }, true);
+    await api.setFavorite({ hashHex: b.hashHex, faceIndex: 0 }, true);
+    render(<Library api={api} width={1200} height={700} />);
+    act(() => useUiStore.getState().setView('star')); await settle();
+    expect(screen.getAllByRole('gridcell')).toHaveLength(2);
+    await act(async () => { screen.getAllByRole('button', { name: 'Yêu thích' })[0].click(); });
+    await settle();
+    expect(screen.getAllByRole('gridcell')).toHaveLength(1);
   });
 });

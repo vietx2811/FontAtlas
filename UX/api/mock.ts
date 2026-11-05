@@ -37,15 +37,22 @@ export function mockRows(): FaceRow[] {
   return rows;
 }
 
+// Họ font hệ thống macOS cho mock: để lưới dev thấy từng họ khác nhau thay vì một font dự phòng.
+const SYSTEM_FONTS: Record<string, string> = {
+  'Public Sans': 'Helvetica Neue', 'Roboto': 'Arial', 'Inter': 'Avenir Next', 'Be Vietnam Pro': 'Gill Sans',
+  'Playfair Display': 'Didot', 'Source Serif 4': 'Georgia', 'Fraunces': 'Baskerville', 'DM Serif Display': 'Bodoni 72',
+  'Bebas Neue': 'Impact', 'Pacifico': 'Snell Roundhand', 'Lobster': 'Chalkduster', 'Oswald': 'Futura',
+  'IBM Plex Mono': 'Courier New', 'JetBrains Mono': 'Menlo', 'Cormorant': 'Palatino', 'Abril Fatface': 'Copperplate',
+};
 const fold = (s: string) => s.normalize('NFD').replace(/\p{Mn}/gu, '').replace(/đ/gi, 'd').toLowerCase();
 const keyOf = (k: FaceKeyDto) => `${k.hashHex}:${k.faceIndex}`;
 const ok = <T,>(v: T): Promise<T> => Promise.resolve(structuredClone(v));
 
 /** Ảnh preview giả: SVG chữ đen trên nền trong suốt (dùng làm mask như PNG alpha thật). */
-function svgPreview(text: string, px: PxBucket, family: string): string {
+function svgPreview(text: string, px: PxBucket, family: string, weight: number, italic: boolean): string {
   const { width, height } = cssSize(px);
   const esc = (s: string) => s.replace(/[<>&"']/g, c => `&#${c.charCodeAt(0)};`);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><text x="4" y="${height * 0.68}" font-size="${px / 2}" font-family="${esc(family)}, sans-serif" fill="#000">${esc(text)}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><text x="4" y="${height * 0.68}" font-size="${px / 2}" font-family="${esc(SYSTEM_FONTS[family] ?? family)}, sans-serif" font-weight="${weight}" font-style="${italic ? 'italic' : 'normal'}" fill="#000">${esc(text)}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -68,6 +75,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const active = new Set<string>();
   let nextId = 10;
   let ui: UiStateDto = { ...DEFAULT_UI_STATE };
+  const uiSettings = new Map<string, string>();
   const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: true, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
 
   const lib = createMockLibraryApi(rows, { latencyMs: o.latencyMs });
@@ -79,26 +87,33 @@ export function createMockApi(o: MockOptions = {}): Api {
     async queryFaces(q) {
       await delay();
       const t = q.text ? fold(q.text) : '';
+      if (q.faceKeys && q.faceKeys.length > 2000) throw new CmdError('invalid_arg', 'faceKeys: at most 2000');
+      const wanted = q.faceKeys ? new Map(q.faceKeys.map((k, i) => [keyOf(k), i])) : null;
       const col = q.collectionId != null ? collections.get(q.collectionId) : null;
       let hits = rows.filter(r =>
+        (!wanted || wanted.has(keyOf(r))) &&
         (!t || fold(r.family).includes(t) || fold(r.fullName ?? '').includes(t)) &&
         (!q.sourceIds?.length || q.sourceIds.includes(sourceOf(r))) &&
         (!q.favoritesOnly || r.isFavorite) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
-      hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
+      if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
+      else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
       const offset = q.offset ?? 0;
       const limit = Math.min(q.limit || 100, 1000);
       return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r })) };
     },
-    previewUrl: (row, { text, px }) => svgPreview(text, px, familyOf.get(row.hashHex) ?? ''),
+    previewUrl: (row, { text, px }) => {
+      const r = byKey.get(keyOf(row));
+      return svgPreview(text, px, familyOf.get(row.hashHex) ?? '', r?.weightClass ?? 400, !!r?.isItalic);
+    },
     fontUrl: () => null,
 
     listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
-      if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id });
+      if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
       const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false };
       sources = [...sources, s];
       return ok(s);
@@ -129,7 +144,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
-        row, summary: 'Sans', source: 'axes', hasImage: false,
+        row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
           license: 'SIL Open Font License 1.1', licenseUrl: 'https://openfontlicense.org', designer: 'Studio Mock', manufacturer: 'Mock Foundry',
@@ -140,6 +155,12 @@ export function createMockApi(o: MockOptions = {}): Api {
       });
     },
     getSettings: () => ok(settings),
+    async getSetting(key) { return uiSettings.get(key) ?? null; },
+    async setSetting(key, value) {
+      if (!/^ui\.[a-z0-9_.-]{1,60}$/.test(key)) throw new CmdError('invalid_arg', 'only ui.* keys');
+      if (new TextEncoder().encode(value).length > 65_536) throw new CmdError('invalid_arg', 'value over 64 KB');
+      uiSettings.set(key, value);
+    },
     activationState: () => ok([...active].map<ActivationStateDto>(k => ({ hashHex: k.split(':')[0], state: 'active', scope: 'user', status: 'ok', reasons: ['manual'], activePath: null, conflictPs: null, lastError: null }))),
     async activationActivate(faces) { faces.forEach(f => active.add(keyOf(f))); },
     async activationDeactivate(faces) { faces.forEach(f => active.delete(keyOf(f))); },

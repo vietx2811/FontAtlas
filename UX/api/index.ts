@@ -34,6 +34,9 @@ export interface Api extends LibraryApi {
   // Phân tích
   getFace(face: FaceKeyDto, lang: 'vi' | 'en'): Promise<FaceDetailDto>;
   // Cài đặt
+  /** Chỉ khoá `ui.*` (≤ 60 ký tự sau tiền tố), giá trị ≤ 64 KB; sai → CmdError('invalid_arg'). */
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
   getSettings(): Promise<SettingsDto>;
   // Kích hoạt (hợp đồng Plan 7)
   activationState(): Promise<ActivationStateDto[]>;

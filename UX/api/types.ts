@@ -37,7 +37,9 @@ export const DEFAULT_UI_STATE: UiStateDto = {
 };
 
 export type FaceDetailDto = {
-  row: FaceRow; summary: string; source: 'axes' | 'axes_and_image'; hasImage: boolean;
+  row: FaceRow; summary: string;
+  /** [6a: thêm] Phân loại hiển thị ở dòng dưới tên (Sans, Serif, Mono…). */
+  classification: string | null; source: 'axes' | 'axes_and_image'; hasImage: boolean;
   file: { format: string; container: string | null; outline: 'glyf' | 'cff' | 'cff2' | 'none'; numGlyphs: number; sizeBytes: number; path: string | null };
   metadata: {
     license: string | null; licenseUrl: string | null; designer: string | null; manufacturer: string | null;

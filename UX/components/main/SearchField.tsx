@@ -38,7 +38,7 @@ export function SearchField(): React.JSX.Element {
   return (
     <label className="fa-search" data-has={text !== ''} title="Tìm (⌘K)">
       <Icon name="search" size={16} />
-      <input ref={input} value={text} placeholder="Tìm font, dự án, thẻ" autoComplete="off" aria-label="Tìm font"
+      <input ref={input} value={text} placeholder="Tìm font" autoComplete="off" aria-label="Tìm font"
         onChange={e => onChange(e.target.value)} onKeyDown={e => { if (e.key === 'Escape' && text !== '') { e.preventDefault(); commit(''); } }} />
       {text !== ''
         ? <button type="button" className="fa-clear" aria-label="Xoá tìm kiếm" onClick={() => { commit(''); input.current?.focus(); }}><Icon name="x" size={13} /></button>
