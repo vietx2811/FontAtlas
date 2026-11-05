@@ -241,7 +241,11 @@ fn similar_with_zero_image_weight_is_axes() {
         .collect();
     let ix = index_of(ps);
     let q = key_of("F0", "Regular");
-    let mut o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 3 };
+    let mut o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: Some(0.0),
+        k: 3,
+    };
     let hits = ix.similar_with(&q, &o, &|_| true).unwrap();
     assert!(!hits.is_empty() && hits.iter().all(|h| h.source == SimilarSource::Axes));
     o.embed_weight = None;
@@ -257,7 +261,13 @@ fn image_only_index() -> (fontatlas_index::Index, Vec<fontatlas_index::FaceProfi
         p.embedding = seed.map(|s| lcg_unit(32, s));
         p
     };
-    let ps = vec![mk("Q", Some(1)), mk("A", Some(1)), mk("B", Some(2)), mk("C", Some(3)), mk("E", None)];
+    let ps = vec![
+        mk("Q", Some(1)),
+        mk("A", Some(1)),
+        mk("B", Some(2)),
+        mk("C", Some(3)),
+        mk("E", None),
+    ];
     (index_of(ps.clone()), ps)
 }
 
@@ -271,7 +281,10 @@ fn image_only_for_non_comparable_query() {
     ));
     let hits = ix.similar_image_only(&q, 5, &|_| true).unwrap();
     assert_eq!(hits.len(), 3);
-    assert!(hits.iter().all(|h| h.source == SimilarSource::Image && h.same.is_empty() && h.differ.is_empty()));
+    assert!(
+        hits.iter()
+            .all(|h| h.source == SimilarSource::Image && h.same.is_empty() && h.differ.is_empty())
+    );
     assert!(hits.windows(2).all(|w| w[0].distance <= w[1].distance));
     assert_eq!(hits[0].key, key_of("A", "Regular")); // cùng vector với Q → cos 1
     assert!(hits[0].distance.abs() < 1e-3, "{}", hits[0].distance);
@@ -289,8 +302,13 @@ fn image_only_without_embedding_is_not_comparable() {
 #[test]
 fn image_only_excludes_self_and_faces_without_image() {
     let (ix, _) = image_only_index();
-    let hits = ix.similar_image_only(&key_of("Q", "Regular"), 10, &|_| true).unwrap();
-    assert!(hits.iter().all(|h| h.key != key_of("Q", "Regular") && h.key != key_of("E", "Regular")));
+    let hits = ix
+        .similar_image_only(&key_of("Q", "Regular"), 10, &|_| true)
+        .unwrap();
+    assert!(
+        hits.iter()
+            .all(|h| h.key != key_of("Q", "Regular") && h.key != key_of("E", "Regular"))
+    );
     let only_b = ix
         .similar_image_only(&key_of("Q", "Regular"), 10, &|p| p.family == "B")
         .unwrap();
@@ -304,7 +322,10 @@ fn fam_style(family: &str, style: &str, stem: f32, contrast: f32) -> fontatlas_i
 }
 
 fn grouped_index() -> fontatlas_index::Index {
-    let mut ps = vec![fam_style("Query", "Regular", 0.15, 1.2), fam_style("Query", "Bold", 0.26, 1.2)];
+    let mut ps = vec![
+        fam_style("Query", "Regular", 0.15, 1.2),
+        fam_style("Query", "Bold", 0.26, 1.2),
+    ];
     // A gần nhất (3 kiểu), B xa hơn (2 kiểu), C xa nhất (1 kiểu)
     for (i, st) in ["Light", "Regular", "Bold"].iter().enumerate() {
         ps.push(fam_style("A", st, 0.15 + i as f32 * 0.02, 1.25));
@@ -320,15 +341,25 @@ fn grouped_index() -> fontatlas_index::Index {
 fn similar_families_group_exclude_own_and_count() {
     let ix = grouped_index();
     let q = key_of("Query", "Regular");
-    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
+    let o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: Some(0.0),
+        k: 0,
+    };
     let g = ix.similar_families(&q, &o, &|_| true, 0, 10).unwrap();
     let fams: Vec<&str> = g.iter().map(|x| x.family.as_str()).collect();
-    assert_eq!(fams, ["A", "B", "C"], "mỗi họ một mục, không có họ của font đang chọn");
+    assert_eq!(
+        fams,
+        ["A", "B", "C"],
+        "mỗi họ một mục, không có họ của font đang chọn"
+    );
     assert_eq!(g.iter().map(|x| x.count).collect::<Vec<_>>(), [3, 2, 1]);
     assert_eq!(g[0].faces.len(), 3);
     // đại diện = face gần nhất của họ
     let rep_dist = g[0].representative.distance;
-    let all = ix.similar(&q, &GroupWeights::default(), 20, &|p| p.family == "A").unwrap();
+    let all = ix
+        .similar(&q, &GroupWeights::default(), 20, &|p| p.family == "A")
+        .unwrap();
     assert!((all[0].distance - rep_dist).abs() < 1e-6);
     assert_eq!(all[0].key, g[0].representative.key);
 }
@@ -337,20 +368,99 @@ fn similar_families_group_exclude_own_and_count() {
 fn similar_families_page_by_family_not_by_face() {
     let ix = grouped_index();
     let q = key_of("Query", "Regular");
-    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
+    let o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: Some(0.0),
+        k: 0,
+    };
     let p1 = ix.similar_families(&q, &o, &|_| true, 0, 2).unwrap();
     let p2 = ix.similar_families(&q, &o, &|_| true, 2, 2).unwrap();
-    assert_eq!(p1.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(), ["A", "B"]);
-    assert_eq!(p2.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(), ["C"]);
-    assert!(ix.similar_families(&q, &o, &|_| true, 9, 2).unwrap().is_empty());
+    assert_eq!(
+        p1.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(),
+        ["A", "B"]
+    );
+    assert_eq!(
+        p2.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(),
+        ["C"]
+    );
+    assert!(
+        ix.similar_families(&q, &o, &|_| true, 9, 2)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
 fn similar_families_filter_limits_member_list() {
     let ix = grouped_index();
     let q = key_of("Query", "Regular");
-    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
-    let g = ix.similar_families(&q, &o, &|p| p.style != "Bold", 0, 10).unwrap();
+    let o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: Some(0.0),
+        k: 0,
+    };
+    let g = ix
+        .similar_families(&q, &o, &|p| p.style != "Bold", 0, 10)
+        .unwrap();
     assert_eq!(g[0].family, "A");
     assert_eq!(g[0].count, 2);
+}
+
+#[test]
+fn similar_family_large_family_cannot_starve_other_families() {
+    let mut ps = vec![fam_style("Query", "Regular", 0.15, 1.2)];
+    for i in 0..3200 {
+        ps.push(fam_style("Large", &format!("Style{i}"), 0.15, 1.25));
+    }
+    for i in 0..5 {
+        ps.push(fam_style(
+            &format!("Other{i}"),
+            "Regular",
+            0.15,
+            2.0 + i as f32,
+        ));
+    }
+    let ix = index_of(ps);
+    let o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: Some(0.0),
+        k: 0,
+    };
+    let q = key_of("Query", "Regular");
+    let all = ix.similar_families(&q, &o, &|_| true, 0, 20).unwrap();
+    assert_eq!(all.len(), 6);
+    let mut paged = Vec::new();
+    for off in (0..6).step_by(2) {
+        paged.extend(ix.similar_families(&q, &o, &|_| true, off, 2).unwrap());
+    }
+    assert_eq!(all, paged);
+    assert!(all[0].faces.windows(2).all(|p| p[0] < p[1]));
+    assert_eq!(
+        ix.similar_families(&q, &o, &|_| true, usize::MAX, 2)
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[test]
+fn similar_families_image_only_and_disabled_image() {
+    let (ix, _) = image_only_index();
+    let mut o = SimilarOptions {
+        weights: GroupWeights::default(),
+        embed_weight: None,
+        k: 0,
+    };
+    let q = key_of("Q", "Regular");
+    let g = ix.similar_families(&q, &o, &|_| true, 0, 20).unwrap();
+    assert_eq!(g.len(), 3);
+    assert!(
+        g.iter()
+            .all(|x| x.representative.source == SimilarSource::Image && x.family != "Q")
+    );
+    o.embed_weight = Some(0.0);
+    assert!(matches!(
+        ix.similar_families(&q, &o, &|_| true, 0, 20),
+        Err(IndexError::NotComparable(_))
+    ));
 }

@@ -11,14 +11,18 @@ use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop
 use tauri::webview::InvokeRequest;
 
 fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-core/tests/fixtures").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("crates/fontatlas-core/tests/fixtures")
+        .join(name)
 }
 
 fn ipc(app: &tauri::App<tauri::test::MockRuntime>, cmd: &str, body: Value) -> Result<Value, Value> {
     use tauri::Manager;
-    let w = app
-        .get_webview_window("main")
-        .unwrap_or_else(|| tauri::WebviewWindowBuilder::new(app, "main", Default::default()).build().unwrap());
+    let w = app.get_webview_window("main").unwrap_or_else(|| {
+        tauri::WebviewWindowBuilder::new(app, "main", Default::default())
+            .build()
+            .unwrap()
+    });
     let req = InvokeRequest {
         cmd: cmd.into(),
         callback: tauri::ipc::CallbackFn(0),
@@ -32,13 +36,20 @@ fn ipc(app: &tauri::App<tauri::test::MockRuntime>, cmd: &str, body: Value) -> Re
 }
 
 fn app_with(state: Arc<AppState>) -> tauri::App<tauri::test::MockRuntime> {
-    mock_builder().manage(state).invoke_handler(app_lib::app_handler!()).build(mock_context(noop_assets())).unwrap()
+    mock_builder()
+        .manage(state)
+        .invoke_handler(app_lib::app_handler!())
+        .build(mock_context(noop_assets()))
+        .unwrap()
 }
 
 #[test]
 fn ipc_query_faces_uses_camel_case_args() {
     let d = tempfile::tempdir().unwrap();
-    let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(NoActivation));
+    let st = AppState::new(
+        AppDirs::under(&d.path().join("data")),
+        Box::new(NoActivation),
+    );
     boot::run_boot(&st);
     let dir = d.path().join("Fonts");
     std::fs::create_dir_all(&dir).unwrap();
@@ -61,7 +72,10 @@ fn ipc_query_faces_uses_camel_case_args() {
 #[test]
 fn ipc_errors_are_cmd_error_shaped() {
     let d = tempfile::tempdir().unwrap();
-    let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(NoActivation)); // chưa boot → chưa có Store
+    let st = AppState::new(
+        AppDirs::under(&d.path().join("data")),
+        Box::new(NoActivation),
+    ); // chưa boot → chưa có Store
     let app = app_with(st);
     let e = ipc(&app, "list_collections", json!({})).unwrap_err();
     assert_eq!(e["code"], "store_unavailable");
@@ -70,4 +84,54 @@ fn ipc_errors_are_cmd_error_shaped() {
     assert_eq!(e["code"], "store_unavailable");
     let e = ipc(&app, "get_setting", json!({ "key": "khong_ui" })).unwrap_err();
     assert_eq!(e["code"], "invalid_arg");
+}
+
+#[test]
+fn ipc_similar_families_and_axis_stats_round_trip() {
+    let d = tempfile::tempdir().unwrap();
+    let st = AppState::new(
+        AppDirs::under(&d.path().join("data")),
+        Box::new(NoActivation),
+    );
+    boot::run_boot(&st);
+    let dir = d.path().join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    for f in ["roboto.ttf", "open_sans.ttf", "playfair_display.ttf"] {
+        std::fs::copy(fixture(f), dir.join(f)).unwrap();
+    }
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    app_lib::index_bundle::rebuild_index(&st).unwrap();
+    let app = app_with(st);
+    let page = ipc(&app, "query_faces", json!({"q": {"text":"Roboto"}})).unwrap();
+    let row = &page["items"][0];
+    let face = json!({"hashHex":row["hashHex"],"faceIndex":row["faceIndex"]});
+    let families = ipc(
+        &app,
+        "similar_families",
+        json!({"face":face,"opts":{},"q":{"offset":0,"limit":1}}),
+    )
+    .unwrap();
+    assert_eq!(families["items"].as_array().unwrap().len(), 1);
+    assert!(families["total"].as_u64().unwrap() >= 2);
+    assert_ne!(families["items"][0]["family"], "Roboto");
+    let stats = ipc(&app, "axis_stats", json!({"q":{}})).unwrap();
+    assert_eq!(stats.as_array().unwrap().len(), 16);
+    assert_eq!(stats[0]["unit"], "em");
+    let invalid = ipc(
+        &app,
+        "similar_families",
+        json!({"face":face,"opts":{},"q":{"rawAxisRanges":[{"axis":"fake","range":[0,1]}]}}),
+    )
+    .unwrap_err();
+    assert_eq!(invalid["code"], "invalid_arg");
+    let detail = ipc(&app, "get_face", json!({"face":face,"lang":"vi"})).unwrap();
+    let sf = detail["axes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["key"] == "serif_foot")
+        .unwrap();
+    assert!(sf["rawValue"].is_number());
+    assert_eq!(sf["unit"], "ratio");
 }

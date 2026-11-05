@@ -138,13 +138,17 @@ pub struct FaceKeyDto {
 impl TryFrom<&FaceKeyDto> for FaceKey {
     type Error = CmdError;
     fn try_from(k: &FaceKeyDto) -> Result<Self, CmdError> {
-        FaceKey::from_hex(&k.hash_hex, k.face_index).map_err(|e| CmdError::invalid_arg(e.to_string()))
+        FaceKey::from_hex(&k.hash_hex, k.face_index)
+            .map_err(|e| CmdError::invalid_arg(e.to_string()))
     }
 }
 
 impl From<&FaceKey> for FaceKeyDto {
     fn from(k: &FaceKey) -> Self {
-        FaceKeyDto { hash_hex: k.hash_hex(), face_index: k.face_index }
+        FaceKeyDto {
+            hash_hex: k.hash_hex(),
+            face_index: k.face_index,
+        }
     }
 }
 
@@ -219,7 +223,11 @@ pub struct FacePageDto {
 
 impl From<FacePage> for FacePageDto {
     fn from(p: FacePage) -> Self {
-        FacePageDto { total: p.total, offset: p.offset, items: p.items.into_iter().map(Into::into).collect() }
+        FacePageDto {
+            total: p.total,
+            offset: p.offset,
+            items: p.items.into_iter().map(Into::into).collect(),
+        }
     }
 }
 
@@ -272,6 +280,15 @@ pub struct AxisFilterDto {
     pub weight: f32,
 }
 
+/// Khoảng đóng theo số đo vật lý gốc (không phải phân vị).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RawAxisRangeDto {
+    pub axis: String,
+    pub range: [f32; 2],
+}
+
 /// Mọi trường `FaceQuery` của store + lọc theo trục + `faceKeys` ("Gần đây", "Đang bật").
 #[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase", default)]
@@ -295,6 +312,7 @@ pub struct FaceQueryDto {
     pub offset: u32,
     pub limit: u32,
     pub axis_filters: Vec<AxisFilterDto>,
+    pub raw_axis_ranges: Vec<RawAxisRangeDto>,
     /// Ràng buộc cứng từ `describe` ("vi_supported" | "vi_complete"): loại face không đạt.
     pub hard: Vec<String>,
     /// Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
@@ -314,7 +332,12 @@ pub struct CollectionDto {
 
 impl From<Collection> for CollectionDto {
     fn from(c: Collection) -> Self {
-        CollectionDto { id: c.id, name: c.name, color: c.color, item_count: c.item_count }
+        CollectionDto {
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            item_count: c.item_count,
+        }
     }
 }
 
@@ -330,7 +353,11 @@ pub struct TagDto {
 
 impl From<Tag> for TagDto {
     fn from(t: Tag) -> Self {
-        TagDto { id: t.id, name: t.name, face_count: t.face_count }
+        TagDto {
+            id: t.id,
+            name: t.name,
+            face_count: t.face_count,
+        }
     }
 }
 
