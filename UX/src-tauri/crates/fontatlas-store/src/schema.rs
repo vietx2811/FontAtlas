@@ -201,6 +201,22 @@ CREATE TABLE settings (
 /// v2 (Plan 7): activation_state có trạng thái thật + bảng lý do kích hoạt.
 /// Đổi tên bảng để giữ dữ liệu cũ, vì SQLite không sửa được `CHECK`.
 pub(crate) const USER_V2: &str = r#"
+-- collections: dựng lại với AUTOINCREMENT để id đã xoá không bao giờ được dùng lại (lý do kích hoạt
+-- `collection:<id>` không thể thừa hưởng nhầm). `migrate` tắt foreign_keys quanh bước này để
+-- DROP TABLE không cascade xoá collection_items.
+CREATE TABLE collections_v2 (
+  collection_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  legacy_id     TEXT UNIQUE,
+  name          TEXT NOT NULL,
+  color         TEXT,
+  position      INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+INSERT INTO collections_v2 (collection_id, legacy_id, name, color, position, created_at, updated_at)
+  SELECT collection_id, legacy_id, name, color, position, created_at, updated_at FROM collections;
+DROP TABLE collections;
+ALTER TABLE collections_v2 RENAME TO collections;
 CREATE TABLE activation_state_v2 (
   hash           BLOB PRIMARY KEY CHECK (length(hash) = 32),
   state          TEXT NOT NULL CHECK (state IN ('active','inactive')),
@@ -237,9 +253,9 @@ INSERT INTO activation_reasons (hash, reason, added_at)
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
 pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2];
 
-/// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
-#[doc(hidden)]
-pub fn create_user_v1_for_test(path: &Path) {
+/// Chỉ cho unit test của crate: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
+#[cfg(test)]
+pub(crate) fn create_user_v1_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user v1");
     c.execute_batch(USER_V1).expect("USER_V1");
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
@@ -272,9 +288,22 @@ pub(crate) fn migrate(
             std::fs::create_dir_all(dir)?;
             let p = dir.join(format!("{db}.v{cur}.{}.db", now_ms()));
             conn.execute("VACUUM INTO ?1", [p.to_string_lossy()])?;
+            let _ = prune_backups(dir, db, BACKUPS_KEPT);
             Some(p)
         }
         _ => None,
+    };
+    // Dựng lại bảng có khoá ngoại trỏ tới (vd collections) cần foreign_keys=OFF TRƯỚC khi mở transaction
+    // (PRAGMA này không có tác dụng bên trong transaction). Khôi phục giá trị cũ sau khi xong.
+    let fk_was_on: bool =
+        conn.query_row("PRAGMA foreign_keys", [], |r| r.get::<_, i64>(0)).map(|v| v == 1).unwrap_or(false);
+    if fk_was_on {
+        conn.execute_batch("PRAGMA foreign_keys = OFF")?;
+    }
+    let restore_fk = || {
+        if fk_was_on {
+            let _ = conn.execute_batch("PRAGMA foreign_keys = ON");
+        }
     };
     for v in cur..latest {
         let step = || -> rusqlite::Result<()> {
@@ -284,10 +313,36 @@ pub(crate) fn migrate(
         };
         if let Err(e) = step() {
             let _ = conn.execute_batch("ROLLBACK");
+            restore_fk();
             return Err(StoreError::Migration { db, from: v, to: v + 1, source: e });
         }
     }
+    restore_fk();
     Ok(backup)
+}
+
+/// Số bản sao lưu migration giữ lại cho mỗi DB.
+pub(crate) const BACKUPS_KEPT: usize = 5;
+
+/// Giữ `keep` bản sao lưu mới nhất của `db` trong `dir` (tên `{db}.v{N}.{ms}.db`, mới = `ms` lớn);
+/// trả số bản đã xoá. File khác tên không bị đụng.
+pub(crate) fn prune_backups(dir: &Path, db: &str, keep: usize) -> std::io::Result<usize> {
+    let prefix = format!("{db}.v");
+    let mut found: Vec<(i64, PathBuf)> = vec![];
+    for e in std::fs::read_dir(dir)? {
+        let e = e?;
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name.strip_prefix(&prefix).and_then(|r| r.strip_suffix(".db")) else { continue };
+        if let Some(ms) = stem.rsplit('.').next().and_then(|s| s.parse::<i64>().ok()) {
+            found.push((ms, e.path()));
+        }
+    }
+    found.sort();
+    let excess = found.len().saturating_sub(keep);
+    for (_, p) in found.iter().take(excess) {
+        std::fs::remove_file(p)?;
+    }
+    Ok(excess)
 }
 
 #[cfg(test)]

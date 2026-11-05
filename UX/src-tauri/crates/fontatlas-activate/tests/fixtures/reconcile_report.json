@@ -14,6 +14,17 @@
       "cause": "collection_deleted"
     }
   ],
+  "autoDeactivateFailed": [
+    {
+      "hashHex": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+      "faces": [
+        0,
+        1
+      ],
+      "removedReasons": [],
+      "cause": "no_reason"
+    }
+  ],
   "reregistered": 3,
   "moved": 1,
   "missing": 1,

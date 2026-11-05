@@ -195,7 +195,8 @@ fn reconcile_drops_deleted_collection_reason() {
     };
     svc.activate_collection(&env.store, a, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
     activate(&svc, &env, f2, Scope::Session);
-    env.store.lock().unwrap().delete_collection(a).unwrap();
+    // Xoá NGOÀI đường chuẩn (store.delete_collection tự gỡ lý do): `prune` là lưới an toàn.
+    env.store.lock().unwrap().conn().execute("DELETE FROM u.collections WHERE collection_id=?1", [a]).unwrap();
     let rep = reconcile(&svc, &env);
     assert_eq!(svc.engine().registrations(), vec![(canon(&env.fonts.join(ROBOTO)), Scope::Session)]);
     assert_eq!(row(&env, &f1).state, DesiredState::Inactive);
@@ -351,4 +352,48 @@ fn shutdown_unregisters_unknown_and_error_session_rows() {
         assert_eq!(row(&env, &k).status, ActivationStatus::Unregistered);
         assert_eq!(row(&env, &k).state, DesiredState::Active, "giữ mong muốn để mở lại thì bật lại");
     }
+}
+
+#[test]
+fn reconcile_reports_files_left_without_reasons_after_store_delete() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = {
+        let mut s = env.store.lock().unwrap();
+        let a = s.create_collection("A", None).unwrap();
+        s.add_to_collection(a, &[f1]).unwrap();
+        a
+    };
+    svc.activate_collection(&env.store, a, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    env.store.lock().unwrap().delete_collection(a).unwrap(); // lý do đã bị gỡ trong cùng transaction
+    let rep = reconcile(&svc, &env);
+    assert!(svc.engine().registrations().is_empty());
+    assert_eq!(rep.auto_deactivated.len(), 1, "không tắt âm thầm");
+    assert_eq!(rep.auto_deactivated[0].cause, "no_reason");
+    assert!(rep.auto_deactivate_failed.is_empty());
+}
+
+#[test]
+fn reconcile_reports_failed_auto_deactivation_separately() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = {
+        let mut s = env.store.lock().unwrap();
+        let a = s.create_collection("A", None).unwrap();
+        s.add_to_collection(a, &[f1]).unwrap();
+        a
+    };
+    svc.activate_collection(&env.store, a, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    env.store.lock().unwrap().delete_collection(a).unwrap();
+    svc.engine().fail_next_unregister(fontatlas_activate::EngineError::Rejected { code: 5, message: "x".into() });
+    let rep = reconcile(&svc, &env);
+    assert!(rep.auto_deactivated.is_empty(), "chưa gỡ được thì không báo là đã tắt");
+    assert_eq!(rep.auto_deactivate_failed.len(), 1);
+    assert_eq!(rep.failed, 1);
+    // lần mở sau gỡ được
+    let again = reconcile(&svc, &env);
+    assert!(svc.engine().registrations().is_empty());
+    assert_eq!(again.cleaned, 1);
 }

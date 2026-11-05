@@ -2,7 +2,6 @@ mod common;
 use common::*;
 use fontatlas_store::{
     ActivationReason, ActivationRow, ActivationScope, ActivationStatus, DesiredState, FaceKey, FaceName,
-    create_user_v1_for_test,
 };
 
 fn row(hash: [u8; 32], status: ActivationStatus) -> ActivationRow {
@@ -21,32 +20,6 @@ fn row(hash: [u8; 32], status: ActivationStatus) -> ActivationRow {
         updated_at: 0,
         engine_version: 1,
     }
-}
-
-#[test]
-fn user_v2_migrates_v1_rows() {
-    let d = tmp();
-    let user = d.path().join(fontatlas_store::USER_FILE);
-    create_user_v1_for_test(&user);
-    {
-        let c = rusqlite::Connection::open(&user).unwrap();
-        c.execute(
-            "INSERT INTO activation_state(hash,state,scope,method,active_path,updated_at) \
-             VALUES (?1,'active','persistent','coretext','/x.ttf',1)",
-            [&[7u8; 32][..]],
-        )
-        .unwrap();
-    }
-    let (s, rep) = fontatlas_store::Store::open(d.path()).unwrap();
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 2);
-    assert!(rep.user_backup.is_some());
-    let r = s.activation_row(&[7; 32]).unwrap().unwrap();
-    assert_eq!(r.state, DesiredState::Active);
-    assert_eq!(r.scope, ActivationScope::Persistent);
-    assert_eq!(r.active_path.as_deref(), Some("/x.ttf"));
-    assert_eq!(r.status, ActivationStatus::Unknown);
-    assert_eq!(r.engine_version, 1);
-    assert_eq!(r.reasons, vec![ActivationReason::Manual]);
 }
 
 #[test]
@@ -126,7 +99,8 @@ fn prune_collection_reasons_drops_deleted_and_removed_items() {
         }
         s.add_activation_reason(&hash, ActivationReason::Collection(coll)).unwrap();
     }
-    s.delete_collection(a).unwrap();
+    // Xoá `a` NGOÀI đường chuẩn (delete_collection đã tự gỡ lý do): prune là lưới an toàn cho trường hợp này.
+    s.conn().execute("DELETE FROM u.collections WHERE collection_id=?1", [a]).unwrap();
     s.remove_from_collection(b, &[fh]).unwrap();
     let pruned = s.prune_collection_reasons().unwrap();
     assert_eq!(pruned, vec![(h, vec![ActivationReason::Collection(a), ActivationReason::Collection(b)])]);
@@ -236,4 +210,28 @@ fn collection_faces_returns_items_and_not_found() {
     assert_eq!(got.len(), 2);
     assert!(got.contains(&keys[0]) && got.contains(&keys[1]));
     assert_eq!(s.collection_faces(999).unwrap_err().code(), "not_found");
+}
+
+#[test]
+fn delete_collection_removes_its_reasons_in_same_tx() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let h = [8u8; 32];
+    let c = s.create_collection("A", None).unwrap();
+    s.put_activation(&row(h, ActivationStatus::Registered)).unwrap();
+    s.add_activation_reason(&h, ActivationReason::Manual).unwrap();
+    s.add_activation_reason(&h, ActivationReason::Collection(c)).unwrap();
+    s.delete_collection(c).unwrap();
+    assert_eq!(s.activation_row(&h).unwrap().unwrap().reasons, vec![ActivationReason::Manual]);
+}
+
+#[test]
+fn deleted_collection_id_is_never_reused() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let a = s.create_collection("A", None).unwrap();
+    let b = s.create_collection("B", None).unwrap();
+    s.delete_collection(b).unwrap(); // xoá id lớn nhất
+    let c = s.create_collection("C", None).unwrap();
+    assert!(c > b, "id {c} phải lớn hơn id đã xoá {b} (a={a})");
 }

@@ -691,3 +691,47 @@ fn deactivate_all_cleans_inactive_error_rows() {
     assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
     assert!(svc.engine().registrations().is_empty());
 }
+
+// ---------- review fix: collection bị xoá ----------
+#[test]
+fn on_collection_deleted_unregisters_orphans_before_store_delete() {
+    let env = env_with(&[LIBRE, ROBOTO]);
+    let svc = service(&env);
+    let (f1, f2) = (key_of(&env, LIBRE), key_of(&env, ROBOTO));
+    let a = collection(&env, "A", &[f1, f2]);
+    activate_coll(&svc, &env, a);
+    activate(&svc, &env, &[f2], ConflictPolicy::Ask); // f2: thủ công + collection
+    let rep = svc.on_collection_deleted(&env.store, a, &mut no_progress()).unwrap();
+    assert_eq!(outcome_of(&rep, &f1), FileOutcome::Deactivated);
+    assert_eq!(outcome_of(&rep, &f2), FileOutcome::KeptActive { manual: true, collection_ids: vec![] });
+    env.store.lock().unwrap().delete_collection(a).unwrap();
+    assert_eq!(svc.engine().registrations().len(), 1);
+}
+
+#[test]
+fn on_collection_deleted_after_store_delete_sweeps_orphans() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = collection(&env, "A", &[f1]);
+    activate_coll(&svc, &env, a);
+    env.store.lock().unwrap().delete_collection(a).unwrap(); // store đã gỡ lý do trong cùng transaction
+    assert!(row(&env, &f1.hash).unwrap().reasons.is_empty());
+    let rep = svc.on_collection_deleted(&env.store, a, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated);
+    assert!(svc.engine().registrations().is_empty());
+    assert_eq!(row(&env, &f1.hash).unwrap().state, DesiredState::Inactive);
+}
+
+#[test]
+fn new_collection_does_not_inherit_deleted_collection_reasons() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let f1 = key_of(&env, LIBRE);
+    let a = collection(&env, "A", &[f1]);
+    activate_coll(&svc, &env, a);
+    env.store.lock().unwrap().delete_collection(a).unwrap();
+    let b = env.store.lock().unwrap().create_collection("B", None).unwrap();
+    assert_ne!(a, b);
+    assert!(!row(&env, &f1.hash).unwrap().reasons.contains(&ActivationReason::Collection(b)));
+}

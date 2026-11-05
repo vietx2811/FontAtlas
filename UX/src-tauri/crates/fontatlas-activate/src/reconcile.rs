@@ -20,7 +20,7 @@ pub struct AutoDeactivated {
     pub hash_hex: String,
     pub faces: Vec<u32>,
     pub removed_reasons: Vec<ActivationReason>,
-    /// "collection_deleted" | "left_collection"
+    /// "collection_deleted" | "left_collection" | "no_reason"
     pub cause: String,
 }
 
@@ -28,6 +28,8 @@ pub struct AutoDeactivated {
 #[serde(rename_all = "camelCase")]
 pub struct ReconcileReport {
     pub auto_deactivated: Vec<AutoDeactivated>,
+    /// Như `auto_deactivated` nhưng hệ điều hành từ chối gỡ: font còn đăng ký, `reconcile` lần sau thử lại.
+    pub auto_deactivate_failed: Vec<AutoDeactivated>,
     pub reregistered: usize,
     pub moved: usize,
     pub missing: usize,
@@ -120,19 +122,26 @@ impl<E: ActivationEngine> ActivationService<E> {
             if out == FileOutcome::Deactivated {
                 rep.cleaned += 1;
             }
-            if let Some((_, removed)) = pruned.iter().find(|(h, _)| *h == row.hash) {
-                let faces = relock(store)
-                    .file_target(&row.hash)?
-                    .map(|t| t.faces.iter().map(|f| f.face_index).collect())
-                    .unwrap_or_default();
-                let deleted =
-                    removed.iter().any(|r| matches!(r, ActivationReason::Collection(id) if !existing.contains(id)));
-                rep.auto_deactivated.push(AutoDeactivated {
-                    hash_hex: hex(&row.hash),
-                    faces,
-                    removed_reasons: removed.clone(),
-                    cause: if deleted { "collection_deleted" } else { "left_collection" }.into(),
-                });
+            // Không tắt âm thầm: mọi file bị tắt vì hết lý do đều được báo cho UI.
+            let faces = relock(store)
+                .file_target(&row.hash)?
+                .map(|t| t.faces.iter().map(|f| f.face_index).collect())
+                .unwrap_or_default();
+            let (removed, cause) = match pruned.iter().find(|(h, _)| *h == row.hash) {
+                Some((_, removed)) => {
+                    let deleted = removed
+                        .iter()
+                        .any(|r| matches!(r, ActivationReason::Collection(id) if !existing.contains(id)));
+                    (removed.clone(), if deleted { "collection_deleted" } else { "left_collection" })
+                }
+                // Lý do đã bị gỡ trước đó (store.delete_collection gỡ trong cùng transaction): không còn biết vì sao.
+                None => (vec![], "no_reason"),
+            };
+            let entry = AutoDeactivated { hash_hex: hex(&row.hash), faces, removed_reasons: removed, cause: cause.into() };
+            if out == FileOutcome::Deactivated {
+                rep.auto_deactivated.push(entry);
+            } else {
+                rep.auto_deactivate_failed.push(entry);
             }
             return Ok(out);
         }

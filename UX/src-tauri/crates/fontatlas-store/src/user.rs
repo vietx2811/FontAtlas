@@ -207,8 +207,14 @@ impl Store {
         Ok(())
     }
 
+    /// Xoá collection và lý do kích hoạt `collection:<id>` của nó trong cùng một transaction.
+    /// Font hết lý do vẫn đang đăng ký trong hệ thống cho tới khi service gỡ
+    /// (`ActivationService::on_collection_deleted`, hoặc `reconcile` lần mở app sau).
     pub fn delete_collection(&mut self, id: i64) -> Result<(), StoreError> {
-        self.conn.execute("DELETE FROM u.collections WHERE collection_id=?1", [id])?;
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM u.activation_reasons WHERE reason = ?1", [format!("collection:{id}")])?;
+        tx.execute("DELETE FROM u.collections WHERE collection_id=?1", [id])?;
+        tx.commit()?;
         Ok(())
     }
 

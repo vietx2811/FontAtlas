@@ -96,6 +96,12 @@ fn reconcile_report_json_matches_contract_fixture() {
             removed_reasons: vec![ActivationReason::Collection(5)],
             cause: "collection_deleted".into(),
         }],
+        auto_deactivate_failed: vec![AutoDeactivated {
+            hash_hex: "ef".repeat(32),
+            faces: vec![0, 1],
+            removed_reasons: vec![],
+            cause: "no_reason".into(),
+        }],
         reregistered: 3,
         moved: 1,
         missing: 1,
@@ -105,6 +111,7 @@ fn reconcile_report_json_matches_contract_fixture() {
         results: vec![result(9, FileOutcome::Activated)],
     };
     let compact = serde_json::to_string(&rep).unwrap();
-    assert!(compact.contains(r#""autoDeactivated""#) && compact.contains(r#""removedReasons""#));
+    assert!(compact.contains(r#""autoDeactivated""#) && compact.contains(r#""autoDeactivateFailed""#));
+    assert!(compact.contains(r#""removedReasons""#));
     check("reconcile_report.json", serde_json::to_string_pretty(&rep).unwrap());
 }

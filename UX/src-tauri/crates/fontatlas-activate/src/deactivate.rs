@@ -64,6 +64,29 @@ impl<E: ActivationEngine> ActivationService<E> {
         self.deactivate_hashes(store, groups, Lift::Collection(collection_id), progress)
     }
 
+    /// Gọi khi một collection bị xoá (6a gọi TRƯỚC `Store::delete_collection`; gọi sau cũng đúng).
+    /// Gỡ lý do `Collection(id)` khỏi mọi file còn mang nó, rồi gỡ đăng ký của mọi file đang `Active`
+    /// mà không còn lý do nào (trường hợp store đã xoá lý do trong cùng transaction với collection).
+    pub fn on_collection_deleted(
+        &self,
+        store: &Mutex<Store>,
+        collection_id: i64,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        let mut rep = self.deactivate_collection(store, collection_id, progress)?;
+        let orphans: Vec<_> = relock(store)
+            .activation_rows()?
+            .into_iter()
+            .filter(|r| r.state == DesiredState::Active && r.reasons.is_empty())
+            .map(|r| (r.hash, vec![]))
+            .collect();
+        let swept = self.deactivate_hashes(store, orphans, Lift::All, progress)?;
+        for r in swept.results {
+            rep.push(r);
+        }
+        Ok(rep)
+    }
+
     /// Nút Cài đặt "Tắt mọi font FontAtlas đã kích hoạt" (dọn trước khi gỡ app).
     pub fn deactivate_all(
         &self,

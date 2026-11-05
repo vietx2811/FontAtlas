@@ -448,3 +448,89 @@ impl Store {
         rows.into_iter().map(|(b, i)| Ok(FaceKey { hash: hash_from_blob(b)?, face_index: i })).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::Connection;
+
+    use crate::open::USER_FILE;
+    use crate::schema::{create_user_v1_for_test, prune_backups};
+
+    use super::*;
+
+    #[test]
+    fn user_v2_migrates_v1_rows() {
+        let d = tempfile::tempdir().unwrap();
+        let user = d.path().join(USER_FILE);
+        create_user_v1_for_test(&user);
+        {
+            let c = Connection::open(&user).unwrap();
+            c.execute(
+                "INSERT INTO activation_state(hash,state,scope,method,active_path,updated_at) \
+                 VALUES (?1,'active','persistent','coretext','/x.ttf',1)",
+                [&[7u8; 32][..]],
+            )
+            .unwrap();
+        }
+        let (s, rep) = Store::open(d.path()).unwrap();
+        let v: i64 = s.conn().query_row("PRAGMA u.user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 2);
+        assert!(rep.user_backup.is_some());
+        let r = s.activation_row(&[7; 32]).unwrap().unwrap();
+        assert_eq!(r.state, DesiredState::Active);
+        assert_eq!(r.scope, ActivationScope::Persistent);
+        assert_eq!(r.active_path.as_deref(), Some("/x.ttf"));
+        assert_eq!(r.status, ActivationStatus::Unknown);
+        assert_eq!(r.engine_version, 1);
+        assert_eq!(r.reasons, vec![ActivationReason::Manual]);
+    }
+
+    #[test]
+    fn collections_survive_v1_to_v2_with_items_and_never_reuse_ids() {
+        let d = tempfile::tempdir().unwrap();
+        let user = d.path().join(USER_FILE);
+        create_user_v1_for_test(&user);
+        {
+            let c = Connection::open(&user).unwrap();
+            c.execute_batch(
+                "INSERT INTO collections(collection_id,name,position,created_at,updated_at) VALUES (1,'A',0,1,1),(3,'C',1,1,1);
+                 INSERT INTO collection_items(collection_id,hash,face_index,added_at) VALUES (1,zeroblob(32),0,1),(3,zeroblob(32),1,1);",
+            )
+            .unwrap();
+        }
+        let (mut s, _) = Store::open(d.path()).unwrap();
+        let ids: Vec<i64> = s.collections().unwrap().iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![1, 3]);
+        let items: i64 = s.conn().query_row("SELECT count(*) FROM u.collection_items", [], |r| r.get(0)).unwrap();
+        assert_eq!(items, 2, "collection_items không được bị cascade xoá khi dựng lại bảng");
+        let auto: i64 = s
+            .conn()
+            .query_row("SELECT count(*) FROM u.sqlite_master WHERE name='collections' AND sql LIKE '%AUTOINCREMENT%'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(auto, 1);
+        let mut fk = s.conn().prepare("PRAGMA u.foreign_key_check").unwrap();
+        assert_eq!(fk.query_map([], |_| Ok(())).unwrap().count(), 0);
+        drop(fk);
+        s.delete_collection(3).unwrap();
+        let next = s.create_collection("D", None).unwrap();
+        assert!(next > 3, "id {next} không được dùng lại id đã xoá");
+    }
+
+    #[test]
+    fn prune_backups_keeps_newest_per_db() {
+        let d = tempfile::tempdir().unwrap();
+        for ms in 1000..1007 {
+            std::fs::write(d.path().join(format!("user.v1.{ms}.db")), b"x").unwrap();
+        }
+        std::fs::write(d.path().join("library.v1.5.db"), b"x").unwrap();
+        std::fs::write(d.path().join("notes.txt"), b"x").unwrap();
+        assert_eq!(prune_backups(d.path(), "user", 5).unwrap(), 2);
+        let mut left: Vec<String> =
+            std::fs::read_dir(d.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(
+            left,
+            ["library.v1.5.db", "notes.txt", "user.v1.1002.db", "user.v1.1003.db", "user.v1.1004.db", "user.v1.1005.db", "user.v1.1006.db"]
+        );
+    }
+}
