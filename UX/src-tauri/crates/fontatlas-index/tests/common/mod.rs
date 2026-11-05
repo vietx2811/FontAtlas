@@ -63,6 +63,16 @@ pub fn synth(family: &str, axes: &[(AxisId, f32, Q, &str)]) -> FaceProfile {
             q: Q::Failed,
             method: "c_upper_terminal_normal_over_thin".into(),
         },
+        a_storeys: Reading {
+            value: None,
+            q: Q::Failed,
+            method: "a_center_vertical_runs".into(),
+        },
+        g_storeys: Reading {
+            value: None,
+            q: Q::Failed,
+            method: "g_center_vertical_runs".into(),
+        },
         embedding: None,
     }
 }

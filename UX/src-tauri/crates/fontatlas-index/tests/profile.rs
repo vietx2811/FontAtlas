@@ -67,3 +67,10 @@ fn profile_reads_terminal_but_not_in_similar_axes() {
     assert_eq!(p.terminal.method, "c_upper_terminal_normal_over_thin");
     assert_eq!(p.readings.len(), 16, "terminal không vào 16 chiều Similar");
 }
+
+#[test]
+fn profile_reads_storeys() {
+    let p = profile("roboto.ttf");
+    assert_eq!((p.a_storeys.value, p.a_storeys.q), (Some(2.0), Q::Measured));
+    assert_eq!((p.g_storeys.value, p.g_storeys.q), (Some(1.0), Q::Measured));
+}

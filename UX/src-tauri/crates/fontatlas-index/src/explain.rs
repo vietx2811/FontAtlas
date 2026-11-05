@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::pair_axes::{AxisLabel, PairAxis, Relation};
 use crate::pairing::{Block, BodyWarning, ClashKind, Gate, PairAssessment, Side};
-use crate::profile::{AxisId, FaceProfile};
+use crate::profile::{AxisId, FaceProfile, Q};
+use crate::reference::ReferenceTable;
 use crate::similar::SimilarHit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -237,6 +238,79 @@ const HINT_EN: &str = "Suggestion: a heading stem weight around {v}";
 const INSUFFICIENT_VI: &str = "Chưa đủ dữ liệu để xếp cặp này cao hơn mức Thử nghiệm";
 const INSUFFICIENT_EN: &str = "Not enough data to rate this pair above Experimental";
 
+const SUM_VI_FULL: &str = "Đủ 134 ký tự Việt.";
+const SUM_EN_FULL: &str = "All 134 Vietnamese letters.";
+const SUM_VI_MISSING: &str = "Thiếu {n} ký tự Việt.";
+const SUM_EN_MISSING: &str = "Missing {n} Vietnamese letters.";
+/// (khoá mệnh đề, tiếng Việt, tiếng Anh) của câu tóm tắt hình học.
+const SUM_CLAUSES: [(&str, &str, &str); 8] = [
+    ("contrast_hi", "tương phản cao", "high contrast"),
+    ("contrast_lo", "tương phản thấp", "low contrast"),
+    ("xh_hi", "x-height cao", "tall x-height"),
+    ("xh_lo", "x-height thấp", "short x-height"),
+    ("ap_hi", "aperture mở", "open aperture"),
+    ("ap_lo", "aperture hẹp", "narrow aperture"),
+    ("sans", "Sans", "Sans"),
+    ("serif", "Serif", "Serif"),
+];
+
+fn clause(key: &str, lang: Lang) -> &'static str {
+    SUM_CLAUSES
+        .iter()
+        .find(|c| c.0 == key)
+        .map(|c| if lang == Lang::Vi { c.1 } else { c.2 })
+        .unwrap_or("")
+}
+
+/// Một câu tóm tắt: lớp (Sans/Serif), tương phản, x-height, aperture (tối đa 4 mệnh đề, chỉ khi Measured
+/// và có phân vị), rồi câu tiếng Việt. Không sinh khen/chê.
+pub fn summarize_face(p: &FaceProfile, r: &ReferenceTable, lang: Lang) -> String {
+    let pct = |a: AxisId| {
+        let rd = p.get(a);
+        if rd.q != Q::Measured {
+            return None;
+        }
+        r.percentile(a, &rd.method, rd.value?)
+    };
+    let mut parts: Vec<&'static str> = Vec::new();
+    let sf = p.get(AxisId::SerifFoot);
+    if sf.q == Q::Measured
+        && let Some(v) = sf.value
+    {
+        if v < 1.2 {
+            parts.push(clause("sans", lang));
+        } else if v > 1.6 {
+            parts.push(clause("serif", lang));
+        }
+    }
+    for (axis, hi, lo) in [
+        (AxisId::Contrast, "contrast_hi", "contrast_lo"),
+        (AxisId::XHeightEm, "xh_hi", "xh_lo"),
+        (AxisId::Aperture, "ap_hi", "ap_lo"),
+    ] {
+        if let Some(x) = pct(axis) {
+            if x >= 0.65 {
+                parts.push(clause(hi, lang));
+            } else if x <= 0.35 {
+                parts.push(clause(lo, lang));
+            }
+        }
+    }
+    let vi = if p.vi_missing == 0 {
+        pick(lang, SUM_VI_FULL, SUM_EN_FULL).to_string()
+    } else {
+        pick(lang, SUM_VI_MISSING, SUM_EN_MISSING).replace("{n}", &p.vi_missing.to_string())
+    };
+    if parts.is_empty() {
+        return vi;
+    }
+    let mut geo = parts.join(", ");
+    if let Some(c) = geo.chars().next() {
+        geo = c.to_uppercase().chain(geo.chars().skip(1)).collect();
+    }
+    format!("{geo}. {vi}")
+}
+
 /// Mọi mẫu câu (để test từ cấm).
 pub fn all_templates() -> Vec<&'static str> {
     let mut v = vec![
@@ -264,7 +338,12 @@ pub fn all_templates() -> Vec<&'static str> {
         HINT_EN,
         INSUFFICIENT_VI,
         INSUFFICIENT_EN,
+        SUM_VI_FULL,
+        SUM_EN_FULL,
+        SUM_VI_MISSING,
+        SUM_EN_MISSING,
     ];
+    v.extend(SUM_CLAUSES.iter().flat_map(|c| [c.1, c.2]));
     let rels = [
         Relation::Harmony,
         Relation::Contrast,

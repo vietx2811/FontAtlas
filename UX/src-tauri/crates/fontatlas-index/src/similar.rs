@@ -44,6 +44,14 @@ impl AxisId {
     }
 }
 
+/// Tuỳ chọn Similar theo yêu cầu. `embed_weight`: `None` = mặc định của Index; `Some(0.0)` = chỉ trục.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SimilarOptions {
+    pub weights: GroupWeights,
+    pub embed_weight: Option<f32>,
+    pub k: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GroupWeights {
     pub proportion: f32,

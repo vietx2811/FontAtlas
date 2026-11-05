@@ -292,3 +292,18 @@ fn rank_prefers_fewer_clashes_then_structure_harmony() {
     v.sort_by_key(|(n, x)| rank_key(x, n, None));
     assert_eq!(v.iter().map(|p| p.0).collect::<Vec<_>>(), ["a", "b", "c"]);
 }
+
+#[test]
+fn pair_candidates_filtered_respects_filter() {
+    let ps: Vec<_> = (0..8).map(|i| synth_full(&format!("F{i}"), "Regular", 0.12 + i as f32 * 0.02)).collect();
+    let ix = index_of(ps);
+    let q = key_of("F0", "Regular");
+    let all = ix.pair_candidates(&q, Role::Heading, Role::Body, false, 20).unwrap();
+    let keep = ["F1", "F3", "F5"];
+    let got = ix
+        .pair_candidates_filtered(&q, Role::Heading, Role::Body, false, 20, &|p| keep.contains(&p.family.as_str()))
+        .unwrap();
+    assert!(!got.is_empty() && got.len() <= 3);
+    assert!(got.iter().all(|(k, _)| keep.iter().any(|f| k.hash.starts_with(f))));
+    assert!(all.len() >= got.len());
+}

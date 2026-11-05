@@ -17,6 +17,7 @@ pub const SCORER_VERSION: &str = "pair-0.1.0";
 pub use embed_index::{ExactEmbeddings, RERANK_CANDIDATES};
 pub use explain::{
     Lang, all_templates, axis_name, explain_pair, explain_similar, fmt_num, pair_axis_name,
+    summarize_face,
 };
 pub use index::Index;
 pub use pairing::{
@@ -25,7 +26,7 @@ pub use pairing::{
 };
 pub use similar::{
     EMBED_WEIGHT, Group, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit,
-    SimilarSource, axis_distance, combine, embed_cos,
+    SimilarOptions, SimilarSource, axis_distance, combine, embed_cos,
 };
 pub use superfamily::{
     PREFIX_STOP_ALWAYS, PREFIX_STOP_UNLESS_SAME_MANUFACTURER, SuperfamilyTable, same_designer,

@@ -101,6 +101,18 @@ impl ReferenceTable {
         Some((i as f32 + frac) / 100.0)
     }
 
+    /// Độ lớn của giá trị có dấu: `percentile(|v|) − percentile(−|v|)`, kẹp [0, 1].
+    /// Chỉ cho `StressDeg`, `SlantDeg`; trục khác trả `None`.
+    pub fn magnitude_percentile(&self, axis: AxisId, method: &str, v: f32) -> Option<f32> {
+        if !matches!(axis, AxisId::StressDeg | AxisId::SlantDeg) || !v.is_finite() {
+            return None;
+        }
+        let m = v.abs();
+        let hi = self.percentile(axis, method, m)?;
+        let lo = self.percentile(axis, method, -m)?;
+        Some((hi - lo).clamp(0.0, 1.0))
+    }
+
     /// Phân vị của 16 trục (None khi thiếu giá trị hoặc thiếu bảng của method).
     pub fn normalize(&self, p: &FaceProfile) -> [Option<f32>; 16] {
         let mut out = [None; 16];

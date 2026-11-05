@@ -228,3 +228,23 @@ fn s6_pair_candidates_50k_under_50ms() {
     assert_eq!(v.len(), 20);
     assert!(ms < 50.0, "{ms} ms");
 }
+
+#[test]
+fn similar_with_zero_image_weight_is_axes() {
+    use fontatlas_index::SimilarOptions;
+    let ps: Vec<_> = (0..6)
+        .map(|i| {
+            let mut p = synth_full(&format!("F{i}"), "Regular", 0.15 + i as f32 * 0.01);
+            p.embedding = Some(lcg_unit(16, i));
+            p
+        })
+        .collect();
+    let ix = index_of(ps);
+    let q = key_of("F0", "Regular");
+    let mut o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 3 };
+    let hits = ix.similar_with(&q, &o, &|_| true).unwrap();
+    assert!(!hits.is_empty() && hits.iter().all(|h| h.source == SimilarSource::Axes));
+    o.embed_weight = None;
+    let hits = ix.similar_with(&q, &o, &|_| true).unwrap();
+    assert!(hits.iter().any(|h| h.source == SimilarSource::AxesAndImage));
+}

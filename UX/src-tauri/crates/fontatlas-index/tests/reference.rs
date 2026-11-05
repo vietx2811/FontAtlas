@@ -152,3 +152,27 @@ fn percentile_matches_linear_scan_on_bundled_reference() {
     }
     assert!(checked > 30_000, "{checked}");
 }
+
+#[test]
+fn magnitude_percentile_symmetric() {
+    use fontatlas_index::{AxisQuantiles, ReferenceTable};
+    let t = ReferenceTable {
+        version: "t".into(),
+        source: "t".into(),
+        analyzer_version: "t".into(),
+        faces: 100,
+        quantiles: vec![AxisQuantiles {
+            axis: "stress_deg".into(),
+            method: "m".into(),
+            n: 100,
+            q: (0..=100).map(|i| -30.0 + 0.6 * i as f32).collect(),
+        }],
+        d_fam: 0.0,
+        d_fam_pairs: 0,
+    };
+    let m = |v: f32| t.magnitude_percentile(AxisId::StressDeg, "m", v).unwrap();
+    assert!((m(15.0) - 0.5).abs() < 0.02, "{}", m(15.0));
+    assert!((m(-15.0) - 0.5).abs() < 0.02);
+    assert!(m(0.0) < 0.02);
+    assert!(t.magnitude_percentile(AxisId::Contrast, "m", 1.0).is_none());
+}

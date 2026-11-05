@@ -11,8 +11,8 @@ use crate::pairing::{
 use crate::profile::{AxisId, FaceKey, FaceProfile, Q, Role};
 use crate::reference::{IndexError, ReferenceTable};
 use crate::similar::{
-    EMBED_WEIGHT, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit, SimilarSource,
-    axis_distance, combine, embed_cos,
+    EMBED_WEIGHT, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit, SimilarOptions,
+    SimilarSource, axis_distance, combine, embed_cos,
 };
 use crate::superfamily::SuperfamilyTable;
 
@@ -168,7 +168,8 @@ impl Index {
             .ok_or_else(|| IndexError::NotFound(k.clone()))
     }
 
-    fn distance(&self, i: usize, j: usize, w: &GroupWeights) -> Option<Cand> {
+    /// `ew` = trọng số ảnh; `ew <= 0` → chỉ trục (nguồn Axes, bỏ qua cos).
+    fn distance(&self, i: usize, j: usize, w: &GroupWeights, ew: f32) -> Option<Cand> {
         let (d, _) = axis_distance(
             &self.vectors[i],
             &self.confs[i],
@@ -176,9 +177,10 @@ impl Index {
             &self.confs[j],
             w,
         )?;
-        Some(match self.q8.cos(i, j) {
+        let cos = if ew > 0.0 { self.q8.cos(i, j) } else { None };
+        Some(match cos {
             Some(c) => (
-                combine(d, c, self.embed_w),
+                combine(d, c, ew),
                 d,
                 j,
                 SimilarSource::AxesAndImage,
@@ -188,11 +190,11 @@ impl Index {
     }
 
     /// Xếp lại bằng f32: đọc vector của query + ứng viên có ảnh, tính lại khoảng cách kết hợp.
-    fn rerank_exact(&self, qi: usize, cands: &mut [Cand]) {
+    fn rerank_exact(&self, qi: usize, cands: &mut [Cand], ew: f32) {
         let Some(src) = self.exact.as_ref() else {
             return;
         };
-        if !self.q8.has(qi) {
+        if ew <= 0.0 || !self.q8.has(qi) {
             return;
         }
         let idx: Vec<usize> = cands
@@ -214,7 +216,7 @@ impl Index {
         };
         for (&n, v) in idx.iter().zip(got.iter().skip(1)) {
             if let Some(c) = embed_cos(Some(qv), v.as_deref().filter(|v| v.len() == dim)) {
-                cands[n].0 = combine(cands[n].1, c, self.embed_w);
+                cands[n].0 = combine(cands[n].1, c, ew);
             }
         }
     }
@@ -255,6 +257,26 @@ impl Index {
         k: usize,
         filter: &dyn Fn(&FaceProfile) -> bool,
     ) -> Result<Vec<SimilarHit>, IndexError> {
+        let o = SimilarOptions {
+            weights: *w,
+            embed_weight: None,
+            k,
+        };
+        self.similar_with(q, &o, filter)
+    }
+
+    /// Similar theo tuỳ chọn; `embed_weight = Some(0.0)` → chỉ trục.
+    pub fn similar_with(
+        &self,
+        q: &FaceKey,
+        o: &SimilarOptions,
+        filter: &dyn Fn(&FaceProfile) -> bool,
+    ) -> Result<Vec<SimilarHit>, IndexError> {
+        let (w, k) = (&o.weights, o.k);
+        let ew = match o.embed_weight {
+            Some(x) if x.is_finite() => x.clamp(0.0, MAX_EMBED_WEIGHT),
+            _ => self.embed_w,
+        };
         let qi = self.idx(q)?;
         if self.vectors[qi].iter().filter(|v| v.is_some()).count() < MIN_SHARED_DIMS {
             return Err(IndexError::NotComparable(q.clone()));
@@ -265,7 +287,7 @@ impl Index {
             if j == qi || !filter(&self.profiles[j]) {
                 continue;
             }
-            if let Some(c) = self.distance(qi, j, w) {
+            if let Some(c) = self.distance(qi, j, w, ew) {
                 if c.3 == SimilarSource::AxesAndImage
                     && let Some(x) = self.q8.cos(qi, j)
                 {
@@ -281,7 +303,7 @@ impl Index {
             let (_, m, _) = img_cos.select_nth_unstable_by(mid, |a, b| a.total_cmp(b));
             let c_hat = *m;
             for c in cands.iter_mut().filter(|c| c.3 == SimilarSource::Axes) {
-                c.0 = combine(c.1, c_hat, self.embed_w);
+                c.0 = combine(c.1, c_hat, ew);
             }
         }
         let by = |a: &Cand, b: &Cand| {
@@ -294,7 +316,7 @@ impl Index {
             cands.select_nth_unstable_by(m - 1, by);
             cands.truncate(m);
         }
-        self.rerank_exact(qi, &mut cands);
+        self.rerank_exact(qi, &mut cands, ew);
         cands.sort_by(by);
         cands.truncate(k);
         Ok(cands
@@ -365,6 +387,19 @@ impl Index {
         project_vi: bool,
         k: usize,
     ) -> Result<Vec<(FaceKey, PairAssessment)>, IndexError> {
+        self.pair_candidates_filtered(q, q_role, cand_role, project_vi, k, &|_| true)
+    }
+
+    /// Như `pair_candidates`; `filter` áp TRƯỚC `assess` (lọc theo collection, face missing…).
+    pub fn pair_candidates_filtered(
+        &self,
+        q: &FaceKey,
+        q_role: Role,
+        cand_role: Role,
+        project_vi: bool,
+        k: usize,
+        filter: &(dyn Fn(&FaceProfile) -> bool + Sync),
+    ) -> Result<Vec<(FaceKey, PairAssessment)>, IndexError> {
         let qi = self.idx(q)?;
         let pq = &self.profiles[qi];
         // H1 lọc trước: face truy vấn thiếu tiếng Việt → mọi cặp Blocked; ứng viên thiếu → Blocked.
@@ -389,7 +424,7 @@ impl Index {
             .profiles
             .par_iter()
             .enumerate()
-            .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0))
+            .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0) && filter(pc))
             .filter_map(|(j, pc)| {
                 let x = assess(pq, q_role, pc, cand_role, facts(j).as_ref(), &ctx);
                 (x.gate != Gate::Blocked).then(|| (rank_parts(&x, cos(j)), j, x))

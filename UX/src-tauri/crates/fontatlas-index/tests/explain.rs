@@ -1,5 +1,6 @@
 mod common;
 use common::*;
+use fontatlas_index::{AxisId, Q, ReferenceTable, summarize_face};
 use fontatlas_index::{
     Block, Gate, Lang, PairAxis, Relation, Side, all_templates, explain_pair, fmt_num,
     pair_axis_name,
@@ -122,4 +123,30 @@ fn blocked_first() {
         Lang::Vi,
     );
     assert!(v[0].contains("thiếu 68 ký tự tiếng Việt"), "{v:?}");
+}
+
+#[test]
+fn summary_playfair_vi() {
+    let s = summarize_face(&profile("playfair_display.ttf"), &ReferenceTable::bundled(), Lang::Vi);
+    assert!(s.starts_with("Serif, tương phản cao"), "{s}");
+    assert!(s.ends_with("Đủ 134 ký tự Việt."), "{s}");
+}
+
+#[test]
+fn summary_libre_missing() {
+    let s = summarize_face(&profile("libre_baskerville.ttf"), &ReferenceTable::bundled(), Lang::Vi);
+    assert!(s.contains("Thiếu 68 ký tự Việt."), "{s}");
+    let en = summarize_face(&profile("libre_baskerville.ttf"), &ReferenceTable::bundled(), Lang::En);
+    assert!(en.contains("Missing 68 Vietnamese letters."), "{en}");
+}
+
+#[test]
+fn summary_non_latin_only_vi_sentence() {
+    let mut p = synth_full("Han", "Regular", 0.15);
+    for a in AxisId::ALL {
+        set_q(&mut p, a, Q::Failed);
+    }
+    p.vi_missing = 134;
+    let s = summarize_face(&p, &ReferenceTable::bundled(), Lang::Vi);
+    assert_eq!(s, "Thiếu 134 ký tự Việt.");
 }

@@ -155,6 +155,9 @@ pub struct FaceProfile {
     pub readings: Vec<Reading>,
     /// Đầu nét (Estimated): không thuộc 16 chiều Similar, không là PairAxis ở Plan 3.
     pub terminal: Reading,
+    /// Số tầng của chữ a / g (1 hoặc 2); thiếu thì Failed. Không vào 16 chiều Similar.
+    pub a_storeys: Reading,
+    pub g_storeys: Reading,
     /// Do Plan 4 cung cấp.
     pub embedding: Option<Vec<f32>>,
 }
@@ -197,6 +200,8 @@ impl FaceProfile {
                 })
                 .collect(),
             terminal: no_terminal(),
+            a_storeys: no_reading("a_center_vertical_runs"),
+            g_storeys: no_reading("g_center_vertical_runs"),
             embedding: None,
         }
     }
@@ -271,12 +276,28 @@ impl FaceProfile {
                 .get("terminal")
                 .and_then(reading)
                 .unwrap_or_else(no_terminal),
+            a_storeys: anatomy
+                .get("a_storeys")
+                .and_then(reading)
+                .unwrap_or_else(|| no_reading("a_center_vertical_runs")),
+            g_storeys: anatomy
+                .get("g_storeys")
+                .and_then(reading)
+                .unwrap_or_else(|| no_reading("g_center_vertical_runs")),
             embedding: None,
         })
     }
 }
 
 pub const TERMINAL_METHOD: &str = "c_upper_terminal_normal_over_thin";
+
+fn no_reading(method: &str) -> Reading {
+    Reading {
+        value: None,
+        q: Q::Failed,
+        method: method.into(),
+    }
+}
 
 fn no_terminal() -> Reading {
     Reading {
