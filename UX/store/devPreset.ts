@@ -41,3 +41,11 @@ export function devInitial(hash: string): NonNullable<MockOptions['initial']> {
   }
   return out;
 }
+
+/** Dựng dữ liệu cho dev/QA trước khi render (chạy cả với backend thật): #addsource=<đường dẫn>&ob=done */
+export async function applyDevBoot(api: Api, hash: string): Promise<void> {
+  const p = new URLSearchParams(hash.replace(/^#/, ''));
+  const path = p.get('addsource');
+  if (path) { try { await api.addSource(path); } catch (e) { console.warn('addsource bỏ qua:', (e as Error).message); } }
+  if (p.get('ob') === 'done') { await api.setSettings({ licenseNoticeAck: true }); await api.setOnboardingStep('done'); }
+}

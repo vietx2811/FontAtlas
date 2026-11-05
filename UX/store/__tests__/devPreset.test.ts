@@ -32,3 +32,20 @@ describe('devInitial (mock model/embed state from the hash)', () => {
     expect(devInitial('').model).toBeUndefined();
   });
 });
+
+import { applyDevBoot } from '../devPreset';
+describe('applyDevBoot (dev-only data setup from the hash, works on the real backend too)', () => {
+  it('adds a source and marks onboarding done with the license acknowledged', async () => {
+    const api = createMockApi({ firstRun: true });
+    await applyDevBoot(api, '#addsource=/Users/me/FixtureFonts&ob=done');
+    expect((await api.listSources()).map(s => s.path)).toContain('/Users/me/FixtureFonts');
+    const ob = await api.onboardingState();
+    expect([ob.step, ob.licenseNoticeAck]).toEqual(['done', true]);
+  });
+  it('a nested or duplicate path is ignored quietly; no params does nothing', async () => {
+    const api = createMockApi();
+    await applyDevBoot(api, '#addsource=/Users/me/Fonts/src1/sub');
+    await applyDevBoot(api, '');
+    expect((await api.listSources())).toHaveLength(3);
+  });
+});
