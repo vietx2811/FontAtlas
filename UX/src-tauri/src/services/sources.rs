@@ -70,6 +70,9 @@ pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdErr
 
 pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<(), CmdError> {
     state.with_store(|s| Ok(s.remove_source(id)?))?;
+    // ảnh preview theo thế hệ: font vừa bị gỡ không được phục vụ từ URL cũ
+    let _ = crate::services::preview::bump_generation(state);
+    crate::services::activation::reconcile_now(state, false);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
     Ok(())
 }

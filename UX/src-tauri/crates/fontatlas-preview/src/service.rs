@@ -47,6 +47,16 @@ impl<L: FaceLocator> PreviewService<L> {
         }
     }
 
+    /// (tổng byte hai vùng, số mục).
+    pub fn cache_stats(&self) -> Result<(u64, u64), PreviewError> {
+        let c = self.cache.lock().map_err(|_| PreviewError::Encode("khoá cache hỏng".into()))?;
+        Ok((c.total_bytes(crate::Pool::Default) + c.total_bytes(crate::Pool::Custom), c.len()?))
+    }
+
+    pub fn clear_cache(&self) -> Result<(), PreviewError> {
+        self.cache.lock().map_err(|_| PreviewError::Encode("khoá cache hỏng".into()))?.clear()
+    }
+
     /// Xin thế hệ mới (khi chữ mẫu hoặc cỡ đổi). Chỉ tăng.
     pub fn bump_generation(&self) -> u64 {
         self.generation.fetch_add(1, Ordering::SeqCst) + 1

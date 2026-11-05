@@ -59,6 +59,9 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
         b.library_recreated = report.library_recreated;
         b.user_backup = report.user_backup.map(|p| p.to_string_lossy().into_owned());
     }
+    if let Err(e) = crate::services::preview::open_service(state) {
+        log::warn!("mở dịch vụ preview lỗi: {e}");
+    }
     refresh_legacy(state);
     set_phase(state, BootPhase::Indexing);
     if let Err(e) = crate::index_bundle::rebuild_index(state) {

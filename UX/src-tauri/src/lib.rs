@@ -25,8 +25,36 @@ fn resolve_dirs(app: &tauri::AppHandle) -> Result<AppDirs, tauri::Error> {
     Ok(AppDirs { data, cache, models })
 }
 
+/// Xử lý yêu cầu scheme trong `spawn_blocking` (đọc file, vẽ PNG, SQLite).
+fn scheme(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>, responder: tauri::UriSchemeResponder, font: bool) {
+    let uri = request.uri().to_string();
+    let origin = request.headers().get("origin").and_then(|v| v.to_str().ok()).map(String::from);
+    let state = app.try_state::<std::sync::Arc<AppState>>().map(|s| s.inner().clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        let http = match state {
+            Some(st) if font => crate::services::preview::serve_font(&st, &uri, origin.as_deref()),
+            Some(st) => crate::services::preview::serve_preview(&st, &uri, origin.as_deref()),
+            None => fontatlas_preview::PreviewHttp {
+                status: 503,
+                content_type: "text/plain",
+                cache_control: "no-store",
+                allow_origin: None,
+                vary: "Origin",
+                body: b"store_unavailable".to_vec(),
+            },
+        };
+        responder.respond(crate::services::preview::to_http(http));
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol(fontatlas_preview::PREVIEW_SCHEME, |ctx, request, responder| {
+            scheme(ctx.app_handle(), request, responder, false)
+        })
+        .register_asynchronous_uri_scheme_protocol(fontatlas_preview::FONT_SCHEME, |ctx, request, responder| {
+            scheme(ctx.app_handle(), request, responder, true)
+        })
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

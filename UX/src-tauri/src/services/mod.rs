@@ -9,6 +9,7 @@ pub mod lifecycle;
 pub mod library;
 pub mod model;
 pub mod onboarding;
+pub mod preview;
 pub mod pairs;
 pub mod scan;
 pub mod settings;

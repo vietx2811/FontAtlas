@@ -179,6 +179,13 @@ impl PreviewCache {
         Ok(())
     }
 
+    /// Xoá toàn bộ cache (người dùng bấm "Xoá bộ nhớ đệm preview").
+    pub fn clear(&mut self) -> Result<(), PreviewError> {
+        self.conn.execute("DELETE FROM previews", [])?;
+        self.totals = [0; 2];
+        Ok(())
+    }
+
     pub fn total_bytes(&self, pool: Pool) -> u64 {
         self.totals[pool.idx()]
     }

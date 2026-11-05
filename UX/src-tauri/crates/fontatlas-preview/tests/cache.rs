@@ -128,3 +128,18 @@ fn keeps_at_most_one_broken_file() {
         .filter(|e| e.file_name().to_string_lossy().starts_with("previews.broken-")).count();
     assert_eq!(broken, 1);
 }
+
+#[test]
+fn clear_empties_cache_and_totals() {
+    let d = tempfile::tempdir().unwrap();
+    let mut c = PreviewCache::open(&d.path().join("p.db"), Budgets::DEFAULT).unwrap();
+    c.put(&k(0), Pool::Custom, b"aaaa").unwrap();
+    c.put(&k(1), Pool::Default, b"bb").unwrap();
+    assert_eq!(c.len().unwrap(), 2);
+    c.clear().unwrap();
+    assert!(c.is_empty().unwrap());
+    assert_eq!((c.total_bytes(Pool::Custom), c.total_bytes(Pool::Default)), (0, 0));
+    assert_eq!(c.get(&k(0)).unwrap(), None);
+    c.put(&k(0), Pool::Custom, b"cc").unwrap(); // dùng lại được
+    assert_eq!(c.len().unwrap(), 1);
+}

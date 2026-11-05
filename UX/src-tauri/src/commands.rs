@@ -16,7 +16,8 @@ use crate::dto::library::*;
 use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::dto::analysis::*;
-use crate::services::{activation, analysis, boot, describe, embed, library, model, onboarding, pairs, settings, sources, system};
+use crate::dto::preview::*;
+use crate::services::{activation, analysis, boot, describe, embed, library, model, onboarding, pairs, preview, settings, sources, system};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -106,6 +107,11 @@ macro_rules! command_list {
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
             async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
+            sync preview_info() -> Result<PreviewInfoDto, CmdError>;
+            async preview_bump_generation() -> Result<u64, CmdError>;
+            async preview_prewarm(items: Vec<PreviewItemDto>) -> Result<(), CmdError>;
+            async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
+            async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -315,6 +321,16 @@ cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
 pub async fn activation_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ActivationEvent>) -> Result<(), CmdError> {
     state.hubs.activation.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
+}
+
+cmd!(preview_bump_generation() -> u64 => |s| preview::bump_generation(s));
+cmd!(preview_prewarm(items: Vec<PreviewItemDto>) -> () => |s| preview::prewarm(s, &items));
+cmd!(preview_cache_info() -> PreviewCacheInfoDto => |s| preview::cache_info(s));
+cmd!(clear_preview_cache() -> () => |s| preview::clear_cache(s));
+
+#[tauri::command]
+pub fn preview_info(state: State<'_, Arc<AppState>>) -> Result<PreviewInfoDto, CmdError> {
+    preview::preview_info(&state)
 }
 
 cmd!(detect_font_managers() -> Vec<FontManagerDto> => |_s| Ok(system::detect_font_managers()));
