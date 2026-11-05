@@ -19,7 +19,11 @@ struct FakeState {
     panic_on: HashSet<PathBuf>,
     barrier: Option<Arc<Barrier>>,
     blocked: bool,
+    fail_unregister: Option<EngineError>,
+    hook: Option<CallHook>,
 }
+
+type CallHook = Arc<dyn Fn(&str, &Path) + Send + Sync>;
 
 #[derive(Default)]
 pub struct FakeEngine {
@@ -49,6 +53,17 @@ impl FakeEngine {
     /// Lần `register` kế tiếp trả lỗi này (một lần).
     pub fn fail_next_register(&self, err: EngineError) {
         self.st().fail_next = Some(err);
+    }
+
+    /// Lần `unregister` kế tiếp trả lỗi này (một lần).
+    pub fn fail_next_unregister(&self, err: EngineError) {
+        self.st().fail_unregister = Some(err);
+    }
+
+    /// `f("register" | "unregister", path)` chạy ở đầu mỗi lần gọi, NGOÀI khoá nội bộ — để test chèn
+    /// một thao tác khác vào giữa một vòng lặp của service. `f` tự chống đệ quy nếu cần.
+    pub fn on_call(&self, f: impl Fn(&str, &Path) + Send + Sync + 'static) {
+        self.st().hook = Some(Arc::new(f));
     }
 
     /// Lần `register(path)` kế tiếp panic trước khi ghi nhận — giả app crash (một lần).
@@ -85,6 +100,10 @@ impl ActivationEngine for FakeEngine {
     }
 
     fn register(&self, path: &Path, scope: Scope) -> Result<(), EngineError> {
+        let hook = self.st().hook.clone();
+        if let Some(h) = hook {
+            h("register", path);
+        }
         let barrier = self.st().barrier.take();
         if let Some(b) = barrier {
             self.st().blocked = true;
@@ -107,7 +126,14 @@ impl ActivationEngine for FakeEngine {
     }
 
     fn unregister(&self, path: &Path, scope: Scope) -> Result<(), EngineError> {
+        let hook = self.st().hook.clone();
+        if let Some(h) = hook {
+            h("unregister", path);
+        }
         let mut st = self.st();
+        if let Some(e) = st.fail_unregister.take() {
+            return Err(e);
+        }
         let before = st.regs.len();
         st.regs.retain(|(p, s)| !(p == path && *s == scope));
         if st.regs.len() == before { Err(EngineError::NotRegistered) } else { Ok(()) }

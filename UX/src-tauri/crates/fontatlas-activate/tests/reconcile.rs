@@ -255,3 +255,100 @@ fn shutdown_then_reconcile_restores_session() {
     assert_eq!(rep.reregistered, 1);
     assert_eq!(svc.engine().registrations(), vec![(canon(&env.fonts.join(LIBRE)), Scope::Session)]);
 }
+
+// ---------- review fix: snapshot cũ không được ghi đè ----------
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use fontatlas_activate::DeactivatePolicy;
+
+/// Invariant: `state=Active` ⇔ có ít nhất một lý do.
+fn assert_invariant(env: &Env, k: &FaceKey) {
+    let r = row(env, k);
+    assert_eq!(r.state == DesiredState::Active, !r.reasons.is_empty(), "{r:?}");
+}
+
+/// Khi file đầu tiên của vòng lặp gọi `op`, tắt file còn lại bằng `deactivate_faces`.
+fn deactivate_other_once(
+    svc: &Arc<ActivationService<FakeEngine>>,
+    env: &Arc<Env>,
+    op: &'static str,
+    a: FaceKey,
+    b: FaceKey,
+) {
+    let (pa, fired) = (canon(&env.fonts.join(LIBRE)), Arc::new(AtomicBool::new(false)));
+    let (s2, e2) = (svc.clone(), env.clone());
+    svc.engine().on_call(move |o, path| {
+        if o == op && !fired.swap(true, Ordering::SeqCst) {
+            let other = if path == pa { b } else { a };
+            s2.deactivate_faces(&e2.store, &[other], DeactivatePolicy::Ask, &mut |_| {}).unwrap();
+        }
+    });
+}
+
+fn two_active() -> (Arc<Env>, Arc<ActivationService<FakeEngine>>, FaceKey, FaceKey) {
+    let env = Arc::new(env_with(&[LIBRE, ROBOTO]));
+    let svc = Arc::new(service(&env));
+    let (a, b) = (key_of(&env, LIBRE), key_of(&env, ROBOTO));
+    activate(&svc, &env, a, Scope::Session);
+    activate(&svc, &env, b, Scope::Session);
+    (env, svc, a, b)
+}
+
+fn one_inactive_and_unregistered(env: &Env, svc: &ActivationService<FakeEngine>, a: &FaceKey, b: &FaceKey) {
+    let inactive: Vec<_> = [a, b].into_iter().filter(|k| row(env, k).state == DesiredState::Inactive).collect();
+    assert_eq!(inactive.len(), 1, "đúng một file bị tắt giữa chừng");
+    assert!(row(env, inactive[0]).reasons.is_empty());
+    assert_eq!(svc.engine().registrations().len(), 1, "file bị tắt không được hồi sinh");
+    assert_invariant(env, a);
+    assert_invariant(env, b);
+}
+
+#[test]
+fn set_scope_does_not_resurrect_row_deactivated_mid_run() {
+    let (env, svc, a, b) = two_active();
+    deactivate_other_once(&svc, &env, "register", a, b);
+    svc.set_scope(&env.store, None, Scope::Persistent).unwrap();
+    one_inactive_and_unregistered(&env, &svc, &a, &b);
+}
+
+#[test]
+fn reconcile_does_not_resurrect_row_deactivated_mid_run() {
+    let (env, svc, a, b) = two_active();
+    svc.engine().simulate_logout();
+    deactivate_other_once(&svc, &env, "register", a, b);
+    reconcile(&svc, &env);
+    one_inactive_and_unregistered(&env, &svc, &a, &b);
+}
+
+#[test]
+fn shutdown_does_not_resurrect_row_deactivated_mid_run() {
+    let (env, svc, a, b) = two_active();
+    deactivate_other_once(&svc, &env, "unregister", a, b);
+    svc.shutdown(&env.store).unwrap();
+    let inactive: Vec<_> = [a, b].into_iter().filter(|k| row(&env, k).state == DesiredState::Inactive).collect();
+    assert_eq!(inactive.len(), 1);
+    assert_invariant(&env, &a);
+    assert_invariant(&env, &b);
+}
+
+// ---------- review fix: shutdown gỡ cả dòng Unknown / Error ----------
+fn set_status(env: &Env, k: &FaceKey, status: ActivationStatus) {
+    let mut s = env.store.lock().unwrap();
+    let mut r = s.activation_row(&k.hash).unwrap().unwrap();
+    r.status = status;
+    s.put_activation(&r).unwrap();
+}
+
+#[test]
+fn shutdown_unregisters_unknown_and_error_session_rows() {
+    let (env, svc, a, b) = two_active();
+    set_status(&env, &a, ActivationStatus::Unknown);
+    set_status(&env, &b, ActivationStatus::Error);
+    assert_eq!(svc.shutdown(&env.store).unwrap(), 2);
+    assert!(svc.engine().registrations().is_empty());
+    for k in [a, b] {
+        assert_eq!(row(&env, &k).status, ActivationStatus::Unregistered);
+        assert_eq!(row(&env, &k).state, DesiredState::Active, "giữ mong muốn để mở lại thì bật lại");
+    }
+}

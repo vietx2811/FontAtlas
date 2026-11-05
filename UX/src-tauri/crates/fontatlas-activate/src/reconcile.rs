@@ -73,7 +73,15 @@ impl<E: ActivationEngine> ActivationService<E> {
                 outcome: FileOutcome::Busy,
             };
             if let Some(_guard) = self.take(hash) {
-                res.outcome = self.reconcile_one(store, row, &pruned, &existing, &mut rep)?;
+                // Đọc lại SAU khi giữ guard: snapshot có thể đã cũ (thao tác khác vừa đổi dòng này).
+                let fresh = relock(store).activation_row(&hash)?;
+                res.outcome = match fresh {
+                    Some(fresh) => {
+                        res.path = fresh.active_path.clone();
+                        self.reconcile_one(store, fresh, &pruned, &existing, &mut rep)?
+                    }
+                    None => FileOutcome::AlreadyInactive,
+                };
             }
             if matches!(res.outcome, FileOutcome::Failed { .. }) {
                 rep.failed += 1;
@@ -202,11 +210,14 @@ impl<E: ActivationEngine> ActivationService<E> {
         let rows: Vec<ActivationRow> = relock(store)
             .activation_rows()?
             .into_iter()
-            .filter(|r| r.scope == Scope::Session && r.status == ActivationStatus::Registered)
+            .filter(|r| r.scope == Scope::Session && maybe_registered(r))
             .collect();
         let mut n = 0;
-        for mut row in rows {
-            let Some(_guard) = self.take(row.hash) else { continue };
+        for snapshot in rows {
+            let Some(_guard) = self.take(snapshot.hash) else { continue };
+            // Đọc lại SAU khi giữ guard: không ghi đè bằng snapshot cũ.
+            let fresh = relock(store).activation_row(&snapshot.hash)?;
+            let Some(mut row) = fresh.filter(|r| r.scope == Scope::Session && maybe_registered(r)) else { continue };
             let Some(p) = row.active_path.clone().map(PathBuf::from) else { continue };
             match self.engine().unregister(&p, Scope::Session) {
                 Ok(()) | Err(EngineError::NotRegistered) => {

@@ -223,6 +223,14 @@ impl<E: ActivationEngine> ActivationService<E> {
                 rep.push(res);
                 continue;
             };
+            // Đọc lại SAU khi giữ guard: dòng trong snapshot có thể đã bị thao tác khác đổi (vd bị tắt).
+            let fresh = relock(store).activation_row(&row.hash)?;
+            let Some(fresh) = fresh.filter(|r| {
+                r.state == DesiredState::Active && r.status == ActivationStatus::Registered && r.scope != scope
+            }) else {
+                continue;
+            };
+            row = fresh;
             let Some(path) = row.active_path.clone() else { continue };
             let path = std::path::PathBuf::from(path);
             let old = row.scope;
