@@ -1,0 +1,12 @@
+[package]
+name = "fontatlas-describe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Tìm bằng mô tả không LLM: từ điển mô tả → bộ lọc trục hiện được trên UI"
+
+[dependencies]
+fontatlas-store = { path = "../fontatlas-store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
