@@ -363,7 +363,7 @@ impl Store {
         &mut self,
         f: impl FnOnce(&rusqlite::Transaction) -> Result<R, StoreError>,
     ) -> Result<R, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let r = f(&tx)?;
         tx.commit()?;
         Ok(r)
@@ -372,7 +372,7 @@ impl Store {
     /// Xoá `collection:<id>` khi collection không còn, hoặc file không còn face nào trong đó.
     /// Trả (hash, các lý do đã xoá) theo thứ tự hash.
     pub fn prune_collection_reasons(&mut self) -> Result<PrunedReasons, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let stale: Vec<(Vec<u8>, String)> = {
             let mut st = tx.prepare(
                 "SELECT r.hash, r.reason FROM u.activation_reasons r

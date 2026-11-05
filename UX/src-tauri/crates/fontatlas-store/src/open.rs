@@ -70,6 +70,30 @@ impl Store {
         Ok((Store { conn, dir: dir.to_path_buf() }, rep))
     }
 
+    /// Kết nối chỉ chạm user.db (không mở library.db): dành cho mọi ghi dữ liệu người dùng,
+    /// để không tranh khoá với lô ingest. `main` là DB trong bộ nhớ; user.db attach thành `u`
+    /// nên SQL của user.rs chạy nguyên. Không migrate: cần `Store::open` đã chạy trước.
+    pub fn open_user_only(dir: &Path) -> Result<Store, StoreError> {
+        let user_path = dir.join(USER_FILE);
+        check_user_version(&user_path)?;
+        let conn = Connection::open_in_memory()?;
+        conn.execute("ATTACH DATABASE ?1 AS u", [user_path.to_string_lossy()])?;
+        conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA u.synchronous=NORMAL;")?;
+        Ok(Store { conn, dir: dir.to_path_buf() })
+    }
+
+    /// Kết nối chỉ đọc (library.db + user.db attach `u`), không migrate: dựng Index mà không
+    /// giữ khoá của Store chính.
+    pub fn open_reader(dir: &Path) -> Result<Store, StoreError> {
+        let user_path = dir.join(USER_FILE);
+        check_user_version(&user_path)?;
+        let conn = Connection::open_with_flags(dir.join(LIBRARY_FILE), OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.execute("ATTACH DATABASE ?1 AS u", [user_path.to_string_lossy()])?;
+        conn.execute_batch("PRAGMA query_only=ON;")?;
+        Ok(Store { conn, dir: dir.to_path_buf() })
+    }
+
     /// Kết nối thô — cho chẩn đoán và test.
     pub fn conn(&self) -> &Connection {
         &self.conn
@@ -78,6 +102,15 @@ impl Store {
     pub fn dir(&self) -> &Path {
         &self.dir
     }
+}
+
+fn check_user_version(user_path: &Path) -> Result<(), StoreError> {
+    let ro = Connection::open_with_flags(user_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let found = user_version(&ro)?;
+    if found != USER_VERSION {
+        return Err(StoreError::NewerSchema { db: "user", found, supported: USER_VERSION });
+    }
+    Ok(())
 }
 
 fn open_library(path: &Path) -> Result<Connection, StoreError> {

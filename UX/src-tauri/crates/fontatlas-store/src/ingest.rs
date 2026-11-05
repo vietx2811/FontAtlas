@@ -225,7 +225,7 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
 impl Store {
     /// Ghi một lô trong MỘT transaction; lỗi bất kỳ → không ghi gì của lô.
     pub fn ingest(&mut self, items: Vec<IngestItem>, seen_at: i64) -> Result<IngestSummary, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let generation: i64 =
             tx.query_row("SELECT value FROM meta WHERE key='scan_generation'", [], |r| r.get(0))?;
         let mut sum = IngestSummary::default();

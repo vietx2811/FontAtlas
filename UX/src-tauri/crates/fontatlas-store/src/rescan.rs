@@ -137,7 +137,7 @@ impl Store {
                 .is_some_and(|&(size, mtime, fresh)| fresh && size == f.size as i64 && mtime == f.mtime_ns)
         });
         {
-            let tx = self.conn.transaction()?;
+            let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
             for f in &unchanged {
                 tx.execute(
                     "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0 WHERE path=?1",
@@ -226,7 +226,7 @@ impl Store {
             st.query_map(params![source_id, generation], |r| Ok((r.get(0)?, r.get(1)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         };
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         for (id, p) in stale {
             if failed_dirs.iter().any(|d| Path::new(&p).starts_with(d)) {
                 continue; // nằm trong thư mục không đọc được: không biết đã xoá hay chưa
@@ -248,7 +248,7 @@ impl Store {
 
     /// Xoá nguồn (thao tác người dùng): vị trí của nguồn, bản ghi `u.sources`, rồi dọn rác.
     pub fn remove_source(&mut self, source_id: i64) -> Result<(), StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
         tx.execute("DELETE FROM u.sources WHERE source_id=?1", [source_id])?;
         tx.commit()?;
@@ -258,7 +258,7 @@ impl Store {
 
     /// Xoá file không còn vị trí nào (vị trí `missing` vẫn giữ file). Không đụng `u`.
     pub fn gc(&mut self) -> Result<usize, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let n = tx.execute(
             "DELETE FROM files WHERE NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = files.file_id)",
             [],

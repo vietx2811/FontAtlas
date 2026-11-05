@@ -189,7 +189,7 @@ impl Store {
         let old = read_old(old_db)?;
         let now = now_ms();
         let mut rep = LegacyImport { fonts: old.fonts.len(), ..Default::default() };
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         // nguồn: cha trước con (theo số thành phần đường dẫn) để nguồn lồng nhau luôn giữ cha;
         // bỏ nguồn thư mục không có path
@@ -283,7 +283,7 @@ impl Store {
     pub fn resolve_legacy(&mut self) -> Result<LegacyResolve, StoreError> {
         let mut rep = LegacyResolve::default();
         let now = now_ms();
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let pending: Vec<(String, String, String)> = {
             let mut st = tx.prepare("SELECT legacy_id, legacy_path, payload FROM u.legacy_ids WHERE hash IS NULL")?;
             st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?

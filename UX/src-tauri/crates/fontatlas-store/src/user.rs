@@ -109,7 +109,7 @@ const SOURCE_COLS: &str = "source_id, kind, name, path, enabled, created_at";
 impl Store {
     /// Thêm nguồn. Trùng (kind, path) → id cũ. Lồng trong/chứa nguồn khác → `NestedSource`.
     pub fn add_source(&mut self, kind: SourceKind, name: &str, path: Option<&Path>) -> Result<i64, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let path_s = path.map(|p| p.to_string_lossy().to_string());
         if let Some(id) = tx
             .query_row(
@@ -220,7 +220,7 @@ impl Store {
 
     pub fn add_to_collection(&mut self, id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
         let now = now_ms();
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let mut n = 0;
         for k in keys {
             n += tx.execute(
@@ -233,7 +233,7 @@ impl Store {
     }
 
     pub fn remove_from_collection(&mut self, id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let mut n = 0;
         for k in keys {
             n += tx.execute(
@@ -265,7 +265,7 @@ impl Store {
 
     pub fn tag_faces(&mut self, tag_id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
         let now = now_ms();
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let mut n = 0;
         for k in keys {
             n += tx.execute(
@@ -278,7 +278,7 @@ impl Store {
     }
 
     pub fn untag_faces(&mut self, tag_id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let mut n = 0;
         for k in keys {
             n += tx.execute(
