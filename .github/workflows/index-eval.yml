@@ -2,7 +2,7 @@ name: index-eval
 on: [push, pull_request]
 jobs:
   test:            # không cần mạng: chỉ fixture trong repo + reference-v1.json đã commit
-    runs-on: macos-14
+    runs-on: macos-latest
     defaults: { run: { working-directory: UX/src-tauri } }
     steps:
       - uses: actions/checkout@v4
@@ -10,7 +10,7 @@ jobs:
       - run: cargo test -p fontatlas-core -p fontatlas-index -p fontatlas-eval
       - run: cargo clippy -p fontatlas-index -p fontatlas-eval -- -D warnings
   eval-report:     # cần mạng (google/fonts); chỉ báo cáo, không chặn merge
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: test
     continue-on-error: true
     defaults: { run: { working-directory: UX/src-tauri } }
