@@ -18,6 +18,8 @@ fn check(name: &str, json: String) {
         std::fs::write(&p, format!("{json}\n")).unwrap();
     }
     let want = std::fs::read_to_string(&p).unwrap_or_else(|_| panic!("thiếu {name}; chạy với UPDATE_FIXTURES=1"));
+    // Checkout Windows có thể đổi LF → CRLF (đã ép LF bằng .gitattributes; chuẩn hoá thêm cho chắc).
+    let want = want.replace("\r\n", "\n");
     assert_eq!(json.trim_end(), want.trim_end(), "{name} lệch hợp đồng");
 }
 
