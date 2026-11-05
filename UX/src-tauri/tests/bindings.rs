@@ -218,9 +218,9 @@ fn fixtures() -> Vec<(&'static str, Value)> {
             "scan_events",
             v(&vec![
                 ScanEvent::Queued { source_id: 1 },
-                ScanEvent::Progress { source_id: 1, progress: ScanProgressDto { phase: ScanPhaseDto::Analyzing, done: 256, total: 1200, faces_written: 256 } },
+                ScanEvent::Progress { source_id: 1, progress: ScanProgressDto { phase: ScanPhaseDto::Analyzing, done: 256, total: 1200, faces_written: 256, not_downloaded: 3 } },
                 ScanEvent::FacesAdded { source_id: 1, count: 256 },
-                ScanEvent::Finished { source_id: 1, stats: RescanStatsDto { status: RescanStatusDto::Ok, seen: 1200, unchanged: 0, relinked: 0, analyzed: 1200, failed: 2, missing: 0, unreadable: vec![] } },
+                ScanEvent::Finished { source_id: 1, stats: RescanStatsDto { status: RescanStatusDto::Ok, seen: 1200, unchanged: 0, not_downloaded: 3, relinked: 0, analyzed: 1200, failed: 2, missing: 0, unreadable: vec![] } },
                 ScanEvent::Idle,
             ]),
         ),
@@ -354,9 +354,9 @@ fn activation_dtos_match_plan7_contract_fixtures() {
 #[test]
 fn dto_serializes_like_core() {
     use fontatlas_store::{LegacyImport, LegacyPreview, LegacyResolve, RescanStats, RescanStatus, ScanPhase, ScanProgress};
-    let prog = ScanProgress { phase: ScanPhase::Hashing, done: 3, total: 9, faces_written: 2 };
+    let prog = ScanProgress { phase: ScanPhase::Hashing, done: 3, total: 9, faces_written: 2, not_downloaded: 4 };
     assert_eq!(serde_json::to_value(&prog).unwrap(), serde_json::to_value(ScanProgressDto::from(&prog)).unwrap());
-    let st = RescanStats { status: RescanStatus::SourceUnavailable, seen: 5, unchanged: 1, relinked: 2, analyzed: 3, failed: 4, missing: 6, unreadable: vec![("a".into(), "io: x".into())] };
+    let st = RescanStats { status: RescanStatus::SourceUnavailable, seen: 5, unchanged: 1, not_downloaded: 7, relinked: 2, analyzed: 3, failed: 4, missing: 6, unreadable: vec![("a".into(), "io: x".into())] };
     assert_eq!(serde_json::to_value(&st).unwrap(), serde_json::to_value(RescanStatsDto::from(&st)).unwrap());
     let imp = LegacyImport { fonts: 1, sources: 2, collections: 3, recovered_collections: 4, bad_tags: 5, skipped_sources: 6 };
     assert_eq!(serde_json::to_value(&imp).unwrap(), serde_json::to_value(LegacyImportDto::from(imp.clone())).unwrap());

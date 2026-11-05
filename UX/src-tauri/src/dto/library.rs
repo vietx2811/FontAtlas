@@ -32,11 +32,19 @@ pub struct ScanProgressDto {
     pub done: u32,
     pub total: u32,
     pub faces_written: u32,
+    /// Font còn là placeholder đám mây (chưa tải về): giao diện hiện "N font chưa tải về".
+    pub not_downloaded: u32,
 }
 
 impl From<&ScanProgress> for ScanProgressDto {
     fn from(p: &ScanProgress) -> Self {
-        ScanProgressDto { phase: p.phase.into(), done: p.done as u32, total: p.total as u32, faces_written: p.faces_written as u32 }
+        ScanProgressDto {
+            phase: p.phase.into(),
+            done: p.done as u32,
+            total: p.total as u32,
+            faces_written: p.faces_written as u32,
+            not_downloaded: p.not_downloaded as u32,
+        }
     }
 }
 
@@ -56,6 +64,7 @@ pub struct RescanStatsDto {
     pub status: RescanStatusDto,
     pub seen: u32,
     pub unchanged: u32,
+    pub not_downloaded: u32,
     pub relinked: u32,
     pub analyzed: u32,
     pub failed: u32,
@@ -73,6 +82,7 @@ impl From<&RescanStats> for RescanStatsDto {
             },
             seen: s.seen as u32,
             unchanged: s.unchanged as u32,
+            not_downloaded: s.not_downloaded as u32,
             relinked: s.relinked as u32,
             analyzed: s.analyzed as u32,
             failed: s.failed as u32,

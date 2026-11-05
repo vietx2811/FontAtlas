@@ -7,6 +7,7 @@
     "progress": {
       "done": 256,
       "facesWritten": 256,
+      "notDownloaded": 3,
       "phase": "analyzing",
       "total": 1200
     },
@@ -24,6 +25,7 @@
       "analyzed": 1200,
       "failed": 2,
       "missing": 0,
+      "notDownloaded": 3,
       "relinked": 0,
       "seen": 1200,
       "status": "ok",
