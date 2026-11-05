@@ -3,15 +3,15 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { setApi } from './api';
-import { createMockApi } from './api/mock';
+import { createApi } from './api/select';
 import { applyDevPreset, devInitial } from './store/devPreset';
 import { StatusProvider } from './context/StatusContext';
 
-// Đến khi 6a có UX/bindings thật, Api thật thay chỗ này.
+// Trong cửa sổ Tauri: lệnh thật (UX/bindings). Ngoài Tauri hoặc VITE_FA_API=mock: mock, kèm preset trạng thái cho dev/QA.
 const dev = import.meta.env.DEV;
-const api = createMockApi(dev ? { initial: devInitial(location.hash), tickMs: 1500 } : {});
+const { api, kind } = createApi(dev ? { initial: devInitial(location.hash), tickMs: 1500 } : {});
 setApi(api);
-if (dev) setTimeout(() => void applyDevPreset(api, location.hash), 400); // sau hydrate()
+if (dev && kind === 'mock') setTimeout(() => void applyDevPreset(api, location.hash), 400); // sau hydrate()
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
