@@ -157,20 +157,30 @@ pub fn directory_source_ids(state: &AppState) -> Result<Vec<i64>, CmdError> {
 fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
     let mut store = Store::open(&state.dirs.data).map(|(s, _)| s);
     loop {
-        let id = {
+        let next = {
             let mut q = lock(&inner.q);
             match q.queue.pop_front() {
                 Some(id) if !inner.shutdown.load(Ordering::SeqCst) => {
                     q.current = Some(id);
-                    id
+                    Some(id)
                 }
                 _ => {
                     q.current = None;
-                    q.running = false;
-                    inner.idle.notify_all();
-                    break;
+                    None
                 }
             }
+        };
+        let Some(id) = next else {
+            // hết việc: báo Idle và chạy các móc; `running` giữ true tới khi móc xong để `wait_idle` chờ đủ
+            state.hubs.scan.emit(ScanEvent::Idle);
+            after_idle(&state);
+            let mut q = lock(&inner.q);
+            if q.queue.is_empty() || inner.shutdown.load(Ordering::SeqCst) {
+                q.running = false;
+                inner.idle.notify_all();
+                break;
+            }
+            continue;
         };
         inner.cancel.store(false, Ordering::SeqCst);
         match store.as_mut() {
@@ -206,11 +216,10 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
                 .emit(ScanEvent::Failed { source_id: id, error: CmdError::new("store_unavailable", e.to_string()) }),
         }
     }
-    state.hubs.scan.emit(ScanEvent::Idle);
-    after_idle(&state);
 }
 
 /// Việc nối tiếp khi hàng đợi quét về rỗng (mỗi task sau thêm móc của mình).
 fn after_idle(state: &Arc<AppState>) {
     boot::resolve_legacy_if_needed(state);
+    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
 }

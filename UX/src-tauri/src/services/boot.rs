@@ -61,6 +61,9 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
     }
     refresh_legacy(state);
     set_phase(state, BootPhase::Indexing);
+    if let Err(e) = crate::index_bundle::rebuild_index(state) {
+        log::warn!("dựng Index lúc khởi động lỗi: {e}");
+    }
     set_phase(state, BootPhase::Activation);
     set_phase(state, BootPhase::Ready);
     snapshot(state)

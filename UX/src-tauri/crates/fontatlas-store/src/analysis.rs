@@ -113,6 +113,17 @@ impl Store {
         Ok(out)
     }
 
+    /// `face_id` của mọi face đang nằm trong collection (cho lọc ứng viên Pairing theo collection).
+    pub fn collection_face_ids(&self, collection_id: i64) -> Result<Vec<i64>, StoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT f.face_id FROM faces f JOIN files fi ON fi.file_id = f.file_id
+             JOIN u.collection_items ci ON ci.hash = fi.hash AND ci.face_index = f.face_index
+             WHERE ci.collection_id = ?1",
+        )?;
+        let ids = st.query_map([collection_id], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(ids)
+    }
+
     /// Vị trí chưa missing có location_id nhỏ nhất.
     pub fn face_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
         let p: Option<String> = self

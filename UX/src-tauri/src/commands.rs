@@ -14,7 +14,8 @@ use crate::dto::events::{BootEvent, ScanEvent};
 use crate::dto::library::*;
 use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
-use crate::services::{boot, library, onboarding, sources, system};
+use crate::dto::analysis::*;
+use crate::services::{analysis, boot, describe, library, onboarding, pairs, sources, system};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -73,6 +74,14 @@ macro_rules! command_list {
             async get_setting(key: String) -> Result<Option<String>, CmdError>;
             async set_setting(key: String, value: String) -> Result<(), CmdError>;
             async detect_font_managers() -> Result<Vec<FontManagerDto>, CmdError>;
+            async get_face(face: FaceKeyDto, lang: LangDto) -> Result<FaceDetailDto, CmdError>;
+            async similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Result<Vec<SimilarHitDto>, CmdError>;
+            async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
+            async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
+            async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
+            async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
+            async delete_pair(id: i64) -> Result<(), CmdError>;
+            async describe(text: String) -> Result<DescribeDto, CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -195,6 +204,14 @@ cmd!(get_ui_state() -> UiStateDto => |s| system::get_ui_state(s));
 cmd!(set_ui_state(state: UiStateDto) -> () => |s| system::set_ui_state(s, &state));
 cmd!(get_setting(key: String) -> Option<String> => |s| system::get_setting(s, &key));
 cmd!(set_setting(key: String, value: String) -> () => |s| system::set_setting(s, &key, &value));
+cmd!(get_face(face: FaceKeyDto, lang: LangDto) -> FaceDetailDto => |s| analysis::get_face(s, &face, lang));
+cmd!(similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Vec<SimilarHitDto> => |s| analysis::similar(s, &face, &opts));
+cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
+cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
+cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
+cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
+cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
+cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
 cmd!(detect_font_managers() -> Vec<FontManagerDto> => |_s| Ok(system::detect_font_managers()));
 
 #[tauri::command]

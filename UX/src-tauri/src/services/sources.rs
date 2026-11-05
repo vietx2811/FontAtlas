@@ -69,7 +69,9 @@ pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdErr
 }
 
 pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<(), CmdError> {
-    state.with_store(|s| Ok(s.remove_source(id)?))
+    state.with_store(|s| Ok(s.remove_source(id)?))?;
+    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    Ok(())
 }
 
 /// `None` = mọi nguồn thư mục.

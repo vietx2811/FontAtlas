@@ -4,6 +4,7 @@ pub mod commands;
 pub mod dto;
 pub mod error;
 pub mod hub;
+pub mod index_bundle;
 pub mod services;
 pub mod state;
 

@@ -8,6 +8,7 @@ use fontatlas_store::Store;
 use crate::dto::settings::BootStatusDto;
 use crate::error::CmdError;
 use crate::hub::Hubs;
+use crate::index_bundle::{IndexSlot, RebuildState};
 use crate::services::scan::ScanManager;
 use crate::services::activation::ActivationApi;
 
@@ -36,6 +37,8 @@ pub struct AppState {
     pub boot: RwLock<BootStatusDto>,
     pub hubs: Hubs,
     pub scans: ScanManager,
+    pub index: IndexSlot,
+    pub rebuild: RebuildState,
 }
 
 impl AppState {
@@ -49,6 +52,8 @@ impl AppState {
             boot: RwLock::new(BootStatusDto::default()),
             hubs: Hubs::default(),
             scans: ScanManager::default(),
+            index: RwLock::new(None),
+            rebuild: RebuildState::default(),
         })
     }
 

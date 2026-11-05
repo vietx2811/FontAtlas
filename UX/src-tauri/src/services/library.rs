@@ -10,12 +10,12 @@ use crate::state::AppState;
 
 pub const MAX_FACE_KEYS: usize = 2000;
 
-/// Phạm vi theo trục mô tả: Task 15 nối vào Index. Trước đó chỉ chấp nhận danh sách rỗng.
-fn axis_scope(_state: &AppState, filters: &[AxisFilterDto]) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
+/// Phạm vi theo bộ lọc trục (từ `describe`): cần Index; rỗng thì không lọc.
+fn axis_scope(state: &AppState, filters: &[AxisFilterDto]) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
     if filters.is_empty() {
         return Ok(None);
     }
-    Err(CmdError::busy("Index chưa dựng xong"))
+    Ok(crate::services::analysis::bundle(state)?.scope_for(filters, &[]))
 }
 
 fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
