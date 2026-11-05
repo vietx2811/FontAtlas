@@ -1,0 +1,163 @@
+{
+  "axes": [
+    {
+      "key": "contrast",
+      "method": "method",
+      "percentile": 0.9399999976158142,
+      "quality": "measured",
+      "reason": null,
+      "value": 4.9
+    },
+    {
+      "key": "serif_foot",
+      "method": "method",
+      "percentile": null,
+      "quality": "measured",
+      "reason": null,
+      "value": "serif"
+    },
+    {
+      "key": "terminal",
+      "method": "method",
+      "percentile": null,
+      "quality": "failed",
+      "reason": "missing_glyph",
+      "value": null
+    }
+  ],
+  "classification": "Serif",
+  "file": {
+    "container": "sfnt",
+    "format": "ttf",
+    "numGlyphs": 1230,
+    "outline": "glyf",
+    "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+    "sizeBytes": 179000
+  },
+  "hasImage": true,
+  "metadata": {
+    "copyright": "Copyright 2017 The Playfair Display Project Authors",
+    "designer": "Claus Eggers Sørensen",
+    "features": {
+      "gpos": [
+        "kern",
+        "mark"
+      ],
+      "gsub": [
+        "liga",
+        "ccmp"
+      ]
+    },
+    "license": "This Font Software is licensed under the SIL Open Font License, Version 1.1.",
+    "licenseUrl": "https://openfontlicense.org",
+    "manufacturer": null,
+    "namedInstances": [
+      {
+        "coords": [
+          {
+            "tag": "wght",
+            "value": 700.0
+          }
+        ],
+        "name": "Bold"
+      }
+    ],
+    "opszRange": null,
+    "scripts": [
+      "cyrl",
+      "latn"
+    ],
+    "variableAxes": [
+      {
+        "default": 400.0,
+        "max": 900.0,
+        "min": 400.0,
+        "tag": "wght"
+      }
+    ],
+    "vendorUrl": null,
+    "version": "Version 1.203"
+  },
+  "row": {
+    "addedAt": 1700000000003,
+    "faceId": 3,
+    "faceIndex": 0,
+    "family": "Playfair Display",
+    "fileSize": 176003,
+    "fullName": "Playfair Display Regular",
+    "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+    "isFavorite": false,
+    "isItalic": false,
+    "isVariable": false,
+    "licenseClass": "ofl",
+    "missing": false,
+    "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+    "subfamily": "Regular",
+    "supportsVi": true,
+    "viMissing": 0,
+    "viStatus": "full",
+    "weightClass": 400,
+    "widthClass": 5
+  },
+  "similarTop": [
+    {
+      "differ": [
+        "width"
+      ],
+      "distance": 0.20999999344348907,
+      "face": {
+        "faceIndex": 0,
+        "hashHex": "0505050505050505050505050505050505050505050505050505050505050505"
+      },
+      "row": {
+        "addedAt": 1700000000005,
+        "faceId": 5,
+        "faceIndex": 0,
+        "family": "Libre Baskerville",
+        "fileSize": 176005,
+        "fullName": "Libre Baskerville Regular",
+        "hashHex": "0505050505050505050505050505050505050505050505050505050505050505",
+        "isFavorite": false,
+        "isItalic": false,
+        "isVariable": false,
+        "licenseClass": "ofl",
+        "missing": false,
+        "path": "/Users/u/Fonts/LibreBaskerville-Regular.ttf",
+        "subfamily": "Regular",
+        "supportsVi": true,
+        "viMissing": 0,
+        "viStatus": "full",
+        "weightClass": 400,
+        "widthClass": 5
+      },
+      "same": [
+        "contrast"
+      ],
+      "source": "axes_and_image"
+    }
+  ],
+  "source": "axes_and_image",
+  "summary": "Serif, tương phản cao, x-height thấp. Đủ 134 ký tự Việt.",
+  "vietnamese": {
+    "dongSign": false,
+    "gposMark": true,
+    "gposMkmk": true,
+    "gsubCcmp": true,
+    "markWeightRatio": {
+      "key": "mark_weight_ratio",
+      "method": "method",
+      "percentile": null,
+      "quality": "estimated",
+      "reason": null,
+      "value": 0.8
+    },
+    "missing": [],
+    "precomposedComposite": true,
+    "stackStyle": "right",
+    "stackedMarksOverflow": false,
+    "stackedMarksTopEm": 1.0499999523162842,
+    "status": "full",
+    "supports": true,
+    "total": 134
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "legacy": {
+    "error": null,
+    "found": true,
+    "imported": null,
+    "preview": {
+      "collections": 3,
+      "favorites": 12,
+      "fonts": 300,
+      "sources": 2,
+      "tags": 5
+    },
+    "resolved": null
+  },
+  "libraryRecreated": false,
+  "phase": "ready",
+  "storeError": null,
+  "userBackup": null
+}

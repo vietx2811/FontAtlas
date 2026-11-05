@@ -1,0 +1,14 @@
+{
+  "bytesPerSec": 0.0,
+  "diskFree": 52000000000,
+  "doneBytes": 148000000,
+  "etaMs": null,
+  "lastError": {
+    "code": "io",
+    "message": "mạng đứt"
+  },
+  "location": "/Users/u/Library/Application Support/com.vietx.fontatlas/models",
+  "requiredBytes": 408000000,
+  "state": "paused",
+  "totalBytes": 371000000
+}

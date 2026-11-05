@@ -1,0 +1,20 @@
+[
+  {
+    "face": {
+      "faceIndex": 0,
+      "hashHex": "0909090909090909090909090909090909090909090909090909090909090909"
+    },
+    "instance": {
+      "coords": [
+        {
+          "tag": "wght",
+          "value": 700.0
+        }
+      ],
+      "name": "Bold"
+    },
+    "italic": false,
+    "subfamily": "Bold",
+    "weight": 700
+  }
+]

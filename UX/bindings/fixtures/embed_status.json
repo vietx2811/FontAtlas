@@ -1,0 +1,13 @@
+{
+  "device": "metal",
+  "done": 300,
+  "enabled": true,
+  "etaMs": 42000,
+  "failed": 1,
+  "loadError": null,
+  "modelVersion": "siglip2-base-p16-224@75de2d5|white-v2",
+  "msPerFace": 28.0,
+  "paused": false,
+  "pending": 1500,
+  "running": true
+}

@@ -1,0 +1,13 @@
+[
+  {
+    "available": true,
+    "enabled": true,
+    "faceCount": 1200,
+    "id": 1,
+    "kind": "directory",
+    "lastScan": null,
+    "name": "Fonts",
+    "path": "/Users/u/Fonts",
+    "scanning": false
+  }
+]
