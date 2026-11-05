@@ -4,6 +4,8 @@ import { useUiStore, type PanelTab } from '../../store/ui';
 import { FontInfoCard } from './FontInfoCard';
 import { StyleDropdown, styleLabel } from './StyleDropdown';
 import { AnatomyTab } from './tabs/AnatomyTab';
+import { PairTab } from './tabs/PairTab';
+import { SimilarTab } from './tabs/SimilarTab';
 import { SpecimenTab } from './tabs/SpecimenTab';
 import { ViTab } from './tabs/ViTab';
 import { useFaceDetail } from './useFaceDetail';
@@ -64,7 +66,8 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
         {tab === 'spec' && <SpecimenTab sample={sample} css={bodyCss} />}
         {tab === 'vi' && detail && <ViTab detail={detail} css={bodyCss} />}
         {tab === 'anat' && detail && <AnatomyTab detail={detail} css={bodyCss} />}
-        {(tab === 'sim' || tab === 'pair') && <div className="fa-soon">Tab này nằm ở T9.</div>}
+        {tab === 'sim' && detail && <SimilarTab detail={detail} />}
+        {tab === 'pair' && detail && <PairTab api={api} detail={detail} css={bodyCss} />}
       </div>
     </aside>
   );

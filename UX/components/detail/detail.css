@@ -78,3 +78,26 @@
 .fa-axis-track { position: relative; height: 2px; background: var(--border); border-radius: 2px; }
 .fa-axis-track.dashed { background: none; border-top: 2px dashed var(--muted); height: 0; }
 .fa-axis-track i { position: absolute; top: -4px; width: 2px; height: 10px; margin-left: -1px; border-radius: 2px; background: var(--accent-ink); }
+
+.fa-sim { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fa-sim-hit { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.fa-sim-name { text-align: left; font-size: 14px; font-weight: 500; }
+.fa-sim-name:hover { color: var(--accent-ink); }
+.fa-badge { font-size: var(--text-2xs); padding: 2px 7px; border-radius: 99px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.fa-sim-why { grid-column: 1 / -1; margin: 0; font-size: var(--text-xs); color: var(--muted); line-height: 1.45; }
+.fa-pair-bar { display: flex; flex-direction: column; gap: 8px; }
+.fa-seg-sm { display: flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-2); }
+.fa-seg-sm button { flex: 1; height: 28px; padding: 0 6px; border-radius: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
+.fa-seg-sm button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.fa-switch-row { display: flex; align-items: center; justify-content: space-between; font-size: var(--text-xs); color: var(--muted); }
+.fa-pair-nav { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fa-pair-nav button { width: 28px; height: 28px; border-radius: 6px; }
+.fa-pair-nav button:hover:not(:disabled) { background: var(--surface-2); color: var(--fg); }
+.fa-pair-nav button:disabled { opacity: .35; }
+.fa-pair-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.fa-pair-name { margin: 0; font-size: var(--text-xs); color: var(--muted); }
+.fa-pair-summary { margin: 0; font-size: var(--text-sm); line-height: 1.5; }
+.fa-pair-labels { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.fa-pair-labels li { font-size: var(--text-xs); padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--fg); }
+.fa-pair-hint { margin: 0; font-size: var(--text-xs); color: var(--accent-ink); }
+.fa-link { color: var(--accent-ink); font-weight: 500; font-size: var(--text-sm); }
