@@ -10,7 +10,7 @@ export const DONE = 'done';
  * Quy ước (Lead duyệt 2026-11-06; 6a lưu `onboarding_step` null và "" như nhau nên không phân biệt được "chưa bắt đầu" với "xong"):
  * - lần đầu = step null và chưa xác nhận giấy phép (`licenseNoticeAck`). Người đã có nguồn từ DB cũ vẫn phải thấy giấy phép, model, kích hoạt;
  * - đang dở = step khác null và khác "done"; xong hoặc bỏ qua hướng dẫn thì ghi "done" (không hiện lại, giấy phép nhắc ở lần quét đầu/Similar);
- * - bước "Thư mục font" (O3) bị bỏ chỉ khi nguồn đã đến từ import dữ liệu cũ.
+ * - bước "Thư mục font" (O3) luôn hiện để bổ sung nguồn, kể cả sau import dữ liệu cũ (Lead duyệt round 2).
  * Nếu sau này cần phân biệt rõ hơn, xin 02 một trường riêng trong OnboardingDto.
  */
 export const isFirstRun = (s: OnboardingDto): boolean => s.step === null && !s.licenseNoticeAck;
@@ -19,8 +19,7 @@ export const startStep = (s: OnboardingDto): Step => (STEPS as readonly string[]
 
 export function visibleSteps(s: OnboardingDto): Step[] {
   const legacyPending = s.legacy.found && !s.legacy.imported && !s.legacy.resolved;
-  const sourcesFromLegacy = !!s.legacy.imported && s.hasSources;
-  return STEPS.filter(step => (step === 'o2' ? legacyPending : step === 'o3' ? !sourcesFromLegacy : step === 'o4' ? s.hasSources : true));
+  return STEPS.filter(step => (step === 'o2' ? legacyPending : step === 'o4' ? s.hasSources : true));
 }
 export function nextStep(cur: Step, s: OnboardingDto): Step | null {
   const list = STEPS.filter(x => x === cur || visibleSteps(s).includes(x));

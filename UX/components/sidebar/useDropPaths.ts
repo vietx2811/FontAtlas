@@ -23,3 +23,11 @@ export async function pickFolderWithDialog(): Promise<string | null> {
   const r = await open({ directory: true, multiple: false });
   return typeof r === 'string' ? r : null;
 }
+
+/** Onboarding có thể nhập nhiều nguồn độc lập trong một lần chọn. */
+export async function pickFoldersWithDialog(): Promise<string[]> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return [];
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const r = await open({ directory: true, multiple: true });
+  return typeof r === 'string' ? [r] : r ?? [];
+}

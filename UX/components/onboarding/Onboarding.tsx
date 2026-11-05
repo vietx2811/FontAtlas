@@ -1,20 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
 import { CmdError } from '../../api';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
-import { pickFolderWithDialog } from '../sidebar/useDropPaths';
+import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 
-type Props = { api: Api; pickFolder?: () => Promise<string | null>; onDone(): void };
+type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void };
 const MB = 1024 * 1024;
 const kindOf = (p: string | null) => (!p ? 'trong máy' : p.startsWith('/Volumes/') ? 'ổ ngoài' : /iCloud|Mobile Documents/.test(p) ? 'iCloud' : 'trong máy');
 
-export function Onboarding({ api, pickFolder = pickFolderWithDialog, onDone }: Props): React.JSX.Element | null {
+export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone }: Props): React.JSX.Element | null {
   const [state, setState] = useState<OnboardingDto | null>(null);
   const [step, setStep] = useState<Step>('o1');
+  const [working, setWorking] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const reload = useCallback(async () => { const s = await api.onboardingState(); setState(s); return s; }, [api]);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function Onboarding({ api, pickFolder = pickFolderWithDialog, onDone }: P
       setState(s);
       const dev = import.meta.env.DEV ? new URLSearchParams(location.hash.replace(/^#/, '')).get('ob') : null; // chỉ cho QA
       setStep(dev && (['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'end'] as string[]).includes(dev) ? (dev as Step) : startStep(s));
-    });
+    }).catch(e => { if (alive) setLoadError(String(e)); });
     return () => { alive = false; };
   }, [api]);
 
@@ -35,18 +37,18 @@ export function Onboarding({ api, pickFolder = pickFolderWithDialog, onDone }: P
   }, [api]);
   const finish = useCallback(async () => { await api.setOnboardingStep(DONE); onDone(); }, [api, onDone]);
 
-  if (!state) return null;
+  if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? `Không tải được hướng dẫn: ${loadError}` : "Đang mở hướng dẫn…"}</p>{loadError && <button type="button" onClick={() => location.reload()}>Thử lại</button>}</main></div>;
   const steps = visibleSteps(state);
   const dots: Step[] = steps.filter(x => x !== 'end');
   const idx = Math.max(0, dots.indexOf(step));
   const next = () => go(nextStep(step, state));
   const back = prevStep(step, state);
-  const ctx = { api, state, reload, next, finish, pickFolder };
+  const ctx = { api, state, reload, next, finish, pickFolders: pickFolder ? async () => { const p = await pickFolder(); return p ? [p] : []; } : pickFolders, setWorking };
 
   return (
     <div className="fa-onb" data-step={step}>
       <header className="fa-onb-top">
-        {back ? <button type="button" className="fa-onb-back" onClick={() => go(back)}>Quay lại</button> : <span />}
+        {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>Quay lại</button> : <span />}
         <div className="fa-onb-dots" role="group" aria-label={`Bước ${Math.min(idx + 1, dots.length)}/${dots.length}`}>
           {dots.map((d, i) => <i key={d} data-on={i <= idx} aria-hidden />)}
         </div>
@@ -67,7 +69,7 @@ export function Onboarding({ api, pickFolder = pickFolderWithDialog, onDone }: P
   );
 }
 
-type Ctx = { api: Api; state: OnboardingDto; reload(): Promise<OnboardingDto>; next(): Promise<void>; finish(): Promise<void>; pickFolder(): Promise<string | null> };
+type Ctx = { api: Api; state: OnboardingDto; reload(): Promise<OnboardingDto>; next(): Promise<void>; finish(): Promise<void>; pickFolders(): Promise<string[]>; setWorking(busy: boolean): void };
 const Actions = ({ children }: { children: React.ReactNode }) => <div className="fa-onb-actions">{children}</div>;
 const Primary = (p: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" className="primary" {...p} />;
 
@@ -111,36 +113,101 @@ function O2({ api, state, reload, next }: Ctx) {
   );
 }
 
-function O3({ api, state, reload, next, pickFolder }: Ctx) {
-  const [sources, setSources] = useState<SourceDto[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const refresh = useCallback(async () => { setSources(await api.listSources()); await reload(); }, [api, reload]);
-  useEffect(() => { void api.listSources().then(setSources); }, [api]);
-  const add = async (path?: string | null) => {
-    const p = path ?? await pickFolder();
-    if (!p) return;
-    try { await api.addSource(p); setMsg(null); await refresh(); }
-    catch (e) {
-      setMsg(e instanceof CmdError && e.code === 'nested_source' ? 'Thư mục này đã nằm trong nguồn có sẵn, nên không cần thêm lần nữa.' : `Không thêm được: ${(e as Error).message}`);
+function sourceError(error: unknown, path?: string): string {
+  if (error instanceof CmdError) {
+    if (error.code === 'cancelled') return '';
+    if (error.code === 'nested_source') {
+      const d = error.detail;
+      const existing = typeof d === 'object' && d !== null && 'existingPath' in d && typeof d.existingPath === 'string' ? d.existingPath : null;
+      if (existing === path) return 'Thư mục này đã có trong thư viện.';
+      if (existing && path && existing.startsWith(`${path.replace(/\/$/, '')}/`)) return `Thư mục này chứa nguồn đã có: ${existing}. Giữ nguyên nguồn cũ.`;
+      return 'Thư mục này đã nằm trong nguồn có sẵn. Giữ nguyên nguồn cũ.';
     }
+    if (error.code === 'busy') return 'Nguồn đang quét. Hãy đợi quét xong rồi thử lại.';
+    if (error.code === 'io') return `Không truy cập được thư mục. Kiểm tra quyền đọc hoặc kết nối ổ đĩa. ${error.message}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
+  const [sources, setSources] = useState<SourceDto[]>([]);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const alive = useRef(true);
+  const [scanning, setScanning] = useState<number[]>([]);
+  const refresh = useCallback(async () => {
+    const list = await api.listSources();
+    if (alive.current) { setSources(list); setLoadError(null); }
+    await reload();
+  }, [api, reload]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { await refresh(); }
+    catch (e) { if (alive.current) setLoadError(sourceError(e)); }
+    finally { if (alive.current) setLoading(false); }
+  }, [refresh]);
+  useEffect(() => {
+    alive.current = true;
+    void load();
+    let off: (() => void) | undefined;
+    let dead = false;
+    let eventSeen = false;
+    api.scanSubscribe(e => {
+      if (dead) return;
+      eventSeen = true;
+      if (e.type === 'queued' || e.type === 'progress') setScanning(ids => ids.includes(e.sourceId) ? ids : [...ids, e.sourceId]);
+      if (e.type === 'finished' || e.type === 'failed') setScanning(ids => ids.filter(id => id !== e.sourceId));
+      if (e.type === 'idle') setScanning([]);
+      if (e.type === 'finished' || e.type === 'idle') void refresh().catch(err => { if (!dead) setLoadError(sourceError(err)); });
+    }).then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([`Không theo dõi được tiến độ: ${sourceError(e)}`]); });
+    api.scanStatus().then(s => { if (!dead && !eventSeen) setScanning([...s.queued, ...(s.currentSourceId === null ? [] : [s.currentSourceId])]); }).catch(e => { if (!dead) setMessages([`Không đọc được trạng thái quét: ${sourceError(e)}`]); });
+    return () => { dead = true; alive.current = false; off?.(); };
+  }, [api, load, refresh]);
+  const run = async (job: () => Promise<void>) => {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setWorking(true); setMessages([]);
+    try { await job(); }
+    catch (e) { if (alive.current) setMessages([sourceError(e)].filter(Boolean)); }
+    finally { lock.current = false; if (alive.current) { setBusy(false); setWorking(false); } }
   };
+  const add = (paths?: string[]) => run(async () => {
+    const chosen = paths ?? await pickFolders();
+    const errors: string[] = [];
+    for (const path of chosen) {
+      try { await api.addSource(path); }
+      catch (e) { const msg = sourceError(e, path); if (msg) errors.push(`${path}: ${msg}`); }
+    }
+    if (chosen.length) await refresh();
+    if (alive.current) setMessages(errors);
+  });
   return (
     <>
       <h1>Thư mục font</h1>
-      <p>Thêm thư mục chứa font. Quét bắt đầu ngay khi thêm.</p>
-      <ul className="fa-onb-sources">
-        {sources.map(s => (
-          <li key={s.id}><span className="path">{s.path}</span><span className="kind">{kindOf(s.path)}</span>
-            <button type="button" aria-label={`Xoá ${s.name}`} onClick={async () => { await api.removeSource(s.id); await refresh(); }}>Xoá</button></li>))}
-        {sources.length === 0 && <li className="empty">Chưa có thư mục nào.</li>}
+      <p>Chọn một hoặc nhiều thư mục. Font được quét tự động.</p>
+      <ul className="fa-onb-sources" aria-label="Nguồn font" aria-busy={loading || busy}>
+        {sources.map(s => {
+          const active = s.scanning || scanning.includes(s.id);
+          return <li key={s.id}>
+            <div className="fa-onb-source-info"><strong>{s.name}</strong><span className="path" title={s.path ?? s.name}>{s.path ?? s.name}</span>
+              <span className="kind">{kindOf(s.path)} · {!s.available ? 'Không truy cập được' : active ? 'Đang quét / chờ quét' : `${s.faceCount.toLocaleString('vi-VN')} font`}</span>
+            </div>
+            <button type="button" disabled={busy || active} title={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'} aria-label={`Xoá ${s.name}`} onClick={() => void run(async () => { await api.removeSource(s.id); await refresh(); })}>Xoá</button>
+          </li>;
+        })}
+        {sources.length === 0 && <li className="empty">{loading ? 'Đang tải nguồn…' : loadError ? 'Chưa tải được danh sách nguồn.' : 'Chưa có thư mục nào.'}</li>}
       </ul>
-      {msg && <p role="alert">{msg}</p>}
+      {loadError && <div className="fa-onb-feedback" role="alert">Không tải được nguồn: {loadError} <button type="button" disabled={busy || loading} onClick={() => void load()}>Thử lại</button></div>}
+      {messages.length > 0 && <ul className="fa-onb-feedback" role="alert">{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>}
+      {busy && <p role="status">Đang cập nhật thư mục…</p>}
       <div className="fa-onb-suggest">
-        <button type="button" onClick={() => void add()}>+ Thêm thư mục</button>
-        <button type="button" onClick={() => void add('/Library/Fonts')}>Font hệ thống</button>
+        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add()}>+ Thêm thư mục</button>
+        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add(['/Library/Fonts'])}>Font hệ thống</button>
       </div>
-      {sources.some(s => s.path?.startsWith('/Volumes/')) && <p className="fa-onb-note">Font trên ổ ngoài sẽ không khả dụng khi rút ổ; dữ liệu của bạn không mất.</p>}
-      <Actions><button type="button" onClick={() => void next()}>Để sau</button><Primary disabled={!state.hasSources && sources.length === 0} onClick={() => void next()}>Tiếp tục</Primary></Actions>
+      {sources.some(s => s.path?.startsWith('/Volumes/')) && <p className="fa-onb-note">Ổ ngoài cần được kết nối để xem và dùng font.</p>}
+      <Actions><button type="button" disabled={busy} onClick={() => void next()}>Để sau</button><Primary disabled={busy || loading || !!loadError || sources.length === 0} onClick={() => void next()}>Tiếp tục</Primary></Actions>
     </>
   );
 }

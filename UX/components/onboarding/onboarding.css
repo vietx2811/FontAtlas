@@ -17,16 +17,25 @@
 .fa-onb-list { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--muted); }
 .fa-onb-note { font-size: 12px !important; }
 .fa-onb-warn { color: var(--warn) !important; }
-.fa-onb-sources { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.fa-onb-sources { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
 .fa-onb-sources li { display: flex; gap: 10px; align-items: center; padding: 8px 12px; font-size: 13px; }
 .fa-onb-sources li + li { border-top: 1px solid var(--border); }
-.fa-onb-sources .path { flex: 1; min-width: 0; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-onb-source-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.fa-onb-source-info strong { font-weight: 500; overflow-wrap: anywhere; }
+.fa-onb-sources .path { min-width: 0; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
+.fa-onb-sources button { flex: none; padding: 6px 8px; border-radius: var(--radius-sm); color: var(--muted); }
+.fa-onb button:disabled { opacity: .45; cursor: default; }
+.fa-onb button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-onb button:hover:not(:disabled) { filter: brightness(.96); }
+.fa-onb-feedback { margin: 0; padding: 8px 12px; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--warn); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.fa-onb-feedback li + li { margin-top: 8px; }
+.fa-onb-feedback button { color: var(--accent-ink); text-decoration: underline; }
 .fa-onb-sources .kind { color: var(--muted); font-size: 12px; }
 .fa-onb-sources .empty { color: var(--muted); }
 .fa-onb-suggest { display: flex; gap: 8px; flex-wrap: wrap; }
 .fa-onb-suggest button { height: 30px; padding: 0 12px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
 .fa-onb-preview { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--sheet); }
-.fa-onb-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.fa-onb-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .fa-onb-actions button { height: 34px; padding: 0 16px; border-radius: 9px; font-size: 14px; background: var(--surface-2); }
 .fa-onb-actions button.primary { background: var(--accent-ink); color: var(--sheet); }
 .fa-onb-actions button:disabled { opacity: .45; }

@@ -47,12 +47,12 @@ describe('step order', () => {
     expect(visibleSteps(s({ legacy }))).toContain('o2');
     expect(visibleSteps(s({ legacy: { ...legacy, imported: { fonts: 1, sources: 1, collections: 0, recoveredCollections: 0, badTags: 0, skippedSources: 0 } } }))).not.toContain('o2');
   });
-  it('sources imported from the old database: no "add folders" step, but license, model and activation stay', () => {
+  it('sources imported from the old database: can add more folders, license, model and activation stay', () => {
     const imported = { ...legacy, imported: { fonts: 1240, sources: 2, collections: 3, recoveredCollections: 0, badTags: 0, skippedSources: 0 } };
     const v = visibleSteps(s({ legacy: imported, hasSources: true }));
-    expect(v).not.toContain('o3');
+    expect(v).toContain('o3');
     expect(v).toEqual(expect.arrayContaining(['o4', 'o5', 'o6', 'o7', 'end']));
-    expect(nextStep('o1', s({ legacy: imported, hasSources: true }))).toBe('o4');
+    expect(nextStep('o1', s({ legacy: imported, hasSources: true }))).toBe('o3');
     expect(visibleSteps(s({ hasSources: true }))).toContain('o3'); // có nguồn nhưng không từ import: vẫn cho thêm
   });
   it('O4 needs a source', () => {

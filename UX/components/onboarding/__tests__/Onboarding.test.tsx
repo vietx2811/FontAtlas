@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { CmdError } from '../../../api';
 import { Onboarding } from '../Onboarding';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
@@ -167,6 +168,74 @@ describe('Onboarding', () => {
     await settle();
     await click(/Thêm thư mục/);
     expect(screen.getByRole('alert').textContent).toMatch(/đã nằm trong nguồn/);
+  });
+
+  it('keeps O3 after legacy import and can add several independent folders', async () => {
+    const api = createMockApi({ firstRun: false, legacy: true });
+    await api.legacyImport();
+    await api.setOnboardingStep('o1');
+    render(<Onboarding api={api} pickFolders={async () => ['/Users/me/Thiết kế/Khách hàng A', '/Volumes/Font/Thư viện chữ Việt rất dài']} onDone={() => {}} />);
+    await settle();
+    await click('Bắt đầu');
+    expect(heading()).toBe('Thư mục font');
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(false);
+    const before = (await api.listSources()).length;
+    await click(/Thêm thư mục/);
+    expect((await api.listSources()).length).toBe(before + 2);
+    expect(screen.getByText('/Volumes/Font/Thư viện chữ Việt rất dài')).toBeTruthy();
+    await click('Tiếp tục');
+    expect(heading()).toBe('Đang quét thư viện');
+  });
+
+  it('cancel is quiet; duplicate and containing sources keep the originals and continue the batch', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    const pickFolders = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(['/Users/me/Fonts/src1', '/Users/me/Fonts', '/Users/me/New']);
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    await settle();
+    const old = (await api.listSources()).map(s => s.id);
+    await click(/Thêm thư mục/);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await click(/Thêm thư mục/);
+    expect(screen.getByRole('alert').textContent).toContain('đã có trong thư viện');
+    expect(screen.getByRole('alert').textContent).toContain('chứa nguồn đã có');
+    expect((await api.listSources()).map(s => s.id)).toEqual(expect.arrayContaining(old));
+    expect(screen.getByText('/Users/me/New')).toBeTruthy();
+  });
+
+  it('locks picker and navigation while pending, then reports permission failure without losing sources', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    let resolve!: (paths: string[]) => void;
+    const pickFolders = vi.fn(() => new Promise<string[]>(r => { resolve = r; }));
+    vi.spyOn(api, 'addSource').mockRejectedValue(new CmdError('io', 'Permission denied'));
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    await settle();
+    await click(/Thêm thư mục/);
+    await click(/Thêm thư mục/);
+    expect(pickFolders).toHaveBeenCalledTimes(1);
+    for (const name of ['Tiếp tục', 'Để sau', 'Quay lại']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => resolve(['/Protected/Fonts']));
+    await settle();
+    expect(screen.getByRole('alert').textContent).toContain('Kiểm tra quyền đọc');
+    expect((await api.listSources()).length).toBeGreaterThan(0);
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('source load can retry; a busy deletion is shown and never removes the source', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    vi.spyOn(api, 'listSources').mockRejectedValueOnce(new Error('offline'));
+    vi.spyOn(api, 'removeSource').mockRejectedValue(new CmdError('busy', 'scanning'));
+    render(<Onboarding api={api} onDone={() => {}} />);
+    await settle();
+    expect(screen.getByRole('alert').textContent).toContain('offline');
+    await click('Thử lại');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const source = (await api.listSources())[0];
+    await click(`Xoá ${source.name}`);
+    expect(screen.getByRole('alert').textContent).toContain('Nguồn đang quét');
+    expect((await api.listSources()).some(s => s.id === source.id)).toBe(true);
   });
 
   it('O4 counts the scan as it streams', async () => {
