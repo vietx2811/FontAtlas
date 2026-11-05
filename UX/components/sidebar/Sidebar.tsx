@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { useUiStore } from '../../store/ui';
+import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
 import { NavSection } from './NavSection';
@@ -169,6 +170,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </NavSection>
       </div>
       <div className="fa-side-foot">
+        <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button>
           <button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={onOpenSettings}><Icon name="gear" /></button>

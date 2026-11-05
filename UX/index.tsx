@@ -4,13 +4,14 @@ import './index.css';
 import App from './App';
 import { setApi } from './api';
 import { createMockApi } from './api/mock';
-import { applyDevPreset } from './store/devPreset';
+import { applyDevPreset, devInitial } from './store/devPreset';
 import { StatusProvider } from './context/StatusContext';
 
 // Đến khi 6a có UX/bindings thật, Api thật thay chỗ này.
-const api = createMockApi();
+const dev = import.meta.env.DEV;
+const api = createMockApi(dev ? { initial: devInitial(location.hash), tickMs: 1500 } : {});
 setApi(api);
-if (import.meta.env.DEV) setTimeout(() => void applyDevPreset(api, location.hash), 400); // sau hydrate()
+if (dev) setTimeout(() => void applyDevPreset(api, location.hash), 400); // sau hydrate()
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

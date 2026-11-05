@@ -20,3 +20,15 @@ describe('applyDevPreset (dev-only state from the URL hash)', () => {
     expect(useUiStore.getState().selectedId).toBeNull();
   });
 });
+
+import { devInitial } from '../devPreset';
+describe('devInitial (mock model/embed state from the hash)', () => {
+  it('maps model and embed keywords', () => {
+    expect(devInitial('#model=downloading').model).toMatchObject({ state: 'downloading' });
+    expect(devInitial('#model=checksum').model).toMatchObject({ state: 'checksum_mismatch' });
+    expect(devInitial('#embed=running').embed).toMatchObject({ running: true, paused: false, device: 'metal' });
+    expect(devInitial('#embed=running').model).toMatchObject({ state: 'ready' });
+    expect(devInitial('#embed=paused').embed).toMatchObject({ running: true, paused: true });
+    expect(devInitial('').model).toBeUndefined();
+  });
+});

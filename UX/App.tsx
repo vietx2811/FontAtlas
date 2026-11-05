@@ -6,6 +6,7 @@ import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
+import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -32,6 +33,11 @@ const App: React.FC = () => {
     const api = getApi();
     const collapsed = useUiStore(s => s.sidebarCollapsed);
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
+        useModelStore.getState().sync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('model sync failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
 
     return (
         <ErrorBoundary>
