@@ -1,6 +1,6 @@
 //! Phát một sự kiện tới mọi đăng ký (nhiều cửa sổ nhận cùng chuỗi sự kiện).
 #[allow(unused_imports)]
-use crate::dto::events::{BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -66,6 +66,7 @@ pub struct Hubs {
     pub scan: ProgressHub<ScanEvent>,
     pub embed: ProgressHub<EmbedEvent>,
     pub model: ProgressHub<ModelEvent>,
+    pub activation: ProgressHub<ActivationEvent>,
 }
 
 #[cfg(test)]

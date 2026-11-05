@@ -3,6 +3,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::dto::library::{RescanStatsDto, ScanProgressDto};
+use crate::dto::activation::{ProgressDto, ReconcileReportDto};
 use crate::dto::model::{EmbedStatusDto, ErrorInfoDto};
 use crate::dto::settings::BootPhase;
 use crate::error::CmdError;
@@ -88,4 +89,14 @@ pub enum EmbedEvent {
         #[ts(type = "number")]
         total_done: u64,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub enum ActivationEvent {
+    Progress { progress: ProgressDto },
+    Reconciled { report: ReconcileReportDto },
+    /// Các file vừa đổi trạng thái (UI nạp lại `activation_state`).
+    Changed { hashes: Vec<String> },
 }

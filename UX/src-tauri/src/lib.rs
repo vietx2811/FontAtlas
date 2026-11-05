@@ -10,7 +10,7 @@ pub mod state;
 
 use tauri::Manager;
 
-use crate::services::activation::NoActivation;
+use crate::services::activation::platform_api;
 use crate::state::{AppDirs, AppState};
 
 /// Thư mục dữ liệu. Bản debug cho phép ghi đè bằng `FONTATLAS_DATA_DIR` (test, smoke).
@@ -32,7 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let dirs = resolve_dirs(app.handle())?;
-            let state = AppState::new(dirs, Box::new(NoActivation));
+            let state = AppState::new(dirs, platform_api());
             app.manage(state.clone());
             crate::services::boot::start(state);
             Ok(())

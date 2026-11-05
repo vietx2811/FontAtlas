@@ -222,6 +222,7 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
 fn after_idle(state: &Arc<AppState>) {
     boot::resolve_legacy_if_needed(state);
     boot::mark_analyzer_seen_if_current(state);
+    crate::services::activation::reconcile_now(state, false);
     let _ = crate::services::embed::ensure_started(state);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
 }

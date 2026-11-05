@@ -95,9 +95,9 @@ pub fn rename_collection(state: &AppState, id: i64, name: &str) -> Result<(), Cm
     state.with_user(|u| Ok(u.rename_collection(id, name)?))
 }
 
-/// Gỡ kích hoạt font của collection trước khi xoá (Task 17 nối vào service Plan 7).
-pub fn before_delete_collection(_state: &AppState, _id: i64) -> Result<(), CmdError> {
-    Ok(())
+/// Gỡ kích hoạt font của collection trước khi xoá (service Plan 7).
+pub fn before_delete_collection(state: &AppState, id: i64) -> Result<(), CmdError> {
+    crate::services::activation::before_delete_collection(state, id)
 }
 
 pub fn delete_collection(state: &AppState, id: i64) -> Result<(), CmdError> {

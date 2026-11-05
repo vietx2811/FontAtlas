@@ -9,14 +9,14 @@ use tauri::State;
 
 use tauri::ipc::Channel;
 
-use crate::dto::activation::ActivationCapsDto;
-use crate::dto::events::{BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::activation::*;
+use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use crate::dto::model::*;
 use crate::dto::library::*;
 use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::dto::analysis::*;
-use crate::services::{analysis, boot, describe, embed, library, model, onboarding, pairs, settings, sources, system};
+use crate::services::{activation, analysis, boot, describe, embed, library, model, onboarding, pairs, settings, sources, system};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -97,6 +97,15 @@ macro_rules! command_list {
             async embed_failures() -> Result<Vec<EmbedFailureDto>, CmdError>;
             async queue_pause_all() -> Result<(), CmdError>;
             async queue_resume_all() -> Result<(), CmdError>;
+            async activation_state() -> Result<Vec<ActivationStateDto>, CmdError>;
+            async activation_preflight(faces: Vec<FaceKeyDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_set_keep(on: bool) -> Result<(), CmdError>;
+            async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -273,6 +282,41 @@ pub async fn embed_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<
     Ok(())
 }
 
+cmd!(activation_state() -> Vec<ActivationStateDto> => |s| activation::state_list(s));
+cmd!(activation_preflight(faces: Vec<FaceKeyDto>) -> ActivationReportDto => |s| activation::preflight(s, &faces));
+cmd!(activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::activate(s, &faces, scope, proceed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::activate_collection(s, collection_id, scope, proceed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::deactivate(s, &faces, force, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::deactivate_collection(s, collection_id, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::deactivate_all(s, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
+
+#[tauri::command]
+pub async fn activation_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ActivationEvent>) -> Result<(), CmdError> {
+    state.hubs.activation.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    Ok(())
+}
+
 cmd!(detect_font_managers() -> Vec<FontManagerDto> => |_s| Ok(system::detect_font_managers()));
 
 #[tauri::command]
@@ -326,7 +370,7 @@ pub async fn scan_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<S
 
 #[tauri::command]
 pub fn activation_caps(state: State<'_, Arc<AppState>>) -> Result<ActivationCapsDto, CmdError> {
-    Ok(ActivationCapsDto { method: state.activation.method().into(), supported: state.activation.supported() })
+    Ok(activation::caps(&state))
 }
 
 /// Kiểm kỷ luật async trên `table` và mã nguồn `src` của commands.rs; trả danh sách vi phạm.

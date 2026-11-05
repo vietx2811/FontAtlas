@@ -65,6 +65,7 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
         log::warn!("dựng Index lúc khởi động lỗi: {e}");
     }
     set_phase(state, BootPhase::Activation);
+    crate::services::activation::reconcile_now(state, true);
     set_phase(state, BootPhase::Ready);
     after_ready(state);
     snapshot(state)
