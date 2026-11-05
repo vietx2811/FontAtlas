@@ -104,6 +104,12 @@ export function createTauriApi(): Api {
     getFace: (face, lang) => call('get_face', { face, lang }),
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     pairCandidates: (face, opts) => call('pair_candidates', { face, opts }),
+    // Dữ liệu và hệ thống
+    backupUserDb: () => call('backup_user_db'),
+    previewCacheInfo: () => call('preview_cache_info'),
+    clearPreviewCache: () => none(call('clear_preview_cache')),
+    listProblems: () => call('list_problems'),
+    retryProblems: () => call('retry_problems'),
     // Cài đặt
     getSetting: key => call('get_setting', { key }),
     setSetting: (key, value) => none(call('set_setting', { key, value })),

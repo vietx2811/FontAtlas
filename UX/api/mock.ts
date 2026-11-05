@@ -81,6 +81,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const uiSettings = new Map<string, string>();
   const scanListeners = new Set<(e: ScanEvent) => void>();
   let scanning = false;
+  let cacheBytes = 12 * 1024 * 1024;
   let onboarded = !o.firstRun;
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
@@ -213,6 +214,12 @@ export function createMockApi(o: MockOptions = {}): Api {
       if (new TextEncoder().encode(value).length > 65_536) throw new CmdError('invalid_arg', 'value over 64 KB');
       uiSettings.set(key, value);
     },
+    // Dữ liệu và hệ thống
+    async backupUserDb() { return '/Users/me/Library/Application Support/com.vietx.fontatlas/backups/user-20261106.db'; },
+    async previewCacheInfo() { return ok({ bytes: cacheBytes, entries: cacheBytes ? 340 : 0 }); },
+    async clearPreviewCache() { cacheBytes = 0; },
+    async listProblems() { return []; },
+    async retryProblems() { return 0; },
     // Khởi động, onboarding, quét
     async startupStatus() { return ok(boot()); },
     async bootSubscribe(l) {

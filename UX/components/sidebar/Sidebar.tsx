@@ -181,7 +181,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button>
-          <button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={onOpenSettings}><Icon name="gear" /></button>
+          <button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button>
         </div>
       </div>
     </nav>

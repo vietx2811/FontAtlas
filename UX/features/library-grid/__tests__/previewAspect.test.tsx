@@ -40,7 +40,7 @@ describe('the drawn preview is never squeezed by the card', () => {
     expect(mask.parentElement).toBe(wrap);
     // Khung ngoài cắt phần tràn; chỉ khung ngoài có thể hẹp hơn ảnh.
     expect(wrap.style.width).toBe('');
-    expect(wrap.style.height).toBe(`${h}px`);
+    expect(wrap.style.minHeight).toBe(`${h}px`); // chiều cao ảnh là sàn; phần dư của ô dùng để căn giữa chữ mẫu
   });
 
   it('img fallback keeps width and height attributes in the same ratio', async () => {
@@ -56,6 +56,7 @@ describe('CSS rules that used to squeeze the image', () => {
   const rule = (sel: string) => new RegExp(`(?:^|\\n)${sel.replace(/[.[\]]/g, '\\$&')}\\s*{([^}]*)}`).exec(css)?.[1] ?? '';
   it('the wrapper clips and has no max-width that could shrink only one axis', () => {
     expect(rule('.fa-spec')).toMatch(/overflow:\s*hidden/);
+    expect(rule('.fa-spec')).toMatch(/align-items:\s*center/);
     expect(rule('.fa-spec')).not.toMatch(/max-width/);
   });
   it('the mask/img never shrink: flex none, max-width none', () => {

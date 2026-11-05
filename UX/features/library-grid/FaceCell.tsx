@@ -5,6 +5,12 @@ import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 
 export const HOVER_DELAY_MS = 150;
+
+/** Nhãn định dạng theo đuôi file (TTF, OTF, TTC, WOFF, WOFF2…); không có đường dẫn thì không nhãn. */
+export function fileFormat(path: string | null): string | null {
+  const m = /\.([a-z0-9]{2,5})$/i.exec(path ?? '');
+  return m ? m[1].toUpperCase() : null;
+}
 export type PreviewMode = 'mask' | 'img';
 export const DEFAULT_PREVIEW_MODE: PreviewMode = 'mask';
 export type CellState = 'loading' | 'ready' | 'error' | 'live';
@@ -95,6 +101,7 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
   const shownUrl = mode === 'mask' ? shown?.src ?? '' : imgShown ?? '';
   const name = `${row.family}${row.subfamily ? ` ${row.subfamily}` : ''}`;
   const missing = row.viMissing > 0;
+  const format = fileFormat(row.path);
   return (
     <div
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
@@ -113,14 +120,14 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
         onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }}>
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
       </button>
-      <div className="fa-spec" data-preview-box style={{ height: ch }}>
+      <div className="fa-spec" data-preview-box data-aligned={layout === 'grid' ? 'middle' : 'start'} style={{ minHeight: ch }}>
         {live ? (
           // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
           <span data-live style={{ fontFamily: `"${live}"`, fontSize: fontSize ?? px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
         ) : state === 'error' ? (
           <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")` }} />
+          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />
@@ -128,6 +135,7 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
       </div>
       <div className="fa-meta">
         <span className="fa-name" data-testid="face-name">{name}</span>
+        {format && <span className="fa-fmt" data-testid="face-format" title={`Định dạng file ${format}`}>{format}</span>}
         <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}
           title={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>{missing ? `−${row.viMissing}` : '●'}</span>
       </div>

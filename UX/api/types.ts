@@ -1,5 +1,6 @@
 // Kiểu IPC: lấy từ UX/bindings (ts-rs, sinh từ Rust). File này chỉ đặt lại tên cho gọn và thêm kiểu phía giao diện.
 import type {
+  PreviewCacheInfoDto, ProblemDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
   ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyStyleDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
@@ -15,6 +16,7 @@ export type {
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow,
 };
+export type { PreviewCacheInfoDto, ProblemDto };
 export type ModelState = ModelStatusDto['state'];
 export type PairRole = PairRoleDto;
 export type PairMode = PairModeDto;

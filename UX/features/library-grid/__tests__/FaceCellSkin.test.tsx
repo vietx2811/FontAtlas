@@ -99,4 +99,18 @@ describe('FaceCell skin (prototype)', () => {
     };
     expect(await heights(120) - await heights(0)).toBe(120);
   });
+
+  it('shows a small format label next to the name so duplicate copies can be told apart', async () => {
+    await mount([makeRow(0, { path: '/f/OpenSans.ttf' }), makeRow(1, { path: '/f/OpenSans.woff2' }), makeRow(2, { path: '/f/x.OTF' }), makeRow(3, { path: null })]);
+    const labels = cells().map(c => within(c).queryByTestId('face-format')?.textContent ?? null);
+    expect(labels).toEqual(['TTF', 'WOFF2', 'OTF', null]);
+    // tên vẫn nguyên văn, nhãn nằm ngoài phần tên
+    expect(within(cells()[1]).getByTestId('face-name').textContent).toBe('Family 00001');
+  });
+
+  it('centres the sample in the free space above the name instead of pinning it to the top-left', async () => {
+    await mount();
+    const wrap = cells()[0].querySelector('[data-preview-box]') as HTMLElement;
+    expect(wrap.getAttribute('data-aligned')).toBe('middle');
+  });
 });
