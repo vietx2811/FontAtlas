@@ -3,6 +3,7 @@ import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
 import { FontInfoCard } from './FontInfoCard';
 import { StyleDropdown, styleLabel } from './StyleDropdown';
+import { AnatomyTab } from './tabs/AnatomyTab';
 import { SpecimenTab } from './tabs/SpecimenTab';
 import { ViTab } from './tabs/ViTab';
 import { useFaceDetail } from './useFaceDetail';
@@ -62,7 +63,8 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
       <div className="fa-p-body" role="tabpanel" data-style={label ?? ''} data-tab={tab}>
         {tab === 'spec' && <SpecimenTab sample={sample} css={bodyCss} />}
         {tab === 'vi' && detail && <ViTab detail={detail} css={bodyCss} />}
-        {tab !== 'spec' && tab !== 'vi' && <div className="fa-soon">Tab này nằm ở T9.</div>}
+        {tab === 'anat' && detail && <AnatomyTab detail={detail} css={bodyCss} />}
+        {(tab === 'sim' || tab === 'pair') && <div className="fa-soon">Tab này nằm ở T9.</div>}
       </div>
     </aside>
   );

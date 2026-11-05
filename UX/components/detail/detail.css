@@ -66,3 +66,15 @@
 .fa-vi-cell small { position: absolute; bottom: 0; font: 8px var(--font-ui); color: var(--warn); }
 .fa-vi-caps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-xs); color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.fa-hxg { display: block; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.fa-axes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fa-axis { display: grid; grid-template-columns: 20px 112px minmax(0, 1fr) 82px; align-items: center; gap: 8px; font-size: var(--text-xs); }
+.fa-axis-ico { color: var(--muted); display: grid; place-items: center; }
+.fa-axis-name { color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-axis-note { color: var(--muted); grid-column: auto; text-align: right; }
+.fa-axis-note.wide { grid-column: 3 / -1; text-align: left; }
+.fa-axis-note em { font-style: normal; }
+.fa-axis-track { position: relative; height: 2px; background: var(--border); border-radius: 2px; }
+.fa-axis-track.dashed { background: none; border-top: 2px dashed var(--muted); height: 0; }
+.fa-axis-track i { position: absolute; top: -4px; width: 2px; height: 10px; margin-left: -1px; border-radius: 2px; background: var(--accent-ink); }
