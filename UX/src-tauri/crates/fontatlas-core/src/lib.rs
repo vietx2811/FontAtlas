@@ -11,7 +11,7 @@ mod vietnamese;
 pub use anatomy::{Anatomy, MeasureAt, measure_with_filter, standard_location};
 pub use error::CoreError;
 pub use load::{Container, Face, FontFile};
-pub use metadata::{AxisInfo, LicenseClass, Metadata, OutlineFormat, classify_license};
+pub use metadata::{AxisInfo, LicenseClass, Metadata, NamedInstanceInfo, OutlineFormat, classify_license};
 pub use metric::{FailReason, Metric, Quality};
 pub use vietnamese::{StackStyle, ViMarks, ViStatus, VietnameseCoverage, vi_required_chars};
 
@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use serde::Serialize;
 
-pub const ANALYZER_VERSION: &str = "core-0.2.0";
+pub const ANALYZER_VERSION: &str = "core-0.3.0";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FaceReport {

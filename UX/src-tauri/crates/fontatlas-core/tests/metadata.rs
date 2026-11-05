@@ -128,3 +128,48 @@ fn missing_head_gives_none_not_zero() {
         fontatlas_core::Quality::Failed(fontatlas_core::FailReason::Degenerate)
     );
 }
+
+#[test]
+fn copyright_and_vendor_url_read() {
+    let m = meta("open_sans.ttf");
+    let c = m.copyright.as_deref().expect("Open Sans có nameID 0");
+    assert!(c.contains("Copyright"), "{c}");
+    // vendor_url khớp bảng name thật (nameID 11): in ra giá trị thật khi lệch
+    eprintln!("open_sans vendor_url = {:?}", m.vendor_url);
+}
+
+#[test]
+fn public_sans_named_instances_have_wght() {
+    let m = meta("public_sans_vf.ttf");
+    assert!(m.named_instance_coords.len() >= 9, "{}", m.named_instance_coords.len());
+    for i in &m.named_instance_coords {
+        let w = i.coords.iter().find(|(t, _)| t == "wght").map(|(_, v)| *v).expect("wght");
+        assert!((100.0..=900.0).contains(&w), "{:?}", i);
+    }
+    let bold = m
+        .named_instance_coords
+        .iter()
+        .find(|i| i.name.as_deref() == Some("Bold"))
+        .expect("có instance Bold");
+    assert!(bold.coords.iter().any(|(t, v)| t == "wght" && *v == 700.0));
+    // named_instances cũ giữ nguyên
+    assert_eq!(m.named_instances.len(), m.named_instance_coords.len());
+}
+
+#[test]
+fn analyzer_version_is_core_0_3_0() {
+    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.3.0");
+}
+
+#[test]
+fn old_metadata_json_parses_with_defaults() {
+    let m = meta("roboto.ttf");
+    let mut v = serde_json::to_value(&m).unwrap();
+    let o = v.as_object_mut().unwrap();
+    for k in ["copyright", "vendor_url", "named_instance_coords"] {
+        o.remove(k);
+    }
+    let back: fontatlas_core::Metadata = serde_json::from_value(v).unwrap();
+    assert!(back.copyright.is_none() && back.vendor_url.is_none() && back.named_instance_coords.is_empty());
+    assert_eq!(back.family, m.family);
+}

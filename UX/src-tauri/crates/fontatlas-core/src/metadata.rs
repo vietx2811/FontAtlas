@@ -1,9 +1,9 @@
 //! Metadata: name, OS/2, head, post, fvar, định dạng outline, OT features, giấy phép.
 use read_fonts::{FontRef, TableProvider, types::Tag};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use skrifa::{MetadataProvider, string::StringId};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LicenseClass {
     Ofl,
@@ -12,7 +12,7 @@ pub enum LicenseClass {
     Unknown,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OutlineFormat {
     Glyf,
@@ -21,7 +21,7 @@ pub enum OutlineFormat {
     None,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AxisInfo {
     pub tag: String,
     pub min: f32,
@@ -29,7 +29,14 @@ pub struct AxisInfo {
     pub max: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// Named instance kèm toạ độ user-space theo thứ tự trục `fvar`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NamedInstanceInfo {
+    pub name: Option<String>,
+    pub coords: Vec<(String, f32)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub family: Option<String>,
     pub subfamily: Option<String>,
@@ -54,6 +61,14 @@ pub struct Metadata {
     pub num_glyphs: Option<u16>,
     pub axes: Vec<AxisInfo>,
     pub named_instances: Vec<String>,
+    #[serde(default)]
+    pub named_instance_coords: Vec<NamedInstanceInfo>,
+    /// nameID 0
+    #[serde(default)]
+    pub copyright: Option<String>,
+    /// nameID 11
+    #[serde(default)]
+    pub vendor_url: Option<String>,
     pub gsub_features: Vec<String>,
     pub gpos_features: Vec<String>,
     /// Tag script OpenType (GSUB + GPOS ScriptList, bỏ DFLT), đã sort.
@@ -193,6 +208,21 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
             .iter()
             .filter_map(|i| name(font, i.subfamily_name_id()))
             .collect(),
+        named_instance_coords: font
+            .named_instances()
+            .iter()
+            .map(|i| NamedInstanceInfo {
+                name: name(font, i.subfamily_name_id()),
+                coords: font
+                    .axes()
+                    .iter()
+                    .map(|a| a.tag().to_string())
+                    .zip(i.user_coords())
+                    .collect(),
+            })
+            .collect(),
+        copyright: name(font, StringId::COPYRIGHT_NOTICE),
+        vendor_url: name(font, StringId::VENDOR_URL),
         gsub_features,
         gpos_features,
         scripts: script_tags(font),
