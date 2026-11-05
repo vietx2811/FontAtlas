@@ -11,7 +11,7 @@ use crate::pairing::{
 use crate::profile::{AxisId, FaceKey, FaceProfile, Q, Role};
 use crate::reference::{IndexError, ReferenceTable};
 use crate::similar::{
-    EMBED_WEIGHT, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit, SimilarOptions,
+    EMBED_WEIGHT, FamilyGroup, GroupWeights, MAX_EMBED_WEIGHT, MIN_SHARED_DIMS, SimilarHit, SimilarOptions,
     SimilarSource, axis_distance, combine, embed_cos,
 };
 use crate::superfamily::SuperfamilyTable;
@@ -248,6 +248,51 @@ impl Index {
             .map(|x| x.1)
             .collect();
         (same, differ)
+    }
+
+    /// Similar gom theo họ (`FaceProfile.family` = typographic family trước, rồi family): mỗi họ một mục
+    /// gồm face đại diện gần nhất và danh sách face của họ; BỎ họ của font đang chọn (cả superfamily nếu
+    /// cùng typographic family). Phân trang theo họ (`offset`, `limit` đếm họ). `o.k` bị bỏ qua: số face
+    /// cần xét suy ra từ `offset + limit`.
+    pub fn similar_families(
+        &self,
+        q: &FaceKey,
+        o: &SimilarOptions,
+        filter: &dyn Fn(&FaceProfile) -> bool,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<FamilyGroup>, IndexError> {
+        let qi = self.idx(q)?;
+        let own = self.profiles[qi].family.clone();
+        let pool = ((offset + limit) * 12).clamp(60, 3000).min(self.profiles.len().max(1));
+        let f2 = |p: &FaceProfile| p.family != own && filter(p);
+        let hits = self.similar_with(q, &SimilarOptions { k: pool, ..*o }, &f2)?;
+        let mut order: Vec<String> = Vec::new();
+        let mut reps: HashMap<String, SimilarHit> = HashMap::new();
+        for h in hits {
+            let Some(p) = self.profile(&h.key) else { continue };
+            if !reps.contains_key(&p.family) {
+                order.push(p.family.clone());
+                reps.insert(p.family.clone(), h);
+            }
+        }
+        let wanted: std::collections::HashSet<&String> = order.iter().skip(offset).take(limit).collect();
+        let mut members: HashMap<&str, Vec<FaceKey>> = HashMap::new();
+        for p in &self.profiles {
+            if wanted.contains(&p.family) && filter(p) {
+                members.entry(p.family.as_str()).or_default().push(p.key.clone());
+            }
+        }
+        Ok(order
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .filter_map(|fam| {
+                let rep = reps.remove(fam)?;
+                let faces = members.remove(fam.as_str()).unwrap_or_default();
+                Some(FamilyGroup { family: fam.clone(), count: faces.len().max(1), representative: rep, faces })
+            })
+            .collect())
     }
 
     pub fn similar(

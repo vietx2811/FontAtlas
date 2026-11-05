@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use fontatlas_index::{AxisId, GroupWeights, IndexError, Q, Role, SimilarSource};
+use fontatlas_index::{AxisId, GroupWeights, IndexError, Q, Role, SimilarOptions, SimilarSource};
 
 #[test]
 fn same_family_ranks_first() {
@@ -295,4 +295,62 @@ fn image_only_excludes_self_and_faces_without_image() {
         .similar_image_only(&key_of("Q", "Regular"), 10, &|p| p.family == "B")
         .unwrap();
     assert_eq!(only_b.len(), 1);
+}
+
+fn fam_style(family: &str, style: &str, stem: f32, contrast: f32) -> fontatlas_index::FaceProfile {
+    let mut p = synth_full(family, style, stem);
+    set_value(&mut p, AxisId::Contrast, contrast);
+    p
+}
+
+fn grouped_index() -> fontatlas_index::Index {
+    let mut ps = vec![fam_style("Query", "Regular", 0.15, 1.2), fam_style("Query", "Bold", 0.26, 1.2)];
+    // A gần nhất (3 kiểu), B xa hơn (2 kiểu), C xa nhất (1 kiểu)
+    for (i, st) in ["Light", "Regular", "Bold"].iter().enumerate() {
+        ps.push(fam_style("A", st, 0.15 + i as f32 * 0.02, 1.25));
+    }
+    for (i, st) in ["Regular", "Bold"].iter().enumerate() {
+        ps.push(fam_style("B", st, 0.15 + i as f32 * 0.02, 2.0));
+    }
+    ps.push(fam_style("C", "Regular", 0.15, 4.0));
+    index_of(ps)
+}
+
+#[test]
+fn similar_families_group_exclude_own_and_count() {
+    let ix = grouped_index();
+    let q = key_of("Query", "Regular");
+    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
+    let g = ix.similar_families(&q, &o, &|_| true, 0, 10).unwrap();
+    let fams: Vec<&str> = g.iter().map(|x| x.family.as_str()).collect();
+    assert_eq!(fams, ["A", "B", "C"], "mỗi họ một mục, không có họ của font đang chọn");
+    assert_eq!(g.iter().map(|x| x.count).collect::<Vec<_>>(), [3, 2, 1]);
+    assert_eq!(g[0].faces.len(), 3);
+    // đại diện = face gần nhất của họ
+    let rep_dist = g[0].representative.distance;
+    let all = ix.similar(&q, &GroupWeights::default(), 20, &|p| p.family == "A").unwrap();
+    assert!((all[0].distance - rep_dist).abs() < 1e-6);
+    assert_eq!(all[0].key, g[0].representative.key);
+}
+
+#[test]
+fn similar_families_page_by_family_not_by_face() {
+    let ix = grouped_index();
+    let q = key_of("Query", "Regular");
+    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
+    let p1 = ix.similar_families(&q, &o, &|_| true, 0, 2).unwrap();
+    let p2 = ix.similar_families(&q, &o, &|_| true, 2, 2).unwrap();
+    assert_eq!(p1.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(), ["A", "B"]);
+    assert_eq!(p2.iter().map(|x| x.family.as_str()).collect::<Vec<_>>(), ["C"]);
+    assert!(ix.similar_families(&q, &o, &|_| true, 9, 2).unwrap().is_empty());
+}
+
+#[test]
+fn similar_families_filter_limits_member_list() {
+    let ix = grouped_index();
+    let q = key_of("Query", "Regular");
+    let o = SimilarOptions { weights: GroupWeights::default(), embed_weight: Some(0.0), k: 0 };
+    let g = ix.similar_families(&q, &o, &|p| p.style != "Bold", 0, 10).unwrap();
+    assert_eq!(g[0].family, "A");
+    assert_eq!(g[0].count, 2);
 }
