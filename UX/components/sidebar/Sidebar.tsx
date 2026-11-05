@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { useUiStore } from '../../store/ui';
+import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
 import { NavSection } from './NavSection';
 import { Icon } from './icons';
@@ -9,6 +10,7 @@ import './sidebar.css';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; active: number | null };
+type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
 const THEME_KEY = 'fa.theme';
@@ -36,6 +38,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [tags, setTags] = useState<TagDto[]>([]);
   const [counts, setCounts] = useState<Counts>({ all: null, star: null, active: null });
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [nested, setNested] = useState<Nested | null>(null);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
   const [menuFor, setMenuFor] = useState<number | null>(null);
@@ -58,13 +61,22 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       setNotice(null);
     } catch (e) {
       if (e instanceof CmdError && e.code === 'nested_source') {
-        const id = (e.detail as { existingId?: number } | undefined)?.existingId;
-        const name = sources.find(x => x.id === id)?.name ?? 'khác';
-        setNotice({ text: `Thư mục này đã nằm trong nguồn «${name}».`, action: id != null ? { label: 'Xem nguồn', run: () => { setView(`src:${id}`); setNotice(null); } } : undefined });
+        const d = (e.detail ?? {}) as { existingId?: number; existingPath?: string };
+        const existing = (await api.listSources()).find(x => x.id === d.existingId);
+        const norm = (p: string) => p.replace(/[\\/]+$/, '');
+        if (!existing?.path) setNotice({ text: 'Thư mục này đã nằm trong một nguồn có sẵn.' });
+        else if (norm(path) === norm(existing.path)) {
+          setNotice({ text: `Đã có trong thư viện (nguồn «${existing.name}»).`, action: { label: 'Xem nguồn', run: () => { setView(`src:${existing.id}`); setNotice(null); } } });
+        } else setNested({ newPath: path, existing, nesting: norm(path).startsWith(`${norm(existing.path)}/`) ? 'inside' : 'contains' });
       } else setNotice({ text: `Không thêm được: ${(e as Error).message}` });
     }
   }, [api, refresh, sources, setView]);
 
+  const replaceSource = async (n: Nested) => {
+    setNested(null);
+    try { await api.removeSource(n.existing.id); await addPath(n.newPath); }
+    catch (e) { setNotice({ text: `Không thay được nguồn: ${(e as Error).message}` }); }
+  };
   const onAddFont = async () => { const p = await pickFolder(); if (p) await addPath(p); };
   const onDrop = useCallback((paths: string[]) => {
     const [first] = paths;
@@ -106,6 +118,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
 
   const cur = (v: string) => view === v;
   return (
+    <>
+    {nested && <NestedSourceDialog {...nested} onCancel={() => setNested(null)} onReplace={() => void replaceSource(nested)}
+      onCreateCollection={name => { setNested(null); void createCollection(name); }} />}
     <nav className="fa-side" data-testid="sidebar" data-collapsed={collapsed} aria-label="Thanh bên">
       <div className="fa-side-scroll">
         <NavItem icon="plus" label="Thêm font" onClick={onAddFont} />
@@ -160,5 +175,6 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </div>
       </div>
     </nav>
+    </>
   );
 }

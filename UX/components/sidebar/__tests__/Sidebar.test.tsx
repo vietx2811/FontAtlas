@@ -91,12 +91,59 @@ describe('Sidebar', () => {
     expect(useUiStore.getState().view).toMatch(/^src:/);
   });
 
-  it('explains a nested folder and jumps to the source that already holds it', async () => {
-    await mount({ pickFolder: async () => '/Users/me/Fonts/src1/sub' });
+  it('D4: a folder inside an existing source opens a dialog with both paths and offers a collection instead', async () => {
+    const { api } = await mount({ pickFolder: async () => '/Users/me/Fonts/src1/Khách A' });
     fireEvent.click(screen.getByRole('button', { name: /Thêm font/ }));
     await settle();
+    const dlg = screen.getByRole('dialog', { name: /nằm trong một nguồn đã có/ });
+    expect(within(dlg).getByText('/Users/me/Fonts/src1/Khách A')).toBeTruthy();
+    expect(within(dlg).getByText('/Users/me/Fonts/src1')).toBeTruthy();
+    expect(dlg.textContent).toMatch(/70 font/);
+    expect(dlg.textContent).toMatch(/tạo một collection/i);
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Tạo collection “Khách A”' }));
+    await settle();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect((await api.listCollections()).map(c => c.name)).toContain('Khách A');
+    expect(useUiStore.getState().view).toMatch(/^col:/);
+  });
+
+  it('D4: Esc and Huỷ close the dialog without changing anything', async () => {
+    const { api } = await mount({ pickFolder: async () => '/Users/me/Fonts/src1/x' });
+    fireEvent.click(screen.getByRole('button', { name: /Thêm font/ }));
+    await settle();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Thêm font/ }));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await api.listCollections()).toEqual([]);
+  });
+
+  it('D4: a folder that contains an existing source can replace it (child removed, parent added)', async () => {
+    const api = createMockApi();
+    const child = await api.addSource('/Volumes/Ổ/Fonts/Khách A');
+    render(<Sidebar api={api} pickFolder={async () => '/Volumes/Ổ/Fonts'} />);
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: /Thêm font/ }));
+    await settle();
+    const dlg = screen.getByRole('dialog', { name: /chứa nguồn/ });
+    expect(dlg.textContent).toMatch(/Khách A/);
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Thay nguồn cũ bằng thư mục này' }));
+    await settle();
+    const names = (await api.listSources()).map(s => s.path);
+    expect(names).toContain('/Volumes/Ổ/Fonts');
+    expect(names).not.toContain(child.path);
+    expect(useUiStore.getState().view).toMatch(/^src:/);
+  });
+
+  it('D4: the exact same path is not a dialog, just a note that it is already there', async () => {
+    await mount({ pickFolder: async () => '/Users/me/Fonts/src1' });
+    fireEvent.click(screen.getByRole('button', { name: /Thêm font/ }));
+    await settle();
+    expect(screen.queryByRole('dialog')).toBeNull();
     const note = screen.getByRole('status');
-    expect(note.textContent).toMatch(/đã nằm trong nguồn/i);
+    expect(note.textContent).toMatch(/Đã có/);
     fireEvent.click(within(note).getByRole('button', { name: /Xem nguồn/ }));
     expect(useUiStore.getState().view).toBe('src:1');
   });
