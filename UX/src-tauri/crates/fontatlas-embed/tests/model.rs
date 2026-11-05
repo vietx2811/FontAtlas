@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use fontatlas_embed::{EmbedError, Manifest, ModelStatus, ModelStore, make_manifest, sha256_file};
+use fontatlas_embed::{DownloadProgress, EmbedError, Manifest, ModelStatus, ModelStore, disk_free, make_manifest, sha256_file};
 
 /// Server tải giả ở 127.0.0.1:0; dừng khi drop.
 struct Srv {
@@ -289,9 +289,8 @@ fn interrupted_download_is_cancelled_and_partial() {
         st.ensure(&|done, _| seen.store(done, Ordering::SeqCst), &cancel)
     });
     assert!(matches!(r, Err(EmbedError::Cancelled)), "{r:?}");
-    assert!(matches!(st.status(), ModelStatus::Missing)); // huỷ thì xoá .part
-    std::fs::write(d.path().join(format!("{}.part", st.file_name())), b"dang do").unwrap(); // app chết giữa chừng
-    assert!(matches!(st.status(), ModelStatus::Partial));
+    // huỷ thì giữ .part để tải tiếp
+    assert!(matches!(st.status(), ModelStatus::Partial { bytes, .. } if bytes > 0));
 }
 
 #[test]
@@ -403,4 +402,132 @@ fn vision_header_bytes_are_pinned() {
     full.extend(want);
     assert_eq!(String::from_utf8_lossy(&h[8..]), String::from_utf8_lossy(&full[8..]));
     assert_eq!(h, full);
+}
+
+type Log = Arc<std::sync::Mutex<Vec<(usize, usize)>>>;
+
+/// Như `serve_range_slow` nhưng ghi lại từng Range yêu cầu.
+fn serve_logged(file: Vec<u8>, chunk: usize, delay: Duration) -> (Srv, String, Log) {
+    let log: Log = Arc::default();
+    let l2 = log.clone();
+    let (srv, url) = serve(move |rq| {
+        let (a, b) = range_of(&rq).unwrap_or((0, file.len() - 1));
+        l2.lock().unwrap().push((a, b));
+        let cr = format!("bytes {a}-{b}/{}", file.len());
+        let h = tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
+        let r = Slow { data: file[a..=b].to_vec(), pos: 0, chunk, delay };
+        let _ = rq.respond(tiny_http::Response::new(206.into(), vec![h], r, Some(b - a + 1), None));
+    });
+    (srv, url, log)
+}
+
+fn big_model(seed: f32) -> Vec<u8> {
+    fake_safetensors(&[
+        ("text_model.w".into(), vec![1024], vals(1024, seed)),
+        ("vision_model.big".into(), vec![1 << 19], vals(1 << 19, seed + 1.0)),
+    ])
+}
+
+/// Huỷ ngay khi đã nhận ≥ 1 MiB vision.
+fn cancel_at_1mib(st: &ModelStore) -> Result<std::path::PathBuf, EmbedError> {
+    let cancel = AtomicBool::new(false);
+    st.ensure_resumable(&|p| if p.done >= (1 << 20) { cancel.store(true, Ordering::SeqCst) }, &cancel)
+}
+
+#[test]
+fn cancel_keeps_part_and_resumes() {
+    let src = big_model(1.0);
+    let (_s, url, log) = serve_logged(src.clone(), 64 << 10, Duration::from_millis(3));
+    let d = tempfile::tempdir().unwrap();
+    let m = manifest_for(&src, &url);
+    let st = store(&d, m.clone());
+    assert!(matches!(cancel_at_1mib(&st), Err(EmbedError::Cancelled)));
+    let ModelStatus::Partial { bytes, total } = st.status() else { panic!("{:?}", st.status()) };
+    assert_eq!(total, m.size);
+    let nh = m.size - m.source.vision_len; // header cục bộ
+    assert!(bytes > nh && bytes < total, "{bytes} {nh} {total}");
+    log.lock().unwrap().clear();
+    let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
+    let p = st.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    let reqs = log.lock().unwrap().clone();
+    // 1: header (nhỏ) để khôi phục sha; 2: phần vision còn lại bắt đầu đúng offset đã có
+    assert_eq!(reqs.len(), 2, "{reqs:?}");
+    assert_eq!(reqs[1].0 as u64, m.source.vision_offset + (bytes - nh));
+    assert!(events.lock().unwrap().iter().all(|e| e.resumed));
+    assert!(matches!(st.status(), ModelStatus::Ready(_)));
+    assert!(!d.path().join(format!("{}.part.json", st.file_name())).exists());
+}
+
+#[test]
+fn manifest_change_restarts() {
+    let (src1, src2) = (big_model(1.0), big_model(5.0));
+    let (_s1, url1, _l1) = serve_logged(src1.clone(), 64 << 10, Duration::from_millis(3));
+    let (_s2, url2, log2) = serve_logged(src2.clone(), 64 << 10, Duration::from_millis(0));
+    let d = tempfile::tempdir().unwrap();
+    assert!(matches!(cancel_at_1mib(&store(&d, manifest_for(&src1, &url1))), Err(EmbedError::Cancelled)));
+    let m2 = manifest_for(&src2, &url2);
+    let st2 = store(&d, m2.clone());
+    assert!(matches!(st2.status(), ModelStatus::Partial { bytes: 0, .. }), "manifest mới → .part cũ không dùng được");
+    let p = ensure(&st2).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m2.sha256);
+    let reqs = log2.lock().unwrap().clone();
+    assert_eq!(reqs[1].0 as u64, m2.source.vision_offset, "{reqs:?}");
+}
+
+#[test]
+fn checksum_mismatch_reported() {
+    let src = fake_model();
+    #[allow(clippy::ptr_arg)]
+    fn flip(b: &mut Vec<u8>, _: usize) {
+        let n = b.len();
+        b[n - 1] ^= 0xff;
+    }
+    let (_s, url) = serve_range(src.clone(), flip);
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, manifest_for(&src, &url));
+    assert!(matches!(ensure(&st), Err(EmbedError::ChecksumMismatch { .. })));
+    assert!(!d.path().join(format!("{}.part", st.file_name())).exists());
+    assert!(!d.path().join(format!("{}.part.json", st.file_name())).exists());
+    assert!(matches!(st.status(), ModelStatus::Missing));
+}
+
+#[test]
+fn progress_reports_speed() {
+    let src = big_model(1.0);
+    let (_s, url, _l) = serve_logged(src.clone(), 128 << 10, Duration::from_millis(2));
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, manifest_for(&src, &url));
+    let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
+    st.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    let ev = events.lock().unwrap();
+    let last = ev.last().unwrap();
+    assert!(last.bytes_per_sec > 0.0 && last.done == last.total, "{last:?}");
+    assert!(ev.iter().all(|e| !e.resumed));
+}
+
+#[test]
+fn server_ignoring_range_restarts_with_resumed_false() {
+    let src = big_model(1.0);
+    let (_s, url, _l) = serve_logged(src.clone(), 64 << 10, Duration::from_millis(3));
+    let d = tempfile::tempdir().unwrap();
+    let m = manifest_for(&src, &url);
+    assert!(matches!(cancel_at_1mib(&store(&d, m.clone())), Err(EmbedError::Cancelled)));
+    let (_f, url_full) = serve_full(src.clone());
+    let mut m2 = m.clone();
+    m2.source.url = url_full;
+    let st2 = store(&d, m2);
+    assert!(matches!(st2.status(), ModelStatus::Partial { bytes, .. } if bytes > 0));
+    let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
+    let p = st2.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    let ev = events.lock().unwrap();
+    assert!(!ev.is_empty() && ev.iter().all(|e| !e.resumed), "{:?}", ev.first());
+}
+
+#[test]
+fn disk_free_positive() {
+    let d = tempfile::tempdir().unwrap();
+    assert!(disk_free(d.path()).unwrap() > 0);
+    assert!(disk_free(&d.path().join("chua/co/thu/muc")).unwrap() > 0);
 }

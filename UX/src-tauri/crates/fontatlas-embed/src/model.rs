@@ -3,7 +3,8 @@
 //! safetensors cục bộ tất định; ghi `.part`, kiểm sha từng đoạn + file cục bộ, fsync, đổi tên nguyên tử,
 //! sidecar `.ok`, khoá chống chạy chồng.
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::cell::Cell;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -17,6 +18,8 @@ use crate::EmbedError;
 /// Thời gian tối đa chờ một chunk dữ liệu (không phải cả file).
 pub const READ_TIMEOUT: Duration = Duration::from_secs(30);
 const CHUNK: usize = 64 << 10;
+/// fsync phần vision đã ghi mỗi 8 MiB (và ghi `.part.json`), để tải tiếp được sau khi app chết.
+const SYNC_EVERY: u64 = 8 << 20;
 
 /// File safetensors chính thức trên máy chủ (đã ghim revision). Vị trí tính bằng byte tuyệt đối trong file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,6 +137,12 @@ struct Extract<'a> {
     vision: Sha256,
     local: Sha256,
     local_len: u64,
+    /// Độ dài header cục bộ đã ghi (nh).
+    hdr_local_len: u64,
+    /// Số byte vision đã ghi/phát lại.
+    vision_written: u64,
+    unsynced: u64,
+    sync_due: bool,
 }
 
 struct Extracted {
@@ -162,6 +171,10 @@ impl<'a> Extract<'a> {
             vision: Sha256::new(),
             local: Sha256::new(),
             local_len: 0,
+            hdr_local_len: 0,
+            vision_written: 0,
+            unsynced: 0,
+            sync_due: false,
         }
     }
 
@@ -191,6 +204,7 @@ impl<'a> Extract<'a> {
         }
         self.local.update(&nh);
         self.local_len += nh.len() as u64;
+        self.hdr_local_len = nh.len() as u64;
         self.header_sha = Some(hs);
         self.span = Some(span);
         Ok(())
@@ -244,9 +258,36 @@ impl<'a> Extract<'a> {
                 o.write_all(b)?;
             }
             self.local_len += take as u64;
+            self.vision_written += take as u64;
+            self.unsynced += take as u64;
+            if self.unsynced >= SYNC_EVERY
+                && let Some(o) = self.out.as_mut()
+            {
+                o.sync_data()?;
+                self.unsynced = 0;
+                self.sync_due = true;
+            }
             off += take;
         }
         Ok(())
+    }
+
+    /// Phát lại phần vision đã ghi trong `.part` (tải tiếp): cập nhật sha mà không ghi lại.
+    fn replay_vision(&mut self, b: &[u8]) {
+        self.vision.update(b);
+        self.local.update(b);
+        self.local_len += b.len() as u64;
+        self.vision_written += b.len() as u64;
+    }
+
+    /// fsync rồi trả (độ dài header cục bộ, byte vision bền) để ghi `.part.json`.
+    fn persist(&mut self) -> std::io::Result<(u64, u64)> {
+        if let Some(o) = self.out.as_mut() {
+            o.flush()?;
+            o.sync_data()?;
+        }
+        self.unsynced = 0;
+        Ok((self.hdr_local_len, self.vision_written))
     }
 
     fn finish(self) -> Result<Extracted, EmbedError> {
@@ -323,7 +364,8 @@ pub fn make_manifest(src: &Path, url: &str, file: &str, license: &str, notice_fi
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelStatus {
     Missing,
-    Partial,
+    /// `.part` còn lại: `bytes` đã có (header cục bộ + vision bền), `total` = kích thước file cục bộ.
+    Partial { bytes: u64, total: u64 },
     Ready(PathBuf),
     Corrupt,
 }
@@ -331,6 +373,40 @@ pub enum ModelStatus {
 /// Manifest phát hành kèm app (nguồn: repo chính thức trên Hugging Face, đã ghim revision).
 pub fn bundled_manifest() -> Manifest {
     serde_json::from_str(include_str!("../data/model-manifest.json")).expect("data/model-manifest.json hợp lệ")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DownloadProgress {
+    pub done: u64,
+    pub total: u64,
+    pub bytes_per_sec: f64,
+    /// `true` khi lần tải này tiếp từ `.part` bằng HTTP 206; `false` khi bắt đầu từ đầu
+    /// (kể cả khi server bỏ qua Range).
+    pub resumed: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PartMeta {
+    manifest_sha256: String,
+    local_header_len: u64,
+    vision_done: u64,
+}
+
+enum Attempt {
+    Done,
+    RangeIgnored,
+}
+
+/// Chỗ trống (byte) của ổ chứa `path` (đi lên thư mục cha còn tồn tại).
+pub fn disk_free(path: &Path) -> std::io::Result<u64> {
+    let mut p = path;
+    while !p.exists() {
+        match p.parent() {
+            Some(q) => p = q,
+            None => break,
+        }
+    }
+    fs2::available_space(p)
 }
 
 pub struct ModelStore {
@@ -365,6 +441,40 @@ impl ModelStore {
         &self.m.file
     }
 
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// Kích thước file cục bộ sau khi tải xong.
+    pub fn expected_size(&self) -> u64 {
+        self.m.size
+    }
+
+    fn meta_path(&self) -> PathBuf {
+        self.path(".part.json")
+    }
+
+    fn write_meta(&self, local_header_len: u64, vision_done: u64) -> std::io::Result<()> {
+        let m = PartMeta { manifest_sha256: self.m.sha256.clone(), local_header_len, vision_done };
+        fs::write(self.meta_path(), serde_json::to_vec(&m).unwrap_or_default())
+    }
+
+    /// `.part.json` đúng manifest hiện tại và `.part` đủ dài; còn dở (chưa hết vision).
+    fn usable_meta(&self) -> Option<PartMeta> {
+        let m: PartMeta = serde_json::from_slice(&fs::read(self.meta_path()).ok()?).ok()?;
+        let len = fs::metadata(self.path(".part")).ok()?.len();
+        (m.manifest_sha256 == self.m.sha256
+            && m.vision_done > 0
+            && m.vision_done < self.m.source.vision_len
+            && len >= m.local_header_len + m.vision_done)
+            .then_some(m)
+    }
+
+    fn drop_part(&self) {
+        let _ = fs::remove_file(self.path(".part"));
+        let _ = fs::remove_file(self.meta_path());
+    }
+
     fn path(&self, suffix: &str) -> PathBuf {
         self.dir.join(format!("{}{suffix}", self.m.file))
     }
@@ -392,11 +502,16 @@ impl ModelStore {
             }
             return ModelStatus::Corrupt;
         }
-        if self.path(".part").exists() { ModelStatus::Partial } else { ModelStatus::Missing }
+        if self.path(".part").exists() {
+            let bytes = self.usable_meta().map(|m| m.local_header_len + m.vision_done).unwrap_or(0);
+            ModelStatus::Partial { bytes, total: self.m.size }
+        } else {
+            ModelStatus::Missing
+        }
     }
 
     pub fn remove(&self) -> std::io::Result<()> {
-        for s in ["", ".part", ".ok"] {
+        for s in ["", ".part", ".part.json", ".ok"] {
             match fs::remove_file(self.path(s)) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
                 _ => {}
@@ -405,7 +520,14 @@ impl ModelStore {
         Ok(())
     }
 
+    /// Như `ensure_resumable`, báo tiến độ dạng (đã tải, tổng).
     pub fn ensure(&self, progress: &dyn Fn(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, EmbedError> {
+        self.ensure_resumable(&|p| progress(p.done, p.total), cancel)
+    }
+
+    /// Tải model; huỷ hoặc lỗi mạng giữ `.part` + `.part.json` để lần sau tiếp từ byte đã ghi.
+    /// Sai checksum thì xoá `.part`. Server bỏ qua Range → tải lại từ đầu (`resumed = false`).
+    pub fn ensure_resumable(&self, progress: &dyn Fn(DownloadProgress), cancel: &AtomicBool) -> Result<PathBuf, EmbedError> {
         fs::create_dir_all(&self.dir)?;
         let lock = OpenOptions::new().create(true).truncate(false).write(true).open(self.path(".lock"))?;
         lock.lock()?; // nhả khi drop
@@ -418,14 +540,25 @@ impl ModelStore {
             _ => {}
         }
         let part = self.path(".part");
-        let _ = fs::remove_file(&part);
-        let r = self.download(&part, progress, cancel);
-        if r.is_err() {
-            let _ = fs::remove_file(&part);
+        let started = Instant::now();
+        let (base, resumed) = (Cell::new(0u64), Cell::new(false));
+        let report = |done: u64, total: u64| {
+            let secs = started.elapsed().as_secs_f64().max(1e-3);
+            let bytes_per_sec = done.saturating_sub(base.get()) as f64 / secs;
+            progress(DownloadProgress { done, total, bytes_per_sec, resumed: resumed.get() });
+        };
+        let r = self.download(&part, &report, cancel, &base, &resumed);
+        if let Err(e) = &r {
+            // chỉ giữ khi dừng giữa chừng (huỷ, mạng) và đã có mốc tiếp được
+            let keep = matches!(e, EmbedError::Cancelled | EmbedError::Io(_)) && self.usable_meta().is_some();
+            if !keep {
+                self.drop_part();
+            }
         }
         r?;
         let file = self.path("");
         fs::rename(&part, &file)?;
+        let _ = fs::remove_file(self.meta_path());
         File::open(&self.dir)?.sync_all()?;
         if let Some(l) = self.ok_line(&file) {
             fs::write(self.path(".ok"), l)?;
@@ -433,38 +566,158 @@ impl ModelStore {
         Ok(file)
     }
 
-    fn download(&self, part: &Path, progress: &dyn Fn(u64, u64), cancel: &AtomicBool) -> Result<(), EmbedError> {
-        let src = &self.m.source;
+    fn download(
+        &self,
+        part: &Path,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+        base: &Cell<u64>,
+        resumed: &Cell<bool>,
+    ) -> Result<(), EmbedError> {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(30)))
             .timeout_recv_response(Some(READ_TIMEOUT))
             .http_status_as_error(false)
             .build()
             .into();
+        if let Some(m) = self.usable_meta() {
+            match self.resume(&agent, part, &m, progress, cancel, base, resumed)? {
+                Attempt::Done => return Ok(()),
+                // server bỏ qua Range: bỏ phần dở, tải lại từ đầu
+                Attempt::RangeIgnored => {
+                    self.drop_part();
+                    base.set(0);
+                    resumed.set(false);
+                }
+            }
+        }
+        self.fresh(&agent, part, progress, cancel)
+    }
+
+    /// Tiếp từ `.part`: lấy lại header (nhỏ), phát lại phần vision đã ghi để khôi phục sha, rồi xin phần còn lại.
+    #[allow(clippy::too_many_arguments)]
+    fn resume(
+        &self,
+        agent: &ureq::Agent,
+        part: &Path,
+        m: &PartMeta,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+        base: &Cell<u64>,
+        resumed: &Cell<bool>,
+    ) -> Result<Attempt, EmbedError> {
+        let src = &self.m.source;
+        let hdr_bytes = 8 + src.header_len;
+        let total = hdr_bytes + src.vision_len;
+        let mut out = OpenOptions::new().read(true).write(true).open(part)?;
+        out.set_len(m.local_header_len + m.vision_done)?; // bỏ phần chưa chắc đã bền
+        let mut ex = Extract::new(Some(src), None);
+        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)))?;
+        match status {
+            206 => {}
+            200 => return Ok(Attempt::RangeIgnored),
+            s => return Err(http(s)),
+        }
+        check_range(cr.as_deref(), 0, hdr_bytes - 1, src.size)?;
+        pump(body, hdr_bytes, cancel, &|_| {}, &mut |c| ex.feed(c))?;
+        if ex.hdr_local_len != m.local_header_len {
+            return Ok(Attempt::RangeIgnored);
+        }
+        out.seek(SeekFrom::Start(m.local_header_len))?;
+        let mut left = m.vision_done;
+        let mut buf = vec![0u8; 1 << 20];
+        while left > 0 {
+            let n = (left as usize).min(buf.len());
+            out.read_exact(&mut buf[..n])?;
+            ex.replay_vision(&buf[..n]);
+            left -= n as u64;
+        }
+        out.seek(SeekFrom::End(0))?;
+        let (a, b) = (src.vision_offset + m.vision_done, src.vision_offset + src.vision_len - 1);
+        let (status, cr, body) = get(agent, &src.url, Some((a, b)))?;
+        match status {
+            206 => {}
+            200 => return Ok(Attempt::RangeIgnored),
+            s => return Err(http(s)),
+        }
+        check_range(cr.as_deref(), a, b, src.size)?;
+        ex.out = Some(&mut out);
+        ex.seek(a);
+        resumed.set(true);
+        let done0 = hdr_bytes + m.vision_done;
+        base.set(done0);
+        let r = pump(body, src.vision_len - m.vision_done, cancel, &|d| progress(done0 + d, total), &mut |c| {
+            ex.feed(c)?;
+            self.checkpoint(&mut ex)
+        });
+        if let Err(e) = &r
+            && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+        {
+            self.save_meta(&mut ex);
+        }
+        r?;
+        let x = ex.finish()?;
+        if x.vision_sha != src.vision_sha256 {
+            return Err(EmbedError::ChecksumMismatch { expected: src.vision_sha256.clone(), got: x.vision_sha });
+        }
+        self.check_local(x, &mut out)?;
+        Ok(Attempt::Done)
+    }
+
+    /// Ghi `.part.json` mỗi lần Extract vừa fsync.
+    fn checkpoint(&self, ex: &mut Extract) -> Result<(), EmbedError> {
+        if ex.sync_due {
+            ex.sync_due = false;
+            self.write_meta(ex.hdr_local_len, ex.vision_written)?;
+        }
+        Ok(())
+    }
+
+    /// Dừng giữa chừng: fsync rồi ghi mốc để tiếp được. Lỗi ghi mốc bỏ qua (lần sau tải lại từ đầu).
+    fn save_meta(&self, ex: &mut Extract) {
+        if let Ok((h, v)) = ex.persist()
+            && v > 0
+        {
+            let _ = self.write_meta(h, v);
+        }
+    }
+
+    fn fresh(&self, agent: &ureq::Agent, part: &Path, progress: &dyn Fn(u64, u64), cancel: &AtomicBool) -> Result<(), EmbedError> {
+        let src = &self.m.source;
+        let _ = fs::remove_file(self.meta_path());
         let mut out = File::create(part)?;
         let hdr_bytes = 8 + src.header_len;
         let mut ex = Extract::new(Some(src), Some(&mut out));
-        let (status, cr, body) = get(&agent, &src.url, Some((0, hdr_bytes - 1)))?;
+        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)))?;
         match status {
             206 => {
                 check_range(cr.as_deref(), 0, hdr_bytes - 1, src.size)?;
                 let total = hdr_bytes + src.vision_len;
                 pump(body, hdr_bytes, cancel, &|d| progress(d, total), &mut |c| ex.feed(c))?;
                 let (a, b) = (src.vision_offset, src.vision_offset + src.vision_len - 1);
-                let (status, cr, body) = get(&agent, &src.url, Some((a, b)))?;
+                let (status, cr, body) = get(agent, &src.url, Some((a, b)))?;
                 if status != 206 {
                     return Err(http(status));
                 }
                 check_range(cr.as_deref(), a, b, src.size)?;
                 ex.seek(a);
-                pump(body, src.vision_len, cancel, &|d| progress(hdr_bytes + d, total), &mut |c| ex.feed(c))?;
+                let r = pump(body, src.vision_len, cancel, &|d| progress(hdr_bytes + d, total), &mut |c| {
+                    ex.feed(c)?;
+                    self.checkpoint(&mut ex)
+                });
+                if let Err(e) = &r
+                    && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+                {
+                    self.save_meta(&mut ex);
+                }
+                r?;
                 let x = ex.finish()?;
                 if x.vision_sha != src.vision_sha256 {
                     return Err(EmbedError::ChecksumMismatch { expected: src.vision_sha256.clone(), got: x.vision_sha });
                 }
                 self.check_local(x, &mut out)
             }
-            // Server bỏ qua Range: stream cả file, chỉ ghi header + đoạn vision.
+            // Server bỏ qua Range: stream cả file, chỉ ghi header + đoạn vision. Không tiếp được.
             200 => {
                 pump(body, src.size, cancel, &|d| progress(d, src.size), &mut |c| ex.feed(c))?;
                 let x = ex.finish()?;
