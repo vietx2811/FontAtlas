@@ -318,6 +318,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
     assert_eq!(serde_json::to_value(ad::ActivationReportDto::from(&rep)).unwrap(), p7("activation_report.json"));
     let rec = fa::ReconcileReport {
         auto_deactivated: vec![fa::AutoDeactivated { hash_hex: "cd".repeat(32), faces: vec![0], removed_reasons: vec![ActivationReason::Collection(5)], cause: "collection_deleted".into() }],
+        auto_deactivate_failed: vec![fa::AutoDeactivated { hash_hex: "ef".repeat(32), faces: vec![0, 1], removed_reasons: vec![], cause: "no_reason".into() }],
         reregistered: 3,
         moved: 1,
         missing: 1,

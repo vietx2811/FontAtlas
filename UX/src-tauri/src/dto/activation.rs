@@ -289,7 +289,7 @@ pub struct AutoDeactivatedDto {
     pub hash_hex: String,
     pub faces: Vec<u32>,
     pub removed_reasons: Vec<ReasonDto>,
-    /// "collection_deleted" | "left_collection"
+    /// "collection_deleted" | "left_collection" | "no_reason"
     pub cause: String,
 }
 
@@ -298,6 +298,8 @@ pub struct AutoDeactivatedDto {
 #[ts(export, rename_all = "camelCase")]
 pub struct ReconcileReportDto {
     pub auto_deactivated: Vec<AutoDeactivatedDto>,
+    /// Tự gỡ thất bại (hệ điều hành từ chối…): font vẫn đăng ký, giao diện nên báo.
+    pub auto_deactivate_failed: Vec<AutoDeactivatedDto>,
     pub reregistered: u32,
     pub moved: u32,
     pub missing: u32,
@@ -309,17 +311,19 @@ pub struct ReconcileReportDto {
 
 impl From<&fa::ReconcileReport> for ReconcileReportDto {
     fn from(r: &fa::ReconcileReport) -> Self {
-        ReconcileReportDto {
-            auto_deactivated: r
-                .auto_deactivated
-                .iter()
+        let conv = |v: &[fa::AutoDeactivated]| -> Vec<AutoDeactivatedDto> {
+            v.iter()
                 .map(|a| AutoDeactivatedDto {
                     hash_hex: a.hash_hex.clone(),
                     faces: a.faces.clone(),
                     removed_reasons: a.removed_reasons.iter().map(ReasonDto::from).collect(),
                     cause: a.cause.clone(),
                 })
-                .collect(),
+                .collect()
+        };
+        ReconcileReportDto {
+            auto_deactivated: conv(&r.auto_deactivated),
+            auto_deactivate_failed: conv(&r.auto_deactivate_failed),
             reregistered: r.reregistered as u32,
             moved: r.moved as u32,
             missing: r.missing as u32,
@@ -334,6 +338,6 @@ impl From<&fa::ReconcileReport> for ReconcileReportDto {
 impl ReconcileReportDto {
     /// Có gì đáng báo cho giao diện không.
     pub fn is_notable(&self) -> bool {
-        !self.auto_deactivated.is_empty() || self.reregistered + self.moved + self.missing + self.not_downloaded + self.failed > 0
+        !self.auto_deactivated.is_empty() || !self.auto_deactivate_failed.is_empty() || self.reregistered + self.moved + self.missing + self.not_downloaded + self.failed > 0
     }
 }

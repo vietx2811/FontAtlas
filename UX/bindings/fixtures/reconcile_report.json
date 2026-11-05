@@ -1,4 +1,15 @@
 {
+  "autoDeactivateFailed": [
+    {
+      "cause": "no_reason",
+      "faces": [
+        0,
+        1
+      ],
+      "hashHex": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+      "removedReasons": []
+    }
+  ],
   "autoDeactivated": [
     {
       "cause": "collection_deleted",

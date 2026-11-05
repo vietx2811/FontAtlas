@@ -474,7 +474,7 @@ mod tests {
         }
         let (s, rep) = Store::open(d.path()).unwrap();
         let v: i64 = s.conn().query_row("PRAGMA u.user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, crate::schema::USER_VERSION as i64);
         assert!(rep.user_backup.is_some());
         let r = s.activation_row(&[7; 32]).unwrap().unwrap();
         assert_eq!(r.state, DesiredState::Active);

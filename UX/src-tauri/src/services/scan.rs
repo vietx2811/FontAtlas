@@ -155,7 +155,8 @@ pub fn directory_source_ids(state: &AppState) -> Result<Vec<i64>, CmdError> {
 }
 
 fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
-    let mut store = Store::open(&state.dirs.data).map(|(s, _)| s);
+    // kết nối chỉ library.db: lô ingest không khoá user.db (yêu thích trong lúc quét không phải chờ)
+    let mut store = Store::open_library_only(&state.dirs.data);
     loop {
         let next = {
             let mut q = lock(&inner.q);
@@ -185,8 +186,20 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
         inner.cancel.store(false, Ordering::SeqCst);
         match store.as_mut() {
             Ok(s) => {
-                let r = s.rescan_source_with(
+                let root = match state.with_user(|u| Ok(u.source(id)?)) {
+                    Ok(src) => src.path.map(std::path::PathBuf::from),
+                    Err(e) => {
+                        state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e });
+                        continue;
+                    }
+                };
+                let Some(root) = root else {
+                    state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::not_found("nguồn không có thư mục") });
+                    continue;
+                };
+                let r = s.rescan_root_with(
                     id,
+                    &root,
                     &mut |p| {
                         while inner.paused.load(Ordering::SeqCst)
                             && !inner.cancel.load(Ordering::SeqCst)

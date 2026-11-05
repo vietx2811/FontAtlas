@@ -152,6 +152,19 @@ impl Store {
             src.path
                 .ok_or_else(|| StoreError::NotFound(format!("nguồn #{source_id} không có thư mục")))?,
         );
+        self.rescan_root_with(source_id, &root, on_progress, cancel)
+    }
+
+    /// Như `rescan_source_with` nhưng nhận sẵn thư mục gốc: chạy được trên kết nối chỉ library.db
+    /// (`Store::open_library_only`), nên lô ingest không khoá user.db.
+    pub fn rescan_root_with(
+        &mut self,
+        source_id: i64,
+        root: &Path,
+        on_progress: &mut dyn FnMut(&ScanProgress),
+        cancel: &AtomicBool,
+    ) -> Result<RescanStats, StoreError> {
+        let root = root.to_path_buf();
         let mut stats = RescanStats::default();
         if !root_available(&root) {
             stats.status = RescanStatus::SourceUnavailable;

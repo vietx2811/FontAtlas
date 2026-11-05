@@ -2,4 +2,8 @@
 import type { AutoDeactivatedDto } from "./AutoDeactivatedDto";
 import type { FileResultDto } from "./FileResultDto";
 
-export type ReconcileReportDto = { autoDeactivated: Array<AutoDeactivatedDto>, reregistered: number, moved: number, missing: number, notDownloaded: number, cleaned: number, failed: number, results: Array<FileResultDto>, };
+export type ReconcileReportDto = { autoDeactivated: Array<AutoDeactivatedDto>, 
+/**
+ * Tự gỡ thất bại (hệ điều hành từ chối…): font vẫn đăng ký, giao diện nên báo.
+ */
+autoDeactivateFailed: Array<AutoDeactivatedDto>, reregistered: number, moved: number, missing: number, notDownloaded: number, cleaned: number, failed: number, results: Array<FileResultDto>, };

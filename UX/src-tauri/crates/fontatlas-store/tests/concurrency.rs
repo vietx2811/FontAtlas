@@ -91,3 +91,21 @@ fn reader_is_query_only() {
     assert_eq!(n, 0);
     a.conn().execute_batch("COMMIT").unwrap();
 }
+
+#[test]
+fn library_only_writer_does_not_lock_user_db() {
+    let d = tmp();
+    {
+        Store::open(d.path()).unwrap();
+    }
+    let lib = Store::open_library_only(d.path()).unwrap();
+    lib.conn().execute_batch("BEGIN IMMEDIATE; INSERT INTO meta(key,value) VALUES('lock','1');").unwrap();
+    let mut u = Store::open_user_only(d.path()).unwrap();
+    for i in 0..50u8 {
+        let t = Instant::now();
+        u.set_favorite(&key(i), true).unwrap();
+        assert!(t.elapsed() < Duration::from_millis(200), "lần {i}: {:?}", t.elapsed());
+    }
+    lib.conn().execute_batch("COMMIT").unwrap();
+    assert!(lib.source(1).is_err(), "kết nối chỉ library không có bảng u.*");
+}

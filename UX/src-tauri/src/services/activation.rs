@@ -49,6 +49,7 @@ pub trait ActivationApi: Send + Sync {
     ) -> Result<ActivationReport, ActivationError>;
     fn deactivate_collection(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
+    fn on_collection_deleted(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn set_scope(&self, s: &Mutex<Store>, hashes: Option<&[[u8; 32]]>, scope: Scope) -> Result<ActivationReport, ActivationError>;
     fn state(&self, s: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
@@ -97,6 +98,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         ActivationService::deactivate_all(self, s, progress)
     }
+    fn on_collection_deleted(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        ActivationService::on_collection_deleted(self, s, id, progress)
+    }
     fn set_scope(&self, s: &Mutex<Store>, hashes: Option<&[[u8; 32]]>, scope: Scope) -> Result<ActivationReport, ActivationError> {
         ActivationService::set_scope(self, s, hashes, scope)
     }
@@ -134,6 +138,9 @@ impl ActivationApi for NoActivation {
         Err(ActivationError::Unsupported)
     }
     fn deactivate_all(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn on_collection_deleted(&self, _: &Mutex<Store>, _: i64, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
     fn set_scope(&self, _: &Mutex<Store>, _: Option<&[[u8; 32]]>, _: Scope) -> Result<ActivationReport, ActivationError> {
@@ -308,7 +315,7 @@ pub fn before_delete_collection(state: &AppState, id: i64) -> Result<(), CmdErro
     if !state.activation.supported() {
         return Ok(());
     }
-    state.activation.deactivate_collection(state.store()?, id, &mut |_| {})?;
+    state.activation.on_collection_deleted(state.store()?, id, &mut |_| {})?;
     Ok(())
 }
 

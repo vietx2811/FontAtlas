@@ -70,6 +70,14 @@ impl Store {
         Ok((Store { conn, dir: dir.to_path_buf() }, rep))
     }
 
+    /// Kết nối ghi chỉ mở library.db, KHÔNG attach user.db: `BEGIN IMMEDIATE` của lô ingest không khoá
+    /// user.db nên ghi yêu thích/collection không phải chờ. Không migrate (cần `Store::open` đã chạy);
+    /// chỉ gọi hàm thuần library (`rescan_root_with`, `ingest`…), hàm dùng bảng `u.*` sẽ lỗi `no such table`.
+    pub fn open_library_only(dir: &Path) -> Result<Store, StoreError> {
+        let conn = open_library_existing(&dir.join(LIBRARY_FILE))?;
+        Ok(Store { conn, dir: dir.to_path_buf() })
+    }
+
     /// Kết nối chỉ chạm user.db (không mở library.db): dành cho mọi ghi dữ liệu người dùng,
     /// để không tranh khoá với lô ingest. `main` là DB trong bộ nhớ; user.db attach thành `u`
     /// nên SQL của user.rs chạy nguyên. Không migrate: cần `Store::open` đã chạy trước.
@@ -102,6 +110,13 @@ impl Store {
     pub fn dir(&self) -> &Path {
         &self.dir
     }
+}
+
+fn open_library_existing(path: &Path) -> Result<Connection, StoreError> {
+    let c = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+    c.busy_timeout(BUSY_TIMEOUT)?;
+    c.execute_batch("PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL;")?;
+    Ok(c)
 }
 
 fn check_user_version(user_path: &Path) -> Result<(), StoreError> {

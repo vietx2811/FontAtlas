@@ -3,6 +3,6 @@ import type { ReasonDto } from "./ReasonDto";
 
 export type AutoDeactivatedDto = { hashHex: string, faces: Array<number>, removedReasons: Array<ReasonDto>, 
 /**
- * "collection_deleted" | "left_collection"
+ * "collection_deleted" | "left_collection" | "no_reason"
  */
 cause: string, };
