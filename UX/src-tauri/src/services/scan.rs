@@ -10,7 +10,7 @@ use fontatlas_store::{SourceKind, Store};
 use crate::dto::events::ScanEvent;
 use crate::dto::library::{RescanStatsDto, ScanProgressDto, ScanStatusDto};
 use crate::error::CmdError;
-use crate::services::boot;
+use crate::services::{access, boot};
 use crate::state::AppState;
 
 #[derive(Default)]
@@ -244,6 +244,12 @@ fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, 
         state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::not_found("nguồn không có thư mục") });
         return;
     };
+    // macOS có thể treo ở opendir khi chờ cấp quyền: thử mở thư mục gốc có giới hạn thời gian trước khi quét.
+    let probe = access::probe_dir(&root, access::timeout());
+    if let Some(error) = access::to_error(&root, &probe) {
+        state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error });
+        return;
+    }
     let r = s.rescan_root_with(
         id,
         &root,

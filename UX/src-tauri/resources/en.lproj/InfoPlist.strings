@@ -1,0 +1,7 @@
+/* Mô tả quyền truy cập thư mục (macOS hiện khi hỏi quyền). */
+"NSRemovableVolumesUsageDescription" = "Font Atlas reads font files on external drives you add to your library. Nothing is uploaded.";
+"NSNetworkVolumesUsageDescription" = "Font Atlas reads font files on network volumes you add to your library. Nothing is uploaded.";
+"NSDesktopFolderUsageDescription" = "Font Atlas reads font files in a Desktop folder only if you add it to your library.";
+"NSDocumentsFolderUsageDescription" = "Font Atlas reads font files in a Documents folder only if you add it to your library.";
+"NSDownloadsFolderUsageDescription" = "Font Atlas reads font files in a Downloads folder only if you add it to your library.";
+"NSFileProviderDomainUsageDescription" = "Font Atlas reads font files stored in cloud folders (iCloud Drive, OneDrive) that you add to your library.";

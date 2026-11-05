@@ -57,7 +57,11 @@
     "copyright": "© 2025 VietX",
     "macOS": {
       "entitlements": "Entitlements.plist",
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "resources/en.lproj/InfoPlist.strings",
+        "Resources/vi.lproj/InfoPlist.strings": "resources/vi.lproj/InfoPlist.strings"
+      }
     }
   }
 }

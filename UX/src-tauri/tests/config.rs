@@ -93,3 +93,43 @@ fn logging_is_rust_only() {
     let caps = read("capabilities/default.json");
     assert!(!caps.contains("\"log:"));
 }
+
+#[test]
+fn info_plist_explains_folder_access_in_both_languages() {
+    let plist = read("Info.plist");
+    let keys = [
+        "NSRemovableVolumesUsageDescription",
+        "NSNetworkVolumesUsageDescription",
+        "NSDesktopFolderUsageDescription",
+        "NSDocumentsFolderUsageDescription",
+        "NSDownloadsFolderUsageDescription",
+        "NSFileProviderDomainUsageDescription",
+    ];
+    for k in keys {
+        assert!(plist.contains(&format!("<key>{k}</key>")), "Info.plist thiếu {k}");
+        for lang in ["en", "vi"] {
+            let s = read(&format!("resources/{lang}.lproj/InfoPlist.strings"));
+            assert!(s.contains(&format!("\"{k}\" = \"")), "{lang}.lproj thiếu {k}");
+        }
+    }
+    assert!(plist.contains("<string>vi</string>") && plist.contains("<string>en</string>"), "CFBundleLocalizations");
+    // bản tiếng Việt có dấu thật, không phải bản tiếng Anh dán lại
+    assert!(read("resources/vi.lproj/InfoPlist.strings").contains("thư mục"));
+    // tauri phải chép hai file .strings vào bundle
+    let conf = json("tauri.conf.json");
+    let files = conf["bundle"]["macOS"]["files"].as_object().expect("bundle.macOS.files");
+    assert!(files.contains_key("Resources/vi.lproj/InfoPlist.strings") && files.contains_key("Resources/en.lproj/InfoPlist.strings"));
+}
+
+#[test]
+fn only_system_settings_urls_can_be_opened() {
+    let c = json("capabilities/open-settings.json");
+    let perms = c["permissions"].as_array().unwrap();
+    assert_eq!(perms.len(), 1);
+    assert_eq!(perms[0]["identifier"], "opener:allow-open-url");
+    let allow = perms[0]["allow"].as_array().unwrap();
+    assert_eq!(allow.len(), 1);
+    assert_eq!(allow[0]["url"], "x-apple.systempreferences:*");
+    // quyền mặc định vẫn tối thiểu, không thêm opener vào đó
+    assert!(!read("capabilities/default.json").contains("opener"));
+}

@@ -1,0 +1,7 @@
+/* Mô tả quyền truy cập thư mục (macOS hiện khi hỏi quyền). */
+"NSRemovableVolumesUsageDescription" = "Font Atlas đọc file font trên ổ ngoài mà bạn thêm vào thư viện. Không có gì được gửi đi.";
+"NSNetworkVolumesUsageDescription" = "Font Atlas đọc file font trên ổ mạng mà bạn thêm vào thư viện. Không có gì được gửi đi.";
+"NSDesktopFolderUsageDescription" = "Font Atlas chỉ đọc file font trong thư mục Desktop nếu bạn thêm nó vào thư viện.";
+"NSDocumentsFolderUsageDescription" = "Font Atlas chỉ đọc file font trong thư mục Documents nếu bạn thêm nó vào thư viện.";
+"NSDownloadsFolderUsageDescription" = "Font Atlas chỉ đọc file font trong thư mục Downloads nếu bạn thêm nó vào thư viện.";
+"NSFileProviderDomainUsageDescription" = "Font Atlas đọc file font trong thư mục đám mây (iCloud Drive, OneDrive) mà bạn thêm vào thư viện.";
