@@ -10,6 +10,7 @@ export async function applyDevPreset(api: Api, hash: string): Promise<void> {
   const ui = useUiStore.getState();
   if (p.get('enable') === '1') { await api.setSettings({ embedEnabled: true }); useModelStore.setState({ embedEnabled: true }); }
   const view = p.get('view'); if (view) ui.setView(view as View);
+  if (p.get('settings') === '1') ui.setSettingsOpen(true);
   const q = p.get('q'); if (q) ui.setQuery(q);
   const size = Number(p.get('size')); if (size) ui.setSampleSize(size);
   const sel = p.get('sel');
