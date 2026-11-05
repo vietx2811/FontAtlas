@@ -38,7 +38,7 @@ fn face_path_skips_missing_locations() {
     let (_d, fonts, s, src) = scanned();
     let mut rows = Vec::new();
     s.for_each_latest_analysis(&mut |a| rows.push(a)).unwrap();
-    let k = rows[0].key.clone();
+    let k = rows[0].key;
     assert!(s.face_path(&k).unwrap().unwrap().starts_with(&fonts));
     // thêm một vị trí thứ hai (id lớn hơn), rồi đánh dấu vị trí đầu missing
     s.conn()
@@ -86,10 +86,10 @@ fn face_ids_of_skips_unknown_keys() {
     let (_d, _f, s, _) = scanned();
     let mut rows = Vec::new();
     s.for_each_latest_analysis(&mut |a| rows.push(a)).unwrap();
-    let keys = vec![rows[2].key.clone(), FaceKey { hash: [7; 32], face_index: 0 }, rows[0].key.clone()];
+    let keys = vec![rows[2].key, FaceKey { hash: [7; 32], face_index: 0 }, rows[0].key];
     let got = s.face_ids_of(&keys).unwrap();
     assert_eq!(got.len(), 2);
-    assert_eq!(got[0], (rows[2].key.clone(), rows[2].face_id));
+    assert_eq!(got[0], (rows[2].key, rows[2].face_id));
 }
 
 #[test]
