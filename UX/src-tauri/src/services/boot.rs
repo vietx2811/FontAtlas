@@ -66,7 +66,32 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
     }
     set_phase(state, BootPhase::Activation);
     set_phase(state, BootPhase::Ready);
+    after_ready(state);
     snapshot(state)
+}
+
+/// Sau `ready`: quét nền khi người dùng bật `rescanOnLaunch` hoặc `ANALYZER_VERSION` đã đổi (bất kể
+/// `rescanOnLaunch`), rồi mở worker embed (luôn sau Store chính).
+fn after_ready(state: &Arc<AppState>) {
+    let rescan_pref = state
+        .with_user(|u| Ok(u.setting(keys::RESCAN_ON_LAUNCH)?))
+        .ok()
+        .flatten()
+        .is_none_or(|v| v != "0" && v != "false");
+    let seen = state.with_user(|u| Ok(u.setting(keys::ANALYZER_SEEN)?)).ok().flatten();
+    let version_changed = seen.as_deref() != Some(fontatlas_core::ANALYZER_VERSION);
+    if rescan_pref || version_changed {
+        let _ = state.scans.enqueue_all_directories(state);
+    }
+    mark_analyzer_seen_if_current(state);
+    let _ = crate::services::embed::ensure_started(state);
+}
+
+/// Ghi `analyzer_version_seen` khi mọi face đã có bản phân tích theo phiên bản hiện tại.
+pub fn mark_analyzer_seen_if_current(state: &AppState) {
+    if matches!(state.with_store(|s| Ok(s.stale_analysis_count()?)), Ok(0)) {
+        let _ = state.with_user(|u| Ok(u.set_setting(keys::ANALYZER_SEEN, fontatlas_core::ANALYZER_VERSION)?));
+    }
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(state: &AppState, key: &str) -> Option<T> {

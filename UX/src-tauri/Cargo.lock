@@ -123,7 +123,9 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "thiserror 2.0.17",
+ "tiny_http",
  "ts-rs",
+ "unicode-normalization",
 ]
 
 [[package]]

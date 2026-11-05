@@ -1,16 +1,19 @@
-//! Trạng thái dùng chung của app: thư mục dữ liệu, hai kết nối Store, từ điển mô tả, kích hoạt.
-use std::path::PathBuf;
+//! Trạng thái dùng chung của app: thư mục dữ liệu, hai kết nối Store, từ điển mô tả, kích hoạt, hàng đợi.
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use fontatlas_describe::Dictionary;
+use fontatlas_embed::{CandleEncoder, EmbedError, Encode, Manifest, bundled_manifest};
 use fontatlas_store::Store;
 
 use crate::dto::settings::BootStatusDto;
 use crate::error::CmdError;
 use crate::hub::Hubs;
 use crate::index_bundle::{IndexSlot, RebuildState};
-use crate::services::scan::ScanManager;
 use crate::services::activation::ActivationApi;
+use crate::services::embed::EmbedSupervisor;
+use crate::services::model::ModelRuntime;
+use crate::services::scan::ScanManager;
 
 #[derive(Debug, Clone)]
 pub struct AppDirs {
@@ -21,8 +24,33 @@ pub struct AppDirs {
 
 impl AppDirs {
     /// `root` chứa tất cả (dùng cho test và `FONTATLAS_DATA_DIR` ở bản debug).
-    pub fn under(root: &std::path::Path) -> Self {
+    pub fn under(root: &Path) -> Self {
         AppDirs { data: root.to_path_buf(), cache: root.join("cache"), models: root.join("models") }
+    }
+}
+
+/// Tạo encoder + tên thiết bị ("metal" | "cpu") từ file model. Bản thật dùng Candle, test dùng encoder giả.
+pub type EncoderFactory = Box<dyn Fn(&Path) -> Result<(Box<dyn Encode>, &'static str), EmbedError> + Send + Sync>;
+pub type DiskFreeFn = Box<dyn Fn(&Path) -> std::io::Result<u64> + Send + Sync>;
+
+/// Phần phụ thuộc môi trường, tiêm được trong test.
+pub struct Deps {
+    pub manifest: Manifest,
+    pub encoder: EncoderFactory,
+    pub disk_free: DiskFreeFn,
+}
+
+impl Deps {
+    pub fn production() -> Deps {
+        Deps {
+            manifest: bundled_manifest(),
+            encoder: Box::new(|p| {
+                let e = CandleEncoder::load_best(p)?;
+                let id = e.device_id();
+                Ok((Box::new(e) as Box<dyn Encode>, id))
+            }),
+            disk_free: Box::new(fontatlas_embed::disk_free),
+        }
     }
 }
 
@@ -39,10 +67,17 @@ pub struct AppState {
     pub scans: ScanManager,
     pub index: IndexSlot,
     pub rebuild: RebuildState,
+    pub deps: Deps,
+    pub model: ModelRuntime,
+    pub embed: EmbedSupervisor,
 }
 
 impl AppState {
     pub fn new(dirs: AppDirs, activation: Box<dyn ActivationApi>) -> Arc<AppState> {
+        Self::with_deps(dirs, activation, Deps::production())
+    }
+
+    pub fn with_deps(dirs: AppDirs, activation: Box<dyn ActivationApi>, deps: Deps) -> Arc<AppState> {
         Arc::new(AppState {
             dirs,
             store: OnceLock::new(),
@@ -54,6 +89,9 @@ impl AppState {
             scans: ScanManager::default(),
             index: RwLock::new(None),
             rebuild: RebuildState::default(),
+            deps,
+            model: ModelRuntime::default(),
+            embed: EmbedSupervisor::default(),
         })
     }
 

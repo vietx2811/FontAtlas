@@ -112,3 +112,74 @@ fn onboarding_step_roundtrip() {
     onboarding::set_onboarding_step(&st, None).unwrap();
     assert!(onboarding::onboarding_state(&st).unwrap().step.is_none());
 }
+
+fn fixture(name: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-core/tests/fixtures").join(name)
+}
+
+#[test]
+fn analyzer_version_change_forces_rescan_even_if_rescan_on_launch_false() {
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path().join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(fixture("roboto.ttf"), dir.join("roboto.ttf")).unwrap();
+    std::fs::copy(fixture("open_sans.ttf"), dir.join("open_sans.ttf")).unwrap();
+    let data = d.path().join("data");
+    {
+        let st = AppState::new(AppDirs::under(&data), Box::new(NoActivation));
+        boot::run_boot(&st);
+        app_lib::services::sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+        assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+        // giả lập: dữ liệu do bản phân tích cũ; người dùng tắt quét lúc mở app
+        st.with_store(|s| {
+            s.conn().execute("UPDATE analyses SET analyzer_version='core-0.0.1'", []).unwrap();
+            s.conn().execute("UPDATE pipeline_state SET version='core-0.0.1' WHERE stage='load'", []).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        st.with_user(|u| {
+            u.set_setting("rescan_on_launch", "0")?;
+            u.set_setting("analyzer_version_seen", "core-0.0.1")?;
+            Ok(())
+        })
+        .unwrap();
+    }
+    let st = AppState::new(AppDirs::under(&data), Box::new(NoActivation));
+    let s = boot::run_boot(&st);
+    assert_eq!(s.phase, BootPhase::Ready);
+    // Index dùng bản phân tích cũ ngay lúc ready (không đợi phân tích lại)
+    assert_eq!(app_lib::services::analysis::bundle(&st).unwrap().len(), 2);
+    assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+    assert_eq!(st.with_store(|x| Ok(x.stale_analysis_count()?)).unwrap(), 0);
+    assert_eq!(
+        st.with_user(|u| Ok(u.setting("analyzer_version_seen")?)).unwrap().as_deref(),
+        Some(fontatlas_core::ANALYZER_VERSION)
+    );
+}
+
+#[test]
+fn rescan_off_and_same_version_does_not_scan() {
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path().join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(fixture("roboto.ttf"), dir.join("roboto.ttf")).unwrap();
+    let data = d.path().join("data");
+    {
+        let st = AppState::new(AppDirs::under(&data), Box::new(NoActivation));
+        boot::run_boot(&st);
+        app_lib::services::sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+        assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+        st.with_user(|u| Ok(u.set_setting("rescan_on_launch", "0")?)).unwrap();
+        assert_eq!(
+            st.with_user(|u| Ok(u.setting("analyzer_version_seen")?)).unwrap().as_deref(),
+            Some(fontatlas_core::ANALYZER_VERSION)
+        );
+    }
+    let st = AppState::new(AppDirs::under(&data), Box::new(NoActivation));
+    let events = Arc::new(Mutex::new(0usize));
+    let e2 = events.clone();
+    st.hubs.scan.subscribe(Box::new(move |_| *e2.lock().unwrap() += 1));
+    boot::run_boot(&st);
+    assert!(st.scans.wait_idle(std::time::Duration::from_secs(10)));
+    assert_eq!(*events.lock().unwrap(), 0, "không quét lại khi tắt và cùng phiên bản");
+}

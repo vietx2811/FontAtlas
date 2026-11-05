@@ -221,5 +221,7 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
 /// Việc nối tiếp khi hàng đợi quét về rỗng (mỗi task sau thêm móc của mình).
 fn after_idle(state: &Arc<AppState>) {
     boot::resolve_legacy_if_needed(state);
+    boot::mark_analyzer_seen_if_current(state);
+    let _ = crate::services::embed::ensure_started(state);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
 }

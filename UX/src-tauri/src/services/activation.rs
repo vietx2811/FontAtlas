@@ -20,3 +20,11 @@ impl ActivationApi for NoActivation {
         false
     }
 }
+
+/// Thoát app: Task 17 gọi `shutdown` của Plan 7 (gỡ font scope session).
+pub fn on_exit(_state: &crate::state::AppState) {}
+
+/// Bật/tắt giữ font kích hoạt sau khi thoát. Task 17 nối thêm `set_scope` của Plan 7 và cờ onboarded.
+pub fn set_keep(state: &crate::state::AppState, on: bool) -> Result<(), crate::error::CmdError> {
+    state.with_user(|u| Ok(u.set_setting(fontatlas_activate::SETTING_ACTIVATION_KEEP, if on { "1" } else { "0" })?))
+}

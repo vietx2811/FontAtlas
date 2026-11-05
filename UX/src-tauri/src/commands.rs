@@ -10,12 +10,13 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::activation::ActivationCapsDto;
-use crate::dto::events::{BootEvent, ScanEvent};
+use crate::dto::events::{BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::model::*;
 use crate::dto::library::*;
 use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::dto::analysis::*;
-use crate::services::{analysis, boot, describe, library, onboarding, pairs, sources, system};
+use crate::services::{analysis, boot, describe, embed, library, model, onboarding, pairs, settings, sources, system};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -82,6 +83,20 @@ macro_rules! command_list {
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
             async describe(text: String) -> Result<DescribeDto, CmdError>;
+            async get_settings() -> Result<SettingsDto, CmdError>;
+            async set_settings(patch: SettingsPatchDto) -> Result<SettingsDto, CmdError>;
+            async model_status() -> Result<ModelStatusDto, CmdError>;
+            async model_download(on_event: Channel<ModelEvent>) -> Result<(), CmdError>;
+            async model_cancel() -> Result<(), CmdError>;
+            async model_redownload(on_event: Channel<ModelEvent>) -> Result<(), CmdError>;
+            async model_remove() -> Result<(), CmdError>;
+            async embed_status() -> Result<EmbedStatusDto, CmdError>;
+            async embed_pause() -> Result<(), CmdError>;
+            async embed_resume() -> Result<(), CmdError>;
+            async embed_subscribe(on_event: Channel<EmbedEvent>) -> Result<(), CmdError>;
+            async embed_failures() -> Result<Vec<EmbedFailureDto>, CmdError>;
+            async queue_pause_all() -> Result<(), CmdError>;
+            async queue_resume_all() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -143,9 +158,7 @@ pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, 
 pub async fn boot_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<BootEvent>) -> Result<(), CmdError> {
     // người đến muộn nhận ngay pha hiện tại
     let _ = on_event.send(BootEvent::Phase { phase: boot::snapshot(&state).phase });
-    state.hubs.boot.subscribe(Box::new(move |e| {
-        let _ = on_event.send(e);
-    }));
+    state.hubs.boot.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -212,6 +225,54 @@ cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
 cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
 cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
 cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
+cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
+cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));
+cmd!(model_status() -> ModelStatusDto => |s| Ok(model::model_status(s)));
+cmd!(model_cancel() -> () => |s| {
+    model::cancel_download(s);
+    Ok(())
+});
+cmd!(model_remove() -> () => |s| model::remove(s));
+cmd!(embed_status() -> EmbedStatusDto => |s| embed::embed_status(s));
+cmd!(embed_pause() -> () => |s| {
+    s.embed.pause();
+    Ok(())
+});
+cmd!(embed_resume() -> () => |s| {
+    s.embed.resume();
+    Ok(())
+});
+cmd!(embed_failures() -> Vec<EmbedFailureDto> => |s| embed::embed_failures(s));
+cmd!(queue_pause_all() -> () => |s| {
+    embed::pause_all(s);
+    Ok(())
+});
+cmd!(queue_resume_all() -> () => |s| {
+    embed::resume_all(s);
+    Ok(())
+});
+
+#[tauri::command]
+pub async fn model_download(state: State<'_, Arc<AppState>>, on_event: Channel<ModelEvent>) -> Result<(), CmdError> {
+    state.hubs.model.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    blocking(&state, model::start_download).await
+}
+
+#[tauri::command]
+pub async fn model_redownload(state: State<'_, Arc<AppState>>, on_event: Channel<ModelEvent>) -> Result<(), CmdError> {
+    state.hubs.model.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    blocking(&state, model::redownload).await
+}
+
+#[tauri::command]
+pub async fn embed_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<EmbedEvent>) -> Result<(), CmdError> {
+    if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
+        let _ = on_event.send(EmbedEvent::Status { status });
+    }
+    state.hubs.embed.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    Ok(())
+}
+
 cmd!(detect_font_managers() -> Vec<FontManagerDto> => |_s| Ok(system::detect_font_managers()));
 
 #[tauri::command]
@@ -259,9 +320,7 @@ pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, Cmd
 
 #[tauri::command]
 pub async fn scan_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ScanEvent>) -> Result<(), CmdError> {
-    state.hubs.scan.subscribe(Box::new(move |e| {
-        let _ = on_event.send(e);
-    }));
+    state.hubs.scan.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 

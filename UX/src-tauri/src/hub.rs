@@ -1,10 +1,11 @@
 //! Phát một sự kiện tới mọi đăng ký (nhiều cửa sổ nhận cùng chuỗi sự kiện).
 #[allow(unused_imports)]
-use crate::dto::events::{BootEvent, ScanEvent};
+use crate::dto::events::{BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-type Sink<E> = Arc<dyn Fn(E) + Send + Sync>;
+/// Sink trả `false` khi người nhận đã đóng (cửa sổ tắt): hub bỏ sink đó.
+type Sink<E> = Arc<dyn Fn(E) -> bool + Send + Sync>;
 
 pub struct ProgressHub<E: Clone + Send + 'static> {
     next: AtomicU64,
@@ -19,6 +20,13 @@ impl<E: Clone + Send + 'static> Default for ProgressHub<E> {
 
 impl<E: Clone + Send + 'static> ProgressHub<E> {
     pub fn subscribe(&self, sink: Box<dyn Fn(E) + Send + Sync>) -> u64 {
+        self.subscribe_while(Box::new(move |e| {
+            sink(e);
+            true
+        }))
+    }
+
+    pub fn subscribe_while(&self, sink: Box<dyn Fn(E) -> bool + Send + Sync>) -> u64 {
         let id = self.next.fetch_add(1, Ordering::SeqCst);
         if let Ok(mut g) = self.sinks.lock() {
             g.push((id, Arc::from(sink)));
@@ -38,12 +46,15 @@ impl<E: Clone + Send + 'static> ProgressHub<E> {
 
     /// Gọi từng sink ngoài khoá (sink chậm hay gọi lại hub không gây deadlock).
     pub fn emit(&self, e: E) {
-        let sinks: Vec<Sink<E>> = match self.sinks.lock() {
-            Ok(g) => g.iter().map(|(_, s)| Arc::clone(s)).collect(),
+        let sinks: Vec<(u64, Sink<E>)> = match self.sinks.lock() {
+            Ok(g) => g.iter().map(|(i, s)| (*i, Arc::clone(s))).collect(),
             Err(_) => return,
         };
-        for s in sinks {
-            s(e.clone());
+        let dead: Vec<u64> = sinks.iter().filter(|(_, s)| !s(e.clone())).map(|(i, _)| *i).collect();
+        if !dead.is_empty()
+            && let Ok(mut g) = self.sinks.lock()
+        {
+            g.retain(|(i, _)| !dead.contains(i));
         }
     }
 }
@@ -53,6 +64,8 @@ impl<E: Clone + Send + 'static> ProgressHub<E> {
 pub struct Hubs {
     pub boot: ProgressHub<BootEvent>,
     pub scan: ProgressHub<ScanEvent>,
+    pub embed: ProgressHub<EmbedEvent>,
+    pub model: ProgressHub<ModelEvent>,
 }
 
 #[cfg(test)]

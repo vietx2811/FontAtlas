@@ -38,6 +38,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(app_handler!())
-        .run(tauri::generate_context!())
-        .expect("không chạy được FontAtlas");
+        .build(tauri::generate_context!())
+        .expect("không dựng được FontAtlas")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event
+                && let Some(state) = app.try_state::<std::sync::Arc<AppState>>()
+            {
+                crate::services::lifecycle::on_exit(&state);
+            }
+        });
 }

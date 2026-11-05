@@ -31,12 +31,14 @@ tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 thiserror = "2"
+unicode-normalization = "0.1.25"
 ts-rs = { version = "=12.0.1", features = ["serde-json-impl"] }
 
 [dev-dependencies]
 rusqlite = { version = "=0.31.0", features = ["bundled"] }
 tauri = { version = "2.9.5", features = ["macos-private-api", "test"] }
 tempfile = "3.27"
+tiny_http = "0.12"
 
 [workspace]
 members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-describe"]
