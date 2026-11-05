@@ -1,9 +1,10 @@
 //! Quét lại một nguồn theo diff (path, size, mtime) → BLAKE3 → chỉ phân tích hash chưa có kết quả mới.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::UNIX_EPOCH;
 
-use fontatlas_core::{ANALYZER_VERSION, analyze_paths};
+use fontatlas_core::{ANALYZER_VERSION, CoreError, analyze_paths};
 use rayon::prelude::*;
 use rusqlite::params;
 use serde::Serialize;
@@ -22,6 +23,36 @@ pub enum RescanStatus {
     Ok,
     /// Gốc nguồn không đọc được (ổ ngoài đã rút…): không đánh missing gì.
     SourceUnavailable,
+    /// Người dùng huỷ giữa chừng: không đánh missing gì.
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScanPhase {
+    Walking,
+    Hashing,
+    Analyzing,
+    MarkingMissing,
+}
+
+/// `faces_written`: số face ghi trong lô vừa xong (UI hiện font dần).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanProgress {
+    pub phase: ScanPhase,
+    pub done: usize,
+    pub total: usize,
+    pub faces_written: usize,
+}
+
+fn progress(phase: ScanPhase, done: usize, total: usize, faces_written: usize) -> ScanProgress {
+    ScanProgress { phase, done, total, faces_written }
+}
+
+enum Work {
+    Known(IngestItem),
+    Analyze(ScannedFile, [u8; 32]),
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -88,12 +119,34 @@ fn hash_file(p: &Path) -> std::io::Result<[u8; 32]> {
     Ok(*h.finalize().as_bytes())
 }
 
+/// Huỷ hoặc ổ rút → dừng quét, không đánh missing.
+fn interrupted(root: &Path, cancel: &AtomicBool) -> Option<RescanStatus> {
+    if cancel.load(Ordering::SeqCst) {
+        Some(RescanStatus::Cancelled)
+    } else if !root_available(root) {
+        Some(RescanStatus::SourceUnavailable)
+    } else {
+        None
+    }
+}
+
 fn root_available(root: &Path) -> bool {
     root.is_dir() && std::fs::read_dir(root).is_ok()
 }
 
 impl Store {
     pub fn rescan_source(&mut self, source_id: i64) -> Result<RescanStats, StoreError> {
+        self.rescan_source_with(source_id, &mut |_| {}, &AtomicBool::new(false))
+    }
+
+    /// Quét có tiến độ và huỷ. `on_progress` luôn gọi NGOÀI transaction (có thể chặn để tạm dừng);
+    /// `cancel` và `root_available` được kiểm sau Walking, Hashing và sau mỗi lô.
+    pub fn rescan_source_with(
+        &mut self,
+        source_id: i64,
+        on_progress: &mut dyn FnMut(&ScanProgress),
+        cancel: &AtomicBool,
+    ) -> Result<RescanStats, StoreError> {
         let src = self.source(source_id)?;
         let root = PathBuf::from(
             src.path
@@ -112,6 +165,11 @@ impl Store {
         )?;
         let (files, failed_dirs) = walk_fonts_report(&root);
         stats.seen = files.len();
+        on_progress(&progress(ScanPhase::Walking, files.len(), files.len(), 0));
+        if let Some(st) = interrupted(&root, cancel) {
+            stats.status = st;
+            return Ok(stats);
+        }
 
         // vị trí đã biết của nguồn: path → (size, mtime, có kết quả mới nhất)
         let mut known: HashMap<String, (i64, i64, bool)> = HashMap::new();
@@ -154,9 +212,13 @@ impl Store {
                 let h = hash_file(&f.path);
                 (f, h)
             }).collect();
-        let mut items: Vec<IngestItem> = Vec::new();
+        on_progress(&progress(ScanPhase::Hashing, stats.seen, stats.seen, 0));
+        if let Some(st) = interrupted(&root, cancel) {
+            stats.status = st;
+            return Ok(stats);
+        }
         let mut unreadable_known: Vec<String> = Vec::new();
-        let mut to_analyze: Vec<(ScannedFile, [u8; 32])> = Vec::new();
+        let mut work: Vec<Work> = Vec::new();
         {
             let mut fresh = self.conn.prepare(
                 "SELECT count(*) FROM pipeline_state WHERE hash=?1 AND face_index=-1 AND stage='load'
@@ -174,37 +236,64 @@ impl Store {
                     Ok(h) => {
                         let n: i64 = fresh.query_row(params![&h[..], ANALYZER_VERSION], |r| r.get(0))?;
                         if n > 0 {
-                            items.push(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known });
+                            work.push(Work::Known(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known }));
                         } else {
-                            to_analyze.push((f, h));
+                            work.push(Work::Analyze(f, h));
                         }
                     }
                 }
             }
         }
-        let paths: Vec<PathBuf> = to_analyze.iter().map(|(f, _)| f.path.clone()).collect();
-        for ((f, h), (_, res)) in to_analyze.into_iter().zip(analyze_paths(&paths)) {
-            let item = match res {
-                // hash của report là chuẩn (file có thể đổi giữa lúc băm và lúc phân tích)
-                Ok(r) => IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) },
-                Err(e) => IngestItem {
-                    source_id,
-                    file: f,
-                    hash: h,
-                    analysis: Analysis::Failed { code: e.code().to_string(), detail: e.to_string() },
-                },
-            };
-            items.push(item);
-        }
-        let mut batch = Vec::with_capacity(INGEST_BATCH);
-        for it in items {
-            batch.push(it);
-            if batch.len() == INGEST_BATCH {
-                self.ingest_counting(std::mem::take(&mut batch), started, &mut stats)?;
+        // phân tích rồi ghi từng lô (font hiện dần); callback và kiểm huỷ nằm ngoài transaction
+        let total = work.len();
+        let mut done = 0;
+        let mut it = work.into_iter();
+        loop {
+            let chunk: Vec<Work> = it.by_ref().take(INGEST_BATCH).collect();
+            if chunk.is_empty() {
+                break;
             }
-        }
-        if !batch.is_empty() {
-            self.ingest_counting(batch, started, &mut stats)?;
+            let n = chunk.len();
+            let mut items: Vec<IngestItem> = Vec::with_capacity(n);
+            let mut pending: Vec<(ScannedFile, [u8; 32])> = Vec::new();
+            for w in chunk {
+                match w {
+                    Work::Known(i) => items.push(i),
+                    Work::Analyze(f, h) => pending.push((f, h)),
+                }
+            }
+            let paths: Vec<PathBuf> = pending.iter().map(|(f, _)| f.path.clone()).collect();
+            for ((f, h), (_, res)) in pending.into_iter().zip(analyze_paths(&paths)) {
+                match res {
+                    // hash của report là chuẩn (file có thể đổi giữa lúc băm và lúc phân tích)
+                    Ok(r) => items.push(IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) }),
+                    // lỗi I/O (ổ rút, file bị khoá…) không phải lỗi font: để pending, lần quét sau thử lại
+                    Err(CoreError::Io(e)) => {
+                        let p = f.path.to_string_lossy().to_string();
+                        if known.contains_key(&p) {
+                            unreadable_known.push(p.clone());
+                        }
+                        stats.unreadable.push((p, format!("io: {}", e.kind())));
+                    }
+                    Err(e) => items.push(IngestItem {
+                        source_id,
+                        file: f,
+                        hash: h,
+                        analysis: Analysis::Failed { code: e.code().to_string(), detail: e.to_string() },
+                    }),
+                }
+            }
+            let faces_written: usize = items
+                .iter()
+                .map(|i| if let Analysis::Report(r) = &i.analysis { r.faces.len() } else { 0 })
+                .sum();
+            self.ingest_counting(items, started, &mut stats)?;
+            done += n;
+            on_progress(&progress(ScanPhase::Analyzing, done, total, faces_written));
+            if let Some(st) = interrupted(&root, cancel) {
+                stats.status = st;
+                return Ok(stats);
+            }
         }
 
         // file đã biết nhưng không đọc được lần này: vẫn coi là còn
@@ -215,8 +304,13 @@ impl Store {
             )?;
         }
         // ổ rút giữa lúc quét → không đánh missing gì
-        if !root_available(&root) {
-            stats.status = RescanStatus::SourceUnavailable;
+        if let Some(st) = interrupted(&root, cancel) {
+            stats.status = st;
+            return Ok(stats);
+        }
+        on_progress(&progress(ScanPhase::MarkingMissing, 0, 0, 0));
+        if let Some(st) = interrupted(&root, cancel) {
+            stats.status = st;
             return Ok(stats);
         }
         let stale: Vec<(i64, String)> = {
