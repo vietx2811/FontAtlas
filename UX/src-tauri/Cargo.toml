@@ -1,14 +1,12 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
+description = "FontAtlas: khám phá, so sánh và ghép cặp font"
 authors = ["you"]
 license = ""
 repository = ""
-edition = "2021"
-rust-version = "1.77.2"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = "2024"
+rust-version = "1.92"
 
 [lib]
 name = "app_lib"
@@ -18,19 +16,26 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
-serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+fontatlas-activate = { path = "crates/fontatlas-activate" }
+fontatlas-core = { path = "crates/fontatlas-core" }
+fontatlas-describe = { path = "crates/fontatlas-describe" }
+fontatlas-embed = { path = "crates/fontatlas-embed" }
+fontatlas-index = { path = "crates/fontatlas-index" }
+fontatlas-preview = { path = "crates/fontatlas-preview" }
+fontatlas-store = { path = "crates/fontatlas-store" }
 log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tauri = { version = "2.9.5", features = ["macos-private-api"] }
-tauri-plugin-log = "2"
-tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-rusqlite = { version = "0.31", features = ["bundled"] }
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4", "v5", "serde"] }
-qdrant-client = "1.7"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+thiserror = "2"
+ts-rs = { version = "=12.0.1", features = ["serde-json-impl"] }
+
+[dev-dependencies]
+tauri = { version = "2.9.5", features = ["macos-private-api", "test"] }
+tempfile = "3.27"
 
 [workspace]
 members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-describe"]
