@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
+import { openPrivacySettings } from '../../privacy';
+import { useScanStore } from '../../store/scan';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -103,7 +105,8 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   const [removing, setRemoving] = useState<SourceDto | null>(null);
   const refresh = useCallback(async () => setSources(await api.listSources()), [api]);
   useEffect(() => { void refresh(); }, [refresh]);
-  const state = (x: SourceDto) => (!x.available ? 'Không khả dụng' : x.scanning ? 'Đang quét' : 'Sẵn sàng');
+  const access = useScanStore(x => x.access);
+  const state = (x: SourceDto) => (x.id in access ? 'Cần quyền truy cập' : !x.available ? 'Không khả dụng' : x.scanning ? 'Đang quét' : 'Sẵn sàng');
   return (
     <>
       <div className="fa-set-bar"><button type="button" onClick={() => useUiStore.getState().requestAddFolder()}>+ Thêm</button></div>
@@ -112,7 +115,8 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}</strong><span className="path">{x.path}</span></div>
             <span className="meta">{x.faceCount} font · {state(x)}</span>
-            <button type="button" onClick={() => void api.rescanSources([x.id])}>Quét lại</button>
+            {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>Cấp quyền</button>}
+            <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? 'Thử lại' : 'Quét lại'}</button>
             <button type="button" className="danger" onClick={() => setRemoving(x)}>Xoá nguồn</button>
           </li>
         ))}

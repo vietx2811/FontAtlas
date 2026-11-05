@@ -1,10 +1,11 @@
 import type { EmptyAction } from './zeroStates';
 import './zero.css';
 
-type Props = { glyph: string; text: string; action?: EmptyAction | { id: string; label: string }; onAction?(id: string): void; compact?: boolean };
+type Act = EmptyAction | { id: string; label: string };
+type Props = { glyph: string; text: string; action?: Act; secondary?: Act; onAction?(id: string): void; compact?: boolean };
 
 /** Trạng thái trống: một chữ minh hoạ nhỏ trên đường nền, một dòng, một hành động (nếu có). */
-export function ZeroState({ glyph, text, action, onAction, compact }: Props): React.JSX.Element {
+export function ZeroState({ glyph, text, action, secondary, onAction, compact }: Props): React.JSX.Element {
   return (
     <div className={`fa-zero${compact ? ' compact' : ''}`} data-testid="zero-state">
       <svg aria-hidden="true" viewBox="0 0 96 64" width="96" height="64">
@@ -13,7 +14,7 @@ export function ZeroState({ glyph, text, action, onAction, compact }: Props): Re
         <text x="48" y="50" fontSize="44" fontWeight="500" fill="var(--muted)" fontFamily="var(--font-ui)" textAnchor="middle">{glyph}</text>
       </svg>
       <p>{text}</p>
-      {action && <button type="button" onClick={() => onAction?.(action.id)}>{action.label}</button>}
+      {action && <div className="fa-zero-actions"><button type="button" onClick={() => onAction?.(action.id)}>{action.label}</button>{secondary && <button type="button" onClick={() => onAction?.(secondary.id)}>{secondary.label}</button>}</div>}
     </div>
   );
 }

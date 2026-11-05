@@ -2,6 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useScanStore } from '../../../store/scan';
+import { PRIVACY_URLS, setUrlOpener } from '../../../privacy';
 import { fireEvent, within } from '@testing-library/react';
 import { useUiStore } from '../../../store/ui';
 import { Library } from '../Library';
@@ -179,6 +180,23 @@ describe('Library', () => {
       expect(zero().textContent).toMatch(/chưa kết nối/);
       fireEvent.click(within(zero()).getByRole('button', { name: 'Quét lại khi cắm' }));
       expect(spy).toHaveBeenCalledWith([3]);
+    });
+
+    it('a source that needs access shows Cấp quyền (opens Files and Folders) and Thử lại (rescans just that source)', async () => {
+      const api = createMockApi();
+      const opened: string[] = [];
+      setUrlOpener(async u => { opened.push(u); return true; });
+      const spy = vi.spyOn(api, 'rescanSources');
+      vi.spyOn(api, 'queryFaces').mockResolvedValue(empty());
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      act(() => { useScanStore.setState({ access: { 3: 'timeout' } }); useUiStore.getState().setView('src:3'); }); await settle();
+      expect(zero().textContent).toMatch(/quyền truy cập/);
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Cấp quyền' }));
+      expect(opened).toEqual([PRIVACY_URLS.files]);
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Thử lại' }));
+      expect(spy).toHaveBeenCalledWith([3]);
+      act(() => useScanStore.setState({ access: {} }));
     });
   });
 });

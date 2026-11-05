@@ -193,4 +193,11 @@ describe('Sidebar', () => {
     await settle();
     expect(pickFolder).toHaveBeenCalledTimes(1);
   });
+
+  it('a source that needs access is marked in the list (title says so)', async () => {
+    await mount();
+    act(() => useScanStore.setState({ access: { 3: 'denied' } }));
+    expect(screen.getByRole('button', { name: /Ổ ngoài/ }).getAttribute('title')).toBe('Ổ ngoài: cần quyền truy cập');
+    act(() => useScanStore.setState({ access: {} }));
+  });
 });

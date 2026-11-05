@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { createModelStore } from '../../../store/model';
+import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Settings, SETTINGS_GROUPS } from '../Settings';
 
@@ -95,6 +96,19 @@ describe('Settings', () => {
       await settle();
       expect((await api.listSources()).map(s => s.id)).toEqual([1, 3]);
       expect(screen.getAllByTestId('source-row')).toHaveLength(2);
+    });
+
+    it('a source that needs access says so and offers Cấp quyền and Thử lại', async () => {
+      const { api } = await mount();
+      await go('Thư viện và nguồn');
+      act(() => useScanStore.setState({ access: { 2: 'timeout' } }));
+      const row = screen.getAllByTestId('source-row')[1];
+      expect(row.textContent).toMatch(/Cần quyền truy cập/);
+      expect(within(row).getByRole('button', { name: 'Cấp quyền' })).toBeTruthy();
+      const spy = vi.spyOn(api, 'rescanSources');
+      fireEvent.click(within(row).getByRole('button', { name: 'Thử lại' }));
+      expect(spy).toHaveBeenCalledWith([2]);
+      act(() => useScanStore.setState({ access: {} }));
     });
 
     it('"Quét lại khi mở app" and "+ Thêm"', async () => {

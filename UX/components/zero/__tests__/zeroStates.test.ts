@@ -3,7 +3,7 @@ import type { SourceDto } from '../../../api';
 import { libraryEmpty, type EmptyCtx } from '../zeroStates';
 
 const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, faceCount: 10, lastScan: null, scanning: false, ...o });
-const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, ...o });
+const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, ...o });
 
 describe('libraryEmpty', () => {
   it('no sources at all: add-folder call to action, mentioning drag and drop', () => {
@@ -58,5 +58,17 @@ describe('libraryEmpty', () => {
       expect(e.text).not.toMatch(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
       expect(e.glyph).toMatch(/^\S$/u);
     }
+  });
+
+  it('a source that needs access: grant + retry (two actions), never "no fonts"', () => {
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0 })], access: { 1: 'timeout' } }));
+    expect(e.kind).toBe('source-access');
+    expect(e.text).toMatch(/quyền truy cập/);
+    expect(e.action).toEqual({ id: 'grant', label: 'Cấp quyền' });
+    expect(e.secondary).toEqual({ id: 'rescan', label: 'Thử lại' });
+  });
+  it('with no fonts at all and every source blocked, the library page says access is needed too', () => {
+    const e = libraryEmpty(ctx({ sources: [src({ faceCount: 0 })], access: { 1: 'denied' } }));
+    expect(e.kind).toBe('source-access');
   });
 });

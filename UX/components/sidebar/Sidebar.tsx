@@ -36,6 +36,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
   const scanned = useScanStore(s => s.written);
+  const access = useScanStore(s => s.access);
   const addRequest = useUiStore(s => s.addFolderRequest);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
@@ -163,8 +164,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
 
         <NavSection title="Nguồn" open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
-            <NavItem key={s.id} icon={s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
-              title={s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} />
+            <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
+              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} />
           ))}
         </NavSection>
 
