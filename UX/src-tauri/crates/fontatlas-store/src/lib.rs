@@ -1,5 +1,6 @@
 //! fontatlas-store: library.db (dẫn xuất) + user.db (người dùng).
 mod activation;
+mod analysis;
 mod embed;
 mod error;
 mod fold;
@@ -16,10 +17,11 @@ pub use activation::{
     PrunedReasons,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
+pub use analysis::StoredAnalysis;
 pub use embed::{EmbedJob, EmbedReader, EnqueueStats, JobResult, SETTING_EMBED_ENABLED, SETTING_LICENSE_NOTICE_ACK};
 pub use error::StoreError;
 pub use fold::vi_fold;
-pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyResolve};
+pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyPreview, LegacyResolve, legacy_preview};
 pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, ScannedFile};
 pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, RescanStats, RescanStatus, ScanPhase, ScanProgress, walk_fonts};
 pub use query::{DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, MAX_LIMIT, SortKey, ViFilter};

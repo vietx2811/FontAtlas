@@ -49,6 +49,30 @@ struct Payload {
     date_added: Option<String>,
 }
 
+/// Số liệu xem trước DB cũ (onboarding O2).
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyPreview {
+    pub fonts: usize,
+    pub sources: usize,
+    pub collections: usize,
+    pub favorites: usize,
+    pub tags: usize,
+}
+
+/// Đọc chỉ-đọc DB cũ để đếm, không ghi gì.
+pub fn legacy_preview(old_db: &Path) -> Result<LegacyPreview, StoreError> {
+    let old = read_old(old_db)?;
+    let tags: HashSet<&str> = old.fonts.iter().flat_map(|f| f.payload.tags.iter().map(String::as_str)).collect();
+    Ok(LegacyPreview {
+        fonts: old.fonts.len(),
+        sources: old.sources.len(),
+        collections: old.collections.len(),
+        favorites: old.fonts.iter().filter(|f| f.payload.favorite).count(),
+        tags: tags.len(),
+    })
+}
+
 struct OldFont {
     id: String,
     path: String,
