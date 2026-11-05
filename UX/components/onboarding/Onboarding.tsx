@@ -3,6 +3,7 @@ import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
 import { CmdError } from '../../api';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
+import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
 import { pickFolderWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
@@ -52,6 +53,7 @@ export function Onboarding({ api, pickFolder = pickFolderWithDialog, onDone }: P
         <span />
       </header>
       <main className="fa-onb-body">
+        <Illustration step={step} />
         {step === 'o1' && <O1 {...ctx} />}
         {step === 'o2' && <O2 {...ctx} />}
         {step === 'o3' && <O3 {...ctx} />}

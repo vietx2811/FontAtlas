@@ -30,3 +30,6 @@
 .fa-onb-actions button { height: 34px; padding: 0 16px; border-radius: 9px; font-size: 14px; background: var(--surface-2); }
 .fa-onb-actions button.primary { background: var(--accent-ink); color: var(--sheet); }
 .fa-onb-actions button:disabled { opacity: .45; }
+
+.fa-illus { align-self: flex-start; margin-bottom: 4px; color: var(--fg); }
+@media (max-height: 620px) { .fa-illus { display: none; } }
