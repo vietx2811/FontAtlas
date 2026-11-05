@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Api } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
 import type { FaceRow } from '../../features/library-grid';
+import { COMPOSER_INSET } from './SampleComposer';
 import { faceKey, toGridQuery, useUiStore } from '../../store/ui';
 
 type Props = { api: Api; width?: number; height?: number };
@@ -38,5 +39,5 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     );
   }
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
-  return <LibraryGrid api={api} query={gridQuery} sampleText={sample} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} onSelect={onSelect} />;
+  return <LibraryGrid api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} onSelect={onSelect} />;
 }

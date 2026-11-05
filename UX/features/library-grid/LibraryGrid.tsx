@@ -15,6 +15,8 @@ export type LibraryGridProps = {
   width?: number; height?: number;
   /** Cỡ chữ mẫu 18–72: quyết định bucket ảnh, bề rộng ô và hộp ảnh (Plan 6b T6). */
   fontSize?: number; layout?: 'grid' | 'list';
+  /** Hàng đệm ở đáy (px) cho ô nổi che thẻ cuối. */
+  bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
 };
 
@@ -24,11 +26,12 @@ type RowProps = {
   cols: number; total: number; paged: PagedFaces | null; version: number; applied: Applied | null;
   api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null;
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
-  fontSize?: number; layout: 'grid' | 'list'; boxHeight: number;
+  fontSize?: number; layout: 'grid' | 'list'; boxHeight: number; rows: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
 };
 
-function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
+function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
+  if (index >= rows) return <div role="presentation" style={style} />; // hàng đệm đáy
   const cells = [];
   for (let c = 0; c < cols; c++) {
     const i = index * cols + c;
@@ -63,7 +66,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', isActive, isFavorite, onToggleFavorite,
+  fontSize, layout = 'grid', bottomInset = 0, isActive, isFavorite, onToggleFavorite,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
@@ -166,12 +169,12 @@ export function LibraryGrid({
         <List
           data-testid="library-grid-scroller"
           rowComponent={Row}
-          rowCount={rowCount}
-          rowHeight={rowH}
+          rowCount={rowCount + (bottomInset ? 1 : 0)}
+          rowHeight={(i: number) => (i >= rowCount ? bottomInset : rowH)}
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: size.height, width: size.width }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

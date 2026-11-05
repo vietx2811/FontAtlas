@@ -88,4 +88,15 @@ describe('FaceCell skin (prototype)', () => {
     await settle();
     expect(bump).toHaveBeenCalledTimes(1); // sang bucket 96
   });
+
+  it('reserves bottomInset px under the last row for the floating composer', async () => {
+    const heights = async (inset: number) => {
+      const { unmount } = await mount(undefined, { bottomInset: inset });
+      const inner = screen.getByTestId('library-grid-scroller').lastElementChild as HTMLElement; // phần tử đo tổng chiều cao
+      const h = parseFloat(inner.style.height);
+      unmount();
+      return h;
+    };
+    expect(await heights(120) - await heights(0)).toBe(120);
+  });
 });
