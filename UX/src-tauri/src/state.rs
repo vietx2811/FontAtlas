@@ -1,11 +1,13 @@
 //! Trạng thái dùng chung của app: thư mục dữ liệu, hai kết nối Store, từ điển mô tả, kích hoạt.
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use fontatlas_describe::Dictionary;
 use fontatlas_store::Store;
 
+use crate::dto::settings::BootStatusDto;
 use crate::error::CmdError;
+use crate::hub::Hubs;
 use crate::services::activation::ActivationApi;
 
 #[derive(Debug, Clone)]
@@ -30,6 +32,8 @@ pub struct AppState {
     pub user: OnceLock<Mutex<Store>>,
     pub dictionary: Dictionary,
     pub activation: Box<dyn ActivationApi>,
+    pub boot: RwLock<BootStatusDto>,
+    pub hubs: Hubs,
 }
 
 impl AppState {
@@ -40,6 +44,8 @@ impl AppState {
             user: OnceLock::new(),
             dictionary: Dictionary::bundled(),
             activation,
+            boot: RwLock::new(BootStatusDto::default()),
+            hubs: Hubs::default(),
         })
     }
 

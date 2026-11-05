@@ -3,6 +3,7 @@ pub mod bindings;
 pub mod commands;
 pub mod dto;
 pub mod error;
+pub mod hub;
 pub mod services;
 pub mod state;
 
@@ -31,7 +32,8 @@ pub fn run() {
         .setup(|app| {
             let dirs = resolve_dirs(app.handle())?;
             let state = AppState::new(dirs, Box::new(NoActivation));
-            app.manage(state);
+            app.manage(state.clone());
+            crate::services::boot::start(state);
             Ok(())
         })
         .invoke_handler(app_handler!())

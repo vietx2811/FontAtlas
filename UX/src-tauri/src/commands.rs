@@ -7,7 +7,12 @@ use std::sync::Arc;
 
 use tauri::State;
 
+use tauri::ipc::Channel;
+
 use crate::dto::activation::ActivationCapsDto;
+use crate::dto::events::BootEvent;
+use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
+use crate::services::{boot, onboarding};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -27,6 +32,12 @@ pub const SYNC_OK: &[&str] = &["startup_status", "scan_status", "preview_info", 
 macro_rules! command_list {
     ($cb:ident) => {
         $crate::$cb! {
+            sync startup_status() -> Result<BootStatusDto, CmdError>;
+            async boot_subscribe(on_event: Channel<BootEvent>) -> Result<(), CmdError>;
+            async onboarding_state() -> Result<OnboardingDto, CmdError>;
+            async set_onboarding_step(step: Option<String>) -> Result<(), CmdError>;
+            async legacy_import() -> Result<LegacyStateDto, CmdError>;
+            async legacy_retry() -> Result<LegacyStateDto, CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
         }
     };
@@ -77,6 +88,41 @@ where
     tauri::async_runtime::spawn_blocking(move || f(&st))
         .await
         .map_err(|e| CmdError::internal(format!("tác vụ nền lỗi: {e}")))?
+}
+
+#[tauri::command]
+pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, CmdError> {
+    Ok(boot::snapshot(&state))
+}
+
+#[tauri::command]
+pub async fn boot_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<BootEvent>) -> Result<(), CmdError> {
+    // người đến muộn nhận ngay pha hiện tại
+    let _ = on_event.send(BootEvent::Phase { phase: boot::snapshot(&state).phase });
+    state.hubs.boot.subscribe(Box::new(move |e| {
+        let _ = on_event.send(e);
+    }));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn onboarding_state(state: State<'_, Arc<AppState>>) -> Result<OnboardingDto, CmdError> {
+    blocking(&state, |s| onboarding::onboarding_state(s)).await
+}
+
+#[tauri::command]
+pub async fn set_onboarding_step(state: State<'_, Arc<AppState>>, step: Option<String>) -> Result<(), CmdError> {
+    blocking(&state, move |s| onboarding::set_onboarding_step(s, step)).await
+}
+
+#[tauri::command]
+pub async fn legacy_import(state: State<'_, Arc<AppState>>) -> Result<LegacyStateDto, CmdError> {
+    blocking(&state, boot::legacy_import).await
+}
+
+#[tauri::command]
+pub async fn legacy_retry(state: State<'_, Arc<AppState>>) -> Result<LegacyStateDto, CmdError> {
+    blocking(&state, boot::legacy_import).await
 }
 
 #[tauri::command]

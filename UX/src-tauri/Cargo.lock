@@ -113,6 +113,7 @@ dependencies = [
  "fontatlas-preview",
  "fontatlas-store",
  "log",
+ "rusqlite",
  "serde",
  "serde_json",
  "tauri",

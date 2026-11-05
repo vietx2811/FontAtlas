@@ -34,6 +34,7 @@ thiserror = "2"
 ts-rs = { version = "=12.0.1", features = ["serde-json-impl"] }
 
 [dev-dependencies]
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
 tauri = { version = "2.9.5", features = ["macos-private-api", "test"] }
 tempfile = "3.27"
 
