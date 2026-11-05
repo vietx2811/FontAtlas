@@ -1,0 +1,53 @@
+/* Sidebar theo prototype: không thẻ, không viền, nằm trên vibrancy. */
+.fa-side { height: 100%; display: flex; flex-direction: column; min-height: 0; padding: 0 8px; width: 100%; overflow: hidden; }
+.fa-side-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding-block: 6px 12px; scrollbar-width: none; }
+.fa-iconbtn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--muted); flex: none; }
+.fa-iconbtn:hover { background: var(--chrome-hover); color: var(--fg); }
+.fa-iconbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+
+.fa-nav-wrap { position: relative; }
+.fa-nav { display: flex; align-items: center; gap: 12px; width: 100%; height: 34px; padding: 0 9px; border-radius: var(--radius-sm); text-align: left; color: var(--fg); white-space: nowrap; font-size: 14px; }
+.fa-nav:hover { background: var(--chrome-hover); }
+.fa-nav[aria-current="true"] { background: var(--chrome-active); font-weight: 500; }
+.fa-nav .fa-ico { opacity: .78; flex: none; }
+.fa-lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fa-n { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fa-kbd { font-size: var(--text-2xs); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
+.fa-swatch { width: 9px; height: 9px; border-radius: 3px; margin-inline: 4px; flex: none; }
+.fa-ejected { color: var(--muted); }
+.fa-ejected .fa-lbl { text-decoration: line-through; text-decoration-color: var(--muted); }
+.fa-more { position: absolute; right: 6px; top: 6px; display: none; width: 22px; height: 22px; place-items: center; border-radius: 5px; color: var(--muted); }
+.fa-nav-wrap:hover .fa-more, .fa-more[aria-expanded="true"] { display: grid; }
+.fa-nav-wrap:hover .fa-n { visibility: hidden; }
+.fa-more:hover { background: var(--chrome-active); color: var(--fg); }
+.fa-menu { position: absolute; right: 4px; top: 32px; z-index: 40; min-width: 140px; padding: 4px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.fa-menu button { text-align: left; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.fa-menu button:hover { background: var(--chrome-hover); }
+
+.fa-sec { margin-top: 14px; }
+.fa-sec-row { position: relative; }
+.fa-sec-head { display: flex; align-items: center; gap: 6px; width: 100%; height: 30px; padding: 0 9px; border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.fa-sec-head:hover { color: var(--fg); }
+.fa-tri { width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .15s; margin-left: 2px; }
+.fa-sec[data-open="true"] .fa-tri { transform: rotate(90deg); }
+.fa-sec-add { position: absolute; right: 6px; top: 4px; display: none; width: 22px; height: 22px; place-items: center; border-radius: 5px; color: var(--muted); }
+.fa-sec:hover .fa-sec-add { display: grid; }
+.fa-sec-add:hover { background: var(--chrome-hover); color: var(--fg); }
+.fa-sec-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .2s ease; }
+.fa-sec[data-open="false"] .fa-sec-body { grid-template-rows: 0fr; }
+.fa-sec-body > div { overflow: hidden; display: flex; flex-direction: column; gap: 1px; }
+.fa-tags { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 9px; }
+.fa-tag { height: 24px; padding: 0 9px; border-radius: 99px; background: var(--chrome-hover); font-size: var(--text-sm); color: var(--muted); }
+.fa-tag:hover { color: var(--fg); }
+.fa-tag[aria-pressed="true"] { background: var(--fg); color: var(--sheet); }
+.fa-inline-input { margin: 2px 9px; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); font-size: 13px; }
+.fa-notice { margin: 8px 4px 0; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--fg); font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.fa-notice button { color: var(--accent-ink); font-weight: 500; }
+
+.fa-side-foot { padding-block: 6px 2px; }
+.fa-foot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 40px; padding: 0 4px; }
+
+/* Rail 56px: chỉ icon; nhãn vẫn là tên truy cập (aria-label). */
+.fa-side[data-collapsed="true"] :is(.fa-lbl, .fa-n, .fa-kbd, .fa-more, .fa-sec, .fa-notice) { display: none; }
+.fa-side[data-collapsed="true"] .fa-nav { justify-content: center; padding: 0; }
+.fa-side[data-collapsed="true"] .fa-foot-actions { flex-direction: column; height: auto; padding-block: 4px; }

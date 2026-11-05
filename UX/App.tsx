@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { getApi } from './api';
 import { Library } from './components/main/Library';
+import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
-import { useUiStore, type View } from './store/ui';
+import { useUiStore } from './store/ui';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
     state = { hasError: false };
@@ -24,26 +25,14 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
 }
 
-// Tạm thời cho đến T4 (Sidebar thật).
-const NAV: Array<[View, string]> = [['all', 'Tất cả'], ['star', 'Yêu thích'], ['recent', 'Gần đây'], ['active', 'Đang bật']];
-
 const App: React.FC = () => {
     const api = getApi();
-    const view = useUiStore(s => s.view);
-    const setView = useUiStore(s => s.setView);
+    const collapsed = useUiStore(s => s.sidebarCollapsed);
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
-
-    const sidebar = (
-        <nav className="p-2 flex flex-col gap-1">
-            {NAV.map(([v, label]) => (
-                <button key={v} onClick={() => setView(v)} aria-current={view === v} className="text-left px-3 py-1.5 rounded-md text-sm hover:bg-[var(--chrome-hover)] aria-[current=true]:bg-[var(--chrome-active)]">{label}</button>
-            ))}
-        </nav>
-    );
 
     return (
         <ErrorBoundary>
-            <WindowShell sidebar={sidebar}>
+            <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
                 <main className="h-full text-[var(--foreground)]"><Library api={api} /></main>
             </WindowShell>
         </ErrorBoundary>
