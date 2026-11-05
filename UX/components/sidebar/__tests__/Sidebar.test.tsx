@@ -38,6 +38,27 @@ describe('Sidebar', () => {
     expect(gone.getAttribute('title')).toMatch(/chưa kết nối/i);
   });
 
+  it('leaves Settings when selecting a sidebar view, including the current view', async () => {
+    await mount();
+    for (const [name, view] of [[/Tất cả/, 'all'], [/Yêu thích/, 'star'], [/Dự án khách/, 'src:2']] as const) {
+      act(() => useUiStore.getState().setSettingsOpen(true));
+      fireEvent.click(screen.getByRole('button', { name }));
+      expect(useUiStore.getState().view).toBe(view);
+      expect(useUiStore.getState().settingsOpen).toBe(false);
+    }
+  });
+
+  it('leaves Settings when selecting a tag filter', async () => {
+    const api = createMockApi();
+    await api.createTag('serif');
+    render(<Sidebar api={api} pickFolder={async () => null} />);
+    await settle();
+    act(() => useUiStore.getState().setSettingsOpen(true));
+    fireEvent.click(screen.getByRole('button', { name: 'serif' }));
+    expect(useUiStore.getState().tag).not.toBeNull();
+    expect(useUiStore.getState().settingsOpen).toBe(false);
+  });
+
   it('sections collapse with aria-expanded and persist through the store', async () => {
     await mount();
     const head = screen.getByRole('button', { name: /^Nguồn/ });

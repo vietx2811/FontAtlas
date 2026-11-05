@@ -114,8 +114,8 @@ export function createUiStore(): UiStore {
     view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, ...initial,
 
-    setView: v => set({ view: v, tag: null }),
-    setTag: t => set({ tag: t }),
+    setView: v => set({ view: v, tag: null, settingsOpen: false }),
+    setTag: t => set({ tag: t, settingsOpen: false }),
     setQuery: q => set({ query: q }),
     setViOnly: on => set({ viOnly: on }),
     setLayout: l => set({ layout: l }),
