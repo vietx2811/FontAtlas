@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
 import { CmdError } from '../../api';
-import { LibraryGrid } from '../../features/library-grid';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
+import { ScanBlocks } from './ScanBlocks';
 import { pickFolderWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 
@@ -144,24 +144,28 @@ function O3({ api, state, reload, next, pickFolder }: Ctx) {
 }
 
 function O4({ api, next }: Ctx) {
+  const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31));
+  const [st, setSt] = useState<{ scanning: boolean; progress: number | null; done: boolean }>({ scanning: false, progress: null, done: false });
   const [seen, setSeen] = useState(0); const [written, setWritten] = useState(0);
-  const [done, setDone] = useState({ seen: 0, analyzed: 0, failed: 0, finished: false });
-  const [faces, setFaces] = useState(0);
+  const [stats, setStats] = useState({ seen: 0, analyzed: 0, failed: 0, finished: false });
   useEffect(() => {
     let off: (() => void) | undefined; let dead = false;
     api.scanSubscribe((e: ScanEvent) => {
-      if (e.type === 'progress') { setSeen(e.progress.total); setWritten(e.progress.facesWritten); }
-      else if (e.type === 'facesAdded') setFaces(f => f + e.count);
-      else if (e.type === 'finished') setDone(d => ({ seen: d.seen + e.stats.seen, analyzed: d.analyzed + e.stats.analyzed, failed: d.failed + e.stats.failed, finished: true }));
+      if (e.type === 'queued') setSt(s => ({ ...s, scanning: true, done: false }));
+      else if (e.type === 'progress') { setSeen(e.progress.total); setWritten(e.progress.facesWritten); setSt({ scanning: true, done: false, progress: e.progress.total > 0 ? e.progress.done / e.progress.total : null }); }
+      else if (e.type === 'finished') setStats(d => ({ seen: d.seen + e.stats.seen, analyzed: d.analyzed + e.stats.analyzed, failed: d.failed + e.stats.failed, finished: true }));
+      else if (e.type === 'idle') setSt({ scanning: false, progress: 1, done: true });
     }).then(u => { if (dead) u(); else off = u; });
+    // Quét đã xong từ trước khi vào bước này (hoặc chưa chạy): hiện dấu tick luôn.
+    void api.scanStatus().then(s => { if (!dead) setSt(p => (s.running ? { ...p, scanning: true } : p.scanning ? p : { scanning: false, progress: 1, done: true })); });
     return () => { dead = true; off?.(); };
   }, [api]);
-  const text = done.finished ? `Đã tìm ${done.seen} file · đã phân tích ${done.analyzed} font · ${done.failed} file có vấn đề` : `Đã tìm ${seen} file · đã phân tích ${written} font`;
+  const text = stats.finished ? `Đã tìm ${stats.seen} file · đã phân tích ${stats.analyzed} font · ${stats.failed} file có vấn đề` : `Đã tìm ${seen} file · đã phân tích ${written} font`;
   return (
     <>
       <h1>Đang quét thư viện</h1>
-      <p data-testid="scan-summary" aria-live="polite">{text}</p>
-      <div className="fa-onb-preview"><LibraryGrid key={Math.floor(faces / 50)} api={api} query={{}} fontSize={28} height={230} /></div>
+      <ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />
+      <p className="sr-only" data-testid="scan-summary" aria-live="polite">{text}</p>
       <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>
       <Actions><Primary onClick={() => void next()}>Tiếp tục</Primary></Actions>
     </>

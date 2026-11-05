@@ -180,6 +180,9 @@ describe('Onboarding', () => {
     expect(heading()).toBe('Đang quét thư viện');
     await act(async () => { await vi.advanceTimersByTimeAsync(600); });
     expect(screen.getByTestId('scan-summary').textContent).toMatch(/Đã tìm 200 file · đã phân tích 195 font · 3 file có vấn đề/);
+    expect(screen.getByRole('img', { name: 'Đã quét xong' })).toBeTruthy(); // xong → vòng tròn xanh
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getAllByTestId('scan-block')).toHaveLength(9);
   });
 });
 
