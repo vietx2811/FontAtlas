@@ -18,6 +18,8 @@ pub enum SortKey {
     Family,
     Weight,
     Added,
+    /// Điểm khớp trong scope (cao trước); không có scope thì như Family.
+    Match,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -148,8 +150,9 @@ fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
 }
 
 /// Khớp đầu từ đứng trước khớp chuỗi con, rồi mới tới sort người dùng chọn. Trả kèm tham số.
-fn order_by(q: &FaceQuery) -> (String, Vec<Value>) {
+fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
     let rank = match q.text.as_deref().and_then(text_match) {
+        _ if q.sort == SortKey::Match => None,
         Some(TextMatch::Fts { start, word, .. }) => Some((
             "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
                 .to_string(),
@@ -158,28 +161,64 @@ fn order_by(q: &FaceQuery) -> (String, Vec<Value>) {
         _ => None,
     };
     let (head, params) = rank.unwrap_or_default();
-    (format!("{head}{}", user_order(q)), params)
+    (format!("{head}{}", user_order(q, scoped)), params)
 }
 
-fn user_order(q: &FaceQuery) -> String {
+fn user_order(q: &FaceQuery, scoped: bool) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
     match q.sort {
         SortKey::Family => format!("f.family_key {dir}, f.weight_class, f.is_italic, f.face_id"),
         SortKey::Weight => format!("f.weight_class {dir}, f.family_key, f.face_id"),
         SortKey::Added => format!("fi.first_seen_at {dir}, f.face_id"),
+        SortKey::Match if scoped => "sc.score DESC, f.family_key, f.face_id".to_string(),
+        SortKey::Match => "f.family_key, f.weight_class, f.is_italic, f.face_id".to_string(),
     }
 }
 
 impl Store {
     pub fn query_faces(&self, q: &FaceQuery) -> Result<FacePage, StoreError> {
+        self.query_faces_scoped(q, None)
+    }
+
+    /// `scope` = (face_id, điểm). Nạp vào `temp.scope` rồi JOIN (không dùng `IN (…)`: 50k tham số
+    /// vượt giới hạn SQLite). `total` đếm trong scope.
+    pub fn query_faces_scoped(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<FacePage, StoreError> {
+        let scoped = scope.is_some();
+        if let Some(sc) = scope {
+            self.conn.execute_batch(
+                "CREATE TEMP TABLE IF NOT EXISTS scope(face_id INTEGER PRIMARY KEY, score REAL NOT NULL);
+                 DELETE FROM temp.scope;",
+            )?;
+            let tx = self.conn.unchecked_transaction()?;
+            {
+                let mut ins = tx.prepare_cached("INSERT OR REPLACE INTO temp.scope(face_id, score) VALUES (?1, ?2)")?;
+                for &(id, score) in sc {
+                    ins.execute(rusqlite::params![id, score as f64])?;
+                }
+            }
+            tx.commit()?;
+        }
+        let page = self.query_faces_inner(q, scoped);
+        if scoped {
+            let _ = self.conn.execute("DELETE FROM temp.scope", []);
+        }
+        page
+    }
+
+    fn query_faces_inner(&self, q: &FaceQuery, scoped: bool) -> Result<FacePage, StoreError> {
+        let from = if scoped {
+            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+        } else {
+            "faces f JOIN files fi ON fi.file_id = f.file_id"
+        };
         let (w, p) = where_clause(q);
         let refs: Vec<&dyn ToSql> = p.iter().map(|v| v as &dyn ToSql).collect();
         let total: i64 = self.conn.query_row(
-            &format!("SELECT count(*) FROM faces f JOIN files fi ON fi.file_id = f.file_id WHERE {w}"),
+            &format!("SELECT count(*) FROM {from} WHERE {w}"),
             refs.as_slice(),
             |r| r.get(0),
         )?;
-        let (order, order_params) = order_by(q);
+        let (order, order_params) = order_by(q, scoped);
         let limit = match q.limit {
             0 => DEFAULT_LIMIT,
             n => n.min(MAX_LIMIT),
@@ -193,7 +232,7 @@ impl Store {
                     NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0),
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
                     fi.first_seen_at, fi.size
-             FROM faces f JOIN files fi ON fi.file_id = f.file_id
+             FROM {from}
              WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset
         );

@@ -107,7 +107,7 @@ impl Store {
         let mut out = Vec::new();
         for k in keys {
             if let Some(id) = st.query_row(params![&k.hash[..], k.face_index], |r| r.get(0)).optional()? {
-                out.push((k.clone(), id));
+                out.push((*k, id));
             }
         }
         Ok(out)
