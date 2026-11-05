@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { getApi } from './api';
 import { Library } from './components/main/Library';
+import { TopBar } from './components/main/TopBar';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
 import { useUiStore } from './store/ui';
@@ -33,7 +34,10 @@ const App: React.FC = () => {
     return (
         <ErrorBoundary>
             <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
-                <main className="h-full text-[var(--foreground)]"><Library api={api} /></main>
+                <main className="h-full flex flex-col text-[var(--foreground)]">
+                    <TopBar api={api} />
+                    <div className="flex-1 min-h-0"><Library api={api} /></div>
+                </main>
             </WindowShell>
         </ErrorBoundary>
     );
