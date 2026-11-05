@@ -1,0 +1,78 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockApi } from '../../../api/mock';
+import { CmdError, type BootEvent } from '../../../api';
+import { useNoticeStore } from '../../../store/notices';
+import { BootGate } from '../BootGate';
+
+const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
+const app = <div data-testid="app">thư viện</div>;
+beforeEach(() => useNoticeStore.setState({ notices: [] }));
+
+describe('BootGate', () => {
+  it('ready and settled: straight to the library', async () => {
+    render(<BootGate api={createMockApi()}>{app}</BootGate>);
+    await settle();
+    expect(screen.getByTestId('app')).toBeTruthy();
+  });
+
+  it('first run: onboarding first, the library after "Vào thư viện"', async () => {
+    const api = createMockApi({ firstRun: true });
+    await api.setOnboardingStep('end');
+    render(<BootGate api={api}>{app}</BootGate>);
+    await settle();
+    expect(screen.queryByTestId('app')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Xong');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' })); });
+    await settle();
+    expect(screen.getByTestId('app')).toBeTruthy();
+  });
+
+  it('shows what the backend is doing until it is ready, then moves on', async () => {
+    const api = createMockApi();
+    let push: (e: BootEvent) => void = () => {};
+    const legacy = { found: false, preview: null, imported: null, resolved: null, error: null };
+    vi.spyOn(api, 'startupStatus')
+      .mockResolvedValueOnce({ phase: 'starting', storeError: null, libraryRecreated: false, userBackup: null, legacy })
+      .mockResolvedValue({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
+    vi.spyOn(api, 'bootSubscribe').mockImplementation(async l => { push = l; return () => {}; });
+    render(<BootGate api={api}>{app}</BootGate>);
+    await settle();
+    expect(screen.getByRole('status').textContent).toMatch(/Đang mở thư viện/);
+    expect(screen.queryByTestId('app')).toBeNull();
+    act(() => push({ type: 'phase', phase: 'indexing' }));
+    expect(screen.getByRole('status').textContent).toMatch(/chỉ mục/);
+    act(() => push({ type: 'phase', phase: 'ready' }));
+    await settle();
+    expect(screen.getByTestId('app')).toBeTruthy();
+  });
+
+  it('a failed start shows the code and message with a retry, never a blank window', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'startupStatus').mockResolvedValue({ phase: 'failed', storeError: { code: 'store_unavailable', message: 'không mở được user.db', detail: null }, libraryRecreated: false, userBackup: '/b/user.db.bak', legacy: { found: false, preview: null, imported: null, resolved: null, error: null } });
+    render(<BootGate api={api}>{app}</BootGate>);
+    await settle();
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toMatch(/store_unavailable/);
+    expect(alert.textContent).toMatch(/không mở được user.db/);
+    expect(alert.textContent).toMatch(/\/b\/user\.db\.bak/);
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    expect(screen.queryByTestId('app')).toBeNull();
+  });
+
+  it('a rebuilt library is explained once, with the reassurance that personal data is intact', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'startupStatus').mockResolvedValue({ phase: 'ready', storeError: null, libraryRecreated: true, userBackup: null, legacy: { found: false, preview: null, imported: null, resolved: null, error: null } });
+    render(<BootGate api={api}>{app}</BootGate>);
+    await settle();
+    expect(useNoticeStore.getState().notices[0].text).toMatch(/Thư viện đã được tạo lại.*yêu thích.*còn nguyên/);
+  });
+
+  it('an error from startup_status itself is shown as a failure too', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'startupStatus').mockRejectedValue(new CmdError('internal', 'boom'));
+    render(<BootGate api={api}>{app}</BootGate>);
+    await settle();
+    expect(screen.getByRole('alert').textContent).toMatch(/boom/);
+  });
+});

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
+import { THEME_KEY } from '../../theme';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -14,7 +15,6 @@ type Counts = { all: number | null; star: number | null; active: number | null }
 type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
-const THEME_KEY = 'fa.theme';
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
 export function SidebarToggle(): React.JSX.Element {

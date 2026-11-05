@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
-import { getApi } from './api';
+import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
 import { Library } from './components/main/Library';
 import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
+import { BootGate } from './components/boot/BootGate';
 import { NoticeStack } from './components/NoticeStack';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -31,8 +32,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
 }
 
-const App: React.FC = () => {
-    const api = getApi();
+/** Thư viện: chỉ dựng sau khi backend sẵn sàng và onboarding xong (BootGate). */
+const Library_: React.FC<{ api: Api }> = ({ api }) => {
     const collapsed = useUiStore(s => s.sidebarCollapsed);
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
     useEffect(() => {
@@ -48,18 +49,25 @@ const App: React.FC = () => {
     }, [api]);
 
     return (
+        <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
+            <div className="h-full flex text-[var(--foreground)]">
+                <main className="flex-1 min-w-0 h-full flex flex-col relative">
+                    <TopBar api={api} />
+                    <div className="flex-1 min-h-0"><Library api={api} /></div>
+                    <SampleComposer />
+                </main>
+                <DetailPanel api={api} />
+            </div>
+        </WindowShell>
+    );
+};
+
+const App: React.FC = () => {
+    const api = getApi();
+    return (
         <ErrorBoundary>
             <NoticeStack />
-            <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
-                <div className="h-full flex text-[var(--foreground)]">
-                    <main className="flex-1 min-w-0 h-full flex flex-col relative">
-                        <TopBar api={api} />
-                        <div className="flex-1 min-h-0"><Library api={api} /></div>
-                        <SampleComposer />
-                    </main>
-                    <DetailPanel api={api} />
-                </div>
-            </WindowShell>
+            <BootGate api={api}><Library_ api={api} /></BootGate>
         </ErrorBoundary>
     );
 };
