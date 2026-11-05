@@ -58,19 +58,34 @@ pub(crate) fn path_str(p: &Path) -> String {
 
 /// Vị trí dùng được của một file.
 pub(crate) enum Located {
+    /// Canonical, UTF-8, và nội dung khớp `hash` của file trong thư viện.
     Ready(PathBuf),
     Missing(Option<PathBuf>),
     NotDownloaded(PathBuf),
+    /// Có file nhưng nội dung không còn khớp hash (bị thay / ghi đè): không đăng ký dưới hash cũ.
+    Changed(PathBuf),
+    /// Đường dẫn canonical không biểu diễn được bằng UTF-8 (cột `active_path` là TEXT): từ chối rõ ràng.
+    BadPath(PathBuf),
 }
 
-/// Vị trí đầu tiên `Ready` (đã canonical); không có thì phân biệt iCloud chưa tải / thiếu hẳn.
+/// Vị trí đầu tiên dùng được (đã canonical, UTF-8, đúng hash); không có thì phân biệt
+/// nội dung đã đổi / đường dẫn lạ / iCloud chưa tải / thiếu hẳn.
 pub(crate) fn locate(t: &FileTarget) -> Located {
-    let mut not_downloaded = None;
+    let (mut changed, mut bad, mut not_downloaded) = (None, None, None);
     for loc in &t.locations {
         match probe_file(&loc.path) {
             FileProbe::Ready => {
-                if let Ok(c) = canonical_path(&loc.path) {
-                    return Located::Ready(c);
+                let Ok(c) = canonical_path(&loc.path) else { continue };
+                if c.to_str().is_none() {
+                    bad.get_or_insert(c);
+                    continue;
+                }
+                match std::fs::read(&c) {
+                    Ok(bytes) if blake3::hash(&bytes).as_bytes() == &t.hash => return Located::Ready(c),
+                    Ok(_) => {
+                        changed.get_or_insert(c);
+                    }
+                    Err(_) => {}
                 }
             }
             FileProbe::NotDownloaded => {
@@ -79,9 +94,14 @@ pub(crate) fn locate(t: &FileTarget) -> Located {
             FileProbe::Missing => {}
         }
     }
-    match not_downloaded {
-        Some(p) => Located::NotDownloaded(p),
-        None => Located::Missing(t.locations.first().map(|l| l.path.clone())),
+    if let Some(p) = changed {
+        Located::Changed(p)
+    } else if let Some(p) = bad {
+        Located::BadPath(p)
+    } else if let Some(p) = not_downloaded {
+        Located::NotDownloaded(p)
+    } else {
+        Located::Missing(t.locations.first().map(|l| l.path.clone()))
     }
 }
 
@@ -230,7 +250,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut batch = Batch {
             avail: self.engine.available_postscript_names().map_err(engine_err)?,
             ours,
-            home: std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default(),
+            home: std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default(),
             seen: HashMap::new(),
         };
         let mut rep = ActivationReport::default();
@@ -327,6 +347,22 @@ impl<E: ActivationEngine> ActivationService<E> {
             Located::NotDownloaded(p) => {
                 res.path = Some(path_str(&p));
                 res.outcome = FileOutcome::NotDownloaded;
+                return Ok(res);
+            }
+            Located::Changed(p) => {
+                res.path = Some(path_str(&p));
+                res.outcome = FileOutcome::Failed {
+                    code: "file_changed".into(),
+                    message: "nội dung file đã đổi so với thư viện; hãy quét lại nguồn".into(),
+                };
+                return Ok(res);
+            }
+            Located::BadPath(p) => {
+                res.path = Some(path_str(&p));
+                res.outcome = FileOutcome::Failed {
+                    code: "path_not_utf8".into(),
+                    message: "đường dẫn file không phải UTF-8 nên không thể kích hoạt".into(),
+                };
                 return Ok(res);
             }
         };

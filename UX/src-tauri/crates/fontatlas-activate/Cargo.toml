@@ -6,6 +6,7 @@ rust-version = "1.85"
 description = "Kích hoạt font cho mọi app (CoreText tại chỗ, theo scope); đối soát với hệ điều hành"
 
 [dependencies]
+blake3 = "=1.8.7"
 fontatlas-store = { path = "../fontatlas-store" }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"

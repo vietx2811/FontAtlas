@@ -67,3 +67,24 @@ Cài đặt dùng bảng `settings` có sẵn: `activation_keep_after_quit`, `ac
 - Windows thật (Plan 7b): `AddFontResourceExW` + `WM_FONTCHANGE`, ghi chú trong `windows.rs`.
 - Checklist Adobe / Figma của spike §1.3 (cần người dùng mở app).
 - Đăng xuất / khởi động lại máy với scope persistent.
+
+## Sửa theo review (nhánh `fix/activate-review`)
+
+Mỗi mục có test đỏ trước khi sửa.
+
+| # | Vấn đề | Sửa |
+|---|---|---|
+| 1 | `set_scope` / `reconcile` / `shutdown` ghi đè bằng snapshot cũ, hồi sinh font vừa tắt | Đọc lại dòng SAU khi giữ guard `in_flight` |
+| 2 | Dòng `Unknown` / `Error` có thể còn đăng ký nhưng không bị gỡ; `set_scope` gỡ scope cũ thất bại thì mất dấu | Gỡ ở cả hai scope (trừ cặp sắp đăng ký). Gỡ scope cũ lỗi → giữ bản ghi cũ (scope/path cũ, `Error`), `reconcile` dọn đăng ký thừa |
+| 3 | "Tắt mọi font" bỏ sót dòng `Error` | `deactivate_one` và `deactivate_all` tính cả `Error`; `unregister_row` thử cả hai scope khi dòng không chắc chắn |
+| 4 | Xoá collection để lại lý do mồ côi; id có thể bị dùng lại | `delete_collection` xoá `collection:<id>` trong cùng transaction. `USER_V2` dựng lại `collections` với `AUTOINCREMENT` (migration tắt `foreign_keys` quanh bước này, có test giữ collection, item và id). Thêm `ActivationService::on_collection_deleted` (gọi trước hoặc sau khi xoá đều đúng) |
+| 5 | `shutdown` chỉ gỡ dòng `Registered` | Gỡ cả `Unknown` và `Error` ở scope session |
+
+Minor đã sửa: `reconcile` báo `auto_deactivated` chỉ khi gỡ thành công, thất bại báo riêng ở `autoDeactivateFailed`; thêm nguyên nhân `no_reason`. `locate` kiểm BLAKE3 nội dung file (đổi nội dung → `file_changed`, không đăng ký dưới hash cũ). Đường dẫn canonical không UTF-8 → `path_not_utf8`. `create_user_v1_for_test` chỉ còn dưới `cfg(test)`. Giữ 5 bản sao lưu migration gần nhất. `HOME` có dự phòng `USERPROFILE`.
+
+Thay đổi hợp đồng (cộng thêm): `ReconcileReport.autoDeactivateFailed`, `AutoDeactivated.cause = "no_reason"`, `ActivationService::on_collection_deleted`. Fixture `reconcile_report.json` đã sinh lại.
+
+Giới hạn còn lại:
+- Test `path_not_utf8` chỉ chạy được trên Linux, vì APFS từ chối tên file không phải UTF-8.
+- Job Windows chưa chạy cục bộ; test dùng đường dẫn kiểu Unix dưới dạng chuỗi nên dự kiến chạy được.
+- Test sống CoreText vẫn chưa chạy (xem trên).

@@ -35,15 +35,19 @@ pub fn rescan(env: &Env) {
     env.store.lock().unwrap().rescan_source(env.source).unwrap();
 }
 
-/// Ingest một file có hash giả (`seed`) và các face với PS name cho trước — để có hai file
-/// khác hash mà cùng PS name, hoặc một "TTC" nhiều face. File nằm ngoài thư mục nguồn.
+/// Ingest một file ngoài thư mục nguồn: nội dung = fixture + `seed` (nên mỗi `seed` có hash thật khác nhau,
+/// khớp với kiểm tra hash của service) và các face có PS name cho trước — để có hai file khác hash mà cùng
+/// PS name, hoặc một "TTC" nhiều face.
 pub fn ingest_fake(env: &Env, file_name: &str, seed: &str, ps_names: &[&str]) -> [u8; 32] {
     let extra = env.dir.path().join("extra");
     std::fs::create_dir_all(&extra).unwrap();
     let path = extra.join(file_name);
-    std::fs::copy(fixture("libre_baskerville.ttf"), &path).unwrap();
+    let mut bytes = std::fs::read(fixture("libre_baskerville.ttf")).unwrap();
+    bytes.extend_from_slice(seed.as_bytes());
+    std::fs::write(&path, &bytes).unwrap();
+    let hash = *blake3::hash(&bytes).as_bytes();
     let mut r = fontatlas_core::analyze_path(&fixture("libre_baskerville.ttf")).unwrap();
-    r.hash_hex = blake3_hex(seed);
+    r.hash_hex = blake3::hash(&bytes).to_hex().to_string();
     let base = r.faces[0].clone();
     r.faces = ps_names
         .iter()
@@ -55,33 +59,14 @@ pub fn ingest_fake(env: &Env, file_name: &str, seed: &str, ps_names: &[&str]) ->
             f
         })
         .collect();
-    let hash = hash_from_hex(&r.hash_hex);
     let item = IngestItem {
         source_id: 999,
-        file: ScannedFile { path: path.clone(), size: 1, mtime_ns: 1 },
+        file: ScannedFile { path: path.clone(), size: bytes.len() as u64, mtime_ns: 1 },
         hash,
         analysis: Analysis::Report(r),
     };
     env.store.lock().unwrap().ingest(vec![item], 1).unwrap();
     hash
-}
-
-fn blake3_hex(seed: &str) -> String {
-    // Không kéo blake3 vào dev-deps: hash giả chỉ cần 32 byte ổn định theo seed.
-    let mut out = [0u8; 32];
-    for (i, b) in seed.bytes().enumerate() {
-        out[i % 32] = out[i % 32].wrapping_mul(31).wrapping_add(b);
-    }
-    out[31] ^= 0xA5;
-    out.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-fn hash_from_hex(h: &str) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    for i in 0..32 {
-        out[i] = u8::from_str_radix(&h[i * 2..i * 2 + 2], 16).unwrap();
-    }
-    out
 }
 
 /// Dạy FakeEngine PS name của mọi vị trí hiện có trong store (gọi lại sau khi đổi tên/rescan).

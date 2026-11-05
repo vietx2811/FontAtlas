@@ -735,3 +735,34 @@ fn new_collection_does_not_inherit_deleted_collection_reasons() {
     assert_ne!(a, b);
     assert!(!row(&env, &f1.hash).unwrap().reasons.contains(&ActivationReason::Collection(b)));
 }
+
+// ---------- review fix: nội dung file đổi / đường dẫn không UTF-8 ----------
+#[test]
+fn activate_rejects_file_whose_content_changed() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    std::fs::copy(fixture(ROBOTO), env.fonts.join(LIBRE)).unwrap(); // cùng tên, nội dung khác, chưa rescan
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    assert!(matches!(&rep.results[0].outcome, FileOutcome::Failed { code, .. } if code == "file_changed"), "{:?}", rep.results[0].outcome);
+    assert!(svc.engine().registrations().is_empty());
+    assert!(row(&env, &k.hash).is_none(), "không đăng ký dưới hash cũ");
+}
+
+// APFS (macOS) từ chối tên file không phải UTF-8 (EILSEQ), nên tình huống chỉ tạo được trên Linux;
+// nhánh `BadPath` còn lại là phòng thủ cho Linux / đường dẫn Windows có surrogate lẻ.
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn activate_rejects_non_utf8_canonical_path() {
+    use std::os::unix::ffi::OsStrExt;
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    // Vị trí trong DB là symlink ASCII; đích thật có tên không phải UTF-8.
+    let target = env.fonts.join(std::ffi::OsStr::from_bytes(b"f\xff\xfe.ttf"));
+    std::fs::rename(env.fonts.join(LIBRE), &target).unwrap();
+    std::os::unix::fs::symlink(&target, env.fonts.join(LIBRE)).unwrap();
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    assert!(matches!(&rep.results[0].outcome, FileOutcome::Failed { code, .. } if code == "path_not_utf8"), "{:?}", rep.results[0].outcome);
+    assert!(svc.engine().registrations().is_empty());
+}

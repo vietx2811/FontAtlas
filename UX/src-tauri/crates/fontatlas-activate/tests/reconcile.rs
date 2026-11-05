@@ -397,3 +397,17 @@ fn reconcile_reports_failed_auto_deactivation_separately() {
     assert!(svc.engine().registrations().is_empty());
     assert_eq!(again.cleaned, 1);
 }
+
+#[test]
+fn reconcile_unregisters_file_replaced_with_other_content() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, k, Scope::Persistent);
+    std::fs::copy(fixture(ROBOTO), env.fonts.join(LIBRE)).unwrap();
+    let rep = reconcile(&svc, &env);
+    assert_eq!(rep.missing, 1);
+    assert!(svc.engine().registrations().is_empty(), "không giữ đăng ký cho nội dung khác hash");
+    let r = row(&env, &k);
+    assert_eq!((r.state, r.status), (DesiredState::Active, ActivationStatus::MissingFile));
+}
