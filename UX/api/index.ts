@@ -2,7 +2,7 @@
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationStateDto, CollectionDto, FaceDetailDto, FaceKeyDto, FamilyStyleDto, PairCandidateDto, PairOptsDto, SettingsDto,
-  SimilarHitDto, SimilarOptsDto, SourceDto, TagDto, UiStateDto,
+  EmbedEvent, EmbedStatusDto, ModelEvent, ModelStatusDto, SimilarHitDto, SimilarOptsDto, SourceDto, TagDto, UiStateDto,
 } from './types';
 
 export * from './types';
@@ -40,6 +40,19 @@ export interface Api extends LibraryApi {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
   getSettings(): Promise<SettingsDto>;
+  setSettings(patch: Partial<SettingsDto>): Promise<SettingsDto>;
+  // Model và hàng đợi embed (6a Task 16)
+  modelStatus(): Promise<ModelStatusDto>;
+  /** Tải (hoặc tải tiếp nếu có .part); sự kiện đến qua `onEvent` cho tới khi Ready/Paused/Failed. */
+  modelDownload(onEvent: (e: ModelEvent) => void): Promise<void>;
+  modelCancel(): Promise<void>;
+  modelRedownload(onEvent: (e: ModelEvent) => void): Promise<void>;
+  modelRemove(): Promise<void>;
+  embedStatus(): Promise<EmbedStatusDto>;
+  embedPause(): Promise<void>;
+  embedResume(): Promise<void>;
+  /** Trả hàm huỷ đăng ký. */
+  embedSubscribe(onEvent: (e: EmbedEvent) => void): Promise<() => void>;
   // Kích hoạt (hợp đồng Plan 7)
   activationState(): Promise<ActivationStateDto[]>;
   activationActivate(faces: FaceKeyDto[]): Promise<void>;

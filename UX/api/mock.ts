@@ -2,6 +2,7 @@
 import { cssSize, type FaceRow, type PxBucket } from '../features/library-grid/types';
 import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
+import { createModelSim } from './mockModel';
 import { VI_TOTAL, axesFor, pairFor, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
@@ -57,7 +58,8 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export type MockOptions = { latencyMs?: number };
+import type { EmbedStatusDto, ModelStatusDto } from './types';
+export type MockOptions = { latencyMs?: number; tickMs?: number; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
   const rows = mockRows();
@@ -79,6 +81,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const uiSettings = new Map<string, string>();
   const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: true, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
 
+  const sim = createModelSim({ tickMs: o.tickMs, initial: o.initial, embedEnabled: () => settings.embedEnabled });
   const lib = createMockLibraryApi(rows, { latencyMs: o.latencyMs });
   const delay = async () => { if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs)); };
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
@@ -165,6 +168,13 @@ export function createMockApi(o: MockOptions = {}): Api {
     async similar(k, o) { const r = findRow(k); return ok(similarFor(r, rows, o.k)); },
     async pairCandidates(k, o) { const r = findRow(k); return ok(pairFor(r, rows, o)); },
     getSettings: () => ok(settings),
+    async setSettings(patch) {
+      const was = settings.embedEnabled;
+      Object.assign(settings, patch);
+      if (patch.embedEnabled !== undefined && patch.embedEnabled !== was) sim.embedEnabledChanged(settings.embedEnabled);
+      return ok(settings);
+    },
+    ...sim,
     async getSetting(key) { return uiSettings.get(key) ?? null; },
     async setSetting(key, value) {
       if (!/^ui\.[a-z0-9_.-]{1,60}$/.test(key)) throw new CmdError('invalid_arg', 'only ui.* keys');

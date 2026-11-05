@@ -91,3 +91,21 @@ export type SettingsDto = {
   embedEnabled: boolean; licenseNoticeAck: boolean; uiLang: 'vi' | 'en'; sampleText: string;
   projectViDefault: boolean; keepActiveOnExit: boolean; rescanOnLaunch: boolean;
 };
+
+export type ModelState = 'missing' | 'downloading' | 'paused' | 'ready' | 'checksum_mismatch' | 'corrupt' | 'unpublished';
+export type ModelStatusDto = {
+  state: ModelState; doneBytes: number; totalBytes: number; bytesPerSec: number; etaMs: number | null;
+  location: string; diskFree: number; requiredBytes: number; lastError: { code: string; message: string } | null;
+};
+export type ModelEvent =
+  | { type: 'progress'; done: number; total: number; bytesPerSec: number; etaMs: number | null; resumed: boolean }
+  | { type: 'ready' } | { type: 'paused' } | { type: 'failed'; error: { code: string; message: string } };
+
+export type EmbedStatusDto = {
+  enabled: boolean; running: boolean; paused: boolean; pending: number; done: number; failed: number;
+  device: 'metal' | 'cpu' | null; msPerFace: number | null; etaMs: number | null; modelVersion: string | null;
+  /** [6a: thêm] Mã lỗi khi không nạp được model (E7). */
+  loadError: string | null;
+};
+/** Kênh embed của 6a (hình dạng tạm, chờ Task 16): mỗi thay đổi gửi trạng thái; xong gửi `finished`. */
+export type EmbedEvent = { kind: 'status'; status: EmbedStatusDto } | { kind: 'finished'; totalDone: number };
