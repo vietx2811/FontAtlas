@@ -334,6 +334,62 @@ impl Index {
             .collect())
     }
 
+    /// Similar chỉ theo ảnh, dùng khi `similar_with` trả `NotComparable` mà font gốc có embedding.
+    /// Khoảng cách = 1 − cos (xếp lại bằng f32 khi có nguồn exact); bỏ chính nó và face chưa có ảnh;
+    /// `same`/`differ` rỗng. Font gốc không có ảnh → `NotComparable`.
+    pub fn similar_image_only(
+        &self,
+        q: &FaceKey,
+        k: usize,
+        filter: &dyn Fn(&FaceProfile) -> bool,
+    ) -> Result<Vec<SimilarHit>, IndexError> {
+        let qi = self.idx(q)?;
+        if !self.q8.has(qi) {
+            return Err(IndexError::NotComparable(q.clone()));
+        }
+        let mut cands: Vec<Cand> = (0..self.profiles.len())
+            .filter(|&j| j != qi && filter(&self.profiles[j]))
+            .filter_map(|j| {
+                let d = 1.0 - self.q8.cos(qi, j)?;
+                Some((d, d, j, SimilarSource::Image))
+            })
+            .collect();
+        let by = |a: &Cand, b: &Cand| {
+            a.0.total_cmp(&b.0)
+                .then_with(|| self.profiles[a.2].key.cmp(&self.profiles[b.2].key))
+        };
+        let m = k.max(RERANK_CANDIDATES);
+        if cands.len() > m {
+            cands.select_nth_unstable_by(m - 1, by);
+            cands.truncate(m);
+        }
+        if let Some(src) = self.exact.as_ref() {
+            let mut keys = vec![self.profiles[qi].key.clone()];
+            keys.extend(cands.iter().map(|c| self.profiles[c.2].key.clone()));
+            let got = src.fetch(&keys);
+            let dim = self.q8.dim();
+            if let Some(Some(qv)) = got.first().filter(|v| v.as_ref().is_some_and(|v| v.len() == dim)) {
+                for (c, v) in cands.iter_mut().zip(got.iter().skip(1)) {
+                    if let Some(x) = embed_cos(Some(qv), v.as_deref().filter(|v| v.len() == dim)) {
+                        c.0 = 1.0 - x;
+                    }
+                }
+            }
+        }
+        cands.sort_by(by);
+        cands.truncate(k);
+        Ok(cands
+            .into_iter()
+            .map(|(d, _, j, source)| SimilarHit {
+                key: self.profiles[j].key.clone(),
+                distance: d,
+                source,
+                same: Vec::new(),
+                differ: Vec::new(),
+            })
+            .collect())
+    }
+
     fn ctx(&self, project_vi: bool) -> PairContext<'_> {
         PairContext {
             thresholds: &self.thresholds,

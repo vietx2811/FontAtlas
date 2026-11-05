@@ -88,6 +88,8 @@ impl GroupWeights {
 pub enum SimilarSource {
     Axes,
     AxesAndImage,
+    /// Chỉ ảnh: font gốc không so được theo trục (chỉ chữ hoa, không Latin…).
+    Image,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

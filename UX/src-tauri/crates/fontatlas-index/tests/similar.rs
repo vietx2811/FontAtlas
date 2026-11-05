@@ -248,3 +248,51 @@ fn similar_with_zero_image_weight_is_axes() {
     let hits = ix.similar_with(&q, &o, &|_| true).unwrap();
     assert!(hits.iter().any(|h| h.source == SimilarSource::AxesAndImage));
 }
+
+fn image_only_index() -> (fontatlas_index::Index, Vec<fontatlas_index::FaceProfile>) {
+    // Q: mọi trục Failed nhưng có ảnh; A..D: có ảnh; E: không ảnh
+    let mk = |name: &str, seed: Option<u64>| {
+        let mut p = synth(name, &[]);
+        p.key = key_of(name, "Regular");
+        p.embedding = seed.map(|s| lcg_unit(32, s));
+        p
+    };
+    let ps = vec![mk("Q", Some(1)), mk("A", Some(1)), mk("B", Some(2)), mk("C", Some(3)), mk("E", None)];
+    (index_of(ps.clone()), ps)
+}
+
+#[test]
+fn image_only_for_non_comparable_query() {
+    let (ix, _) = image_only_index();
+    let q = key_of("Q", "Regular");
+    assert!(matches!(
+        ix.similar(&q, &GroupWeights::default(), 5, &|_| true),
+        Err(IndexError::NotComparable(_))
+    ));
+    let hits = ix.similar_image_only(&q, 5, &|_| true).unwrap();
+    assert_eq!(hits.len(), 3);
+    assert!(hits.iter().all(|h| h.source == SimilarSource::Image && h.same.is_empty() && h.differ.is_empty()));
+    assert!(hits.windows(2).all(|w| w[0].distance <= w[1].distance));
+    assert_eq!(hits[0].key, key_of("A", "Regular")); // cùng vector với Q → cos 1
+    assert!(hits[0].distance.abs() < 1e-3, "{}", hits[0].distance);
+}
+
+#[test]
+fn image_only_without_embedding_is_not_comparable() {
+    let (ix, _) = image_only_index();
+    assert!(matches!(
+        ix.similar_image_only(&key_of("E", "Regular"), 5, &|_| true),
+        Err(IndexError::NotComparable(_))
+    ));
+}
+
+#[test]
+fn image_only_excludes_self_and_faces_without_image() {
+    let (ix, _) = image_only_index();
+    let hits = ix.similar_image_only(&key_of("Q", "Regular"), 10, &|_| true).unwrap();
+    assert!(hits.iter().all(|h| h.key != key_of("Q", "Regular") && h.key != key_of("E", "Regular")));
+    let only_b = ix
+        .similar_image_only(&key_of("Q", "Regular"), 10, &|p| p.family == "B")
+        .unwrap();
+    assert_eq!(only_b.len(), 1);
+}
