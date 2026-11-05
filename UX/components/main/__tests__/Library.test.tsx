@@ -78,4 +78,15 @@ describe('Library', () => {
     expect(fav).toHaveBeenCalledWith({ hashHex: first.hashHex, faceIndex: 0 }, true);
     expect(screen.getAllByRole('button', { name: 'Yêu thích' })[0].getAttribute('aria-pressed')).toBe('true');
   });
+
+  it('highlights the cell of a face selected elsewhere (store selectedId)', async () => {
+    const api = createMockApi();
+    render(<Library api={api} width={1200} height={700} />);
+    await settle();
+    const cell = screen.getAllByRole('gridcell')[2];
+    const row = (await api.queryFaces({ limit: 5 })).items[2];
+    act(() => useUiStore.getState().select(`${row.hashHex}:${row.faceIndex}`));
+    expect(cell.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByRole('gridcell')[0].getAttribute('aria-selected')).toBe('false');
+  });
 });

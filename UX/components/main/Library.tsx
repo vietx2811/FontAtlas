@@ -15,6 +15,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const viOnly = useUiStore(s => s.viOnly);
   const sample = useUiStore(s => s.sample);
   const select = useUiStore(s => s.select);
+  const selectedKey = useUiStore(s => s.selectedId);
   const fontSize = useUiStore(s => s.sampleSize);
   const layout = useUiStore(s => s.layout);
   const active = useUiStore(s => s.active);
@@ -39,5 +40,5 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     );
   }
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
-  return <LibraryGrid api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} onSelect={onSelect} />;
+  return <LibraryGrid api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect} />;
 }

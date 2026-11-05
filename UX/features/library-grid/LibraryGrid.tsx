@@ -11,7 +11,7 @@ export { HOVER_DELAY_MS, DEFAULT_PREVIEW_MODE, type CellState, type PreviewMode 
 
 export type LibraryGridProps = {
   api: LibraryApi; query: GridQuery; sampleText?: string; px?: PxBucket; previewMode?: PreviewMode;
-  selectedFaceId?: number | null; onSelect?(row: FaceRow): void; loader?: FontFaceLoader; blobs?: PreviewBlobs;
+  selectedFaceId?: number | null; selectedKey?: string | null; onSelect?(row: FaceRow): void; loader?: FontFaceLoader; blobs?: PreviewBlobs;
   width?: number; height?: number;
   /** Cỡ chữ mẫu 18–72: quyết định bucket ảnh, bề rộng ô và hộp ảnh (Plan 6b T6). */
   fontSize?: number; layout?: 'grid' | 'list';
@@ -24,13 +24,13 @@ type Applied = { rendererVersion: string; generation: number; text: string; px: 
 
 type RowProps = {
   cols: number; total: number; paged: PagedFaces | null; version: number; applied: Applied | null;
-  api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null;
+  api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null; selectedKey: string | null;
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
   fontSize?: number; layout: 'grid' | 'list'; boxHeight: number; rows: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
 };
 
-function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
+function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
   if (index >= rows) return <div role="presentation" style={style} />; // hàng đệm đáy
   const cells = [];
   for (let c = 0; c < cols; c++) {
@@ -43,7 +43,7 @@ function Row({ index, style, rows, cols, total, paged, applied, api, px, text, m
       : null;
     cells.push(
       <FaceCell key={row ? row.faceId : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
-        selected={!!row && row.faceId === selectedFaceId} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
+        selected={!!row && (selectedKey ? `${row.hashHex}:${row.faceIndex}` === selectedKey : row.faceId === selectedFaceId)} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
         fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} />,
     );
   }
@@ -65,7 +65,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
-  selectedFaceId = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
+  selectedFaceId = null, selectedKey = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
   fontSize, layout = 'grid', bottomInset = 0, isActive, isFavorite, onToggleFavorite,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
@@ -174,7 +174,7 @@ export function LibraryGrid({
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: size.height, width: size.width }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

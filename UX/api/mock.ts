@@ -129,7 +129,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
-        row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), source: 'axes', hasImage: false,
+        row, summary: 'Sans', source: 'axes', hasImage: false,
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
           license: 'SIL Open Font License 1.1', licenseUrl: 'https://openfontlicense.org', designer: 'Studio Mock', manufacturer: 'Mock Foundry',

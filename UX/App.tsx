@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { getApi } from './api';
+import { DetailPanel } from './components/detail/DetailPanel';
 import { Library } from './components/main/Library';
 import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
@@ -35,11 +36,14 @@ const App: React.FC = () => {
     return (
         <ErrorBoundary>
             <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
-                <main className="h-full flex flex-col relative text-[var(--foreground)]">
-                    <TopBar api={api} />
-                    <div className="flex-1 min-h-0"><Library api={api} /></div>
-                    <SampleComposer />
-                </main>
+                <div className="h-full flex text-[var(--foreground)]">
+                    <main className="flex-1 min-w-0 h-full flex flex-col relative">
+                        <TopBar api={api} />
+                        <div className="flex-1 min-h-0"><Library api={api} /></div>
+                        <SampleComposer />
+                    </main>
+                    <DetailPanel api={api} />
+                </div>
             </WindowShell>
         </ErrorBoundary>
     );
