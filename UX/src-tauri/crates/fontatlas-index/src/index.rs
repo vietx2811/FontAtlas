@@ -456,6 +456,22 @@ impl Index {
         k: usize,
         filter: &(dyn Fn(&FaceProfile) -> bool + Sync),
     ) -> Result<Vec<(FaceKey, PairAssessment)>, IndexError> {
+        self.pair_candidates_gated(q, q_role, cand_role, project_vi, k, filter, None)
+    }
+
+    /// Như `pair_candidates_filtered`, thêm `gate`: chỉ giữ ứng viên đúng cổng, áp TRƯỚC khi cắt top-k
+    /// (lọc sau khi cắt sẽ mất hết ứng viên khi top-k toàn cổng khác).
+    #[allow(clippy::too_many_arguments)]
+    pub fn pair_candidates_gated(
+        &self,
+        q: &FaceKey,
+        q_role: Role,
+        cand_role: Role,
+        project_vi: bool,
+        k: usize,
+        filter: &(dyn Fn(&FaceProfile) -> bool + Sync),
+        gate: Option<Gate>,
+    ) -> Result<Vec<(FaceKey, PairAssessment)>, IndexError> {
         let qi = self.idx(q)?;
         let pq = &self.profiles[qi];
         // H1 lọc trước: face truy vấn thiếu tiếng Việt → mọi cặp Blocked; ứng viên thiếu → Blocked.
@@ -483,7 +499,7 @@ impl Index {
             .filter(|(j, pc)| *j != qi && !(project_vi && pc.vi_missing > 0) && filter(pc))
             .filter_map(|(j, pc)| {
                 let x = assess(pq, q_role, pc, cand_role, facts(j).as_ref(), &ctx);
-                (x.gate != Gate::Blocked).then(|| (rank_parts(&x, cos(j)), j, x))
+                (x.gate != Gate::Blocked && gate.is_none_or(|g| x.gate == g)).then(|| (rank_parts(&x, cos(j)), j, x))
             })
             .collect();
         // Cùng thứ tự với rank_key (phần số, rồi tên), rồi key.

@@ -91,6 +91,33 @@ impl ScanManager {
         self.inner.paused.load(Ordering::SeqCst)
     }
 
+    /// Đặt cờ tắt + huỷ (không chờ).
+    pub fn request_shutdown(&self) {
+        self.inner.shutdown.store(true, Ordering::SeqCst);
+        self.inner.cancel.store(true, Ordering::SeqCst);
+        lock(&self.inner.q).queue.clear();
+    }
+
+    /// Bỏ nguồn khỏi hàng đợi; đang quét nguồn đó thì huỷ và chờ xong (≤ 10 s). `false` = chưa dừng kịp.
+    pub fn forget(&self, id: i64) -> bool {
+        let running = {
+            let mut q = lock(&self.inner.q);
+            q.queue.retain(|x| *x != id);
+            q.current == Some(id)
+        };
+        if !running {
+            return true;
+        }
+        self.inner.cancel.store(true, Ordering::SeqCst);
+        let q = lock(&self.inner.q);
+        let (_g, r) = self
+            .inner
+            .idle
+            .wait_timeout_while(q, Duration::from_secs(10), |q| q.current == Some(id))
+            .unwrap_or_else(|e| e.into_inner());
+        !r.timed_out()
+    }
+
     /// Huỷ nguồn đang quét (các nguồn còn trong hàng vẫn chạy).
     pub fn cancel_current(&self) {
         self.inner.cancel.store(true, Ordering::SeqCst);
@@ -98,9 +125,7 @@ impl ScanManager {
 
     /// Huỷ và chờ luồng quét kết thúc (≤ 5 s).
     pub fn shutdown(&self) {
-        self.inner.shutdown.store(true, Ordering::SeqCst);
-        self.inner.cancel.store(true, Ordering::SeqCst);
-        lock(&self.inner.q).queue.clear();
+        self.request_shutdown();
         let h = lock(&self.inner.worker).take();
         if let Some(h) = h {
             let t = Instant::now();
@@ -163,6 +188,7 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             match q.queue.pop_front() {
                 Some(id) if !inner.shutdown.load(Ordering::SeqCst) => {
                     q.current = Some(id);
+                    inner.cancel.store(false, Ordering::SeqCst);
                     Some(id)
                 }
                 _ => {
@@ -172,9 +198,12 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             }
         };
         let Some(id) = next else {
-            // hết việc: báo Idle và chạy các móc; `running` giữ true tới khi móc xong để `wait_idle` chờ đủ
+            // hết việc: báo Idle và chạy các móc; `running` giữ true tới khi móc xong để `wait_idle` chờ đủ.
+            // Đang tắt app thì bỏ móc (không mở worker embed hay đăng ký lại font sau `on_exit`).
             state.hubs.scan.emit(ScanEvent::Idle);
-            after_idle(&state);
+            if !inner.shutdown.load(Ordering::SeqCst) {
+                after_idle(&state);
+            }
             let mut q = lock(&inner.q);
             if q.queue.is_empty() || inner.shutdown.load(Ordering::SeqCst) {
                 q.running = false;
@@ -183,51 +212,59 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             }
             continue;
         };
-        inner.cancel.store(false, Ordering::SeqCst);
-        match store.as_mut() {
-            Ok(s) => {
-                let root = match state.with_user(|u| Ok(u.source(id)?)) {
-                    Ok(src) => src.path.map(std::path::PathBuf::from),
-                    Err(e) => {
-                        state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e });
-                        continue;
-                    }
-                };
-                let Some(root) = root else {
-                    state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::not_found("nguồn không có thư mục") });
-                    continue;
-                };
-                let r = s.rescan_root_with(
-                    id,
-                    &root,
-                    &mut |p| {
-                        while inner.paused.load(Ordering::SeqCst)
-                            && !inner.cancel.load(Ordering::SeqCst)
-                            && !inner.shutdown.load(Ordering::SeqCst)
-                        {
-                            std::thread::sleep(Duration::from_millis(50));
-                        }
-                        state.hubs.scan.emit(ScanEvent::Progress { source_id: id, progress: ScanProgressDto::from(p) });
-                        if p.faces_written > 0 {
-                            state.hubs.scan.emit(ScanEvent::FacesAdded { source_id: id, count: p.faces_written as u32 });
-                        }
-                    },
-                    &inner.cancel,
-                );
-                match r {
-                    Ok(stats) => {
-                        let dto = RescanStatsDto::from(&stats);
-                        lock(&inner.last).insert(id, dto.clone());
-                        state.hubs.scan.emit(ScanEvent::Finished { source_id: id, stats: dto });
-                    }
-                    Err(e) => state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() }),
-                }
-            }
-            Err(e) => state
+        // panic trong quét/callback không được làm kẹt `running`: coi như job lỗi và đi tiếp
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_job(&state, &inner, &mut store, id)));
+        if r.is_err() {
+            state
                 .hubs
                 .scan
-                .emit(ScanEvent::Failed { source_id: id, error: CmdError::new("store_unavailable", e.to_string()) }),
+                .emit(ScanEvent::Failed { source_id: id, error: CmdError::internal("luồng quét gặp lỗi không lường trước") });
         }
+        lock(&inner.q).current = None;
+        inner.idle.notify_all(); // `forget` chờ nguồn đang quét dừng
+    }
+}
+
+fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, fontatlas_store::StoreError>, id: i64) {
+    let s = match store.as_mut() {
+        Ok(s) => s,
+        Err(e) => {
+            state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::new("store_unavailable", e.to_string()) });
+            return;
+        }
+    };
+    let root = match state.with_user(|u| Ok(u.source(id)?)) {
+        Ok(src) => src.path.map(std::path::PathBuf::from),
+        Err(e) => {
+            state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e });
+            return;
+        }
+    };
+    let Some(root) = root else {
+        state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::not_found("nguồn không có thư mục") });
+        return;
+    };
+    let r = s.rescan_root_with(
+        id,
+        &root,
+        &mut |p| {
+            while inner.paused.load(Ordering::SeqCst) && !inner.cancel.load(Ordering::SeqCst) && !inner.shutdown.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            state.hubs.scan.emit(ScanEvent::Progress { source_id: id, progress: ScanProgressDto::from(p) });
+            if p.faces_written > 0 {
+                state.hubs.scan.emit(ScanEvent::FacesAdded { source_id: id, count: p.faces_written as u32 });
+            }
+        },
+        &inner.cancel,
+    );
+    match r {
+        Ok(stats) => {
+            let dto = RescanStatsDto::from(&stats);
+            lock(&inner.last).insert(id, dto.clone());
+            state.hubs.scan.emit(ScanEvent::Finished { source_id: id, stats: dto });
+        }
+        Err(e) => state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() }),
     }
 }
 

@@ -233,15 +233,13 @@ pub fn pair_candidates(state: &AppState, face: &FaceKeyDto, opts: &PairOptsDto) 
         let Some(m) = b.meta.get(&p.key) else { return false };
         !m.missing && in_collection.as_ref().is_none_or(|s| s.contains(&m.face_id))
     };
-    let mut got = b.index.pair_candidates_filtered(&q, qr, cr, opts.project_vi, k, &filter)?;
-    if let Some(mode) = opts.mode {
-        let want = match mode {
-            PairModeDto::Safe => Gate::Safe,
-            PairModeDto::Controlled => Gate::Controlled,
-            PairModeDto::Experimental => Gate::Experimental,
-        };
-        got.retain(|(_, x)| x.gate == want);
-    }
+    // cổng áp TRƯỚC khi cắt top-k (lọc sau sẽ rỗng khi top-k toàn cổng khác)
+    let want = opts.mode.map(|m| match m {
+        PairModeDto::Safe => Gate::Safe,
+        PairModeDto::Controlled => Gate::Controlled,
+        PairModeDto::Experimental => Gate::Experimental,
+    });
+    let got = b.index.pair_candidates_gated(&q, qr, cr, opts.project_vi, k, &filter, want)?;
     let keys: Vec<IxKey> = got.iter().map(|(k, _)| k.clone()).collect();
     let rows = rows_of(state, &b, &keys)?;
     let lang = lang_of(opts.lang);

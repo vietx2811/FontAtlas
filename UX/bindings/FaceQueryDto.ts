@@ -9,6 +9,10 @@ import type { ViFilterDto } from "./ViFilterDto";
  */
 export type FaceQueryDto = { text: string | null, vi: ViFilterDto | null, license: Array<string>, variable: boolean | null, italic: boolean | null, sourceIds: Array<number>, favoritesOnly: boolean, collectionId: number | null, tagIds: Array<number>, includeMissing: boolean, sort: SortKeyDto, descending: boolean, offset: number, limit: number, axisFilters: Array<AxisFilterDto>, 
 /**
+ * Ràng buộc cứng từ `describe` ("vi_supported" | "vi_complete"): loại face không đạt.
+ */
+hard: Array<string>, 
+/**
  * Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
  */
 faceKeys: Array<FaceKeyDto> | null, };

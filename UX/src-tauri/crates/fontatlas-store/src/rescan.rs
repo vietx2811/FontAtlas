@@ -89,16 +89,27 @@ fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
             failed.push(dir);
             continue;
         };
-        for e in rd.flatten() {
+        for e in rd {
+            // lỗi ở mức mục (ổ chập chờn) → thư mục cha coi như không đọc được, KHÔNG để font trong đó thành "đã xoá"
+            let Ok(e) = e else {
+                failed.push(dir.clone());
+                continue;
+            };
             if e.file_name().to_string_lossy().starts_with('.') {
                 continue;
             }
-            let Ok(ft) = e.file_type() else { continue };
+            let Ok(ft) = e.file_type() else {
+                failed.push(dir.clone());
+                continue;
+            };
             let p = e.path();
             if ft.is_dir() {
                 stack.push(p);
             } else if ft.is_file() && is_font(&p) {
-                let Ok(m) = e.metadata() else { continue };
+                let Ok(m) = e.metadata() else {
+                    failed.push(dir.clone());
+                    continue;
+                };
                 let mtime_ns = m
                     .modified()
                     .ok()
@@ -222,7 +233,8 @@ impl Store {
         // băm song song phần đổi; hash đã có kết quả mới nhất → chỉ nối vị trí
         let hashed: Vec<(ScannedFile, std::io::Result<[u8; 32]>)> =
             changed.into_par_iter().map(|f| {
-                let h = hash_file(&f.path);
+                // huỷ giữa pha băm: bỏ phần còn lại (kết quả bị bỏ ngay sau đó vì `interrupted`)
+                let h = if cancel.load(Ordering::Relaxed) { Err(std::io::ErrorKind::Interrupted.into()) } else { hash_file(&f.path) };
                 (f, h)
             }).collect();
         on_progress(&progress(ScanPhase::Hashing, stats.seen, stats.seen, 0));

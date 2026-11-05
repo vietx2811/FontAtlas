@@ -11,11 +11,11 @@ use crate::state::AppState;
 pub const MAX_FACE_KEYS: usize = 2000;
 
 /// Phạm vi theo bộ lọc trục (từ `describe`): cần Index; rỗng thì không lọc.
-fn axis_scope(state: &AppState, filters: &[AxisFilterDto]) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
-    if filters.is_empty() {
+fn axis_scope(state: &AppState, filters: &[AxisFilterDto], hard: &[String]) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
+    if filters.is_empty() && hard.is_empty() {
         return Ok(None);
     }
-    Ok(crate::services::analysis::bundle(state)?.scope_for(filters, &[]))
+    Ok(crate::services::analysis::bundle(state)?.scope_for(filters, &crate::services::describe::hard_of(hard)))
 }
 
 fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
@@ -41,7 +41,7 @@ fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
 }
 
 pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
-    let mut scope = axis_scope(state, &q.axis_filters)?;
+    let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     if let Some(fk) = &q.face_keys {
         if fk.len() > MAX_FACE_KEYS {
             return Err(CmdError::invalid_arg(format!("faceKeys tối đa {MAX_FACE_KEYS}")));

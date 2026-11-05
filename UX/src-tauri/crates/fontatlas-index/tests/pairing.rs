@@ -307,3 +307,28 @@ fn pair_candidates_filtered_respects_filter() {
     assert!(got.iter().all(|(k, _)| keep.iter().any(|f| k.hash.starts_with(f))));
     assert!(all.len() >= got.len());
 }
+
+#[test]
+fn gate_filter_applies_before_top_k() {
+    // nhiều ứng viên khác nhau về tương phản/độ đậm → có ≥ 2 cổng; chọn cổng không nằm trong top-k
+    // cùng họ → An toàn (xếp đầu); họ khác → Thử nghiệm
+    let mut ps = vec![synth_full("Inter", "Regular", 0.15), synth_full("Inter", "Bold", 0.26)];
+    for (i, st) in ["Medium", "SemiBold", "Light", "Black"].iter().enumerate() {
+        ps.push(synth_full("Inter", st, 0.17 + i as f32 * 0.02));
+    }
+    for i in 0..30 {
+        ps.push(synth_with(&format!("C{i}"), &[(AxisId::Contrast, 1.1 + i as f32 * 0.4)]));
+    }
+    let ix = index_of(ps);
+    let q = key_of("Inter", "Regular");
+    let all = ix.pair_candidates(&q, Role::Heading, Role::Body, false, 100).unwrap();
+    let gates: std::collections::BTreeSet<_> = all.iter().map(|(_, x)| x.gate).collect();
+    assert!(gates.len() >= 2, "dữ liệu thử phải có ≥ 2 cổng: {gates:?}");
+    let top3: Vec<_> = all.iter().take(3).map(|(_, x)| x.gate).collect();
+    let other = all.iter().map(|(_, x)| x.gate).find(|g| !top3.contains(g)).expect("cổng ngoài top-3");
+    let got = ix.pair_candidates_gated(&q, Role::Heading, Role::Body, false, 3, &|_| true, Some(other)).unwrap();
+    assert!(!got.is_empty(), "lọc cổng sau khi cắt top-k làm mất ứng viên");
+    assert!(got.iter().all(|(_, x)| x.gate == other));
+    let want = all.iter().filter(|(_, x)| x.gate == other).count().min(3);
+    assert_eq!(got.len(), want);
+}

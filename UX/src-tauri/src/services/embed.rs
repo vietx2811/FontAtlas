@@ -37,6 +37,8 @@ struct Inner {
     stats: Mutex<Stats>,
     paused: AtomicBool,
     running: AtomicBool,
+    /// Chỉ một `ensure_started` chạy một lúc (tránh hai worker khi tải model xong cùng lúc quét xong).
+    start_guard: Mutex<()>,
 }
 
 #[derive(Default)]
@@ -71,6 +73,13 @@ impl EmbedSupervisor {
         }
     }
 
+    /// Chỉ đặt cờ huỷ (không chờ): dùng khi tắt app để cả ba hàng đợi cùng dừng song song.
+    pub fn request_stop(&self) {
+        if let Some(w) = lock(&self.inner.worker).as_ref() {
+            w.cancel();
+        }
+    }
+
     /// Huỷ worker hiện tại và chờ nó dừng.
     pub fn stop(&self) {
         self.stop_within(Duration::from_secs(30));
@@ -100,6 +109,7 @@ impl EmbedSupervisor {
 
 /// Mở worker nếu: embedding bật, model `Ready`, chưa có worker chạy. Không có model → `Ok(false)`, không lỗi.
 pub fn ensure_started(state: &Arc<AppState>) -> Result<bool, CmdError> {
+    let _start = lock(&state.embed.inner.start_guard);
     let enabled = state.with_user(|u| Ok(u.embed_enabled()?))?;
     let Some(path) = model::ready_path(state) else { return Ok(false) };
     if !enabled {

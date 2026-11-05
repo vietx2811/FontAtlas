@@ -171,9 +171,10 @@ pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, 
 
 #[tauri::command]
 pub async fn boot_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<BootEvent>) -> Result<(), CmdError> {
-    // người đến muộn nhận ngay pha hiện tại
-    let _ = on_event.send(BootEvent::Phase { phase: boot::snapshot(&state).phase });
+    // đăng ký TRƯỚC rồi mới gửi pha hiện tại (có thể trùng, không mất `Ready` rơi giữa hai bước)
+    let ch = on_event.clone();
     state.hubs.boot.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    let _ = ch.send(BootEvent::Phase { phase: boot::snapshot(&state).phase });
     Ok(())
 }
 
@@ -281,10 +282,11 @@ pub async fn model_redownload(state: State<'_, Arc<AppState>>, on_event: Channel
 
 #[tauri::command]
 pub async fn embed_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<EmbedEvent>) -> Result<(), CmdError> {
-    if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
-        let _ = on_event.send(EmbedEvent::Status { status });
-    }
+    let ch = on_event.clone();
     state.hubs.embed.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
+        let _ = ch.send(EmbedEvent::Status { status });
+    }
     Ok(())
 }
 

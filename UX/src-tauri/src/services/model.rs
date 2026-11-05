@@ -194,6 +194,12 @@ fn run_download(state: &Arc<AppState>, ms: ModelStore) {
     }
 }
 
+/// Chỉ cho test: bật cờ "đang tải" mà không có luồng.
+#[doc(hidden)]
+pub fn force_downloading_for_test(state: &AppState, on: bool) {
+    state.model.downloading.store(on, Ordering::SeqCst);
+}
+
 pub fn cancel_download(state: &AppState) {
     state.model.cancel.store(true, Ordering::SeqCst);
 }
@@ -223,8 +229,15 @@ pub fn remove_files(dir: &Path, m: &Manifest) -> Result<(), CmdError> {
 
 /// Xoá rồi tải lại từ đầu.
 pub fn redownload(state: &Arc<AppState>) -> Result<(), CmdError> {
+    redownload_within(state, Duration::from_secs(5))
+}
+
+/// Lần tải đang chạy không dừng kịp (server treo) → `busy`, KHÔNG xoá file.
+pub fn redownload_within(state: &Arc<AppState>, wait: Duration) -> Result<(), CmdError> {
     cancel_download(state);
-    wait_download(state, Duration::from_secs(5));
+    if !wait_download(state, wait) || state.model.is_downloading() {
+        return Err(CmdError::busy("lần tải trước chưa dừng, thử lại sau"));
+    }
     state.embed.stop();
     remove_files(&state.dirs.models, &state.deps.manifest)?;
     clear_error(state);
@@ -234,7 +247,9 @@ pub fn redownload(state: &Arc<AppState>) -> Result<(), CmdError> {
 /// Dừng worker, xoá file, về `missing`.
 pub fn remove(state: &Arc<AppState>) -> Result<(), CmdError> {
     cancel_download(state);
-    wait_download(state, Duration::from_secs(5));
+    if !wait_download(state, Duration::from_secs(5)) || state.model.is_downloading() {
+        return Err(CmdError::busy("lần tải đang chạy chưa dừng, thử lại sau"));
+    }
     state.embed.stop();
     remove_files(&state.dirs.models, &state.deps.manifest)?;
     clear_error(state);

@@ -51,6 +51,20 @@ Tái lập: `FONTATLAS_PERF_DIR=<thư mục font> cargo test -p app --release --
 - 2dd1842 fix(store): IMMEDIATE write transactions; user-only and reader connections
 - 119cc7c docs(plan6a): bring approved plan b2cc0fd onto feat/tauri-backend
 
+## Sau review độc lập
+
+Rebase lên `dev/mvp` d53a653 (bản sửa Plan 7). Luồng quét dùng `Store::open_library_only` (không attach `user.db`); test yêu thích trong lúc quét từng đỏ 231 ms với kết nối attach. Reviewer (Sonnet) tìm 9 mục Important; đã sửa (mỗi mục có test hồi quy ở `tests/review_fixes.rs` hoặc crate liên quan):
+
+- `ensure_started` không còn race mở hai worker; `remove_source` dừng/loại nguồn khỏi hàng quét trước khi xoá;
+- tắt app: cờ huỷ đặt cho quét/model/embed trước rồi mới chờ, bỏ móc sau-quét khi đang tắt, pha băm kiểm huỷ;
+- bộ lọc `mode` của `pair_candidates` áp trước khi cắt top-k (`pair_candidates_gated`);
+- `boot_subscribe`/`embed_subscribe` đăng ký trước, gửi ảnh chụp sau;
+- đi cây thư mục: lỗi từng mục đẩy thư mục cha vào "không đọc được" (không đánh missing oan);
+- panic trong job quét không làm kẹt hàng đợi;
+- `FaceQueryDto.hard` (ràng buộc cứng của `describe`); `model_redownload`/`model_remove` trả `busy` thay vì xoá file khi lần tải chưa dừng.
+
+Minor chưa làm (ghi để sau): `counts()` embed đếm trên kết nối chính; `enqueue` bỏ qua yêu cầu quét lại nguồn đang chạy (cờ dirty); nạp lại `temp.scope` mỗi trang; `claim_embedding_batch` O(N²); luồng đọc nền của tải model không có timeout thân; `Index::profiles_for_test` dùng ở đường chạy thật (đổi tên); chặn cặp trùng; `VACUUM` cache preview; `on_exit` chạy đồng bộ ở `RunEvent::Exit`.
+
 ## Quyết định (Ruling) đã chốt khi thực thi
 
 Đầy đủ trong sổ `.superpowers/sdd/…/progress.md` (git-ignore). Những cái ảnh hưởng 6b/Plan 7:

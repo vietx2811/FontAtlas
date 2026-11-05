@@ -285,6 +285,8 @@ pub struct FaceQueryDto {
     pub offset: u32,
     pub limit: u32,
     pub axis_filters: Vec<AxisFilterDto>,
+    /// Ràng buộc cứng từ `describe` ("vi_supported" | "vi_complete"): loại face không đạt.
+    pub hard: Vec<String>,
     /// Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
     pub face_keys: Option<Vec<FaceKeyDto>>,
 }
