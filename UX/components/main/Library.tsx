@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Api } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
 import type { FaceRow } from '../../features/library-grid';
@@ -14,6 +14,19 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const viOnly = useUiStore(s => s.viOnly);
   const sample = useUiStore(s => s.sample);
   const select = useUiStore(s => s.select);
+  const fontSize = useUiStore(s => s.sampleSize);
+  const layout = useUiStore(s => s.layout);
+  const active = useUiStore(s => s.active);
+  const [favs, setFavs] = useState<ReadonlyMap<number, boolean>>(new Map());
+  useEffect(() => { useUiStore.getState().refreshActive(api).catch(e => console.warn('activation_state failed', e)); }, [api]);
+  const isActive = useCallback((r: FaceRow) => active.has(r.hashHex), [active]);
+  const isFavorite = useCallback((r: FaceRow) => favs.get(r.faceId) ?? r.isFavorite, [favs]);
+  const toggleFavorite = useCallback((r: FaceRow) => {
+    const next = !(favs.get(r.faceId) ?? r.isFavorite);
+    api.setFavorite({ hashHex: r.hashHex, faceIndex: r.faceIndex }, next)
+      .then(() => setFavs(m => new Map(m).set(r.faceId, next)))
+      .catch(e => console.warn('set_favorite failed', e));
+  }, [api, favs]);
   const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly }), [view, tag, query, viOnly]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
@@ -25,5 +38,5 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     );
   }
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
-  return <LibraryGrid api={api} query={gridQuery} sampleText={sample} width={width} height={height} selectedFaceId={selectedFaceId} onSelect={onSelect} />;
+  return <LibraryGrid api={api} query={gridQuery} sampleText={sample} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} onSelect={onSelect} />;
 }

@@ -64,7 +64,7 @@ function App({ rows }: { rows: ReturnType<typeof makeRow>[] }) {
   const [api] = useState(() => createMockLibraryApi(rows, { toUrl: name => `/preview/${name}` }));
   const [text, setText] = useState('Hamburgefonts Ăn phở');
   useEffect(() => { if (AUTO) bench(setText); }, []);
-  return <LibraryGrid api={api} query={{}} width={1280} height={800} previewMode={MODE} sampleText={text} />;
+  return <LibraryGrid api={api} query={{}} width={1280} height={800} previewMode={MODE} sampleText={text} fontSize={34} />;
 }
 
 fetch('/api/manifest').then(r => r.json()).then((m: Array<{ family: string }>) => {

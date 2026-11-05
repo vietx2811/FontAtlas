@@ -27,6 +27,8 @@ export interface UiState {
   sidebarCollapsed: boolean;
   openSections: Record<SectionKey, boolean>;
   infoExpanded: boolean;
+  /** hashHex của các face đang bật (activation_state); nạp bằng refreshActive. */
+  active: ReadonlySet<string>;
 }
 
 export interface UiActions {
@@ -45,6 +47,7 @@ export interface UiActions {
   toggleInfo(): void;
   /** Đọc get_ui_state, rồi ghi ngược (debounce) mỗi khi một trường bền đổi. */
   hydrate(api: Api): Promise<void>;
+  refreshActive(api: Api): Promise<void>;
 }
 
 export const faceKey = (k: FaceKeyDto): string => `${k.hashHex}:${k.faceIndex}`;
@@ -90,7 +93,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Set<string>(), ...initial,
 
     setView: v => set({ view: v, tag: null }),
     setTag: t => set({ tag: t }),
@@ -105,6 +108,11 @@ export function createUiStore(): UiStore {
     toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     toggleSection: k => set(s => ({ openSections: { ...s.openSections, [k]: !s.openSections[k] } })),
     toggleInfo: () => set(s => ({ infoExpanded: !s.infoExpanded })),
+
+    async refreshActive(api) {
+      const st = await api.activationState();
+      set({ active: new Set(st.filter(x => x.state === 'active').map(x => x.hashHex)) });
+    },
 
     async hydrate(api) {
       stop?.();

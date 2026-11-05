@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import './libraryGrid.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
-import { cssSize, type FaceRow, type PxBucket } from './types';
+import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 
 export const HOVER_DELAY_MS = 150;
 export type PreviewMode = 'mask' | 'img';
@@ -14,12 +14,13 @@ type Props = {
   mode: PreviewMode; blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void;
   /** Gặp 410: thế hệ backend đã đi tiếp → grid lấy lại thế hệ hiện tại. */
   onStale?(): void;
+  /** Cỡ chữ mẫu (css px). Có → ảnh bucket co về cỡ này; không → cỡ gốc của bucket (harness cũ). */
+  fontSize?: number; layout?: 'grid' | 'list'; active?: boolean; favorite?: boolean;
+  onToggleFavorite?(row: FaceRow): void; boxHeight?: number;
 };
 
-const NON_ASCII = /[^\x00-\x7F]/;
-
-export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale }: Props): React.JSX.Element {
-  const { width: cw, height: ch } = cssSize(px);
+export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight }: Props): React.JSX.Element {
+  const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
   const shownRef = useRef<{ src: string; blob: string } | null>(null);
@@ -87,44 +88,49 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
   useEffect(() => () => stopLive(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!row) {
-    return <div role="gridcell" data-state="loading" style={{ flex: 1, margin: 4, height: ch + 48, background: 'var(--muted-soft)', borderRadius: 8 }} />;
+    return <div role="gridcell" data-state="loading" data-layout={layout} className="fa-cell fa-cell-skeleton" style={{ height: boxHeight }} />;
   }
 
   const shownState: CellState = live ? 'live' : state;
   const shownUrl = mode === 'mask' ? shown?.src ?? '' : imgShown ?? '';
+  const name = `${row.family}${row.subfamily ? ` ${row.subfamily}` : ''}`;
+  const missing = row.viMissing > 0;
   return (
     <div
-      role="gridcell" tabIndex={0} aria-selected={selected}
-      data-face-id={row.faceId} data-state={shownState} data-shown-url={shownUrl}
+      role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
+      data-face-id={row.faceId} data-state={shownState} data-shown-url={shownUrl} style={{ height: boxHeight }}
       onClick={() => onSelect(row)}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(row); } }}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSelect(row); } }}
       onPointerEnter={() => {
         if (!canLive) return;
         hovering.current = true;
         hoverTimer.current = setTimeout(() => { hoverTimer.current = null; startLive(); }, HOVER_DELAY_MS);
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
-      style={{ flex: 1, minWidth: 0, margin: 4, padding: '8px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxSizing: 'border-box' }}
     >
-      <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {row.family}{row.subfamily ? ` ${row.subfamily}` : ''}
-      </div>
-      <div style={{ width: cw, height: ch, maxWidth: '100%' }}>
+      {active && <span className="fa-dot" data-testid="active-dot" title="Đang bật" />}
+      <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite} title="Yêu thích"
+        onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }}>
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
+      </button>
+      <div className="fa-spec" data-preview-box style={{ width: cw, height: ch }}>
         {live ? (
           // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
-          <span data-live style={{ fontFamily: `"${live}"`, fontSize: px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
+          <span data-live style={{ fontFamily: `"${live}"`, fontSize: fontSize ?? px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
         ) : state === 'error' ? (
-          <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: `${ch}px` }}>Không có preview</span>
+          <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")` }} />
+          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: '100%', height: '100%', ['--preview-url' as string]: `url("${shown.blob}")` }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />
         )}
       </div>
-      {NON_ASCII.test(text) && !row.supportsVi && row.viMissing > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--accent)' }}>Thiếu {row.viMissing} ký tự tiếng Việt</div>
-      )}
+      <div className="fa-meta">
+        <span className="fa-name" data-testid="face-name">{name}</span>
+        <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}
+          title={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>{missing ? `−${row.viMissing}` : '●'}</span>
+      </div>
     </div>
   );
 }

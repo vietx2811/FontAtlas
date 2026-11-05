@@ -71,3 +71,18 @@ export const DEFAULT_SAMPLE = 'Hamburgefonts Ăn phở';
 export function cssSize(px: PxBucket): { width: number; height: number } {
   return { width: (13 * px) / 2, height: Math.floor((7 * px) / 3) / 2 };
 }
+
+/** Bề rộng tối thiểu của ô theo cỡ chữ mẫu (Plan 6b T6): 140 + size × 2.6 px. */
+export const cellMinWidth = (fontSize: number): number => 140 + fontSize * 2.6;
+
+/** Bucket ảnh gần nhất với cỡ hiển thị: ảnh vẽ ở px trên canvas 2× nên cỡ css = px/2. */
+export function bucketFor(fontSize: number): PxBucket {
+  return PX_BUCKETS.reduce((best, b) => (Math.abs(b - 2 * fontSize) < Math.abs(best - 2 * fontSize) ? b : best));
+}
+
+/** Hộp ảnh hiển thị: co ảnh bucket về cỡ chữ người dùng chọn. */
+export function previewBox(px: PxBucket, fontSize: number): { width: number; height: number } {
+  const { height } = cssSize(px);
+  const scale = fontSize / (px / 2);
+  return { width: Math.round(13 * fontSize), height: Math.round(height * scale) };
+}

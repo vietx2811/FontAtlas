@@ -159,13 +159,6 @@ describe('LibraryGrid', () => {
     expect(c).toHaveAttribute('data-state', 'ready');
   });
 
-  it('shows missing Vietnamese badge only for non-ASCII sample on fonts lacking it', async () => {
-    await mount({ sampleText: 'Ăn phở' }, [makeRow(0, { supportsVi: false, viMissing: 12 }), makeRow(1)]);
-    const [a, b] = cells();
-    expect(a).toHaveTextContent('Thiếu 12 ký tự tiếng Việt');
-    expect(b).not.toHaveTextContent('Thiếu');
-  });
-
   it('click and Enter select the face', async () => {
     const onSelect = vi.fn();
     await mount({ onSelect });

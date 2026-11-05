@@ -5,7 +5,7 @@ import { DEFAULT_PREVIEW_MODE, FaceCell, type PreviewMode } from './FaceCell';
 import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from './fontFaceLoader';
 import { usePagedFaces, type PagedFaces } from './pagedFaces';
 import { PreviewBlobs } from './previewBlobs';
-import { DEFAULT_SAMPLE, cssSize, type FaceRow, type GridQuery, type PxBucket } from './types';
+import { DEFAULT_SAMPLE, bucketFor, cellMinWidth, cssSize, previewBox, type FaceRow, type GridQuery, type PxBucket } from './types';
 
 export { HOVER_DELAY_MS, DEFAULT_PREVIEW_MODE, type CellState, type PreviewMode } from './FaceCell';
 
@@ -13,6 +13,9 @@ export type LibraryGridProps = {
   api: LibraryApi; query: GridQuery; sampleText?: string; px?: PxBucket; previewMode?: PreviewMode;
   selectedFaceId?: number | null; onSelect?(row: FaceRow): void; loader?: FontFaceLoader; blobs?: PreviewBlobs;
   width?: number; height?: number;
+  /** Cỡ chữ mẫu 18–72: quyết định bucket ảnh, bề rộng ô và hộp ảnh (Plan 6b T6). */
+  fontSize?: number; layout?: 'grid' | 'list';
+  isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
 };
 
 type Applied = { rendererVersion: string; generation: number; text: string; px: PxBucket };
@@ -21,9 +24,11 @@ type RowProps = {
   cols: number; total: number; paged: PagedFaces | null; version: number; applied: Applied | null;
   api: LibraryApi; px: PxBucket; text: string; mode: PreviewMode; selectedFaceId: number | null;
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
+  fontSize?: number; layout: 'grid' | 'list'; boxHeight: number;
+  isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
 };
 
-function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale }: RowComponentProps<RowProps>) {
+function Row({ index, style, cols, total, paged, applied, api, px, text, mode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
   const cells = [];
   for (let c = 0; c < cols; c++) {
     const i = index * cols + c;
@@ -35,7 +40,8 @@ function Row({ index, style, cols, total, paged, applied, api, px, text, mode, s
       : null;
     cells.push(
       <FaceCell key={row ? row.faceId : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
-        selected={!!row && row.faceId === selectedFaceId} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale} />,
+        selected={!!row && row.faceId === selectedFaceId} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
+        fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} />,
     );
   }
   return <div role="row" style={{ ...style, display: 'flex' }}>{cells}</div>;
@@ -55,9 +61,11 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 }
 
 export function LibraryGrid({
-  api, query, sampleText = DEFAULT_SAMPLE, px = 48, previewMode = DEFAULT_PREVIEW_MODE,
+  api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
+  fontSize, layout = 'grid', isActive, isFavorite, onToggleFavorite,
 }: LibraryGridProps): React.JSX.Element {
+  const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
   const size = useSize(box, { width, height });
   const { paged, snap } = usePagedFaces(api, query);
@@ -123,14 +131,23 @@ export function LibraryGrid({
     return () => { alive = false; if (pending.current === key) pending.current = null; };
   }, [api, applied, sampleText, px]);
 
-  const { width: cw, height: ch } = cssSize(px);
-  const cols = Math.max(1, Math.floor(size.width / (cw + 24)));
-  const rowH = ch + 64;
+  let cols: number; let rowH: number; let boxHeight: number;
+  if (fontSize) {
+    const dispH = previewBox(px, fontSize).height;
+    cols = layout === 'list' ? 1 : Math.max(1, Math.floor((size.width - 28) / (cellMinWidth(fontSize) + 8)));
+    boxHeight = layout === 'list' ? Math.max(48, dispH + 20) : Math.max(132, dispH + 78);
+    rowH = boxHeight + 8;
+  } else {
+    const { width: cw, height: ch } = cssSize(px);
+    cols = Math.max(1, Math.floor(size.width / (cw + 24)));
+    rowH = ch + 64;
+    boxHeight = ch + 48;
+  }
   const total = snap.total ?? 0;
   const rowCount = Math.ceil(total / cols);
 
   return (
-    <div ref={box} role="grid" aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
+    <div ref={box} role="grid" data-layout={layout} aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
       {previewError && (
         <div role="alert">
           Không tải được preview: {previewError}{' '}
@@ -154,7 +171,7 @@ export function LibraryGrid({
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: size.height, width: size.width }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

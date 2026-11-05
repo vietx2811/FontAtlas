@@ -3,3 +3,33 @@
 /* Phương án dự phòng previewMode='img': ảnh đen trên nền trong, đảo màu ở theme tối. */
 .fa-preview-img { display: block; }
 .dark .fa-preview-img { filter: invert(1); }
+
+/* ---------- Vỏ thẻ theo prototype (Plan 6b T6) ---------- */
+.fa-cell {
+  position: relative; flex: 1; min-width: 0; margin: 4px; box-sizing: border-box; text-align: left;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 10px; overflow: hidden;
+  padding: 12px 12px 10px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
+  transition: border-color .15s, box-shadow .15s;
+}
+.fa-cell:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.fa-cell[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fa-cell-skeleton { background: var(--surface-2); border-color: transparent; }
+.fa-spec { max-width: 100%; overflow: hidden; flex: none; }
+.fa-spec-error { font-size: 12px; color: var(--muted); }
+.fa-meta { display: flex; align-items: center; gap: 6px; font-size: var(--text-2xs); color: var(--muted); min-width: 0; }
+.fa-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-vi { font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; }
+.fa-vi.ok { color: var(--on); }
+.fa-vi.miss { color: var(--warn); }
+.fa-dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
+.fa-star { position: absolute; top: 6px; right: 22px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
+.fa-cell:hover .fa-star, .fa-star[aria-pressed="true"], .fa-star:focus-visible { opacity: 1; }
+.fa-star[aria-pressed="true"] { color: var(--accent); }
+
+/* Chế độ danh sách: mỗi dòng một font, tên bên trái, chữ mẫu bên phải. */
+.fa-cell[data-layout="list"] { flex-direction: row-reverse; align-items: center; justify-content: flex-end; gap: 12px; border-radius: 0; border-width: 0 0 1px; background: transparent; padding: 6px 40px 6px 8px; margin: 0; }
+.fa-cell[data-layout="list"][aria-selected="true"] { background: var(--accent-soft); box-shadow: none; }
+.fa-cell[data-layout="list"] .fa-meta { width: 220px; flex: none; }
+.fa-cell[data-layout="list"] .fa-spec { flex: 1; }
+.fa-cell[data-layout="list"] .fa-dot { top: 50%; margin-top: -3px; }
+.fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }
