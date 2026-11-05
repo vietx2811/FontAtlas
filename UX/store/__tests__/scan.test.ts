@@ -67,4 +67,22 @@ describe('scan store', () => {
     await run(600);
     expect(s.getState().scanning).toBe(false);
   });
+
+  it('counts files skipped as not downloaded from progress events, per source, and clears them when the source finishes (the count then lives in its last scan)', async () => {
+    const api = createMockApi();
+    let push: (e: import('../../api').ScanEvent) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async l => { push = l; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const prog = (id: number, nd: number) => ({ type: 'progress' as const, sourceId: id, progress: { phase: 'walking' as const, done: 1, total: 9, facesWritten: 0, notDownloaded: nd } });
+    push(prog(1, 3)); push(prog(2, 4));
+    expect(s.getState().cloud).toEqual({ 1: 3, 2: 4 });
+    expect(s.getState().cloudTotal()).toBe(7);
+    push(prog(1, 5));
+    expect(s.getState().cloudTotal()).toBe(9);
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 9, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } });
+    expect(s.getState().cloud).toEqual({ 2: 4 });
+    push({ type: 'queued', sourceId: 2 });
+    expect(s.getState().cloud).toEqual({}); // quét lại: đếm lại từ đầu
+  });
 });

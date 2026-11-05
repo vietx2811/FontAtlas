@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
+import { notDownloadedOf } from '../zero/zeroStates';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -106,6 +107,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   const refresh = useCallback(async () => setSources(await api.listSources()), [api]);
   useEffect(() => { void refresh(); }, [refresh]);
   const access = useScanStore(x => x.access);
+  const cloud = useScanStore(x => x.cloud);
   const state = (x: SourceDto) => (x.id in access ? 'Cần quyền truy cập' : !x.available ? 'Không khả dụng' : x.scanning ? 'Đang quét' : 'Sẵn sàng');
   return (
     <>
@@ -114,7 +116,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         {sources.map(x => (
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}</strong><span className="path">{x.path}</span></div>
-            <span className="meta">{x.faceCount} font · {state(x)}</span>
+            <span className="meta">{x.faceCount} font · {state(x)}{notDownloadedOf(x, cloud) > 0 ? ` · ${notDownloadedOf(x, cloud)} chưa tải về` : ''}</span>
             {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>Cấp quyền</button>}
             <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? 'Thử lại' : 'Quét lại'}</button>
             <button type="button" className="danger" onClick={() => setRemoving(x)}>Xoá nguồn</button>

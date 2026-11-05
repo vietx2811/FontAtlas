@@ -166,4 +166,11 @@ describe('mock analysis data (tabs of the detail panel)', () => {
     expect(await api.pairCandidates({ hashHex: bad.hashHex, faceIndex: 0 }, { ...base, mode: 'safe' })).toEqual([]);
     expect((await api.pairCandidates({ hashHex: bad.hashHex, faceIndex: 0 }, { ...base, mode: 'safe', projectVi: false })).length).toBeGreaterThan(0);
   });
+
+  it('one source carries a last scan with files still in the cloud (for QA and screenshots)', async () => {
+    const api = createMockApi();
+    const src = (await api.listSources()).find(x => x.id === 2)!;
+    expect(src.lastScan?.notDownloaded).toBe(12);
+    expect((await api.listSources()).filter(x => (x.lastScan?.notDownloaded ?? 0) > 0)).toHaveLength(1);
+  });
 });

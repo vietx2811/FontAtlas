@@ -3,10 +3,10 @@ import { Icon, type IconName } from './icons';
 
 type Props = {
   icon?: IconName; swatch?: string | null; label: string; count?: number | null; current?: boolean;
-  unavailable?: boolean; title?: string; kbd?: string; onClick(): void; more?: ReactNode;
+  unavailable?: boolean; title?: string; kbd?: string; onClick(): void; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
 };
 
-export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more }: Props): React.JSX.Element {
+export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub }: Props): React.JSX.Element {
   return (
     <div className="fa-nav-wrap">
       <button type="button" className={`fa-nav${unavailable ? ' fa-ejected' : ''}`} aria-current={current ? 'true' : undefined}
@@ -18,6 +18,7 @@ export function NavItem({ icon, swatch, label, count, current, unavailable, titl
         {count != null && <span className="fa-n">{count}</span>}
       </button>
       {more}
+      {sub}
     </div>
   );
 }

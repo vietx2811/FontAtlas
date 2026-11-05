@@ -73,6 +73,8 @@ export function createMockApi(o: MockOptions = {}): Api {
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
     { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, faceCount: 0, lastScan: null, scanning: false },
   ];
+  // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
+  const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
   const countOf = (id: number) => rows.filter(r => sourceOf(r) === id).length;
   const collections = new Map<number, CollectionDto & { faces: Set<string> }>();
   const tags = new Map<number, TagDto & { faces: Set<string> }>();
@@ -93,10 +95,10 @@ export function createMockApi(o: MockOptions = {}): Api {
     scanning = true;
     emit({ type: 'queued', sourceId: id });
     [0.25, 0.5, 0.75, 1].forEach((f, i) => setTimeout(() => {
-      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180), notDownloaded: 0 } });
+      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180), notDownloaded: Math.round(f * 7) } });
       emit({ type: 'facesAdded', sourceId: id, count: 45 });
       if (f === 1) {
-        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [], notDownloaded: 0 } });
+        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [], notDownloaded: 7 } });
         emit({ type: 'idle' }); scanning = false;
       }
     }, (i + 1) * t));
@@ -138,7 +140,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     fontUrl: () => null,
 
-    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id) }))),
+    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), lastScan: s.lastScan ?? lastScanOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });

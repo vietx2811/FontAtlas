@@ -98,6 +98,13 @@ describe('Settings', () => {
       expect(screen.getAllByTestId('source-row')).toHaveLength(2);
     });
 
+    it('shows how many files of a source are still in the cloud', async () => {
+      await mount();
+      await go('Thư viện và nguồn');
+      expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/12 chưa tải về/);
+      expect(screen.getAllByTestId('source-row')[0].textContent).not.toMatch(/chưa tải về/);
+    });
+
     it('a source that needs access says so and offers Cấp quyền and Thử lại', async () => {
       const { api } = await mount();
       await go('Thư viện và nguồn');

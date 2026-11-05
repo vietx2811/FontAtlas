@@ -200,4 +200,25 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: /Ổ ngoài/ }).getAttribute('title')).toBe('Ổ ngoài: cần quyền truy cập');
     act(() => useScanStore.setState({ access: {} }));
   });
+
+  describe('files still in the cloud (not downloaded)', () => {
+    it('a source whose last scan skipped placeholders says how many, with a tooltip on how to download them', async () => {
+      await mount();
+      const line = screen.getByTestId('not-downloaded');
+      expect(line.textContent).toBe('12 font chưa tải về');
+      expect(line.getAttribute('title')).toMatch(/Finder/);
+      expect(line.getAttribute('title')).toMatch(/Tải về/);
+      expect(within(line).queryByRole('button')).toBeNull(); // không có nút tự tải
+      expect(screen.getAllByTestId('not-downloaded')).toHaveLength(1); // chỉ nguồn có file chưa tải
+    });
+
+    it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
+      await mount();
+      act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));
+      const status = screen.getByRole('status', { name: 'Đang quét' });
+      expect(within(status).getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
+      act(() => useScanStore.setState({ scanning: false, cloud: {} }));
+      expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
+    });
+  });
 });

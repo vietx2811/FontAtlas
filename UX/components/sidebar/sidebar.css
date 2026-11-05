@@ -79,3 +79,9 @@
 @keyframes fa-pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .fa-scan-dot { animation: none; } }
 .fa-side[data-collapsed="true"] .fa-scan { justify-content: center; font-size: 0; }
+
+.fa-cloud, .fa-scan-cloud { display: flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--muted); cursor: help; }
+.fa-cloud { padding: 0 9px 4px 40px; margin-top: -2px; }
+.fa-scan-cloud { margin-left: 4px; }
+.fa-scan { flex-wrap: wrap; }
+.fa-side[data-collapsed="true"] .fa-cloud { display: none; }

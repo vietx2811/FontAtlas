@@ -27,6 +27,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
   const access = useScanStore(s => s.access);
+  const cloud = useScanStore(s => s.cloud);
   const [sources, setSources] = useState<SourceDto[]>([]);
   useEffect(() => { let alive = true; api.listSources().then(x => { if (alive) setSources(x); }, () => {}); return () => { alive = false; }; }, [api, scanVersion]);
   const [reload, setReload] = useState(0); // bỏ sao trong view Yêu thích → nạp lại để thẻ biến mất ngay
@@ -43,7 +44,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews, active }), [view, tag, query, viOnly, recentViews, active]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
-  const empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access });
+  const empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud });
   const onEmptyAction = (id: string) => {
     const ui = useUiStore.getState();
     if (id === 'add-folder') ui.requestAddFolder();

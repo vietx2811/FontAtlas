@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { THEME_KEY } from '../../theme';
 import { useScanStore } from '../../store/scan';
+import { notDownloadedOf } from '../zero/zeroStates';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -17,6 +18,8 @@ type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+
+export const CLOUD_TIP = 'File đang ở iCloud/OneDrive, chưa tải về máy nên chưa quét được. Trong Finder: bấm chuột phải › Tải về, rồi quét lại.';
 
 export function SidebarToggle(): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
@@ -37,6 +40,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanning = useScanStore(s => s.scanning);
   const scanned = useScanStore(s => s.written);
   const access = useScanStore(s => s.access);
+  const cloud = useScanStore(s => s.cloud);
+  const cloudNow = Object.values(cloud).reduce((a, b) => a + b, 0);
   const addRequest = useUiStore(s => s.addFolderRequest);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
@@ -165,7 +170,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavSection title="Nguồn" open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
-              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} />
+              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)}
+              sub={notDownloadedOf(s, cloud) > 0 ? <div className="fa-cloud" data-testid="not-downloaded" title={CLOUD_TIP}><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div> : undefined} />
           ))}
         </NavSection>
 
@@ -178,7 +184,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}</div>}
+        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}{cloudNow > 0 && <span className="fa-scan-cloud" data-testid="scan-not-downloaded" title={CLOUD_TIP}><Icon name="cloud" size={12} />{cloudNow} font chưa tải về</span>}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button>
