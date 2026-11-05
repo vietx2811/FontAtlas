@@ -1,6 +1,8 @@
 // Dữ liệu phân tích giả nhưng ổn định theo từng face (cùng face → cùng kết quả), cho dev và Vitest.
 import type { FaceRow } from '../features/library-grid/types';
-import type { AxisReadingDto, PairCandidateDto, PairLabelDto, PairOptsDto, PairSymbol, SimilarHitDto, SimilarSource } from './types';
+import type { AxisReadingDto, PairCandidateDto, PairLabelDto, PairOptsDto, SimilarHitDto, SimilarSource } from './types';
+
+type PairSymbol = '●' | '◐' | '◆' | '○' | '◑';
 
 /** 16 trục đo + terminal + hai trục phân loại (a_storeys, g_storeys). */
 export const MEASURED_AXES = [

@@ -1,4 +1,5 @@
 // Mô phỏng model + hàng đợi embed bằng timer (thay Channel của 6a) để dev/QA thấy mọi trạng thái E0–E11.
+import { CmdError } from './types';
 import type { EmbedEvent, EmbedStatusDto, ModelEvent, ModelStatusDto } from './types';
 
 export const MODEL_BYTES = 371 * 1024 * 1024;
@@ -74,6 +75,7 @@ export function createModelSim(o: ModelSimOptions) {
       sink?.({ type: 'paused' });
     },
     async modelRedownload(onEvent: (e: ModelEvent) => void) {
+      if (model.state === 'downloading') throw new CmdError('busy', 'download in progress: stop it first');
       clearInterval(dl); stopEmbedTimer();
       model = { ...model, state: 'missing', doneBytes: 0, lastError: null };
       embed = { ...embed, running: false, pending: 0 };

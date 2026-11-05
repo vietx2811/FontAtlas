@@ -1,19 +1,36 @@
 // Mọi lệnh backend đi qua một interface; tên phương thức = tên lệnh 6a (camelCase).
+// Cài đặt thật: api/tauri.ts (invoke + Channel). Cài đặt giả: api/mock.ts (dev không có Tauri, Vitest).
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
-  ActivationStateDto, CollectionDto, FaceDetailDto, FaceKeyDto, FamilyStyleDto, PairCandidateDto, PairOptsDto, SettingsDto,
-  EmbedEvent, EmbedStatusDto, ModelEvent, ModelStatusDto, SimilarHitDto, SimilarOptsDto, SourceDto, TagDto, UiStateDto,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
+  FaceKeyDto, FamilyStyleDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
 export * from './types';
 
+export type ActivateOptions = { scope?: ScopeDto | null; proceed?: boolean; onProgress?(p: ProgressDto): void };
+export type DeactivateOptions = { force?: boolean; onProgress?(p: ProgressDto): void };
+
 export interface Api extends LibraryApi {
-  // Nguồn
+  // Khởi động và onboarding
+  startupStatus(): Promise<BootStatusDto>;
+  bootSubscribe(onEvent: (e: BootEvent) => void): Promise<Unsubscribe>;
+  onboardingState(): Promise<OnboardingDto>;
+  setOnboardingStep(step: string | null): Promise<void>;
+  legacyImport(): Promise<LegacyStateDto>;
+  legacyRetry(): Promise<LegacyStateDto>;
+  // Nguồn và quét
   listSources(): Promise<SourceDto[]>;
-  /** Ném CmdError('nested_source', …, { existingId }) khi nằm trong/chứa nguồn có sẵn. */
+  /** Ném CmdError('nested_source', …, { existingId, existingPath }) khi nằm trong/chứa nguồn có sẵn. */
   addSource(path: string): Promise<SourceDto>;
   removeSource(sourceId: number): Promise<void>;
   rescanSources(sourceIds?: number[]): Promise<void>;
+  scanPause(): Promise<void>;
+  scanResume(): Promise<void>;
+  scanCancel(): Promise<void>;
+  scanStatus(): Promise<ScanStatusDto>;
+  scanSubscribe(onEvent: (e: ScanEvent) => void): Promise<Unsubscribe>;
   // Thư viện
   getFamilyStyles(family: string): Promise<FamilyStyleDto[]>;
   setFavorite(face: FaceKeyDto, on: boolean): Promise<void>;
@@ -33,7 +50,7 @@ export interface Api extends LibraryApi {
   setUiState(state: UiStateDto): Promise<void>;
   // Phân tích
   getFace(face: FaceKeyDto, lang: 'vi' | 'en'): Promise<FaceDetailDto>;
-  similar(face: FaceKeyDto, opts: SimilarOptsDto): Promise<SimilarHitDto[]>;
+  similar(face: FaceKeyDto, opts?: SimilarQuery): Promise<SimilarHitDto[]>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Cài đặt
   /** Chỉ khoá `ui.*` (≤ 60 ký tự sau tiền tố), giá trị ≤ 64 KB; sai → CmdError('invalid_arg'). */
@@ -41,22 +58,29 @@ export interface Api extends LibraryApi {
   setSetting(key: string, value: string): Promise<void>;
   getSettings(): Promise<SettingsDto>;
   setSettings(patch: Partial<SettingsDto>): Promise<SettingsDto>;
-  // Model và hàng đợi embed (6a Task 16)
+  // Model và hàng đợi embed
   modelStatus(): Promise<ModelStatusDto>;
-  /** Tải (hoặc tải tiếp nếu có .part); sự kiện đến qua `onEvent` cho tới khi Ready/Paused/Failed. */
+  /** Trả ngay khi bắt đầu; tiến độ, Ready, Paused, Failed qua `onEvent`. */
   modelDownload(onEvent: (e: ModelEvent) => void): Promise<void>;
   modelCancel(): Promise<void>;
+  /** Đang tải thì ném CmdError('busy'). */
   modelRedownload(onEvent: (e: ModelEvent) => void): Promise<void>;
   modelRemove(): Promise<void>;
   embedStatus(): Promise<EmbedStatusDto>;
   embedPause(): Promise<void>;
   embedResume(): Promise<void>;
-  /** Trả hàm huỷ đăng ký. */
-  embedSubscribe(onEvent: (e: EmbedEvent) => void): Promise<() => void>;
-  // Kích hoạt (hợp đồng Plan 7)
+  embedSubscribe(onEvent: (e: EmbedEvent) => void): Promise<Unsubscribe>;
+  // Kích hoạt (Plan 7)
+  activationCaps(): Promise<{ method: string; supported: boolean }>;
   activationState(): Promise<ActivationStateDto[]>;
-  activationActivate(faces: FaceKeyDto[]): Promise<void>;
-  activationDeactivate(faces: FaceKeyDto[]): Promise<void>;
+  activationPreflight(faces: FaceKeyDto[]): Promise<ActivationReportDto>;
+  activationActivate(faces: FaceKeyDto[], opts?: ActivateOptions): Promise<ActivationReportDto>;
+  activationDeactivate(faces: FaceKeyDto[], opts?: DeactivateOptions): Promise<ActivationReportDto>;
+  activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
+  activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  activationSetKeep(on: boolean): Promise<void>;
+  activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
 }
 
 let current: Api | null = null;

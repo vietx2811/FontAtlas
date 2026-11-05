@@ -2,6 +2,7 @@
 import { cssSize, type FaceRow, type PxBucket } from '../features/library-grid/types';
 import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
+import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
 import { VI_TOTAL, axesFor, pairFor, similarFor, viMissingFor } from './mockAnalysis';
 import {
@@ -58,8 +59,8 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-import type { EmbedStatusDto, ModelStatusDto } from './types';
-export type MockOptions = { latencyMs?: number; tickMs?: number; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
+import type { BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent } from './types';
+export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
   const rows = mockRows();
@@ -67,7 +68,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
-  let sources: SourceDto[] = [
+  let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
     { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, faceCount: 0, lastScan: null, scanning: false },
@@ -75,12 +76,34 @@ export function createMockApi(o: MockOptions = {}): Api {
   const countOf = (id: number) => rows.filter(r => sourceOf(r) === id).length;
   const collections = new Map<number, CollectionDto & { faces: Set<string> }>();
   const tags = new Map<number, TagDto & { faces: Set<string> }>();
-  const active = new Set<string>();
   let nextId = 10;
   let ui: UiStateDto = { ...DEFAULT_UI_STATE };
   const uiSettings = new Map<string, string>();
-  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: true, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
+  const scanListeners = new Set<(e: ScanEvent) => void>();
+  let scanning = false;
+  let onboarded = !o.firstRun;
+  let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
+  const legacyState = () => legacy;
+  const boot = (): BootStatusDto => ({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
+  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
 
+  const simulateScan = (id: number) => {
+    const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));
+    scanning = true;
+    emit({ type: 'queued', sourceId: id });
+    [0.25, 0.5, 0.75, 1].forEach((f, i) => setTimeout(() => {
+      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180) } });
+      emit({ type: 'facesAdded', sourceId: id, count: 45 });
+      if (f === 1) {
+        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [] } });
+        emit({ type: 'idle' }); scanning = false;
+      }
+    }, (i + 1) * t));
+  };
+  const act = createActivationSim({
+    rowOf: k => byKey.get(keyOf(k)),
+    collectionFaces: id => [...(collections.get(id)?.faces ?? [])].map(k => { const [h, i] = k.split(':'); return { hashHex: h, faceIndex: Number(i) }; }),
+  });
   const sim = createModelSim({ tickMs: o.tickMs, initial: o.initial, embedEnabled: () => settings.embedEnabled });
   const lib = createMockLibraryApi(rows, { latencyMs: o.latencyMs });
   const delay = async () => { if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs)); };
@@ -120,6 +143,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
       const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false };
       sources = [...sources, s];
+      simulateScan(s.id);
       return ok(s);
     },
     async removeSource(id) { sources = sources.filter(s => s.id !== id); },
@@ -133,9 +157,17 @@ export function createMockApi(o: MockOptions = {}): Api {
     listCollections: () => ok([...collections.values()].map(({ faces, ...c }) => ({ ...c, itemCount: faces.size }))),
     async createCollection(name, color) { const id = nextId++; const c = { id, name, color, itemCount: 0, faces: new Set<string>() }; collections.set(id, c); return ok({ id, name, color, itemCount: 0 }); },
     async renameCollection(id, name) { const c = collections.get(id); if (!c) throw new CmdError('not_found', 'collection'); c.name = name; },
-    async deleteCollection(id) { collections.delete(id); },
+    async deleteCollection(id) {
+      const faces = [...(collections.get(id)?.faces ?? [])].map(k => { const [h, i] = k.split(':'); return { hashHex: h, faceIndex: Number(i) }; });
+      collections.delete(id);
+      act.collectionChanged(faces.map(f => [f, id] as [typeof f, number]), 'collection_deleted');
+    },
     async addToCollection(id, faces) { const c = collections.get(id); if (!c) throw new CmdError('not_found', 'collection'); faces.forEach(f => c.faces.add(keyOf(f))); },
-    async removeFromCollection(id, faces) { collections.get(id)?.faces && faces.forEach(f => collections.get(id)!.faces.delete(keyOf(f))); },
+    async removeFromCollection(id, faces) {
+      const c = collections.get(id); if (!c) return;
+      faces.forEach(f => c.faces.delete(keyOf(f)));
+      act.collectionChanged(faces.map(f => [f, id] as [typeof f, number]), 'left_collection');
+    },
     listTags: () => ok([...tags.values()].map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))),
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
     async createTag(name) { const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
@@ -181,8 +213,26 @@ export function createMockApi(o: MockOptions = {}): Api {
       if (new TextEncoder().encode(value).length > 65_536) throw new CmdError('invalid_arg', 'value over 64 KB');
       uiSettings.set(key, value);
     },
-    activationState: () => ok([...active].map<ActivationStateDto>(k => ({ hashHex: k.split(':')[0], state: 'active', scope: 'user', status: 'ok', reasons: ['manual'], activePath: null, conflictPs: null, lastError: null }))),
-    async activationActivate(faces) { faces.forEach(f => active.add(keyOf(f))); },
-    async activationDeactivate(faces) { faces.forEach(f => active.delete(keyOf(f))); },
+    // Khởi động, onboarding, quét
+    async startupStatus() { return ok(boot()); },
+    async bootSubscribe(l) {
+      const phases = ['scanning', 'indexing', 'activation', 'ready'] as const;
+      const timers = phases.map((phase, i) => setTimeout(() => l({ type: 'phase', phase }), (i + 1) * (o.tickMs ?? 400) / 4));
+      return () => timers.forEach(clearTimeout);
+    },
+    async onboardingState() {
+      return ok<OnboardingDto>({
+        step: uiSettings.get('onboarding_step') || null, hasSources: sources.length > 0, legacy: legacyState(), licenseNoticeAck: settings.licenseNoticeAck,
+        embedEnabled: settings.embedEnabled, modelState: (await sim.modelStatus()).state, activationSupported: true, activationOnboarded: onboarded, keepActiveOnExit: settings.keepActiveOnExit,
+        fontManagers: [{ name: 'RightFont', installed: false, activeCount: null }, { name: 'FontBase', installed: true, activeCount: null }],
+      });
+    },
+    async setOnboardingStep(step) { uiSettings.set('onboarding_step', step ?? ''); },
+    async legacyImport() { legacy = { ...legacyState(), imported: { fonts: 1240, sources: 2, collections: 3, recoveredCollections: 0, badTags: 0, skippedSources: 0 } }; return ok(legacy); },
+    async legacyRetry() { return ok(legacyState()); },
+    async scanStatus() { return ok({ running: scanning, paused: false, currentSourceId: null, queued: [] }); },
+    async scanPause() {}, async scanResume() {}, async scanCancel() {},
+    async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
+    ...act,
   };
 }
