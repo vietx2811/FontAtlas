@@ -104,4 +104,19 @@ describe('Tooltip', () => {
     act(() => b.focus()); expect(screen.getAllByRole('tooltip')).toHaveLength(1);
     expect(tip()).toHaveTextContent('Hai');
   });
+
+  it('uses the label and disabled state as of the moment it opens, not as of the hover', async () => {
+    const { rerender } = render(<Tooltip label="Cũ"><button type="button">a</button></Tooltip>);
+    fireEvent.pointerEnter(screen.getByRole('button'));
+    await advance(200);
+    rerender(<Tooltip label="Mới"><button type="button">a</button></Tooltip>);
+    await advance(TOOLTIP_DELAY_MS);
+    expect(tip()).toHaveTextContent('Mới');
+    fireEvent.pointerLeave(screen.getByRole('button'));
+    fireEvent.pointerEnter(screen.getByRole('button'));
+    await advance(200);
+    rerender(<Tooltip label="Mới" disabled><button type="button">a</button></Tooltip>);
+    await advance(TOOLTIP_DELAY_MS);
+    expect(tip()).toBeNull();
+  });
 });

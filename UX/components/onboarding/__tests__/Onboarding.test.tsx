@@ -277,7 +277,7 @@ describe('Onboarding', () => {
     render(<Onboarding api={api} onDone={() => {}} />); await settle();
     for (const source of sources.slice(0, 2)) {
       const button = screen.getByRole('button', { name: `Xoá ${source.name}` });
-      expect(button).toBeDisabled(); fireEvent.click(button);
+      expect(button).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(button);
     }
     expect(remove).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Tiếp tục' })).not.toBeDisabled();

@@ -8,18 +8,23 @@ export const SELECT_MAX = 2000;
 
 export const rowKey = (r: Pick<FaceRow, 'hashHex' | 'faceIndex'>): string => `${r.hashHex}:${r.faceIndex}`;
 
+/** Thẻ mốc của Shift-click: khoá là sự thật, index chỉ là gợi ý (thứ tự có thể đổi) và được kiểm lại trước khi dùng. */
+export type SelectionAnchor = { key: string; index: number };
+
 export interface SelectionState {
   rows: ReadonlyMap<string, FaceRow>;
-  /** Index (trong truy vấn hiện tại) của thẻ mốc cho Shift-click. */
-  anchor: number | null;
+  anchor: SelectionAnchor | null;
   /** Tăng mỗi lần clear: việc lấy dải/⌘A đang bay thấy epoch đổi thì bỏ kết quả. */
   epoch: number;
 }
 export interface SelectionActions {
   /** Chọn đúng các thẻ này. */
-  replace(rows: readonly FaceRow[], anchor: number | null): void;
+  replace(rows: readonly FaceRow[], anchor: SelectionAnchor | null): void;
   /** Thêm vào vùng chọn hiện có. */
-  add(rows: readonly FaceRow[], anchor?: number | null): void;
+  add(rows: readonly FaceRow[], anchor?: SelectionAnchor | null): void;
+  /** Bỏ các thẻ này khỏi vùng chọn (không đụng phần còn lại). */
+  remove(rows: readonly Pick<FaceRow, 'hashHex' | 'faceIndex'>[]): void;
+  setAnchor(anchor: SelectionAnchor | null): void;
   /** Bật/tắt một thẻ; trả true nếu thẻ vừa được thêm. */
   toggle(row: FaceRow, index: number): boolean;
   clear(): void;
@@ -38,15 +43,28 @@ export function createSelectionStore(): SelectionStore {
       const k = rowKey(row);
       const adding = !next.has(k);
       if (adding) next.set(k, row); else next.delete(k);
-      set({ rows: next, anchor: index });
+      set({ rows: next, anchor: { key: k, index } });
       return adding;
     },
+    remove: rows => set(s => {
+      const next = new Map(s.rows);
+      rows.forEach(r => next.delete(rowKey(r)));
+      return next.size === s.rows.size ? s : { rows: next, anchor: s.anchor && next.has(s.anchor.key) ? s.anchor : null };
+    }),
+    setAnchor: anchor => set(s => (s.anchor === anchor || (s.anchor === null && anchor === null) ? s : { anchor })),
     clear: () => set(s => ({ rows: s.rows.size ? new Map() : s.rows, anchor: null, epoch: s.epoch + 1 })),
   }));
 }
 export const useSelectionStore = createSelectionStore();
 
 /** Bỏ chọn: xoá vùng chọn và đóng panel chi tiết (dùng chung cho Esc và nút "Bỏ chọn"). */
+/** Thẻ vừa biến khỏi truy vấn (bỏ yêu thích trong Yêu thích…): bỏ khỏi vùng chọn; nếu đó là font đang xem thì chuyển sang font còn lại hoặc đóng panel. */
+export function dropFromSelection(rows: readonly Pick<FaceRow, 'hashHex' | 'faceIndex'>[]): void {
+  useSelectionStore.getState().remove(rows);
+  const ui = useUiStore.getState();
+  if (ui.selectedId && rows.some(r => rowKey(r) === ui.selectedId)) ui.select([...useSelectionStore.getState().rows.keys()].at(-1) ?? null);
+}
+
 export function clearSelection(): void {
   useSelectionStore.getState().clear();
   useUiStore.getState().select(null);

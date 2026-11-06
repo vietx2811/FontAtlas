@@ -55,7 +55,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
             <Tooltip label={detail?.row.family} onlyIfTruncated>
               <FaceTitle as="h2" api={api} face={detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null} className="fa-p-name">{detail?.row.family ?? ''}</FaceTitle>
             </Tooltip>
-            <Tooltip label={isActive ? 'Tắt kích hoạt font' : 'Kích hoạt font trên máy'}><span className="fa-switch-wrap"><button type="button" role="switch" className="fa-switch" aria-checked={isActive} aria-label="Kích hoạt font" disabled={!detail} onClick={toggle} /></span></Tooltip>
+            <Tooltip label={isActive ? 'Tắt kích hoạt font' : 'Kích hoạt font trên máy'}><button type="button" role="switch" className="fa-switch" aria-checked={isActive} aria-label="Kích hoạt font" aria-disabled={!detail || undefined} onClick={() => { if (detail) toggle(); }} /></Tooltip>
           </div>
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}</div>
           {styles.length > 0 && <StyleDropdown styles={styles} value={label} onChange={setStyle} loader={loaderFor(api)} />}

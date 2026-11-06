@@ -18,7 +18,7 @@ type Props = {
  * thì giữ font giao diện; glyph thiếu rơi về font giao diện nhờ ngăn xếp font.
  */
 export function FaceTitle({ api, loader, face, as: Tag = 'span', className, style, variation, children, ...rest }: Props): React.JSX.Element {
-  const family = useLoadedFamily(loader !== undefined ? loader : api ? loaderFor(api) : null, face && { ...face, fileSize: face.fileSize ?? 0 });
+  const family = useLoadedFamily(loader !== undefined ? loader : api ? loaderFor(api) : null, face && { ...face, fileSize: face.fileSize ?? 0 }, true); // tên = ref mềm
   // Face nạp qua FontFace chỉ khai báo kiểu gốc: đặt weight/style về gốc và tắt in đậm/nghiêng giả.
   const own: CSSProperties | undefined = family
     ? { fontFamily: ownFontStack(family), fontWeight: 400, fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: variation?.length ? variation.map(c => `"${c.tag}" ${c.value}`).join(', ') : undefined }

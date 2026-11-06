@@ -41,13 +41,17 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
   const tip = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const hide = useCallback(() => { clearTimeout(timer.current); timer.current = undefined; setOpen(false); }, []);
+  // Đọc props qua ref lúc mở: tooltip đang chờ không dùng nhãn/trạng thái cũ, và các callback bên dưới ổn định.
+  const live = useRef({ label, disabled, onlyIfTruncated });
+  live.current = { label, disabled, onlyIfTruncated };
   const reveal = useCallback(() => {
-    if (disabled || label === null || label === undefined || label === '' || label === false) return;
-    if (onlyIfTruncated && !isTruncated(trigger.current)) return;
+    const { label: l, disabled: d, onlyIfTruncated: cut } = live.current;
+    if (d || l === null || l === undefined || l === '' || l === false) return;
+    if (cut && !isTruncated(trigger.current)) return;
     closeCurrent?.();
     closeCurrent = hide;
     setOpen(true);
-  }, [disabled, label, onlyIfTruncated, hide]);
+  }, [hide]);
   const schedule = useCallback(() => { clearTimeout(timer.current); timer.current = setTimeout(reveal, delay); }, [reveal, delay]);
 
   useEffect(() => () => { clearTimeout(timer.current); if (closeCurrent === hide) closeCurrent = null; }, [hide]);

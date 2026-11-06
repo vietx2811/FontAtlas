@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Api, SourceDto } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
+import { sharedFontLoader } from '../../features/library-grid/sharedLoader';
 import type { FaceRow } from '../../features/library-grid';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
-import { rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
+import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
 import { useFaceActions } from '../faces/FaceActions';
 import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
@@ -43,11 +44,16 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const isActive = useCallback((r: FaceRow) => active.has(r.hashHex), [active]);
   const isFavorite = useCallback((r: FaceRow) => favs.get(r.faceId) ?? r.isFavorite, [favs]);
   const toggleFavorite = useCallback((r: FaceRow) => {
-    const next = !(favs.get(r.faceId) ?? r.isFavorite);
+    const next = !(useFavoriteStore.getState().overrides.get(r.faceId) ?? r.isFavorite);
     api.setFavorite({ hashHex: r.hashHex, faceIndex: r.faceIndex }, next)
-      .then(() => { useFavoriteStore.getState().set([r], next); useUiStore.getState().bumpLibrary(!next && useUiStore.getState().view === 'star'); })
+      .then(() => {
+        useFavoriteStore.getState().set([r], next);
+        const inStar = !next && useUiStore.getState().view === 'star';
+        if (inStar) dropFromSelection([r]); // thẻ sắp biến khỏi truy vấn
+        useUiStore.getState().bumpLibrary(inStar);
+      })
       .catch(e => console.warn('set_favorite failed', e));
-  }, [api, favs]);
+  }, [api]);
   // "Gần đây": chọn/mở font đẩy nó lên đầu danh sách, nhưng thứ tự trên lưới đứng yên cho tới khi rời view (hoặc mở lại thư viện).
   const inRecent = view === 'recent';
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +66,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     const st = useSelectionStore.getState();
     let target: FaceRow[];
     if (st.rows.has(rowKey(row))) target = [...st.rows.values()];
-    else { st.replace([row], index); useUiStore.getState().select(faceKey(row)); target = [row]; }
+    else { st.replace([row], { key: rowKey(row), index }); useUiStore.getState().select(faceKey(row)); target = [row]; }
     actions.openMenu(target, { x: at.x, y: at.y }, { keyboard: at.keyboard, returnFocus: at.el });
   }), [actions]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
@@ -75,10 +81,11 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'grant') void openPrivacySettings();
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };
-  const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
+  const onSelect = useCallback((row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); }, [select]);
+  const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
-      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
+      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
     </div>
   );

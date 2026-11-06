@@ -1,16 +1,14 @@
 import type { Api } from '../../api';
-import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from '../../features/library-grid/fontFaceLoader';
+import type { FontFaceLoader } from '../../features/library-grid/fontFaceLoader';
+import { sharedFontLoader } from '../../features/library-grid/sharedLoader';
 import { useLoadedFamily } from '../../features/library-grid/useLoadedFamily';
 
 type Face = { hashHex: string; faceIndex: number; fileSize: number };
-const loaders = new WeakMap<Api, FontFaceLoader>();
-export const loaderFor = (api: Api): FontFaceLoader => {
-  let l = loaders.get(api);
-  if (!l) { l = new FontFaceLoader(browserLoaderDeps(api, new ScrollVelocity())); loaders.set(api, l); }
-  return l;
-};
 
-/** Họ font đã nạp từ fontatlas-font:// cho một face (null: chưa nạp, hoặc face ≥ 1 của TTC → không dùng FontFace). */
+/** Bộ nạp dùng chung với lưới (một hàng đợi, một ngân sách). */
+export const loaderFor = (api: Api): FontFaceLoader => sharedFontLoader(api).loader;
+
+/** Họ font đã nạp từ fontatlas-font:// cho một face dùng làm NỘI DUNG (specimen…) → ref cứng, ưu tiên cao. null: chưa nạp, hoặc face ≥ 1 của TTC. */
 export function useFontFamily(api: Api, face: Face | null): string | null {
   return useLoadedFamily(loaderFor(api), face);
 }

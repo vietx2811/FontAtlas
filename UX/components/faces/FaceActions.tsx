@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Api, CollectionDto, FaceKeyDto, TagDto } from '../../api';
 import type { FaceRow } from '../../features/library-grid/types';
 import { useNoticeStore } from '../../store/notices';
-import { rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
+import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
 import { faceKey, useUiStore } from '../../store/ui';
 import { useActivationFlow } from '../activation/useActivationFlow';
 import { Menu, type MenuAnchor } from '../ui/Menu';
@@ -50,12 +50,12 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [prompt, setPrompt] = useState<PromptState | null>(null);
   const [data, setData] = useState<{ cols: CollectionDto[]; tags: TagDto[] } | null>(null);
-  const overrides = useFavoriteStore(s => s.overrides);
   const active = useUiStore(s => s.active);
   const flowRef = useRef(flow); flowRef.current = flow;
   const anchorRef = useRef<MenuAnchor>({ x: 0, y: 0 });
 
-  const isFavorite = useCallback((r: FaceRow) => overrides.get(r.faceId) ?? r.isFavorite, [overrides]);
+  // Đọc store tại thời điểm gọi → `value` của context ổn định, không làm cả lưới vẽ lại mỗi lần đổi yêu thích.
+  const isFavorite = useCallback((r: FaceRow) => useFavoriteStore.getState().overrides.get(r.faceId) ?? r.isFavorite, []);
 
   // Mỗi lần mở menu: nạp danh sách dự án/thẻ mới nhất (có thể vừa đổi ở thanh bên).
   const menuRows = menu?.rows;
@@ -82,7 +82,9 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     if (done.length) {
       useFavoriteStore.getState().set(done, on);
       say('info', on ? `Đã thêm ${what(done)} vào Yêu thích` : `Đã bỏ ${what(done)} khỏi Yêu thích`);
-      useUiStore.getState().bumpLibrary(!on && useUiStore.getState().view === 'star');
+      const reload = !on && useUiStore.getState().view === 'star';
+      if (reload) dropFromSelection(done); // lưới sắp nạp lại và các thẻ này không còn trong truy vấn
+      useUiStore.getState().bumpLibrary(reload);
     }
     if (failed.length) say('error', `${failed.length} font không đổi được yêu thích: ${failed[0]}`);
   }, [api, isFavorite]);

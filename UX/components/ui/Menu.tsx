@@ -33,9 +33,10 @@ function List({ entries, onClose, closeAll, depth, focusFirst, label }: {
   const [sub, setSubState] = useState<{ id: string; kb: boolean } | null>(null);
   const setSub = (id: string | null, kb = false) => setSubState(id === null ? null : { id, kb });
   const subTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const enabled = useCallback(() => [...(ref.current?.querySelectorAll<HTMLElement>(':scope > .fa-mi-wrap > .fa-mi:not([aria-disabled="true"])') ?? [])], []);
+  // Mục aria-disabled vẫn focus được bằng mũi tên (APG) để người dùng bàn phím đọc được lý do ở tooltip; Enter không kích hoạt.
+  const enabled = useCallback(() => [...(ref.current?.querySelectorAll<HTMLElement>(':scope > .fa-mi-wrap > .fa-mi') ?? [])], []);
   useEffect(() => () => clearTimeout(subTimer.current), []);
-  useEffect(() => { if (focusFirst) enabled()[0]?.focus(); else if (depth === 0) ref.current?.focus(); }, [focusFirst, depth, enabled]);
+  useEffect(() => { if (focusFirst) enabled().find(b => b.getAttribute('aria-disabled') !== 'true')?.focus(); else if (depth === 0) ref.current?.focus(); }, [focusFirst, depth, enabled]);
 
   const step = (from: Element | null, dir: 1 | -1) => {
     const list = enabled();
@@ -150,6 +151,7 @@ export function Menu({ entries, anchor, onClose, label, focusFirst, returnFocus 
 
   useEffect(() => {
     const down = (e: Event) => { if (!root.current?.contains(e.target as Node)) close(); };
+    // Cuộn/lăn chuột bên trong menu hoặc submenu (danh sách dài) không đóng menu.
     const scroll = (e: Event) => { if (!root.current?.contains(e.target as Node)) close(); };
     // Focus có thể đã rời menu (bấm vào vùng không focus được): Esc vẫn đóng được. Esc trong menu đã được List xử lý và chặn nổi bọt.
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
@@ -157,7 +159,7 @@ export function Menu({ entries, anchor, onClose, label, focusFirst, returnFocus 
     document.addEventListener('pointerdown', down, true);
     document.addEventListener('contextmenu', down, true);
     window.addEventListener('scroll', scroll, true);
-    window.addEventListener('wheel', close, { passive: true });
+    window.addEventListener('wheel', scroll, { passive: true });
     window.addEventListener('resize', close);
     window.addEventListener('blur', close);
     return () => {
@@ -165,7 +167,7 @@ export function Menu({ entries, anchor, onClose, label, focusFirst, returnFocus 
       document.removeEventListener('pointerdown', down, true);
       document.removeEventListener('contextmenu', down, true);
       window.removeEventListener('scroll', scroll, true);
-      window.removeEventListener('wheel', close);
+      window.removeEventListener('wheel', scroll);
       window.removeEventListener('resize', close);
       window.removeEventListener('blur', close);
     };

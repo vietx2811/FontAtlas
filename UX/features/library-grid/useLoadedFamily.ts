@@ -5,10 +5,11 @@ import type { FontFaceLoader, LoaderRow } from './fontFaceLoader';
 export const ownFontStack = (family: string): string => `"${family}", var(--font-ui)`;
 
 /**
- * Nạp font của một face để vẽ tên/tiêu đề bằng chính nó: acquire khi hiện, release khi rời.
- * Trả null khi chưa nạp xong, bị bỏ qua lúc cuộn nhanh, hoặc face ≥ 1 của TTC (FontFace không chọn được face).
+ * Nạp font của một face: acquire khi hiện, release khi rời.
+ * `soft` = chỉ để vẽ TÊN (làn ưu tiên thấp, bỏ qua font quá lớn, có thể bị gỡ khi vượt ngân sách).
+ * Trả null khi chưa nạp xong, bị bỏ qua lúc cuộn nhanh, quá lớn, hoặc face ≥ 1 của TTC (FontFace không chọn được face).
  */
-export function useLoadedFamily(loader: FontFaceLoader | null, face: LoaderRow | null): string | null {
+export function useLoadedFamily(loader: FontFaceLoader | null, face: LoaderRow | null, soft = false): string | null {
   const [family, setFamily] = useState<string | null>(null);
   const hash = face?.hashHex; const index = face?.faceIndex; const size = face?.fileSize ?? 0;
   useEffect(() => {
@@ -16,8 +17,8 @@ export function useLoadedFamily(loader: FontFaceLoader | null, face: LoaderRow |
     if (!loader || hash === undefined || index === undefined) return;
     const row = { hashHex: hash, faceIndex: index, fileSize: size };
     let alive = true;
-    loader.acquire(row).then(f => { if (alive) setFamily(f); }, () => { /* giữ font giao diện */ });
-    return () => { alive = false; loader.release(row); };
-  }, [loader, hash, index, size]);
+    loader.acquire(row, { soft }).then(f => { if (alive) setFamily(f); }, () => { /* giữ font giao diện */ });
+    return () => { alive = false; loader.release(row, { soft }); };
+  }, [loader, hash, index, size, soft]);
   return family;
 }

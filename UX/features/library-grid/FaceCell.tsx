@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import './libraryGrid.css';
 import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
@@ -35,7 +35,7 @@ type Props = {
 };
 export type PickMods = { meta: boolean; shift: boolean };
 
-export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
@@ -46,7 +46,7 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acquired = useRef(false);
   // Tên thẻ vẽ bằng chính font của thẻ; cuộn nhanh thì loader chưa nạp (ScrollVelocity), TTC face ≥ 1 giữ font giao diện.
-  const nameFamily = useLoadedFamily(loader, row ? { hashHex: row.hashHex, faceIndex: row.faceIndex, fileSize: row.fileSize } : null);
+  const nameFamily = useLoadedFamily(loader, row ? { hashHex: row.hashHex, faceIndex: row.faceIndex, fileSize: row.fileSize } : null, true);
 
   // mask: tải một lần → blob URL; giữ ảnh cũ cho tới khi ảnh mới sẵn sàng.
   useEffect(() => {
@@ -172,3 +172,6 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
     </div>
   );
 }
+
+/** memo: đổi vùng chọn/yêu thích chỉ vẽ lại đúng những thẻ có `selected`/`favorite`/`active` đổi (các callback truyền vào phải ổn định). */
+export const FaceCell = memo(FaceCellImpl);

@@ -125,7 +125,7 @@ export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; d
             <Tooltip label={SOURCE_TIP[h.source]}><span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span></Tooltip>
             <p className="fa-sim-style">{h.row.subfamily ?? 'Kiểu đại diện'} · {group.count.toLocaleString('vi-VN')} kiểu</p>
             <p className="fa-sim-why">{h.same.length ? `Giống: ${names(h.same)}` : 'Chưa có trục giống để giải thích'}{h.differ.length ? ` · Khác: ${names(h.differ)}` : ''}</p>
-            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><Tooltip label="Family vượt giới hạn 2.000 kiểu của truy vấn thư viện" disabled={!tooLarge}><span><button type="button" disabled={tooLarge || openingFamily !== null} onClick={() => void openFamily(group.family)}>Xem family</button></span></Tooltip></div>
+            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><Tooltip label="Family vượt giới hạn 2.000 kiểu của truy vấn thư viện" disabled={!tooLarge}><button type="button" aria-disabled={tooLarge || openingFamily !== null || undefined} onClick={() => { if (!tooLarge && openingFamily === null) void openFamily(group.family); }}>Xem family</button></Tooltip></div>
             {tooLarge && <p className="fa-sim-why">Hơn 2.000 kiểu; hãy mở font đại diện để xem family.</p>}
           </li>;
         })}</ul>

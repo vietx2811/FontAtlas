@@ -10,12 +10,14 @@ const items = () => screen.getAllByRole('menuitem');
 const key = (el: Element, k: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(el, { key: k, ...init });
 
 describe('Menu', () => {
-  it('arrow keys move through enabled items (wrapping), Enter runs and closes', () => {
+  it('arrow keys move through all items (wrapping, disabled ones focusable), Enter runs and closes', () => {
     const a = vi.fn(); const c = vi.fn();
     const { onClose, menu } = mount([{ id: 'a', label: 'A', onSelect: a }, { id: 'b', label: 'B', disabled: true, reason: 'Không áp dụng' }, { type: 'sep' }, { id: 'c', label: 'C', onSelect: c }]);
     expect(document.activeElement).toBe(menu);
     key(menu, 'ArrowDown'); expect(document.activeElement).toBe(items()[0]);
-    key(document.activeElement!, 'ArrowDown'); expect(document.activeElement).toBe(items()[2]); // bỏ qua mục disabled
+    key(document.activeElement!, 'ArrowDown'); expect(document.activeElement).toBe(items()[1]); // mục aria-disabled vẫn focus được (APG)
+    key(document.activeElement!, 'Enter'); expect(onClose).not.toHaveBeenCalled(); // …nhưng Enter không chạy nó
+    key(document.activeElement!, 'ArrowDown'); expect(document.activeElement).toBe(items()[2]);
     key(document.activeElement!, 'ArrowDown'); expect(document.activeElement).toBe(items()[0]); // vòng lại
     key(document.activeElement!, 'ArrowUp'); expect(document.activeElement).toBe(items()[2]);
     key(document.activeElement!, 'Enter');
@@ -76,5 +78,23 @@ describe('Menu', () => {
   it('keyboard-opened menu focuses the first item', () => {
     render(<Menu entries={[{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]} anchor={{ x: 0, y: 0 }} onClose={() => {}} focusFirst />);
     expect(document.activeElement).toBe(items()[0]);
+  });
+
+  it('wheel/scroll inside the menu or a submenu does not close it; outside it does', () => {
+    const { onClose, menu } = mount([{ id: 'p', label: 'Dự án', items: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] }]);
+    key(menu, 'ArrowDown'); key(items()[0], 'ArrowRight');
+    const subItem = screen.getByRole('menuitem', { name: 'A' });
+    fireEvent.wheel(subItem); fireEvent.wheel(menu); fireEvent.scroll(subItem.closest('.fa-menu2')!);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.wheel(screen.getByText('origin'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('an aria-disabled item shows its reason as a tooltip when reached with the keyboard', () => {
+    mount([{ id: 'a', label: 'A' }, { id: 'f', label: 'Hiện trong Finder', disabled: true, reason: 'Chọn một font để hiện trong Finder' }]);
+    const menu = screen.getByRole('menu');
+    key(menu, 'ArrowDown'); key(document.activeElement!, 'ArrowDown');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Hiện trong Finder' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Chọn một font để hiện trong Finder');
   });
 });

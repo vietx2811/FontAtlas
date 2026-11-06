@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { FaceRow } from '../../features/library-grid/types';
-import { clearSelection } from '../../store/selection';
+import { clearSelection, useFavoriteStore } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
 import { useFaceActions } from '../faces/FaceActions';
 import { Icon } from '../sidebar/icons';
@@ -11,6 +11,7 @@ import './selectionBar.css';
 export function SelectionBar({ rows }: { rows: readonly FaceRow[] }): React.JSX.Element | null {
   const actions = useFaceActions();
   const active = useUiStore(s => s.active);
+  useFavoriteStore(s => s.overrides); // đổi yêu thích → nhãn Yêu thích/Bỏ yêu thích vẽ lại
   const projectBtn = useRef<HTMLButtonElement>(null);
   if (rows.length < 2 || !actions) return null;
   const allFav = rows.every(actions.isFavorite);

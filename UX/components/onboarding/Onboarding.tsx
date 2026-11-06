@@ -202,7 +202,7 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
             <div className="fa-onb-source-info"><strong>{s.name}</strong><Tooltip label={s.path ?? s.name} onlyIfTruncated><span className="path">{s.path ?? s.name}</span></Tooltip>
               <span className="kind">{kindOf(s.path)} · {!s.available ? 'Không truy cập được' : active ? 'Đang quét / chờ quét' : `${s.faceCount.toLocaleString('vi-VN')} font`}</span>
             </div>
-            <Tooltip label={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'}><span className="fa-onb-del"><button type="button" disabled={busy || active} aria-label={`Xoá ${s.name}`} onClick={() => void run(async () => { await api.removeSource(s.id); await refresh(); })}>Xoá</button></span></Tooltip>
+            <Tooltip label={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'}><button type="button" aria-disabled={busy || active || undefined} aria-label={`Xoá ${s.name}`} onClick={() => { if (!busy && !active) void run(async () => { await api.removeSource(s.id); await refresh(); }); }}>Xoá</button></Tooltip>
           </li>;
         })}
         {sources.length === 0 && <li className="empty">{loading ? 'Đang tải nguồn…' : loadError ? 'Chưa tải được danh sách nguồn.' : 'Chưa có thư mục nào.'}</li>}

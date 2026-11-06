@@ -51,10 +51,10 @@ describe('card title in its own font', () => {
     const dl = deferredLoader();
     const { unmount } = render(<LibraryGrid api={createMockLibraryApi([makeRow(0)])} query={{}} width={1300} height={800} loader={dl.loader} blobs={blobs()} fontSize={34} />);
     await settle();
-    expect(dl.loader.acquire).toHaveBeenCalledWith(expect.objectContaining({ hashHex: '0'.repeat(64), faceIndex: 0 }));
-    const before = dl.loader.release.mock.calls.length;
+    expect(dl.loader.acquire).toHaveBeenCalledWith(expect.objectContaining({ hashHex: '0'.repeat(64), faceIndex: 0 }), { soft: true }); // tên = ref mềm
+    expect(dl.loader.release).not.toHaveBeenCalled();
     unmount();
-    expect(dl.loader.release.mock.calls.length).toBeGreaterThan(before);
+    expect(dl.loader.release).toHaveBeenCalledWith(expect.objectContaining({ hashHex: '0'.repeat(64) }), { soft: true });
   });
 
   it('a name that is cut gets a tooltip with the full name; a name that fits does not', async () => {

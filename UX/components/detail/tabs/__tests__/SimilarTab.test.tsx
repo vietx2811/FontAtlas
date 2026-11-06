@@ -146,7 +146,10 @@ describe('SimilarTab', () => {
     vi.spyOn(api, 'similarFamilies').mockResolvedValue(p);
     render(<SimilarTab api={api} detail={d} />);
     await screen.findAllByTestId('similar-hit');
-    expect(screen.getByRole('button', { name: 'Xem family' })).toBeDisabled();
+    const xf = screen.getByRole('button', { name: 'Xem family' });
+    expect(xf).toHaveAttribute('aria-disabled', 'true'); // vẫn focus được để tooltip lý do hiện bằng bàn phím
+    fireEvent.click(xf);
+    expect(useUiStore.getState().familyScope).toBeNull();
     expect(screen.getByRole('button', { name: 'Mở font' })).not.toBeDisabled();
     expect(screen.getByText(/Hơn 2.000 kiểu/)).toBeTruthy();
   });

@@ -19,6 +19,8 @@ export type LibraryGridProps = {
   bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
   /** Tập khoá `${hashHex}:${faceIndex}` đang được chọn (đa chọn). Có → thay cho selectedFaceId/selectedKey khi tô thẻ. */
+  /** Bộ nạp dùng chung toàn app kèm ScrollVelocity của nó (lưới đưa tốc độ cuộn vào). Thiếu → lưới tự tạo bộ nạp riêng. */
+  velocity?: ScrollVelocity;
   selectedKeys?: ReadonlySet<string>;
   /** Bấm thẻ kèm ⌘/Ctrl/Shift; index là vị trí trong truy vấn. Thiếu → onSelect. */
   onPick?(row: FaceRow, index: number, mods: PickMods): void;
@@ -27,6 +29,7 @@ export type LibraryGridProps = {
   emptyState?: React.ReactNode;
 };
 
+const NOOP = () => {};
 type Applied = { rendererVersion: string; generation: number; text: string; px: PxBucket };
 
 type RowProps = {
@@ -75,7 +78,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
-  selectedFaceId = null, selectedKey = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
+  selectedFaceId = null, selectedKey = null, onSelect = NOOP, loader: loaderProp, velocity: velocityProp, blobs: blobsProp, width, height,
   fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, selectedKeys, onPick, onContextMenu,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
@@ -83,7 +86,8 @@ export function LibraryGrid({
   const size = useSize(box, { width, height });
   const { paged, snap } = usePagedFaces(api, query);
   // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
-  const [velocity] = useState(() => new ScrollVelocity());
+  const [ownVelocity] = useState(() => new ScrollVelocity());
+  const velocity = velocityProp ?? ownVelocity;
   const [ownBlobs] = useState(() => (blobsProp ? null : new PreviewBlobs()));
   const blobs = blobsProp ?? ownBlobs!;
   // Loader tự tạo giữ FontFace trong document.fonts → tạo và huỷ trong cùng một effect.

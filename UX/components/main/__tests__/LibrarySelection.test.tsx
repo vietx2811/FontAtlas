@@ -7,6 +7,8 @@ import { NoticeStack } from '../../NoticeStack';
 import { useNoticeStore } from '../../../store/notices';
 import { useFavoriteStore, useSelectionStore } from '../../../store/selection';
 import { useUiStore } from '../../../store/ui';
+import { sharedFontLoader } from '../../../features/library-grid/sharedLoader';
+import * as gridTypes from '../../../features/library-grid/types';
 import { Library } from '../Library';
 import { TopBar } from '../TopBar';
 
@@ -135,6 +137,36 @@ describe('Library multi-select', () => {
     fireEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Bỏ chọn' }));
     expect(screen.queryByRole('toolbar')).toBeNull();
     expect(row.querySelector('.fa-family-chip')).not.toBeNull();
+  });
+
+  it('unfavouriting in Yêu thích drops those cards from the selection (they leave the query) but keeps the rest', async () => {
+    const api = createMockApi();
+    const items = (await api.queryFaces({ limit: 4 })).items;
+    for (const r of items) await api.setFavorite({ hashHex: r.hashHex, faceIndex: r.faceIndex }, true);
+    act(() => useUiStore.getState().setView('star'));
+    await mount(api);
+    const c = cells();
+    expect(c).toHaveLength(4);
+    click(c[0]); click(c[1], { metaKey: true }); click(c[2], { metaKey: true });
+    expect(useSelectionStore.getState().rows.size).toBe(3);
+    const gone = c[1].getAttribute('data-face-id');
+    await act(async () => { fireEvent.click(within(c[1]).getByRole('button', { name: 'Yêu thích' })); });
+    await settle();
+    const left = [...useSelectionStore.getState().rows.values()].map(r => String(r.faceId));
+    expect(left).toHaveLength(2);
+    expect(left).not.toContain(gone);
+    expect(cells()).toHaveLength(3);
+    expect(screen.getByTestId('selection-count')).toHaveTextContent('2 đã chọn');
+  });
+
+  it('all cards and the panel share ONE font loader; card names ask for it as soft refs', async () => {
+    const api = createMockApi();
+    const shared = sharedFontLoader(api);
+    const spy = vi.spyOn(shared.loader, 'acquire');
+    await mount(api);
+    expect(sharedFontLoader(api)).toBe(shared);
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls.every(([, o]) => o?.soft === true)).toBe(true); // lưới chỉ xin tên (mock không có URL font nên không tải thật)
   });
 
   describe('Gần đây keeps its order while you work in it', () => {
