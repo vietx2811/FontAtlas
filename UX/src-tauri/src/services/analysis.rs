@@ -167,8 +167,12 @@ pub fn similar_families(
     let b = bundle(state)?;
     let key = ix_of(&b, face)?;
     let allowed = crate::services::library::matching_keys(state, q)?;
+    // A Latin source font should not be matched to CJK/Indic families by their Latin subset
+    // (real system fonts: Avenir Next -> Hiragino, Sangam MN). Non-Latin sources keep all.
+    let latin_source = !b.meta.get(&key).is_some_and(|m| m.non_latin_primary);
     let filter = |p: &FaceProfile| {
         allowed.contains(&p.key)
+            && (!latin_source || !b.meta.get(&p.key).is_some_and(|m| m.non_latin_primary))
             && (!opts.vi_only || b.meta.get(&p.key).is_some_and(|m| m.vi_supported))
             && (opts.source_ids.is_empty()
                 || b.meta

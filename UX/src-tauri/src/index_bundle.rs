@@ -25,6 +25,39 @@ pub struct FaceMeta {
     pub file_size: u64,
     /// `vi_status` ∈ {full, precomposed_only}
     pub vi_supported: bool,
+    /// Font built for a major non-Latin script (CJK, Indic, Thai, Arabic…), per OpenType
+    /// script tags in the stored metadata. Its Latin subset is secondary.
+    pub non_latin_primary: bool,
+}
+
+/// OpenType script tags whose presence marks a font as designed primarily for that script.
+/// Arabic, Hebrew, Greek, Cyrillic, Georgian, Armenian are deliberately absent: pan-Latin
+/// families (macOS Arial, Times New Roman) carry them as secondary scripts.
+const NON_LATIN_PRIMARY: &[&str] = &[
+    "hani", "kana", "hang", "jamo", "bopo", "deva", "dev2", "beng", "bng2", "guru", "gur2", "gujr", "gjr2",
+    "orya", "ory2", "taml", "tml2", "telu", "tel2", "knda", "knd2", "mlym", "mlm2", "sinh", "thai", "lao ",
+    "khmr", "mymr", "mym2", "tibt", "ethi", "cans", "cher", "mong",
+];
+/// AAT-only CJK fonts (Songti, AppleGothic) have no OpenType script list; their glyph count
+/// gives them away. Pan-Latin families stay far below (Arial 3381 on macOS).
+const CJK_GLYPHS: u64 = 5000;
+
+pub fn is_non_latin_primary(scripts: &[&str], num_glyphs: Option<u64>) -> bool {
+    scripts.iter().any(|t| NON_LATIN_PRIMARY.contains(t)) || num_glyphs.is_some_and(|n| n > CJK_GLYPHS)
+}
+
+#[cfg(test)]
+mod script_tests {
+    #[test]
+    fn classifies_by_opentype_script_tags() {
+        use super::is_non_latin_primary as f;
+        assert!(f(&["cyrl", "grek", "hani", "kana", "latn"], Some(20339))); // Hiragino Sans
+        assert!(f(&["brah", "gran", "latn", "tml2"], Some(1522))); // Tamil Sangam MN
+        assert!(f(&[], Some(8535))); // Songti SC (AAT only)
+        assert!(!f(&["arab", "cyrl", "grek", "hebr", "latn"], Some(3381))); // Arial
+        assert!(!f(&["latn"], Some(1134))); // Georgia
+        assert!(!f(&[], Some(2252))); // Helvetica (AAT only)
+    }
 }
 
 pub struct IndexBundle {
@@ -86,6 +119,13 @@ impl IndexBundle {
                     container: a.container,
                     file_size: a.file_size,
                     vi_supported: matches!(status, "full" | "precomposed_only"),
+                    non_latin_primary: is_non_latin_primary(
+                        &m.get("scripts")
+                            .and_then(Value::as_array)
+                            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                            .unwrap_or_default(),
+                        m.get("num_glyphs").and_then(Value::as_u64),
+                    ),
                 },
             );
             profiles.push(p);
