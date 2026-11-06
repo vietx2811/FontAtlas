@@ -4,7 +4,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use fontatlas_embed::{DownloadProgress, EmbedError, Manifest, ModelStatus, ModelStore, disk_free, make_manifest, sha256_file};
+use fontatlas_embed::{
+    DownloadProgress, EmbedError, Manifest, ModelStatus, ModelStore, disk_free, make_manifest,
+    sha256_file,
+};
 
 /// Server tải giả ở 127.0.0.1:0; dừng khi drop.
 struct Srv {
@@ -59,7 +62,10 @@ fn fake_safetensors(tensors: &[(String, Vec<usize>, Vec<f32>)]) -> Vec<u8> {
     for (k, shape, v) in tensors {
         let a = data.len();
         data.extend(v.iter().flat_map(|x| x.to_le_bytes()));
-        hdr.insert(k.clone(), serde_json::json!({"dtype": "F32", "shape": shape, "data_offsets": [a, data.len()]}));
+        hdr.insert(
+            k.clone(),
+            serde_json::json!({"dtype": "F32", "shape": shape, "data_offsets": [a, data.len()]}),
+        );
     }
     let mut h = serde_json::to_vec(&serde_json::Value::Object(hdr)).unwrap();
     while !(8 + h.len()).is_multiple_of(8) {
@@ -78,11 +84,31 @@ fn vals(n: usize, seed: f32) -> Vec<f32> {
 /// Giống file HF: tháp text trước, vision sau (vision liền một đoạn).
 fn fake_model() -> Vec<u8> {
     fake_safetensors(&[
-        ("text_model.embeddings.weight".into(), vec![64, 32], vals(64 * 32, 1.0)),
-        ("text_model.head.weight".into(), vec![32, 32], vals(32 * 32, 2.0)),
-        ("vision_model.embeddings.patch_embedding.weight".into(), vec![8, 3, 4, 4], vals(8 * 48, 3.0)),
-        ("vision_model.head.probe".into(), vec![1, 1, 8], vals(8, 4.0)),
-        ("vision_model.post_layernorm.weight".into(), vec![8], vals(8, 5.0)),
+        (
+            "text_model.embeddings.weight".into(),
+            vec![64, 32],
+            vals(64 * 32, 1.0),
+        ),
+        (
+            "text_model.head.weight".into(),
+            vec![32, 32],
+            vals(32 * 32, 2.0),
+        ),
+        (
+            "vision_model.embeddings.patch_embedding.weight".into(),
+            vec![8, 3, 4, 4],
+            vals(8 * 48, 3.0),
+        ),
+        (
+            "vision_model.head.probe".into(),
+            vec![1, 1, 8],
+            vals(8, 4.0),
+        ),
+        (
+            "vision_model.post_layernorm.weight".into(),
+            vec![8],
+            vals(8, 5.0),
+        ),
     ])
 }
 
@@ -91,7 +117,10 @@ where
     F: Fn(tiny_http::Request) + Send + 'static,
 {
     let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").unwrap());
-    let url = format!("http://{}/model.safetensors", server.server_addr().to_ip().unwrap());
+    let url = format!(
+        "http://{}/model.safetensors",
+        server.server_addr().to_ip().unwrap()
+    );
     let count = Arc::new(AtomicUsize::new(0));
     let (s2, c2) = (server.clone(), count.clone());
     let handle = std::thread::spawn(move || {
@@ -100,7 +129,14 @@ where
             f(rq);
         }
     });
-    (Srv { server, count, handle: Some(handle) }, url)
+    (
+        Srv {
+            server,
+            count,
+            handle: Some(handle),
+        },
+        url,
+    )
 }
 
 fn range_of(rq: &tiny_http::Request) -> Option<(usize, usize)> {
@@ -118,8 +154,13 @@ fn serve_range(file: Vec<u8>, tweak: fn(&mut Vec<u8>, usize)) -> (Srv, String) {
                 let mut part = file[a..=b].to_vec();
                 tweak(&mut part, a);
                 let cr = format!("bytes {a}-{b}/{total}");
-                let h = tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
-                let _ = rq.respond(tiny_http::Response::from_data(part).with_status_code(206).with_header(h));
+                let h =
+                    tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
+                let _ = rq.respond(
+                    tiny_http::Response::from_data(part)
+                        .with_status_code(206)
+                        .with_header(h),
+                );
             }
             None => {
                 let _ = rq.respond(tiny_http::Response::from_data(file.clone()));
@@ -143,8 +184,19 @@ fn serve_range_slow(file: Vec<u8>, chunk: usize, delay: Duration) -> (Srv, Strin
         let (a, b) = range_of(&rq).unwrap_or((0, file.len() - 1));
         let cr = format!("bytes {a}-{b}/{}", file.len());
         let h = tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
-        let r = Slow { data: file[a..=b].to_vec(), pos: 0, chunk, delay };
-        let _ = rq.respond(tiny_http::Response::new(206.into(), vec![h], r, Some(b - a + 1), None));
+        let r = Slow {
+            data: file[a..=b].to_vec(),
+            pos: 0,
+            chunk,
+            delay,
+        };
+        let _ = rq.respond(tiny_http::Response::new(
+            206.into(),
+            vec![h],
+            r,
+            Some(b - a + 1),
+            None,
+        ));
     })
 }
 
@@ -191,7 +243,11 @@ fn range_download_extracts_vision_only() {
     assert_eq!(sha256_file(&p).unwrap(), m.sha256);
     assert!(std::fs::metadata(&p).unwrap().len() < src.len() as u64);
     let got = tensors_of(&p);
-    assert!(got.keys().all(|k| k.starts_with("vision_model.")) && got.len() == 3, "{:?}", got.keys());
+    assert!(
+        got.keys().all(|k| k.starts_with("vision_model.")) && got.len() == 3,
+        "{:?}",
+        got.keys()
+    );
     let d2 = tempfile::tempdir().unwrap();
     std::fs::write(d2.path().join("s"), &src).unwrap();
     let want = tensors_of(&d2.path().join("s"));
@@ -220,7 +276,10 @@ fn full_file_with_wrong_source_sha_rejected() {
     let mut m = manifest_for(&src, &url);
     m.source.sha256 = "00".repeat(32);
     let st = store(&d, m);
-    assert!(matches!(ensure(&st), Err(EmbedError::ChecksumMismatch { .. })));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::ChecksumMismatch { .. })
+    ));
     assert!(matches!(st.status(), ModelStatus::Missing));
 }
 
@@ -235,7 +294,10 @@ fn bad_segment_checksum_rejected() {
     let (_s, url) = serve_range(src.clone(), flip_last);
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&src, &url));
-    assert!(matches!(ensure(&st), Err(EmbedError::ChecksumMismatch { .. })));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::ChecksumMismatch { .. })
+    ));
     assert!(matches!(st.status(), ModelStatus::Missing));
 }
 
@@ -246,7 +308,11 @@ fn wrong_content_range_rejected() {
         let (a, b) = range_of(&rq).unwrap();
         let cr = format!("bytes {}-{}/{}", a + 1, b + 1, src.len()); // lệch 1 byte
         let h = tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
-        let _ = rq.respond(tiny_http::Response::from_data(src[a..=b].to_vec()).with_status_code(206).with_header(h));
+        let _ = rq.respond(
+            tiny_http::Response::from_data(src[a..=b].to_vec())
+                .with_status_code(206)
+                .with_header(h),
+        );
     });
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&fake_model(), &url));
@@ -263,7 +329,10 @@ fn oversize_range_body_aborted() {
     let (_s, url) = serve_range(src.clone(), grow);
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&src, &url));
-    assert!(matches!(ensure(&st), Err(EmbedError::ChecksumMismatch { .. })));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::ChecksumMismatch { .. })
+    ));
     assert!(matches!(st.status(), ModelStatus::Missing));
 }
 
@@ -311,11 +380,14 @@ fn tampered_ready_file_is_corrupt() {
 }
 
 #[test]
-fn http_error_is_io() {
+fn http_error_has_status_separate_from_disk_io() {
     let (_s, url) = serve_status(404);
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&fake_model(), &url));
-    assert!(matches!(ensure(&st), Err(EmbedError::Io(_))));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::Http { status: 404, .. })
+    ));
 }
 
 #[test]
@@ -335,10 +407,20 @@ fn concurrent_ensure_downloads_once() {
 #[test]
 fn downloaded_tiny_siglip_loads_in_candle() {
     // tiny_siglip + tháp text giả đặt trước, giống bố cục file HF
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tiny_siglip.safetensors");
-    let mut ts: Vec<(String, Vec<usize>, Vec<f32>)> = vec![("text_model.x".into(), vec![256], vals(256, 9.0))];
-    for (k, t) in candle_core::safetensors::load(&p, &candle_core::Device::Cpu).unwrap().into_iter().collect::<std::collections::BTreeMap<_, _>>() {
-        ts.push((k, t.dims().to_vec(), t.flatten_all().unwrap().to_vec1().unwrap()));
+    let p =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tiny_siglip.safetensors");
+    let mut ts: Vec<(String, Vec<usize>, Vec<f32>)> =
+        vec![("text_model.x".into(), vec![256], vals(256, 9.0))];
+    for (k, t) in candle_core::safetensors::load(&p, &candle_core::Device::Cpu)
+        .unwrap()
+        .into_iter()
+        .collect::<std::collections::BTreeMap<_, _>>()
+    {
+        ts.push((
+            k,
+            t.dims().to_vec(),
+            t.flatten_all().unwrap().to_vec1().unwrap(),
+        ));
     }
     let src = fake_safetensors(&ts);
     let (_s, url) = serve_range(src.clone(), no_tweak);
@@ -355,9 +437,13 @@ fn downloaded_tiny_siglip_loads_in_candle() {
         hidden_act: candle_nn::Activation::GeluPytorchTanh,
         layer_norm_eps: 1e-6,
     };
-    let mut e = fontatlas_embed::CandleEncoder::load_with(&local, fontatlas_embed::Backend::Cpu, &cfg).unwrap();
+    let mut e =
+        fontatlas_embed::CandleEncoder::load_with(&local, fontatlas_embed::Backend::Cpu, &cfg)
+            .unwrap();
     use fontatlas_embed::Encode;
-    let v = e.encode(&[vec![0.1; 3 * 224 * 224]], &AtomicBool::new(false)).unwrap();
+    let v = e
+        .encode(&[vec![0.1; 3 * 224 * 224]], &AtomicBool::new(false))
+        .unwrap();
     assert_eq!(v[0].len(), 32);
 }
 
@@ -383,7 +469,10 @@ fn offline_extract_equals_downloaded_file() {
     let d = tempfile::tempdir().unwrap();
     std::fs::write(d.path().join("src"), &src).unwrap();
     fontatlas_embed::extract_vision_file(&d.path().join("src"), &d.path().join("out")).unwrap();
-    assert_eq!(sha256_file(&d.path().join("out")).unwrap(), manifest_for(&src, "http://x").sha256);
+    assert_eq!(
+        sha256_file(&d.path().join("out")).unwrap(),
+        manifest_for(&src, "http://x").sha256
+    );
 }
 
 #[test]
@@ -400,7 +489,10 @@ fn vision_header_bytes_are_pinned() {
     }
     let mut full = (want.len() as u64).to_le_bytes().to_vec();
     full.extend(want);
-    assert_eq!(String::from_utf8_lossy(&h[8..]), String::from_utf8_lossy(&full[8..]));
+    assert_eq!(
+        String::from_utf8_lossy(&h[8..]),
+        String::from_utf8_lossy(&full[8..])
+    );
     assert_eq!(h, full);
 }
 
@@ -415,8 +507,19 @@ fn serve_logged(file: Vec<u8>, chunk: usize, delay: Duration) -> (Srv, String, L
         l2.lock().unwrap().push((a, b));
         let cr = format!("bytes {a}-{b}/{}", file.len());
         let h = tiny_http::Header::from_bytes(&b"Content-Range"[..], cr.as_bytes()).unwrap();
-        let r = Slow { data: file[a..=b].to_vec(), pos: 0, chunk, delay };
-        let _ = rq.respond(tiny_http::Response::new(206.into(), vec![h], r, Some(b - a + 1), None));
+        let r = Slow {
+            data: file[a..=b].to_vec(),
+            pos: 0,
+            chunk,
+            delay,
+        };
+        let _ = rq.respond(tiny_http::Response::new(
+            206.into(),
+            vec![h],
+            r,
+            Some(b - a + 1),
+            None,
+        ));
     });
     (srv, url, log)
 }
@@ -424,14 +527,25 @@ fn serve_logged(file: Vec<u8>, chunk: usize, delay: Duration) -> (Srv, String, L
 fn big_model(seed: f32) -> Vec<u8> {
     fake_safetensors(&[
         ("text_model.w".into(), vec![1024], vals(1024, seed)),
-        ("vision_model.big".into(), vec![1 << 19], vals(1 << 19, seed + 1.0)),
+        (
+            "vision_model.big".into(),
+            vec![1 << 19],
+            vals(1 << 19, seed + 1.0),
+        ),
     ])
 }
 
 /// Huỷ ngay khi đã nhận ≥ 1 MiB vision.
 fn cancel_at_1mib(st: &ModelStore) -> Result<std::path::PathBuf, EmbedError> {
     let cancel = AtomicBool::new(false);
-    st.ensure_resumable(&|p| if p.done >= (1 << 20) { cancel.store(true, Ordering::SeqCst) }, &cancel)
+    st.ensure_resumable(
+        &|p| {
+            if p.done >= (1 << 20) {
+                cancel.store(true, Ordering::SeqCst)
+            }
+        },
+        &cancel,
+    )
 }
 
 #[test]
@@ -442,13 +556,17 @@ fn cancel_keeps_part_and_resumes() {
     let m = manifest_for(&src, &url);
     let st = store(&d, m.clone());
     assert!(matches!(cancel_at_1mib(&st), Err(EmbedError::Cancelled)));
-    let ModelStatus::Partial { bytes, total } = st.status() else { panic!("{:?}", st.status()) };
+    let ModelStatus::Partial { bytes, total } = st.status() else {
+        panic!("{:?}", st.status())
+    };
     assert_eq!(total, m.size);
     let nh = m.size - m.source.vision_len; // header cục bộ
     assert!(bytes > nh && bytes < total, "{bytes} {nh} {total}");
     log.lock().unwrap().clear();
     let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
-    let p = st.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    let p = st
+        .ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
     assert_eq!(sha256_file(&p).unwrap(), m.sha256);
     let reqs = log.lock().unwrap().clone();
     // 1: header (nhỏ) để khôi phục sha; 2: phần vision còn lại bắt đầu đúng offset đã có
@@ -456,7 +574,11 @@ fn cancel_keeps_part_and_resumes() {
     assert_eq!(reqs[1].0 as u64, m.source.vision_offset + (bytes - nh));
     assert!(events.lock().unwrap().iter().all(|e| e.resumed));
     assert!(matches!(st.status(), ModelStatus::Ready(_)));
-    assert!(!d.path().join(format!("{}.part.json", st.file_name())).exists());
+    assert!(
+        !d.path()
+            .join(format!("{}.part.json", st.file_name()))
+            .exists()
+    );
 }
 
 #[test]
@@ -465,10 +587,16 @@ fn manifest_change_restarts() {
     let (_s1, url1, _l1) = serve_logged(src1.clone(), 64 << 10, Duration::from_millis(3));
     let (_s2, url2, log2) = serve_logged(src2.clone(), 64 << 10, Duration::from_millis(0));
     let d = tempfile::tempdir().unwrap();
-    assert!(matches!(cancel_at_1mib(&store(&d, manifest_for(&src1, &url1))), Err(EmbedError::Cancelled)));
+    assert!(matches!(
+        cancel_at_1mib(&store(&d, manifest_for(&src1, &url1))),
+        Err(EmbedError::Cancelled)
+    ));
     let m2 = manifest_for(&src2, &url2);
     let st2 = store(&d, m2.clone());
-    assert!(matches!(st2.status(), ModelStatus::Partial { bytes: 0, .. }), "manifest mới → .part cũ không dùng được");
+    assert!(
+        matches!(st2.status(), ModelStatus::Partial { bytes: 0, .. }),
+        "manifest mới → .part cũ không dùng được"
+    );
     let p = ensure(&st2).unwrap();
     assert_eq!(sha256_file(&p).unwrap(), m2.sha256);
     let reqs = log2.lock().unwrap().clone();
@@ -486,9 +614,16 @@ fn checksum_mismatch_reported() {
     let (_s, url) = serve_range(src.clone(), flip);
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&src, &url));
-    assert!(matches!(ensure(&st), Err(EmbedError::ChecksumMismatch { .. })));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::ChecksumMismatch { .. })
+    ));
     assert!(!d.path().join(format!("{}.part", st.file_name())).exists());
-    assert!(!d.path().join(format!("{}.part.json", st.file_name())).exists());
+    assert!(
+        !d.path()
+            .join(format!("{}.part.json", st.file_name()))
+            .exists()
+    );
     assert!(matches!(st.status(), ModelStatus::Missing));
 }
 
@@ -499,10 +634,14 @@ fn progress_reports_speed() {
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&src, &url));
     let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
-    st.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    st.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
     let ev = events.lock().unwrap();
     let last = ev.last().unwrap();
-    assert!(last.bytes_per_sec > 0.0 && last.done == last.total, "{last:?}");
+    assert!(
+        last.bytes_per_sec > 0.0 && last.done == last.total,
+        "{last:?}"
+    );
     assert!(ev.iter().all(|e| !e.resumed));
 }
 
@@ -512,17 +651,26 @@ fn server_ignoring_range_restarts_with_resumed_false() {
     let (_s, url, _l) = serve_logged(src.clone(), 64 << 10, Duration::from_millis(3));
     let d = tempfile::tempdir().unwrap();
     let m = manifest_for(&src, &url);
-    assert!(matches!(cancel_at_1mib(&store(&d, m.clone())), Err(EmbedError::Cancelled)));
+    assert!(matches!(
+        cancel_at_1mib(&store(&d, m.clone())),
+        Err(EmbedError::Cancelled)
+    ));
     let (_f, url_full) = serve_full(src.clone());
     let mut m2 = m.clone();
     m2.source.url = url_full;
     let st2 = store(&d, m2);
     assert!(matches!(st2.status(), ModelStatus::Partial { bytes, .. } if bytes > 0));
     let events = std::sync::Mutex::new(Vec::<DownloadProgress>::new());
-    let p = st2.ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false)).unwrap();
+    let p = st2
+        .ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
     assert_eq!(sha256_file(&p).unwrap(), m.sha256);
     let ev = events.lock().unwrap();
-    assert!(!ev.is_empty() && ev.iter().all(|e| !e.resumed), "{:?}", ev.first());
+    assert!(
+        !ev.is_empty() && ev.iter().all(|e| !e.resumed),
+        "{:?}",
+        ev.first()
+    );
 }
 
 #[test]
@@ -530,4 +678,481 @@ fn disk_free_positive() {
     let d = tempfile::tempdir().unwrap();
     assert!(disk_free(d.path()).unwrap() > 0);
     assert!(disk_free(&d.path().join("chua/co/thu/muc")).unwrap() > 0);
+}
+
+// Raw local HTTP fixture: one explicitly owned thread per connection, joined on drop.
+// Connection: close makes cancelled bodies observable as EOF rather than pooled idle sockets.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fault {
+    None,
+    WrongRange,
+    IgnoreRange,
+    TruncateOnce,
+    Stall,
+    StallAlways,
+}
+struct ConcurrentSrv {
+    url: String,
+    stop: Arc<AtomicBool>,
+    active: Arc<AtomicUsize>,
+    peak: Arc<AtomicUsize>,
+    requests: Arc<AtomicUsize>,
+    finished: Log,
+    thread: Option<JoinHandle<()>>,
+}
+impl Drop for ConcurrentSrv {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(h) = self.thread.take() {
+            h.join().unwrap();
+        }
+    }
+}
+impl ConcurrentSrv {
+    fn wait_idle(&self) {
+        let t = std::time::Instant::now();
+        while self.active.load(Ordering::SeqCst) > 0 && t.elapsed() < Duration::from_secs(2) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            self.active.load(Ordering::SeqCst),
+            0,
+            "no active transfer after cancellation/failure"
+        );
+    }
+}
+fn concurrent_server(file: Vec<u8>, vision_offset: usize, fault: Fault) -> ConcurrentSrv {
+    use std::io::Write;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}/model", listener.local_addr().unwrap());
+    let stop = Arc::new(AtomicBool::new(false));
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let requests = Arc::new(AtomicUsize::new(0));
+    let finished: Log = Arc::default();
+    let (s, act, max, reqs, done) = (
+        stop.clone(),
+        active.clone(),
+        peak.clone(),
+        requests.clone(),
+        finished.clone(),
+    );
+    let file = Arc::new(file);
+    let fired = Arc::new(AtomicBool::new(false));
+    let thread = std::thread::spawn(move || {
+        let mut handles = Vec::new();
+        while !s.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let (act, max, reqs, done, file, fired, stop) = (
+                        act.clone(),
+                        max.clone(),
+                        reqs.clone(),
+                        done.clone(),
+                        file.clone(),
+                        fired.clone(),
+                        s.clone(),
+                    );
+                    handles.push(std::thread::spawn(move || {
+                        stream.set_nonblocking(false).unwrap();
+                        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                        stream.set_write_timeout(Some(Duration::from_secs(2))).unwrap();
+                        let mut header = Vec::new(); let mut ch = [0u8; 1];
+                        while !header.ends_with(b"\r\n\r\n") {
+                            if header.len() > 32000 || stream.read_exact(&mut ch).is_err() { return; }
+                            header.push(ch[0]);
+                        }
+                        reqs.fetch_add(1, Ordering::SeqCst);
+                        struct Guard(Arc<AtomicUsize>); impl Drop for Guard { fn drop(&mut self) { self.0.fetch_sub(1, Ordering::SeqCst); } }
+                        let n = act.fetch_add(1, Ordering::SeqCst) + 1; max.fetch_max(n, Ordering::SeqCst); let _g = Guard(act);
+                        let text = String::from_utf8(header).unwrap();
+                        let range = text.lines().find_map(|l| {
+                            let (key, value) = l.split_once(':')?;
+                            if !key.eq_ignore_ascii_case("range") { return None; }
+                            let (a,b) = value.trim().strip_prefix("bytes=")?.split_once('-')?;
+                            Some((a.parse::<usize>().ok()?, b.parse::<usize>().ok()?))
+                        });
+                        let (a,b) = range.unwrap_or((0,file.len()-1));
+                        let child = range.is_some() && a >= vision_offset + (4 << 20);
+                        let special = child && fault != Fault::None && (fault == Fault::StallAlways || !fired.swap(true, Ordering::SeqCst));
+                        if special && fault == Fault::IgnoreRange {
+                            let _ = write!(stream,"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",file.len());
+                            let _ = stream.flush(); let _ = stream.read(&mut ch); return;
+                        }
+                        let (status, cr) = if range.is_some() {
+                            (206, format!("Content-Range: bytes {}-{}/{}\r\n", if special && fault == Fault::WrongRange { a+1 } else { a },b,file.len()))
+                        } else { (200,String::new()) };
+                        if write!(stream,"HTTP/1.1 {status} OK\r\n{cr}Content-Length: {}\r\nConnection: close\r\n\r\n", b-a+1).is_err() { return; }
+                        if special && matches!(fault,Fault::Stall | Fault::StallAlways) { let _ = stream.flush(); let _ = stream.read(&mut ch); return; }
+                        let end = if special && fault == Fault::TruncateOnce { a + ((b-a)/2) } else { b+1 };
+                        // Delay the first parallel chunk so later chunks finish first.
+                        if child && a == vision_offset + (4<<20) { std::thread::sleep(Duration::from_millis(150)); }
+                        for c in file[a..end].chunks(64<<10) {
+                            if stop.load(Ordering::SeqCst) || stream.write_all(c).is_err() { return; }
+                            if child { std::thread::sleep(Duration::from_millis(2)); }
+                        }
+                        done.lock().unwrap().push((a,b));
+                    }));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(2))
+                }
+                Err(_) => break,
+            }
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+    });
+    ConcurrentSrv {
+        url,
+        stop,
+        active,
+        peak,
+        requests,
+        finished,
+        thread: Some(thread),
+    }
+}
+fn parallel_model() -> Vec<u8> {
+    fake_safetensors(&[
+        ("text_model.w".into(), vec![8], vec![0.0; 8]),
+        ("vision_model.big".into(), vec![4 << 20], vals(4 << 20, 2.0)),
+    ])
+}
+
+#[test]
+fn parallel_ranges_are_bounded_ordered_and_sha_verified() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::None);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, m.clone());
+    let t = std::time::Instant::now();
+    let p = ensure(&st).unwrap();
+    eprintln!(
+        "localhost 16MiB bounded transfer: {:?}, peak={}",
+        t.elapsed(),
+        s.peak.load(Ordering::SeqCst)
+    );
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    s.wait_idle();
+    assert_eq!(s.peak.load(Ordering::SeqCst), 3);
+    let finished = s.finished.lock().unwrap();
+    let first = m.source.vision_offset as usize + (4 << 20);
+    assert!(
+        finished.iter().position(|x| x.0 == first).unwrap()
+            > finished
+                .iter()
+                .position(|x| x.0 == first + (4 << 20))
+                .unwrap(),
+        "fixture must complete out of order"
+    );
+}
+
+#[test]
+fn parallel_worker_bad_range_and_200_fallback() {
+    for fault in [Fault::WrongRange, Fault::IgnoreRange] {
+        let src = parallel_model();
+        let mut m = manifest_for(&src, "");
+        let s = concurrent_server(src, m.source.vision_offset as usize, fault);
+        m.source.url = s.url.clone();
+        let d = tempfile::tempdir().unwrap();
+        let st = store(&d, m.clone());
+        let r = ensure(&st);
+        if fault == Fault::WrongRange {
+            assert!(matches!(
+                r,
+                Err(EmbedError::Network {
+                    kind: fontatlas_embed::NetworkErrorKind::Other,
+                    ..
+                })
+            ));
+            assert!(!matches!(st.status(), ModelStatus::Ready(_)));
+        } else {
+            assert_eq!(sha256_file(&r.unwrap()).unwrap(), m.sha256);
+        }
+        s.wait_idle();
+        assert!(
+            s.peak.load(Ordering::SeqCst) <= 3,
+            "{}",
+            s.peak.load(Ordering::SeqCst)
+        );
+    }
+}
+
+#[test]
+fn parallel_truncation_retries_from_contiguous_prefix_without_progress_rewind() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::TruncateOnce);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, m.clone());
+    let events = std::sync::Mutex::new(Vec::new());
+    let p = st
+        .ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    s.wait_idle();
+    let ev = events.lock().unwrap();
+    assert!(ev.windows(2).all(|w| w[0].done <= w[1].done));
+    assert!(ev.iter().all(|e| e.done <= e.total));
+    assert!(ev.iter().any(|e| e.resumed));
+    assert!(s.requests.load(Ordering::SeqCst) > 5);
+    assert!(s.peak.load(Ordering::SeqCst) <= 3);
+}
+
+#[test]
+fn parallel_cancel_and_timeout_drop_stalled_body_and_resume_exact_prefix() {
+    for cancel_it in [true, false] {
+        let src = parallel_model();
+        let mut m = manifest_for(&src, "");
+        let s = concurrent_server(src, m.source.vision_offset as usize, Fault::Stall);
+        m.source.url = s.url.clone();
+        let d = tempfile::tempdir().unwrap();
+        let st = store(&d, m.clone()).with_read_timeout_for_test(Duration::from_millis(350));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let watcher = if cancel_it {
+            let (cancel, active) = (cancel.clone(), s.active.clone());
+            Some(std::thread::spawn(move || {
+                let t = std::time::Instant::now();
+                while active.load(Ordering::SeqCst) < 3 && t.elapsed() < Duration::from_secs(3) {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                std::thread::sleep(Duration::from_millis(75));
+                cancel.store(true, Ordering::SeqCst);
+            }))
+        } else {
+            None
+        };
+        let r = st.ensure_resumable(&|_| {}, &cancel);
+        if let Some(h) = watcher {
+            h.join().unwrap();
+        }
+        if cancel_it {
+            assert!(matches!(r, Err(EmbedError::Cancelled)));
+        } else {
+            assert!(r.is_ok(), "single stall is retried");
+        }
+        s.wait_idle();
+        assert!(s.peak.load(Ordering::SeqCst) <= 3);
+        if cancel_it {
+            let ModelStatus::Partial { bytes, .. } = st.status() else {
+                panic!("must retain contiguous prefix")
+            };
+            assert_eq!(bytes, m.size - m.source.vision_len + (4 << 20));
+            let p = ensure(&st).unwrap();
+            assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+            s.wait_idle();
+        }
+    }
+}
+
+#[test]
+fn sync_model_api_inside_async_runtime_returns_error_without_panicking() {
+    let d = tempfile::tempdir().unwrap();
+    let m = manifest_for(&fake_model(), "http://127.0.0.1:1/model");
+    let st = store(&d, m);
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let r = rt.block_on(async { ensure(&st) });
+    assert!(matches!(r,Err(EmbedError::Model(ref e)) if e.contains("dedicated std::thread")));
+}
+
+#[test]
+fn persistent_timeout_stops_after_bounded_retries_and_leaves_no_active_worker() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::StallAlways);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, m.clone()).with_read_timeout_for_test(Duration::from_millis(350));
+    let t = std::time::Instant::now();
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::Network {
+            kind: fontatlas_embed::NetworkErrorKind::Timeout,
+            ..
+        })
+    ));
+    assert!(t.elapsed() < Duration::from_secs(5));
+    s.wait_idle();
+    assert!(s.peak.load(Ordering::SeqCst) <= 3);
+    assert!(s.requests.load(Ordering::SeqCst) <= 9);
+    let ModelStatus::Partial { bytes, .. } = st.status() else {
+        panic!("retain prefix")
+    };
+    assert_eq!(bytes, m.size - m.source.vision_len + (4 << 20));
+}
+
+#[test]
+fn final_local_sha_mismatch_never_ready_or_retried_and_429_honors_server_pacing() {
+    let src = fake_model();
+    let (s, url) = serve_range(src.clone(), no_tweak);
+    let d = tempfile::tempdir().unwrap();
+    let mut m = manifest_for(&src, &url);
+    m.sha256 = "00".repeat(32);
+    let st = store(&d, m);
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::ChecksumMismatch { .. })
+    ));
+    assert_eq!(s.requests(), 2);
+    assert_eq!(st.status(), ModelStatus::Missing);
+    let (s, url) = serve(|rq| {
+        let h = tiny_http::Header::from_bytes("Retry-After", "120").unwrap();
+        let _ = rq.respond(tiny_http::Response::empty(429).with_header(h));
+    });
+    let st = store(&d, manifest_for(&src, &url));
+    assert!(
+        matches!(ensure(&st),Err(EmbedError::Http { status:429, retry_after:Some(ref v) }) if v == "120")
+    );
+    assert_eq!(s.requests(), 1);
+    assert_eq!(st.status(), ModelStatus::Missing);
+}
+
+#[test]
+fn sync_api_rejects_tokio_blocking_context_before_filesystem_mutation() {
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("untouched");
+    let m = manifest_for(&fake_model(), "http://127.0.0.1:1/model");
+    let p = path.clone();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let r = rt.block_on(async move {
+        tokio::task::spawn_blocking(move || ensure(&ModelStore::new(p, m)))
+            .await
+            .unwrap()
+    });
+    assert!(matches!(r,Err(EmbedError::Model(ref e)) if e.contains("dedicated std::thread")));
+    assert!(!path.exists());
+}
+
+#[test]
+fn malformed_resume_metadata_cannot_overflow_or_mix_header_denominators() {
+    let src = big_model(1.0);
+    let (_s, url, _log) = serve_logged(src.clone(), 64 << 10, Duration::from_millis(3));
+    let d = tempfile::tempdir().unwrap();
+    let m = manifest_for(&src, &url);
+    let st = store(&d, m.clone());
+    assert!(matches!(cancel_at_1mib(&st), Err(EmbedError::Cancelled)));
+    let meta = d.path().join(format!("{}.part.json", st.file_name()));
+    std::fs::write(meta,serde_json::to_vec(&serde_json::json!({"manifest_sha256":m.sha256,"local_header_len":u64::MAX,"vision_done":1})).unwrap()).unwrap();
+    assert_eq!(
+        st.status(),
+        ModelStatus::Partial {
+            bytes: 0,
+            total: m.size
+        }
+    );
+    assert_eq!(sha256_file(&ensure(&st).unwrap()).unwrap(), m.sha256);
+}
+
+#[test]
+fn transient_http_5xx_retries_then_succeeds_but_4xx_never_retries() {
+    for status in [500, 502, 503, 504] {
+        let src = fake_model();
+        let served = src.clone();
+        let n = AtomicUsize::new(0);
+        let (srv, url) = serve(move |rq| {
+            if n.fetch_add(1, Ordering::SeqCst) == 0 {
+                let _ = rq.respond(tiny_http::Response::empty(status));
+                return;
+            }
+            let (a, b) = range_of(&rq).unwrap();
+            let cr = tiny_http::Header::from_bytes(
+                "Content-Range",
+                format!("bytes {a}-{b}/{}", served.len()),
+            )
+            .unwrap();
+            let _ = rq.respond(
+                tiny_http::Response::from_data(served[a..=b].to_vec())
+                    .with_status_code(206)
+                    .with_header(cr),
+            );
+        });
+        let d = tempfile::tempdir().unwrap();
+        let m = manifest_for(&src, &url);
+        let p = ensure(&store(&d, m.clone())).unwrap();
+        assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+        assert_eq!(srv.requests(), 3);
+    }
+    for status in [400, 401, 403, 404, 408] {
+        let (srv, url) = serve_status(status);
+        let d = tempfile::tempdir().unwrap();
+        let e = ensure(&store(&d, manifest_for(&fake_model(), &url))).unwrap_err();
+        assert!(matches!(e,EmbedError::Http { status:s, .. } if s==status));
+        assert_eq!(e.code(), "http");
+        assert_eq!(srv.requests(), 1);
+    }
+}
+
+#[test]
+fn full_stream_fallback_starts_a_new_progress_denominator() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::IgnoreRange);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, m.clone());
+    let events = std::sync::Mutex::new(Vec::new());
+    let p = st
+        .ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    let events = events.lock().unwrap();
+    let switch = events
+        .windows(2)
+        .position(|w| w[0].total != w[1].total)
+        .expect("Range -> full source changes total")
+        + 1;
+    assert!(events[switch - 1].done >= 4 << 20);
+    assert!(
+        events[switch].done <= 2 << 20,
+        "new phase must start advancing from zero"
+    );
+    assert!(
+        events
+            .windows(2)
+            .all(|w| w[0].total != w[1].total || w[0].done <= w[1].done)
+    );
+    assert!(
+        events
+            .iter()
+            .all(|e| e.done <= e.total && e.bytes_per_sec.is_finite())
+    );
+    assert_eq!(events.last().unwrap().done, m.source.size);
+    s.wait_idle();
+}
+
+#[test]
+fn redirect_loop_is_reported_without_a_second_download_attempt() {
+    let (srv, url) = serve(|rq| {
+        let h = tiny_http::Header::from_bytes("Location", "/model.safetensors").unwrap();
+        let _ = rq.respond(tiny_http::Response::empty(302).with_header(h));
+    });
+    let d = tempfile::tempdir().unwrap();
+    let e = ensure(&store(&d, manifest_for(&fake_model(), &url))).unwrap_err();
+    assert!(
+        matches!(
+            e,
+            EmbedError::Network {
+                kind: fontatlas_embed::NetworkErrorKind::Redirect,
+                ..
+            }
+        ),
+        "{e:?}"
+    );
+    assert_eq!(e.code(), "http_redirect");
+    assert!(
+        srv.requests() <= 11,
+        "redirects should not be retried as a new download"
+    );
 }

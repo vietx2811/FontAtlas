@@ -32,3 +32,21 @@ No analyzer algorithm changes. Claude's stress=0 and Source Code Pro g-storeys n
 ## Addendum approved by Lead
 
 `AxisReadingDto` gains `rawValue: number|null`, `unit: string|null`. Existing `value` stays compatible (serif_foot class string); numeric serif_foot remains available as rawValue. Quality/reason/method unchanged. For caps fallback stem unit is cap_height_ratio. Detail axes now include cap_height_em and descender_em read directly from Anatomy; descender retains its negative sign. These two extra measurements are not in the 16-dimensional Index/stats/filter API. Maximum rawAxisRanges length: 16.
+
+
+## Model error codes — follow-up review (2026-11-06)
+
+Shape `ErrorInfoDto = { code: string, message: string }` không đổi. Các mã dưới đi qua model status/failed event. `message` là chi tiết kỹ thuật, có HTTP status và Retry-After nếu máy chủ gửi; không coi HTTP 403 là lỗi quyền ghi đĩa. Không có trường status mới trong DTO; Rust có `EmbedError::Http { status, retry_after }`.
+
+| code | Ý nghĩa / gợi ý thông báo tiếng Việt | Auto retry |
+|---|---|---|
+| `http` | Máy chủ tải model trả lỗi HTTP. Vui lòng thử lại sau. Chi tiết chứa status; 429 hiển thị giới hạn yêu cầu và Retry-After. | Chỉ 500/502/503/504, tối đa 3 attempt với backoff 250/500 ms. 429 và 4xx khác không. |
+| `tls` | Không thể xác thực chứng chỉ máy chủ tải model. Kiểm tra mạng hoặc CA của proxy. | Không. TLS/cert được phân loại theo typed rustls error trong cause chain. |
+| `http_redirect` | Địa chỉ tải chuyển hướng không hợp lệ hoặc quá nhiều lần. | Không. |
+| `http_config` | Cấu hình địa chỉ tải hoặc TLS không hợp lệ. | Không. |
+| `network` | Kết nối tải model bị gián đoạn, quá hạn hoặc dữ liệu phản hồi không hợp lệ. Xem chi tiết để thử lại. | Chỉ connect/timeout/body/request I/O. Lỗi protocol Content-Range hoặc nguyên nhân không rõ không tự retry. |
+| `io` | Không đọc/ghi được tệp model trên máy. Kiểm tra ổ đĩa và quyền truy cập. | Chỉ các I/O kind tạm thời có sẵn; PermissionDenied không retry. |
+| `checksum` | Dữ liệu model không khớp bản phát hành. Hãy tải lại. | Không; không dùng file sai SHA. |
+| `cancelled` | Đã dừng tải; có thể tiếp tục nếu có checkpoint hợp lệ. | Không. |
+
+`done` chỉ đơn điệu trong cùng `total`. Range -> full stream đổi mẫu số sẽ phát done=0 và tính lại bytesPerSec trong phase mới; UI cần cập nhật cả done và total, vẫn chờ Ready để xác nhận thành công. Metadata resume là contiguous durable prefix, không phải tổng byte trong event.

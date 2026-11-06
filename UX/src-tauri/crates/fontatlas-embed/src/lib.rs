@@ -6,17 +6,20 @@ pub use candle_enc::{Backend, CandleEncoder, select_backend};
 pub mod encoder;
 pub mod model;
 pub mod render;
-pub use model::{DownloadProgress, Manifest, ModelStatus, ModelStore, READ_TIMEOUT, Source, VISION_PREFIX, bundled_manifest, disk_free, extract_vision_file, make_manifest, sha256_file, vision_header};
-pub mod whiten;
+pub use model::{
+    DownloadProgress, Manifest, ModelStatus, ModelStore, READ_TIMEOUT, Source, VISION_PREFIX,
+    bundled_manifest, disk_free, extract_vision_file, make_manifest, sha256_file, vision_header,
+};
 pub mod source;
+pub mod whiten;
 pub use source::StoreEmbeddingSource;
 pub mod worker;
-pub use worker::{EmbedWorker, Progress, WorkerConfig};
-#[cfg(feature = "fit")]
-pub use whiten::fit;
-pub use whiten::Whitening;
 pub use encoder::Encode;
 pub use render::{Gray224, coverage_ratio, render_input, to_tensor};
+pub use whiten::Whitening;
+#[cfg(feature = "fit")]
+pub use whiten::fit;
+pub use worker::{EmbedWorker, Progress, WorkerConfig};
 
 /// Model, runtime, chuỗi render: thành phần của `raw_version`.
 pub const MODEL_NAME: &str = "siglip2-base-p16-224@75de2d5";
@@ -36,12 +39,18 @@ pub const NORM_STD: f32 = 0.5;
 
 /// Version của vector thô (không gồm whitening). `model_sha256` = sha của file safetensors vision cục bộ.
 pub fn raw_version(model_sha256: &str) -> String {
-    format!("{MODEL_NAME}|st-vision@{}|{RUNTIME_ID}|{RENDER_ID}", short(model_sha256))
+    format!(
+        "{MODEL_NAME}|st-vision@{}|{RUNTIME_ID}|{RENDER_ID}",
+        short(model_sha256)
+    )
 }
 
 /// Version của vector đã whiten = raw_version + whitening.
 pub fn model_version(raw_version: &str, whitening_version: &str, whitening_sha256: &str) -> String {
-    format!("{raw_version}|{whitening_version}@{}", short(whitening_sha256))
+    format!(
+        "{raw_version}|{whitening_version}@{}",
+        short(whitening_sha256)
+    )
 }
 
 fn short(sha: &str) -> &str {
@@ -51,11 +60,38 @@ fn short(sha: &str) -> &str {
 /// Chia họ thành nửa "tune"/"test" cố định: byte đầu của blake3(lowercase(family)) chẵn → tune.
 pub fn family_split(family: &str) -> &'static str {
     let h = blake3::hash(family.to_lowercase().as_bytes());
-    if h.as_bytes()[0].is_multiple_of(2) { "tune" } else { "test" }
+    if h.as_bytes()[0].is_multiple_of(2) {
+        "tune"
+    } else {
+        "test"
+    }
+}
+
+/// Transport failures kept separate from local filesystem I/O.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkErrorKind {
+    Timeout,
+    Connect,
+    Body,
+    RequestIo,
+    Tls,
+    Redirect,
+    Builder,
+    Other,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum EmbedError {
+    #[error("http {status}; Retry-After: {retry_after:?}")]
+    Http {
+        status: u16,
+        retry_after: Option<String>,
+    },
+    #[error("network {kind:?}: {message}")]
+    Network {
+        kind: NetworkErrorKind,
+        message: String,
+    },
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
     #[error("font: {0}")]
@@ -79,6 +115,13 @@ pub enum EmbedError {
 impl EmbedError {
     pub fn code(&self) -> &'static str {
         match self {
+            EmbedError::Http { .. } => "http",
+            EmbedError::Network { kind, .. } => match kind {
+                NetworkErrorKind::Tls => "tls",
+                NetworkErrorKind::Redirect => "http_redirect",
+                NetworkErrorKind::Builder => "http_config",
+                _ => "network",
+            },
             EmbedError::Io(_) => "io",
             EmbedError::Font(_) => "font",
             EmbedError::NoGlyphs => "no_glyphs",
@@ -116,20 +159,34 @@ mod tests {
     #[test]
     fn versions_compose() {
         let raw = raw_version(&"ab".repeat(32));
-        assert_eq!(raw, format!("siglip2-base-p16-224@75de2d5|st-vision@{}|candle0.11|render-v2", "ab".repeat(6)));
-        assert_eq!(model_version(&raw, "white-v1", &"cd".repeat(32)), format!("{raw}|white-v1@{}", "cd".repeat(6)));
+        assert_eq!(
+            raw,
+            format!(
+                "siglip2-base-p16-224@75de2d5|st-vision@{}|candle0.11|render-v2",
+                "ab".repeat(6)
+            )
+        );
+        assert_eq!(
+            model_version(&raw, "white-v1", &"cd".repeat(32)),
+            format!("{raw}|white-v1@{}", "cd".repeat(6))
+        );
     }
 
     #[test]
     fn any_component_changes_version() {
         let r1 = raw_version(&"ab".repeat(32));
         assert_ne!(r1, raw_version(&"ac".repeat(32)));
-        assert_ne!(model_version(&r1, "white-v1", &"cd".repeat(32)), model_version(&r1, "white-v2", &"cd".repeat(32)));
+        assert_ne!(
+            model_version(&r1, "white-v1", &"cd".repeat(32)),
+            model_version(&r1, "white-v2", &"cd".repeat(32))
+        );
     }
 
     #[test]
     fn family_split_deterministic_balanced_case_insensitive() {
-        let t = (0..1000).filter(|i| family_split(&format!("Family {i}")) == "tune").count();
+        let t = (0..1000)
+            .filter(|i| family_split(&format!("Family {i}")) == "tune")
+            .count();
         assert!((400..600).contains(&t), "{t}");
         assert_eq!(family_split("Roboto"), family_split("roboto"));
     }
