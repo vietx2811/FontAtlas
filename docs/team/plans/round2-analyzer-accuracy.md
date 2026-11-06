@@ -40,5 +40,5 @@ Các trục khác không đổi.
 
 ## Giới hạn
 - Stress vẫn luôn "Ước lượng"; ngưỡng 1,7 là cổng độ tin, không phải bộ phân loại.
-- Bảng trước/sau đo trước khi chốt gate "khai báo italic" (phương án B). Sau gate, test `upright_script_is_not_deskewed_from_a_curved_l` xác nhận script upright không bị dựng; chưa chạy lại toàn bộ 35 nhãn a/g.
+- Lead chạy lại pipeline audit gốc (bản sao, nguồn chỉ đọc) với dump tại dev/mvp 37bf14c sau gate B: a/g storeys **0 face đổi / 983**; danh sách nhãn tay 36 face giữ nguyên 33/36 như trước (3 lệch có từ trước: Cormorant SC, Monaco, Poppins — không do thay đổi này). Stress |tilt|>45°: 13 → 0.
 - Contrast font condensed vẫn là tỉ lệ thô (Estimated), chưa có công thức chuẩn hoá kiểm chứng.
