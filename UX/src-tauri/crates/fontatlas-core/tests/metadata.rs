@@ -157,8 +157,8 @@ fn public_sans_named_instances_have_wght() {
 }
 
 #[test]
-fn analyzer_version_is_core_0_3_0() {
-    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.3.0");
+fn analyzer_version_is_core_0_4_0() {
+    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.4.0");
 }
 
 #[test]

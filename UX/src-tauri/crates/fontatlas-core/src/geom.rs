@@ -52,12 +52,26 @@ impl<'a> GlyphCtx<'a> {
             .post()
             .map(|p| p.italic_angle().to_f64())
             .unwrap_or(0.0);
-        GlyphCtx {
+        let mut ctx = GlyphCtx {
             font,
             loc,
             deskew: ia.to_radians().tan(),
             char_filter: None,
+        };
+        // Audit 2026-11-06: post.italicAngle=0 for Roboto Italic (-9.8°)
+        // and Avenir Next Condensed Medium Italic (-9.8°). Upright tolerance was ±2°;
+        // use >=3° measured stem slant only for declared italic/oblique faces.
+        // Upright scripts do not have a uniform shear: preserve their a/g topology heuristic.
+        if ia.abs() < 0.5
+            && ctx.declared_slanted()
+            && !ctx.font.charmap().is_symbol()
+            && let Some(slant) = ctx
+                .stem_slant_deg()
+                .filter(|v| v.is_finite() && v.abs() >= 3.0)
+        {
+            ctx.deskew = slant.to_radians().tan();
         }
+        ctx
     }
 
     /// Ẩn bớt ký tự (dùng để test nhánh font chỉ có chữ hoa).
@@ -68,6 +82,33 @@ impl<'a> GlyphCtx<'a> {
 
     pub fn font(&self) -> &FontRef<'a> {
         &self.font
+    }
+
+    /// Raw stem angle without deskew/rounding; shared by fallback deskew and the public metric.
+    pub(crate) fn stem_slant_deg(&self) -> Option<f64> {
+        let g = self.glyph('l', false).or_else(|| self.glyph('I', false))?;
+        let (y1, y2) = (
+            g.bbox.y0 + g.bbox.height() * 0.25,
+            g.bbox.y0 + g.bbox.height() * 0.75,
+        );
+        let m1 = hline(&g, y1).first().map(|(a, b)| (a + b) / 2.0)?;
+        let m2 = hline(&g, y2).first().map(|(a, b)| (a + b) / 2.0)?;
+        Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
+    }
+
+    fn declared_slanted(&self) -> bool {
+        use read_fonts::tables::{head::MacStyle, os2::SelectionFlags};
+        self.font.os2().is_ok_and(|o| {
+            o.fs_selection()
+                .intersects(SelectionFlags::ITALIC | SelectionFlags::OBLIQUE)
+        }) || self
+            .font
+            .head()
+            .is_ok_and(|h| h.mac_style().contains(MacStyle::ITALIC))
+    }
+
+    pub(crate) fn is_slanted(&self) -> bool {
+        self.deskew.atan().to_degrees().abs() >= 0.5 || self.declared_slanted()
     }
 
     pub fn glyph(&self, ch: char, upright: bool) -> Option<GlyphShape> {

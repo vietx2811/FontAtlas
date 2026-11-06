@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use serde::Serialize;
 
-pub const ANALYZER_VERSION: &str = "core-0.3.0";
+pub const ANALYZER_VERSION: &str = "core-0.4.0";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FaceReport {
