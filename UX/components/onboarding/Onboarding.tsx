@@ -41,8 +41,10 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
 
   if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? `Không tải được hướng dẫn: ${loadError}` : "Đang mở hướng dẫn…"}</p>{loadError && <button type="button" onClick={() => location.reload()}>Thử lại</button>}</main></div>;
   const steps = visibleSteps(state);
-  const dots: Step[] = steps.filter(x => x !== 'end');
-  const idx = Math.max(0, dots.indexOf(step));
+  // Số chấm cố định suốt hướng dẫn: bước quét (o4) luôn có chấm, kể cả trước khi thêm nguồn,
+  // để chấm không tăng giữa chừng. Màn "Xong" tô hết.
+  const dots: Step[] = steps.filter(x => x !== 'end').concat(steps.includes('o4') ? [] : ['o4']).sort((a, b) => a.localeCompare(b));
+  const idx = step === 'end' ? dots.length - 1 : Math.max(0, dots.indexOf(step));
   const next = () => go(nextStep(step, state));
   const back = prevStep(step, state);
   const ctx = { api, state, reload, next, finish, pickFolders: pickFolder ? async () => { const p = await pickFolder(); return p ? [p] : []; } : pickFolders, setWorking };
@@ -237,8 +239,8 @@ function O4({ api, next }: Ctx) {
   const text = stats.finished ? `Đã tìm ${stats.seen} file · đã phân tích ${stats.analyzed} font · ${stats.failed} file có vấn đề` : `Đã tìm ${seen} file · đã phân tích ${written} font`;
   return (
     <>
-      <h1>Đang quét thư viện</h1>
       <ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />
+      <h1>Đang quét thư viện</h1>
       <p className="sr-only" data-testid="scan-summary" aria-live="polite">{text}</p>
       <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>
       <Actions><Primary onClick={() => void next()}>Tiếp tục</Primary></Actions>
@@ -276,14 +278,11 @@ function O6({ api, next }: Ctx) {
   return (
     <>
       <h1>Phân tích hình ảnh (tuỳ chọn)</h1>
-      <p>So sánh hình dáng chữ bằng một model nhận dạng ảnh, cộng thêm vào số đo giải phẫu. Kết quả Similar sát với cảm nhận bằng mắt hơn, nhất là với font display và script.</p>
+      <p>So sánh hình dáng chữ bằng model ảnh để Similar sát với mắt nhìn hơn. Không bật vẫn dùng được số đo.</p>
       <ul className="fa-onb-list">
-        <li>Tải một lần ~371 MB từ Hugging Face (SigLIP 2 của Google, giấy phép Apache-2.0), có kiểm tra checksum.</li>
-        {info && info.faces > 0 && <li>Thư viện hiện tại: {info.faces.toLocaleString('vi-VN')} font → phân tích khoảng {mins} phút, chạy nền.</li>}
-        {info && <li>Ổ đĩa còn trống: {Math.round(info.free / (1024 * MB))} GB.</li>}
-        <li>Mọi xử lý chạy trên máy. Không gửi font hay ảnh đi đâu.</li>
+        <li>~371 MB, tải một lần từ Hugging Face (SigLIP 2, Apache-2.0). Chạy trên máy.</li>
+        {info && <li>{info.faces > 0 ? `${info.faces.toLocaleString('vi-VN')} font · khoảng ${mins} phút · ` : ''}còn trống {Math.round(info.free / (1024 * MB))} GB</li>}
       </ul>
-      <p className="fa-onb-note">Không bật thì Similar và Pairing vẫn chạy bằng số đo.</p>
       {short > 0 && <p role="alert">Cần thêm {Math.ceil(short / MB)} MB trống.</p>}
       {initError && <p role="alert">Không đọc được trạng thái model.</p>}
       {showDownload && <p role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{ui.text ?? (model?.state === 'ready' ? 'Model đã sẵn sàng' : 'Phân tích hình ảnh đang tắt')}</p>}

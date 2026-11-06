@@ -34,6 +34,14 @@ thiserror = "2"
 unicode-normalization = "0.1.25"
 ts-rs = { version = "=12.0.1", features = ["serde-json-impl"] }
 
+# Chỉ dùng cho QA bản debug (chụp webview của chính app, không cần quyền ghi màn hình).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSError"] }
+objc2-app-kit = { version = "0.3", features = ["NSImage"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "block2", "objc2-app-kit"] }
+
 [dev-dependencies]
 rusqlite = { version = "=0.31.0", features = ["bundled"] }
 tauri = { version = "2.9.5", features = ["macos-private-api", "test"] }

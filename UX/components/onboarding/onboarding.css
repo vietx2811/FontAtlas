@@ -14,7 +14,7 @@
 .fa-onb-field legend { padding: 0; margin-bottom: 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .fa-onb-field label { display: flex; align-items: baseline; gap: 8px; }
 .fa-onb-field small { color: var(--muted); font-size: 12px; margin-left: 4px; }
-.fa-onb-list { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.fa-onb-list { margin: 0; padding-left: 0; list-style: none; font-size: 14px; line-height: 1.6; color: var(--muted); }
 .fa-onb-note { font-size: 12px !important; }
 .fa-onb-warn { color: var(--warn) !important; }
 .fa-onb-sources { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }

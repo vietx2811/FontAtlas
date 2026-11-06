@@ -20,6 +20,8 @@ for _ in $(seq 1 120); do
   sleep 5
   case "$(q "select group_concat(value) from settings where key like 'ui.qa.%'")" in *'"done"'*|*'"error"'*|*onb-stuck*) break;; esac
 done
+for t in "$QA"/data/snap-*.tiff; do [ -f "$t" ] && sips -s format png "$t" --out "${t%.tiff}.png" >/dev/null && rm "$t"; done
+echo "ảnh: $QA/data/snap-*.png"
 q "select value from settings where key like 'ui.qa.%' order by key" | python3 -c '
 import sys, json
 fail = 0

@@ -179,6 +179,25 @@ describe('LibraryGrid', () => {
     spy.mockRestore();
   });
 
+  it('never leaves orphan cells when a refetch briefly shows a face at two positions', async () => {
+    // Seen in the native app during a scan: pages refetched while the list grew, the same face sat at
+    // two indices of one row, and keying cells by faceId left a stale "loading" cell in the DOM.
+    const base = rows.slice(0, 6);
+    const dup = [base[0], base[1], base[1], base[3], base[4], base[4]];
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const loader = stubLoader(); const { b } = blobs();
+    const r = render(ui(createMockLibraryApi(base), {}, { loader, b }));
+    await settle();
+    r.rerender(ui(createMockLibraryApi(dup), {}, { loader, b }));
+    await settle();
+    r.rerender(ui(createMockLibraryApi(base), {}, { loader, b }));
+    await settle();
+    expect(cells()).toHaveLength(6);
+    expect(new Set(cells().map(c => c.getAttribute('data-face-id'))).size).toBe(6);
+    expect(err.mock.calls.filter(c => String(c[0]).includes('same key'))).toEqual([]);
+    err.mockRestore();
+  });
+
   it('shows the empty state', async () => {
     await mount({ query: { text: 'khong co font nao' } });
     expect(screen.getByText('Không có font nào khớp')).toBeInTheDocument();

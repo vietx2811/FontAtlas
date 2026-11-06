@@ -37,14 +37,15 @@ function Row({ index, style, rows, cols, total, paged, applied, api, px, text, m
   const cells = [];
   for (let c = 0; c < cols; c++) {
     const i = index * cols + c;
-    if (i >= total) { cells.push(<div key={c} style={{ flex: 1, margin: 4 }} />); continue; }
+    // Ô trống cùng hộp với thẻ (padding + viền) để hàng cuối không kéo giãn thẻ.
+    if (i >= total) { cells.push(<div key={c} className="fa-cell" aria-hidden style={{ visibility: "hidden", height: boxHeight }} />); continue; }
     const row = paged?.rowAt(i);
     // URL dùng chữ/cỡ "đã áp dụng" (cùng thế hệ backend) → ảnh cũ giữ nguyên trong lúc xin thế hệ mới.
     const url = row && applied
       ? api.previewUrl(row, { text: applied.text, px: applied.px, generation: applied.generation, rendererVersion: applied.rendererVersion })
       : null;
     cells.push(
-      <FaceCell key={row ? row.faceId : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
+      <FaceCell key={row ? `${i}:${row.faceId}` : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
         selected={!!row && (selectedKey ? `${row.hashHex}:${row.faceIndex}` === selectedKey : row.faceId === selectedFaceId)} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
         fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} />,
     );

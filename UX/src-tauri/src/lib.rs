@@ -47,6 +47,36 @@ fn scheme(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>, respon
     });
 }
 
+/// QA bản debug: sự kiện `qa-snap` (payload = tên) → ảnh TIFF của webview vào FONTATLAS_DATA_DIR.
+/// Dùng `WKWebView.takeSnapshot`, chỉ chụp nội dung của chính app.
+#[cfg(all(debug_assertions, target_os = "macos"))]
+mod qa_snapshot {
+    use tauri::{Listener, Manager};
+
+    pub fn listen(app: &tauri::AppHandle) {
+        let Some(dir) = std::env::var_os("FONTATLAS_DATA_DIR") else { return };
+        let dir = std::path::PathBuf::from(dir);
+        let h = app.clone();
+        app.listen("qa-snap", move |ev| {
+            let name: String = serde_json::from_str(ev.payload()).unwrap_or_else(|_| "snap".into());
+            let name: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+            let path = dir.join(format!("snap-{name}.tiff"));
+            let Some(w) = h.get_webview_window("main") else { return };
+            let _ = w.with_webview(move |wv| unsafe {
+                let wk: &objc2_web_kit::WKWebView = &*(wv.inner() as *const objc2_web_kit::WKWebView);
+                let block = block2::RcBlock::new(move |img: *mut objc2_app_kit::NSImage, _e: *mut objc2_foundation::NSError| {
+                    if let Some(img) = img.as_ref()
+                        && let Some(data) = img.TIFFRepresentation()
+                    {
+                        let _ = std::fs::write(&path, data.to_vec());
+                    }
+                });
+                wk.takeSnapshotWithConfiguration_completionHandler(None, &block);
+            });
+        });
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol(fontatlas_preview::PREVIEW_SCHEME, |ctx, request, responder| {
@@ -69,6 +99,8 @@ pub fn run() {
             if let Some(path) = std::env::var_os("FONTATLAS_QA_SCRIPT") {
                 let js = std::fs::read_to_string(path)?;
                 let h = app.handle().clone();
+                #[cfg(target_os = "macos")]
+                qa_snapshot::listen(app.handle());
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_secs(4));
                     if let Some(w) = h.get_webview_window("main") {
