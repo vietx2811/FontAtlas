@@ -215,7 +215,8 @@ fn manifest_for(file: &[u8], url: &str) -> Manifest {
 }
 
 fn store(d: &tempfile::TempDir, m: Manifest) -> ModelStore {
-    ModelStore::new(d.path().into(), m)
+    // Fixtures are sized for 4 MiB ranges; production default is larger.
+    ModelStore::new(d.path().into(), m).with_range_chunk_for_test(4 << 20)
 }
 
 fn ensure(st: &ModelStore) -> Result<std::path::PathBuf, EmbedError> {
@@ -460,7 +461,8 @@ fn range_survives_redirect_like_hf_cdn() {
     let m = manifest_for(&src, &url);
     let p = ensure(&store(&d, m.clone())).unwrap();
     assert_eq!(sha256_file(&p).unwrap(), m.sha256);
-    assert_eq!((redir.requests(), srv.requests()), (2, 2));
+    // Redirect resolved once (header probe); the vision range goes straight to the CDN.
+    assert_eq!((redir.requests(), srv.requests()), (1, 2));
 }
 
 #[test]
@@ -690,6 +692,7 @@ enum Fault {
     TruncateOnce,
     Stall,
     StallAlways,
+    Forbid403Once,
 }
 struct ConcurrentSrv {
     url: String,
@@ -776,6 +779,10 @@ fn concurrent_server(file: Vec<u8>, vision_offset: usize, fault: Fault) -> Concu
                         let (a,b) = range.unwrap_or((0,file.len()-1));
                         let child = range.is_some() && a >= vision_offset + (4 << 20);
                         let special = child && fault != Fault::None && (fault == Fault::StallAlways || !fired.swap(true, Ordering::SeqCst));
+                        if special && fault == Fault::Forbid403Once {
+                            let _ = write!(stream,"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                            return;
+                        }
                         if special && fault == Fault::IgnoreRange {
                             let _ = write!(stream,"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",file.len());
                             let _ = stream.flush(); let _ = stream.read(&mut ch); return;
@@ -1155,4 +1162,68 @@ fn redirect_loop_is_reported_without_a_second_download_attempt() {
         srv.requests() <= 11,
         "redirects should not be retried as a new download"
     );
+}
+
+/// Origin that 302s every request to `cdn` and counts hits.
+fn redirector(cdn: String) -> (Srv, String) {
+    serve(move |rq| {
+        let h = tiny_http::Header::from_bytes(&b"Location"[..], cdn.as_bytes()).unwrap();
+        let _ = rq.respond(tiny_http::Response::empty(302).with_header(h));
+    })
+}
+
+#[test]
+fn redirect_is_resolved_once_for_all_ranges() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let cdn = concurrent_server(src, m.source.vision_offset as usize, Fault::None);
+    let (origin, url) = redirector(cdn.url.clone());
+    m.source.url = url;
+    let d = tempfile::tempdir().unwrap();
+    let p = ensure(&store(&d, m.clone())).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    cdn.wait_idle();
+    assert_eq!(origin.requests(), 1, "only the probe touches the origin");
+    assert!(cdn.requests.load(Ordering::SeqCst) >= 5);
+}
+
+#[test]
+fn cdn_403_re_resolves_from_origin_and_continues() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let cdn = concurrent_server(src, m.source.vision_offset as usize, Fault::Forbid403Once);
+    let (origin, url) = redirector(cdn.url.clone());
+    m.source.url = url;
+    let d = tempfile::tempdir().unwrap();
+    let p = ensure(&store(&d, m.clone())).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    cdn.wait_idle();
+    assert_eq!(origin.requests(), 2, "probe + one re-resolve");
+}
+
+#[test]
+fn sliding_window_bounds_in_flight_and_reorder_buffer() {
+    let n = 8 << 20;
+    let src = fake_safetensors(&[
+        ("text_model.w".into(), vec![8], vec![0.0; 8]),
+        ("vision_model.big".into(), vec![n], vals(n, 2.0)),
+    ]);
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::None);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let p = ensure(&store(&d, m.clone())).unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256, "fed strictly in order");
+    s.wait_idle();
+    assert_eq!(s.peak.load(Ordering::SeqCst), 3);
+    // The first parallel chunk is delayed 150 ms. Window of 3: at most the next two chunks can
+    // complete before it; a chunk 3 positions later cannot even start until it is consumed.
+    let first = m.source.vision_offset as usize + (4 << 20);
+    let finished = s.finished.lock().unwrap();
+    let pos = finished.iter().position(|x| x.0 == first).unwrap();
+    let before = finished[..pos]
+        .iter()
+        .filter(|x| x.0 > m.source.vision_offset as usize)
+        .count();
+    assert!((1..=2).contains(&before), "{before} chunks finished before the delayed one");
 }
