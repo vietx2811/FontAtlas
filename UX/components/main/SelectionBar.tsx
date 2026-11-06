@@ -1,13 +1,14 @@
 import { useRef } from 'react';
 import type { FaceRow } from '../../features/library-grid/types';
+import { clearSelection } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
 import { useFaceActions } from '../faces/FaceActions';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import './selectionBar.css';
 
-/** Thanh nổi trên lưới khi chọn ≥ 2 font: "N đã chọn" + hành động nhanh. */
-export function SelectionBar({ rows, onClear }: { rows: readonly FaceRow[]; onClear(): void }): React.JSX.Element | null {
+/** Thanh trong hàng dưới topbar khi chọn ≥ 2 font: "N đã chọn" + hành động nhanh (không đè lên lưới). */
+export function SelectionBar({ rows }: { rows: readonly FaceRow[] }): React.JSX.Element | null {
   const actions = useFaceActions();
   const active = useUiStore(s => s.active);
   const projectBtn = useRef<HTMLButtonElement>(null);
@@ -30,7 +31,7 @@ export function SelectionBar({ rows, onClear }: { rows: readonly FaceRow[]; onCl
       </Tooltip>
       <span className="fa-selbar-sep" aria-hidden />
       <Tooltip label="Bỏ chọn" shortcut="Esc">
-        <button type="button" onClick={onClear}>Bỏ chọn</button>
+        <button type="button" onClick={clearSelection}>Bỏ chọn</button>
       </Tooltip>
     </div>
   );

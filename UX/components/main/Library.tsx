@@ -6,7 +6,6 @@ import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
 import { rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
 import { useFaceActions } from '../faces/FaceActions';
-import { SelectionBar } from './SelectionBar';
 import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
 import { libraryEmpty, type Empty } from '../zero/zeroStates';
@@ -49,11 +48,14 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
       .then(() => { useFavoriteStore.getState().set([r], next); useUiStore.getState().bumpLibrary(!next && useUiStore.getState().view === 'star'); })
       .catch(e => console.warn('set_favorite failed', e));
   }, [api, favs]);
-  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews, active, filters, familyScope }), [view, tag, query, viOnly, recentViews, active, filters, familyScope]);
+  // "Gần đây": chọn/mở font đẩy nó lên đầu danh sách, nhưng thứ tự trên lưới đứng yên cho tới khi rời view (hoặc mở lại thư viện).
+  const inRecent = view === 'recent';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const frozenRecents = useMemo(() => recentViews, [inRecent]);
+  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews: frozenRecents, active, filters, familyScope }), [view, tag, query, viOnly, frozenRecents, active, filters, familyScope]);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
   const scopeKey = useMemo(() => JSON.stringify([view, tag, query, viOnly, filters, familyScope?.name ?? null]), [view, tag, query, viOnly, filters, familyScope]);
   const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap);
-  const selectedRows = useMemo(() => [...selection.rows.values()], [selection.rows]);
   const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     const st = useSelectionStore.getState();
     let target: FaceRow[];
@@ -76,7 +78,6 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
-      <SelectionBar rows={selectedRows} onClear={selection.clear} />
       <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
     </div>

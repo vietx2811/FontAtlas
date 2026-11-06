@@ -3,7 +3,7 @@ import type { Api } from '../../api';
 import type { PickMods } from '../../features/library-grid';
 import type { FaceRow, GridQuery } from '../../features/library-grid/types';
 import { useNoticeStore } from '../../store/notices';
-import { SELECT_MAX, rowKey, useSelectionStore } from '../../store/selection';
+import { SELECT_MAX, clearSelection, rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
 
 const CHUNK = 500;
@@ -38,24 +38,21 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
     return out;
   }, [api]);
 
-  const clear = useCallback(() => {
-    token.current++;
-    useSelectionStore.getState().clear();
-    useUiStore.getState().select(null);
-  }, []);
+  const clear = clearSelection;
 
   const pick = useCallback((row: FaceRow, index: number, mods: PickMods) => {
     const st = useSelectionStore.getState();
     const ui = useUiStore.getState();
     const key = rowKey(row);
     const mine = ++token.current;
+    const epoch = st.epoch;
     if (mods.shift && st.anchor !== null) {
       const anchor = st.anchor;
       const lo = Math.min(anchor, index);
       let hi = Math.max(anchor, index);
       if (hi - lo + 1 > SELECT_MAX) { hi = lo + SELECT_MAX - 1; say('info', `Chỉ chọn ${fmt(SELECT_MAX)} font mỗi lần`); }
       fetchRange(lo, hi).then(list => {
-        if (token.current !== mine) return;
+        if (token.current !== mine || useSelectionStore.getState().epoch !== epoch) return;
         if (mods.meta) st.add(list); else st.replace(list, anchor);
         useUiStore.getState().select(key);
       }, e => say('error', `Không chọn được dải font: ${(e as Error)?.message ?? e}`));
@@ -73,12 +70,13 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
 
   const selectAll = useCallback(async () => {
     const mine = ++token.current;
+    const epoch = useSelectionStore.getState().epoch;
     try {
       const first = await api.queryFaces({ ...queryRef.current, offset: 0, limit: Math.min(CHUNK, SELECT_MAX) });
       const want = Math.min(first.total, SELECT_MAX);
       const list = [...first.items];
       if (want > list.length) list.push(...await fetchRange(list.length, want - 1));
-      if (token.current !== mine) return;
+      if (token.current !== mine || useSelectionStore.getState().epoch !== epoch) return;
       useSelectionStore.getState().replace(list.slice(0, want), 0);
       if (first.total > SELECT_MAX) say('info', `Đã chọn ${fmt(SELECT_MAX)} font đầu tiên trong ${fmt(first.total)} font`);
     } catch (e) { say('error', `Không chọn được tất cả: ${(e as Error)?.message ?? e}`); }
