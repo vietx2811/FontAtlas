@@ -26,9 +26,11 @@ skrifa = "=0.48.0"
 thiserror = "2"
 tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
 # Async transport: cancellation drops requests instead of detaching a blocking reader.
-reqwest = { version = "=0.12.26", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "=0.12.26", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
 tokio = { version = "=1.48.0", features = ["rt", "time", "net"] }
 futures-util = "=0.3.31"
+rustls = { version = "=0.23.35", default-features = false, features = ["std"] }
+log = "=0.4.29"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 candle-core = { version = "=0.11.0", features = ["accelerate", "metal"] }

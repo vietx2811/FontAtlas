@@ -14,7 +14,8 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::EmbedError;
+use crate::{EmbedError, NetworkErrorKind};
+use std::error::Error;
 
 /// Thời gian tối đa chờ một chunk dữ liệu (không phải cả file).
 pub const READ_TIMEOUT: Duration = Duration::from_secs(30);
@@ -453,10 +454,21 @@ pub fn disk_free(path: &Path) -> std::io::Result<u64> {
     fs2::available_space(p)
 }
 
+#[cfg(test)]
+struct TestResolver(std::sync::Arc<dyn reqwest::dns::Resolve>);
+#[cfg(test)]
+impl reqwest::dns::Resolve for TestResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        self.0.resolve(name)
+    }
+}
+
 pub struct ModelStore {
     dir: PathBuf,
     m: Manifest,
     read_timeout: Duration,
+    #[cfg(test)]
+    dns_resolver: Option<std::sync::Arc<dyn reqwest::dns::Resolve>>,
 }
 
 pub fn sha256_file(p: &Path) -> std::io::Result<String> {
@@ -489,6 +501,8 @@ impl ModelStore {
             dir,
             m,
             read_timeout: READ_TIMEOUT,
+            #[cfg(test)]
+            dns_resolver: None,
         }
     }
 
@@ -522,7 +536,15 @@ impl ModelStore {
             local_header_len,
             vision_done,
         };
-        fs::write(self.meta_path(), serde_json::to_vec(&m).unwrap_or_default())
+        let tmp = self.path(".part.json.tmp");
+        let bytes = serde_json::to_vec(&m).map_err(std::io::Error::other)?;
+        let mut file = File::create(&tmp)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(tmp, self.meta_path())?;
+        best_effort_sync_directory(&self.dir, sync_directory);
+        Ok(())
     }
 
     /// `.part.json` đúng manifest hiện tại và `.part` đủ dài; còn dở (chưa hết vision).
@@ -542,6 +564,7 @@ impl ModelStore {
     fn drop_part(&self) {
         let _ = fs::remove_file(self.path(".part"));
         let _ = fs::remove_file(self.meta_path());
+        let _ = fs::remove_file(self.path(".part.json.tmp"));
     }
 
     fn path(&self, suffix: &str) -> PathBuf {
@@ -590,7 +613,7 @@ impl ModelStore {
     }
 
     pub fn remove(&self) -> std::io::Result<()> {
-        for s in ["", ".part", ".part.json", ".ok"] {
+        for s in ["", ".part", ".part.json", ".part.json.tmp", ".ok"] {
             match fs::remove_file(self.path(s)) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
                 _ => {}
@@ -643,10 +666,18 @@ impl ModelStore {
         let started = Instant::now();
         let (base, resumed) = (Cell::new(0u64), Cell::new(false));
         let high_water = Cell::new(0u64);
+        let last_total = Cell::new(0u64);
+        let phase_started = Cell::new(started);
         let report = |done: u64, total: u64| {
+            if last_total.get() != 0 && last_total.get() != total {
+                high_water.set(0);
+                base.set(0);
+                phase_started.set(Instant::now());
+            }
+            last_total.set(total);
             let done = done.max(high_water.get()).min(total);
             high_water.set(done);
-            let secs = started.elapsed().as_secs_f64().max(1e-3);
+            let secs = phase_started.get().elapsed().as_secs_f64().max(1e-3);
             let bytes_per_sec = done.saturating_sub(base.get()) as f64 / secs;
             progress(DownloadProgress {
                 done,
@@ -659,10 +690,12 @@ impl ModelStore {
             .enable_all()
             .build()?;
         let r = runtime.block_on(self.download(&part, &report, cancel, &base, &resumed));
+        // getaddrinfo may still be blocked inside Tokio's resolver blocking pool. Never
+        // let Runtime::drop keep the model worker/lock alive while waiting for DNS.
+        runtime.shutdown_background();
         if let Err(e) = &r {
             // chỉ giữ khi dừng giữa chừng (huỷ, mạng) và đã có mốc tiếp được
-            let keep = matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
-                && self.usable_meta().is_some();
+            let keep = preserve_partial(e) && self.usable_meta().is_some();
             if !keep {
                 self.drop_part();
             }
@@ -683,10 +716,18 @@ impl ModelStore {
         if cancel.load(Ordering::SeqCst) {
             return Err(EmbedError::Cancelled);
         }
+        self.publish_verified(&part, sync_directory)
+    }
+
+    fn publish_verified(
+        &self,
+        part: &Path,
+        sync: fn(&Path) -> std::io::Result<()>,
+    ) -> Result<PathBuf, EmbedError> {
         let file = self.path("");
-        fs::rename(&part, &file)?;
+        fs::rename(part, &file)?;
         let _ = fs::remove_file(self.meta_path());
-        sync_directory(&self.dir)?;
+        best_effort_sync_directory(&self.dir, sync);
         if let Some(l) = self.ok_line(&file) {
             fs::write(self.path(".ok"), l)?;
         }
@@ -701,13 +742,18 @@ impl ModelStore {
         base: &Cell<u64>,
         resumed: &Cell<bool>,
     ) -> Result<(), EmbedError> {
+        let builder = reqwest::Client::builder()
+            .connect_timeout(self.read_timeout)
+            .read_timeout(self.read_timeout)
+            .pool_max_idle_per_host(CONCURRENCY);
+        #[cfg(test)]
+        let builder = if let Some(resolver) = &self.dns_resolver {
+            builder.dns_resolver(std::sync::Arc::new(TestResolver(resolver.clone())))
+        } else {
+            builder
+        };
         let agent = Http {
-            client: reqwest::Client::builder()
-                .connect_timeout(self.read_timeout)
-                .read_timeout(self.read_timeout)
-                .pool_max_idle_per_host(CONCURRENCY)
-                .build()
-                .map_err(network_error)?,
+            client: builder.build().map_err(network_error)?,
             timeout: self.read_timeout,
             full_only: Cell::new(false),
         };
@@ -809,7 +855,7 @@ impl ModelStore {
         base.set(done0);
         let r = self.vision(agent, &mut ex, a, progress, cancel).await;
         if let Err(e) = &r
-            && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+            && preserve_partial(e)
         {
             self.save_meta(&mut ex);
         }
@@ -875,7 +921,7 @@ impl ModelStore {
                     .vision(agent, &mut ex, src.vision_offset, progress, cancel)
                     .await;
                 if let Err(e) = &r
-                    && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+                    && preserve_partial(e)
                 {
                     self.save_meta(&mut ex);
                 }
@@ -893,6 +939,7 @@ impl ModelStore {
                 Ok(Attempt::Done)
             }
             200 => {
+                progress(0, src.size);
                 pump(
                     body,
                     src.size,
@@ -918,6 +965,7 @@ impl ModelStore {
         progress: &dyn Fn(u64, u64),
         cancel: &AtomicBool,
     ) -> Result<(), EmbedError> {
+        progress(0, self.m.source.size);
         let mut out = File::create(part)?;
         let mut ex = Extract::new(Some(&self.m.source), Some(&mut out));
         let (status, _, body) = get(agent, &self.m.source.url, None, cancel).await?;
@@ -1060,24 +1108,80 @@ impl ModelStore {
 }
 
 fn http(status: u16) -> EmbedError {
-    // 429 and other HTTP failures are surfaced without automatic retry (honor server pacing).
-    EmbedError::Io(std::io::Error::new(
-        std::io::ErrorKind::PermissionDenied,
-        format!("http {status}"),
-    ))
+    EmbedError::Http {
+        status,
+        retry_after: None,
+    }
+}
+
+fn preserve_partial(e: &EmbedError) -> bool {
+    matches!(
+        e,
+        EmbedError::Cancelled
+            | EmbedError::Io(_)
+            | EmbedError::Http { .. }
+            | EmbedError::Network { .. }
+    )
 }
 
 fn retryable(e: &EmbedError) -> bool {
-    matches!(e, EmbedError::Io(io) if matches!(io.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionAborted | std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe))
+    match e {
+        EmbedError::Http {
+            status: 500 | 502 | 503 | 504,
+            ..
+        } => true,
+        EmbedError::Network { kind, .. } => matches!(
+            kind,
+            NetworkErrorKind::Timeout
+                | NetworkErrorKind::Connect
+                | NetworkErrorKind::Body
+                | NetworkErrorKind::RequestIo
+        ),
+        EmbedError::Io(io) => matches!(
+            io.kind(),
+            std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::UnexpectedEof
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::BrokenPipe
+        ),
+        _ => false,
+    }
 }
 
 fn network_error(e: reqwest::Error) -> EmbedError {
-    let kind = if e.is_timeout() {
-        std::io::ErrorKind::TimedOut
+    let mut chain: Vec<&(dyn Error + 'static)> = vec![&e];
+    let mut source = e.source();
+    while let Some(cause) = source {
+        chain.push(cause);
+        source = cause.source();
+    }
+    let kind = if chain.iter().any(|e| e.is::<rustls::Error>()) {
+        NetworkErrorKind::Tls
+    } else if e.is_builder() {
+        NetworkErrorKind::Builder
+    } else if e.is_redirect() {
+        NetworkErrorKind::Redirect
+    } else if e.is_timeout() {
+        NetworkErrorKind::Timeout
+    } else if e.is_connect() {
+        NetworkErrorKind::Connect
+    } else if chain.iter().any(|e| {
+        e.downcast_ref::<reqwest::Error>()
+            .is_some_and(|e| e.is_body())
+    }) {
+        NetworkErrorKind::Body
+    } else if e.is_request() && chain.iter().any(|e| e.is::<std::io::Error>()) {
+        NetworkErrorKind::RequestIo
     } else {
-        std::io::ErrorKind::ConnectionAborted
+        NetworkErrorKind::Other
     };
-    EmbedError::Io(std::io::Error::new(kind, e))
+    let message = chain
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(": ");
+    EmbedError::Network { kind, message }
 }
 
 struct Http {
@@ -1114,11 +1218,9 @@ async fn cancellable<T>(
     let io = async {
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| {
-                EmbedError::Io(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "HTTP read timeout",
-                ))
+            .map_err(|_| EmbedError::Network {
+                kind: NetworkErrorKind::Timeout,
+                message: "HTTP read timeout".into(),
             })?
             .map_err(network_error)
     };
@@ -1153,11 +1255,11 @@ async fn get(
             .headers()
             .get("retry-after")
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("unspecified");
-        return Err(EmbedError::Io(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            format!("http 429; Retry-After: {retry_after}; retry manually later"),
-        )));
+            .map(str::to_string);
+        return Err(EmbedError::Http {
+            status,
+            retry_after,
+        });
     }
     if range.is_some() && status == 200 {
         agent.full_only.set(true);
@@ -1173,10 +1275,10 @@ async fn get(
 fn check_range(cr: Option<&str>, a: u64, b: u64, total: u64) -> Result<(), EmbedError> {
     let want = format!("bytes {a}-{b}/{total}");
     if cr != Some(want.as_str()) {
-        return Err(EmbedError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("content-range {cr:?}, cần {want}"),
-        )));
+        return Err(EmbedError::Network {
+            kind: NetworkErrorKind::Other,
+            message: format!("content-range {cr:?}, cần {want}"),
+        });
     }
     Ok(())
 }
@@ -1241,10 +1343,10 @@ async fn pump(
         }
     }
     if done != expected {
-        return Err(EmbedError::Io(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            format!("expected {expected} bytes, received {done}"),
-        )));
+        return Err(EmbedError::Network {
+            kind: NetworkErrorKind::Body,
+            message: format!("expected {expected} bytes, received {done}"),
+        });
     }
     progress(done);
     Ok(())
@@ -1268,6 +1370,12 @@ fn sync_directory_unavailable(_dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn best_effort_sync_directory(dir: &Path, sync: fn(&Path) -> std::io::Result<()>) {
+    if let Err(e) = sync(dir) {
+        log::warn!("model directory fsync failed at {}: {e}", dir.display());
+    }
+}
+
 #[cfg(test)]
 mod durability_tests {
     use super::*;
@@ -1278,5 +1386,181 @@ mod durability_tests {
             sync_directory_unavailable(Path::new("/nonexistent-fontatlas-durability-fixture"))
                 .is_ok()
         );
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    struct BlockingResolver {
+        started: Arc<AtomicBool>,
+    }
+    impl reqwest::dns::Resolve for BlockingResolver {
+        fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
+            let started = self.started.clone();
+            Box::pin(async move {
+                tokio::task::spawn_blocking(move || {
+                    started.store(true, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_secs(2));
+                })
+                .await
+                .unwrap();
+                Err(std::io::Error::other("synthetic slow getaddrinfo").into())
+            })
+        }
+    }
+    #[test]
+    fn cancelling_slow_blocking_dns_releases_model_worker_and_lock_under_one_second() {
+        let d = tempfile::tempdir().unwrap();
+        let mut m = bundled_manifest();
+        m.source.url = "http://fontatlas-dns-fixture.invalid/model".into();
+        let started = Arc::new(AtomicBool::new(false));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut st = ModelStore::new(d.path().into(), m);
+        st.dns_resolver = Some(Arc::new(BlockingResolver {
+            started: started.clone(),
+        }));
+        let c = cancel.clone();
+        let watcher = std::thread::spawn(move || {
+            let t = Instant::now();
+            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(3) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(started.load(Ordering::SeqCst));
+            c.store(true, Ordering::SeqCst);
+        });
+        let t = Instant::now();
+        let result = st.ensure_resumable(&|_| {}, &cancel);
+        let elapsed = t.elapsed();
+        watcher.join().unwrap();
+        assert!(matches!(result, Err(EmbedError::Cancelled)));
+        assert!(elapsed < Duration::from_secs(1), "{elapsed:?}");
+        let lock = OpenOptions::new()
+            .write(true)
+            .open(st.path(".lock"))
+            .unwrap();
+        lock.try_lock()
+            .expect("model lock must be released, even while resolver blocking task finishes");
+    }
+
+    struct CertificateFailure {
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl reqwest::dns::Resolve for CertificateFailure {
+        fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Err(
+                    rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer)
+                        .into(),
+                )
+            })
+        }
+    }
+    #[test]
+    fn typed_certificate_failure_is_not_retried_or_reported_as_disk_permission() {
+        let d = tempfile::tempdir().unwrap();
+        let mut m = bundled_manifest();
+        m.source.url = "https://fontatlas-certificate-fixture.invalid/model".into();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut st = ModelStore::new(d.path().into(), m);
+        st.dns_resolver = Some(Arc::new(CertificateFailure {
+            calls: calls.clone(),
+        }));
+        let e = st
+            .ensure_resumable(&|_| {}, &AtomicBool::new(false))
+            .unwrap_err();
+        assert!(
+            matches!(
+                e,
+                EmbedError::Network {
+                    kind: NetworkErrorKind::Tls,
+                    ..
+                }
+            ),
+            "{e:?}"
+        );
+        assert_eq!(e.code(), "tls");
+        assert!(!retryable(&e));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn invalid_request_builder_is_not_retried() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let err = rt.block_on(async {
+            reqwest::Client::new()
+                .get("http://[invalid")
+                .send()
+                .await
+                .unwrap_err()
+        });
+        rt.shutdown_background();
+        let e = network_error(err);
+        assert!(matches!(
+            e,
+            EmbedError::Network {
+                kind: NetworkErrorKind::Builder,
+                ..
+            }
+        ));
+        assert!(!retryable(&e));
+        assert_eq!(e.code(), "http_config");
+    }
+    #[test]
+    fn verified_publish_succeeds_despite_directory_fsync_failure() {
+        let d = tempfile::tempdir().unwrap();
+        let bytes = b"verified fixture";
+        let mut m = bundled_manifest();
+        m.file = "verified.bin".into();
+        m.size = bytes.len() as u64;
+        m.sha256 = format!("{:x}", Sha256::digest(bytes));
+        let st = ModelStore::new(d.path().into(), m);
+        let part = st.path(".part");
+        fs::write(&part, bytes).unwrap();
+        let p = st
+            .publish_verified(&part, |_| {
+                Err(std::io::Error::other("injected directory fsync failure"))
+            })
+            .unwrap();
+        assert_eq!(fs::read(&p).unwrap(), bytes);
+        assert_eq!(st.status(), ModelStatus::Ready(p));
+    }
+    #[test]
+    fn metadata_checkpoint_is_atomic_and_keeps_previous_checkpoint_on_failure() {
+        let d = tempfile::tempdir().unwrap();
+        let st = ModelStore::new(d.path().into(), bundled_manifest());
+        st.write_meta(100, 200).unwrap();
+        assert!(!st.path(".part.json.tmp").exists());
+        let before = fs::read(st.meta_path()).unwrap();
+        fs::create_dir(st.path(".part.json.tmp")).unwrap();
+        assert!(st.write_meta(100, 300).is_err());
+        assert_eq!(fs::read(st.meta_path()).unwrap(), before);
+        fs::remove_dir(st.path(".part.json.tmp")).unwrap();
+        st.write_meta(100, 300).unwrap();
+        let got: PartMeta = serde_json::from_slice(&fs::read(st.meta_path()).unwrap()).unwrap();
+        assert_eq!(got.vision_done, 300);
+        assert!(!st.path(".part.json.tmp").exists());
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let meta = st.meta_path();
+        let reader = std::thread::spawn(move || {
+            let started = Instant::now();
+            while !stopped.load(Ordering::SeqCst) && started.elapsed() < Duration::from_secs(5) {
+                let bytes = fs::read(&meta).unwrap();
+                let m: PartMeta = serde_json::from_slice(&bytes)
+                    .expect("reader must never see a partial JSON checkpoint");
+                assert_eq!(m.local_header_len, 100);
+            }
+        });
+        for n in 301..331 {
+            st.write_meta(100, n).unwrap();
+        }
+        stop.store(true, Ordering::SeqCst);
+        reader.join().unwrap();
     }
 }

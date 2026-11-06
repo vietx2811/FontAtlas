@@ -380,11 +380,14 @@ fn tampered_ready_file_is_corrupt() {
 }
 
 #[test]
-fn http_error_is_io() {
+fn http_error_has_status_separate_from_disk_io() {
     let (_s, url) = serve_status(404);
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, manifest_for(&fake_model(), &url));
-    assert!(matches!(ensure(&st), Err(EmbedError::Io(_))));
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::Http { status: 404, .. })
+    ));
 }
 
 #[test]
@@ -860,9 +863,13 @@ fn parallel_worker_bad_range_and_200_fallback() {
         let st = store(&d, m.clone());
         let r = ensure(&st);
         if fault == Fault::WrongRange {
-            assert!(
-                matches!(r,Err(EmbedError::Io(ref e)) if e.kind()==std::io::ErrorKind::InvalidData)
-            );
+            assert!(matches!(
+                r,
+                Err(EmbedError::Network {
+                    kind: fontatlas_embed::NetworkErrorKind::Other,
+                    ..
+                })
+            ));
             assert!(!matches!(st.status(), ModelStatus::Ready(_)));
         } else {
             assert_eq!(sha256_file(&r.unwrap()).unwrap(), m.sha256);
@@ -966,9 +973,13 @@ fn persistent_timeout_stops_after_bounded_retries_and_leaves_no_active_worker() 
     let d = tempfile::tempdir().unwrap();
     let st = store(&d, m.clone()).with_read_timeout_for_test(Duration::from_millis(350));
     let t = std::time::Instant::now();
-    assert!(
-        matches!(ensure(&st),Err(EmbedError::Io(ref e)) if e.kind()==std::io::ErrorKind::TimedOut)
-    );
+    assert!(matches!(
+        ensure(&st),
+        Err(EmbedError::Network {
+            kind: fontatlas_embed::NetworkErrorKind::Timeout,
+            ..
+        })
+    ));
     assert!(t.elapsed() < Duration::from_secs(5));
     s.wait_idle();
     assert!(s.peak.load(Ordering::SeqCst) <= 3);
@@ -999,7 +1010,7 @@ fn final_local_sha_mismatch_never_ready_or_retried_and_429_honors_server_pacing(
     });
     let st = store(&d, manifest_for(&src, &url));
     assert!(
-        matches!(ensure(&st),Err(EmbedError::Io(ref e)) if e.to_string().contains("Retry-After: 120"))
+        matches!(ensure(&st),Err(EmbedError::Http { status:429, retry_after:Some(ref v) }) if v == "120")
     );
     assert_eq!(s.requests(), 1);
     assert_eq!(st.status(), ModelStatus::Missing);
@@ -1042,4 +1053,106 @@ fn malformed_resume_metadata_cannot_overflow_or_mix_header_denominators() {
         }
     );
     assert_eq!(sha256_file(&ensure(&st).unwrap()).unwrap(), m.sha256);
+}
+
+#[test]
+fn transient_http_5xx_retries_then_succeeds_but_4xx_never_retries() {
+    for status in [500, 502, 503, 504] {
+        let src = fake_model();
+        let served = src.clone();
+        let n = AtomicUsize::new(0);
+        let (srv, url) = serve(move |rq| {
+            if n.fetch_add(1, Ordering::SeqCst) == 0 {
+                let _ = rq.respond(tiny_http::Response::empty(status));
+                return;
+            }
+            let (a, b) = range_of(&rq).unwrap();
+            let cr = tiny_http::Header::from_bytes(
+                "Content-Range",
+                format!("bytes {a}-{b}/{}", served.len()),
+            )
+            .unwrap();
+            let _ = rq.respond(
+                tiny_http::Response::from_data(served[a..=b].to_vec())
+                    .with_status_code(206)
+                    .with_header(cr),
+            );
+        });
+        let d = tempfile::tempdir().unwrap();
+        let m = manifest_for(&src, &url);
+        let p = ensure(&store(&d, m.clone())).unwrap();
+        assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+        assert_eq!(srv.requests(), 3);
+    }
+    for status in [400, 401, 403, 404, 408] {
+        let (srv, url) = serve_status(status);
+        let d = tempfile::tempdir().unwrap();
+        let e = ensure(&store(&d, manifest_for(&fake_model(), &url))).unwrap_err();
+        assert!(matches!(e,EmbedError::Http { status:s, .. } if s==status));
+        assert_eq!(e.code(), "http");
+        assert_eq!(srv.requests(), 1);
+    }
+}
+
+#[test]
+fn full_stream_fallback_starts_a_new_progress_denominator() {
+    let src = parallel_model();
+    let mut m = manifest_for(&src, "");
+    let s = concurrent_server(src, m.source.vision_offset as usize, Fault::IgnoreRange);
+    m.source.url = s.url.clone();
+    let d = tempfile::tempdir().unwrap();
+    let st = store(&d, m.clone());
+    let events = std::sync::Mutex::new(Vec::new());
+    let p = st
+        .ensure_resumable(&|e| events.lock().unwrap().push(e), &AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(sha256_file(&p).unwrap(), m.sha256);
+    let events = events.lock().unwrap();
+    let switch = events
+        .windows(2)
+        .position(|w| w[0].total != w[1].total)
+        .expect("Range -> full source changes total")
+        + 1;
+    assert!(events[switch - 1].done >= 4 << 20);
+    assert!(
+        events[switch].done <= 2 << 20,
+        "new phase must start advancing from zero"
+    );
+    assert!(
+        events
+            .windows(2)
+            .all(|w| w[0].total != w[1].total || w[0].done <= w[1].done)
+    );
+    assert!(
+        events
+            .iter()
+            .all(|e| e.done <= e.total && e.bytes_per_sec.is_finite())
+    );
+    assert_eq!(events.last().unwrap().done, m.source.size);
+    s.wait_idle();
+}
+
+#[test]
+fn redirect_loop_is_reported_without_a_second_download_attempt() {
+    let (srv, url) = serve(|rq| {
+        let h = tiny_http::Header::from_bytes("Location", "/model.safetensors").unwrap();
+        let _ = rq.respond(tiny_http::Response::empty(302).with_header(h));
+    });
+    let d = tempfile::tempdir().unwrap();
+    let e = ensure(&store(&d, manifest_for(&fake_model(), &url))).unwrap_err();
+    assert!(
+        matches!(
+            e,
+            EmbedError::Network {
+                kind: fontatlas_embed::NetworkErrorKind::Redirect,
+                ..
+            }
+        ),
+        "{e:?}"
+    );
+    assert_eq!(e.code(), "http_redirect");
+    assert!(
+        srv.requests() <= 11,
+        "redirects should not be retried as a new download"
+    );
 }
