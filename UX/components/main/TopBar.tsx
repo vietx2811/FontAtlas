@@ -8,13 +8,17 @@ import { FilterPanel } from './FilterPanel';
 
 export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const { title, count } = useViewSummary(api);
+  const familyScope = useUiStore(s => s.familyScope);
+  const filters = useUiStore(s => s.filters);
+  const setView = useUiStore(s => s.setView);
   const viOnly = useUiStore(s => s.viOnly);
   const setViOnly = useUiStore(s => s.setViOnly);
   const layout = useUiStore(s => s.layout);
   const setLayout = useUiStore(s => s.setLayout);
+  const hasFilters = viOnly || filters.italic != null || filters.variable != null || !!filters.rawAxisRanges?.length;
   return (
-    <header className="fa-topbar">
-      <div className="fa-ttl"><h1>{title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
+    <header className={`fa-topbar${familyScope ? ' has-family' : ''}`}>
+      <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
       <button type="button" className="fa-vi-toggle" aria-pressed={viOnly} title="Chỉ font đủ dấu tiếng Việt" onClick={() => setViOnly(!viOnly)}>Ặ vi</button>
       <FilterPanel api={api} />
@@ -22,6 +26,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
         <button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" title="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button>
         <button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" title="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button>
       </div>
+      {familyScope && <div className="fa-family-row"><button type="button" className="fa-family-chip" aria-label={`Bỏ phạm vi family ${familyScope.name}`} title={`${count ?? '…'}/${familyScope.faces.length} kiểu${hasFilters ? ' · có lọc' : ''}`} onClick={() => setView('all')}><span>Family: {familyScope.name}{hasFilters ? ' · có lọc' : ''}</span><span aria-hidden>×</span></button></div>}
     </header>
   );
 }

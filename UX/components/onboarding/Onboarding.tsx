@@ -180,8 +180,11 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
       try { await api.addSource(path); }
       catch (e) { const msg = sourceError(e, path); if (msg) errors.push(`${path}: ${msg}`); }
     }
-    if (chosen.length) await refresh();
     if (alive.current) setMessages(errors);
+    if (chosen.length) {
+      try { await refresh(); }
+      catch (e) { if (alive.current) setLoadError(sourceError(e)); }
+    }
   });
   return (
     <>

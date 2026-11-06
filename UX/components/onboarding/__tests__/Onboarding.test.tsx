@@ -238,6 +238,19 @@ describe('Onboarding', () => {
     expect((await api.listSources()).some(s => s.id === source.id)).toBe(true);
   });
 
+  it('preserves per-folder failures when refreshing the source list also fails', async () => {
+    const api = createMockApi(); await api.setOnboardingStep('o3');
+    const sources = vi.spyOn(api, 'listSources');
+    vi.spyOn(api, 'addSource').mockRejectedValueOnce(new CmdError('io', 'Folder A denied')).mockRejectedValueOnce(new CmdError('io', 'Folder B denied'));
+    render(<Onboarding api={api} pickFolders={async () => ['/A', '/B']} onDone={() => {}} />);
+    await settle();
+    sources.mockRejectedValueOnce(new Error('refresh unavailable'));
+    await click(/Thêm thư mục/);
+    const alerts = screen.getAllByRole('alert').map(e => e.textContent).join(' ');
+    expect(alerts).toContain('Folder A denied'); expect(alerts).toContain('Folder B denied');
+    expect(alerts).toContain('refresh unavailable');
+  });
+
   it('does not delete current or queued sources from scan status', async () => {
     const api = createMockApi(); await api.setOnboardingStep('o3');
     const sources = await api.listSources();
