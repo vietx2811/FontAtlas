@@ -1,61 +1,66 @@
 # 00 — Tóm tắt: Pairing Desk
 
-- **Ngày:** 2026-11-06 (vòng 2) · **Nhánh:** `docs/font-desk` · **Trạng thái:** chờ chủ app chọn phương án layout
+- **Ngày:** 2026-11-06 (vòng 3) · **Nhánh:** `docs/font-desk` · **Trạng thái:** chờ chủ app duyệt hai chế độ Pairing / Compare
 - **Tài liệu:**
-  - vòng 2: `05_layout_options_v2.md` · prototype `docs/design/prototype/pairing-desk-v2.html` · ảnh `shots-v2/`
-  - vòng 1 (lịch sử, cơ chế vẫn đúng): `01`–`04` · `font-desk-v1.html` · `shots/`
+  - vòng 3 (hiện hành): `06_v3_pairing_compare.md` · prototype `docs/design/prototype/pairing-desk-v3.html` · ảnh `shots-v3/`
+  - vòng 2: `05_layout_options_v2.md` · `pairing-desk-v2.html` · `shots-v2/`
+  - vòng 1 (lịch sử, cơ chế giọng/vai/nguồn/nhãn/dữ liệu vẫn đúng): `01`–`04` · `font-desk-v1.html` · `shots/`
 
-## Tên và hệ từ (chủ app đã chốt)
-- **Pairing Desk** là tính năng, mở toàn phần phải. Mục sidebar cùng tên liệt kê các Case có sao và dòng "Tất cả Case".
-- **Case** là đơn vị làm việc: tự lưu, sao, thùng rác 30 ngày. Không dùng "Plate" nữa.
-- **Combo** là một phương án ghép trong Case. Một Case có nhiều combo.
-- Giữ các từ: Neo · Giọng (①②③, tối đa 3) · Vai · Bố cục · Chế độ · Kiểu ghép · Thử / Đặt · So sánh.
+## Đã chốt (chủ app)
+- **Pairing Desk** là tính năng. **Case** là đơn vị làm việc. **Combo** là phương án ghép, nằm trong Case. Cả ba giữ tiếng Anh.
+- Người dùng là Graphic Designer, Art Director, Layout Artist (và UI/Web). Nội dung mẫu đa ngành, tiếng Việt thật có dấu chồng.
+- Nền layout là **phương án C — Cột vai + Cuộn chọn**.
+- **Option Stepper** `‹ ▾ ›` thay mọi tab. **Cột mốc** trong Compare cố định.
+- **Thuật ngữ font giữ tiếng Anh** (x-height, contrast, stress, aperture, weight, width, serif, Variable, Italic…), giải thích bằng gloss theo locale. Mọi chuỗi UI qua khoá i18n.
 
-## Người dùng
-- Graphic Designer, Art Director, Layout Artist (và UI/Web designer). Bỏ định hướng F&B.
-- Bố cục mẫu đa ngành: **Editorial · Brand sheet · Poster · UI/Web · Bao bì**. Chữ mẫu là tiếng Việt thật có dấu chồng (Ữ Ặ Ệ Ỗ, ươ).
+## Vòng 3: hai chế độ
+| | Pairing | Compare |
+|---|---|---|
+| Để làm gì | Tìm và thử font cho từng vai, ghép giọng thành combo | Đặt nhiều font **hoặc** nhiều combo cạnh nhau theo chiều ngang |
+| Màn hình | Cột vai · Cuộn chọn · Trang · **Dải chi tiết** dưới trang | Bảng so sánh ngang (Specimen / Số đo / Meta), hoặc Song bản |
+| Pairing Style, Mức ghép | Có, ở đầu Cuộn chọn (nguồn Ghép) | Không có |
+| Chuyển | `‹ Pairing ▾ ›`, `⌘1` | `⌘2`, `⇧C` (đưa font đang thử vào Compare), "So sánh các combo" |
 
-## Phương án layout vòng 2 (chủ app chọn; prototype có công tắc A / B / C)
-| | Ý chính | T1–T3: click · quãng chuột (ước lượng) | Mạnh ở |
-|---|---|---|---|
-| v1 (mốc) | Trang + Sổ giọng + Khay dưới | ~5 · ~2.800 px | — |
-| **A Tại chỗ** (đề xuất) | Thanh nổi ngay trên khối chữ: ‹ font ▾ › · đậm · hoa/thường · cỡ · so sánh. Danh sách thả xuống ngay dưới khối, hover là thử | ~7 · ~750 px | Đổi font một vai; trang lớn nhất (~85%); hợp bố cục dài |
-| B Song bản | 2–3 bản trang đặt cạnh nhau, mỗi bản là một ứng viên; dải thông số mở được | ~3 · ~750 px | Thử nhiều ứng viên, trình bày cho khách |
-| C Cột vai + Cuộn chọn | Cột vai → font sát trang; cuộn chọn mở cạnh dòng, lăn chuột là thử | ~4 · ~800 px | Bàn phím, thấy toàn hệ vai → font |
+- **Dải chi tiết** (`I` để thu gọn) — trả lời nhận xét 1:
+  - thẻ **Đang dùng** và **Đang thử**: chữ thật của vai + meta (Designer, Foundry, Version, License, Glyphs, Styles, Variable axes, VI x/186);
+  - bảng số đo: Đang dùng · Đang thử · **Δ**;
+  - nhãn ●◐◆○ ở đầu dải; nút "Đặt vào vai" và "Đưa vào Compare".
+- **Compare Font** — trả lời nhận xét 2:
+  - mốc cố định là font đang dùng cho vai;
+  - mỗi ô số có Δ so với mốc;
+  - kéo đổi chỗ cột và hàng (trong cùng nhóm); sắp theo thông số; ghim, bỏ, thêm cột (tìm + gợi ý);
+  - Đặt vào vai; Thử trong Pairing.
+- **Compare Combo:** trang thu nhỏ, giọng ①②③, nhãn ①↔②, Δ x-height, contrast, VI thấp nhất, số font, license. Có Dùng combo, Mở trong Pairing, thêm combo từ gợi ý.
+- **Giữ ngữ cảnh khi chuyển chế độ:**
+  - Pairing → Compare mang theo font đang thử và font đã ghim;
+  - Compare → Pairing mở Cuộn chọn với font đó ở trạng thái thử;
+  - Đặt từ Compare thì font cũ thành một cột, không mất phương án.
 
-**Đề xuất:** A làm mặc định, kèm chế độ **So sánh**. Trong So sánh có nút "Song bản" (lấy từ B). Danh sách của A dùng `↑ ↓` và lăn chuột (lấy từ C).
+## Thay đổi đáng chú ý so với vòng 2
+- Panel chi tiết đặt **dưới trang**, không đặt bên phải. Panel bên phải làm trang co còn khoảng 360 px ở 1400; đặt dưới, trang giữ khoảng 660 px.
+- "Chế độ" nay là Pairing / Compare. Bộ An toàn / Có kiểm soát / Thử nghiệm đổi tên thành **"Mức ghép"**.
+- Tên Pairing Style chuyển sang tiếng Anh: Superfamily · Serif + Sans · Display + Text · Keep one, change one · Rule-breaking.
+- `AXIS_META` (nhãn trục tiếng Việt trong code) cần đổi sang nhãn EN + gloss khi triển khai (06 §6).
 
-## Thành phần mới (có trong prototype)
-- **Option Stepper `‹ nhãn ▾ ›`** thay mọi dạng chấm và tab dài. Dùng cho Bố cục, Combo, Chế độ, Kiểu ghép, Vai, Sắp xếp.
-  - Mũi tên chuyển ngay; bấm nhãn mở dropdown có icon, mô tả và "+ Thêm".
-  - Lăn chuột hoặc `← →` khi focus.
-- **Combo indicator** `‹ ⧉ Combo 2/3 ▾ ›`, phím `[` `]`. Dropdown gồm:
-  - các combo kèm nhãn trục rút gọn; hover là thử trên trang;
-  - 2 combo gợi ý chưa lưu (bấm là thêm);
-  - Lưu combo hiện tại (`⌘⇧S`), Đặt làm combo chính, So sánh các combo.
-- **So sánh mở rộng** (nút `columns-3`, phím `C`):
-  - Cột mốc cố định. Các cột font đặt cạnh nhau.
-  - Hàng specimen (tiêu đề, đoạn văn, dấu chồng) và hàng thông số (số đo + đơn vị + ●◐◆○, cổng).
-  - Kéo đổi chỗ cột và hàng; sắp theo thông số ↑↓; ghim cột; bỏ cột; thêm cột; Đặt; xem Song bản.
-- **Icon lucide** cho mọi nút, tag, chip; bảng ánh xạ đủ ở 05 §7.
-  - Luôn hiện: thao tác chính và trạng thái.
-  - Hiện khi hover/focus: thao tác phụ trên dòng/cột.
-- **Tổ chức tuỳ chọn** theo ba tầng:
-  - thanh trên gom thành 4 cụm;
-  - popover Lọc (`F`) có 4 nhóm và mục Nâng cao đóng sẵn;
-  - chip lọc đang bật, gỡ được.
+## Dữ liệu
+- Đã có: `MetadataDto` (designer, manufacturer, version, license, variableAxes), `FileInfoDto.numGlyphs`, `VietnameseDto` (186), `AxisReadingDto`.
+- Cần thêm:
+  - `faces_detail(keys[])` để lấy nhiều face một lần;
+  - bảng `case_compare` để nhớ cột, thứ tự, nhóm đóng;
+  - file gloss `locales/<lang>/terms.json`;
+  - mẫu câu giải thích (Rust) chèn nhãn EN.
 
 ## Đã kiểm
-- Prototype v2: **0 lỗi console**. Kịch bản tự động chạy hết mọi luồng của A, B, C, Combo, Lọc, So sánh (kéo thả, sắp, ghim), sáng/tối và Case từ font thiếu tiếng Việt.
-- 15 ảnh ở 1400×920 và 1100×800. Lỗi thấy trên ảnh đều đã sửa (chi tiết ở 05 §10).
+- Prototype v3: **0 lỗi console**. Kịch bản tự động chạy hết các luồng chính của Pairing, Compare Font, Compare Combo, chuyển chế độ hai chiều, sáng/tối, 5 bố cục, và Case từ font thiếu tiếng Việt.
+- 11 ảnh ở 1400×920 và 1100×800. Lỗi thấy trên ảnh đều đã sửa (06 §10).
 - **Giới hạn:**
-  - số đo và nhãn là dữ liệu giả; font Google là font đứng thay;
-  - kéo thả chỉ giả lập sự kiện, chưa kéo bằng chuột thật;
-  - chưa test với người dùng; quãng chuột là số ước lượng trên sơ đồ.
+  - số đo, version, số glyph là dữ liệu giả;
+  - kéo thả chỉ giả lập sự kiện;
+  - chưa có locale thứ hai; chưa kiểm trình đọc màn hình; chưa test với người dùng thật.
 
-## Quyết định cần chủ app
-1. Phương án mặc định: **A** (đề xuất), B hay C? Giữ B làm "Song bản" trong So sánh?
-2. Combo nằm trong Case (đề xuất), hay mỗi combo là một Case riêng?
-3. Option Stepper thay mọi tab, hay giữ tab ngang cho Bố cục?
-4. Cột mốc trong So sánh cố định (đề xuất), hay kéo được như cột khác?
-5. Giữ "Pairing Desk", "Case", "Combo" bằng tiếng Anh trong UI tiếng Việt?
+## Câu hỏi cho chủ app
+1. Dải chi tiết **dưới trang** (đề xuất) hay panel **bên phải**?
+2. Hàng nguồn gợi ý (5 icon) giữ dạng nút bấm một lần, hay đổi sang Option Stepper cho đồng nhất?
+3. Cột Compare Font dùng chung cho mọi vai, hay mỗi giọng một danh sách riêng?
+4. Tên "Mức ghép", hay một từ tiếng Anh (ví dụ "Strictness")?
+5. Ở 1100 px, dải chi tiết ẩn dòng meta. Chấp nhận được không?
