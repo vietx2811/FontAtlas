@@ -4,6 +4,7 @@ import type { Api, FaceDetailDto, SimilarSource, SimilarFamilyPageDto } from '..
 import { useModelStore, useModelUi, type ModelStore } from '../../../store/model';
 import { useScanStore } from '../../../store/scan';
 import { faceKey, toMetadataQuery, useUiStore } from '../../../store/ui';
+import { ModelDetails, ModelSpinner } from '../../model/ModelFeedback';
 import { ZeroState } from '../../zero/ZeroState';
 import { AXIS_META } from './AnatomyTab';
 
@@ -22,10 +23,13 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
   const act = (id: Parameters<ReturnType<typeof store.getState>['act']>[1]) => void store.getState().act(api, id);
 
   let body: React.ReactNode = null; let actions: React.ReactNode = null;
-  if (ui.code === 'E2') body = `${ui.text!.replace(/^Đang tải model (\d+%).*$/, 'Đang tải model ($1)')}. Kết quả hiện chỉ dựa trên số đo.`;
+  if (ui.code === 'E2' || ui.code === 'E3') {
+    body = `${ui.text}. Kết quả hiện chỉ dựa trên số đo.`;
+    actions = ui.actions.map(a => <button key={a.label} type="button" onClick={() => act(a.id)}>{a.label}</button>);
+  }
   else if (ui.code === 'E8' || ui.code === 'E9') body = `${ui.code === 'E9' ? 'Phân tích hình ảnh tạm dừng' : 'Đang phân tích hình ảnh'} ${ui.text!.match(/(\d[\d.]*\/\d[\d.]*)/)![1]} — kết quả sẽ đầy đủ hơn khi xong`;
   else if (ui.severity === 'error') {
-    body = `${ui.text}${ui.detail ? ` — ${ui.detail}` : ''}`;
+    body = ui.text;
     actions = ui.actions.map(a => <button key={a.label} type="button" onClick={() => act(a.id)}>{a.label}</button>);
   } else if (!ui.imageReady && !off) {
     body = `Kết quả chỉ dựa trên số đo giải phẫu. Bật phân tích hình ảnh để so cả hình dáng chữ (~371 MB).`;
@@ -35,7 +39,7 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
     </>;
   }
   if (body === null) return null;
-  return <div className="fa-strip" data-testid="image-strip" role="note"><span>ⓘ {body}</span><span className="fa-strip-actions">{actions}</span></div>;
+  return <div className="fa-strip" data-testid="image-strip" role="note"><span><ModelSpinner ui={ui} />{body}</span><span className="fa-strip-actions">{actions}</span><ModelDetails detail={ui.detail} /></div>;
 }
 
 const PAGE_SIZE = 6;

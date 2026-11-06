@@ -185,14 +185,14 @@ describe('SimilarTab', () => {
 
     it('E2: says the download is running and results are measures-only for now', async () => {
       await strip({ initial: { model: { state: 'downloading', doneBytes: 140 * 1024 * 1024 } } }, true);
-      expect(screen.getByTestId('image-strip').textContent).toMatch(/Đang tải model \(38%\)\. Kết quả hiện chỉ dựa trên số đo/);
+      expect(screen.getByTestId('image-strip').textContent).toMatch(/Đang tải model 38%.*Kết quả hiện chỉ dựa trên số đo/);
     });
 
     it('E4–E7: the error with its retry action', async () => {
       await strip({ initial: { model: { state: 'checksum_mismatch' } } }, true);
       const note = screen.getByTestId('image-strip');
       expect(note.textContent).toMatch(/Model tải về bị hỏng/);
-      expect(within(note).getByRole('button', { name: 'Tải lại' })).toBeTruthy();
+      expect(within(note).getByRole('button', { name: 'Thử lại' })).toBeTruthy();
     });
 
     it('E8: "Đang phân tích hình ảnh 412/3.800 — kết quả sẽ đầy đủ hơn khi xong"', async () => {

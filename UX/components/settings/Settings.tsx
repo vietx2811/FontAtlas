@@ -8,6 +8,7 @@ import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { Modal } from '../Modal';
 import './settings.css';
+import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'Chung' }, { id: 'library', label: 'Thư viện và nguồn' }, { id: 'vision', label: 'Phân tích hình ảnh' },
@@ -141,14 +142,14 @@ function Vision({ api, s, patch, store }: { api: Api; store: ModelStore } & SubP
   const ui = useModelUi(store);
   const embed = store(x => x.embed);
   const model = store(x => x.model);
-  const line = !s.embedEnabled ? 'Đã tắt: Similar và Ghép cặp dùng số đo.' : ui.text ?? (ui.imageReady ? 'Sẵn sàng' : 'Chưa có trạng thái');
+  const line = ui.text ?? (!s.embedEnabled ? 'Đã tắt: Similar và Ghép cặp dùng số đo.' : ui.imageReady ? 'Sẵn sàng' : 'Chưa có trạng thái');
   return (
     <>
       <Switch label="Bật phân tích hình ảnh" on={s.embedEnabled} onChange={async v => { await patch({ embedEnabled: v }); useModelStore.setState({ embedEnabled: v }); store.setState({ embedEnabled: v }); }} />
       <div className="fa-set-group">
-        <p data-testid="model-line">{line}</p>
-        {s.embedEnabled && ui.actions.length > 0 && <div className="fa-set-presets">{ui.actions.map(a => <button key={a.label} type="button" onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}</div>}
-        {ui.detail && <p className="fa-set-note">{ui.detail}</p>}
+        <p data-testid="model-line" role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{line}</p>
+        {ui.actions.length > 0 && <div className="fa-set-presets">{ui.actions.map(a => <button key={a.label} type="button" onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}</div>}
+        <ModelDetails detail={ui.detail} />
         {model && model.state === 'missing' && s.embedEnabled && <p className="fa-set-note">Tải một lần khoảng {Math.round(model.totalBytes / MB)} MB, có kiểm tra checksum.</p>}
         {ui.settingsText && <p className="fa-set-note">{ui.settingsText}</p>}
         {embed?.modelVersion && <p className="fa-set-note">Model: {embed.modelVersion}</p>}

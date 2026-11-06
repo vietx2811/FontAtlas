@@ -52,3 +52,9 @@ Lead duyệt ngày 2026-11-06: discovery/stats chỉ dựa metadata + filters/vi
 Giữ filters/viOnly khi Xem family để tôn trọng ý định lọc đang có. Nhưng membership lấy TOÀN family bằng getFamilyStyles không kèm filter, dedupe named instances theo FaceKey, kiểm giới hạn 2000. Chip riêng hàng trong TopBar “Family: X · có lọc”, tooltip n/N kiểu, nút × thoát scope; nới/bỏ lọc sẽ thấy lại các kiểu còn lại.
 
 Giữ stats/draft/full mode khi refetch. Cận đã chọn ngoài domain mới vẫn hiển thị nguyên, blur không sửa là no-op. Slider chỉ commit cuối pointer/key gesture; aria-valuetext có unit. Checkbox mặc định bao focus bằng floor/ceil; nhập cận dưới floor, cận trên ceil. Trạng thái dữ liệu thật (quét/rỗng/thiếu quyền) ưu tiên hơn thông báo không khớp bộ lọc. Lỗi refresh onboarding giữ cùng lỗi từng thư mục. Chưa bổ sung hủy batch folder giữa chừng theo phạm vi Lead.
+
+## Downloader mới — brief cuối Round 2
+
+Nhập nguyên checkpoint 357ec1b, không sửa Rust/bindings. Giữ tokens/font/spacing hiện có. Dùng cùng deriveModelUi cho sidebar, Settings, onboarding và Similar: transfer có số MB/s (decimal), phần trăm tối đa99 trước khi đủbyte; done==total>0 chuyển text “Đang kiểm tra tệp…” và spinner không xác định, chỉ Ready xác nhận sẵn sàng. Channel cập nhật cả done/total, không lấy max qua hai phase; snapshot cũ không đè event mới.
+
+Thông báo theo ErrorInfo.code trong contract; message kỹ thuật chỉ ở details/summary “Chi tiết” mặc định đóng. HTTP429 có Retry-After nếu đọc được, cancelled là info với “Tiếp tục tải”; lỗi khác có “Thử lại”. O6 Tải ngay bắt đầu ngay tại bước model, cho xem tiến độ/lỗi và bấm Tiếp tục để chuyển bước trong lúc tải nền. Không tải model thật trong QA; dev hash thêm checking/tls/cancelled cho mock.
