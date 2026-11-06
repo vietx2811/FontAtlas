@@ -4,7 +4,7 @@ import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
 import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
-import { VI_TOTAL, axesFor, pairFor, similarFor, viMissingFor } from './mockAnalysis';
+import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
   type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
@@ -125,6 +125,10 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!t || fold(r.family).includes(t) || fold(r.fullName ?? '').includes(t)) &&
         (!q.sourceIds?.length || q.sourceIds.includes(sourceOf(r))) &&
         (!q.favoritesOnly || r.isFavorite) &&
+        (!q.license?.length || q.license.includes(r.licenseClass)) &&
+        (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
+        (q.includeMissing || !r.missing) &&
+        (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
@@ -180,6 +184,29 @@ export function createMockApi(o: MockOptions = {}): Api {
     getUiState: () => ok(ui),
     async setUiState(s) { ui = { ...s }; },
 
+    async axisStats(q = {}) {
+      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: 1000 });
+      return MEASURED_AXES.map(axis => {
+        const values = items.flatMap(r => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? [a.rawValue] : []; }).sort((a, b) => a - b);
+        const quantile = (p: number) => { if (!values.length) return null; const at = (values.length - 1) * p; const i = Math.floor(at); return values[i] + (values[Math.ceil(at)] - values[i]) * (at - i); };
+        return { axis, unit: MOCK_UNITS[axis], count: values.length, min: values[0] ?? null, max: values.at(-1) ?? null, p1: quantile(.01), p99: quantile(.99) };
+      });
+    },
+    async similarFamilies(face, opts = {}, q = {}) {
+      const row = findRow(face);
+      const { items } = await this.queryFaces({ ...q, offset: 0, limit: 1000 });
+      const candidates = items.filter(r => (!opts.viOnly || r.viMissing === 0) && (!opts.sourceIds?.length || opts.sourceIds.includes(sourceOf(r))) && (!opts.weightRange || (r.weightClass != null && r.weightClass >= opts.weightRange[0] && r.weightClass <= opts.weightRange[1])));
+      const ranked = similarFor(row, candidates, candidates.length).map(h => opts.useImage === false ? { ...h, source: 'axes' as const } : h);
+      const groups = new Map<string, { family: string; representative: typeof ranked[number]; faces: FaceKeyDto[]; count: number }>();
+      for (const hit of ranked) {
+        const group = groups.get(hit.row.family);
+        if (group) { group.faces.push(hit.face); group.count++; }
+        else groups.set(hit.row.family, { family: hit.row.family, representative: hit, faces: [hit.face], count: 1 });
+      }
+      const offset = q.offset ?? 0;
+      return { total: groups.size, offset, items: [...groups.values()].slice(offset, offset + (q.limit ?? 12)) };
+    },
+
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
@@ -194,7 +221,7 @@ export function createMockApi(o: MockOptions = {}): Api {
           status: row.viStatus, supports: row.supportsVi, missing: viMissingFor(row.viMissing), total: VI_TOTAL,
           precomposedComposite: row.viMissing === 0, gposMark: true, gposMkmk: row.faceId % 2 === 0, gsubCcmp: true, dongSign: true,
           stackedMarksTopEm: 1.08, stackedMarksOverflow: row.faceId % 4 === 1, stackStyle: row.faceId % 4 === 1 ? 'tight' : null,
-          markWeightRatio: { key: 'mark_weight_ratio', value: 0.82, quality: 'measured', reason: null, method: 'outline', percentile: 55 },
+          markWeightRatio: { key: 'mark_weight_ratio', value: 0.82, rawValue: 0.82, unit: 'ratio', quality: 'measured', reason: null, method: 'outline', percentile: 55 },
         },
         axes: axesFor(row),
         similarTop: similarFor(row, rows, 3),

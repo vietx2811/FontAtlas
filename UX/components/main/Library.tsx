@@ -5,7 +5,7 @@ import type { FaceRow } from '../../features/library-grid';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
 import { ZeroState } from '../zero/ZeroState';
-import { libraryEmpty } from '../zero/zeroStates';
+import { libraryEmpty, type Empty } from '../zero/zeroStates';
 import { COMPOSER_INSET } from './SampleComposer';
 import { faceKey, toGridQuery, useUiStore } from '../../store/ui';
 
@@ -13,6 +13,8 @@ type Props = { api: Api; width?: number; height?: number };
 
 /** Nối store → GridQuery → LibraryGrid. Không lọc ở client. */
 export function Library({ api, width, height }: Props): React.JSX.Element {
+  const filters = useUiStore(s => s.filters);
+  const familyScope = useUiStore(s => s.familyScope);
   const view = useUiStore(s => s.view);
   const tag = useUiStore(s => s.tag);
   const query = useUiStore(s => s.query);
@@ -41,15 +43,16 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
       .then(() => { setFavs(m => new Map(m).set(r.faceId, next)); if (!next && useUiStore.getState().view === 'star') setReload(n => n + 1); })
       .catch(e => console.warn('set_favorite failed', e));
   }, [api, favs]);
-  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews, active }), [view, tag, query, viOnly, recentViews, active]);
+  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews, active, filters, familyScope }), [view, tag, query, viOnly, recentViews, active, filters, familyScope]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
-  const empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud });
+  const filtered = !!(filters.variable != null || filters.italic != null || filters.rawAxisRanges?.length || familyScope);
+  const empty: Empty = filtered ? { kind: 'no-match', glyph: 'ở', text: familyScope ? `Không có kiểu font khớp bộ lọc trong ${familyScope.name}` : 'Không có font khớp bộ lọc', action: { id: 'clear-filters', label: 'Xoá bộ lọc' } } : libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud });
   const onEmptyAction = (id: string) => {
     const ui = useUiStore.getState();
     if (id === 'add-folder') ui.requestAddFolder();
     else if (id === 'go-all') ui.setView('all');
-    else if (id === 'clear-filters') { ui.setQuery(''); ui.setViOnly(false); ui.setTag(null); }
+    else if (id === 'clear-filters') { ui.setQuery(''); ui.setViOnly(false); ui.setTag(null); ui.setFilters({}); }
     else if (id === 'grant') void openPrivacySettings();
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import type { Api, FaceDetailDto, SimilarSource } from '../../../api';
+import { useEffect, useMemo, useState } from 'react';
+import type { Api, FaceDetailDto, SimilarSource, SimilarFamilyPageDto } from '../../../api';
 import { useModelStore, useModelUi, type ModelStore } from '../../../store/model';
-import { faceKey, useUiStore } from '../../../store/ui';
+import { useScanStore } from '../../../store/scan';
+import { faceKey, toGridQuery, useUiStore } from '../../../store/ui';
 import { ZeroState } from '../../zero/ZeroState';
 import { AXIS_META } from './AnatomyTab';
 
@@ -26,7 +27,7 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
     body = `${ui.text}${ui.detail ? ` — ${ui.detail}` : ''}`;
     actions = ui.actions.map(a => <button key={a.label} type="button" onClick={() => act(a.id)}>{a.label}</button>);
   } else if (!ui.imageReady && !off) {
-    body = `Kết quả chỉ dựa trên số đo giải phẫu. Bật phân tích hình ảnh để so cả hình dáng chữ (~371 MB, khoảng 2 phút cho thư viện của bạn).`;
+    body = `Kết quả chỉ dựa trên số đo giải phẫu. Bật phân tích hình ảnh để so cả hình dáng chữ (~371 MB).`;
     actions = <>
       <button type="button" onClick={() => void store.getState().enable(api)}>{embedEnabled ? 'Tải model' : 'Bật'}</button>
       <button type="button" onClick={() => { setOff(true); void api.setSetting(HINT_OFF, '1'); }}>Không hiện lại</button>
@@ -36,33 +37,59 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
   return <div className="fa-strip" data-testid="image-strip" role="note"><span>ⓘ {body}</span><span className="fa-strip-actions">{actions}</span></div>;
 }
 
+const PAGE_SIZE = 6;
+
 export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; detail: FaceDetailDto; store?: ModelStore }): React.JSX.Element {
-  const select = useUiStore(s => s.select);
-  const strip = <ImageStrip api={api} store={store} />;
-  const ui = useModelUi(store);
-  if (detail.similarTop.length === 0) {
-    return (
-      <>
-        {strip}
-        <ZeroState compact glyph="ơ" text="Font này có quá ít số đo để tìm font tương tự"
-          action={ui.imageReady ? undefined : { id: 'enable', label: 'Bật phân tích hình ảnh' }} onAction={() => void store.getState().enable(api)} />
-      </>
-    );
-  }
-  return (
-    <>
-    {strip}
-    <ul className="fa-sim">
-      {detail.similarTop.map(h => (
-        <li key={faceKey(h.face)} data-testid="similar-hit" className="fa-sim-hit">
-          <button type="button" className="fa-sim-name" onClick={() => select(faceKey(h.face))}>
-            {h.row.family}{h.row.subfamily ? ` ${h.row.subfamily}` : ''}
-          </button>
-          <span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span>
-          <p className="fa-sim-why">Giống ở: {names(h.same)} · Khác ở: {names(h.differ)}</p>
-        </li>
-      ))}
-    </ul>
-    </>
-  );
+  const state = useUiStore();
+  const scanVersion = useScanStore(s => s.version);
+  const queryKey = JSON.stringify(toGridQuery(state));
+  const q = useMemo(() => JSON.parse(queryKey) as ReturnType<typeof toGridQuery>, [queryKey]);
+  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState<SimilarFamilyPageDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const key = faceKey(detail.row);
+  const imageReady = useModelUi(store).imageReady;
+  // Gắn offset với face/query để không gửi trang cũ cho font hoặc bộ lọc mới.
+  const scope = `${key}:${queryKey}:${imageReady}:${scanVersion}`;
+  const [pagingScope, setPagingScope] = useState(scope);
+  const currentOffset = pagingScope === scope ? offset : 0;
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setError(null);
+    api.similarFamilies(detail.row, { useImage: imageReady }, { ...q, offset: currentOffset, limit: PAGE_SIZE })
+      .then(p => { if (alive) setPage(p); })
+      .catch(e => { if (alive) { setPage(null); setError(e instanceof Error ? e.message : String(e)); } })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [api, key, q, imageReady, currentOffset, retry, scanVersion]);
+  const go = (to: number) => { setPagingScope(scope); setOffset(to); };
+  const open = (id: string) => { state.select(id); state.setPanelTab('spec'); };
+  return <>
+    <ImageStrip api={api} store={store} />
+    {loading ? <p role="status" className="fa-soon">Đang tìm family tương tự…</p>
+      : error ? <div role="alert" className="fa-panel-error">Không tìm được family tương tự: {error} <button type="button" onClick={() => setRetry(n => n + 1)}>Thử lại</button></div>
+      : !page?.items.length ? <ZeroState compact glyph="ơ" text={state.familyScope ? 'Bỏ phạm vi family để tìm các family khác' : 'Không có family tương tự khớp bộ lọc và dữ liệu hiện có'} action={{ id: 'clear', label: 'Xem toàn thư viện' }} onAction={() => { state.setView('all'); state.setQuery(''); state.setViOnly(false); state.setFilters({}); }} />
+      : <>
+        <p className="fa-soon">{page.total.toLocaleString('vi-VN')} family · mỗi family một font đại diện</p>
+        <ul className="fa-sim">{page.items.map(group => {
+          const h = group.representative;
+          const tooLarge = group.faces.length > 2000 || group.count > 2000;
+          return <li key={group.family} data-testid="similar-hit" className="fa-sim-hit">
+            <strong className="fa-sim-name">{group.family}</strong>
+            <span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span>
+            <p className="fa-sim-style">{h.row.subfamily ?? 'Kiểu đại diện'} · {group.count.toLocaleString('vi-VN')} kiểu</p>
+            <p className="fa-sim-why">{h.same.length ? `Giống: ${names(h.same)}` : 'Chưa có trục giống để giải thích'}{h.differ.length ? ` · Khác: ${names(h.differ)}` : ''}</p>
+            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><button type="button" disabled={tooLarge} title={tooLarge ? 'Family vượt giới hạn 2.000 kiểu của truy vấn thư viện' : undefined} onClick={() => state.openFamily({ name: group.family, faces: group.faces })}>Xem family</button></div>
+            {tooLarge && <p className="fa-sim-why">Hơn 2.000 kiểu; hãy mở font đại diện để xem family.</p>}
+          </li>;
+        })}</ul>
+        <nav className="fa-pair-nav" aria-label="Trang family tương tự">
+          <button type="button" aria-label="Trang trước" disabled={page.offset === 0} onClick={() => go(Math.max(0, page.offset - PAGE_SIZE))}>‹</button>
+          <span>{page.offset + 1}–{page.offset + page.items.length} / {page.total}</span>
+          <button type="button" aria-label="Trang sau" disabled={page.offset + page.items.length >= page.total} onClick={() => go(page.offset + PAGE_SIZE)}>›</button>
+        </nav>
+      </>}
+  </>;
 }

@@ -1,6 +1,8 @@
+import type { RawAxisRangeDto } from '../../bindings';
 // Kiểu dữ liệu lưới thư viện — gương fontatlas-store (serde camelCase) trên dev/mvp.
 
 export type FaceQuery = {
+  rawAxisRanges?: RawAxisRangeDto[];
   text?: string; vi?: 'full' | 'supported'; license?: string[];
   variable?: boolean; italic?: boolean; sourceIds?: number[];
   favoritesOnly?: boolean; collectionId?: number; tagIds?: number[];

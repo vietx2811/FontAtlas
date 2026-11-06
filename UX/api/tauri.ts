@@ -45,7 +45,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     text: q.text?.trim() ? q.text : null, vi: q.vi ?? null, license: q.license ?? [], variable: q.variable ?? null, italic: q.italic ?? null,
     sourceIds: q.sourceIds ?? [], favoritesOnly: q.favoritesOnly ?? false, collectionId: q.collectionId ?? null, tagIds: q.tagIds ?? [],
     includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
-    axisFilters: [], hard: [], faceKeys: q.faceKeys ?? null,
+    axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -103,6 +103,8 @@ export function createTauriApi(): Api {
     // Phân tích
     getFace: (face, lang) => call('get_face', { face, lang }),
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
+    similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
+    axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
     pairCandidates: (face, opts) => call('pair_candidates', { face, opts }),
     // Dữ liệu và hệ thống
     backupUserDb: () => call('backup_user_db'),

@@ -69,19 +69,17 @@
 
 .fa-hxg { display: block; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .fa-axes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.fa-axis { display: grid; grid-template-columns: 20px 112px minmax(0, 1fr) 82px; align-items: center; gap: 8px; font-size: var(--text-xs); }
-.fa-axis-ico { color: var(--muted); display: grid; place-items: center; }
-.fa-axis-name { color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fa-axis-note { color: var(--muted); grid-column: auto; text-align: right; }
-.fa-axis-note.wide { grid-column: 3 / -1; text-align: left; }
-.fa-axis-note em { font-style: normal; }
-.fa-axis-track { position: relative; height: 2px; background: var(--border); border-radius: 2px; }
-.fa-axis-track.dashed { background: none; border-top: 2px dashed var(--muted); height: 0; }
-.fa-axis-track i { position: absolute; top: -4px; width: 2px; height: 10px; margin-left: -1px; border-radius: 2px; background: var(--accent-ink); }
+.fa-axis { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline; gap: 3px 8px; font-size: var(--text-xs); padding-block: 6px; border-bottom: 1px solid var(--border); }
+.fa-axis-ico { color: var(--muted); align-self: start; padding-top: 1px; }
+.fa-axis-name { color: var(--fg); overflow-wrap: anywhere; }
+.fa-axis-value { text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fa-axis-value small { display: inline; font-size: 10px; color: var(--muted); }
+.fa-axis-note { grid-column: 2 / -1; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.fa-axis[data-quality="estimated"] .fa-axis-value { text-decoration: underline dashed var(--muted); text-underline-offset: 3px; }
 
 .fa-sim { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.fa-sim-hit { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
-.fa-sim-name { text-align: left; font-size: 14px; font-weight: 500; }
+.fa-sim-hit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.fa-sim-name { min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: 14px; font-weight: 500; }
 .fa-sim-name:hover { color: var(--accent-ink); }
 .fa-badge { font-size: var(--text-2xs); padding: 2px 7px; border-radius: 99px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .fa-sim-why { grid-column: 1 / -1; margin: 0; font-size: var(--text-xs); color: var(--muted); line-height: 1.45; }
@@ -105,3 +103,11 @@
 .fa-strip { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--accent-soft); font-size: var(--text-xs); line-height: 1.45; color: var(--fg); }
 .fa-strip-actions { display: flex; gap: 12px; }
 .fa-strip-actions button { color: var(--accent-ink); font-weight: 500; }
+.fa-panel-close { color: var(--muted); font-size: 20px; width: 24px; height: 28px; flex: none; border-radius: var(--radius-sm); }
+.fa-panel-close:hover { color: var(--fg); background: var(--surface-2); }
+.fa-sim-style { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.fa-sim-actions { grid-column: 1 / -1; display: flex; gap: 12px; margin-top: 4px; }
+.fa-sim-actions button { color: var(--accent-ink); font-size: var(--text-xs); padding-block: 4px; }
+.fa-sim-actions button:disabled { opacity: .45; cursor: default; }
+
+.fa-sim-actions button:focus-visible, .fa-panel-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }

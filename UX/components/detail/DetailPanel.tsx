@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
 import { FontInfoCard } from './FontInfoCard';
@@ -17,6 +17,7 @@ const TABS: Array<[PanelTab, string, string]> = [['spec', 'Specimen', 'Aa'], ['v
 const FORMAT: Record<string, string> = { glyf: 'TTF', cff: 'OTF', cff2: 'OTF', none: '' };
 
 export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
+  const panel = useRef<HTMLElement>(null);
   const selectedId = useUiStore(s => s.selectedId);
   const style = useUiStore(s => s.style);
   const tab = useUiStore(s => s.panelTab);
@@ -29,6 +30,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const family = useFontFamily(api, detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null);
   const familyOf = useCallback(() => null, []); // font từng kiểu trong danh sách: dùng weight/italic CSS trên họ đã nạp
 
+  useEffect(() => { if (panel.current) panel.current.scrollTop = 0; }, [selectedId, tab, style]);
   if (!selectedId) return null;
   const isActive = !!detail && active.has(detail.row.hashHex);
   const shown = detail ? styles.find(s => s.face.hashHex === detail.row.hashHex && s.face.faceIndex === detail.row.faceIndex) : undefined;
@@ -41,13 +43,14 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
 
   return (
-    <aside className="fa-panel" aria-label="Chi tiết font">
+    <aside ref={panel} className="fa-panel" aria-label="Chi tiết font">
       {flow.dialog}
       {error ? (
         <div role="alert" className="fa-panel-error">Không đọc được font này: {error} <button type="button" onClick={retry}>Thử lại</button></div>
       ) : (
         <div className="fa-p-head">
           <div className="fa-p-row">
+            <button type="button" className="fa-panel-close" aria-label="Đóng chi tiết" title="Đóng chi tiết" onClick={() => useUiStore.getState().select(null)}>×</button>
             <h2 className="fa-p-name" style={{ fontFamily: family ? `"${family}", var(--font-ui)` : undefined }} title={detail?.row.family}>{detail?.row.family ?? ''}</h2>
             <button type="button" role="switch" className="fa-switch" aria-checked={isActive} aria-label="Kích hoạt font" title="Kích hoạt" disabled={!detail} onClick={toggle} />
           </div>

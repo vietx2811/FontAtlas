@@ -2,7 +2,7 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, FaceKeyDto, UiStateDto } from '../api';
 import { DEFAULT_UI_STATE } from '../api';
-import type { GridQuery } from '../features/library-grid/types';
+import type { GridQuery, FaceQuery } from '../features/library-grid/types';
 
 export const PERSIST_DEBOUNCE_MS = 400;
 export const RECENT_MAX = 200;
@@ -18,7 +18,12 @@ export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';
 
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges'>;
+export type FamilyScope = { name: string; faces: FaceKeyDto[] };
+
 export interface UiState {
+  filters: LibraryFilters;
+  familyScope: FamilyScope | null;
   view: View;
   tag: string | null; // id thẻ (số, dạng chuỗi)
   query: string;
@@ -43,6 +48,8 @@ export interface UiState {
 }
 
 export interface UiActions {
+  setFilters(filters: LibraryFilters): void;
+  openFamily(scope: FamilyScope): void;
   setView(v: View): void;
   setTag(t: string | null): void;
   setQuery(q: string): void;
@@ -71,8 +78,8 @@ export const parseFaceKey = (id: string): FaceKeyDto => {
 };
 
 /** Gần đây/Đang bật đi qua `faceKeys` (6a b2cc0fd); danh sách rỗng là kết quả rỗng, không phải "không lọc". */
-export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'>): GridQuery {
-  const q: GridQuery = {};
+export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope'>>): GridQuery {
+  const q: GridQuery = { ...s.filters };
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
@@ -82,6 +89,7 @@ export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'
   } else if (s.view === 'star') q.favoritesOnly = true;
   else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
   else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
+  if (s.familyScope) q.faceKeys = s.familyScope.faces;
   if (s.tag !== null) q.tagIds = [Number(s.tag)];
   const text = s.query.trim();
   if (text) q.text = text;
@@ -111,12 +119,14 @@ export function createUiStore(): UiStore {
   const initial = fromDto(DEFAULT_UI_STATE);
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
-    view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
+    filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, ...initial,
 
-    setView: v => set({ view: v, tag: null, settingsOpen: false }),
-    setTag: t => set({ tag: t, settingsOpen: false }),
-    setQuery: q => set({ query: q }),
+    setFilters: filters => set({ filters }),
+    openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false }),
+    setView: v => set({ view: v, tag: null, familyScope: null, settingsOpen: false }),
+    setTag: t => set({ tag: t, familyScope: null, settingsOpen: false }),
+    setQuery: q => set({ query: q, familyScope: null }),
     setViOnly: on => set({ viOnly: on }),
     setLayout: l => set({ layout: l }),
     setSample: s => set({ sample: s }),

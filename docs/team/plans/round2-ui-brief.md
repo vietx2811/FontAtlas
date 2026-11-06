@@ -29,3 +29,18 @@ Baseline Rust `analysis.rs` trả tên trục canonical từ `AxisId`; mock cũ 
 ## Kiểm tra dự kiến
 
 Vitest onboarding: nhiều folder, nguồn sẵn/legacy, cancel, duplicate/nested, permission/error, busy, reload step, scan và navigation. Anatomy: canonical keys, unit/method, zero/negative, missing/failed/estimated, guide thật. `tsc --noEmit`, Vitest phù hợp, `npm run build`, `git diff --check`. Paseo browser tại :3012, 1400×920 và 1000×700, sáng/tối; ghi rõ dữ liệu mock, không có native IPC/activation thật.
+
+## Brief C/D theo hợp đồng backend đã duyệt
+
+- Similar giữ panel hiện có, mỗi family một hàng/card có tên family, style đại diện + số kiểu, badge nguồn, lý do ngắn. Hai hành động “Mở font” chuyển sang specimen của representative thật, “Xem family” hiện danh sách faceKeys backend trả trong library, đóng panel; sidebar vẫn đưa về view thường được. Phân trang 6 family, tổng và offset backend; loading/error/retry/empty riêng, bỏ phản hồi cũ khi đổi face/filter.
+- Filter mở từ nút “Lọc” cạnh toggle Việt ở toolbar, popover 360px giới hạn chiều cao viewport và cuộn, không thay layout/sidebar/detail. Chia Loại font và Số đo, body 13px, nhãn 12px. Checkbox variable/italic; mỗi trục có 2 input số + 2 range control có accessible label khác nhau. Domain lấy `axis_stats`: mặc định focus p1–p99, nút “Toàn khoảng” mở min–max; input số luôn nhận outlier trong min–max; constant/empty vô hiệu hóa range có giải thích ngắn. Không padding domain giả.
+- Điều kiện số raw inclusive AND qua query backend; missing không khớp range; reset và số điều kiện hiện cạnh trigger. Giữ lọc khi đổi sidebar như query hiện có. Bộ lọc được áp dụng vào library/count/Similar, không chỉ hàng đang hiển thị. Error stats có retry; no-match có thao tác xóa lọc.
+- Shared formatter dùng unit từ backend, số thập phân Việt; query luôn giữ số vật lý không đổi %.
+
+## Quyết định sau visual review của Lead
+
+- Số đo/input dùng vi-VN: deg 1 số lẻ; em và mọi ratio 3 số lẻ. Tooltip anatomy giữ nguyên rawValue/method. Input nhận cả dấu phẩy và chấm; query dùng số đã làm tròn đang hiển thị.
+- Domain focus/full được làm tròn biên ra ngoài theo cùng precision. “Toàn khoảng” chọn [floor(min), ceil(max)] để inclusive raw filter giữ cả font biên. Constant vẫn không cho kéo slider, khoảng chọn bao quanh số raw theo precision. Test bao biên -10.04..15.04 → -10.1..15.1.
+- Stress trong Core luôn estimated khi đo được (`o_harmonic_fit`); mock đã khớp và UI giữ nhãn Ước lượng từ quality. Không sửa analyzer.
+- WindowShell có `data-native`: chỉ browser mock (`false`) thêm nền sheet để sidebar tối đọc được. Native vẫn transparent cho vibrancy. Theme dùng color-scheme đúng sáng/tối cho scrollbar.
+- Detail trở về đầu khi đổi font/tab/style; có nút đóng. Cả Mở font/Xem family có focus-visible 2px accent.

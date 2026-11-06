@@ -115,19 +115,19 @@ describe('mock api', () => {
 });
 
 describe('mock analysis data (tabs of the detail panel)', () => {
-  it('get_face carries 19 axis readings with a mix of measured / estimated / failed and a percentile only when measured or estimated', async () => {
+  it('get_face carries 21 axis readings with a mix of measured / estimated / failed and a percentile only when measured or estimated', async () => {
     const api = createMockApi();
     const r = (await api.queryFaces({ text: 'Inter', limit: 1 })).items[0];
     const d = await api.getFace({ hashHex: r.hashHex, faceIndex: 0 }, 'vi');
-    expect(d.axes).toHaveLength(19);
+    expect(d.axes).toHaveLength(21);
     const q = new Set(d.axes.map(a => a.quality));
     expect(q.has('measured')).toBe(true);
     for (const a of d.axes) {
       if (a.quality === 'failed') { expect(a.percentile).toBeNull(); expect(a.reason).toBeTruthy(); }
-      else if (['terminal', 'a_storeys', 'g_storeys'].includes(a.key)) expect(a.percentile).toBeNull(); // phân loại, không có phân vị
+      else if (['terminal', 'a_storeys', 'g_storeys', 'serif_foot', 'cap_height_em', 'descender_em'].includes(a.key)) expect(a.percentile).toBeNull(); // phân loại, không có phân vị
       else expect(a.percentile).toBeGreaterThanOrEqual(0);
     }
-    expect(d.axes.map(a => a.key)).toEqual(expect.arrayContaining(['x_height', 'cap_height', 'terminal', 'a_storeys', 'g_storeys']));
+    expect(d.axes.map(a => a.key)).toEqual(expect.arrayContaining(['x_height_em', 'cap_height_em', 'terminal', 'a_storeys', 'g_storeys']));
   });
 
   it('is deterministic per face and the Vietnamese block follows the row (missing list length = viMissing)', async () => {

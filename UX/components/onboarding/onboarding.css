@@ -44,3 +44,8 @@
 @media (max-height: 620px) { .fa-illus { display: none; } }
 .fa-onb-field label { flex-wrap: wrap; }
 .fa-onb-field small { flex-basis: 100%; margin: 0 0 0 24px; }
+
+@media (max-height: 760px) {
+  .fa-onb-top { padding-top: 24px; }
+  .fa-onb-body { padding-top: 20px; gap: 12px; }
+}

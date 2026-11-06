@@ -4,6 +4,7 @@ import { Icon } from '../sidebar/icons';
 import { SearchField } from './SearchField';
 import { useViewSummary } from './useViewSummary';
 import './topbar.css';
+import { FilterPanel } from './FilterPanel';
 
 export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const { title, count } = useViewSummary(api);
@@ -16,6 +17,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
       <div className="fa-ttl"><h1>{title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
       <button type="button" className="fa-vi-toggle" aria-pressed={viOnly} title="Chỉ font đủ dấu tiếng Việt" onClick={() => setViOnly(!viOnly)}>Ặ vi</button>
+      <FilterPanel api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
         <button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" title="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button>
         <button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" title="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button>

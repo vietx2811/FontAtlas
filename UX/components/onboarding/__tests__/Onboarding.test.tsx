@@ -238,6 +238,20 @@ describe('Onboarding', () => {
     expect((await api.listSources()).some(s => s.id === source.id)).toBe(true);
   });
 
+  it('does not delete current or queued sources from scan status', async () => {
+    const api = createMockApi(); await api.setOnboardingStep('o3');
+    const sources = await api.listSources();
+    vi.spyOn(api, 'scanStatus').mockResolvedValue({ running: true, paused: false, currentSourceId: sources[0].id, queued: [sources[1].id] });
+    const remove = vi.spyOn(api, 'removeSource');
+    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    for (const source of sources.slice(0, 2)) {
+      const button = screen.getByRole('button', { name: `Xoá ${source.name}` });
+      expect(button).toBeDisabled(); fireEvent.click(button);
+    }
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Tiếp tục' })).not.toBeDisabled();
+  });
+
   it('O4 counts the scan as it streams', async () => {
     vi.useFakeTimers();
     const api = createMockApi({ firstRun: true, tickMs: 100 });

@@ -38,3 +38,6 @@ html, body, #root { background: transparent; height: 100%; }
   overflow: auto;
   position: relative;
 }
+
+/* Trình duyệt mock không có vật liệu windowEffects phía sau sidebar. */
+.fa-shell[data-native="false"] { background: var(--sheet); }

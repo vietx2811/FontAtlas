@@ -29,7 +29,7 @@ describe('query_faces', () => {
   it('fills every FaceQueryDto field with the 6a defaults (camelCase, no missing keys)', () => {
     expect(toFaceQueryDto({})).toEqual({
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
-      includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], faceKeys: null,
+      includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null,
     });
   });
 
@@ -48,6 +48,19 @@ describe('query_faces', () => {
     expect(page.items[0].faceId).toBe(row.faceId);
     reply = () => ({ total: 1, offset: 0, items: [{ ...row, surprise: 1 }] });
     await expect(createTauriApi().queryFaces({})).rejects.toBeInstanceOf(ContractError);
+  });
+});
+
+describe('round2 contracts', () => {
+  it('sends physical raw filters to query_faces, axis_stats and family pagination to similar_families', async () => {
+    const api = createTauriApi();
+    const q = { italic: true, sourceIds: [2], rawAxisRanges: [{ axis: 'slant_deg', range: [-25.5, 15] as [number, number] }], offset: 6, limit: 6 };
+    expect(toFaceQueryDto(q).rawAxisRanges).toEqual(q.rawAxisRanges);
+    await api.axisStats(q);
+    expect(last()).toEqual({ cmd: 'axis_stats', args: { q: toFaceQueryDto(q) } });
+    const face = { hashHex: 'ab', faceIndex: 2 };
+    await api.similarFamilies(face, { useImage: false }, q);
+    expect(last()).toEqual({ cmd: 'similar_families', args: { face, opts: { weights: { proportion: 1, weight: 1, structure: 1, detail: 1 }, useImage: false, k: 12, viOnly: false, sourceIds: [], weightRange: null }, q: toFaceQueryDto(q) } });
   });
 });
 

@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../../api/mock';
 import type { FaceDetailDto } from '../../../../api';
 import { faceKey, useUiStore } from '../../../../store/ui';
@@ -16,40 +16,81 @@ async function detail(family = 'Roboto'): Promise<FaceDetailDto> {
 describe('SimilarTab', () => {
   beforeEach(() => useUiStore.setState(initial, true));
 
-  it('shows the 3 nearest fonts, each with "Giống ở … · Khác ở …" and a source badge, and no score', async () => {
+  it('loads one result per other family, explains it without a score and pages by family', async () => {
+    const api = createMockApi();
     const d = await detail();
-    const { container } = render(<SimilarTab api={createMockApi()} detail={d} />);
-    const items = screen.getAllByTestId('similar-hit');
-    expect(items).toHaveLength(3);
-    for (const it of items) {
-      expect(it.textContent).toMatch(/Giống ở: .+/);
-      expect(it.textContent).toMatch(/Khác ở: .+/);
-      expect(['Số đo', 'Số đo + Hình ảnh']).toContain(within(it).getByTestId('source-badge').textContent);
+    const spy = vi.spyOn(api, 'similarFamilies');
+    render(<SimilarTab api={api} detail={d} />);
+    const items = await screen.findAllByTestId('similar-hit');
+    expect(items).toHaveLength(6);
+    const first = spy.mock.results[0];
+    const page = await first.value;
+    expect(new Set(page.items.map(g => g.family)).size).toBe(page.items.length);
+    expect(page.items.every(g => g.family !== d.row.family)).toBe(true);
+    for (const item of items) {
+      expect(item.textContent).toMatch(/Giống: .+/);
+      expect(item.textContent).toMatch(/Khác: .+/);
+      expect(within(item).getByTestId('source-badge')).toBeTruthy();
+      expect(item.textContent).not.toMatch(/x_height|stem_weight|%/);
     }
-    expect(container.textContent).not.toMatch(/%|\d\.\d/);
+    const firstNames = page.items.map(g => g.family);
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ offset: 6, limit: 6 })));
+    const second = await spy.mock.results.at(-1)!.value;
+    await screen.findAllByTestId('similar-hit');
+    expect(second.items.every(g => !firstNames.includes(g.family))).toBe(true);
+    expect(second.total).toBe(page.total);
   });
 
-  it('axis keys read as Vietnamese names', async () => {
-    render(<SimilarTab api={createMockApi()} detail={await detail()} />);
-    expect(screen.getAllByTestId('similar-hit')[0].textContent).not.toMatch(/x_height|avg_width|stem_weight/);
+  it('Mở font opens the representative specimen; Xem family uses backend members and closes detail', async () => {
+    const api = createMockApi(); const d = await detail();
+    const page = await api.similarFamilies(d.row, {}, { limit: 6 });
+    render(<SimilarTab api={api} detail={d} />);
+    const items = await screen.findAllByTestId('similar-hit');
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Mở font' }));
+    expect(useUiStore.getState().selectedId).toBe(faceKey(page.items[0].representative.face));
+    expect(useUiStore.getState().panelTab).toBe('spec');
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Xem family' }));
+    expect(useUiStore.getState().familyScope).toEqual({ name: page.items[0].family, faces: page.items[0].faces });
+    expect(useUiStore.getState().selectedId).toBeNull();
+    const { toGridQuery } = await import('../../../../store/ui');
+    expect(toGridQuery(useUiStore.getState()).faceKeys).toEqual(page.items[0].faces);
+    act(() => useUiStore.getState().setView('all'));
+    expect(useUiStore.getState().familyScope).toBeNull();
+    expect(toGridQuery(useUiStore.getState()).faceKeys).toBeUndefined();
+  });
+
+  it('sends real filters, resets offset when scope changes and offers retry/empty states', async () => {
+    const api = createMockApi(); const d = await detail();
+    const spy = vi.spyOn(api, 'similarFamilies');
+    render(<SimilarTab api={api} detail={d} />);
+    await screen.findAllByTestId('similar-hit');
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findAllByTestId('similar-hit');
+    act(() => useUiStore.getState().setFilters({ italic: true, rawAxisRanges: [{ axis: 'slant_deg', range: [0, 30] }] }));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ offset: 0, italic: true, rawAxisRanges: [{ axis: 'slant_deg', range: [0, 30] }] })));
+    spy.mockRejectedValueOnce(new Error('index unavailable'));
+    act(() => useUiStore.getState().setQuery('test'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('index unavailable');
+    spy.mockResolvedValueOnce({ total: 0, offset: 0, items: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByTestId('zero-state')).toHaveTextContent('Không có family tương tự');
+  });
+
+  it('does not silently truncate a family over the 2000 face query limit', async () => {
+    const api = createMockApi(); const d = await detail();
+    const p = await api.similarFamilies(d.row, {}, { limit: 1 });
+    p.items[0].count = 2001;
+    vi.spyOn(api, 'similarFamilies').mockResolvedValue(p);
+    render(<SimilarTab api={api} detail={d} />);
+    await screen.findAllByTestId('similar-hit');
+    expect(screen.getByRole('button', { name: 'Xem family' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Mở font' })).not.toBeDisabled();
+    expect(screen.getByText(/Hơn 2.000 kiểu/)).toBeTruthy();
   });
 
   it('badges follow the source', () => {
     expect(SOURCE_BADGE).toEqual({ axes: 'Số đo', axes_and_image: 'Số đo + Hình ảnh', image: 'Hình ảnh' });
-  });
-
-  it('clicking a hit selects that face', async () => {
-    const d = await detail();
-    render(<SimilarTab api={createMockApi()} detail={d} />);
-    const hit = d.similarTop[1];
-    act(() => { fireEvent.click(screen.getAllByTestId('similar-hit')[1].querySelector('button')!); });
-    expect(useUiStore.getState().selectedId).toBe(faceKey(hit.face));
-  });
-
-  it('explains when a font has too few measurements', async () => {
-    const d = { ...(await detail()), similarTop: [] };
-    render(<SimilarTab api={createMockApi()} detail={d} />);
-    expect(screen.getByTestId('zero-state').textContent).toMatch(/quá ít số đo/);
   });
 
   describe('image-analysis strip (UX 03 §3.3)', () => {
