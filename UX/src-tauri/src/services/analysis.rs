@@ -188,7 +188,10 @@ pub fn similar_families(
         embed_weight: if opts.use_image { None } else { Some(0.0) },
         k: 0,
     };
-    let groups = b.index.similar_families(&key, &o, &filter, 0, b.len())?;
+    let mut groups = b.index.similar_families(&key, &o, &filter, 0, b.len())?;
+    // macOS hidden system families (".Aqua Kana", ".New York", ".Hiragino … Interface") are UI
+    // fonts that design apps do not list; never suggest them (seen on real /System/Library/Fonts).
+    groups.retain(|g| !is_hidden_family(&g.family));
     let total = groups.len() as u32;
     let limit = if q.limit == 0 { 12 } else { q.limit.min(100) } as usize;
     let selected: Vec<_> = groups
@@ -226,6 +229,22 @@ pub fn similar_families(
         offset: q.offset,
         items,
     })
+}
+
+/// Family names starting with '.' are macOS-private system fonts.
+pub fn is_hidden_family(family: &str) -> bool {
+    family.starts_with('.')
+}
+
+#[cfg(test)]
+mod hidden_family_tests {
+    #[test]
+    fn dot_prefixed_families_are_hidden() {
+        assert!(super::is_hidden_family(".Aqua Kana"));
+        assert!(super::is_hidden_family(".New York"));
+        assert!(!super::is_hidden_family("New York"));
+        assert!(!super::is_hidden_family("Avenir Next"));
+    }
 }
 
 /// Raw units from Core (never reference percentile units).
