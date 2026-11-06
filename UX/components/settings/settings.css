@@ -32,3 +32,5 @@ button.danger { color: var(--warn); }
 .fa-set-about { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
 .fa-set-about dt { color: var(--muted); }
 .fa-set-about dd { margin: 0; }
+
+.fa-set-group [role="alert"] { color: var(--warn); }

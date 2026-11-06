@@ -7,6 +7,8 @@ import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
+import { useModelStore, useModelUi } from '../../store/model';
+import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void };
 const MB = 1024 * 1024;
@@ -255,10 +257,20 @@ function O5({ api, reload, next }: Ctx) {
 }
 
 function O6({ api, next }: Ctx) {
+  const store = useModelStore;
+  const ui = useModelUi(store);
+  const model = store(s => s.model);
+  const [started, setStarted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [info, setInfo] = useState<{ free: number; required: number; faces: number } | null>(null);
   useEffect(() => {
-    void Promise.all([api.modelStatus(), api.listSources()]).then(([m, s]) => setInfo({ free: m.diskFree, required: m.requiredBytes, faces: s.reduce((n, x) => n + x.faceCount, 0) }));
+    let alive = true; let off: (() => void) | undefined;
+    store.getState().sync(api).then(u => { if (alive) off = u; else u(); }).catch(e => { if (alive) setInitError(String(e)); });
+    void Promise.all([api.modelStatus(), api.listSources()]).then(([m, s]) => { if (alive) setInfo({ free: m.diskFree, required: m.requiredBytes, faces: s.reduce((n, x) => n + x.faceCount, 0) }); }).catch(e => { if (alive) setInitError(String(e)); });
+    return () => { alive = false; off?.(); };
   }, [api]);
+  const showDownload = started || !!model && model.state !== 'missing' || ui.severity === 'error';
   const short = info ? Math.max(0, info.required - info.free) : 0;
   const mins = info ? estimateAnalysisMinutes(info.faces) : 0;
   return (
@@ -273,10 +285,14 @@ function O6({ api, next }: Ctx) {
       </ul>
       <p className="fa-onb-note">Không bật thì Similar và Pairing vẫn chạy bằng số đo.</p>
       {short > 0 && <p role="alert">Cần thêm {Math.ceil(short / MB)} MB trống.</p>}
+      {initError && <p role="alert">Không đọc được trạng thái model.</p>}
+      {showDownload && <p role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{ui.text ?? (model?.state === 'ready' ? 'Model đã sẵn sàng' : 'Phân tích hình ảnh đang tắt')}</p>}
+      <ModelDetails detail={ui.detail ?? initError ?? undefined} />
       <Actions>
-        <button type="button" onClick={async () => { await api.setSettings({ embedEnabled: false }); await next(); }}>Không dùng</button>
+        {!showDownload && <><button type="button" onClick={async () => { await api.setSettings({ embedEnabled: false }); await next(); }}>Không dùng</button>
         <button type="button" onClick={async () => { await api.setSettings({ embedEnabled: true }); await next(); }}>Để sau</button>
-        <Primary disabled={short > 0} onClick={async () => { await api.setSettings({ embedEnabled: true }); await api.modelDownload(() => {}); await next(); }}>Tải ngay</Primary>
+        <Primary disabled={short > 0 || !info || busy || !!initError} onClick={async () => { setStarted(true); setBusy(true); try { await store.getState().enable(api); } finally { setBusy(false); } }}>Tải ngay</Primary></>}
+        {showDownload && <>{ui.actions.map(a => <button key={a.label} type="button" disabled={busy} onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}<Primary onClick={() => void next()}>Tiếp tục</Primary></>}
       </Actions>
     </>
   );

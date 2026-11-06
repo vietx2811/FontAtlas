@@ -96,7 +96,7 @@ describe('Onboarding', () => {
     expect(heading()).toBe('Thư mục font');
   });
 
-  it('O6: disk space check, "Không dùng" turns analysis off, "Tải ngay" starts the download and moves on', async () => {
+  it('O6: disk space check, "Không dùng" turns analysis off, "Tải ngay" shows progress until the user continues', async () => {
     const api = createMockApi({ firstRun: true, initial: { model: { diskFree: 100 * 1024 * 1024 } } });
     await api.setOnboardingStep('o6');
     render(<Onboarding api={api} onDone={() => {}} />);
@@ -113,6 +113,9 @@ describe('Onboarding', () => {
     await click('Tải ngay');
     expect((await api2.getSettings()).embedEnabled).toBe(true);
     expect(dl).toHaveBeenCalled();
+    expect(heading()).toBe('Phân tích hình ảnh (tuỳ chọn)');
+    expect(screen.getByText(/Đang tải model/)).toBeTruthy();
+    await click('Tiếp tục');
     expect(heading()).toBe('Kích hoạt font cho app thiết kế');
   });
 
@@ -125,6 +128,21 @@ describe('Onboarding', () => {
     await click('Không dùng');
     expect((await api.getSettings()).embedEnabled).toBe(false);
     expect(heading()).toBe('Kích hoạt font cho app thiết kế');
+  });
+
+  it('O6 exposes checking and collapsed technical errors with cancellation resume', async () => {
+    const api = createMockApi({ firstRun: true, initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
+    await api.setOnboardingStep('o6');
+    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    expect(screen.getByText('Đang kiểm tra tệp…')).toBeTruthy();
+    expect(screen.getByTestId('model-spinner')).toBeTruthy();
+    const { useModelStore } = await import('../../../store/model');
+    act(() => useModelStore.setState(s => ({ model: { ...s.model!, state: 'paused', lastError: { code: 'tls', message: 'ONBOARD_TLS_DETAIL' } } })));
+    expect(screen.getByRole('alert')).toHaveTextContent('Không xác thực');
+    expect(screen.getByText('ONBOARD_TLS_DETAIL')).not.toBeVisible();
+    act(() => useModelStore.setState(s => ({ model: { ...s.model!, lastError: { code: 'cancelled', message: 'user stop' } } })));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tải' })).toBeTruthy();
   });
 
   it('O7: default is "turn off with the app"; the choice is saved with activation_set_keep', async () => {

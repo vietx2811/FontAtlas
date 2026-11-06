@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Api } from '../../api';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import './modelProgress.css';
+import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 
 export const SR_THROTTLE_MS = 10_000;
 
@@ -34,12 +35,13 @@ function Ring({ value }: { value: number }): React.JSX.Element {
 
 export function ModelProgress({ api, store = useModelStore }: { api: Api; store?: ModelStore }): React.JSX.Element | null {
   const ui = useModelUi(store);
-  const announced = useThrottledAnnouncement(ui.text, ui.code);
+  const totalBytes = store(s => s.model?.totalBytes);
+  const announced = useThrottledAnnouncement(ui.text, `${ui.code}:${!!ui.checking}`);
   if (!ui.text) return null;
   const error = ui.severity === 'error';
   return (
-    <div className={`fa-model${error ? ' err' : ''}`} data-testid="model-progress" data-code={ui.code} title={ui.detail}>
-      {ui.progress !== null ? <Ring value={ui.progress} /> : <span className="fa-model-dot" aria-hidden>{error ? '⚠' : 'ⓘ'}</span>}
+    <div className={`fa-model${error ? ' err' : ''}`} data-testid="model-progress" data-code={ui.code} title={ui.code === 'E8' || ui.code === 'E9' ? ui.detail : undefined}>
+      {ui.progress !== null ? <Ring key={`${ui.code}:${totalBytes}`} value={ui.progress} /> : ui.code === 'E2' ? <ModelSpinner ui={ui} /> : <span className="fa-model-dot" aria-hidden>{error ? '⚠' : 'ⓘ'}</span>}
       <span className="fa-model-text">{ui.text}</span>
       <span className="fa-model-actions">
         {ui.actions.map(a => (
@@ -47,6 +49,7 @@ export function ModelProgress({ api, store = useModelStore }: { api: Api; store?
         ))}
         {ui.code === 'E1' && <button type="button" aria-label="Đóng gợi ý" title="Đóng" onClick={() => store.getState().dismissE1()}>×</button>}
       </span>
+      <ModelDetails detail={ui.detail} />
       {/* Vùng đọc màn hình: lỗi dùng assertive, tiến độ dùng polite (≤ 1 lần/10 s). */}
       <span className="sr-only" data-testid="model-live" role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'}>{announced}</span>
     </div>

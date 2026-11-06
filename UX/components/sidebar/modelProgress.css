@@ -11,3 +11,6 @@
 .fa-ring .fgc { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .4s; }
 .fa-side[data-collapsed="true"] .fa-model-text, .fa-side[data-collapsed="true"] .fa-model-actions { display: none; }
 .fa-side[data-collapsed="true"] .fa-model { justify-content: center; padding: 4px 0; }
+
+.fa-model { flex-wrap: wrap; }
+.fa-side[data-collapsed="true"] .fa-model-details { display: none; }

@@ -1,0 +1,7 @@
+.fa-model-spinner { display: inline-block; width: 14px; height: 14px; flex: none; border: 2px solid var(--border); border-top-color: var(--accent-ink); border-radius: 50%; animation: fa-model-spin .8s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes fa-model-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .fa-model-spinner { animation: none; border-style: dashed; } }
+.fa-model-details { flex-basis: 100%; min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.fa-model-details summary { width: fit-content; cursor: pointer; color: var(--accent-ink); }
+.fa-model-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-model-details p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; margin: 4px 0 0; color: var(--muted); font-size: 11px; }
