@@ -1,5 +1,6 @@
 //! Tương phản nét, trục nhấn, aperture 'c', độ rộng, độ nghiêng, chân serif, counter.
 use kurbo::{Point, Shape, Vec2};
+use read_fonts::TableProvider;
 
 use crate::geom::{GlyphCtx, GlyphShape, first_stem, hline, ink_runs, vline};
 use crate::metric::{FailReason, Metric, Quality};
@@ -51,10 +52,26 @@ pub fn contrast_o(ctx: &GlyphCtx) -> Metric {
         None => Metric::failed(FailReason::MissingGlyph, M),
         Some(o) => Metric::from_opt(
             contrast_on(&o).map(|v| v.0),
-            Quality::Measured,
+            contrast_quality(ctx, &o),
             FailReason::Degenerate,
             M,
         ),
+    }
+}
+
+/// Radial rays overestimate contrast in narrow o (Bebas 1.94, Oswald 1.91,
+/// DIN Condensed 1.40 in the audit). No validated correction formula: keep the raw
+/// ratio and lower confidence for declared condensed faces or o aspect <=0.65.
+pub(crate) fn contrast_quality(ctx: &GlyphCtx, o: &GlyphShape) -> Quality {
+    let narrow = o.bbox.width() / o.bbox.height() <= 0.65
+        || ctx
+            .font()
+            .os2()
+            .is_ok_and(|t| (1..=4).contains(&t.us_width_class()));
+    if narrow {
+        Quality::Estimated
+    } else {
+        Quality::Measured
     }
 }
 
@@ -81,9 +98,13 @@ pub fn stress_deg(ctx: &GlyphCtx) -> Metric {
     };
     match contrast_on(&o) {
         None => Metric::failed(FailReason::Degenerate, M),
-        Some((c, _)) if c < 1.3 => Metric::failed(FailReason::LowContrast, M),
-        // Chưa qua kiểm định (spike: Baskerville ra 0°) → luôn Estimated.
-        Some((_, tilt)) => Metric::estimated(tilt.round(), M),
+        // Narrow o can flip the fitted stress to ±90° (Bebas/DIN in audit).
+        Some((_, tilt)) if tilt.abs() > 45.0 => Metric::failed(FailReason::Degenerate, M),
+        // Audit: regular sans contrast 1.08..1.35; transitional minimum 1.89.
+        // 1.7 leaves a margin on both groups; this is a confidence gate, not a classifier.
+        Some((c, _)) if c < 1.7 => Metric::failed(FailReason::LowContrast, M),
+        // Harmonic stress remains Estimated; canonicalize -0.0 after rounding.
+        Some((_, tilt)) => Metric::estimated(tilt.round() + 0.0, M),
     }
 }
 
@@ -99,7 +120,7 @@ pub(crate) fn angular_aperture(g: &GlyphShape, origin: Point) -> Option<f64> {
             ink_runs(&g.path, origin, origin + Vec2::new(th.cos(), th.sin()) * r).is_empty()
         })
         .count();
-    Some(open as f64)
+    (open > 0).then_some(open as f64)
 }
 
 /// Điểm giữa khe đầu tiên sau nét trái trên dòng quét y.
@@ -142,20 +163,9 @@ pub fn mean_adv_lc_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
 /// Độ nghiêng đo thật (không dựng thẳng) trên 'l' hoặc 'I'; âm = nghiêng phải như italic.
 pub fn slant_deg(ctx: &GlyphCtx) -> Metric {
     const M: &str = "l_or_I_midline_offset";
-    let v = ctx
-        .glyph('l', false)
-        .or_else(|| ctx.glyph('I', false))
-        .and_then(|g| {
-            let (y1, y2) = (
-                g.bbox.y0 + g.bbox.height() * 0.25,
-                g.bbox.y0 + g.bbox.height() * 0.75,
-            );
-            let m1 = hline(&g, y1).first().map(|(a, b)| (a + b) / 2.0)?;
-            let m2 = hline(&g, y2).first().map(|(a, b)| (a + b) / 2.0)?;
-            Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
-        });
+    let v = ctx.stem_slant_deg();
     Metric::from_opt(
-        v.map(|v| (v * 10.0).round() / 10.0),
+        v.map(|v| (v * 10.0).round() / 10.0 + 0.0),
         Quality::Measured,
         FailReason::MissingGlyph,
         M,
@@ -174,7 +184,11 @@ pub fn serif_foot(ctx: &GlyphCtx, xh: f64) -> Metric {
     foot.sort_by(f64::total_cmp);
     Metric::from_opt(
         foot.get(foot.len() / 2).copied(),
-        Quality::Measured,
+        if ctx.is_slanted() {
+            Quality::Estimated
+        } else {
+            Quality::Measured
+        },
         FailReason::MissingGlyph,
         M,
     )

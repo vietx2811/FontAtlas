@@ -290,36 +290,6 @@ fn stats_of(axis: AxisId, mut values: Vec<f32>) -> AxisStatsDto {
     }
 }
 
-#[cfg(test)]
-mod raw_stats_tests {
-    use super::*;
-    #[test]
-    fn empty_single_constant_nan_and_outlier() {
-        let a = AxisId::Width;
-        let s = stats_of(a, vec![f32::NAN, f32::INFINITY]);
-        assert_eq!(
-            (s.count, s.min, s.max, s.p1, s.p99),
-            (0, None, None, None, None)
-        );
-        for v in [vec![2.0], vec![2.0; 10]] {
-            let s = stats_of(a, v);
-            assert_eq!(
-                (s.min, s.max, s.p1, s.p99),
-                (Some(2.0), Some(2.0), Some(2.0), Some(2.0))
-            );
-        }
-        let mut v = vec![1.0; 100];
-        v.push(1000.0);
-        let s = stats_of(a, v);
-        assert_eq!(
-            (s.count, s.min, s.max, s.p1, s.p99),
-            (101, Some(1.0), Some(1000.0), Some(1.0), Some(1.0))
-        );
-        let s = stats_of(a, vec![0.0, 100.0]);
-        assert_eq!((s.p1, s.p99), (Some(1.0), Some(99.0)));
-    }
-}
-
 fn gate_str(g: Gate) -> &'static str {
     match g {
         Gate::Safe => "safe",
@@ -786,4 +756,34 @@ pub fn get_face(
         axes,
         similar_top,
     })
+}
+
+#[cfg(test)]
+mod raw_stats_tests {
+    use super::*;
+    #[test]
+    fn empty_single_constant_nan_and_outlier() {
+        let a = AxisId::Width;
+        let s = stats_of(a, vec![f32::NAN, f32::INFINITY]);
+        assert_eq!(
+            (s.count, s.min, s.max, s.p1, s.p99),
+            (0, None, None, None, None)
+        );
+        for v in [vec![2.0], vec![2.0; 10]] {
+            let s = stats_of(a, v);
+            assert_eq!(
+                (s.min, s.max, s.p1, s.p99),
+                (Some(2.0), Some(2.0), Some(2.0), Some(2.0))
+            );
+        }
+        let mut v = vec![1.0; 100];
+        v.push(1000.0);
+        let s = stats_of(a, v);
+        assert_eq!(
+            (s.count, s.min, s.max, s.p1, s.p99),
+            (101, Some(1.0), Some(1000.0), Some(1.0), Some(1.0))
+        );
+        let s = stats_of(a, vec![0.0, 100.0]);
+        assert_eq!((s.p1, s.p99), (Some(1.0), Some(99.0)));
+    }
 }

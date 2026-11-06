@@ -455,7 +455,10 @@ fn family_pages_stats_and_raw_filters_use_real_library() {
     )
     .unwrap();
     assert_eq!(only.total, 1);
-    assert_eq!(only.items[0].faces, [target.clone()]);
+    assert_eq!(
+        only.items[0].faces.as_slice(),
+        std::slice::from_ref(&target)
+    );
     let stats = analysis::axis_stats(
         &st,
         &FaceQueryDto {
