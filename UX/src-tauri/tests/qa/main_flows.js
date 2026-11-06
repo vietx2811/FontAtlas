@@ -1,14 +1,14 @@
 (async () => {
   const T = window.__TAURI_INTERNALS__;
   const inv = (c, a) => T.invoke(c, a);
-  let n = 0;
-  const log = async (step, ok, detail) => { n++; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail }) }); } catch (e) {} };
+  let n = 0; const T0 = Date.now();
+  const log = async (step, ok, detail) => { n++; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wait = async (fn, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; };
   const btn = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.trim() === text && !b.disabled);
   // Cửa sổ QA có thể không ở trước nên WKWebView không chạy animation/transition: chốt về trạng thái cuối trước khi chụp.
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
-  const snap = async name => { settleAnims(); await sleep(150); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(900); };
+  const snap = async name => { settleAnims(); await sleep(80); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); };
   const btnHas = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.includes(text) && !b.disabled);
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
@@ -114,19 +114,19 @@
     const ownNames = () => cells().map(key).filter(n => n && n.dataset.ownFont);
     await wait(() => cells().length >= 10, 30000);
     await wait(() => ownNames().length >= 3, 30000);
-    await sleep(800); await snap('cards-own-font');
+    await sleep(100); await snap('cards-own-font');
     const ownFams = ownNames().slice(0, 6).map(n => ({ text: n.textContent, family: getComputedStyle(n).fontFamily.slice(0, 40), differs: getComputedStyle(n).fontFamily !== uiFont, hasFallback: /Inter|var\(--font-ui\)|-apple-system/.test(getComputedStyle(n).fontFamily) || getComputedStyle(n).fontFamily.split(',').length > 1 }));
     await log('card-names-own-font', ownFams.length >= 3 && ownFams.every(f => f.differs), { loaded: ownNames().length, of: cells().length, ownFams });
     // Tooltip: rê chuột vào chấm tiếng Việt của thẻ đầu, rồi vào nút Cài đặt
     const vi0 = cells()[0].querySelector('[data-testid=vi-mark]');
     hover(vi0);
     const t1 = await wait(tip, 3000);
-    const t1Text = t1?.textContent; await sleep(300); await snap('tooltip-badge');
+    const t1Text = t1?.textContent; await sleep(100); await snap('tooltip-badge');
     unhover(vi0); await sleep(200);
     const gear = document.querySelector('button[aria-label="Cài đặt"]');
     hover(gear);
     const t2 = await wait(tip, 3000);
-    const t2Text = t2?.textContent; await sleep(300); await snap('tooltip-settings');
+    const t2Text = t2?.textContent; await sleep(100); await snap('tooltip-settings');
     unhover(gear); await sleep(200);
     await log('tooltip-hover', !!t1 && !!t2 && /Cài đặt/.test(t2Text) && /⌘,/.test(t2Text) && !tip(), { badge: t1Text, gear: t2Text, leftover: !!tip(), nativeTitles: document.querySelectorAll('[title]').length });
     // Đa chọn: click + ⌘-click. Đo lưới so với panel chi tiết trước/sau khi panel mở và thanh chọn xuất hiện.
@@ -147,15 +147,15 @@
     const m0 = measure('before-panel');
     cs[0].click(); await sleep(300);
     const m1 = measure('panel-open+300ms');
-    await sleep(1500);
-    const m1b = measure('panel-open+1800ms');
+    await sleep(500);
+    const m1b = measure('panel-open+800ms');
     cs[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
     const bar = await wait(() => document.querySelector('[data-testid=selection-count]'), 5000);
-    await sleep(500); await snap('selection-bar');
+    await sleep(100); await snap('selection-bar');
     await log('cmd-click-two', /^2 đã chọn$/.test(bar?.textContent ?? ''), { bar: bar?.textContent, selected: cells().filter(c => c.getAttribute('aria-selected') === 'true').length });
     const m2 = measure('bar-shown');
-    await sleep(1500);
-    const m3 = measure('bar-shown+1500ms');
+    await sleep(500);
+    const m3 = measure('bar-shown+500ms');
     const ticks = await rafTicks(500);
     const m4 = measure('after-raf');
     await log('grid-fits-panel', [m1, m1b, m2, m3, m4].every(m => m.fits && m.colsOk), { rafTicksIn500ms: ticks, m0, m1, m1b, m2, m3, m4 });
@@ -166,16 +166,16 @@
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));
     const menu = await wait(() => document.querySelector('[role=menu]'), 3000);
-    await sleep(500); await snap('context-menu');
+    await sleep(100); await snap('context-menu');
     const labels = [...document.querySelectorAll('[role=menuitem]')].map(i => i.textContent);
     await log('context-menu-open', !!menu && labels.some(l => /^Thêm vào dự án/.test(l)) && !!bar && document.querySelector('[data-testid=selection-count]')?.textContent === '2 đã chọn', { labels, header: menu?.textContent.slice(0, 30) });
     const addProj = [...document.querySelectorAll('[role=menuitem]')].find(i => /^Thêm vào dự án/.test(i.textContent));
     addProj?.click();
     const newProj = await wait(() => [...document.querySelectorAll('[role=menuitem]')].find(i => i.textContent === 'Dự án mới…'), 3000);
-    await sleep(500); await snap('context-submenu');
+    await sleep(100); await snap('context-submenu');
     newProj?.click();
     const nameInput = await wait(() => document.querySelector('input[aria-label="Tên dự án"]'), 3000);
-    await sleep(300); await snap('new-project-prompt');
+    await sleep(100); await snap('new-project-prompt');
     if (nameInput) {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(nameInput, 'QA hai font');
       nameInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -183,12 +183,14 @@
     }
     let proj = null;
     for (let i = 0; i < 30 && !proj?.itemCount; i++) { await sleep(300); proj = (await inv('list_collections', {})).find(c => c.name === 'QA hai font'); }
-    await sleep(600); await snap('project-created');
+    await sleep(100); await snap('project-created');
     await log('new-project-has-two-fonts', !!proj && proj.itemCount === 2, { proj, toast: document.querySelector('.fa-toast')?.textContent, sidebar: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].some(b => /QA hai font/.test(b.textContent)) });
-    // Esc bỏ chọn
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await sleep(400);
-    await log('escape-clears', !document.querySelector('[data-testid=selection-count]') && cells().every(c => c.getAttribute('aria-selected') !== 'true'), { left: cells().filter(c => c.getAttribute('aria-selected') === 'true').length });
+    // Esc bỏ chọn: chờ menu/hộp nhập/tooltip đã đóng (điều kiện thật, không đoán thời gian), rồi gửi Esc tới phần tử đang focus như bàn phím thật.
+    const overlays = () => document.querySelector('[role=menu], [role=dialog], [role=alertdialog], [role=tooltip]');
+    const idle = await wait(() => !overlays() && document.querySelector('[data-testid=selection-count]'), 10000);
+    (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    const cleared = await wait(() => !document.querySelector('[data-testid=selection-count]') && cells().every(c => c.getAttribute('aria-selected') !== 'true'), 8000);
+    await log('escape-clears', !!idle && !!cleared, { idleBeforeEsc: !!idle, left: cells().filter(c => c.getAttribute('aria-selected') === 'true').length, overlay: overlays()?.outerHTML.slice(0, 160) ?? null, active: document.activeElement && (document.activeElement.tagName + '.' + String(document.activeElement.className).slice(0, 40)), bar: document.querySelector('[data-testid=selection-count]')?.textContent ?? null });
     // Chuột phải thẻ chưa chọn (1 font) + tiêu đề panel bằng font của thẻ + dark
     const c3 = cells()[3]; const r3 = c3.getBoundingClientRect();
     c3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 50, clientY: r3.top + 50, button: 2 }));
@@ -199,14 +201,15 @@
     await wait(() => h2 && h2.dataset.ownFont, 8000);
     await snap('context-menu-single');
     await log('context-menu-single', single.includes('Mở chi tiết') && single.includes('Tìm tương tự') && cells().filter(c => c.getAttribute('aria-selected') === 'true').length === 1, { single, panelTitleOwnFont: h2?.dataset.ownFont ?? null, panelTitleFamily: h2 && getComputedStyle(h2).fontFamily.slice(0, 40) });
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(() => !document.querySelector('[role=menu]'), 5000);
     document.documentElement.dataset.theme = 'dark';
-    await sleep(500);
+    await sleep(150);
     c3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 50, clientY: r3.top + 50, button: 2 }));
     await wait(() => document.querySelector('[role=menu]'), 3000);
-    await sleep(400); await snap('context-menu-dark');
+    await sleep(100); await snap('context-menu-dark');
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    const gear2 = document.querySelector('button[aria-label="Cài đặt"]'); hover(gear2); await wait(tip, 3000); await sleep(300); await snap('tooltip-dark'); unhover(gear2);
+    const gear2 = document.querySelector('button[aria-label="Cài đặt"]'); hover(gear2); await wait(tip, 3000); await sleep(100); await snap('tooltip-dark'); unhover(gear2);
     document.documentElement.dataset.theme = 'light';
     await log('dark-snapshots', true, '');
     await log('done', true, '');
