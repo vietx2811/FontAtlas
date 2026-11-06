@@ -24,7 +24,7 @@
 .fa-onb-source-info strong { font-weight: 500; overflow-wrap: anywhere; }
 .fa-onb-sources .path { min-width: 0; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; color: var(--muted); }
 .fa-onb-sources button { flex: none; padding: 6px 8px; border-radius: var(--radius-sm); color: var(--muted); }
-.fa-onb button:disabled { opacity: .45; cursor: default; }
+.fa-onb button:disabled, .fa-onb button[aria-disabled="true"] { opacity: .45; cursor: default; }
 .fa-onb button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fa-onb button:hover:not(:disabled) { filter: brightness(.96); }
 .fa-onb-feedback { margin: 0; padding: 8px 12px; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--warn); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }

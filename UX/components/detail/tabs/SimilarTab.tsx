@@ -6,9 +6,17 @@ import { useScanStore } from '../../../store/scan';
 import { faceKey, toMetadataQuery, useUiStore } from '../../../store/ui';
 import { ModelDetails, ModelSpinner } from '../../model/ModelFeedback';
 import { ZeroState } from '../../zero/ZeroState';
+import { faceMenuProps, useFaceActions } from '../../faces/FaceActions';
+import { FaceTitle } from '../../ui/FaceTitle';
+import { Tooltip } from '../../ui/Tooltip';
 import { AXIS_META } from './AnatomyTab';
 
 export const SOURCE_BADGE: Record<SimilarSource, string> = { axes: 'Số đo', axes_and_image: 'Số đo + Hình ảnh', image: 'Hình ảnh' };
+export const SOURCE_TIP: Record<SimilarSource, string> = {
+  axes: 'So sánh theo số đo giải phẫu chữ (chiều cao x, nét, tương phản…)',
+  axes_and_image: 'So sánh theo số đo giải phẫu và hình dáng chữ',
+  image: 'So sánh theo hình dáng chữ',
+};
 const names = (keys: string[]): string => keys.map(k => (AXIS_META[k]?.label ?? k).toLowerCase()).join(', ');
 
 /** Ba font gần nhất. Không điểm, không phần trăm: chỉ "Giống ở / Khác ở" và nguồn phân tích. */
@@ -47,6 +55,7 @@ const PAGE_SIZE = 6;
 export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; detail: FaceDetailDto; store?: ModelStore }): React.JSX.Element {
   const state = useUiStore(useShallow(s => ({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, filters: s.filters, select: s.select, setPanelTab: s.setPanelTab, openFamily: s.openFamily, setView: s.setView, setQuery: s.setQuery, setViOnly: s.setViOnly, setFilters: s.setFilters })));
   const scanVersion = useScanStore(s => s.version);
+  const faceActions = useFaceActions();
   const queryKey = JSON.stringify(toMetadataQuery(state));
   const q = useMemo(() => JSON.parse(queryKey) as ReturnType<typeof toMetadataQuery>, [queryKey]);
   const [paging, setPaging] = useState({ scope: '', offset: 0 });
@@ -111,12 +120,12 @@ export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; d
         <ul className="fa-sim">{page.items.map(group => {
           const h = group.representative;
           const tooLarge = group.faces.length > 2000 || group.count > 2000;
-          return <li key={group.family} data-testid="similar-hit" className="fa-sim-hit">
-            <strong className="fa-sim-name">{group.family}</strong>
-            <span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span>
+          return <li key={group.family} data-testid="similar-hit" className="fa-sim-hit" {...faceMenuProps(faceActions, [h.row])}>
+            <FaceTitle as="strong" api={api} face={h.row} className="fa-sim-name">{group.family}</FaceTitle>
+            <Tooltip label={SOURCE_TIP[h.source]}><span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span></Tooltip>
             <p className="fa-sim-style">{h.row.subfamily ?? 'Kiểu đại diện'} · {group.count.toLocaleString('vi-VN')} kiểu</p>
             <p className="fa-sim-why">{h.same.length ? `Giống: ${names(h.same)}` : 'Chưa có trục giống để giải thích'}{h.differ.length ? ` · Khác: ${names(h.differ)}` : ''}</p>
-            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><button type="button" disabled={tooLarge || openingFamily !== null} title={tooLarge ? 'Family vượt giới hạn 2.000 kiểu của truy vấn thư viện' : undefined} onClick={() => void openFamily(group.family)}>Xem family</button></div>
+            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><Tooltip label="Family vượt giới hạn 2.000 kiểu của truy vấn thư viện" disabled={!tooLarge}><button type="button" aria-disabled={tooLarge || openingFamily !== null || undefined} onClick={() => { if (!tooLarge && openingFamily === null) void openFamily(group.family); }}>Xem family</button></Tooltip></div>
             {tooLarge && <p className="fa-sim-why">Hơn 2.000 kiểu; hãy mở font đại diện để xem family.</p>}
           </li>;
         })}</ul>

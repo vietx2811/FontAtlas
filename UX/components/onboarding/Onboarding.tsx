@@ -9,6 +9,7 @@ import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
+import { Tooltip } from '../ui/Tooltip';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void };
 const MB = 1024 * 1024;
@@ -198,10 +199,10 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
         {sources.map(s => {
           const active = s.scanning || scanning.includes(s.id);
           return <li key={s.id}>
-            <div className="fa-onb-source-info"><strong>{s.name}</strong><span className="path" title={s.path ?? s.name}>{s.path ?? s.name}</span>
+            <div className="fa-onb-source-info"><strong>{s.name}</strong><Tooltip label={s.path ?? s.name} onlyIfTruncated><span className="path">{s.path ?? s.name}</span></Tooltip>
               <span className="kind">{kindOf(s.path)} · {!s.available ? 'Không truy cập được' : active ? 'Đang quét / chờ quét' : `${s.faceCount.toLocaleString('vi-VN')} font`}</span>
             </div>
-            <button type="button" disabled={busy || active} title={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'} aria-label={`Xoá ${s.name}`} onClick={() => void run(async () => { await api.removeSource(s.id); await refresh(); })}>Xoá</button>
+            <Tooltip label={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'}><button type="button" aria-disabled={busy || active || undefined} aria-label={`Xoá ${s.name}`} onClick={() => { if (!busy && !active) void run(async () => { await api.removeSource(s.id); await refresh(); }); }}>Xoá</button></Tooltip>
           </li>;
         })}
         {sources.length === 0 && <li className="empty">{loading ? 'Đang tải nguồn…' : loadError ? 'Chưa tải được danh sách nguồn.' : 'Chưa có thư mục nào.'}</li>}

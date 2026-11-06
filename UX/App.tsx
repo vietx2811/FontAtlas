@@ -10,6 +10,7 @@ import { Settings } from './components/settings/Settings';
 import { SettingsShortcut } from './components/settings/SettingsShortcut';
 import { BootGate } from './components/boot/BootGate';
 import { NoticeStack } from './components/NoticeStack';
+import { FaceActionsProvider } from './components/faces/FaceActions';
 import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -59,6 +60,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     }, [api]);
 
     return (
+        <FaceActionsProvider api={api}>
         <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
             {settingsOpen ? (
                 <Settings api={api} onClose={() => useUiStore.getState().setSettingsOpen(false)}
@@ -72,6 +74,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
                 <DetailPanel api={api} />
             </div>}
         </WindowShell>
+        </FaceActionsProvider>
     );
 };
 

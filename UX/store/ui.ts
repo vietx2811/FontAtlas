@@ -45,6 +45,10 @@ export interface UiState {
   settingsOpen: boolean;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
+  /** Tăng khi dữ liệu thư viện đổi từ nơi khác (thêm vào dự án, gắn thẻ…): thanh bên nạp lại số đếm/danh sách. */
+  libraryRev: number;
+  /** Tăng khi lưới phải nạp lại (bỏ yêu thích trong view Yêu thích, gỡ khỏi dự án…). */
+  gridRev: number;
 }
 
 export interface UiActions {
@@ -69,6 +73,7 @@ export interface UiActions {
   setSettingsOpen(on: boolean): void;
   toggleSettings(): void;
   refreshActive(api: Api): Promise<void>;
+  bumpLibrary(reloadGrid?: boolean): void;
 }
 
 export const faceKey = (k: FaceKeyDto): string => `${k.hashHex}:${k.faceIndex}`;
@@ -126,7 +131,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false }),
@@ -151,6 +156,7 @@ export function createUiStore(): UiStore {
     toggleSettings: () => set(s => ({ settingsOpen: !s.settingsOpen })),
     requestAddFolder: () => set(s => ({ addFolderRequest: s.addFolderRequest + 1 })),
     toggleInfo: () => set(s => ({ infoExpanded: !s.infoExpanded })),
+    bumpLibrary: (reloadGrid = false) => set(s => ({ libraryRev: s.libraryRev + 1, gridRev: reloadGrid ? s.gridRev + 1 : s.gridRev })),
 
     async refreshActive(api) {
       const st = await api.activationState();

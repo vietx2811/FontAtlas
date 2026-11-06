@@ -1,0 +1,9 @@
+/* Thanh chọn nhiều nằm trong hàng dưới topbar (cạnh chip Family), cao bằng chip, không đè lên lưới. */
+.fa-selbar { display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 2px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 12px; white-space: nowrap; }
+.fa-selbar-n { padding: 0 8px 0 6px; font-weight: 600; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.fa-selbar-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--border); }
+.fa-selbar button { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 4px; color: var(--fg); font-size: 12px; }
+.fa-selbar button:hover { background: var(--chrome-hover); }
+.fa-selbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.fa-selbar button[aria-disabled="true"] { opacity: .45; }
+@media (max-width: 1180px) { .fa-selbar button { padding: 0 6px; } }

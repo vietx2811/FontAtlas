@@ -1,0 +1,35 @@
+/* Menu ngữ cảnh kiểu macOS: nền thẻ, viền mảnh, bóng nhẹ; mục tô accent-soft khi focus/hover. */
+.fa-menu2-root { position: fixed; left: 0; top: 0; z-index: 1500; }
+.fa-menu2 {
+  min-width: 200px; max-width: 280px; padding: 4px; box-sizing: border-box; outline: none;
+  background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18), 0 1px 3px rgba(0, 0, 0, .08);
+  font: 400 13px/1.3 var(--font-ui);
+  animation: fa-menu-in .1s ease-out both;
+}
+.fa-menu2[data-depth="1"] { max-height: min(340px, 60vh); overflow-y: auto; }
+.fa-mi-wrap { position: relative; }
+.fa-mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; padding: 0 8px; border-radius: 6px; text-align: left; color: inherit; background: none; }
+.fa-mi:focus, .fa-mi:focus-visible, .fa-mi[aria-expanded="true"] { outline: none; background: var(--accent-soft); color: var(--fg); }
+.fa-mi[aria-disabled="true"] { opacity: .45; cursor: default; }
+.fa-mi[aria-disabled="true"]:focus { background: var(--chrome-hover); }
+.fa-mi[data-danger="true"] { color: var(--warn); }
+.fa-mi-ico { flex: none; width: 14px; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.fa-mi-lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-mi-hint { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.fa-mi-chev { flex: none; color: var(--muted); font-size: 14px; line-height: 1; }
+.fa-mi-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.fa-mi-label { padding: 4px 8px 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.fa-sub { position: absolute; left: 100%; top: -5px; margin-left: 2px; }
+.fa-sub[data-flip="left"] { left: auto; right: 100%; margin-left: 0; margin-right: 2px; }
+@keyframes fa-menu-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .fa-menu2 { animation: none; } }
+
+/* Hộp nhập tên (Dự án mới…, Thẻ mới…) */
+.fa-prompt { position: fixed; z-index: 1500; width: 240px; padding: 10px; box-sizing: border-box; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .18); font: 400 13px/1.3 var(--font-ui); color: var(--fg); }
+.fa-prompt label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+.fa-prompt input { width: 100%; box-sizing: border-box; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: inherit; outline: none; }
+.fa-prompt input:focus { border-color: var(--accent); background: var(--card); }
+.fa-prompt .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.fa-prompt .row button { height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12px; background: var(--surface-2); color: var(--fg); }
+.fa-prompt .row button[data-primary] { background: var(--accent); color: #2A1F14; font-weight: 600; }

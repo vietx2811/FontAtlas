@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { createModelStore } from '../../../store/model';
 import { ModelProgress, SR_THROTTLE_MS } from '../ModelProgress';
+import { tipOf } from '../../../test/tip';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -53,7 +54,7 @@ describe('ModelProgress', () => {
     await mount({ initial: { model: { state: 'ready' }, embed: { enabled: true, running: true, pending: 3000, done: 800, device: 'metal', etaMs: 120_000 } } });
     const row = screen.getByTestId('model-progress');
     expect(row.textContent).toContain('Phân tích hình ảnh 800/3.800');
-    expect(row.getAttribute('title')).toBe('Đang dùng: Metal (GPU)');
+    expect(await tipOf(row)).toBe('Đang dùng: Metal (GPU)');
     expect(row.querySelector('[data-ring]')).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tạm dừng' })); });
     expect(screen.getByTestId('model-progress').textContent).toContain('tạm dừng');

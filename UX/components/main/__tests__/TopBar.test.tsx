@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useUiStore } from '../../../store/ui';
 import { SEARCH_DEBOUNCE_MS, SearchField } from '../SearchField';
 import { TopBar } from '../TopBar';
+import { tipOf } from '../../../test/tip';
 
 const initial = useUiStore.getState();
 const search = () => screen.getByRole('textbox', { name: 'Tìm font' }) as HTMLInputElement;
@@ -93,7 +94,7 @@ describe('TopBar', () => {
     render(<TopBar api={api} />); await settle();
     const chip = screen.getByRole('button', { name: 'Bỏ phạm vi family Be Vietnam Pro' });
     expect(chip.textContent).toContain('Family: Be Vietnam Pro · có lọc');
-    expect(chip).toHaveAttribute('title', '9/18 kiểu · có lọc');
+    expect(await tipOf(chip)).toBe('9/18 kiểu · có lọc — bấm để bỏ phạm vi family');
     fireEvent.click(chip);
     expect(useUiStore.getState().familyScope).toBeNull();
     expect(useUiStore.getState().filters).toEqual({ italic: true });

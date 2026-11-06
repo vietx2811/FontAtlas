@@ -1,10 +1,14 @@
+import { useMemo } from 'react';
 import type { Api } from '../../api';
 import { useUiStore } from '../../store/ui';
+import { useSelectionStore } from '../../store/selection';
+import { SelectionBar } from './SelectionBar';
 import { Icon } from '../sidebar/icons';
 import { SearchField } from './SearchField';
 import { useViewSummary } from './useViewSummary';
 import './topbar.css';
 import { FilterPanel } from './FilterPanel';
+import { Tooltip } from '../ui/Tooltip';
 
 export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const { title, count } = useViewSummary(api);
@@ -15,18 +19,24 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const setViOnly = useUiStore(s => s.setViOnly);
   const layout = useUiStore(s => s.layout);
   const setLayout = useUiStore(s => s.setLayout);
+  const selected = useSelectionStore(s => s.rows);
+  const selectedRows = useMemo(() => [...selected.values()], [selected]);
+  const showSelection = selectedRows.length >= 2;
   const hasFilters = viOnly || filters.italic != null || filters.variable != null || !!filters.rawAxisRanges?.length;
   return (
-    <header className={`fa-topbar${familyScope ? ' has-family' : ''}`}>
+    <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection ? ' has-row' : ''}`}>
       <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
-      <button type="button" className="fa-vi-toggle" aria-pressed={viOnly} title="Chỉ font đủ dấu tiếng Việt" onClick={() => setViOnly(!viOnly)}>Ặ vi</button>
+      <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
       <FilterPanel api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
-        <button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" title="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button>
-        <button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" title="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button>
+        <Tooltip label="Hiện dạng lưới"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button></Tooltip>
+        <Tooltip label="Hiện dạng danh sách"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button></Tooltip>
       </div>
-      {familyScope && <div className="fa-family-row"><button type="button" className="fa-family-chip" aria-label={`Bỏ phạm vi family ${familyScope.name}`} title={`${count ?? '…'}/${familyScope.faces.length} kiểu${hasFilters ? ' · có lọc' : ''}`} onClick={() => setView('all')}><span>Family: {familyScope.name}{hasFilters ? ' · có lọc' : ''}</span><span aria-hidden>×</span></button></div>}
+      {(familyScope || showSelection) && <div className="fa-family-row">
+        {familyScope && <Tooltip label={`${count ?? '…'}/${familyScope.faces.length} kiểu${hasFilters ? ' · có lọc' : ''} — bấm để bỏ phạm vi family`}><button type="button" className="fa-family-chip" aria-label={`Bỏ phạm vi family ${familyScope.name}`} onClick={() => setView('all')}><span>Family: {familyScope.name}{hasFilters ? ' · có lọc' : ''}</span><span aria-hidden>×</span></button></Tooltip>}
+        {showSelection && <SelectionBar rows={selectedRows} />}
+      </div>}
     </header>
   );
 }

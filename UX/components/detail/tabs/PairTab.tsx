@@ -4,6 +4,9 @@ import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole } from '.
 import { useUiStore } from '../../../store/ui';
 import { useFontFamily } from '../useFontFamily';
 import { ZeroState } from '../../zero/ZeroState';
+import { faceMenuProps, useFaceActions } from '../../faces/FaceActions';
+import { FaceTitle } from '../../ui/FaceTitle';
+import { Tooltip } from '../../ui/Tooltip';
 import { AXIS_META } from './AnatomyTab';
 import { PARAGRAPH } from './SpecimenTab';
 
@@ -14,6 +17,7 @@ type Props = { api: Api; detail: FaceDetailDto; css: CSSProperties };
 export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   const sample = useUiStore(s => s.sample);
   const setPanelTab = useUiStore(s => s.setPanelTab);
+  const faceActions = useFaceActions();
   const [role, setRole] = useState<PairRole>('heading');
   const [mode, setMode] = useState<PairMode>('safe');
   const [projectVi, setProjectVi] = useState(true);
@@ -72,16 +76,18 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
             <span data-testid="pair-counter">{idx + 1} / {cands.length}</span>
             <button type="button" aria-label="Ứng viên sau" disabled={idx >= cands.length - 1} onClick={() => setIdx(i => Math.min(cands.length - 1, i + 1))}>▶</button>
           </div>
-          <div className="fa-pair-card">
+          <div className="fa-pair-card" {...faceMenuProps(faceActions, [cand.row])}>
             <div className="fa-pair-heading" data-testid="pair-heading" style={{ ...headCss, fontSize: 26, lineHeight: 1.2 }}>{sample.trim() || 'Phở bò Hà Nội'}</div>
             <p className="fa-pair-body" data-testid="pair-body" style={{ ...bodyCss, fontSize: 14, lineHeight: 1.55, margin: 0 }}>{PARAGRAPH}</p>
           </div>
-          <p className="fa-pair-name">{cand.row.family}{cand.row.subfamily ? ` ${cand.row.subfamily}` : ''} · {role === 'heading' ? 'nội dung' : 'tiêu đề'}</p>
+          <p className="fa-pair-name" {...faceMenuProps(faceActions, [cand.row])}>
+            <FaceTitle api={api} face={cand.row} className="fa-pair-title">{cand.row.family}{cand.row.subfamily ? ` ${cand.row.subfamily}` : ''}</FaceTitle> · {role === 'heading' ? 'nội dung' : 'tiêu đề'}
+          </p>
           <p data-testid="pair-summary" className="fa-pair-summary">{cand.summary}</p>
           <ul className="fa-pair-labels">
             {cand.labels.map(l => {
               const axis = AXIS_META[l.axis]?.label ?? l.axis;
-              return <li key={l.axis} data-testid="pair-label" title={l.relation} aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li>;
+              return <Tooltip key={l.axis} label={l.relation}><li data-testid="pair-label" aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li></Tooltip>;
             })}
           </ul>
           {cand.weightHint && <p className="fa-pair-hint">{cand.weightHint}</p>}

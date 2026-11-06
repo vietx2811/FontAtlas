@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FamilyStyleDto } from '../../api';
+import type { FontFaceLoader } from '../../features/library-grid/fontFaceLoader';
+import { FaceTitle } from '../ui/FaceTitle';
 
 export const styleLabel = (s: FamilyStyleDto): string => s.subfamily ?? s.instance?.name ?? 'Regular';
 const weightOf = (s: FamilyStyleDto): number => s.weight ?? 400;
@@ -12,11 +14,11 @@ export function orderStyles(styles: FamilyStyleDto[]): { romans: FamilyStyleDto[
 
 type Props = {
   styles: FamilyStyleDto[]; value: string | null; onChange(label: string): void;
-  /** Họ font đã nạp cho từng kiểu (null = dùng font giao diện + weight/italic CSS). */
-  familyOf?(s: FamilyStyleDto): string | null;
+  /** Bộ nạp font: mỗi kiểu hiện bằng chính font của nó (chưa nạp xong → font giao diện + weight/italic CSS). */
+  loader?: FontFaceLoader | null;
 };
 
-export function StyleDropdown({ styles, value, onChange, familyOf }: Props): React.JSX.Element {
+export function StyleDropdown({ styles, value, onChange, loader = null }: Props): React.JSX.Element {
   const { romans, italics } = useMemo(() => orderStyles([...styles]), [styles]);
   const flat = useMemo(() => [...romans, ...italics], [romans, italics]);
   const current = flat.find(s => styleLabel(s) === value) ?? flat[0];
@@ -41,10 +43,10 @@ export function StyleDropdown({ styles, value, onChange, familyOf }: Props): Rea
   }, [open]);
   useEffect(() => { if (open) { list.current?.focus(); document.getElementById(optId(active))?.scrollIntoView?.({ block: 'nearest' }); } }, [open, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const css = (s: FamilyStyleDto): React.CSSProperties => {
-    const fam = familyOf?.(s);
-    return { fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: weightOf(s), fontStyle: s.italic ? 'italic' : 'normal' };
-  };
+  const css = (s: FamilyStyleDto): React.CSSProperties => ({ fontWeight: weightOf(s), fontStyle: s.italic ? 'italic' : 'normal' });
+  const title = (s: FamilyStyleDto, label: string) => (
+    <FaceTitle loader={loader} face={s.face} variation={s.instance?.coords} className="lbl">{label}</FaceTitle>
+  );
   const option = (s: FamilyStyleDto) => {
     const i = flat.indexOf(s);
     const label = styleLabel(s);
@@ -52,7 +54,7 @@ export function StyleDropdown({ styles, value, onChange, familyOf }: Props): Rea
     return (
       <li key={`${label}-${i}`} id={optId(i)} role="option" aria-label={label} aria-selected={selected} className={i === active ? 'kb' : undefined} style={css(s)}
         onMouseEnter={() => setActive(i)} onClick={() => choose(s)}>
-        <span className="ck" aria-hidden>{selected ? '✓' : ''}</span>{label}<span className="wt">{weightOf(s)}</span>
+        <span className="ck" aria-hidden>{selected ? '✓' : ''}</span>{title(s, label)}<span className="wt">{weightOf(s)}</span>
       </li>
     );
   };
@@ -73,7 +75,7 @@ export function StyleDropdown({ styles, value, onChange, familyOf }: Props): Rea
     <div ref={root} className={`fa-dd${open ? ' open' : ''}`}>
       <button ref={btn} type="button" className="fa-dd-btn" aria-label="Kiểu chữ" aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
         onClick={() => (open ? close() : show())} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); show(); } }}>
-        <span className="cur" style={current ? css(current) : undefined}>{current ? styleLabel(current) : '—'}</span>
+        <span className="cur" style={current ? css(current) : undefined}>{current ? title(current, styleLabel(current)) : '—'}</span>
         <span className="cnt">{flat.length} kiểu</span>
         {!disabled && <span className="chev" aria-hidden />}
       </button>
