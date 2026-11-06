@@ -27,6 +27,9 @@ export async function pickFolderWithDialog(): Promise<string | null> {
 /** Onboarding có thể nhập nhiều nguồn độc lập trong một lần chọn. */
 export async function pickFoldersWithDialog(): Promise<string[]> {
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return [];
+  // QA nội bộ (bản debug + FONTATLAS_QA_SCRIPT): hộp thoại gốc không điều khiển được bằng script.
+  const qa = (window as { __FA_QA_PICKS__?: string[][] }).__FA_QA_PICKS__;
+  if (Array.isArray(qa)) return qa.shift() ?? [];
   const { open } = await import('@tauri-apps/plugin-dialog');
   const r = await open({ directory: true, multiple: true });
   return typeof r === 'string' ? [r] : r ?? [];

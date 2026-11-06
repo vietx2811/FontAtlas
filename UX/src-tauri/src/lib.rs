@@ -63,6 +63,19 @@ pub fn run() {
             let state = AppState::new(dirs, platform_api());
             app.manage(state.clone());
             crate::services::boot::start(state);
+            // QA nội bộ (chỉ bản debug): chạy một tệp JS trong webview thật để đi các luồng chính
+            // trên IPC thật, cùng FONTATLAS_DATA_DIR tạm. Không có trong bản release.
+            #[cfg(debug_assertions)]
+            if let Some(path) = std::env::var_os("FONTATLAS_QA_SCRIPT") {
+                let js = std::fs::read_to_string(path)?;
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(4));
+                    if let Some(w) = h.get_webview_window("main") {
+                        let _ = w.eval(&js);
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(app_handler!())
