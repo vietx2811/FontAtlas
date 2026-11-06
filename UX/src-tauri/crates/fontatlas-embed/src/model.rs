@@ -2,8 +2,9 @@
 //! (server không hỗ trợ Range → stream cả file, chỉ ghi phần cần, kiểm sha toàn file), ghép thành file
 //! safetensors cục bộ tất định; ghi `.part`, kiểm sha từng đoạn + file cục bộ, fsync, đổi tên nguyên tử,
 //! sidecar `.ok`, khoá chống chạy chồng.
-use futures_util::future::{Either, select, try_join_all};
-use std::cell::Cell;
+use futures_util::StreamExt;
+use futures_util::future::{Either, select};
+use std::cell::{Cell, RefCell};
 use std::fs::{self, File, OpenOptions};
 use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -19,8 +20,9 @@ use std::error::Error;
 
 /// Thời gian tối đa chờ một chunk dữ liệu (không phải cả file).
 pub const READ_TIMEOUT: Duration = Duration::from_secs(30);
-/// Three HTTP bodies and at most 12 MiB of out-of-order payload at once.
-const RANGE_CHUNK: u64 = 4 << 20;
+/// Sliding window: at most CONCURRENCY bodies in flight and CONCURRENCY chunks buffered
+/// (48 MiB worst case). Large chunks amortize per-request TTFB.
+const RANGE_CHUNK: u64 = 16 << 20;
 const PARALLEL_AT: u64 = 8 << 20;
 const CONCURRENCY: usize = 3;
 const ATTEMPTS: usize = 3;
@@ -467,6 +469,7 @@ pub struct ModelStore {
     dir: PathBuf,
     m: Manifest,
     read_timeout: Duration,
+    chunk: u64,
     #[cfg(test)]
     dns_resolver: Option<std::sync::Arc<dyn reqwest::dns::Resolve>>,
 }
@@ -501,6 +504,7 @@ impl ModelStore {
             dir,
             m,
             read_timeout: READ_TIMEOUT,
+            chunk: RANGE_CHUNK,
             #[cfg(test)]
             dns_resolver: None,
         }
@@ -510,6 +514,13 @@ impl ModelStore {
     #[doc(hidden)]
     pub fn with_read_timeout_for_test(mut self, timeout: Duration) -> Self {
         self.read_timeout = timeout;
+        self
+    }
+
+    /// Local HTTP fixture tests only; production uses RANGE_CHUNK.
+    #[doc(hidden)]
+    pub fn with_range_chunk_for_test(mut self, chunk: u64) -> Self {
+        self.chunk = chunk.max(1);
         self
     }
 
@@ -756,6 +767,7 @@ impl ModelStore {
             client: builder.build().map_err(network_error)?,
             timeout: self.read_timeout,
             full_only: Cell::new(false),
+            cdn: RefCell::new(None),
         };
         let mut force_full = false;
         for attempt in 0..ATTEMPTS {
@@ -820,7 +832,7 @@ impl ModelStore {
         let mut out = OpenOptions::new().read(true).write(true).open(part)?;
         out.set_len(m.local_header_len + m.vision_done)?; // bỏ phần chưa chắc đã bền
         let mut ex = Extract::new(Some(src), None);
-        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)), cancel).await?;
+        let (status, cr, body) = get_range(agent, src, 0, hdr_bytes - 1, cancel).await?;
         match status {
             206 => {}
             200 => return Ok(Attempt::RangeIgnored),
@@ -903,7 +915,7 @@ impl ModelStore {
         let mut out = File::create(part)?;
         let hdr_bytes = 8 + src.header_len;
         let mut ex = Extract::new(Some(src), Some(&mut out));
-        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)), cancel).await?;
+        let (status, cr, body) = get_range(agent, src, 0, hdr_bytes - 1, cancel).await?;
         match status {
             206 => {
                 check_range(cr.as_deref(), 0, hdr_bytes - 1, src.size)?;
@@ -1010,7 +1022,7 @@ impl ModelStore {
         let total = hdr_bytes + src.vision_len;
         let parallel = end - a >= PARALLEL_AT;
         if !parallel {
-            let (status, cr, body) = get(agent, &src.url, Some((a, end - 1)), cancel).await?;
+            let (status, cr, body) = get_range(agent, src, a, end - 1, cancel).await?;
             if status == 200 {
                 return Ok(Attempt::RangeIgnored);
             }
@@ -1035,7 +1047,8 @@ impl ModelStore {
         }
         // Header probe was validated before this call; a single vision chunk confirms the
         // same behavior for payload before opening concurrent transfers.
-        let first_end = (a + RANGE_CHUNK).min(end);
+        let chunk = self.chunk;
+        let first_end = (a + chunk).min(end);
         match range_bytes(agent, src, a, first_end - 1, cancel, &|d| {
             progress(hdr_bytes + ex.vision_written + d, total)
         })
@@ -1050,47 +1063,49 @@ impl ModelStore {
             Err(RangeError::Ignored) => return Ok(Attempt::RangeIgnored),
             Err(RangeError::Failed(e)) => return Err(e),
         }
+        // Sliding window: `buffered` keeps up to CONCURRENCY requests in flight, yields results
+        // strictly in order, and starts chunk i + CONCURRENCY only after chunk i was yielded,
+        // so at most CONCURRENCY chunks are in memory. Dropping the stream aborts all transfers.
+        let mut ranges = Vec::new();
         while a < end {
-            if cancel.load(Ordering::SeqCst) {
-                return Err(EmbedError::Cancelled);
-            }
-            let mut ranges = Vec::new();
-            for _ in 0..CONCURRENCY {
-                if a == end {
-                    break;
-                }
-                let b = (a + RANGE_CHUNK).min(end);
-                ranges.push((a, b - 1));
-                a = b;
-            }
-            let counters = Cell::new([0u64; CONCURRENCY]);
-            let done0 = hdr_bytes + ex.vision_written;
-            let jobs = ranges.iter().enumerate().map(|(i, &(lo, hi))| {
-                let counters = &counters;
+            let b = (a + chunk).min(end);
+            ranges.push((a, b - 1));
+            a = b;
+        }
+        let slots = Cell::new([0u64; CONCURRENCY]);
+        let done0 = Cell::new(hdr_bytes + ex.vision_written);
+        let mut jobs = futures_util::stream::iter(ranges.into_iter().enumerate())
+            .map(|(i, (lo, hi))| {
+                let (slots, done0) = (&slots, &done0);
                 async move {
                     range_bytes(agent, src, lo, hi, cancel, &|d| {
-                        let mut bytes = counters.get();
-                        bytes[i] = d;
-                        counters.set(bytes);
-                        progress(done0 + bytes.iter().sum::<u64>(), total);
+                        let mut v = slots.get();
+                        v[i % CONCURRENCY] = d;
+                        slots.set(v);
+                        progress(done0.get() + v.iter().sum::<u64>(), total);
                     })
                     .await
                 }
-            });
-            let result = try_join_all(jobs).await;
-            let chunks = match result {
+            })
+            .buffered(CONCURRENCY);
+        let mut i = 0usize;
+        while let Some(r) = jobs.next().await {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(EmbedError::Cancelled);
+            }
+            let bytes = match r {
                 Ok(v) => v,
                 Err(RangeError::Ignored) => return Ok(Attempt::RangeIgnored),
                 Err(RangeError::Failed(e)) => return Err(e),
             };
-            for bytes in chunks {
-                if cancel.load(Ordering::SeqCst) {
-                    return Err(EmbedError::Cancelled);
-                }
-                ex.feed(&bytes)?;
-                self.checkpoint(ex)?;
-                progress(hdr_bytes + ex.vision_written, total);
-            }
+            ex.feed(&bytes)?;
+            self.checkpoint(ex)?;
+            let mut v = slots.get();
+            v[i % CONCURRENCY] = 0;
+            slots.set(v);
+            done0.set(done0.get() + bytes.len() as u64);
+            i += 1;
+            progress(done0.get() + v.iter().sum::<u64>(), total);
         }
         Ok(Attempt::Done)
     }
@@ -1188,6 +1203,8 @@ struct Http {
     client: reqwest::Client,
     timeout: Duration,
     full_only: Cell<bool>,
+    /// Final URL the official URL redirected to; reused for later Range requests.
+    cdn: RefCell<Option<String>>,
 }
 type Body = reqwest::Response;
 
@@ -1272,6 +1289,42 @@ async fn get(
     Ok((status, cr, resp))
 }
 
+/// Ranged GET. The first success follows the official URL's redirect once and remembers the
+/// final URL; later ranges go straight there. If that URL is rejected (expired signature),
+/// re-resolve from the official URL exactly once for this request.
+async fn get_range(
+    agent: &Http,
+    src: &Source,
+    a: u64,
+    b: u64,
+    cancel: &AtomicBool,
+) -> Result<(u16, Option<String>, Body), EmbedError> {
+    let cached = agent.cdn.borrow().clone();
+    if let Some(cdn) = cached {
+        let r = get(agent, &cdn, Some((a, b)), cancel).await?;
+        if !matches!(r.0, 401 | 403 | 410) {
+            return Ok(r);
+        }
+        let mut slot = agent.cdn.borrow_mut();
+        if slot.as_deref() == Some(cdn.as_str()) {
+            *slot = None;
+        }
+    }
+    let r = get(agent, &src.url, Some((a, b)), cancel).await?;
+    if r.0 == 206 {
+        let fin = r.2.url().as_str();
+        if fin != src.url && same_or_https(&src.url, fin) {
+            *agent.cdn.borrow_mut() = Some(fin.to_string());
+        }
+    }
+    Ok(r)
+}
+
+/// A redirect may only keep the scheme or upgrade to https, never downgrade.
+fn same_or_https(origin: &str, fin: &str) -> bool {
+    fin.starts_with("https://") || origin.split(':').next() == fin.split(':').next()
+}
+
 fn check_range(cr: Option<&str>, a: u64, b: u64, total: u64) -> Result<(), EmbedError> {
     let want = format!("bytes {a}-{b}/{total}");
     if cr != Some(want.as_str()) {
@@ -1301,7 +1354,7 @@ async fn range_bytes(
     cancel: &AtomicBool,
     progress: &dyn Fn(u64),
 ) -> Result<Vec<u8>, RangeError> {
-    let (status, cr, body) = get(agent, &src.url, Some((a, b)), cancel).await?;
+    let (status, cr, body) = get_range(agent, src, a, b, cancel).await?;
     if status == 200 {
         return Err(RangeError::Ignored);
     }
