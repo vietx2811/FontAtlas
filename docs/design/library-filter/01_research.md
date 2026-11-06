@@ -72,6 +72,8 @@ Bài học: filter **sống trong search**, không phải nút riêng; filter đ
 - **Nhiễu dữ liệu**: `sdh_Arabic` (Southern Kurdish) có base toàn chữ Latin → font Latin "hỗ trợ Arabic". Cần **kiểm tra chéo script** (ký tự base phải thuộc script khai báo, trừ ký tự chung) và chỉ nhận `verified|preliminary` mặc định.
 
 ### Đề xuất
+> **Vòng 2 (2026-11-06) — chủ app chốt: chỉ dùng Hyperglot, không fallback gflanguages.** Tên ngôn ngữ theo locale lấy từ CLDR của hệ điều hành qua `Intl.DisplayNames` (không nhúng dữ liệu); preview theo `sample_text` của gflanguages (P3 cũ) vì vậy bỏ — cần nguồn câu mẫu khác nếu vẫn muốn. Các dòng về gflanguages dưới đây chỉ còn giá trị tham khảo.
+
 - **Nguồn chính: Hyperglot** (Apache-2.0, chuyên cho kiểm font, có validity + design notes). Xuất ở build-time: resolver chính chủ (`hyperglot-export`/thư viện Python) → `languages.json.gz` (id, tên Anh, autonym, script, validity, speakers, base, auxiliary, marks) → `include_bytes!` trong crate core. Bổ sung **tên tiếng Việt** cho ~40 ngôn ngữ hay dùng (bảng tay nhỏ).
 - **Dự phòng/bổ sung: gflanguages** (Apache-2.0) — cùng định dạng ký tự, thêm `sample_text` để preview theo ngôn ngữ và fallback cho ngôn ngữ Hyperglot chưa có.
 - **Cập nhật**: ghim phiên bản (vd `hyperglot==0.8.2`) trong script build `tools/langdata/`; cập nhật khi nâng cấp app; thay đổi bảng → tăng `lang_db_version` → backend tính lại coverage (chỉ đọc cmap đã cache, không quét lại file).

@@ -528,7 +528,7 @@ function axRow(k){
 function renderAdv(){
   const el=$('#adv'); el.hidden=!ui.adv; if(!ui.adv) return;
   const n=results().length; const hist=el.dataset.hist==='true';
-  el.innerHTML = `<div class="ph"><strong>Bộ lọc nâng cao</strong><span style="display:flex;gap:6px;align-items:center"><span class="mini-seg" style="font-size:11px"><button aria-pressed="${hist}" data-hist="1" data-tip="Giai đoạn sau: mật độ font theo giá trị">Mật độ (xem trước)</button></span><button class="iconbtn" data-shrink aria-label="Thu về cơ bản" data-tip="Thu gọn · Esc"><svg class="ic"><use href="#i-shrink"/></svg></button><button class="iconbtn" data-close aria-label="Đóng bộ lọc" data-tip="Đóng"><svg class="ic"><use href="#i-x"/></svg></button></span></div>
+  el.innerHTML = `<div class="ph"><strong>Bộ lọc nâng cao</strong><span style="display:flex;gap:6px;align-items:center"><span class="mini-seg" style="font-size:11px"><button aria-pressed="${hist}" data-histbtn="1" data-tip="Giai đoạn sau: mật độ font theo giá trị">Mật độ (xem trước)</button></span><button class="iconbtn" data-shrink aria-label="Thu về cơ bản" data-tip="Thu gọn · Esc"><svg class="ic"><use href="#i-shrink"/></svg></button><button class="iconbtn" data-close aria-label="Đóng bộ lọc" data-tip="Đóng"><svg class="ic"><use href="#i-x"/></svg></button></span></div>
   <div class="pb"><div class="basiccol" data-collapsed="${ui.bcol}"><button class="btog" data-btog aria-expanded="${!ui.bcol}">${ui.bcol?'▸':'▾'} Cơ bản <span class="s">${chips().filter(c=>!c.dim.startsWith('ax:')).map(c=>c.t).join(' · ')||'chưa chọn'}</span></button>${basicRows()}</div>
   <div class="groups">${[['vert','open'],['stroke','foot'],['horiz']].map(col=>`<div class="gcol">${GROUPS.filter(g=>col.includes(g.id)).map(g=>{const act=g.axes.filter(k=>S.axes[k]).length;return `<section class="grp" aria-labelledby="g-${g.id}"><h3 id="g-${g.id}"><svg class="ic"><use href="#${g.icon}"/></svg>${g.t}${act?`<span class="n">${act} đang lọc</span>`:''}</h3>${g.axes.map(axRow).join('')}</section>`;}).join('')}</div>`).join('')}</div></div>
   <div class="pf"><span><b style="color:var(--fg)" id="advcount">${n}</b> font khớp</span><span>· Miền P1–P99; nháy đúp mép thanh để mở min–max · bấm số để nhập</span><span class="sp"></span><button class="btn ghost" data-clear ${chips().length?'':'disabled'}>Đặt lại</button></div>`;
@@ -715,7 +715,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-adv]')){ui.adv=true;ui.basic=false;render();return;}
   if(t.closest('[data-btog]')){ui.bcol=!ui.bcol;renderAdv();return;}
   if(t.closest('[data-shrink]')){ui.adv=false;ui.basic=true;render();return;}
-  if(t.closest('[data-hist]')){const a=$('#adv');a.dataset.hist=a.dataset.hist==='true'?'false':'true';renderAdv();return;}
+  if(t.closest('[data-histbtn]')){const a=$('#adv');a.dataset.hist=a.dataset.hist==='true'?'false':'true';renderAdv();return;}
   if(t.closest('[data-clear]')){const keepText=S.text;S=fresh();S.text=keepText;render();return;}
   const lo=t.closest('[data-loosen]'); if(lo){chips()[+lo.dataset.loosen].rm();render();return;}
   const cl=t.closest('[data-cls]'); if(cl){const id=cl.dataset.cls;S.classes.has(id)?S.classes.delete(id):S.classes.add(id);render();return;}
