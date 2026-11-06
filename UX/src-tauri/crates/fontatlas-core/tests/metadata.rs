@@ -157,8 +157,9 @@ fn public_sans_named_instances_have_wght() {
 }
 
 #[test]
-fn analyzer_version_is_core_0_4_0() {
-    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.4.0");
+fn analyzer_version_is_core_0_4_1() {
+    // 0.4.1: metadata.cmap_scripts (no anatomy change; reference quantiles identical).
+    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.4.1");
 }
 
 #[test]
@@ -166,10 +167,18 @@ fn old_metadata_json_parses_with_defaults() {
     let m = meta("roboto.ttf");
     let mut v = serde_json::to_value(&m).unwrap();
     let o = v.as_object_mut().unwrap();
-    for k in ["copyright", "vendor_url", "named_instance_coords"] {
+    for k in ["copyright", "vendor_url", "named_instance_coords", "cmap_scripts"] {
         o.remove(k);
     }
     let back: fontatlas_core::Metadata = serde_json::from_value(v).unwrap();
     assert!(back.copyright.is_none() && back.vendor_url.is_none() && back.named_instance_coords.is_empty());
+    assert!(back.cmap_scripts.is_empty());
     assert_eq!(back.family, m.family);
+}
+
+#[test]
+fn latin_fixture_has_no_non_latin_cmap_scripts() {
+    let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/roboto.ttf")).unwrap();
+    let r = fontatlas_core::analyze_bytes(data).unwrap();
+    assert!(r.faces[0].metadata.cmap_scripts.is_empty());
 }

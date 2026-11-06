@@ -120,10 +120,12 @@ impl IndexBundle {
                     file_size: a.file_size,
                     vi_supported: matches!(status, "full" | "precomposed_only"),
                     non_latin_primary: is_non_latin_primary(
-                        &m.get("scripts")
-                            .and_then(Value::as_array)
-                            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>())
-                            .unwrap_or_default(),
+                        &["scripts", "cmap_scripts"]
+                            .iter()
+                            .filter_map(|k| m.get(*k).and_then(Value::as_array))
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>(),
                         m.get("num_glyphs").and_then(Value::as_u64),
                     ),
                 },
