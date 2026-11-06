@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Api, SourceDto } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
 import type { FaceRow } from '../../features/library-grid';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
+import { rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
+import { useFaceActions } from '../faces/FaceActions';
+import { SelectionBar } from './SelectionBar';
+import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
 import { libraryEmpty, type Empty } from '../zero/zeroStates';
 import { COMPOSER_INSET } from './SampleComposer';
@@ -32,18 +36,31 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const cloud = useScanStore(s => s.cloud);
   const [sources, setSources] = useState<SourceDto[]>([]);
   useEffect(() => { let alive = true; api.listSources().then(x => { if (alive) setSources(x); }, () => {}); return () => { alive = false; }; }, [api, scanVersion]);
-  const [reload, setReload] = useState(0); // bỏ sao trong view Yêu thích → nạp lại để thẻ biến mất ngay
-  const [favs, setFavs] = useState<ReadonlyMap<number, boolean>>(new Map());
+  const gridRev = useUiStore(s => s.gridRev); // bỏ sao trong view Yêu thích, gỡ khỏi dự án → nạp lại để thẻ biến mất ngay
+  const favs = useFavoriteStore(s => s.overrides);
+  const actions = useFaceActions();
+  const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => { useUiStore.getState().refreshActive(api).catch(e => console.warn('activation_state failed', e)); }, [api]);
   const isActive = useCallback((r: FaceRow) => active.has(r.hashHex), [active]);
   const isFavorite = useCallback((r: FaceRow) => favs.get(r.faceId) ?? r.isFavorite, [favs]);
   const toggleFavorite = useCallback((r: FaceRow) => {
     const next = !(favs.get(r.faceId) ?? r.isFavorite);
     api.setFavorite({ hashHex: r.hashHex, faceIndex: r.faceIndex }, next)
-      .then(() => { setFavs(m => new Map(m).set(r.faceId, next)); if (!next && useUiStore.getState().view === 'star') setReload(n => n + 1); })
+      .then(() => { useFavoriteStore.getState().set([r], next); useUiStore.getState().bumpLibrary(!next && useUiStore.getState().view === 'star'); })
       .catch(e => console.warn('set_favorite failed', e));
   }, [api, favs]);
   const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews, active, filters, familyScope }), [view, tag, query, viOnly, recentViews, active, filters, familyScope]);
+  // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
+  const scopeKey = useMemo(() => JSON.stringify([view, tag, query, viOnly, filters, familyScope?.name ?? null]), [view, tag, query, viOnly, filters, familyScope]);
+  const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap);
+  const selectedRows = useMemo(() => [...selection.rows.values()], [selection.rows]);
+  const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
+    const st = useSelectionStore.getState();
+    let target: FaceRow[];
+    if (st.rows.has(rowKey(row))) target = [...st.rows.values()];
+    else { st.replace([row], index); useUiStore.getState().select(faceKey(row)); target = [row]; }
+    actions.openMenu(target, { x: at.x, y: at.y }, { keyboard: at.keyboard, returnFocus: at.el });
+  }), [actions]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
   const filtered = !!(filters.variable != null || filters.italic != null || filters.rawAxisRanges?.length || familyScope);
@@ -57,5 +74,11 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };
   const onSelect = (row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); };
-  return <LibraryGrid key={`${reload}:${scanVersion}`} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect} />;
+  return (
+    <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
+      <SelectionBar rows={selectedRows} onClear={selection.clear} />
+      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
+        selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
+    </div>
+  );
 }

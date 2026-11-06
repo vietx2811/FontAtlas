@@ -3,6 +3,7 @@ import type { AxisReadingDto, FaceDetailDto } from '../../../api';
 import { AxisIcon } from './axisIcons';
 
 import { AXIS_META, numberText, unitText } from './measurements';
+import { Tooltip } from '../../ui/Tooltip';
 export { AXIS_META } from './measurements';
 
 const CATEGORY_TEXT: Record<string, Record<string, string>> = {
@@ -39,17 +40,19 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const missing = !numeric && !category;
   const noRaw = a.key === 'serif_foot' && !numeric && !failed;
   return (
-    <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality} title={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
+    <Tooltip label={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
+    <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
       <span className="fa-axis-name">{meta.label}</span>
       <span className="fa-axis-value">{failed ? 'Không đo được' : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? 'Chưa đo'}</span>
       {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
         {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do' : <>
           {missing ? 'Chưa có dữ liệu' : noRaw ? 'Chưa có số đo' : estimated ? 'Ước lượng' : category && numeric ? category : ''}
-          {!missing && a.percentile !== null && <span title="Vị trí so với tập tham chiếu; không phải độ tin cậy">{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span>}
+          {!missing && a.percentile !== null && <Tooltip label="Vị trí so với tập tham chiếu; không phải độ tin cậy"><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
         </>}
       </span>}
     </li>
+    </Tooltip>
   );
 }
 

@@ -132,7 +132,9 @@ export class FontFaceLoader {
       if (!e || e.state !== 'queued') continue;
       e.state = 'loading';
       this.active++;
-      const face = this.deps.createFace(key, `url("${e.url}")`);
+      let face: { load(): Promise<unknown> };
+      try { face = this.deps.createFace(key, `url("${e.url}")`); }
+      catch { e.state = 'error'; e.resolve(null); this.active--; continue; } // môi trường không có FontFace: giữ font giao diện
       face.load().then(
         () => {
           if (this.disposed) { e.resolve(null); return; }

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import type { FontFaceLoader } from '../../../features/library-grid/fontFaceLoader';
 import { describe, expect, it, vi } from 'vitest';
 import type { FamilyStyleDto } from '../../../api';
 import { StyleDropdown, orderStyles, styleLabel } from '../StyleDropdown';
@@ -101,10 +102,23 @@ describe('StyleDropdown', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
-  it('renders each option in its own font family when provided', () => {
-    mount({ familyOf: s => (s.subfamily === 'Bold' ? 'fa-bold' : null) });
+  it('renders each option in its own font once loaded, and keeps the UI font + weight/italic until then', async () => {
+    const pending = new Map<string, (f: string | null) => void>();
+    const loader = {
+      acquire: vi.fn((r: { hashHex: string }) => new Promise<string | null>(res => pending.set(r.hashHex, res))),
+      release: vi.fn(),
+    } as unknown as FontFaceLoader;
+    mount({ loader });
     fireEvent.click(trigger());
-    expect(screen.getByRole('option', { name: 'Bold' }).style.fontFamily).toContain('fa-bold');
+    const bold = () => screen.getByRole('option', { name: 'Bold' }).querySelector('.lbl') as HTMLElement;
+    // chưa nạp xong: font giao diện, kiểu CSS theo style
+    expect(bold().style.fontFamily).toBe('');
+    expect(screen.getByRole('option', { name: 'Bold' }).style.fontWeight).toBe('700');
     expect(screen.getByRole('option', { name: 'Light Italic' }).style.fontStyle).toBe('italic');
+    await act(async () => { pending.get('Bold')!('fa-bold'); });
+    expect(bold().style.fontFamily).toContain('fa-bold');
+    expect(bold().style.fontFamily).toContain('var(--font-ui)'); // fallback cho glyph thiếu
+    expect(bold().style.fontWeight).toBe('400'); // không in đậm giả trên font đã là Bold
+    expect(bold().dataset.ownFont).toBe('fa-bold');
   });
 });

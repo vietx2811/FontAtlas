@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar, SidebarToggle } from '../Sidebar';
+import { tipOf } from '../../../test/tip';
 
 const initial = useUiStore.getState();
 const settle = async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
@@ -35,7 +36,7 @@ describe('Sidebar', () => {
     expect(useUiStore.getState().view).toBe('src:2');
     const gone = screen.getByRole('button', { name: /Ổ ngoài/ });
     expect(gone.getAttribute('data-unavailable')).toBe('true');
-    expect(gone.getAttribute('title')).toMatch(/chưa kết nối/i);
+    expect(await tipOf(gone)).toMatch(/chưa kết nối/i);
   });
 
   it('leaves Settings when selecting a sidebar view, including the current view', async () => {
@@ -218,7 +219,7 @@ describe('Sidebar', () => {
   it('a source that needs access is marked in the list (title says so)', async () => {
     await mount();
     act(() => useScanStore.setState({ access: { 3: 'denied' } }));
-    expect(screen.getByRole('button', { name: /Ổ ngoài/ }).getAttribute('title')).toBe('Ổ ngoài: cần quyền truy cập');
+    expect(await tipOf(screen.getByRole('button', { name: /Ổ ngoài/ }))).toBe('Ổ ngoài: cần quyền truy cập');
     act(() => useScanStore.setState({ access: {} }));
   });
 
@@ -227,8 +228,9 @@ describe('Sidebar', () => {
       await mount();
       const line = screen.getByTestId('not-downloaded');
       expect(line.textContent).toBe('12 font chưa tải về');
-      expect(line.getAttribute('title')).toMatch(/Finder/);
-      expect(line.getAttribute('title')).toMatch(/Tải về/);
+      const tip = await tipOf(line);
+      expect(tip).toMatch(/Finder/);
+      expect(tip).toMatch(/Tải về/);
       expect(within(line).queryByRole('button')).toBeNull(); // không có nút tự tải
       expect(screen.getAllByTestId('not-downloaded')).toHaveLength(1); // chỉ nguồn có file chưa tải
     });

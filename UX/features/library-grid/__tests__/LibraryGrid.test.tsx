@@ -130,13 +130,14 @@ describe('LibraryGrid', () => {
     const { loader } = await mount();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const c = cells()[0];
+    const [acq, rel] = [loader.acquire.mock.calls.length, loader.release.mock.calls.length]; // tên thẻ đã nạp font của chính nó khi hiện
     fireEvent.pointerEnter(c);
-    expect(loader.acquire).not.toHaveBeenCalled();
+    expect(loader.acquire).toHaveBeenCalledTimes(acq);
     await act(async () => { await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS); });
-    expect(loader.acquire).toHaveBeenCalledTimes(1);
+    expect(loader.acquire).toHaveBeenCalledTimes(acq + 1);
     expect(c).toHaveAttribute('data-state', 'live');
     fireEvent.pointerLeave(c);
-    expect(loader.release).toHaveBeenCalledTimes(1);
+    expect(loader.release).toHaveBeenCalledTimes(rel + 1);
   });
 
   it('live font renders at the same size as the preview (no jump, no clipping)', async () => {
@@ -153,9 +154,10 @@ describe('LibraryGrid', () => {
     const { loader } = await mount({}, [makeRow(0, { faceIndex: 1 })]);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const c = cells()[0];
+    const acq = loader.acquire.mock.calls.length;
     fireEvent.pointerEnter(c);
     await act(async () => { await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS); });
-    expect(loader.acquire).not.toHaveBeenCalled();
+    expect(loader.acquire).toHaveBeenCalledTimes(acq); // không nạp thêm để vẽ live
     expect(c).toHaveAttribute('data-state', 'ready');
   });
 

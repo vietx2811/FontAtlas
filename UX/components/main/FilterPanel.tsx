@@ -5,6 +5,7 @@ import { toMetadataQuery, useUiStore } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { AXIS_META, numberText, roundedValue, unitText } from '../detail/tabs/measurements';
 import './filters.css';
+import { Tooltip } from '../ui/Tooltip';
 
 // Intent: chọn miền số đo thật trong thư viện, thao tác gọn bên cạnh tìm kiếm.
 // Palette/depth/surfaces/type: token card/border/fg/accent và Inter hiện có. Spacing: 4/8/12/16.
@@ -48,7 +49,7 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
   return <div className="fa-filter-root" ref={root}>
     <button ref={trigger} type="button" className="fa-vi-toggle" aria-expanded={open} aria-controls="font-filters" data-selected={count > 0} onClick={() => setOpen(v => !v)}>Lọc{count ? ` · ${count}` : ''}</button>
     {open && <div ref={dialog} id="font-filters" className="fa-filters" role="dialog" aria-label="Bộ lọc font">
-      <header><strong>Bộ lọc</strong><button type="button" aria-label="Đóng bộ lọc" onClick={() => { setOpen(false); trigger.current?.focus(); }}>×</button></header>
+      <header><strong>Bộ lọc</strong><Tooltip label="Đóng bộ lọc" shortcut="Esc"><button type="button" aria-label="Đóng bộ lọc" onClick={() => { setOpen(false); trigger.current?.focus(); }}>×</button></Tooltip></header>
       <div className="fa-filter-content" aria-busy={loading}>
         <fieldset><legend>Loại font</legend>
           <label><input type="checkbox" checked={filters.variable === true} onChange={e => state.setFilters({ ...filters, variable: e.target.checked ? true : undefined })} />Variable</label>
@@ -102,7 +103,7 @@ function AxisRange({ stats: s, selected, onChange }: { stats: AxisStatsDto; sele
   };
   return <fieldset className="fa-axis-filter">
     <legend><label><input type="checkbox" checked={!!selected} disabled={empty && !selected} onChange={e => onChange(e.target.checked ? [range[0], range[1]] : null)} />{label}</label></legend>
-    <div className="fa-axis-domain"><span>{unitText(s.unit)} · {s.count} font</span>{!empty && !constant && <button type="button" aria-pressed={full || outlier} disabled={outlier} title={outlier ? 'Khoảng đang chọn có ngoại lệ ngoài P1–P99' : undefined} onClick={() => { if (!full) { setFull(true); if (selected) onChange([min, max]); } else setFull(false); }}>{outlier ? 'Đang dùng min–max' : full ? 'Khoảng P1–P99' : 'Toàn khoảng'}</button>}</div>
+    <div className="fa-axis-domain"><span>{unitText(s.unit)} · {s.count} font</span>{!empty && !constant && <Tooltip label={outlier ? 'Khoảng đang chọn có ngoại lệ ngoài P1–P99' : full ? 'Quay lại khoảng phổ biến P1–P99, bỏ qua các giá trị ngoại lệ' : 'Hiện cả giá trị nhỏ nhất đến lớn nhất, kể cả ngoại lệ hiếm'}><span><button type="button" aria-pressed={full || outlier} disabled={outlier} onClick={() => { if (!full) { setFull(true); if (selected) onChange([min, max]); } else setFull(false); }}>{outlier ? 'Đang dùng min–max' : full ? 'Khoảng P1–P99' : 'Toàn khoảng'}</button></span></Tooltip>}</div>
     {empty && <p>Chưa có số đo trong phạm vi này</p>}
     {(!empty || selected) && <>
       <div className="fa-range-inputs">{[0, 1].map(i => <label key={i}><span>{i === 0 ? 'Từ' : 'Đến'}</span><input type="text" inputMode="decimal" aria-label={`${label} ${i === 0 ? 'từ' : 'đến'}`} disabled={!selected} value={draft[i]} onChange={e => { const next = [...draft]; next[i] = e.target.value; setDraft(next); }} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} /></label>)}</div>

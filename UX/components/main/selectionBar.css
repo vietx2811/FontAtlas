@@ -1,0 +1,16 @@
+.fa-selbar {
+  position: absolute; z-index: 12; top: 8px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border); box-shadow: 0 6px 22px rgba(0, 0, 0, .12);
+  font-size: 12px; white-space: nowrap; animation: fa-selbar-in .14s ease-out both;
+}
+.fa-selbar-n { padding: 0 8px 0 6px; font-weight: 600; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.fa-selbar-sep { width: 1px; height: 16px; margin: 0 4px; background: var(--border); }
+.fa-selbar button { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border-radius: 8px; color: var(--fg); font-size: 12px; }
+.fa-selbar button:hover { background: var(--chrome-hover); }
+.fa-selbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.fa-selbar button[aria-disabled="true"] { opacity: .45; }
+@keyframes fa-selbar-in { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .fa-selbar { animation: none; } }
+@media (max-width: 1180px) { .fa-selbar button { padding: 0 7px; } }
