@@ -129,13 +129,36 @@
     const t2Text = t2?.textContent; await sleep(300); await snap('tooltip-settings');
     unhover(gear); await sleep(200);
     await log('tooltip-hover', !!t1 && !!t2 && /Cài đặt/.test(t2Text) && /⌘,/.test(t2Text) && !tip(), { badge: t1Text, gear: t2Text, leftover: !!tip(), nativeTitles: document.querySelectorAll('[title]').length });
-    // Đa chọn: click + ⌘-click
+    // Đa chọn: click + ⌘-click. Đo lưới so với panel chi tiết trước/sau khi panel mở và thanh chọn xuất hiện.
+    const r1 = n => Math.round(n * 10) / 10;
+    const rect = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { l: r1(r.left), r: r1(r.right), t: r1(r.top), b: r1(r.bottom), w: r1(r.width) }; };
+    const measure = label => {
+      const sc = document.querySelector('[data-testid=library-grid-scroller]'); const grid = document.querySelector('[role=grid]');
+      const lib = document.querySelector('.fa-lib'); const panel = document.querySelector('aside.fa-panel');
+      const size = Number(document.querySelector('.fa-composer input[type=range]')?.value ?? 34);
+      const cols = Number(grid?.getAttribute('aria-colcount'));
+      const expected = grid ? Math.max(1, Math.floor((grid.getBoundingClientRect().width - 28) / (140 + size * 2.6 + 8))) : null;
+      const sr = sc?.getBoundingClientRect(); const pr = panel?.getBoundingClientRect();
+      return { label, scroller: rect(sc), grid: rect(grid), lib: rect(lib), panel: rect(panel), cols, expected, fits: !!sr && (!pr || sr.right <= pr.left + 1), colsOk: cols === expected, hidden: document.hidden, focus: document.hasFocus() };
+    };
+    // rAF có thể không chạy khi cửa sổ QA ở nền → hẹn giờ thật để không treo; số tick = 0 chứng minh WebView đang không dựng khung.
+    const rafTicks = ms => new Promise(res => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < ms) requestAnimationFrame(f); }; requestAnimationFrame(f); setTimeout(() => res(n), ms + 100); });
     const cs = cells();
+    const m0 = measure('before-panel');
     cs[0].click(); await sleep(300);
+    const m1 = measure('panel-open+300ms');
+    await sleep(1500);
+    const m1b = measure('panel-open+1800ms');
     cs[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
     const bar = await wait(() => document.querySelector('[data-testid=selection-count]'), 5000);
     await sleep(500); await snap('selection-bar');
     await log('cmd-click-two', /^2 đã chọn$/.test(bar?.textContent ?? ''), { bar: bar?.textContent, selected: cells().filter(c => c.getAttribute('aria-selected') === 'true').length });
+    const m2 = measure('bar-shown');
+    await sleep(1500);
+    const m3 = measure('bar-shown+1500ms');
+    const ticks = await rafTicks(500);
+    const m4 = measure('after-raf');
+    await log('grid-fits-panel', [m1, m1b, m2, m3, m4].every(m => m.fits && m.colsOk), { rafTicksIn500ms: ticks, m0, m1, m1b, m2, m3, m4 });
     const barBox = bar?.closest('.fa-selbar')?.getBoundingClientRect(); const gridBox = document.querySelector('[role=grid]')?.getBoundingClientRect(); const hdr = document.querySelector('header.fa-topbar');
     await log('selection-bar-in-row', !!barBox && !!gridBox && barBox.bottom <= gridBox.top + 1 && !!hdr?.contains(bar) && !!bar.closest('.fa-family-row'), { bar: barBox && [Math.round(barBox.top), Math.round(barBox.bottom)], gridTop: gridBox && Math.round(gridBox.top), header: hdr?.className });
 

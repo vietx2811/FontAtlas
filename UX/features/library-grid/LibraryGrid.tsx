@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { List, type RowComponentProps } from 'react-window';
 import type { LibraryApi } from './api';
 import { DEFAULT_PREVIEW_MODE, FaceCell, type PickMods, type PreviewMode } from './FaceCell';
@@ -63,16 +63,31 @@ function Row({ index, style, rows, cols, total, paged, applied, api, px, text, m
   return <div role="row" style={{ ...style, display: 'flex' }}>{cells}</div>;
 }
 
+/**
+ * Kích thước khung chứa. Đo ĐỒNG BỘ sau mỗi lần render (trước khi vẽ) bằng clientWidth/clientHeight, nên không phụ thuộc thời điểm
+ * ResizeObserver chạy (WebView ở nền/bị che có thể hoãn RO rất lâu, để lại số cột cũ khi panel/thanh chọn đổi bề rộng).
+ * ResizeObserver vẫn giữ để bắt các thay đổi không kéo theo render (kéo cửa sổ).
+ */
 function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: number; height?: number }) {
   const [size, setSize] = useState({ width: fixed.width ?? 1280, height: fixed.height ?? 800 });
+  const apply = useCallback((w: number, h: number) => {
+    const width = fixed.width ?? w; const height = fixed.height ?? h;
+    setSize(s => (s.width === width && s.height === height ? s : { width, height }));
+  }, [fixed.width, fixed.height]);
+  const both = fixed.width !== undefined && fixed.height !== undefined;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (both || !el) return;
+    if (el.clientWidth > 0 && el.clientHeight > 0) apply(el.clientWidth, el.clientHeight); // 0 = chưa có layout (ẩn/jsdom): giữ số cũ
+  });
   useEffect(() => {
-    if (fixed.width !== undefined && fixed.height !== undefined) return;
+    if (both) return;
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ width: fixed.width ?? e.contentRect.width, height: fixed.height ?? e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) => apply(e.contentRect.width, e.contentRect.height));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref, fixed.width, fixed.height]);
+  }, [ref, both, apply]);
   return size;
 }
 
@@ -187,7 +202,7 @@ export function LibraryGrid({
           rowHeight={(i: number) => (i >= rowCount ? bottomInset : rowH)}
           overscanCount={2}
           defaultHeight={size.height}
-          style={{ height: size.height, width: size.width }}
+          style={{ height: '100%', width: '100%' }}
           rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
