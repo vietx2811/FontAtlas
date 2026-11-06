@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FontAtlas · Plates — prototype v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&family=Josefin+Sans:wght@300;400;600;700&family=Alegreya:ital,wght@0,400;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Fraunces:ital,wght@0,400;0,600;0,800;1,400&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;600;700&family=Oswald:wght@300;400;500;600;700&family=Roboto+Slab:wght@300;400;600;700&family=Bricolage+Grotesque:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=Abril+Fatface&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/*
+  Prototype cho tính năng Plates (tên tạm "Font Desk"). Spec: docs/design/font-desk/04_spec.md
+  - Font Google là stand-in cho font trong thư viện người dùng. Số đo trục và nhãn ●◐◆○ ở đây là DỮ LIỆU GIẢ,
+    tính bằng luật rút gọn mô phỏng R1–R9; app thật lấy từ pair_candidates / assess_pair.
+  - DM Serif Display và Abril Fatface không có bộ ký tự tiếng Việt trên Google Fonts: dùng để minh hoạ cảnh báo thiếu ký tự.
+  - Dữ liệu tự lưu vào localStorage (mô phỏng user.db).
+*/
+:root{
+  --chrome:#F1EFEC; --chrome-hover:rgba(41,37,36,.06); --chrome-active:rgba(41,37,36,.09);
+  --sheet:#FAFAFA; --card:#FFFFFF; --page:#FFFFFF; --fg:#2A2A2A; --muted:#78716C; --border:#E7E5E4; --surface-2:#F3F2F0;
+  --accent:#D4A574; --accent-ink:#9A6B3C; --accent-soft:#F5E6D3; --on:#3FA66B; --warn:#C2410C;
+  --shadow:0 1px 2px rgba(41,37,36,.05),0 8px 24px rgba(41,37,36,.08);
+  --font-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --side-w:240px; --ledger-w:264px; --tray-h:252px;
+  --r-sm:7px; --r-md:10px; --r-lg:14px;
+}
+@media (max-width:1279px){ :root{ --side-w:216px; --ledger-w:224px; } }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--chrome);color:var(--fg);font:13px/1.4 var(--font-ui);-webkit-font-smoothing:antialiased;min-width:1000px;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px;border-radius:4px}
+.ico{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- Shell ---------- */
+.app{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);height:100vh;padding:8px 8px 8px 0}
+.side{display:flex;flex-direction:column;min-height:0;padding:0 8px}
+.side-top{height:36px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:var(--muted)}
+.side-scroll{flex:1;overflow:auto;scrollbar-width:none;padding-bottom:12px}
+.nav{display:flex;align-items:center;gap:11px;width:100%;height:32px;padding:0 9px;border-radius:var(--r-sm);text-align:left;font-size:14px;white-space:nowrap}
+.nav:hover{background:var(--chrome-hover)}
+.nav[aria-current="true"]{background:var(--chrome-active);font-weight:500}
+.nav .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nav .n{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav .ico{opacity:.75}
+.sec{margin-top:16px}
+.sec-head{display:flex;align-items:center;gap:6px;height:28px;padding:0 9px;color:var(--muted);font-size:13px;font-weight:500;border-radius:var(--r-sm);width:100%;text-align:left}
+.sec-head:hover{color:var(--fg)}
+.tri{width:0;height:0;border-top:5px solid currentColor;border-left:4px solid transparent;border-right:4px solid transparent}
+.sec-head .sp{flex:1}
+.sec-add{width:22px;height:22px;display:grid;place-items:center;border-radius:5px;color:var(--muted);opacity:0}
+.sec:hover .sec-add,.sec-add:focus-visible{opacity:1}
+.sec-add:hover{background:var(--chrome-hover);color:var(--fg)}
+.nav.plate-nav{font-size:13.5px}
+.nav.sub{color:var(--muted);font-size:12.5px}
+.plate-ico{width:14px;height:16px;border:1.4px solid currentColor;border-radius:2px;position:relative;opacity:.7;flex:none}
+.plate-ico::after{content:"";position:absolute;left:2px;right:2px;top:3px;height:1.4px;background:currentColor;box-shadow:0 3px 0 currentColor,0 6px 0 currentColor}
+.side-foot{display:flex;gap:4px;padding:6px 4px;color:var(--muted)}
+.iconbtn{width:30px;height:30px;display:grid;place-items:center;border-radius:var(--r-sm);color:var(--muted)}
+.iconbtn:hover{background:var(--chrome-hover);color:var(--fg)}
+
+.main{background:var(--sheet);border-radius:12px;box-shadow:var(--shadow);min-width:0;min-height:0;overflow:hidden;position:relative;display:flex;flex-direction:column}
+
+/* ---------- Library (minimal, for context-menu entry point) ---------- */
+.lib-top{height:52px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--border)}
+.lib-top h1{font-size:15px;margin:0;font-weight:600}
+.lib-top .n{color:var(--muted)}
+.lib-top .hint{margin-left:auto;color:var(--muted);font-size:12px}
+.lib-grid{flex:1;overflow:auto;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;align-content:start}
+.fcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 14px 10px;text-align:left;display:flex;flex-direction:column;gap:18px;min-height:132px}
+.fcard:hover{border-color:#D6D3D1}
+.fcard[aria-selected="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.fcard .spec{font-size:30px;line-height:1.15;white-space:nowrap;overflow:hidden}
+.fcard .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.vi-miss{color:var(--warn)}
+.vi-ok{color:var(--on)}
+
+/* ---------- Plates home (zerostate) ---------- */
+.home{flex:1;overflow:auto;padding:44px 56px 56px}
+.home-in{max-width:980px;margin:0 auto}
+.home h1{font-size:22px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+.home .lede{color:var(--muted);margin:0 0 28px;font-size:13.5px;max-width:520px}
+.start{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:22px 24px;display:grid;gap:14px}
+.start.drag{border-color:var(--accent);background:#FFFCF8}
+.start h2{margin:0;font-size:15px;font-weight:600}
+.start-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.start-row .k{width:68px;color:var(--muted);font-size:12px}
+.seed-search{flex:1;min-width:260px;position:relative}
+.seed-search input{width:100%;height:38px;border:1px solid var(--border);border-radius:var(--r-md);padding:0 12px 0 34px;background:var(--sheet)}
+.seed-search .ico{position:absolute;left:11px;top:11px;color:var(--muted)}
+.seed-results{position:absolute;left:0;right:0;top:42px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow);z-index:5;max-height:260px;overflow:auto;padding:4px}
+.seed-results button{display:flex;justify-content:space-between;align-items:baseline;width:100%;padding:8px 10px;border-radius:6px;text-align:left}
+.seed-results button:hover,.seed-results button:focus-visible{background:var(--surface-2)}
+.seed-results .s{font-size:20px}
+.chip{height:30px;padding:0 12px;border-radius:99px;border:1px solid var(--border);background:var(--card);font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.chip:hover{border-color:#D6D3D1}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.drop-hint{color:var(--muted);font-size:12px}
+.list-head{display:flex;align-items:baseline;justify-content:space-between;margin:34px 0 12px}
+.list-head h3{margin:0;font-size:13px;font-weight:600}
+.list-head .muted{color:var(--muted);font-size:12px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.pcard{text-align:left;display:flex;flex-direction:column;gap:8px}
+.pthumb{aspect-ratio:16/10;background:var(--page);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;position:relative;padding:14px 16px}
+.pcard:hover .pthumb{border-color:#CFCBC8}
+.pthumb .t1{font-size:19px;line-height:1.05}
+.pthumb .t2{font-size:9px;margin-top:8px;line-height:1.45;color:#444}
+.pthumb .t3{font-size:7.5px;letter-spacing:.14em;color:#777;margin-bottom:8px}
+.pcard .nm{font-weight:500;display:flex;gap:6px;align-items:center}
+.pcard .sub{font-size:11.5px;color:var(--muted)}
+.star{color:var(--accent-ink)}
+.empty-note{color:var(--muted);font-size:12.5px;padding:18px 0}
+
+/* ---------- Plate workspace ---------- */
+.ws{flex:1;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;min-height:0;min-width:0}
+.tray{min-width:0}
+.bar{height:50px;display:flex;align-items:center;gap:12px;padding:0 14px 0 18px;border-bottom:1px solid var(--border);min-width:0;overflow:hidden}
+.pname{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;padding:3px 5px;border-radius:5px;outline:none}
+.pname:hover{background:var(--chrome-hover)}
+.pname:focus{background:var(--card);box-shadow:0 0 0 1px var(--border)}
+.starbtn{width:28px;height:28px;display:grid;place-items:center;border-radius:6px;color:var(--muted);font-size:16px}
+.starbtn[aria-pressed="true"]{color:var(--accent-ink)}
+.starbtn:hover{background:var(--chrome-hover)}
+.tabs{display:flex;gap:2px;background:var(--surface-2);padding:2px;border-radius:9px}
+.tabs button{height:28px;padding:0 11px;border-radius:7px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.tabs button:hover{color:var(--fg)}
+.tabs button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08);font-weight:500}
+.tabs .p1{font-size:9.5px;color:var(--muted);margin-left:3px;vertical-align:1px}
+.bar .sp{flex:1}
+.tog{display:flex;align-items:center;gap:7px;height:28px;padding:0 9px;border-radius:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.tog:hover{background:var(--chrome-hover);color:var(--fg)}
+.tog .sw{width:24px;height:14px;border-radius:99px;background:#D6D3D1;position:relative;transition:background .15s}
+.tog .sw::after{content:"";position:absolute;width:10px;height:10px;border-radius:50%;background:#fff;left:2px;top:2px;transition:left .15s}
+.tog[aria-checked="true"]{color:var(--fg)}
+.tog[aria-checked="true"] .sw{background:var(--accent-ink)}
+.tog[aria-checked="true"] .sw::after{left:12px}
+.depth{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.depth button{width:22px;height:22px;border-radius:50%;display:grid;place-items:center}
+.depth button i{width:7px;height:7px;border-radius:50%;border:1.4px solid var(--muted);display:block}
+.depth button[aria-pressed="true"] i{background:var(--accent-ink);border-color:var(--accent-ink)}
+.depth button:hover{background:var(--chrome-hover)}
+.saved{font-size:11.5px;color:var(--muted);white-space:nowrap;min-width:64px;text-align:right}
+.saved.busy{color:var(--accent-ink)}
+@media (max-width:1279px){ .tog .t-l,.tabs .p1,.saved{display:none} .tabs button{padding:0 7px} .pname{max-width:140px} .bar{gap:8px} .src button{padding:0 7px} .t-title{display:none} }
+
+.body{display:grid;grid-template-columns:minmax(0,1fr) var(--ledger-w);min-height:0}
+.canvas{overflow:auto;padding:26px 28px 32px;position:relative;background:var(--sheet)}
+.trying-note{position:sticky;top:-10px;z-index:3;margin:-14px auto 10px;width:max-content;max-width:100%;background:var(--fg);color:#fff;font-size:12px;padding:6px 12px;border-radius:99px;box-shadow:var(--shadow)}
+.ledger{border-left:1px solid var(--border);overflow:auto;padding:14px 14px 18px;display:flex;flex-direction:column;gap:6px;background:var(--sheet)}
+
+/* page */
+.page{background:var(--page);border:1px solid var(--border);margin:0 auto;color:#1F1D1B;position:relative}
+.role{position:relative;border-radius:3px;cursor:default;transition:box-shadow .1s}
+.role:hover{box-shadow:0 0 0 1px rgba(154,107,60,.28)}
+.role.sel{box-shadow:0 0 0 1px var(--accent-ink);box-shadow:0 0 0 1px transparent;outline:1px dashed var(--accent-ink);outline-offset:5px}
+.role.try{box-shadow:-6px 0 0 -4px var(--accent)}
+.role.prov{color:#5b5753}
+.role[contenteditable="true"]{outline:1px solid var(--accent-ink);outline-offset:5px;cursor:text;background:#FFFCF8}
+.role-tag{position:absolute;right:100%;margin-right:14px;top:2px;font:500 10px/1 var(--font-ui);letter-spacing:.02em;color:var(--accent-ink);white-space:nowrap;opacity:0;pointer-events:none;font-style:normal;text-transform:none}
+.role:hover .role-tag{opacity:1}
+.miss{background:rgba(194,65,12,.14);box-shadow:inset 0 -2px 0 var(--warn);border-radius:1px}
+
+/* menu */
+.pg-menu{width:min(100%,600px);padding:52px 60px 46px}
+.pg-menu .head{text-align:center;margin-bottom:34px}
+.pg-menu .addr{margin-top:10px}
+.pg-menu .rule{height:1px;background:#1F1D1B;opacity:.85;margin:0 0 26px}
+.pg-menu .sect{margin:0 0 14px}
+.pg-menu .group{margin-bottom:28px}
+.dish{margin-bottom:14px}
+.dish .line{display:flex;align-items:baseline;gap:8px}
+.dish .lead{flex:1;border-bottom:1.5px dotted #9b9690;transform:translateY(-4px);min-width:20px}
+.dish.inline .line{display:block}
+.dish.inline .price{margin-left:10px}
+.dish .desc{margin-top:3px;max-width:88%}
+.pg-menu .foot{margin-top:30px;text-align:center}
+.price-tg{position:absolute;right:10px;top:10px;font:11px var(--font-ui);color:var(--muted);display:flex;gap:4px;align-items:center}
+.price-tg button{padding:2px 7px;border-radius:5px;border:1px solid var(--border)}
+.price-tg button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+
+/* sign */
+.pg-sign{width:min(100%,640px);padding:44px 48px;display:grid;grid-template-columns:auto 1fr;gap:6px 30px;align-items:center}
+.pg-sign .num{grid-row:span 3;border-right:1.5px solid #1F1D1B;padding-right:28px}
+.distances{width:min(100%,640px);margin:18px auto 0;display:flex;gap:16px;align-items:flex-end;font:11px var(--font-ui);color:var(--muted)}
+.distances figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.distances .mini{background:var(--page);border:1px solid var(--border);overflow:hidden}
+
+/* pack */
+.pg-pack{width:min(100%,520px);aspect-ratio:4/3.3;padding:34px 38px;display:flex;flex-direction:column;border-radius:4px}
+.pg-pack .frame{border:1.5px solid #1F1D1B;flex:1;padding:24px 26px;display:flex;flex-direction:column;gap:6px;text-align:center;justify-content:center}
+.pg-pack .row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;padding-top:18px;text-align:left;gap:16px}
+
+/* brand */
+.pg-brand{width:min(100%,760px);padding:42px 48px;display:grid;grid-template-columns:1.1fr 1fr;gap:28px 40px}
+.pg-brand .full{grid-column:1/-1}
+.aa{display:flex;flex-direction:column;gap:6px;border-top:1px solid #1F1D1B;padding-top:10px}
+.aa .big{font-size:64px;line-height:1}
+.aa .set{font-size:15px;letter-spacing:.04em;line-height:1.5;word-break:break-all}
+.aa .cap{font:500 10px var(--font-ui);color:#77716B;letter-spacing:.06em;text-transform:uppercase}
+
+/* editorial */
+.pg-ed{width:min(100%,640px);padding:50px 56px}
+.pg-ed .cols{columns:2;column-gap:26px;margin-top:22px}
+.pg-ed .cols p{margin:0 0 10px}
+.pg-ed blockquote{margin:18px 0;padding:0;break-inside:avoid}
+
+/* ledger */
+.l-head{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-weight:500;padding:2px 4px 6px}
+.voice{border-radius:var(--r-md);padding:10px 10px 10px;display:flex;flex-direction:column;gap:5px;border:1px solid transparent}
+.voice:hover{background:var(--card);border-color:var(--border)}
+.voice.active{background:var(--card);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.voice.drop{border-color:var(--accent-ink);border-style:dashed;background:#FFFCF8}
+.v-top{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.v-idx{width:17px;height:17px;border-radius:50%;border:1.2px solid currentColor;display:grid;place-items:center;font-size:10px;font-weight:600}
+.voice.active .v-idx{background:var(--accent-ink);border-color:var(--accent-ink);color:#fff}
+.v-top .sp{flex:1}
+.v-more{width:22px;height:22px;border-radius:5px;display:grid;place-items:center}
+.v-more:hover{background:var(--chrome-hover)}
+.v-font{font-size:19px;line-height:1.15;color:var(--fg);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v-meta{font-size:11px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.anchor{display:inline-flex;align-items:center;gap:3px;color:var(--accent-ink);font-weight:500}
+.prov-tag{color:var(--accent-ink);background:var(--accent-soft);border-radius:4px;padding:1px 5px}
+.labels{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px}
+.lab{white-space:nowrap;color:#57534E}
+.lab b{font-weight:400;margin-right:3px;color:var(--fg)}
+.lab.k{color:var(--warn)} .lab.k b{color:var(--warn)}
+.lab.u{color:var(--muted)}
+.roles{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.rchip{font-size:11px;height:22px;padding:0 8px;border-radius:99px;background:var(--surface-2);color:#57534E;cursor:grab}
+.rchip:hover{color:var(--fg);background:#ECEAE7}
+.rchip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink)}
+.add-voice{margin-top:2px;height:34px;border:1px dashed #D6D3D1;border-radius:var(--r-md);color:var(--muted);font-size:12px}
+.add-voice:hover,.add-voice.drop{border-color:var(--accent-ink);color:var(--accent-ink)}
+.warn3{font-size:11px;color:var(--muted);padding:0 4px}
+.vi-block{margin-top:auto;border-top:1px solid var(--border);padding:12px 4px 0;font-size:12px;display:flex;flex-direction:column;gap:6px}
+.vi-block .t{font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-weight:500}
+.vi-line{display:flex;gap:6px;align-items:baseline}
+.vi-line .ch{font-size:14px;letter-spacing:.08em}
+.linkbtn{color:var(--accent-ink);font-size:12px;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(154,107,60,.4)}
+
+/* tray */
+.tray{border-top:1px solid var(--border);background:var(--card);height:var(--tray-h);display:flex;flex-direction:column;min-height:0;transition:height .18s ease}
+.tray.closed{height:42px}
+.tray.deep{--tray-h:330px}
+.t-head{height:42px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px 0 18px;min-width:0}
+.t-title{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.t-title b{color:var(--fg);font-weight:600}
+.src{display:flex;gap:2px}
+.src button{height:28px;padding:0 10px;border-radius:7px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.src button:hover{color:var(--fg);background:var(--chrome-hover)}
+.src button[aria-pressed="true"]{color:var(--fg);background:var(--surface-2);font-weight:500}
+.t-head .sp{flex:1}
+.modes{display:flex;gap:2px;background:var(--surface-2);padding:2px;border-radius:8px}
+.modes button{height:24px;padding:0 8px;border-radius:6px;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.modes button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sel-style{height:28px;border:1px solid var(--border);border-radius:7px;background:var(--card);font:12px var(--font-ui);padding:0 6px;color:var(--fg)}
+.t-collapse{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--muted)}
+.t-collapse:hover{background:var(--chrome-hover)}
+.tray.closed .t-body{display:none}
+.t-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.t-note{padding:0 18px 8px;font-size:12px;color:var(--muted);display:flex;gap:10px;align-items:center;white-space:nowrap;overflow:hidden}
+.t-note > span:first-child{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tray.has-note{--tray-h:276px}
+.t-note .act{color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px}
+.t-lib{display:flex;gap:8px;padding:0 18px 8px}
+.t-lib input{height:28px;border:1px solid var(--border);border-radius:7px;padding:0 10px;width:240px;background:var(--sheet)}
+.cards{flex:1;min-height:0;display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:2px 18px 14px;scroll-snap-type:x proximity;align-items:stretch}
+.cand{flex:none;width:222px;border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px 9px;display:flex;flex-direction:column;gap:6px;background:var(--card);scroll-snap-align:start;position:relative;outline:none}
+.cand:hover{border-color:#D3CFCB}
+.cand.focus{border-color:var(--accent-ink);box-shadow:0 0 0 1px var(--accent-ink)}
+.cand.current{background:var(--sheet)}
+.cand.trying{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.tray.deep .cand{width:320px}
+.cand > *{flex-shrink:0}
+.cand > .c-sum{flex-shrink:1;min-height:0}
+.c-top{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.c-top .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-top .tag{font-size:10px;font-weight:500;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+.pin{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;color:var(--muted)}
+.pin:hover{background:var(--chrome-hover)}
+.pin[aria-pressed="true"]{color:var(--accent-ink)}
+.c-s1{font-size:21px;line-height:1.45;padding-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1F1D1B}
+.c-s2{font-size:11.5px;line-height:1.55;color:#3d3a37;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-sum{font-size:11px;color:var(--muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.c-act{display:flex;align-items:center;gap:6px;margin-top:auto}
+.btn{height:26px;padding:0 10px;border-radius:7px;font-size:12px;border:1px solid var(--border);background:var(--card);white-space:nowrap}
+.btn:hover{border-color:#CFCBC8}
+.btn.pri{background:var(--fg);color:#fff;border-color:var(--fg)}
+.btn.pri:hover{background:#000}
+.btn[disabled]{opacity:.45;cursor:default}
+.c-act .src-tag{margin-left:auto;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.note{font-size:11px;color:var(--accent-ink);font-style:italic}
+.axes{display:grid;grid-template-columns:62px 1fr auto;gap:3px 8px;font-size:10.5px;color:#57534E;align-items:center;margin-top:2px}
+.axes svg{width:100%;height:10px}
+.axes .v{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.stack{display:flex;gap:2px;align-items:baseline;font-size:26px;line-height:1.1;margin-top:2px;position:relative;height:36px}
+.stack span{position:absolute;left:0;top:0;letter-spacing:.06em}
+.stack .a{color:rgba(154,107,60,.55)}
+.stack .b{color:rgba(31,29,27,.85)}
+.stack-cap{font-size:10px;color:var(--muted)}
+.t-foot{position:absolute;right:18px;bottom:6px;font-size:10.5px;color:var(--muted)}
+.counter{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.skel{flex:none;width:222px;border-radius:var(--r-md);background:linear-gradient(90deg,#F3F2F0 0%,#ECEAE7 40%,#F3F2F0 80%);background-size:300% 100%;animation:sk 1.2s linear infinite}
+@keyframes sk{to{background-position:-150% 0}}
+
+/* depth 0 hides annotations */
+.d0 .labels,.d0 .c-sum{display:none}
+
+/* menu popover / toast */
+.ctx{position:fixed;z-index:50;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:0 12px 32px rgba(41,37,36,.18);padding:4px;min-width:220px;font-size:13px}
+.ctx button{display:flex;width:100%;padding:7px 10px;border-radius:6px;text-align:left;gap:8px;align-items:center}
+.ctx button:hover,.ctx button:focus-visible{background:var(--surface-2)}
+.ctx hr{border:0;border-top:1px solid var(--border);margin:4px 2px}
+.ctx .cap{font-size:11px;color:var(--muted);padding:6px 10px 2px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--fg);color:#fff;padding:9px 14px;border-radius:10px;font-size:12.5px;box-shadow:var(--shadow);z-index:60;display:flex;gap:12px;align-items:center}
+.toast button{color:var(--accent);text-decoration:underline}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side" aria-label="Điều hướng">
+    <div class="side-top"><button class="iconbtn" aria-label="Thu gọn sidebar"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button></div>
+    <nav class="side-scroll" id="side"></nav>
+    <div class="side-foot"><button class="iconbtn" aria-label="Giao diện tối"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><button class="iconbtn" aria-label="Cài đặt"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button><span style="flex:1"></span><button class="iconbtn" id="reset" title="Đặt lại dữ liệu mẫu của prototype" aria-label="Đặt lại dữ liệu mẫu">↺</button></div>
+  </aside>
+  <main class="main" id="main" aria-live="off"></main>
+</div>
+<div class="sr" aria-live="polite" id="live"></div>
+
+<script>
+'use strict';
+/* =========================================================================
+   DỮ LIỆU GIẢ — font stand-in + số đo trục minh hoạ (không phải số đo thật)
+   ========================================================================= */
+const VI_RANGE = /[Ạ-ỹ]/; // chữ có dấu dựng sẵn của tiếng Việt
+const FONTS = [
+  {id:'playfair', fam:'Playfair Display', cls:'serif', sub:'display', xh:.51, ct:4.8, wd:.92, w:[400,900], it:true, styles:6, by:'Claire Coleman'},
+  {id:'bevn', fam:'Be Vietnam Pro', cls:'sans', xh:.53, ct:1.2, wd:1.02, w:[300,700], it:true, styles:18, by:'Lâm Bảo'},
+  {id:'lora', fam:'Lora', cls:'serif', xh:.50, ct:2.2, wd:.98, w:[400,700], it:true, styles:8},
+  {id:'mont', fam:'Montserrat', cls:'sans', sub:'geometric', xh:.52, ct:1.1, wd:1.18, w:[300,700], styles:18},
+  {id:'josefin', fam:'Josefin Sans', cls:'sans', sub:'geometric', xh:.40, ct:1.2, wd:1.0, w:[300,700], styles:14},
+  {id:'alegreya', fam:'Alegreya', cls:'serif', xh:.45, ct:2.6, wd:.9, w:[400,700], it:true, styles:12, lowConf:true},
+  {id:'ebg', fam:'EB Garamond', cls:'serif', xh:.40, ct:2.8, wd:.88, w:[400,600], it:true, styles:10},
+  {id:'fraunces', fam:'Fraunces', cls:'serif', sub:'display', xh:.50, ct:3.4, wd:.98, w:[400,800], it:true, styles:18},
+  {id:'sserif', fam:'Source Serif 4', cls:'serif', xh:.48, ct:2.4, wd:.95, w:[400,700], it:true, styles:16, sf:'source'},
+  {id:'ssans', fam:'Source Sans 3', cls:'sans', xh:.49, ct:1.2, wd:.92, w:[300,700], styles:16, sf:'source'},
+  {id:'oswald', fam:'Oswald', cls:'sans', sub:'condensed', xh:.58, ct:1.3, wd:.72, w:[300,700], styles:6},
+  {id:'rslab', fam:'Roboto Slab', cls:'slab', xh:.54, ct:1.3, wd:1.0, w:[300,700], styles:9},
+  {id:'brico', fam:'Bricolage Grotesque', cls:'sans', xh:.52, ct:1.4, wd:.96, w:[400,700], styles:12},
+  {id:'dmserif', fam:'DM Serif Display', cls:'serif', sub:'display', xh:.48, ct:4.2, wd:.9, w:[400,400], it:true, styles:2, noVi:true},
+  {id:'abril', fam:'Abril Fatface', cls:'serif', sub:'display', xh:.47, ct:6.0, wd:1.0, w:[400,400], styles:1, noVi:true},
+  {id:'smono', fam:'Space Mono', cls:'mono', xh:.52, ct:1.1, wd:1.2, w:[400,700], styles:4},
+];
+const F = Object.fromEntries(FONTS.map(f => [f.id, f]));
+const CLS_VI = {serif:'Có chân', sans:'Không chân', slab:'Chân vuông', mono:'Đơn cách', display:'Trưng bày'};
+const GROUP = f => (f.cls === 'slab' ? 'serif' : f.cls);
+const missingIn = (f, text) => f.noVi ? [...new Set([...text].filter(c => VI_RANGE.test(c)))] : [];
+
+/* ---------- Vai ---------- */
+const ROLE = {
+  eyebrow:{n:'Eyebrow', v:2, step:-1, w:500, up:true, tr:.16, lh:1.3},
+  wordmark:{n:'Tên quán', v:1, step:5, w:700, up:true, tr:.02, lh:1.06},
+  headline:{n:'Tiêu đề', v:1, step:4, w:600, tr:-.01, lh:1.1},
+  deck:{n:'Phụ đề', v:1, step:1, w:400, it:true, lh:1.3},
+  section:{n:'Mục', v:1, step:1, w:700, up:true, tr:.1, lh:1.2},
+  item:{n:'Tên món', v:2, step:.6, w:600, lh:1.3},
+  body:{n:'Mô tả', v:2, step:0, w:400, lh:1.55},
+  price:{n:'Giá', v:2, step:.6, w:600, num:true, lh:1.3},
+  caption:{n:'Ghi chú', v:2, step:-1, w:400, lh:1.45},
+  fine:{n:'Chữ nhỏ', v:2, step:-2, w:400, lh:1.45},
+  quote:{n:'Trích dẫn', v:1, step:2.2, w:400, it:true, lh:1.25},
+  numeral:{n:'Số lớn', v:1, step:7, w:700, lh:.95},
+};
+/* ---------- Bố cục (dữ liệu, có phiên bản) ---------- */
+const LAYOUTS = {
+  menu:{n:'Menu', base:13, ratio:1.25, roles:['eyebrow','wordmark','caption','section','item','price','body','fine'],
+    text:{eyebrow:'Thực đơn · Mùa thu 2026', wordmark:'Phở Lý Quốc Sư', caption:'Số 10 Lý Quốc Sư, Hoàn Kiếm · Mở cửa 6:00 – 22:00',
+      s1:'Món nước', s2:'Món thêm',
+      i1:'Phở bò tái lăn', p1:'65.000đ', d1:'Nước dùng ninh xương 12 tiếng, bánh phở tươi tráng trong ngày, hành trần và rau thơm.',
+      i2:'Phở gà ta xé', p2:'60.000đ', d2:'Gà ta luộc lá chanh, thêm trứng non, gừng và hành phi giòn.',
+      i3:'Bún mọc sườn sụn', p3:'55.000đ', d3:'Mọc giã tay, sườn sụn hầm mềm, nấm hương và rau cải.',
+      i4:'Quẩy giòn', p4:'10.000đ', d4:'Chiên mới mỗi giờ.', i5:'Trứng chần', p5:'8.000đ', d5:'Lòng đào, rưới nước dùng nóng.',
+      fine:'Giá đã gồm VAT. Quý khách dị ứng món nào xin báo trước để bếp chuẩn bị.'}},
+  sign:{n:'Bảng hiệu', base:15, ratio:1.4, steps:{wordmark:4, numeral:6}, roles:['numeral','wordmark','deck','caption'],
+    text:{numeral:'36', wordmark:'Bún chả Hữu', deck:'Từ 1979 · Hàng Mành', caption:'Mở cửa 10:00 – 21:00 · 0912 345 678'}},
+  pack:{n:'Bao bì', base:11.5, ratio:1.25, roles:['eyebrow','wordmark','item','body','fine','price'],
+    text:{eyebrow:'Độ đạm 40°N', wordmark:'Nước mắm Cửa Hội', item:'Cá cơm ủ chượp 18 tháng',
+      body:'Thành phần: cá cơm than, muối biển Cửa Hội. Lắc nhẹ trước khi dùng, đậy kín sau khi mở.',
+      fine:'NSX 06/11/2026 · HSD 24 tháng · Sản xuất tại Nghi Lộc, Nghệ An', price:'500 ml'}},
+  brand:{n:'Brand sheet', p1:true, base:13, ratio:1.333, roles:['eyebrow','wordmark','headline','body','caption'],
+    text:{eyebrow:'Hệ chữ · 2026', wordmark:'Gánh Hàng Rong', headline:'Ấm như bếp lửa, rõ như bảng giá.',
+      body:'Giọng chính dùng cho tên thương hiệu, tiêu đề và các mục lớn. Giọng đọc lo mô tả món, giá và mọi chữ nhỏ trên bao bì. Không dùng quá hai giọng trên cùng một mặt in.',
+      caption:'Thang cỡ 1,333 · cỡ đọc 13 pt · khoảng dòng 1,55'}},
+  editorial:{n:'Editorial', p1:true, base:12.5, ratio:1.333, roles:['eyebrow','headline','deck','caption','body','quote'],
+    text:{eyebrow:'Bếp nhà', headline:'Mùa nước nổi ở Châu Đốc', deck:'Ba thế hệ giữ nghề mắm cá linh bên bờ sông Hậu',
+      caption:'Bài: Ngọc Hân · Ảnh: Minh Tú',
+      b1:'Tháng chín, nước từ thượng nguồn tràn về đồng. Cá linh theo dòng nước xuống, nhỏ bằng ngón tay, bạc như vảy trăng. Nhà bà Sáu bắt đầu mùa mắm khi những chuyến ghe đầu tiên cập bến lúc trời còn tối.',
+      b2:'Mắm cá linh không vội được. Cá rửa sạch, trộn muối hột theo tỉ lệ bà giữ trong đầu suốt năm mươi năm, rồi ủ trong khạp sành đặt dưới hiên. Ba tháng sau, khi gió chướng thổi, mắm mới đủ ngọt.',
+      quote:'“Mắm ngon là mắm biết đợi.”'}},
+};
+const LAYOUT_KEYS = Object.keys(LAYOUTS);
+
+/* =========================================================================
+   NHÃN TRỤC GIẢ (mô phỏng rút gọn R1–R9) — app thật: pair_candidates / assess_pair
+   ========================================================================= */
+function axes(a, b){
+  const out = [];
+  const ln = (x,y) => Math.abs(Math.log(x/y));
+  const same = GROUP(a) === GROUP(b);
+  const sf = (a.sf && a.sf === b.sf) || a.id === b.id;
+  // cấu trúc
+  const dx = ln(b.xh, a.xh); out.push({k:'xh', n:'x-height', g:'s', sym: dx < .10 ? '●' : '◐', va:a.xh, vb:b.xh, fmt:v=>v.toFixed(2).replace('.',',')});
+  const dw = ln(b.wd, a.wd); out.push({k:'wd', n:'độ rộng', g:'s', sym: dw < .10 ? '●' : dw > .25 ? '◐' : '◆', va:a.wd, vb:b.wd, fmt:v=>v.toFixed(2).replace('.',',')});
+  if (a.lowConf || b.lowConf) out.push({k:'ap', n:'độ mở', g:'s', sym:'○', va:null, vb:null});
+  // biểu cảm
+  out.push({k:'sf', n:'chân', g:'e', sym: same ? '●' : '◐', va:null, vb:null, txt:`${CLS_VI[GROUP(a)]} · ${CLS_VI[GROUP(b)]}`});
+  const dc = ln(b.ct, a.ct);
+  let csym = dc < .20 ? '●' : dc > .70 ? '◐' : (!same ? '◐~' : '◆');
+  out.push({k:'ct', n:'tương phản nét', g:'e', sym:csym, va:a.ct, vb:b.ct, fmt:v=>v.toFixed(1).replace('.',',')});
+  // va chạm toàn cục (R7) và cùng da khác khung (R8)
+  const expr = out.filter(x => x.g === 'e');
+  const exprC = expr.some(x => x.sym === '◐');
+  const structAllH = out.filter(x => x.g === 's').every(x => x.sym === '●' || x.sym === '○');
+  if (!sf && same && !exprC && structAllH) out.push({k:'gl', n:'gần như nhau', g:'x', sym:'◆', glob:true});
+  else if (!sf && same && !exprC && out.some(x => x.g === 's' && x.sym === '◐')) out.push({k:'r8', n:'khung khác, da giống', g:'x', sym:'◆', glob:true});
+  if (sf && a.id !== b.id) out.unshift({k:'fam', n:'cùng superfamily', g:'m', sym:'●'});
+  return out;
+}
+function assess(ref, cand, viText, projectVi){
+  const ax = axes(ref, cand);
+  const miss = missingIn(cand, viText);
+  const K = ax.filter(x => x.sym === '◆');
+  const sHarm = ax.filter(x => x.g === 's' && x.sym === '●').length;
+  const sf = ax.some(x => x.k === 'fam') || ref.id === cand.id;
+  const exprC = ax.some(x => x.g === 'e' && x.sym === '◐');
+  let gate = 'experimental';
+  if (sf || (K.length === 0 && ax.filter(x => x.g === 's').every(x => x.sym === '●' || x.sym === '○'))) gate = 'safe';
+  else if (K.length <= 1 && K.every(x => x.k === 'wd') && exprC) gate = 'controlled';
+  const kept = ax.filter(x => x.sym === '●' && x.g !== 'm').map(x => x.n);
+  const changed = ax.filter(x => x.sym.startsWith('◐')).map(x => x.n);
+  let sum;
+  if (ax.some(x => x.k === 'gl')) sum = 'Khác họ nhưng gần như nhau: dễ trông như chọn nhầm.';
+  else if (ax.some(x => x.k === 'r8')) sum = 'Bề mặt giống, khung chữ khác: đứng cạnh nhau thấy lệch.';
+  else if (sf && ref.id !== cand.id) sum = 'Cùng gốc thiết kế: tỉ lệ và nhịp sẵn khớp.';
+  else sum = (kept.length ? 'Giữ: ' + kept.slice(0,2).join(', ') + '. ' : '') + (changed.length ? 'Đổi: ' + changed.slice(0,2).join(', ') + '.' : 'Rất gần nhau.');
+  const labels = [];
+  if (miss.length) labels.push({sym:'◆', n:`thiếu ${miss.slice(0,3).join(' ')}${miss.length > 3 ? '…' : ''}`, vi:true});
+  ax.filter(x => x.sym === '◆').forEach(x => labels.push(x));
+  ax.filter(x => x.sym !== '◆').forEach(x => labels.push(x));
+  return {ax, gate, K:K.length + (miss.length ? 1 : 0), sHarm, sf, sum, labels, miss, blocked: projectVi && (miss.length > 0 || cand.noVi)};
+}
+const GATE_VI = {safe:'An toàn', controlled:'Có kiểm soát', experimental:'Thử nghiệm'};
+const GATE_ORDER = {safe:0, controlled:1, experimental:2};
+const PAIR_STYLES = [
+  ['all','Mọi kiểu ghép'], ['family','Cùng họ'], ['serifsans','Có chân + không chân'], ['displaytext','Trưng bày + đọc'],
+  ['keepone','Giữ một, đổi một'], ['break','Phá cách'],
+];
+function styleOk(style, ref, c, r){
+  switch(style){
+    case 'family': return r.sf;
+    case 'serifsans': return r.ax.some(x => x.k === 'sf' && x.sym === '◐') && r.K === 0;
+    case 'displaytext': return (ref.sub === 'display' || ref.ct > 4) && c.ct < 2.7 && c.xh >= .45;
+    case 'keepone': return r.sHarm >= 1 && r.ax.some(x => x.g === 'e' && x.sym === '◐') && r.K === 0;
+    case 'break': return r.K > 0;
+    default: return true;
+  }
+}
+
+/* =========================================================================
+   TRẠNG THÁI (mô phỏng user.db — tự lưu localStorage)
+   ========================================================================= */
+const KEY = 'fa-plates-proto-v1';
+const seedPlates = () => ([
+  {id:1, name:'Phở Lý Quốc Sư', layout:'menu', starred:true, projectVi:true, mode:'safe', depth:1, trayOpen:true, sel:'item', tab:'pair', style:'all', xnorm:false, priceStyle:'leader',
+   voices:[{slot:1, font:'playfair', wAdj:0, anchor:true},{slot:2, font:'bevn', wAdj:0}], roleVoice:{}, texts:{}, pinned:{2:[{font:'lora', note:'đọc mềm hơn, khách thích'}]}, updated:Date.now()-3600e3*20},
+  {id:2, name:'Nước mắm Cửa Hội', layout:'pack', starred:true, projectVi:true, mode:'safe', depth:1, trayOpen:true, sel:'wordmark', tab:'pair', style:'all', xnorm:false, priceStyle:'leader',
+   voices:[{slot:1, font:'oswald', wAdj:0, anchor:true},{slot:2, font:'sserif', wAdj:0}], roleVoice:{}, texts:{}, pinned:{}, updated:Date.now()-3600e3*50},
+  {id:3, name:'Gánh Hàng Rong', layout:'brand', starred:false, projectVi:true, mode:'controlled', depth:1, trayOpen:true, sel:'headline', tab:'pair', style:'all', xnorm:false, priceStyle:'leader',
+   voices:[{slot:1, font:'fraunces', wAdj:0, anchor:true},{slot:2, font:'brico', wAdj:0}], roleVoice:{}, texts:{}, pinned:{}, updated:Date.now()-3600e3*24*6},
+]);
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)) } catch(e) { S = null }
+if (!S || !Array.isArray(S.plates)) S = {plates:seedPlates(), view:'home', open:null, nextId:4, lastLayout:'menu', libSel:null};
+const ui = {preview:null, focus:0, editing:null, highlight:false, libQ:'', seedQ:'', loading:false, ctx:null};
+let saveTimer = null, savedState = 'saved';
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(S)) }catch(e){} }
+function touch(immediate){
+  const p = cur(); if (p) p.updated = Date.now();
+  savedState = 'busy'; paintSaved();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { persist(); savedState = 'saved'; paintSaved(); }, immediate ? 120 : 600);
+}
+const cur = () => S.plates.find(p => p.id === S.open && !p.deleted);
+const voice = (p, slot) => p.voices.find(v => v.slot === slot);
+function roleSlot(p, role){
+  let s = p.roleVoice[role] ?? ROLE[role].v;
+  if (!voice(p, s)) s = voice(p, 2) ? 2 : 1;
+  return s;
+}
+
+/* =========================================================================
+   TIỆN ÍCH
+   ========================================================================= */
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fstack = f => `"${f.fam}", ${GROUP(f) === 'serif' ? 'Georgia, serif' : 'Helvetica, sans-serif'}`;
+function live(msg){ $('#live').textContent = msg }
+function ago(t){
+  const m = Math.round((Date.now()-t)/60000);
+  if (m < 1) return 'vừa xong'; if (m < 60) return m + ' phút trước';
+  const h = Math.round(m/60); if (h < 24) return h + ' giờ trước';
+  return Math.round(h/24) + ' ngày trước';
+}
+function toast(msg, act){
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role','status');
+  t.innerHTML = `<span>${esc(msg)}</span>` + (act ? `<button type="button">${esc(act.label)}</button>` : '');
+  if (act) t.querySelector('button').onclick = () => { t.remove(); act.run(); };
+  document.body.appendChild(t); setTimeout(() => t.remove(), 4200);
+}
+const ICON = {
+  grid:'<svg class="ico" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+  star:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>',
+  clock:'<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  power:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>',
+  plus:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  folder:'<svg class="ico" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
+  search:'<svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>',
+  more:'<svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/></svg>',
+  pin:'<svg class="ico" viewBox="0 0 24 24"><path d="M9 4h6l-1 5 3 3H7l3-3z"/><path d="M12 12v8"/></svg>',
+  anchor:'<svg class="ico" style="width:12px;height:12px" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13a7 7 0 0 0 14 0M8 10h8"/></svg>',
+  chev:'<svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+};
+
+/* =========================================================================
+   SIDEBAR
+   ========================================================================= */
+function renderSide(){
+  const starred = S.plates.filter(p => p.starred && !p.deleted);
+  const n = S.plates.filter(p => !p.deleted).length;
+  const v = S.view, open = S.open;
+  $('#side').innerHTML = `
+    <button class="nav" data-act="nav-lib">${ICON.plus}<span class="lbl">Thêm font</span></button>
+    <button class="nav" data-act="nav-lib" aria-current="${v==='lib'}">${ICON.grid}<span class="lbl">Tất cả</span><span class="n">${FONTS.length}</span></button>
+    <button class="nav">${ICON.star}<span class="lbl">Yêu thích</span><span class="n">0</span></button>
+    <button class="nav">${ICON.clock}<span class="lbl">Gần đây</span></button>
+    <button class="nav">${ICON.power}<span class="lbl">Đang bật</span><span class="n">0</span></button>
+    <div class="sec" role="group" aria-label="Plates">
+      <div style="display:flex;align-items:center">
+        <button class="sec-head" data-act="nav-home" style="flex:1"><span class="tri"></span><span>Plates</span><span class="sp"></span></button>
+        <button class="sec-add" data-act="new-plate" title="Plate mới (⌘⇧N)" aria-label="Plate mới">${ICON.plus}</button>
+      </div>
+      ${starred.map(p => `<button class="nav plate-nav" data-act="open" data-id="${p.id}" aria-current="${v==='plate' && open===p.id}" data-drop-plate="${p.id}"><span class="plate-ico"></span><span class="lbl">${esc(p.name)}</span></button>`).join('')}
+      <button class="nav sub" data-act="nav-home" aria-current="${v==='home'}"><span style="width:14px"></span><span class="lbl">${n ? 'Tất cả Plate' : 'Plate mới'}</span>${n ? `<span class="n">${n}</span>` : ''}</button>
+    </div>
+    <div class="sec"><button class="sec-head"><span class="tri"></span><span>Dự án</span></button></div>
+    <div class="sec"><button class="sec-head"><span class="tri"></span><span>Nguồn</span></button>
+      <button class="nav">${ICON.folder}<span class="lbl">Google Fonts</span><span class="n">${FONTS.length}</span></button></div>
+    <div class="sec"><button class="sec-head"><span class="tri"></span><span>Thẻ</span></button></div>`;
+}
+
+/* =========================================================================
+   THƯ VIỆN (rút gọn — chỉ để demo điểm vào qua menu ngữ cảnh)
+   ========================================================================= */
+function renderLib(){
+  $('#main').innerHTML = `
+    <div class="lib-top"><h1>Tất cả <span class="n">${FONTS.length}</span></h1><span class="hint">Chuột phải một font: “Plate mới từ font này” · “Thêm vào Plate ▸” · hoặc chọn rồi bấm ⇧P</span></div>
+    <div class="lib-grid" role="listbox" aria-label="Thư viện">
+      ${FONTS.map(f => `<button class="fcard" role="option" data-act="lib-sel" data-font="${f.id}" aria-selected="${S.libSel===f.id}" draggable="true" data-drag-font="${f.id}">
+        <div class="spec" style="font-family:${esc(fstack(f))}">Phở bò Hà Nội</div>
+        <div class="meta"><span>${esc(f.fam)}</span>${f.noVi ? '<span class="vi-miss">◆ thiếu 90 ký tự Việt</span>' : '<span class="vi-ok">● đủ tiếng Việt</span>'}</div></button>`).join('')}
+    </div>`;
+}
+
+/* =========================================================================
+   PLATES HOME (zerostate)
+   ========================================================================= */
+function thumb(p){
+  const v1 = F[voice(p,1).font], v2 = F[(voice(p,2) || voice(p,1)).font];
+  const L = LAYOUTS[p.layout], t = {...L.text, ...(p.texts[p.layout] || {})};
+  const big = (t.wordmark || t.headline || '').toUpperCase();
+  const small = t.d1 || t.body || t.b1 || t.deck || '';
+  const top = (t.eyebrow || '').toUpperCase();
+  return `<div class="pthumb" aria-hidden="true"><div class="t3" style="font-family:${esc(fstack(v2))}">${esc(top)}</div>
+    <div class="t1" style="font-family:${esc(fstack(v1))};font-weight:${Math.min(700, v1.w[1])}">${esc(big)}</div>
+    <div class="t2" style="font-family:${esc(fstack(v2))}">${esc(small)}</div></div>`;
+}
+function renderHome(){
+  const all = S.plates.filter(p => !p.deleted).sort((a,b) => b.updated - a.updated);
+  const starred = all.filter(p => p.starred), rest = all.filter(p => !p.starred);
+  const q = ui.seedQ.trim().toLowerCase();
+  const results = q ? FONTS.filter(f => f.fam.toLowerCase().includes(q)) : [];
+  const recent = ['playfair','fraunces','oswald','bevn','dmserif'];
+  const card = p => `<button class="pcard" data-act="open" data-id="${p.id}">${thumb(p)}
+      <span class="nm">${p.starred ? '<span class="star" aria-label="có sao">★</span>' : ''}${esc(p.name)}</span>
+      <span class="sub">${LAYOUTS[p.layout].n} · ${p.voices.map(v => esc(F[v.font].fam)).join(' + ')} · ${ago(p.updated)}</span></button>`;
+  $('#main').innerHTML = `<div class="home"><div class="home-in">
+    <h1>Plates</h1>
+    <p class="lede">Atlas là tập các plate. Mỗi Plate là một trang chữ bạn dựng quanh một font: hệ thống gợi ý, bạn thử trên trang thật rồi quyết định.</p>
+    <section class="start" id="start" aria-labelledby="start-h">
+      <h2 id="start-h">Bắt đầu từ font nào?</h2>
+      <div class="start-row">
+        <div class="seed-search">${ICON.search}<input id="seedq" placeholder="Tìm trong thư viện… (vd. playfair)" value="${esc(ui.seedQ)}" autocomplete="off" aria-label="Tìm font neo">
+          ${results.length ? `<div class="seed-results" role="listbox">${results.map(f => `<button data-act="seed" data-font="${f.id}" role="option"><span class="s" style="font-family:${esc(fstack(f))}">${esc(f.fam)}</span><span style="font-size:11px;color:var(--muted)">${CLS_VI[f.sub==='display'?'display':GROUP(f)]} · ${f.styles} kiểu${f.noVi ? ' · <span class=vi-miss>◆ thiếu tiếng Việt</span>' : ''}</span></button>`).join('')}</div>` : (q ? `<div class="seed-results"><div style="padding:10px;color:var(--muted)">Không có font nào tên “${esc(q)}”.</div></div>` : '')}
+        </div>
+        <span class="drop-hint">hoặc kéo một font từ thư viện vào đây</span>
+      </div>
+      <div class="start-row"><span class="k">Gần đây</span>${recent.map(id => `<button class="chip" data-act="seed" data-font="${id}" style="font-family:${esc(fstack(F[id]))};font-size:14px">${esc(F[id].fam)}</button>`).join('')}</div>
+      <div class="start-row" role="radiogroup" aria-label="Bố cục"><span class="k">Bố cục</span>${LAYOUT_KEYS.map(k => `<button class="chip" role="radio" data-act="seed-layout" data-layout="${k}" aria-pressed="${S.lastLayout===k}" aria-checked="${S.lastLayout===k}">${LAYOUTS[k].n}</button>`).join('')}</div>
+    </section>
+    ${all.length ? `
+      ${starred.length ? `<div class="list-head"><h3>Có sao</h3><span class="muted">hiện ở sidebar</span></div><div class="pgrid">${starred.map(card).join('')}</div>` : ''}
+      <div class="list-head"><h3>${starred.length ? 'Khác' : 'Tất cả'}</h3><span class="muted">sắp theo lần sửa gần nhất</span></div>
+      ${rest.length ? `<div class="pgrid">${rest.map(card).join('')}</div>` : '<p class="empty-note">Mọi Plate đều đã có sao.</p>'}`
+    : `<p class="empty-note">Chưa có Plate nào. Chọn một font ở trên — bố cục ${LAYOUTS[S.lastLayout].n} sẽ có ngay chữ thật để bạn thử.</p>`}
+    ${S.plates.some(p => p.deleted) ? `<div class="list-head"><h3>Đã xoá</h3><span class="muted">giữ 30 ngày</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${S.plates.filter(p=>p.deleted).map(p => `<button class="chip" data-act="restore" data-id="${p.id}">↺ ${esc(p.name)}</button>`).join('')}</div>` : ''}
+  </div></div>`;
+  const inp = $('#seedq');
+  if (ui.focusSeed) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); ui.focusSeed = false; }
+}
+function createPlate(fontId){
+  const f = F[fontId];
+  const p = {id:S.nextId++, name:'Plate mới · ' + f.fam, layout:S.lastLayout, starred:false, projectVi:true, mode:'safe', depth:1, trayOpen:true,
+    sel:null, tab:'pair', style:'all', xnorm:false, priceStyle:'leader', voices:[{slot:1, font:fontId, wAdj:0, anchor:true}], roleVoice:{}, texts:{}, pinned:{}, updated:Date.now(), fresh:true};
+  // gợi ý tạm cho Giọng đọc: ứng viên đầu tiên ở nguồn Ghép (F1 trong spec)
+  const first = pairList(p, 2, true)[0];
+  p.voices.push({slot:2, font: first ? first.f.id : 'bevn', wAdj:0, provisional:true});
+  p.sel = ['item','body','deck'].find(r => LAYOUTS[p.layout].roles.includes(r)) || LAYOUTS[p.layout].roles[0];
+  S.plates.push(p); S.open = p.id; S.view = 'plate'; ui.preview = null; ui.focus = 0;
+  touch(true); render();
+  live(`Đã tạo Plate từ ${f.fam}. Giọng đọc đang dùng gợi ý tạm.`);
+}
+
+/* =========================================================================
+   DANH SÁCH ỨNG VIÊN CHO KHAY
+   ========================================================================= */
+function voiceText(p, slot, layout){
+  const L = LAYOUTS[layout || p.layout], t = {...L.text, ...(p.texts[layout || p.layout] || {})};
+  let s = '';
+  for (const [k, val] of Object.entries(t)) {
+    const role = keyRole(k);
+    if (role && roleSlot(p, role) === slot) s += ' ' + (ROLE[role].up ? val.toUpperCase() : val);
+  }
+  return s;
+}
+function keyRole(k){ if (ROLE[k]) return k; return {s1:'section',s2:'section',i1:'item',i2:'item',i3:'item',i4:'item',i5:'item',p1:'price',p2:'price',p3:'price',p4:'price',p5:'price',d1:'body',d2:'body',d3:'body',d4:'body',d5:'body',b1:'body',b2:'body'}[k] || null; }
+function refFor(p, slot){ return slot === 1 ? voice(p,2) : voice(p,1); }
+function pairList(p, slot, ignoreStyle){
+  const ref = F[refFor(p, slot)?.font || voice(p,1).font];
+  const txt = voiceText(p, slot);
+  const curFont = voice(p, slot)?.font;
+  if (p.projectVi && ref.noVi && slot !== 1) return []; // H1: neo thiếu tiếng Việt → backend trả rỗng
+  let list = FONTS.filter(f => f.id !== ref.id).map(f => ({f, r:assess(ref, f, txt, p.projectVi), src:'Ghép'}));
+  list = list.filter(x => !x.r.blocked); // H1: dự án tiếng Việt chặn ở nguồn Ghép
+  const lim = GATE_ORDER[p.mode];
+  list = list.filter(x => GATE_ORDER[x.r.gate] <= lim);
+  if (!ignoreStyle && p.style !== 'all') list = list.filter(x => styleOk(p.style, ref, x.f, x.r));
+  list.sort((a,b) => (b.r.sf - a.r.sf) || (a.r.K - b.r.K) || (b.r.sHarm - a.r.sHarm) || GATE_ORDER[a.r.gate] - GATE_ORDER[b.r.gate] || a.f.fam.localeCompare(b.f.fam));
+  if (slot === 3) { const r2 = F[voice(p,2).font]; list.forEach(x => x.r2 = assess(r2, x.f, txt, p.projectVi)); }
+  return list.map(x => ({...x, current: x.f.id === curFont}));
+}
+function similarList(p, slot){
+  const base = F[voice(p, slot).font];
+  const ref = F[refFor(p, slot)?.font || base.id];
+  const txt = voiceText(p, slot);
+  const d = f => Math.abs(Math.log(f.xh/base.xh))/.1 + Math.abs(Math.log(f.ct/base.ct))/.5 + Math.abs(Math.log(f.wd/base.wd))/.15 + (GROUP(f)!==GROUP(base)?2.5:0) + (f.sub!==base.sub?.8:0);
+  return FONTS.filter(f => f.id !== base.id).sort((a,b) => d(a)-d(b)).slice(0,7).map(f => {
+    const r = assess(ref, f, txt, p.projectVi);
+    const ax = axes(base, f);
+    const same = ax.filter(x => x.sym === '●' && x.g !== 'm').map(x => x.n).slice(0,2), diff = ax.filter(x => x.sym !== '●' && x.sym !== '○' && x.g !== 'x').map(x => x.n).slice(0,2);
+    r.sum = `Giống ${esc(base.fam)} ở ${same.join(', ') || '—'}${diff.length ? '; khác ở ' + diff.join(', ') : ''}.`;
+    return {f, r, src:'Giống'};
+  });
+}
+function familyList(p, slot){
+  const base = F[voice(p, slot).font];
+  const ref = F[refFor(p, slot)?.font || base.id];
+  const txt = voiceText(p, slot);
+  const out = [];
+  const steps = [[-100,'Light'],[0,'Regular'],[100,'Medium'],[200,'Bold']];
+  const v = voice(p, slot);
+  steps.forEach(([adj, nm]) => out.push({f:base, wAdj:adj, styleName:nm, r:assess(ref, base, txt, p.projectVi), src:'Cùng họ', current: v.font===base.id && v.wAdj===adj}));
+  FONTS.filter(f => f.sf && f.sf === base.sf && f.id !== base.id).forEach(f => out.push({f, wAdj:0, r:assess(ref, f, txt, p.projectVi), src:'Superfamily'}));
+  out.forEach(x => { if (x.styleName) x.r = {...x.r, sum: `Kiểu ${x.styleName} của ${base.fam}.`} });
+  return out;
+}
+function libList(p, slot){
+  const ref = F[refFor(p, slot)?.font || voice(p,1).font];
+  const txt = voiceText(p, slot); const q = ui.libQ.trim().toLowerCase();
+  return FONTS.filter(f => !q || f.fam.toLowerCase().includes(q)).map(f => ({f, r:assess(ref, f, txt, p.projectVi), src:'Thư viện', current:f.id===voice(p,slot)?.font}));
+}
+function pinnedList(p, slot){
+  const ref = F[refFor(p, slot)?.font || voice(p,1).font];
+  const txt = voiceText(p, slot);
+  return (p.pinned[slot] || []).map(x => ({f:F[x.font], r:assess(ref, F[x.font], txt, p.projectVi), src: x.prev ? 'Đã dùng trước' : x.lib ? 'Từ thư viện' : 'Đã ghim', note:x.note}));
+}
+function trayList(p){
+  const slot = activeSlot(p);
+  if (!voice(p, slot)) return [];
+  switch(p.tab){
+    case 'similar': return similarList(p, slot);
+    case 'family': return familyList(p, slot);
+    case 'lib': return libList(p, slot);
+    case 'pinned': return pinnedList(p, slot);
+    default: return pairList(p, slot);
+  }
+}
+const activeSlot = p => roleSlot(p, p.sel || 'body');
+
+/* =========================================================================
+   TRANG (canvas)
+   ========================================================================= */
+function fontFor(p, slot){
+  const v = voice(p, slot);
+  if (ui.preview && ui.preview.slot === slot) return {f:F[ui.preview.font], wAdj: ui.preview.wAdj ?? v.wAdj, trying:true};
+  return {f:F[v.font], wAdj:v.wAdj, prov:v.provisional};
+}
+function roleEl(p, key, tag='div', extraStyle=''){
+  const role = keyRole(key), R = ROLE[role], L = LAYOUTS[p.layout];
+  const slot = roleSlot(p, role);
+  const {f, wAdj, trying, prov} = fontFor(p, slot);
+  const t = (p.texts[p.layout] || {})[key] ?? L.text[key];
+  const text = R.up ? t.toUpperCase() : t;
+  const size = L.base * Math.pow(L.ratio, (L.steps && L.steps[role]) ?? R.step);
+  const w = Math.max(f.w[0], Math.min(f.w[1], R.w + wAdj));
+  const miss = missingIn(f, text);
+  const body = (ui.highlight && miss.length) ? [...text].map(c => miss.includes(c) ? `<span class="miss">${esc(c)}</span>` : esc(c)).join('') : esc(text);
+  const style = `font-family:${esc(fstack(f))};font-size:${size.toFixed(1)}px;font-weight:${w};line-height:${R.lh};letter-spacing:${R.tr||0}em;${R.it && f.it ? 'font-style:italic;' : ''}${R.num ? 'font-variant-numeric:tabular-nums;' : ''}${p.xnorm ? 'font-size-adjust:0.52;' : ''}${extraStyle}`;
+  const cls = ['role', p.sel === role ? 'sel' : '', trying ? 'try' : '', prov ? 'prov' : ''].join(' ');
+  const label = `${R.n} — ${f.fam}`;
+  const editing = ui.editing === key;
+  return `<${tag} class="${cls}" data-role="${role}" data-key="${key}" tabindex="0" role="group" aria-label="${esc(label)}" style="${style}"${editing ? ' contenteditable="true"' : ''} data-drop-role="${role}"><span class="role-tag" contenteditable="false">${esc(R.n)}</span>${body}</${tag}>`;
+}
+function pageHTML(p){
+  const r = (k, tag, st) => roleEl(p, k, tag, st);
+  switch(p.layout){
+    case 'menu': {
+      const dish = i => `<div class="dish ${p.priceStyle==='inline'?'inline':''}"><div class="line">${r('i'+i,'span')}${p.priceStyle==='leader' ? '<span class="lead" aria-hidden="true"></span>' : ''}${r('p'+i,'span','white-space:nowrap')}</div><div class="desc">${r('d'+i)}</div></div>`;
+      return `<div class="page pg-menu">
+        <div class="price-tg" role="group" aria-label="Kiểu đặt giá">Giá <button data-act="price" data-v="leader" aria-pressed="${p.priceStyle==='leader'}">căn phải</button><button data-act="price" data-v="inline" aria-pressed="${p.priceStyle==='inline'}">cuối dòng</button></div>
+        <div class="head">${r('eyebrow')}<div style="height:10px"></div>${r('wordmark')}<div class="addr">${r('caption')}</div></div>
+        <div class="rule"></div>
+        <div class="group"><div class="sect">${r('s1')}</div>${dish(1)}${dish(2)}${dish(3)}</div>
+        <div class="group"><div class="sect">${r('s2')}</div>${dish(4)}${dish(5)}</div>
+        <div class="foot">${r('fine')}</div></div>`;
+    }
+    case 'sign': {
+      const inner = `<div class="num">${r('numeral')}</div>${r('wordmark')}${r('deck')}${r('caption')}`;
+      return `<div class="page pg-sign">${inner}</div>
+        <div class="distances" aria-label="Xem ở khoảng cách"><figure><div class="mini" style="width:250px;height:${Math.round(250*0.36)}px"><div style="transform:scale(.39);transform-origin:0 0;width:640px;pointer-events:none" aria-hidden="true">${`<div class="page pg-sign" style="border:0">${inner.replace(/tabindex="0"/g,'tabindex="-1"').replace(/role="group"/g,'').replace(/ sel /g,' ').replace(/data-drop-role="[a-z]+"/g,'')}</div>`}</div></div><figcaption>vừa · 40%</figcaption></figure>
+        <figure><div class="mini" style="width:96px;height:${Math.round(96*0.36)}px"><div style="transform:scale(.15);transform-origin:0 0;width:640px;pointer-events:none" aria-hidden="true"><div class="page pg-sign" style="border:0">${inner.replace(/tabindex="0"/g,'tabindex="-1"').replace(/role="group"/g,'').replace(/ sel /g,' ').replace(/data-drop-role="[a-z]+"/g,'')}</div></div></div><figcaption>xa · 15%</figcaption></figure></div>`;
+    }
+    case 'pack':
+      return `<div class="page pg-pack"><div class="frame">${r('eyebrow')}${r('wordmark')}${r('item')}<div style="height:8px"></div>${r('body')}
+        <div class="row">${r('fine','div','max-width:66%')}${r('price','div','white-space:nowrap')}</div></div></div>`;
+    case 'brand': {
+      const aa = slot => { const v = voice(p, slot); if (!v) return ''; const {f} = fontFor(p, slot);
+        return `<div class="aa"><span class="cap">${slot===1?'① Giọng chính':slot===2?'② Giọng đọc':'③ Giọng nhấn'} · ${esc(f.fam)}</span><span class="big" style="font-family:${esc(fstack(f))}">Aa Ưư</span><span class="set" style="font-family:${esc(fstack(f))}">AĂÂBCDĐEÊGHIKLMNOÔƠPQRSTUƯVXY ăâđêôơư ẤẦẨẪẬ Ữ Ặ Ệ Ỗ 0123456789 ₫ đ</span></div>`; };
+      return `<div class="page pg-brand"><div class="full">${r('eyebrow')}<div style="height:8px"></div>${r('wordmark')}</div>
+        <div>${r('headline')}<div style="height:14px"></div>${r('body')}<div style="height:12px"></div>${r('caption')}</div>
+        <div style="display:flex;flex-direction:column;gap:18px">${aa(1)}${aa(2)}${aa(3)}</div></div>`;
+    }
+    case 'editorial':
+      return `<div class="page pg-ed">${r('eyebrow')}<div style="height:12px"></div>${r('headline')}<div style="height:10px"></div>${r('deck')}<div style="height:12px"></div>${r('caption')}
+        <div class="cols">${r('b1','p')}<blockquote>${r('quote')}</blockquote>${r('b2','p')}</div></div>`;
+  }
+}
+
+/* =========================================================================
+   SỔ GIỌNG
+   ========================================================================= */
+function labelsHTML(labels, max=3){
+  return `<div class="labels">${labels.slice(0, max).map(l => {
+    const s = l.sym.replace('~',''); const cls = s === '◆' ? 'k' : s === '○' ? 'u' : '';
+    return `<span class="lab ${cls}"><b aria-hidden="true">${s}</b>${esc(l.n)}<span class="sr"> (${s==='●'?'hoà hợp':s==='◐'?'tương phản':s==='◆'?'cần xem':'chưa chắc'})</span></span>`; }).join('')}</div>`;
+}
+function ledgerHTML(p){
+  const L = LAYOUTS[p.layout];
+  const rolesOf = slot => L.roles.filter(r => roleSlot(p, r) === slot);
+  const vnames = {1:'Giọng chính', 2:'Giọng đọc', 3:'Giọng nhấn'};
+  const act = activeSlot(p);
+  const blocks = p.voices.map(v => {
+    const f = F[v.font];
+    let labs = '';
+    if (v.slot !== 1) { const r = assess(F[voice(p,1).font], f, voiceText(p, v.slot), p.projectVi); labs = labelsHTML(r.labels, 3); }
+    const wName = {'-100':'Light','0':'Regular','100':'Medium','200':'Bold'}[String(v.wAdj)] || '';
+    return `<div class="voice ${act===v.slot?'active':''}" data-drop-slot="${v.slot}">
+      <div class="v-top"><span class="v-idx">${v.slot}</span><span>${vnames[v.slot] || 'Giọng ' + v.slot}</span><span class="sp"></span>
+        <button class="v-more" data-act="voice-menu" data-slot="${v.slot}" aria-label="Thao tác ${vnames[v.slot]}">${ICON.more}</button></div>
+      <button class="v-font" data-act="pick-slot" data-slot="${v.slot}" style="font-family:${esc(fstack(f))}" title="Chọn để đổi font giọng này">${esc(f.fam)}</button>
+      <div class="v-meta">${v.anchor ? `<span class="anchor">${ICON.anchor} neo</span>·` : ''}${v.provisional ? '<span class="prov-tag">gợi ý tạm · chưa đặt</span>' : `<span>${wName}</span>`}<span>· Số đo</span></div>
+      ${labs}
+      <div class="roles">${rolesOf(v.slot).map(r => `<button class="rchip" data-act="sel-role" data-role="${r}" aria-pressed="${p.sel===r}" draggable="true" data-drag-role="${r}">${ROLE[r].n}</button>`).join('') || '<span style="font-size:11px;color:var(--muted)">Chưa có vai — kéo vai vào đây</span>'}</div>
+    </div>`;
+  }).join('');
+  // kiểm tiếng Việt trên chữ của trang
+  const issues = p.voices.map(v => ({v, f:F[v.font], miss:missingIn(F[v.font], voiceText(p, v.slot))})).filter(x => x.miss.length);
+  const vi = !p.projectVi ? `<div class="vi-line"><span>○</span><span>Đã tắt kiểm tiếng Việt cho Plate này.</span></div>`
+    : issues.length ? issues.map(x => `<div class="vi-line" style="color:var(--warn)"><span>◆</span><span>${esc(x.f.fam)} thiếu <span class="ch">${esc(x.miss.slice(0,6).join(' '))}</span>${x.miss.length>6?` +${x.miss.length-6}`:''} — ở ${rolesOf(x.v.slot).map(r=>ROLE[r].n).slice(0,2).join(', ')}</span></div>`).join('') + `<button class="linkbtn" data-act="hl" style="text-align:left">${ui.highlight ? 'Bỏ tô chữ thiếu' : 'Tô chữ thiếu trên trang'}</button>`
+    : `<div class="vi-line" style="color:var(--on)"><span>●</span><span style="color:var(--fg)">Đủ ký tự cho chữ trên trang này.</span></div>`;
+  return `<div class="l-head">Sổ giọng</div>${blocks}
+    ${p.voices.length < 3 ? `<button class="add-voice" data-act="add-voice" data-drop-slot="new">＋ Giọng nhấn</button>` : `<button class="add-voice" data-act="add-voice" data-drop-slot="new">＋ Giọng</button><div class="warn3">Trên 3 font, trang dễ rời rạc. Vẫn thêm được.</div>`}
+    <div class="vi-block"><span class="t">Tiếng Việt</span>${vi}</div>`;
+}
+
+/* =========================================================================
+   KHAY
+   ========================================================================= */
+function dumbbell(va, vb, lo, hi){
+  if (va == null) return `<svg viewBox="0 0 100 10" aria-hidden="true"><line x1="2" y1="5" x2="98" y2="5" stroke="#D6D3D1" stroke-dasharray="3 3"/></svg>`;
+  const x = v => 4 + 92 * Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+  return `<svg viewBox="0 0 100 10" aria-hidden="true"><line x1="2" y1="5" x2="98" y2="5" stroke="#ECEAE7"/><line x1="${x(va)}" y1="5" x2="${x(vb)}" y2="5" stroke="#A8A29E" stroke-width="1.5"/><circle cx="${x(va)}" cy="5" r="3.2" fill="#C9A57E"/><circle cx="${x(vb)}" cy="5" r="3.2" fill="#2A2A2A"/></svg>`;
+}
+const RANGE = {xh:[.38,.6], wd:[.7,1.2], ct:[1,6]};
+function cardHTML(p, x, i){
+  const slot = activeSlot(p);
+  const role = p.sel || 'body', R = ROLE[role];
+  const L = LAYOUTS[p.layout], t = {...L.text, ...(p.texts[p.layout] || {})};
+  const k1 = Object.keys(t).find(k => keyRole(k) === role) || role;
+  let s1 = t[k1] || ''; if (R.up) s1 = s1.toUpperCase();
+  const secondRole = ['body','deck','caption','fine'].find(r => r !== role && L.roles.includes(r) && roleSlot(p, r) === slot);
+  const k2 = secondRole ? Object.keys(t).find(k => keyRole(k) === secondRole) : null;
+  const s2 = k2 ? t[k2] : '';
+  const priceK = L.roles.includes('price') && roleSlot(p,'price') === slot && role !== 'price' ? Object.keys(t).find(k => keyRole(k) === 'price') : null;
+  const f = x.f;
+  const w = Math.max(f.w[0], Math.min(f.w[1], R.w + (x.wAdj || 0)));
+  const ref = F[refFor(p, slot)?.font || voice(p,1).font];
+  const pinned = (p.pinned[slot] || []).some(y => y.font === f.id);
+  const trying = ui.preview && ui.preview.font === f.id && (ui.preview.wAdj ?? 0) === (x.wAdj ?? 0);
+  const name = f.fam + (x.styleName ? ' ' + x.styleName : '');
+  const deep = p.depth === 2;
+  const axesRows = deep ? `<div class="axes">${x.r.ax.filter(a => a.k in RANGE || a.k==='sf' || a.k==='ap').map(a => `<span>${a.sym.replace('~','')} ${a.n}</span>${a.k in RANGE ? dumbbell(a.va, a.vb, ...RANGE[a.k]) : dumbbell(null)}<span class="v">${a.fmt ? a.fmt(a.va) + ' · ' + a.fmt(a.vb) : a.txt || 'ước lượng'}</span>`).join('')}</div>
+    <div class="stack" aria-label="Chồng dấu: ${esc(ref.fam)} (nâu) và ${esc(f.fam)} (đen)"><span class="a" style="font-family:${esc(fstack(ref))}">Ữ Ặ Ệ Ỗ ươ</span><span class="b" style="font-family:${esc(fstack(f))}">Ữ Ặ Ệ Ỗ ươ</span></div><span class="stack-cap">chồng dấu · nâu = ${esc(ref.fam)}</span>` : '';
+  const labs = x.r2 ? `${labelsHTML(x.r.labels, 2)}<div class="labels" style="font-size:10.5px;color:var(--muted)">so với ②:</div>${labelsHTML(x.r2.labels, 2)}` : labelsHTML(x.r.labels, deep ? 5 : 3);
+  return `<div class="cand ${ui.focus===i?'focus':''} ${x.current?'current':''} ${trying?'trying':''}" data-idx="${i}" tabindex="${ui.focus===i?0:-1}" role="option" aria-selected="${ui.focus===i}" aria-label="${esc(name)}. ${esc(x.r.sum)}" draggable="true" data-drag-font="${f.id}" data-wadj="${x.wAdj||0}">
+    <div class="c-top"><span class="nm">${esc(name)}</span>${x.current ? '<span class="tag">đang dùng</span>' : ''}${f.noVi ? '<span class="tag" style="color:var(--warn);border-color:rgba(194,65,12,.3)">◆ VI</span>' : ''}
+      <button class="pin" data-act="pin" data-font="${f.id}" aria-pressed="${pinned}" aria-label="${pinned?'Bỏ ghim':'Ghim'} ${esc(f.fam)}" title="Ghim (G)">${ICON.pin}</button></div>
+    <div class="c-s1" style="font-family:${esc(fstack(f))};font-weight:${w};${R.it && f.it ? 'font-style:italic;' : ''}letter-spacing:${(R.tr||0)/2}em">${esc(s1)}</div>
+    ${!deep && (s2 || priceK) ? `<div class="c-s2" style="font-family:${esc(fstack(f))}">${priceK ? `<b style="font-weight:600">${esc(t[priceK])}</b> · ` : ''}${esc(s2)}</div>` : ''}
+    ${labs}
+    ${x.note ? `<div class="note">“${esc(x.note)}”</div>` : ''}
+    ${deep ? axesRows : `<div class="c-sum">${x.r.sum}</div>`}
+    <div class="c-act"><button class="btn" data-act="try" data-idx="${i}" aria-label="Thử ${esc(name)} trên trang (giữ Space)">Thử</button><button class="btn pri" data-act="set" data-idx="${i}" ${x.current?'disabled':''}>Đặt</button>
+      <span class="src-tag">${esc(x.src)}${x.src==='Ghép' ? ' · ' + GATE_VI[x.r.gate] : ''}</span></div>
+  </div>`;
+}
+function trayHTML(p){
+  const slot = activeSlot(p);
+  const v = voice(p, slot);
+  const ref = refFor(p, slot);
+  const vnames = {1:'① Giọng chính', 2:'② Giọng đọc', 3:'③ Giọng nhấn'};
+  const list = trayList(p);
+  ui.list = list;
+  if (ui.focus >= list.length) ui.focus = Math.max(0, list.length - 1);
+  const pinnedN = (p.pinned[slot] || []).length;
+  const tabs = [['pair','Ghép'],['similar','Giống'],['family','Cùng họ'],['lib','Thư viện'],['pinned',`Đã ghim${pinnedN ? ' (' + pinnedN + ')' : ''}`]];
+  let note = '';
+  if (p.tab === 'pair' && !list.length) {
+    const anchorF = F[ref?.font || voice(p,1).font];
+    const reason = (p.projectVi && anchorF.noVi && slot !== 1) ? `Neo ${anchorF.fam} thiếu ký tự tiếng Việt: không có cặp qua kiểm tiếng Việt.` : `Không có ứng viên ${GATE_VI[p.mode]}${p.style!=='all' ? ' kiểu “' + PAIR_STYLES.find(s=>s[0]===p.style)[1] + '”' : ''}.`;
+    note = `<div class="t-note"><span>${esc(reason)}</span>${p.mode!=='experimental' ? `<button class="act" data-act="mode" data-v="${p.mode==='safe'?'controlled':'experimental'}">Xem ${p.mode==='safe'?'Có kiểm soát':'Thử nghiệm'}</button>` : ''}${p.style!=='all' ? '<button class="act" data-act="style-all">Mọi kiểu ghép</button>' : ''}${p.projectVi ? '<button class="act" data-act="vi">Tắt kiểm tiếng Việt</button>' : ''}<span>· Bên dưới: font giống, để bạn vẫn có lựa chọn</span></div>`;
+    ui.list = similarList(p, slot).slice(0, 4);
+  }
+  if (p.tab === 'pinned' && !list.length) note = `<div class="t-note">Chưa ghim font nào. Bấm ${'⚑'} trên thẻ, hoặc chuột phải một font trong thư viện → “Thêm vào Plate”.</div>`;
+  const cards = ui.loading ? Array.from({length:4}, () => '<div class="skel" aria-hidden="true"></div>').join('') : ui.list.map((x, i) => cardHTML(p, x, i)).join('');
+  return `<section class="tray ${p.trayOpen ? '' : 'closed'} ${p.depth===2 ? 'deep' : ''} ${note ? 'has-note' : ''}" aria-label="Khay so sánh">
+    <div class="t-head">
+      <button class="t-collapse" data-act="tray" aria-expanded="${p.trayOpen}" aria-label="${p.trayOpen ? 'Thu khay' : 'Mở khay'} (T)" style="transform:rotate(${p.trayOpen?0:180}deg)">${ICON.chev}</button>
+      <span class="t-title">Cho <b>${vnames[slot] || 'Giọng ' + slot}</b>${ref ? ` · so với ${esc(F[ref.font].fam)}` : ''}</span>
+      <div class="src" role="tablist" aria-label="Nguồn gợi ý">${tabs.map(([k, n]) => `<button role="tab" data-act="tab" data-v="${k}" aria-pressed="${p.tab===k}" aria-selected="${p.tab===k}">${n}</button>`).join('')}</div>
+      <span class="sp"></span>
+      ${p.tab === 'pair' ? `<select class="sel-style" data-act="style" aria-label="Kiểu ghép">${PAIR_STYLES.map(([k,n]) => `<option value="${k}" ${p.style===k?'selected':''}>${n}</option>`).join('')}</select>
+      <div class="modes" role="group" aria-label="Chế độ">${['safe','controlled','experimental'].map(m => `<button data-act="mode" data-v="${m}" aria-pressed="${p.mode===m}">${GATE_VI[m]}</button>`).join('')}</div>` : ''}
+      <span class="counter">${ui.list.length ? (ui.focus + 1) + ' / ' + ui.list.length : ''}</span>
+    </div>
+    <div class="t-body">${p.tab === 'lib' ? `<div class="t-lib"><input id="libq" placeholder="Tìm trong thư viện…" value="${esc(ui.libQ)}" aria-label="Tìm trong thư viện"><span style="font-size:11.5px;color:var(--muted);align-self:center">Kéo thẻ lên một vai hoặc một giọng · chuột phải để chọn nhanh</span></div>` : ''}${note}
+      <div class="cards" role="listbox" aria-label="Ứng viên" id="cards">${cards}</div></div>
+  </section>`;
+}
+
+/* =========================================================================
+   WORKSPACE
+   ========================================================================= */
+function renderPlate(){
+  const p = cur(); if (!p) { S.view = 'home'; return render(); }
+  const tryingName = ui.preview ? F[ui.preview.font].fam : null;
+  $('#main').innerHTML = `<div class="ws ${p.depth===0 ? 'd0' : ''}">
+    <header class="bar">
+      <span class="pname" id="pname" contenteditable="true" spellcheck="false" role="textbox" aria-label="Tên Plate">${esc(p.name)}</span>
+      <button class="starbtn" data-act="star" aria-pressed="${p.starred}" aria-label="${p.starred ? 'Bỏ sao' : 'Đánh sao'} (⌘D)" title="${p.starred ? 'Bỏ sao' : 'Đánh sao — hiện ở sidebar'}">${p.starred ? '★' : '☆'}</button>
+      <div class="tabs" role="group" aria-label="Bố cục">${LAYOUT_KEYS.map((k, i) => `<button data-act="layout" data-v="${k}" aria-pressed="${p.layout===k}" title="⌥${i+1}">${LAYOUTS[k].n}${LAYOUTS[k].p1 ? '<span class="p1">P1</span>' : ''}</button>`).join('')}</div>
+      <span class="sp"></span>
+      <button class="tog" role="switch" data-act="vi" aria-checked="${p.projectVi}" title="Dự án dùng tiếng Việt"><span class="sw"></span><span class="t-l">Tiếng Việt</span><span class="sr">Tiếng Việt</span></button>
+      <button class="tog" role="switch" data-act="xnorm" aria-checked="${p.xnorm}" title="Cân x-height giữa các giọng"><span class="sw"></span><span class="t-l">Cân x-height</span><span class="sr">Cân x-height</span></button>
+      <div class="depth" role="group" aria-label="Độ sâu">${[0,1,2].map(d => `<button data-act="depth" data-v="${d}" aria-pressed="${p.depth===d}" aria-label="Độ sâu ${d} (phím ${d+1})" title="${['Chỉ trang','Chú thích','Phòng thí nghiệm'][d]} · ${d+1}"><i></i></button>`).join('')}</div>
+      <button class="iconbtn" data-act="plate-menu" aria-label="Thêm thao tác">${ICON.more}</button>
+      <span class="saved" id="saved"></span>
+    </header>
+    <div class="body">
+      <div class="canvas" id="canvas">${tryingName ? `<div class="trying-note">Đang thử ${esc(tryingName)} — rời chuột hoặc nhả Space để quay lại</div>` : ''}${pageHTML(p)}</div>
+      <aside class="ledger" aria-label="Sổ giọng">${ledgerHTML(p)}</aside>
+    </div>
+    ${trayHTML(p)}
+  </div>`;
+  paintSaved();
+  if (ui.editing) { const el = document.querySelector(`[data-key="${ui.editing}"]`); if (el) { el.focus(); placeCaretEnd(el); } }
+}
+function placeCaretEnd(el){ const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+function paintSaved(){
+  const el = $('#saved'); if (!el) return;
+  el.className = 'saved' + (savedState==='busy' ? ' busy' : '');
+  el.textContent = savedState === 'busy' ? 'Đang lưu…' : 'Đã lưu';
+}
+function render(){
+  renderSide();
+  if (S.view === 'plate') renderPlate(); else if (S.view === 'lib') renderLib(); else renderHome();
+}
+
+/* =========================================================================
+   HÀNH ĐỘNG
+   ========================================================================= */
+function setVoice(p, slot, fontId, wAdj=0){
+  const v = voice(p, slot); if (!v) return;
+  if (v.font !== fontId && !v.provisional) {
+    p.pinned[slot] = (p.pinned[slot] || []).filter(x => x.font !== v.font);
+    p.pinned[slot].unshift({font:v.font, prev:true});
+  }
+  p.pinned[slot] = (p.pinned[slot] || []).filter(x => x.font !== fontId);
+  v.font = fontId; v.wAdj = wAdj; delete v.provisional;
+  ui.preview = null; touch(true); render();
+  live(`Đã đặt ${F[fontId].fam} cho giọng ${slot}.`);
+}
+function togglePin(p, slot, fontId){
+  const arr = p.pinned[slot] = p.pinned[slot] || [];
+  const i = arr.findIndex(x => x.font === fontId);
+  if (i >= 0) arr.splice(i, 1); else arr.unshift({font:fontId});
+  touch(); render();
+}
+function addVoice(p, fontId){
+  const slot = Math.max(...p.voices.map(v => v.slot)) + 1;
+  const src = voice(p, 2) || voice(p, 1);
+  p.voices.push({slot, font: fontId || src.font, wAdj:0});
+  const role = p.sel && p.sel !== 'wordmark' ? p.sel : (LAYOUTS[p.layout].roles.includes('price') ? 'price' : 'eyebrow');
+  p.roleVoice[role] = slot; p.sel = role; p.tab = 'pair';
+  touch(true); render();
+  live(`Đã thêm giọng ${slot} cho vai ${ROLE[role].n}.`);
+}
+function startTry(i){
+  const p = cur(); const x = ui.list?.[i]; if (!p || !x) return;
+  const slot = activeSlot(p);
+  if (ui.preview && ui.preview.font === x.f.id && (ui.preview.wAdj ?? 0) === (x.wAdj ?? 0)) return;
+  ui.preview = {slot, font:x.f.id, wAdj:x.wAdj ?? voice(p, slot).wAdj}; ui.focus = i;
+  rerenderKeepScroll(); live(`Đang thử ${x.f.fam}.`);
+}
+function endTry(){ if (!ui.preview) return; ui.preview = null; rerenderKeepScroll(); }
+function rerenderKeepScroll(){
+  const c = $('#cards'), cv = $('#canvas');
+  const sx = c ? c.scrollLeft : 0, sy = cv ? cv.scrollTop : 0;
+  const hadFocus = document.activeElement && document.activeElement.closest && document.activeElement.closest('.cand');
+  render();
+  if ($('#cards')) $('#cards').scrollLeft = sx; if ($('#canvas')) $('#canvas').scrollTop = sy;
+  if (hadFocus) { const el = document.querySelector(`.cand[data-idx="${ui.focus}"]`); el && el.focus({preventScroll:true}); }
+}
+function closeCtx(){ document.querySelectorAll('.ctx').forEach(m => m.remove()); ui.ctx = null; }
+function openCtx(x, y, items){
+  closeCtx();
+  const m = document.createElement('div'); m.className = 'ctx'; m.setAttribute('role','menu');
+  m.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.cap ? `<div class="cap">${esc(it.cap)}</div>` : `<button role="menuitem" data-i="${i}">${esc(it.label)}</button>`).join('');
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  m.addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; const it = items[+b.dataset.i]; closeCtx(); it.run(); });
+  m.querySelector('button')?.focus();
+  ui.ctx = m;
+}
+function libCtx(fontId, x, y){
+  const f = F[fontId];
+  const plates = S.plates.filter(p => !p.deleted).sort((a,b) => b.updated - a.updated).slice(0, 5);
+  openCtx(x, y, [
+    {label:'Plate mới từ font này   ⇧P', run:() => createPlate(fontId)},
+    '-', {cap:'Thêm vào Plate ▸ (vào khay, không đổi trang)'},
+    ...plates.map(p => ({label:'   ' + p.name, run:() => {
+      const slot = voice(p,2) ? 2 : 1;
+      p.pinned[slot] = (p.pinned[slot] || []).filter(z => z.font !== fontId); p.pinned[slot].unshift({font:fontId, lib:true});
+      p.updated = Date.now(); persist(); render();
+      toast(`Đã ghim ${f.fam} vào khay “${p.name}”`, {label:'Mở', run:() => { S.open = p.id; S.view = 'plate'; p.tab = 'pinned'; p.sel = p.sel || 'body'; render(); }});
+    }})),
+  ]);
+}
+function trayCardCtx(i, x, y){
+  const p = cur(); const it = ui.list[i]; if (!it) return;
+  const slot = activeSlot(p);
+  openCtx(x, y, [
+    {label:`Đặt cho giọng ${slot}`, run:() => setVoice(p, slot, it.f.id, it.wAdj || 0)},
+    {label:'Ghim / bỏ ghim', run:() => togglePin(p, slot, it.f.id)},
+    {label:'Tạo giọng mới với font này', run:() => addVoice(p, it.f.id)},
+    '-', {label:'Ghi chú…', run:() => { const n = prompt('Ghi chú một dòng cho ' + it.f.fam, ''); if (n == null) return; const arr = p.pinned[slot] = p.pinned[slot] || []; let e = arr.find(z => z.font === it.f.id); if (!e) { e = {font:it.f.id}; arr.unshift(e); } e.note = n; touch(); render(); }},
+  ]);
+}
+
+/* ---------- click ---------- */
+document.addEventListener('click', e => {
+  if (ui.ctx && !e.target.closest('.ctx')) closeCtx();
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act, p = cur();
+  switch(a){
+    case 'nav-lib': S.view = 'lib'; S.open = null; render(); break;
+    case 'nav-home': S.view = 'home'; S.open = null; render(); break;
+    case 'open': S.open = +b.dataset.id; S.view = 'plate'; ui.preview = null; ui.focus = 0; const op = cur(); if (op) { op.updated = op.updated; } render(); break;
+    case 'new-plate': if (S.view === 'lib' && S.libSel) createPlate(S.libSel); else { S.view = 'home'; S.open = null; ui.focusSeed = true; render(); } break;
+    case 'seed': ui.seedQ = ''; createPlate(b.dataset.font); break;
+    case 'seed-layout': S.lastLayout = b.dataset.layout; persist(); render(); break;
+    case 'restore': { const q = S.plates.find(x => x.id === +b.dataset.id); q.deleted = false; persist(); render(); break; }
+    case 'lib-sel': S.libSel = b.dataset.font; render(); break;
+    case 'star': p.starred = !p.starred; touch(true); render(); live(p.starred ? 'Đã đánh sao. Plate hiện ở sidebar.' : 'Đã bỏ sao.'); break;
+    case 'layout': p.layout = b.dataset.v; S.lastLayout = p.layout; if (!LAYOUTS[p.layout].roles.includes(p.sel)) p.sel = LAYOUTS[p.layout].roles.find(r => ROLE[r].v === activeSlot(p)) || LAYOUTS[p.layout].roles[0]; ui.preview = null; ui.editing = null; touch(true); render(); break;
+    case 'vi': p.projectVi = !p.projectVi; touch(); render(); break;
+    case 'xnorm': p.xnorm = !p.xnorm; touch(); render(); break;
+    case 'depth': p.depth = +b.dataset.v; touch(); render(); break;
+    case 'tray': p.trayOpen = !p.trayOpen; touch(); render(); break;
+    case 'tab': p.tab = b.dataset.v; ui.focus = 0; ui.loading = true; render(); setTimeout(() => { ui.loading = false; render(); }, 260); touch(); break;
+    case 'mode': p.mode = b.dataset.v; ui.focus = 0; touch(); render(); break;
+    case 'style-all': p.style = 'all'; touch(); render(); break;
+    case 'price': p.priceStyle = b.dataset.v; touch(); render(); break;
+    case 'hl': ui.highlight = !ui.highlight; render(); break;
+    case 'sel-role': p.sel = b.dataset.role; ui.focus = 0; ui.preview = null; touch(); render(); break;
+    case 'pick-slot': { const r = LAYOUTS[p.layout].roles.find(r => roleSlot(p, r) === +b.dataset.slot); if (r) p.sel = r; p.trayOpen = true; touch(); render(); break; }
+    case 'add-voice': addVoice(p); break;
+    case 'pin': togglePin(p, activeSlot(p), b.dataset.font); break;
+    case 'set': { const x = ui.list[+b.dataset.idx]; if (x) setVoice(p, activeSlot(p), x.f.id, x.wAdj || 0); break; }
+    case 'try': { const i = +b.dataset.idx; if (ui.preview && ui.list[i] && ui.preview.font === ui.list[i].f.id) endTry(); else startTry(i); break; }
+    case 'voice-menu': {
+      const slot = +b.dataset.slot, r = b.getBoundingClientRect();
+      const items = [
+        {label:'Đổi kiểu (Light · Regular · Bold)…', run:() => { const role = LAYOUTS[p.layout].roles.find(x => roleSlot(p, x) === slot); if (role) p.sel = role; p.tab = 'family'; p.trayOpen = true; render(); }},
+        {label:'Tìm font giống', run:() => { const role = LAYOUTS[p.layout].roles.find(x => roleSlot(p, x) === slot); if (role) p.sel = role; p.tab = 'similar'; p.trayOpen = true; render(); }},
+      ];
+      if (!voice(p, slot).anchor) items.push({label:'Đặt làm neo', run:() => { p.voices.forEach(v => v.anchor = v.slot === slot); touch(); render(); }});
+      if (slot > 1) items.push('-', {label:'Bỏ giọng này (vai về giọng còn lại)', run:() => { p.voices = p.voices.filter(v => v.slot !== slot); Object.keys(p.roleVoice).forEach(k => { if (p.roleVoice[k] === slot) delete p.roleVoice[k]; }); touch(true); render(); }});
+      openCtx(r.left - 150, r.bottom + 4, items); break;
+    }
+    case 'plate-menu': {
+      const r = b.getBoundingClientRect();
+      openCtx(r.left - 170, r.bottom + 4, [
+        {label:'Nhân bản (P1)', run:() => { const c = JSON.parse(JSON.stringify(p)); c.id = S.nextId++; c.name = p.name + ' · B'; c.starred = false; c.updated = Date.now(); S.plates.push(c); S.open = c.id; touch(true); render(); toast('Đã nhân bản để so phương án'); }},
+        {label:'Xuất PNG / PDF (P1)', run:() => toast('Xuất có chân trang ghi font và cỡ — chưa có trong prototype')},
+        {label:'Lịch sử (P1)', run:() => toast('Mốc tự động sau mỗi lần Đặt — chưa có trong prototype')},
+        '-', {label:'Xoá (vào “Đã xoá” 30 ngày)', run:() => { p.deleted = true; S.view = 'home'; S.open = null; persist(); render(); toast(`Đã xoá “${p.name}”`, {label:'Hoàn tác', run:() => { p.deleted = false; S.open = p.id; S.view = 'plate'; persist(); render(); }}); }},
+      ]); break;
+    }
+  }
+});
+/* ---------- chọn vai trên trang / sửa chữ ---------- */
+document.addEventListener('click', e => {
+  const el = e.target.closest('.page .role'); if (!el || el.isContentEditable) return;
+  const p = cur(); if (!p) return;
+  if (p.sel !== el.dataset.role) { p.sel = el.dataset.role; ui.focus = 0; ui.preview = null; p.trayOpen = true; touch(); render(); document.querySelector(`[data-key="${el.dataset.key}"]`)?.focus({preventScroll:true}); }
+});
+document.addEventListener('dblclick', e => {
+  const el = e.target.closest('.page .role'); if (!el) return;
+  ui.editing = el.dataset.key; ui.highlight = ui.highlight; render();
+});
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (el.id === 'pname') { const p = cur(); const v = el.textContent.trim(); if (p && v && v !== p.name) { p.name = v; touch(true); renderSide(); } }
+  if (el.classList && el.classList.contains('role') && el.isContentEditable) {
+    const p = cur(); const key = el.dataset.key;
+    const clone = el.cloneNode(true); clone.querySelector('.role-tag')?.remove();
+    let v = clone.textContent.replace(/\s+/g,' ').trim();
+    const R = ROLE[keyRole(key)];
+    const orig = (p.texts[p.layout] || {})[key] ?? LAYOUTS[p.layout].text[key];
+    if (R.up && v === orig.toUpperCase()) v = orig;
+    if (v && v !== orig) { p.texts[p.layout] = {...(p.texts[p.layout] || {}), [key]: v}; touch(); }
+    ui.editing = null;
+    setTimeout(render, 0);
+    if (key === 'wordmark' && p.fresh && v) { p.fresh = false; toast(`Đổi tên Plate thành “${v}”?`, {label:'Đổi', run:() => { p.name = v; touch(true); render(); }}); }
+  }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'seedq') { ui.seedQ = e.target.value; ui.focusSeed = true; renderHome(); }
+  if (e.target.id === 'libq') { ui.libQ = e.target.value; const pos = e.target.selectionStart; renderPlate(); const i = $('#libq'); i.focus(); i.setSelectionRange(pos, pos); }
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.act === 'style') {
+    const p = cur(); p.style = e.target.value;
+    if (p.style === 'break' && p.mode !== 'experimental') { p.mode = 'experimental'; toast('“Phá cách” cần chế độ Thử nghiệm — đã chuyển.'); }
+    ui.focus = 0; touch(); render();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'pname' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  if (e.target.classList?.contains('role') && e.target.isContentEditable && e.key === 'Escape') { e.preventDefault(); e.target.blur(); }
+});
+/* ---------- thử bằng hover ---------- */
+document.addEventListener('pointerover', e => {
+  const b = e.target.closest('[data-act="try"]'); if (b) startTry(+b.dataset.idx);
+});
+document.addEventListener('pointerout', e => {
+  const b = e.target.closest('[data-act="try"]'); if (b && !b.contains(e.relatedTarget) && !ui.spaceHeld) endTry();
+});
+/* ---------- menu ngữ cảnh ---------- */
+document.addEventListener('contextmenu', e => {
+  const fc = e.target.closest('.fcard'); if (fc) { e.preventDefault(); S.libSel = fc.dataset.font; renderLib(); libCtx(fc.dataset.font, e.clientX, e.clientY); return; }
+  const cd = e.target.closest('.cand'); if (cd) { e.preventDefault(); trayCardCtx(+cd.dataset.idx, e.clientX, e.clientY); return; }
+  const ro = e.target.closest('.page .role'); if (ro) { e.preventDefault(); const p = cur(); const role = ro.dataset.role;
+    openCtx(e.clientX, e.clientY, [
+      {label:'Chọn font khác…', run:() => { p.sel = role; p.trayOpen = true; render(); }},
+      {label:'Sửa chữ (nhấp đúp)', run:() => { ui.editing = ro.dataset.key; render(); }},
+      '-', {cap:'Chuyển sang giọng'}, ...p.voices.filter(v => v.slot !== roleSlot(p, role)).map(v => ({label:`   ${v.slot} · ${F[v.font].fam}`, run:() => { p.roleVoice[role] = v.slot; p.sel = role; touch(true); render(); }})),
+      {label:'Tách thành giọng mới', run:() => { p.sel = role; addVoice(p); }},
+      '-', {label:'Khôi phục chữ mẫu', run:() => { const t = p.texts[p.layout]; if (t) delete t[ro.dataset.key]; touch(); render(); }},
+    ]); }
+});
+/* ---------- kéo thả ---------- */
+let drag = null;
+document.addEventListener('dragstart', e => {
+  const f = e.target.closest('[data-drag-font]'); const r = e.target.closest('[data-drag-role]');
+  if (r) { drag = {role:r.dataset.dragRole}; }
+  else if (f) { drag = {font:f.dataset.dragFont, wAdj:+(f.dataset.wadj||0)}; }
+  if (drag) { e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', JSON.stringify(drag)); }
+});
+document.addEventListener('dragover', e => {
+  if (!drag) return;
+  const t = e.target.closest(drag.role ? '[data-drop-slot]' : '[data-drop-slot],[data-drop-role],#start,[data-drop-plate]');
+  document.querySelectorAll('.drop').forEach(x => x !== t && x.classList.remove('drop'));
+  if (t) { e.preventDefault(); t.classList.add('drop'); }
+});
+document.addEventListener('drop', e => {
+  if (!drag) return; e.preventDefault();
+  document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop'));
+  const p = cur();
+  const plateNav = e.target.closest('[data-drop-plate]');
+  if (plateNav && drag.font) { const q = S.plates.find(x => x.id === +plateNav.dataset.dropPlate); const slot = voice(q,2) ? 2 : 1; q.pinned[slot] = (q.pinned[slot]||[]).filter(z => z.font !== drag.font); q.pinned[slot].unshift({font:drag.font, lib:true}); persist(); toast(`Đã ghim ${F[drag.font].fam} vào khay “${q.name}”`); drag = null; return; }
+  if (e.target.closest('#start') && drag.font) { createPlate(drag.font); drag = null; return; }
+  const slotEl = e.target.closest('[data-drop-slot]'), roleEl2 = e.target.closest('[data-drop-role]');
+  if (drag.role && slotEl && p) {
+    if (slotEl.dataset.dropSlot === 'new') { p.sel = drag.role; addVoice(p); } else { p.roleVoice[drag.role] = +slotEl.dataset.dropSlot; p.sel = drag.role; touch(true); render(); }
+  } else if (drag.font && p) {
+    if (slotEl) { if (slotEl.dataset.dropSlot === 'new') addVoice(p, drag.font); else setVoice(p, +slotEl.dataset.dropSlot, drag.font, drag.wAdj); }
+    else if (roleEl2) { const role = roleEl2.dataset.dropRole, fid = drag.font; p.sel = role; setVoice(p, roleSlot(p, role), fid, drag.wAdj); toast(`Đã đặt ${F[fid].fam} cho cả giọng của “${ROLE[role].n}”`, {label:'Chỉ vai này', run:() => { p.sel = role; addVoice(p, fid); }}); }
+  }
+  drag = null;
+});
+document.addEventListener('dragend', () => { drag = null; document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
+
+/* ---------- bàn phím ---------- */
+document.addEventListener('keydown', e => {
+  const typing = e.target.closest('input,textarea,[contenteditable="true"]');
+  if (e.key === 'Escape') {
+    if (ui.ctx) { closeCtx(); return; }
+    if (ui.preview) { endTry(); return; }
+  }
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); S.view = 'home'; S.open = null; ui.focusSeed = true; render(); return; }
+  if (typing) return;
+  if (S.view === 'lib' && e.shiftKey && e.key.toLowerCase() === 'p' && S.libSel) { e.preventDefault(); createPlate(S.libSel); return; }
+  const p = cur(); if (S.view !== 'plate' || !p) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); p.starred = !p.starred; touch(true); render(); return; }
+  if (e.altKey && /^Digit[1-5]$/.test(e.code)) { e.preventDefault(); const k = LAYOUT_KEYS[+e.code.slice(-1)-1]; document.querySelector(`[data-act="layout"][data-v="${k}"]`)?.click(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const n = ui.list?.length || 0;
+  const focusCard = () => { const el = document.querySelector(`.cand[data-idx="${ui.focus}"]`); el?.focus(); el?.scrollIntoView({block:'nearest', inline:'nearest'}); };
+  if (e.key === 'ArrowRight' && n) { e.preventDefault(); ui.focus = Math.min(n-1, ui.focus+1); if (ui.preview) ui.preview = null; rerenderKeepScroll(); focusCard(); }
+  else if (e.key === 'ArrowLeft' && n) { e.preventDefault(); ui.focus = Math.max(0, ui.focus-1); if (ui.preview) ui.preview = null; rerenderKeepScroll(); focusCard(); }
+  else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.closest('.page')) {
+    e.preventDefault(); const roles = [...document.querySelectorAll('.page:not([aria-hidden]) .role')].filter(el => !el.closest('[aria-hidden]'));
+    const i = roles.indexOf(e.target.closest('.role')); const nx = roles[Math.max(0, Math.min(roles.length-1, i + (e.key==='ArrowDown'?1:-1)))];
+    if (nx) { p.sel = nx.dataset.role; ui.focus = 0; render(); document.querySelector(`.page [data-key="${nx.dataset.key}"]`)?.focus(); }
+  }
+  else if (e.key === ' ' && n && !e.repeat && (e.target.closest('.cand') || e.target === document.body)) { e.preventDefault(); ui.spaceHeld = true; startTry(ui.focus); }
+  else if (e.key === 'Enter' && e.target.closest('.cand')) { e.preventDefault(); const x = ui.list[ui.focus]; if (x && !x.current) setVoice(p, activeSlot(p), x.f.id, x.wAdj || 0); }
+  else if (e.key === 'Enter' && e.target.closest('.page .role')) { e.preventDefault(); ui.editing = e.target.closest('.role').dataset.key; render(); }
+  else if (e.key.toLowerCase() === 'g' && n) { const x = ui.list[ui.focus]; if (x) togglePin(p, activeSlot(p), x.f.id); }
+  else if (e.key.toLowerCase() === 't') { p.trayOpen = !p.trayOpen; touch(); render(); }
+  else if (['1','2','3'].includes(e.key)) { p.depth = +e.key - 1; touch(); render(); }
+});
+document.addEventListener('keyup', e => { if (e.key === ' ' && ui.spaceHeld) { ui.spaceHeld = false; endTry(); } });
+$('#reset').onclick = () => { localStorage.removeItem(KEY); location.reload(); };
+// trang dài: cho phép mở trực tiếp ?plate=1 hoặc ?view=lib để chụp màn hình
+(() => { const q = new URLSearchParams(location.search);
+  if (q.get('fresh') === '1') { S = {plates:seedPlates(), view:'home', open:null, nextId:4, lastLayout:'menu', libSel:null}; }
+  if (q.get('empty') === '1') { S = {plates:[], view:'home', open:null, nextId:1, lastLayout:'menu', libSel:null}; }
+  if (q.get('plate')) { S.open = +q.get('plate'); S.view = 'plate'; const p = cur(); if (p) { if (q.get('layout')) p.layout = q.get('layout'); if (q.get('depth')) p.depth = +q.get('depth'); if (q.get('tab')) p.tab = q.get('tab'); if (q.get('sel')) p.sel = q.get('sel'); } }
+  if (q.get('view') === 'lib') S.view = 'lib';
+  if (q.get('seed') && F[q.get('seed')]) { setTimeout(() => createPlate(q.get('seed')), 0); }
+})();
+render();
+</script>
+</body>
+</html>
