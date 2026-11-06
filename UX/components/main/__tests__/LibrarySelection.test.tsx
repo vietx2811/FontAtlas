@@ -85,6 +85,68 @@ describe('Library multi-select', () => {
     expect(screen.queryByTestId('selection-count')).toBeNull();
   });
 
+  describe('Esc', () => {
+    const select2 = () => { const c = cells(); click(c[0]); click(c[1], { metaKey: true }); expect(useSelectionStore.getState().rows.size).toBe(2); return c; };
+    const esc = (el: Element = document.body) => { act(() => { fireEvent.keyDown(el, { key: 'Escape' }); }); };
+
+    it('with a context menu open: the first Esc closes only the menu, the next one clears the selection', async () => {
+      await mount();
+      const c = select2();
+      fireEvent.contextMenu(c[0], { clientX: 20, clientY: 20 });
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      esc(document.activeElement ?? document.body);          // focus đang ở trong menu
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(useSelectionStore.getState().rows.size).toBe(2);
+      esc();
+      expect(useSelectionStore.getState().rows.size).toBe(0);
+    });
+
+    it('…even when focus has left the menu (Esc on the body): menu closes first, selection stays', async () => {
+      await mount();
+      const c = select2();
+      fireEvent.contextMenu(c[0], { clientX: 20, clientY: 20 });
+      (document.activeElement as HTMLElement | null)?.blur();
+      esc(document.body);
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(useSelectionStore.getState().rows.size).toBe(2);
+      esc();
+      expect(useSelectionStore.getState().rows.size).toBe(0);
+    });
+
+    it('with a tooltip showing: the first Esc closes only the tooltip, wherever focus is', async () => {
+      await mount();
+      const c = select2();
+      fireEvent.pointerEnter(within(c[0]).getByTestId('vi-mark'));
+      await act(async () => { await new Promise(r => setTimeout(r, 520)); });
+      expect(screen.getByRole('tooltip')).toBeInTheDocument();
+      esc(c[0]);
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      expect(useSelectionStore.getState().rows.size).toBe(2);
+      esc(c[0]);
+      expect(useSelectionStore.getState().rows.size).toBe(0);
+    });
+
+    it('Esc while typing in the sample or search box leaves the selection alone', async () => {
+      await mount();
+      select2();
+      for (const type of ['text', 'search']) {
+        const input = document.createElement('input'); input.type = type; document.body.appendChild(input); input.focus();
+        esc(input);
+        expect(useSelectionStore.getState().rows.size).toBe(2);
+        input.remove();
+      }
+    });
+
+    it('a plain Esc on a focused card clears the selection and closes the panel', async () => {
+      await mount();
+      const c = select2();
+      c[1].focus();
+      esc(c[1]);
+      expect(useSelectionStore.getState().rows.size).toBe(0);
+      expect(useUiStore.getState().selectedId).toBeNull();
+    });
+  });
+
   it('⌘A does not hijack typing in an input', async () => {
     await mount();
     const input = document.createElement('input'); document.body.appendChild(input); input.focus();

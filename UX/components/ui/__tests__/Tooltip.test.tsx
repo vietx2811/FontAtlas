@@ -119,4 +119,17 @@ describe('Tooltip', () => {
     await advance(TOOLTIP_DELAY_MS);
     expect(tip()).toBeNull();
   });
+
+  it('Esc closes a hover-opened tooltip from anywhere and does not reach other Esc handlers', async () => {
+    const other = vi.fn(); document.addEventListener('keydown', other);
+    render(<Tooltip label="A"><button type="button">a</button></Tooltip>);
+    fireEvent.pointerEnter(screen.getByRole('button')); await advance(TOOLTIP_DELAY_MS + 10);
+    expect(tip()).not.toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(tip()).toBeNull();
+    expect(other).not.toHaveBeenCalled();           // Esc đầu tiên chỉ dành cho tooltip
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(other).toHaveBeenCalledTimes(1);         // Esc tiếp theo đi tiếp như thường
+    document.removeEventListener('keydown', other);
+  });
 });

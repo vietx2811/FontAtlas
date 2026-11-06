@@ -72,6 +72,15 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
     el.style.visibility = 'visible';
   }, [open]);
 
+  // Esc đóng tooltip đang hiện dù focus ở đâu (tooltip mở bằng hover khi focus nằm trên thẻ…). Chặn tại giai đoạn capture để Esc đó KHÔNG
+  // lọt tới các phím tắt khác (bỏ chọn, đóng menu): Esc đầu tiên chỉ đóng tooltip.
+  useEffect(() => {
+    if (!open) return;
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') { hide(); e.stopPropagation(); } };
+    document.addEventListener('keydown', onEsc, true);
+    return () => document.removeEventListener('keydown', onEsc, true);
+  }, [open, hide]);
+
   // Cuộn hoặc đổi cỡ cửa sổ: vị trí cũ không còn đúng.
   useEffect(() => {
     if (!open) return;
@@ -96,7 +105,7 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
     onPointerDown: (e: React.PointerEvent) => { own.onPointerDown?.(e); hide(); },
     onFocus: (e: React.FocusEvent) => { own.onFocus?.(e); if (focusVisible(e.currentTarget)) { clearTimeout(timer.current); reveal(); } },
     onBlur: (e: React.FocusEvent) => { own.onBlur?.(e); hide(); },
-    onKeyDown: (e: React.KeyboardEvent) => { own.onKeyDown?.(e); if (e.key === 'Escape' && open) { hide(); e.stopPropagation(); } },
+    onKeyDown: (e: React.KeyboardEvent) => { own.onKeyDown?.(e); },
   } as Partial<Handlers>);
 
   return (
