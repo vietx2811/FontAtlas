@@ -151,6 +151,9 @@ export function Menu({ entries, anchor, onClose, label, focusFirst, returnFocus 
   useEffect(() => {
     const down = (e: Event) => { if (!root.current?.contains(e.target as Node)) close(); };
     const scroll = (e: Event) => { if (!root.current?.contains(e.target as Node)) close(); };
+    // Focus có thể đã rời menu (bấm vào vùng không focus được): Esc vẫn đóng được. Esc trong menu đã được List xử lý và chặn nổi bọt.
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', esc);
     document.addEventListener('pointerdown', down, true);
     document.addEventListener('contextmenu', down, true);
     window.addEventListener('scroll', scroll, true);
@@ -158,6 +161,7 @@ export function Menu({ entries, anchor, onClose, label, focusFirst, returnFocus 
     window.addEventListener('resize', close);
     window.addEventListener('blur', close);
     return () => {
+      document.removeEventListener('keydown', esc);
       document.removeEventListener('pointerdown', down, true);
       document.removeEventListener('contextmenu', down, true);
       window.removeEventListener('scroll', scroll, true);

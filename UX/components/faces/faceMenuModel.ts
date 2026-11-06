@@ -39,7 +39,7 @@ export function projectEntries(rows: readonly FaceRow[], ctx: Pick<FaceMenuCtx, 
   const list: MenuEntry[] = collections === null
     ? [{ id: 'loading', label: 'Đang tải…', disabled: true }]
     : collections.map(c => ({ id: `col-${c.id}`, label: c.name, hint: String(c.itemCount), disabled: c.id === here, reason: 'Đang xem dự án này', onSelect: () => actions.addToProject(rows, c.id, c.name) }));
-  return [...list, { type: 'sep', id: 'sep-new' }, { id: 'new-project', label: 'Dự án mới…', onSelect: () => actions.newProject(rows) }];
+  return [...list, ...(list.length ? [{ type: 'sep' as const, id: 'sep-new' }] : []), { id: 'new-project', label: 'Dự án mới…', onSelect: () => actions.newProject(rows) }];
 }
 
 export function buildFaceMenu(rows: readonly FaceRow[], ctx: FaceMenuCtx): MenuEntry[] {
@@ -64,7 +64,7 @@ export function buildFaceMenu(rows: readonly FaceRow[], ctx: FaceMenuCtx): MenuE
   const tagItems: MenuEntry[] = ctx.tags === null
     ? [{ id: 'loading', label: 'Đang tải…', disabled: true }]
     : ctx.tags.map(t => ({ id: `tag-${t.id}`, label: t.name, hint: String(t.faceCount), onSelect: () => a.tag(rows, t.id, t.name) }));
-  out.push({ id: 'tag', label: 'Gắn thẻ', items: [...tagItems, { type: 'sep', id: 'sep-tag' }, { id: 'new-tag', label: 'Thẻ mới…', onSelect: () => a.newTag(rows) }] });
+  out.push({ id: 'tag', label: 'Gắn thẻ', items: [...tagItems, ...(tagItems.length ? [{ type: 'sep' as const, id: 'sep-tag' }] : []), { id: 'new-tag', label: 'Thẻ mới…', onSelect: () => a.newTag(rows) }] });
 
   const usable = rows.filter(r => !r.missing);
   const allActive = usable.length > 0 && usable.every(ctx.isActive);

@@ -81,3 +81,11 @@ describe('buildFaceMenu', () => {
     expect(c.actions.tag).toHaveBeenCalledWith([expect.objectContaining({ faceId: 2 })], 2, 'Serif');
   });
 });
+
+describe('empty lists', () => {
+  it('no stray separator above "Dự án mới…" / "Thẻ mới…" when there is nothing to list', () => {
+    const e = buildFaceMenu([makeRow(1)], ctx({ collections: [], tags: [] }));
+    expect(find(e, 'project').items!.map(x => x.type ?? 'item')).toEqual(['item']);
+    expect(find(e, 'tag').items!.map(x => x.type ?? 'item')).toEqual(['item']);
+  });
+});
