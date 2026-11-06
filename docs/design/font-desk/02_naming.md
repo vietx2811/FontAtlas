@@ -1,5 +1,8 @@
 # 02 — Đặt tên tính năng và hệ thuật ngữ
 
+> **Cập nhật vòng 2 (2026-11-06):** chủ app đã chốt tên **Pairing Desk** (tính năng) và **Case** (đơn vị); không dùng "Plate". Bỏ định hướng F&B, đối tượng là Graphic Designer / Art Director / Layout Artist. Hệ từ, persona và layout mới: xem `05_layout_options_v2.md`. Nội dung dưới đây giữ nguyên làm lịch sử quyết định.
+
+
 - **Ngày:** 2026-11-06 · **Kết luận:** tên chính **Plate**, dự phòng **Case**. Đơn vị làm việc cũng gọi là **Plate**; mục sidebar là **Plates** (thay "Pairing Labs").
 
 ---

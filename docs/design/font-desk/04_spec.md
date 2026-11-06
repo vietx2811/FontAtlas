@@ -1,5 +1,8 @@
 # 04 — Spec: Plates
 
+> **Cập nhật vòng 2 (2026-11-06):** chủ app đã chốt tên **Pairing Desk** (tính năng) và **Case** (đơn vị); không dùng "Plate". Bỏ định hướng F&B, đối tượng là Graphic Designer / Art Director / Layout Artist. Hệ từ, persona và layout mới: xem `05_layout_options_v2.md`. Nội dung dưới đây giữ nguyên làm lịch sử quyết định.
+
+
 - **Ngày:** 2026-11-06 · **Trạng thái:** đề xuất, chờ chủ app duyệt · **Prototype:** `docs/design/prototype/font-desk-v1.html`
 - **Hướng:** lai A + B ở `03_concepts.md`: **Trang + Sổ giọng + Khay**. Thuật ngữ theo `02_naming.md` §4.
 - **Ký hiệu ưu tiên:** **MVP** (bản đầu của tính năng) · **P1** (nên có ngay sau) · **Sau**.

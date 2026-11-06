@@ -1,5 +1,8 @@
 # 01 — Nghiên cứu: không gian ghép chữ theo use case
 
+> **Cập nhật vòng 2 (2026-11-06):** chủ app đã chốt tên **Pairing Desk** (tính năng) và **Case** (đơn vị); không dùng "Plate". Bỏ định hướng F&B, đối tượng là Graphic Designer / Art Director / Layout Artist. Hệ từ, persona và layout mới: xem `05_layout_options_v2.md`. Nội dung dưới đây giữ nguyên làm lịch sử quyết định.
+
+
 - **Ngày:** 2026-11-06 · **Người viết:** Visual/UX worker (phiên font-desk) · **Nhánh:** `docs/font-desk` (từ `dev/mvp` 484b29d)
 - **Tên tạm trong yêu cầu:** "Font Desk". Tên chọn ở `02_naming.md` (**Plate**). File này dùng "Font Desk" khi trích yêu cầu, còn lại dùng "Plate".
 - **Nhãn mức chắc chắn:** **[XM]** đã xem nguồn gốc hoặc tài liệu nội bộ đã kiểm · **[TT]** qua bên thứ ba hoặc kết quả tìm kiếm · **[SL]** suy luận của tôi, cần kiểm bằng người dùng thật.

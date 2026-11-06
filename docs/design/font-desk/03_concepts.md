@@ -1,5 +1,8 @@
 # 03 — Các cách tiếp cận và đánh giá
 
+> **Cập nhật vòng 2 (2026-11-06):** chủ app đã chốt tên **Pairing Desk** (tính năng) và **Case** (đơn vị); không dùng "Plate". Bỏ định hướng F&B, đối tượng là Graphic Designer / Art Director / Layout Artist. Hệ từ, persona và layout mới: xem `05_layout_options_v2.md`. Nội dung dưới đây giữ nguyên làm lịch sử quyết định.
+
+
 - **Ngày:** 2026-11-06 · **Đầu vào:** `01_research.md` (insight I1–I8), `02_naming.md` (thuật ngữ).
 - **Kết luận:** chọn **hướng lai A + B** — "Trang + Sổ giọng + Khay" — đặt C (so nhiều phương án) và D (bản đồ) làm lớp sau.
 
