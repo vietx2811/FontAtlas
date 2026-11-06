@@ -18,6 +18,14 @@ describe('libraryEmpty', () => {
     expect(sc.action).toBeUndefined();
     expect(libraryEmpty(ctx({ sources: [src({ faceCount: 0 })] }))).toMatchObject({ kind: 'sources-empty', action: { id: 'rescan', label: 'Quét lại' } });
   });
+  it('filtered no-match never masks no sources, scanning or permission failure', () => {
+    const filters = { filtered: true, query: 'x', viOnly: true };
+    expect(libraryEmpty(ctx({ ...filters, sources: [] })).kind).toBe('no-sources');
+    expect(libraryEmpty(ctx({ ...filters, scanning: true })).kind).toBe('scanning');
+    expect(libraryEmpty(ctx({ ...filters, view: 'src:1', access: { 1: 'timeout' } })).kind).toBe('source-access');
+    expect(libraryEmpty(ctx({ ...filters, sources: [src({ faceCount: 0 })] })).kind).toBe('sources-empty');
+    expect(libraryEmpty(ctx({ filtered: true, familyName: 'Family A' })).text).toContain('Family A');
+  });
   it('a search with no hits: names the text and offers to clear the filters', () => {
     const e = libraryEmpty(ctx({ query: 'phở' }));
     expect(e.kind).toBe('no-match');

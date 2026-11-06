@@ -44,3 +44,11 @@ Vitest onboarding: nhiều folder, nguồn sẵn/legacy, cancel, duplicate/neste
 - Stress trong Core luôn estimated khi đo được (`o_harmonic_fit`); mock đã khớp và UI giữ nhãn Ước lượng từ quality. Không sửa analyzer.
 - WindowShell có `data-native`: chỉ browser mock (`false`) thêm nền sheet để sidebar tối đọc được. Native vẫn transparent cho vibrancy. Theme dùng color-scheme đúng sáng/tối cho scrollbar.
 - Detail trở về đầu khi đổi font/tab/style; có nút đóng. Cả Mở font/Xem family có focus-visible 2px accent.
+
+## Follow-up sau review độc lập
+
+Lead duyệt ngày 2026-11-06: discovery/stats chỉ dựa metadata + filters/viOnly, bỏ membership family/Gần đây/Đang bật. Library vẫn dùng faceKeys. Chuyển trang theo scope mới về 0 vĩnh viễn; nếu total giảm làm trang rỗng thì quay về trang hợp lệ.
+
+Giữ filters/viOnly khi Xem family để tôn trọng ý định lọc đang có. Nhưng membership lấy TOÀN family bằng getFamilyStyles không kèm filter, dedupe named instances theo FaceKey, kiểm giới hạn 2000. Chip riêng hàng trong TopBar “Family: X · có lọc”, tooltip n/N kiểu, nút × thoát scope; nới/bỏ lọc sẽ thấy lại các kiểu còn lại.
+
+Giữ stats/draft/full mode khi refetch. Cận đã chọn ngoài domain mới vẫn hiển thị nguyên, blur không sửa là no-op. Slider chỉ commit cuối pointer/key gesture; aria-valuetext có unit. Checkbox mặc định bao focus bằng floor/ceil; nhập cận dưới floor, cận trên ceil. Trạng thái dữ liệu thật (quét/rỗng/thiếu quyền) ưu tiên hơn thông báo không khớp bộ lọc. Lỗi refresh onboarding giữ cùng lỗi từng thư mục. Chưa bổ sung hủy batch folder giữa chừng theo phạm vi Lead.

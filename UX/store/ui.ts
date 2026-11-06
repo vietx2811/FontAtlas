@@ -77,23 +77,29 @@ export const parseFaceKey = (id: string): FaceKeyDto => {
   return { hashHex: id.slice(0, i), faceIndex: Number(id.slice(i + 1)) };
 };
 
-/** Gần đây/Đang bật đi qua `faceKeys` (6a b2cc0fd); danh sách rỗng là kết quả rỗng, không phải "không lọc". */
-export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope'>>): GridQuery {
+/** Metadata dùng cho discovery/stats; không phụ thuộc membership của family/Gần đây/Đang bật. */
+export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'> & Partial<Pick<UiState, 'filters'>>): GridQuery {
   const q: GridQuery = { ...s.filters };
+  if (s.view === 'star') q.favoritesOnly = true;
+  else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
+  else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
+  if (s.tag !== null) q.tagIds = [Number(s.tag)];
+  if (s.query.trim()) q.text = s.query.trim();
+  if (s.viOnly) q.vi = 'full';
+  return q;
+}
+
+/** Gần đây/Đang bật/family giới hạn library bằng faceKeys; discovery dùng toMetadataQuery. */
+export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope'>>): GridQuery {
+  const q = toMetadataQuery(s);
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
   } else if (s.view === 'active') {
     q.faceKeys = [...s.active].flatMap(([hashHex, faces]) => faces.map(faceIndex => ({ hashHex, faceIndex }))).slice(0, FACE_KEYS_MAX);
     q.sort = 'match';
-  } else if (s.view === 'star') q.favoritesOnly = true;
-  else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
-  else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
+  }
   if (s.familyScope) q.faceKeys = s.familyScope.faces;
-  if (s.tag !== null) q.tagIds = [Number(s.tag)];
-  const text = s.query.trim();
-  if (text) q.text = text;
-  if (s.viOnly) q.vi = 'full';
   return q;
 }
 

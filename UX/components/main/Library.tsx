@@ -47,7 +47,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
   const filtered = !!(filters.variable != null || filters.italic != null || filters.rawAxisRanges?.length || familyScope);
-  const empty: Empty = filtered ? { kind: 'no-match', glyph: 'ở', text: familyScope ? `Không có kiểu font khớp bộ lọc trong ${familyScope.name}` : 'Không có font khớp bộ lọc', action: { id: 'clear-filters', label: 'Xoá bộ lọc' } } : libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud });
+  const empty: Empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud, filtered, familyName: familyScope?.name });
   const onEmptyAction = (id: string) => {
     const ui = useUiStore.getState();
     if (id === 'add-folder') ui.requestAddFolder();

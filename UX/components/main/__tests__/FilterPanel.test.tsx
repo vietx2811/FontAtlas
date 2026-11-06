@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import type { AxisStatsDto } from '../../../api';
@@ -44,6 +44,86 @@ describe('FilterPanel', () => {
     expect(screen.getByRole('textbox', { name: 'Độ nghiêng từ' })).toHaveValue('-10,1');
     expect(screen.getByRole('textbox', { name: 'Độ nghiêng đến' })).toHaveValue('15,1');
   });
+  it('selects focus floor/ceil and rounds typed lower down, upper up', async () => {
+    await mount([{ ...axis, p1: -5.04, p99: 10.04 }]);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Độ nghiêng' }));
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range).toEqual([-5.1, 10.1]);
+    const from = screen.getByRole('textbox', { name: 'Độ nghiêng từ' });
+    const to = screen.getByRole('textbox', { name: 'Độ nghiêng đến' });
+    fireEvent.change(from, { target: { value: '-3.011' } }); fireEvent.blur(from);
+    fireEvent.change(to, { target: { value: '9,011' } }); fireEvent.blur(to);
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range).toEqual([-3.1, 9.1]);
+    expect(from).toHaveValue('-3,1'); expect(to).toHaveValue('9,1');
+  });
+
+  it('does not lose a decimal unit from binary floating-point rounding at typed boundaries', async () => {
+    await mount([axis, { axis: 'contrast', unit: 'ratio', count: 10, min: 0, max: 2, p1: .5, p99: 1.5 }]);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Tương phản nét' }));
+    const from = screen.getByRole('textbox', { name: 'Tương phản nét từ' });
+    fireEvent.change(from, { target: { value: '1,001' } }); fireEvent.blur(from);
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range[0]).toBe(1.001);
+    expect(from).toHaveValue('1,001');
+  });
+
+  it('only commits slider gestures on release and exposes the unit to assistive technology', async () => {
+    await mount(); fireEvent.click(screen.getByRole('checkbox', { name: 'Độ nghiêng' }));
+    const changes: unknown[] = [];
+    const off = useUiStore.subscribe((s, old) => { if (s.filters !== old.filters) changes.push(s.filters); });
+    const low = screen.getByRole('slider', { name: 'Độ nghiêng cận dưới' });
+    fireEvent.change(low, { target: { value: '-9.04' } });
+    fireEvent.change(low, { target: { value: '-8.04' } });
+    expect(changes).toHaveLength(0);
+    expect(low).toHaveAttribute('aria-valuetext', '-8,1 °');
+    fireEvent.pointerUp(low);
+    expect(changes).toHaveLength(1);
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range).toEqual([-8.1, 15]);
+    const high = screen.getByRole('slider', { name: 'Độ nghiêng cận trên' });
+    fireEvent.change(high, { target: { value: '14.04' } }); fireEvent.keyUp(high, { key: 'ArrowLeft' });
+    expect(changes).toHaveLength(2);
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range).toEqual([-8.1, 14.1]);
+    off();
+  });
+
+  it('keeps selected bounds outside a contracted domain and does not commit an unchanged draft', async () => {
+    const { spy } = await mount();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Độ nghiêng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toàn khoảng' }));
+    spy.mockResolvedValue([{ ...axis, min: -5, max: 5, p1: -2, p99: 2 }]);
+    const from = screen.getByRole('textbox', { name: 'Độ nghiêng từ' });
+    act(() => useUiStore.getState().setView('src:2'));
+    await waitFor(() => expect(screen.getByText('Min -5,0 · max 5,0')).toBeTruthy());
+    expect(screen.getByRole('textbox', { name: 'Độ nghiêng từ' })).toBe(from);
+    fireEvent.blur(from);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(toGridQuery(useUiStore.getState()).rawAxisRanges![0].range).toEqual([-30, 45]);
+    expect(screen.getByRole('slider', { name: 'Độ nghiêng cận dưới' })).toHaveAttribute('min', '-30');
+    expect(screen.getByRole('slider', { name: 'Độ nghiêng cận trên' })).toHaveAttribute('max', '45');
+  });
+
+  it('retains drafts and full-domain mode through refetch and ignores recent membership', async () => {
+    const { spy } = await mount();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Độ nghiêng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Toàn khoảng' }));
+    const from = screen.getByRole('textbox', { name: 'Độ nghiêng từ' });
+    fireEvent.change(from, { target: { value: '-24,04' } });
+    let resolve!: (s: AxisStatsDto[]) => void;
+    spy.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    act(() => useUiStore.getState().setView('src:2'));
+    await screen.findByText('Đang cập nhật miền số đo…');
+    expect(screen.getByRole('textbox', { name: 'Độ nghiêng từ' })).toBe(from);
+    expect(from).toHaveValue('-24,04');
+    await act(async () => resolve([{ ...axis, min: -100, max: 100, p1: -50, p99: 60 }]));
+    expect(from).toHaveValue('-24,04');
+    expect(screen.getByRole('button', { name: 'Khoảng P1–P99' })).toBeTruthy();
+    act(() => useUiStore.getState().setView('recent'));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({}));
+    const before = spy.mock.calls.length;
+    act(() => useUiStore.getState().select('new:0'));
+    await act(async () => {});
+    expect(spy).toHaveBeenCalledTimes(before);
+    expect(screen.getByRole('button', { name: /Lọc ·/ })).not.toHaveAttribute('aria-pressed');
+  });
+
   it('handles missing and constant stats without fabricating a domain', async () => {
     await mount([axis, { axis: 'contrast', unit: 'ratio', count: 1, min: 1, max: 1, p1: 1, p99: 1 }, { axis: 'spacing', unit: 'x_height_ratio', count: 0, min: null, max: null, p1: null, p99: null }]);
     expect(screen.getByRole('checkbox', { name: 'Khoảng cách chữ' })).toBeDisabled();

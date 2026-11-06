@@ -15,8 +15,12 @@ export const UNIT_LABEL: Record<string, string> = {
 };
 export const precisionFor = (unit: string | null | undefined): number => unit === 'deg' ? 1 : 3;
 export function roundedValue(value: number, unit: string | null | undefined, direction: 'nearest' | 'down' | 'up' = 'nearest'): number {
-  const scale = 10 ** precisionFor(unit);
-  return (direction === 'down' ? Math.floor(value * scale) : direction === 'up' ? Math.ceil(value * scale) : Math.round(value * scale)) / scale;
+  const digits = precisionFor(unit);
+  // Dịch dấu thập phân qua exponent để 1.001 × 1000 không thành 1000.9999999999.
+  const [coefficient, exponent = '0'] = String(value).split('e');
+  const shifted = Number(`${coefficient}e${Number(exponent) + digits}`);
+  const integer = direction === 'down' ? Math.floor(shifted) : direction === 'up' ? Math.ceil(shifted) : Math.round(shifted);
+  return integer / 10 ** digits;
 }
 export const numberText = (value: number, unit?: string | null): string => new Intl.NumberFormat('vi-VN', { useGrouping: false, minimumFractionDigits: precisionFor(unit), maximumFractionDigits: precisionFor(unit) }).format(value);
 export const unitText = (unit: string | null): string => unit ? UNIT_LABEL[unit] ?? unit : '';

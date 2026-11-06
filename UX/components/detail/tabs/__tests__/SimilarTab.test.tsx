@@ -51,7 +51,7 @@ describe('SimilarTab', () => {
     expect(useUiStore.getState().selectedId).toBe(faceKey(page.items[0].representative.face));
     expect(useUiStore.getState().panelTab).toBe('spec');
     fireEvent.click(within(items[0]).getByRole('button', { name: 'Xem family' }));
-    expect(useUiStore.getState().familyScope).toEqual({ name: page.items[0].family, faces: page.items[0].faces });
+    await waitFor(() => expect(useUiStore.getState().familyScope).toEqual({ name: page.items[0].family, faces: page.items[0].faces }));
     expect(useUiStore.getState().selectedId).toBeNull();
     const { toGridQuery } = await import('../../../../store/ui');
     expect(toGridQuery(useUiStore.getState()).faceKeys).toEqual(page.items[0].faces);
@@ -75,6 +75,68 @@ describe('SimilarTab', () => {
     spy.mockResolvedValueOnce({ total: 0, offset: 0, items: [] });
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect(await screen.findByTestId('zero-state')).toHaveTextContent('Không có family tương tự');
+  });
+
+  it('discovers other families inside a family scope and ignores recent/active membership changes', async () => {
+    const api = createMockApi(); const d = await detail('Inter');
+    const styles = await api.getFamilyStyles('Inter');
+    useUiStore.getState().openFamily({ name: 'Inter', faces: styles.map(s => s.face) });
+    const spy = vi.spyOn(api, 'similarFamilies');
+    render(<SimilarTab api={api} detail={d} />);
+    await screen.findAllByTestId('similar-hit');
+    expect(spy.mock.calls[0][2]).not.toHaveProperty('faceKeys');
+    expect((await spy.mock.results[0].value).items.every(g => g.family !== 'Inter')).toBe(true);
+    act(() => { useUiStore.getState().setView('recent'); useUiStore.getState().select('another:0'); });
+    await act(async () => {});
+    act(() => { useUiStore.getState().setView('active'); useUiStore.setState({ active: new Map([['different', [0]]]) }); });
+    await act(async () => {});
+    expect(spy).toHaveBeenCalledTimes(1);
+    act(() => useUiStore.getState().setFilters({ italic: true }));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    expect(spy.mock.calls[1][2]).toMatchObject({ italic: true, offset: 0 });
+    expect(spy.mock.calls[1][2]).not.toHaveProperty('faceKeys');
+  });
+
+  it('resets offset permanently on a scope round trip and recovers after total shrinks', async () => {
+    const api = createMockApi(); const d = await detail();
+    const original = api.similarFamilies.bind(api);
+    let shrink = false;
+    const spy = vi.spyOn(api, 'similarFamilies').mockImplementation(async (face, opts, q = {}) => {
+      const p = await original(face, opts, q);
+      if (shrink) return { ...p, total: 3, items: q.offset ? [] : p.items.slice(0, 3) };
+      return p;
+    });
+    render(<SimilarTab api={api} detail={d} />);
+    await screen.findAllByTestId('similar-hit');
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(screen.getByText('7–12 / 15')).toBeTruthy());
+    act(() => useUiStore.getState().setQuery('Inter'));
+    await waitFor(() => expect(spy.mock.calls.at(-1)![2]).toMatchObject({ text: 'Inter', offset: 0 }));
+    act(() => useUiStore.getState().setQuery(''));
+    await waitFor(() => expect(screen.getByText('1–6 / 15')).toBeTruthy());
+    shrink = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(screen.getByText('1–3 / 3')).toBeTruthy());
+    expect(spy.mock.calls.at(-1)![2]).toMatchObject({ offset: 0 });
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+  });
+
+  it('opens all family members without filtering so clearing filters reveals the missing styles', async () => {
+    const api = createMockApi(); const d = await detail();
+    useUiStore.getState().setFilters({ italic: true });
+    const family = vi.spyOn(api, 'getFamilyStyles');
+    render(<SimilarTab api={api} detail={d} />);
+    const items = await screen.findAllByTestId('similar-hit');
+    fireEvent.click(within(items[0]).getByRole('button', { name: 'Xem family' }));
+    await waitFor(() => expect(useUiStore.getState().familyScope).not.toBeNull());
+    const s = useUiStore.getState();
+    expect(family).toHaveBeenCalledWith(s.familyScope!.name);
+    const { toGridQuery } = await import('../../../../store/ui');
+    const filtered = await api.queryFaces(toGridQuery(s));
+    expect(filtered.total).toBeLessThan(s.familyScope!.faces.length);
+    act(() => s.setFilters({}));
+    const all = await api.queryFaces(toGridQuery(useUiStore.getState()));
+    expect(all.total).toBe(s.familyScope!.faces.length);
   });
 
   it('does not silently truncate a family over the 2000 face query limit', async () => {
