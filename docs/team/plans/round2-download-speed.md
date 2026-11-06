@@ -12,3 +12,7 @@ Thay đổi trong `fontatlas-embed/src/model.rs`:
 - curl một luồng cùng URL: 37.8 s (9.8 MB/s), chỉ phần vision, không SHA.
 
 Giới hạn: feed+checkpoint (SHA, ghi, fsync) chạy đồng bộ trên runtime current-thread, chặn I/O ~2.3 s / 42 s; head-of-line: một chunk chậm chặn cửa sổ sau 3 chunk (đúng yêu cầu bộ đệm có biên).
+
+## Thử tách feed khỏi runtime mạng (đã revert)
+
+Thread mạng riêng (runtime + client riêng, cửa sổ 3 range, kênh bounded cap 1) và thread gọi làm feed/checkpoint/progress. Test fixture (feed chậm vẫn giữ range bay; huỷ khi kênh bị chặn dừng < 2.5 s) và `cargo test --workspace` (704) + clippy đều qua. Bench thật 3 lần: 42.1 s, 43.3 s, 43.0 s (8.6-8.8 MB/s), không khác 9ab91ba (41.9-47.0 s) quá nhiễu, nên bỏ để giữ thiết kế đơn giản. Khoảng cách còn lại với curl (37.8 s) khó nằm ở feed; có thể là 3 kết nối song song chia băng thông không hơn gì một luồng trên đường này, hoặc TTFB mỗi range.
