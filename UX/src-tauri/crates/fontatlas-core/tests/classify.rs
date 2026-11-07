@@ -1,14 +1,23 @@
 mod common;
 use common::*;
-use fontatlas_core::classify::{Class, ClassifyInput, Metrics, Usage, classify};
+use fontatlas_core::classify::{CONF_MIN, Class, ClassifyInput, Metrics, Usage, classify, subclass_for};
 use fontatlas_core::{FontFile, MeasureAt};
 
-fn cls(name: &str) -> fontatlas_core::classify::Classification {
+fn inp(name: &str) -> ClassifyInput {
     let f = FontFile::open(&fixture(name)).unwrap();
     let face = &f.faces().unwrap()[0];
     let m = serde_json::to_value(face.metadata()).unwrap();
     let a = serde_json::to_value(face.measure(MeasureAt::Standard)).unwrap();
-    classify(&ClassifyInput::from_json(&m, &a))
+    ClassifyInput::from_json(&m, &a)
+}
+
+fn cls(name: &str) -> fontatlas_core::classify::Classification {
+    classify(&inp(name))
+}
+
+/// Lớp tốt nhất máy đoán: class nếu đã đủ tin, ngược lại `candidate` (độ tin cậy dưới CONF_MIN).
+fn best(c: &fontatlas_core::classify::Classification) -> Class {
+    c.candidate.unwrap_or(c.class)
 }
 
 #[test]
@@ -22,7 +31,7 @@ fn fixtures_get_expected_classes() {
         ("fira_sans_regular.ttf", Class::Sans),
     ] {
         let c = cls(file);
-        assert_eq!(c.class, want, "{file}: {c:?}");
+        assert_eq!(best(&c), want, "{file}: {c:?}");
         assert!(c.confidence > 0.0 && !c.signals.is_empty(), "{file}");
     }
 }
@@ -30,14 +39,28 @@ fn fixtures_get_expected_classes() {
 #[test]
 fn playfair_is_didone_and_has_display_usage() {
     let c = cls("playfair_display.ttf");
-    assert_eq!(c.subclass.as_deref(), Some("didone"), "{c:?}");
+    assert_eq!(subclass_for(&inp("playfair_display.ttf"), Class::Serif).as_deref(), Some("didone"), "{c:?}");
     assert!(c.usage.contains(&Usage::Display) || c.usage.contains(&Usage::Text), "{:?}", c.usage);
 }
 
 #[test]
 fn script_fixture_is_script() {
     let c = cls("dancing_script_vf.ttf");
-    assert_eq!(c.class, Class::Script, "{c:?}");
+    assert_eq!(best(&c), Class::Script, "{c:?}");
+    // tín hiệu nét nối / baseline nhảy phải tham gia
+    assert!(c.signals.iter().any(|s| s.detail.contains("chạm cả hai mép")), "{c:?}");
+    assert!(c.signals.iter().any(|s| s.detail.contains("nhảy")), "{c:?}");
+}
+
+#[test]
+fn below_conf_min_is_uncertain_with_candidate_never_a_wrong_guess() {
+    for file in ["roboto.ttf", "open_sans.ttf", "playfair_display.ttf", "libre_baskerville.ttf", "source_code_pro.ttf", "dancing_script_vf.ttf"] {
+        let c = cls(file);
+        match c.class {
+            Class::Uncertain => assert!(c.subclass.is_none() && (c.candidate.is_some() || c.confidence == 0.0), "{file}: {c:?}"),
+            _ => assert!(c.candidate.is_none() && c.confidence >= CONF_MIN, "{file}: {c:?}"),
+        }
+    }
 }
 
 #[test]

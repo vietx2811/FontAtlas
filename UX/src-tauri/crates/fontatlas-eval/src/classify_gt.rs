@@ -108,7 +108,19 @@ pub fn truth(category: &str, tags: &[(String, u32)]) -> Option<Truth> {
     }
     let subs: BTreeSet<&'static str> = tags.iter().filter_map(|(t, _)| tag_sub(t)).collect();
     // Có đúng một nhãn con (cùng class) thì mới đánh giá subclass
-    let sub = if subs.len() == 1 && primary != Class::Display { subs } else { BTreeSet::new() };
+    let sub = if primary == Class::Mono {
+        // Mono của GF mang tag hình dạng của họ gốc: Sans → sans_mono; Serif/Slab (không có Sans) → serif_mono
+        let has = |p: &str| tags.iter().any(|(t, _)| t.starts_with(p));
+        match (has("/Sans/"), has("/Serif/") || has("/Slab/")) {
+            (true, false) => BTreeSet::from(["sans_mono"]),
+            (false, true) => BTreeSet::from(["serif_mono"]),
+            _ => BTreeSet::new(),
+        }
+    } else if subs.len() == 1 && primary != Class::Display {
+        subs
+    } else {
+        BTreeSet::new()
+    };
     Some(Truth { primary, accept, sub })
 }
 
@@ -149,6 +161,13 @@ mod tests {
     fn rounded_sans_accepts_display() {
         let g = truth("SANS_SERIF", &t(&["/Sans/Rounded"])).unwrap();
         assert!(g.accept.contains(&Class::Display) && g.accept.contains(&Class::Sans));
+    }
+
+    #[test]
+    fn mono_subclass_comes_from_shape_family_tags() {
+        assert_eq!(truth("MONOSPACE", &t(&["/Sans/Geometric"])).unwrap().sub.iter().copied().collect::<Vec<_>>(), vec!["sans_mono"]);
+        assert_eq!(truth("MONOSPACE", &t(&["/Slab/Humanist"])).unwrap().sub.iter().copied().collect::<Vec<_>>(), vec!["serif_mono"]);
+        assert!(truth("MONOSPACE", &t(&[])).unwrap().sub.is_empty());
     }
 
     #[test]

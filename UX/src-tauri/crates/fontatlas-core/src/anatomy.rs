@@ -43,6 +43,10 @@ pub struct Anatomy {
     pub g_storeys: Metric,
     /// Đầu nét trên 'c' (Estimated). |Spearman r với contrast| = 0.447 trên google/fonts (Plan 3).
     pub terminal: Metric,
+    /// Tỉ lệ chữ a–z có mực chạm cả hai mép advance (chữ viết liền nét).
+    pub connect: Metric,
+    /// Độ nhảy đỉnh/đáy của chữ cao bằng x-height, ÷ x-height.
+    pub bounce: Metric,
 }
 
 fn settings(font: &FontRef, at: &MeasureAt) -> Vec<(String, f32)> {
@@ -139,6 +143,8 @@ pub fn measure_with_filter(
         a_storeys: detail::a_storeys(&ctx),
         g_storeys: detail::g_storeys(&ctx),
         terminal: detail::terminal_c_normal(&ctx),
+        connect: detail::connect_lc(&ctx, xh),
+        bounce: detail::bounce_lc(&ctx, xh),
         location: set,
     }
 }
@@ -189,5 +195,7 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
         a_storeys: f("a_center_vertical_runs"),
         g_storeys: f("g_center_vertical_runs"),
         terminal: f("c_upper_terminal_normal_over_thin"),
+        connect: f("frac_a_z_ink_touches_both_advance_edges"),
+        bounce: f("xheight_letters_top_bottom_jitter_over_xh"),
     }
 }

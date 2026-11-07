@@ -392,6 +392,8 @@ pub struct ClassificationDto {
     /// snake_case, `null` khi chưa đủ chắc.
     pub subclass: Option<String>,
     pub confidence: f32,
+    /// Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
+    pub candidate: Option<String>,
     pub signals: Vec<ClassSignalDto>,
     /// "text" | "display" | "ui"
     pub usage: Vec<String>,

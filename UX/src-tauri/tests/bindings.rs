@@ -146,7 +146,8 @@ fn detail() -> FaceDetailDto {
             class: "serif".into(),
             label: "Serif".into(),
             subclass: Some("didone".into()),
-            confidence: 0.82,
+            confidence: 0.91,
+            candidate: None,
             signals: vec![ClassSignalDto {
                 source: "measure".into(),
                 detail: "contrast 3.4".into(),

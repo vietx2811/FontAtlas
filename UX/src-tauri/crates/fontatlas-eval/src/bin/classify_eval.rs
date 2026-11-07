@@ -58,7 +58,7 @@ fn main() {
         }
     }
     fams.retain(|f| split == "all" || fontatlas_embed::family_split(&f.name) == split);
-    let results: Vec<(String, Truth, fontatlas_core::classify::Classification)> = fams
+    let results: Vec<(String, Truth, fontatlas_core::classify::Classification, ClassifyInput)> = fams
         .par_iter()
         .filter_map(|f| {
             let gt = truth(&f.category, tagmap.get(&f.name).map(Vec::as_slice).unwrap_or(&[]))?;
@@ -67,25 +67,28 @@ fn main() {
             let inp = ClassifyInput::from_json(&serde_json::to_value(&face.metadata).ok()?, &serde_json::to_value(&face.anatomy).ok()?);
             let mut row = format!("{},{},{}", f.name.replace(',', " "), gt.primary.label(), gt.sub.iter().next().copied().unwrap_or(""));
             let m = &inp.m;
-            for x in [m.serif_foot, m.contrast, m.stress_abs, m.slant_abs, m.aperture, m.width, m.width_cv, m.spacing, m.stem, m.x_height_em, m.a_storeys, m.g_storeys] {
+            for x in [m.serif_foot, m.contrast, m.stress_abs, m.slant_abs, m.aperture, m.width, m.width_cv, m.spacing, m.stem, m.x_height_em, m.a_storeys, m.g_storeys, m.connect, m.bounce, m.terminal, m.aperture_e, m.counter] {
                 row.push_str(&format!(",{}", x.map_or(String::new(), |v| format!("{v:.4}"))));
             }
             let md = serde_json::to_value(&face.metadata).ok()?;
             row.push_str(&format!(",{},{},{},{}", md["panose"][0], md["family_class"][0], md["is_fixed_pitch"], gt.accept.iter().map(|c| c.label()).collect::<Vec<_>>().join("|")));
-            Some((row, gt, classify(&inp)))
+            let c = classify(&inp);
+            let sc = |k: Class| c.signals.iter().filter(|s| s.vote == k).map(|s| s.weight).sum::<f32>();
+            row.push_str(&format!(",{},{},{:.3},{:.2},{:.2},{:.2},{:.2},{:.2},{},{}", c.class.label(), c.subclass.clone().unwrap_or_default(), c.confidence, sc(Class::Serif), sc(Class::Sans), sc(Class::Script), sc(Class::Display), sc(Class::Mono), fontatlas_embed::family_split(&f.name), gt.sub.iter().next().copied().unwrap_or("")));
+            Some((row, gt, c, inp))
         })
         .collect();
     if let Some(d) = &dump {
         let mut rows: Vec<&str> = results.iter().map(|r| r.0.as_str()).collect();
         rows.sort();
-        std::fs::write(d, format!("name,gt,gtsub,serif_foot,contrast,stress,slant,aperture,width,width_cv,spacing,stem,xh,a_st,g_st,panose0,sfc,fixed,accept\n{}\n", rows.join("\n"))).expect("ghi dump");
+        std::fs::write(d, format!("name,gt,gtsub,serif_foot,contrast,stress,slant,aperture,width,width_cv,spacing,stem,xh,a_st,g_st,connect,bounce,terminal,aperture_e,counter,panose0,sfc,fixed,accept,pred,predsub,conf,s_serif,s_sans,s_script,s_display,s_mono,split,gtsub2\n{}\n", rows.join("\n"))).expect("ghi dump");
     }
     let mut md = String::new();
     let n = results.len();
     let (mut ok, mut unc, mut wrong) = (0, 0, 0);
     let mut cm: BTreeMap<(&str, &str), usize> = BTreeMap::new();
     let mut wrong_list = Vec::new();
-    for (name, gt, c) in &results {
+    for (name, gt, c, _) in &results {
         let pred = c.class;
         *cm.entry((gt.primary.label(), pred.label())).or_default() += 1;
         if pred == Class::Uncertain {
@@ -118,18 +121,38 @@ fn main() {
         }
         md.push('\n');
     }
+    // precision / coverage theo ngưỡng confidence (đoán thô = class hoặc candidate)
+    let raw = |c: &fontatlas_core::classify::Classification| c.candidate.unwrap_or(c.class);
+    let curve = |title: &str, pick: &dyn Fn(&Truth) -> bool| -> String {
+        let rows: Vec<_> = results.iter().filter(|r| pick(&r.1)).collect();
+        let total = rows.len();
+        let mut o = format!("\n## {title} ({total} họ)\n\n| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |\n|---|---|---|---|---|\n");
+        for th in [0.0f32, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.88, 0.9, 0.93, 0.95] {
+            let sel: Vec<_> = rows.iter().filter(|(_, _, c, _)| raw(c) != Class::Uncertain && c.confidence >= th).collect();
+            let good = sel.iter().filter(|(_, gt, c, _)| gt.accept.contains(&raw(c))).count();
+            o.push_str(&format!("| {th:.2} | {} | {:.1}% | {} | {:.1}% |\n", sel.len(), pct(sel.len(), total), good, pct(good, sel.len())));
+        }
+        o
+    };
+    use Class::{Mono, Sans, Serif};
+    md.push_str(&curve("Precision/coverage — toàn bộ", &|_| true));
+    md.push_str(&curve("Precision/coverage — chỉ nhóm văn bản (đáp án Serif/Sans/Mono)", &|g| matches!(g.primary, Serif | Sans | Mono)));
+    md.push_str(&curve("Precision/coverage — theo hình dạng (loại họ GF chỉ có nhãn Display theo mục đích, không tag hình dạng)", &|g| !(g.primary == Class::Display && g.accept.len() == 1)));
     // subclass
     let (mut sn, mut sok, mut sunc, mut swrong) = (0, 0, 0, 0);
     let mut scm: BTreeMap<(String, String), usize> = BTreeMap::new();
-    for (_, gt, c) in &results {
-        if gt.sub.is_empty() || !gt.accept.contains(&c.class) {
+    for (_, gt, c, inp) in &results {
+        // subclass đo riêng khỏi ngưỡng class: dùng class đoán thô (candidate) nếu đã bị hạ về Uncertain
+        let rc = c.candidate.unwrap_or(c.class);
+        if gt.sub.is_empty() || !gt.accept.contains(&rc) {
             continue;
         }
         sn += 1;
-        let pred = c.subclass.clone().unwrap_or_else(|| "uncertain".into());
+        let sub = c.subclass.clone().or_else(|| fontatlas_core::classify::subclass_for(inp, rc));
+        let pred = sub.clone().unwrap_or_else(|| "uncertain".into());
         let truth = gt.sub.iter().next().copied().unwrap_or("").to_string();
         *scm.entry((truth.clone(), pred.clone())).or_default() += 1;
-        if c.subclass.is_none() {
+        if sub.is_none() {
             sunc += 1;
         } else if gt.sub.contains(pred.as_str()) {
             sok += 1;

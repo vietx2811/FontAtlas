@@ -17,7 +17,11 @@ label: string,
 /**
  * snake_case, `null` khi chưa đủ chắc.
  */
-subclass: string | null, confidence: number, signals: Array<ClassSignalDto>, 
+subclass: string | null, confidence: number, 
+/**
+ * Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
+ */
+candidate: string | null, signals: Array<ClassSignalDto>, 
 /**
  * "text" | "display" | "ui"
  */

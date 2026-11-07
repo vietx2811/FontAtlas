@@ -95,7 +95,10 @@ fn get_face_playfair() {
     let ch = f.axes.iter().find(|a| a.key == "contrast_h").expect("contrast_h");
     assert_eq!(ch.unit.as_deref(), Some("ratio"));
     assert!(ch.raw_value.is_some_and(|v| v > 1.0), "Playfair H stem/bar > 1");
-    assert_eq!(f.classification.as_deref(), Some("Serif"));
+    // Độ tin cậy hiệu chỉnh: Playfair (contrast rất cao) dưới CONF_MIN → Uncertain nhưng giữ candidate Serif.
+    let ci = &f.classification_info;
+    assert_eq!(ci.candidate.as_deref().or(Some(ci.class.as_str())), Some("serif"), "{ci:?}");
+    assert_eq!(f.classification.is_none(), ci.class == "uncertain");
     assert_eq!(f.vietnamese.total, 134);
     assert!(f.vietnamese.supports && f.vietnamese.missing.is_empty());
     assert!(
@@ -573,7 +576,11 @@ fn class_filter_facets_and_override_use_effective_class() {
     // facet đếm đủ mọi face; mỗi class lọc ra đúng số facet báo
     let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
     assert_eq!(facets.iter().map(|f| u64::from(f.count)).sum::<u64>(), total);
-    let mono = facets.iter().find(|f| f.class == "mono").expect("Source Code Pro là Mono");
+    // ngưỡng CONF_MIN có thể hạ Source Code Pro về Uncertain: ghi đè thủ công để có facet xác định
+    let scp = find(&st, "Source Code Pro");
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&scp), class: "mono".into(), subclass: Some("sans_mono".into()) }).unwrap();
+    let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    let mono = facets.iter().find(|f| f.class == "mono").expect("override → Mono");
     let q = FaceQueryDto { classes: vec!["mono".into()], limit: 50, ..Default::default() };
     assert_eq!(library::query_faces(&st, &q).unwrap().total, u64::from(mono.count));
 

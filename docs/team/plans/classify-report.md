@@ -1,4 +1,219 @@
-# Font Desk D1 — báo cáo phân loại (classify, core-0.5.0)
+# Font Desk D1 — báo cáo phân loại (classify, core-0.6.0) — Vòng 2
+
+Nhánh `feat/classify`. Đáp án và chia tune/test giữ nguyên như vòng 1 (xem phần "Vòng 1" bên dưới). Mọi hằng số
+(ngưỡng cue, hệ số hiệu chỉnh, luật subclass Sans/Mono) được chọn trên **tune**; **test** chạy với cấu hình đã chốt.
+Ngoại lệ cần nói rõ: sau lần chạy test đầu, tôi thấy ma trận subclass của test có 19 họ `sans_mono` bị gán `serif_mono`;
+luật Mono được sửa theo dữ liệu **tune** (19/19 họ Mono có nhãn con là sans_mono, `serif_foot` trung vị 2.8 vì i/l/j có chân)
+chứ không fit lại trên test, rồi chạy test lần cuối.
+
+## Tóm tắt
+
+| Chỉ tiêu | Vòng 1 (test) | Vòng 2 tune | Vòng 2 test | Mục tiêu |
+|---|---|---|---|---|
+| Sai trên phần đã gán (class) | 22.5% | 4.2% | **4.1%** | ≤ 5% — **đạt** |
+| Phần đã gán / tổng (độ phủ) | 94.8% | 36.4% | 39.7% | chấp nhận giảm |
+| Uncertain | 5.2% | 63.6% | 60.3% | — |
+| Subclass đúng/đã gán (họ đúng class, đo trên class thô) | 64.9% | 74.9% | **70.7%** | ≥ 70% — đạt sát ngưỡng |
+
+**Đánh đổi phải biết:** để sai ≤ 5% thì ~60% họ bị hạ về `Uncertain`. Máy vẫn trả `candidate` (lớp đoán thô) và `confidence`
+để UI hiện "có lẽ là Sans" thay vì để trống. Toàn bộ đường cong precision/coverage ở dưới; muốn nhiều nhãn hơn thì hạ
+`CONF_MIN` (ví dụ 0.80 → ~94% precision, 60% độ phủ trên test).
+
+## Thay đổi vòng 2
+
+1. **Hiệu chỉnh confidence** (`classify::calibrate`): hồi quy logistic L2 fit trên tune (973 họ, 5-fold CV nội bộ),
+   đặc trưng = class đoán, lề điểm, bằng chứng Display/Script còn lại, và vài số đo "văn bản điển hình"
+   (width_cv, spacing, aperture_e, counter, contrast, terminal, bounce, connect). `confidence` là P(đúng);
+   dưới `CONF_MIN = 0.88` thì `class = Uncertain` và `candidate` giữ lớp đoán. Script fit: `docs/team/eval/classify_calibrate.py`.
+2. **Số đo mới cho Script** (core, `anatomy.connect`, `anatomy.bounce`; `ANALYZER_VERSION = core-0.6.0`):
+   `connect` = tỉ lệ chữ a–z có mực chạm cả hai mép advance; `bounce` = độ nhảy đỉnh/đáy chữ cao bằng x-height ÷ x-height.
+   Trung vị tune: Script connect 0.40 / bounce 0.044, các class khác 0.15–0.19 / 0.013–0.016. Độ nghiêng thân vẫn đo bằng I/T/|.
+   Recall Script tune 102 → 136/170 trước khi hiệu chỉnh.
+3. **Display chỉ khi có bằng chứng hình học rõ** (điểm Display ≥ 2.0: từ khoá/Panose/sFamilyClass hoặc ≥ 2 số đo cực đoan);
+   còn lại để Serif/Sans/Script + tag usage `Display`. GF dán nhãn Display theo mục đích nên Display gần như không còn được gán:
+   test chỉ có 1/243 họ Display được gán đúng, 219 → `Uncertain`, 23 gán sang Serif/Sans/Script (một phần được GT chấp nhận khi họ có tag hình dạng).
+4. **Subclass Sans** (luật mới fit trên tune): 'a' một tầng → geometric; aperture ≥ 92° hoặc aperture_e > 0.217 → humanist;
+   width ≥ 0.97 & contrast ≤ 1.34 → geometric; còn lại grotesque (aperture < 68° hoặc terminal ≥ 1.55) / neo_grotesque.
+   Sans (mô phỏng trên 249 họ tune có nhãn con): 72.3% → 76.3%. **grotesque ↔ neo_grotesque vẫn nhập nhằng** (test: neo_grotesque 9/21 đúng, 10 nhầm grotesque).
+5. **Subclass Mono**: chỉ gán `serif_mono` khi tên/Panose/sFamilyClass khai báo serif, còn lại `sans_mono` (xem lý do ở trên).
+   Ground truth cũng sửa: nhãn con của Mono lấy từ tag họ gốc (Sans → sans_mono, Serif/Slab → serif_mono) thay vì tag Sans/Serif chung chung.
+6. **Script formal/handwritten**: thử cây quyết định và quét ngưỡng trên spacing/contrast/x-height/stress; không hơn mức
+   "luôn handwritten" (78% trong GF), CV ~76%. Giữ luật cũ. Chưa có tín hiệu đáng tin để tách formal và handwritten.
+
+## Kết quả test (1045 họ) — toàn bộ
+
+## Class — tập `test` (1045 họ có đáp án)
+
+| đúng | Uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 398 | 630 | 17 | 38.1% | 95.9% |
+
+Hàng = đáp án (primary), cột = dự đoán.
+
+| GT \ dự đoán | Serif | Sans | Mono | Script | Display | Blackletter | Symbol | Uncertain |
+|---|---|---|---|---|---|---|---|---|
+| Serif | 96 | 0 | 0 | 0 | 0 | 0 | 0 | 84 |
+| Sans | 5 | 231 | 1 | 0 | 0 | 0 | 4 | 154 |
+| Mono | 0 | 0 | 16 | 0 | 0 | 0 | 0 | 18 |
+| Script | 0 | 0 | 0 | 34 | 1 | 0 | 0 | 148 |
+| Display | 7 | 14 | 0 | 2 | 1 | 0 | 0 | 219 |
+| Blackletter | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 7 |
+
+## Precision/coverage — toàn bộ (1045 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 996 | 95.3% | 793 | 79.6% |
+| 0.50 | 934 | 89.4% | 777 | 83.2% |
+| 0.60 | 872 | 83.4% | 752 | 86.2% |
+| 0.70 | 782 | 74.8% | 699 | 89.4% |
+| 0.75 | 717 | 68.6% | 647 | 90.2% |
+| 0.80 | 627 | 60.0% | 587 | 93.6% |
+| 0.85 | 517 | 49.5% | 495 | 95.7% |
+| 0.88 | 408 | 39.0% | 395 | 96.8% |
+| 0.90 | 305 | 29.2% | 297 | 97.4% |
+| 0.93 | 160 | 15.3% | 157 | 98.1% |
+| 0.95 | 107 | 10.2% | 107 | 100.0% |
+
+## Kết quả test — chỉ nhóm văn bản (đáp án Serif/Sans/Mono)
+
+## Precision/coverage — chỉ nhóm văn bản (đáp án Serif/Sans/Mono) (609 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 581 | 95.4% | 544 | 93.6% |
+| 0.50 | 566 | 92.9% | 537 | 94.9% |
+| 0.60 | 554 | 91.0% | 529 | 95.5% |
+| 0.70 | 528 | 86.7% | 510 | 96.6% |
+| 0.75 | 508 | 83.4% | 492 | 96.9% |
+| 0.80 | 477 | 78.3% | 468 | 98.1% |
+| 0.85 | 429 | 70.4% | 422 | 98.4% |
+| 0.88 | 349 | 57.3% | 343 | 98.3% |
+| 0.90 | 274 | 45.0% | 271 | 98.9% |
+| 0.93 | 149 | 24.5% | 147 | 98.7% |
+| 0.95 | 107 | 17.6% | 107 | 100.0% |
+
+Nhóm văn bản: sai khoảng 1,7% ở độ phủ ~57% (ngưỡng 0.88) — đủ tốt cho các bộ lọc "Serif/Sans/Mono" trong Library.
+
+## Kết quả test — theo hình dạng
+
+## Precision/coverage — theo hình dạng (loại họ GF chỉ có nhãn Display theo mục đích, không tag hình dạng) (898 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 856 | 95.3% | 762 | 89.0% |
+| 0.50 | 820 | 91.3% | 747 | 91.1% |
+| 0.60 | 786 | 87.5% | 730 | 92.9% |
+| 0.70 | 733 | 81.6% | 691 | 94.3% |
+| 0.75 | 681 | 75.8% | 643 | 94.4% |
+| 0.80 | 609 | 67.8% | 586 | 96.2% |
+| 0.85 | 506 | 56.3% | 495 | 97.8% |
+| 0.88 | 402 | 44.8% | 395 | 98.3% |
+| 0.90 | 300 | 33.4% | 297 | 99.0% |
+| 0.93 | 159 | 17.7% | 157 | 98.7% |
+| 0.95 | 107 | 11.9% | 107 | 100.0% |
+
+Bảng này loại họ GF chỉ mang nhãn Display theo mục đích (không tag hình dạng) — chỉ để tham khảo: app không hứa gán Display cho các font đó.
+
+## Subclass (test)
+
+## Subclass — họ đã đúng class và có nhãn con duy nhất (526)
+
+| đúng | uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 372 | 0 | 154 | 70.7% | 70.7% |
+
+| GT subclass | dự đoán | số họ |
+|---|---|---|
+| casual_brush | casual_brush | 1 |
+| casual_brush | transitional | 1 |
+| didone | didone | 8 |
+| didone | humanist_oldstyle | 2 |
+| didone | slab | 2 |
+| didone | transitional | 8 |
+| formal | casual_brush | 1 |
+| formal | formal | 19 |
+| formal | handwritten | 7 |
+| geometric | decorative | 1 |
+| geometric | geometric | 32 |
+| geometric | humanist | 8 |
+| grotesque | geometric | 10 |
+| grotesque | grotesque | 17 |
+| grotesque | humanist | 5 |
+| grotesque | neo_grotesque | 1 |
+| handwritten | formal | 32 |
+| handwritten | handwritten | 43 |
+| humanist | geometric | 13 |
+| humanist | grotesque | 3 |
+| humanist | humanist | 155 |
+| humanist | neo_grotesque | 2 |
+| humanist_oldstyle | humanist_oldstyle | 16 |
+| humanist_oldstyle | transitional | 8 |
+| neo_grotesque | geometric | 5 |
+| neo_grotesque | grotesque | 10 |
+| neo_grotesque | humanist | 7 |
+| neo_grotesque | neo_grotesque | 9 |
+| sans_mono | sans_mono | 19 |
+| sans_mono | serif_mono | 1 |
+| serif_mono | sans_mono | 2 |
+| serif_mono | serif_mono | 2 |
+| slab | slab | 11 |
+| slab | transitional | 1 |
+| stencil | geometric | 1 |
+| stencil | humanist | 1 |
+| transitional | didone | 5 |
+| transitional | humanist_oldstyle | 15 |
+| transitional | slab | 2 |
+| transitional | transitional | 40 |
+
+## Kết quả tune (để so sánh, đã dùng để hiệu chỉnh)
+
+## Class — tập `tune` (973 họ có đáp án)
+
+| đúng | Uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 339 | 619 | 15 | 34.8% | 95.8% |
+
+Hàng = đáp án (primary), cột = dự đoán.
+
+| GT \ dự đoán | Serif | Sans | Mono | Script | Display | Blackletter | Symbol | Uncertain |
+|---|---|---|---|---|---|---|---|---|
+| Serif | 80 | 0 | 0 | 0 | 0 | 0 | 0 | 96 |
+| Sans | 2 | 202 | 1 | 0 | 1 | 0 | 1 | 132 |
+| Mono | 0 | 1 | 9 | 0 | 0 | 0 | 0 | 16 |
+| Script | 0 | 0 | 0 | 30 | 0 | 0 | 0 | 140 |
+| Display | 6 | 9 | 0 | 7 | 3 | 0 | 0 | 225 |
+| Blackletter | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 10 |
+
+## Precision/coverage — toàn bộ (973 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 934 | 96.0% | 739 | 79.1% |
+| 0.50 | 877 | 90.1% | 726 | 82.8% |
+| 0.60 | 816 | 83.9% | 699 | 85.7% |
+| 0.70 | 718 | 73.8% | 631 | 87.9% |
+| 0.75 | 651 | 66.9% | 581 | 89.2% |
+| 0.80 | 568 | 58.4% | 523 | 92.1% |
+| 0.85 | 457 | 47.0% | 435 | 95.2% |
+| 0.88 | 352 | 36.2% | 338 | 96.0% |
+| 0.90 | 262 | 26.9% | 254 | 96.9% |
+| 0.93 | 139 | 14.3% | 137 | 98.6% |
+| 0.95 | 87 | 8.9% | 87 | 100.0% |
+
+## Giới hạn còn lại
+
+- Độ phủ class chỉ ~38% toàn bộ ở mức sai ≤ 5% (nhóm văn bản ~57%). Script chỉ ~19% họ có nhãn (34/183), Display gần 0.
+- Display của GF là mục đích dùng; không có tín hiệu hình học tách chúng khỏi Sans/Serif/Script thường. Hướng khả dĩ: dùng tag usage `Display` + người dùng ghi đè.
+- grotesque ↔ neo_grotesque, transitional ↔ humanist_oldstyle, formal ↔ handwritten: nhập nhằng tự nhiên trong ground truth.
+- Hiệu chỉnh fit trên 973 họ GF; ngoài GF (font thương mại có Panose/sFamilyClass đầy đủ) chưa đo. CV nội bộ trên tune cho precision ~95% ở 0.88–0.90.
+- Font đã phân tích bằng core-0.5.0 sẽ được phân tích lại do `ANALYZER_VERSION` đổi; chúng chưa có `connect`/`bounce` đến lúc đó (cue Script bỏ qua khi thiếu).
+
+---
+
+# Vòng 1 (giữ nguyên để so sánh)
+
+## Báo cáo vòng 1 (core-0.5.0)
 
 Nhánh `feat/classify`. Đáp án: `google/fonts` @47d54ca — `tags/all/families.csv` (tag score ≥ 50, không mâu thuẫn; bản sao + SHA ở `docs/team/eval/`) cộng `category` trong METADATA.pb. Tune/test chia theo `fontatlas_embed::family_split` (ngưỡng chỉnh trên tune, báo cáo trên test, không chỉnh theo test).
 
