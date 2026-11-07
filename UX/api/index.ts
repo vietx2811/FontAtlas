@@ -1,5 +1,6 @@
 // Mọi lệnh backend đi qua một interface; tên phương thức = tên lệnh 6a (camelCase).
 // Cài đặt thật: api/tauri.ts (invoke + Channel). Cài đặt giả: api/mock.ts (dev không có Tauri, Vitest).
+import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
@@ -57,6 +58,8 @@ export interface Api extends LibraryApi {
   classFacets(q?: FaceQuery): Promise<ClassFacetDto[]>;
   setClassificationOverride(over: ClassificationOverrideDto): Promise<void>;
   clearClassificationOverride(face: FaceKeyDto): Promise<void>;
+  /** So sánh 2–8 face: số đo thật + percentile + Dấu chồng. Hiện ghép từ getFace; khi có command compare_faces thì đổi ở tauri.ts. */
+  compareFaces(faces: FaceKeyDto[]): Promise<CompareDto>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */

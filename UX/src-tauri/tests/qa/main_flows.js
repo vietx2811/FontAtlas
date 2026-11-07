@@ -182,6 +182,25 @@
     await snap('topbar-actions-2');
     await log('topbar-actions-two', !!pcGroup && actNames.includes('Compare') && actNames.includes('Pair these') && !actNames.includes('Find similar') && /2 chọn/.test(pcGroup.textContent), { actNames, text: pcGroup?.textContent });
 
+    // Compare (⇧C / nút) với 2 font: màn Compare thật, số đo thật, Esc quay lại giữ vùng chọn
+    const compareBtn = [...(pcGroup?.querySelectorAll('button') ?? [])].find(x => x.getAttribute('aria-label') === 'Compare');
+    compareBtn?.click();
+    const tbl = await wait(() => document.querySelector('.cmp-tbl'), 30000);
+    await wait(() => document.querySelectorAll('.cmp-tbl .cmp-metric, .cmp-tbl .cmp-na').length >= 8, 30000);
+    await sleep(600); await snap('compare-open');
+    const colHeads = [...document.querySelectorAll('.cmp-tbl .ch')];
+    const metricCells = document.querySelectorAll('.cmp-tbl .cmp-metric').length;
+    const ovlCount = document.querySelectorAll('.cmp-overlay svg').length;
+    const crashed = /Lỗi giao diện/.test(document.body.textContent ?? '');
+    const sizeBefore = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
+    btn('Match x-height')?.click(); await sleep(300);
+    const sizeAfter = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
+    await snap('compare-match-xheight');
+    await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0], { cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
+    (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(() => !document.querySelector('.cmp-tbl') && document.querySelector('[data-testid=selection-count]'), 8000);
+    await log('compare-close-keeps-selection', !document.querySelector('.cmp-tbl') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });
+
     // Menu ngữ cảnh trong vùng chọn → giữ vùng chọn, menu nhiều font
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));

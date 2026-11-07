@@ -1,4 +1,5 @@
 // Cài đặt thật của Api: invoke + Channel của Tauri, kiểu từ UX/bindings (ts-rs). Tên lệnh và khoá đối số do TauriCommandMap kiểm lúc biên dịch.
+import { composeCompare } from './compare';
 import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } from '../bindings';
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
@@ -106,6 +107,7 @@ export function createTauriApi(): Api {
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
+    compareFaces(faces) { return composeCompare(this, faces); },
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
     setClassificationOverride: over => none(call('set_classification_override', { over })),
     clearClassificationOverride: face => none(call('clear_classification_override', { face })),

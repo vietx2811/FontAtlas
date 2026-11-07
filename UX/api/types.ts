@@ -43,3 +43,4 @@ export const DEFAULT_UI_STATE: UiStateDto = {
 
 /** Lệnh model/embed có Channel dùng chung kiểu callback phía giao diện. */
 export type Unsubscribe = () => void;
+export type { CompareDto, CompareFace, CompareMetric, CompareMetricKey } from './compare';
