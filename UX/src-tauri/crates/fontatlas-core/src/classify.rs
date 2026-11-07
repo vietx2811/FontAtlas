@@ -13,7 +13,6 @@ pub enum Class {
     Sans,
     Mono,
     Script,
-    Display,
     Blackletter,
     Symbol,
     Uncertain,
@@ -26,7 +25,6 @@ impl Class {
             Class::Sans => "Sans",
             Class::Mono => "Mono",
             Class::Script => "Script",
-            Class::Display => "Display",
             Class::Blackletter => "Blackletter",
             Class::Symbol => "Symbol",
             Class::Uncertain => "Uncertain",
@@ -39,7 +37,6 @@ impl Class {
             "sans" => Class::Sans,
             "mono" => Class::Mono,
             "script" => Class::Script,
-            "display" => Class::Display,
             "blackletter" => Class::Blackletter,
             "symbol" => Class::Symbol,
             "uncertain" => Class::Uncertain,
@@ -56,7 +53,6 @@ impl Class {
             Class::Sans => "sans",
             Class::Mono => "mono",
             Class::Script => "script",
-            Class::Display => "display",
             Class::Blackletter => "blackletter",
             Class::Symbol => "symbol",
             Class::Uncertain => "uncertain",
@@ -71,7 +67,6 @@ pub fn subclasses_of(c: Class) -> &'static [&'static str] {
         Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist"],
         Class::Mono => &["serif_mono", "sans_mono"],
         Class::Script => &["formal", "casual_brush", "handwritten"],
-        Class::Display => &["decorative", "stencil", "inline_outline", "rounded", "fat_face"],
         Class::Blackletter | Class::Symbol | Class::Uncertain => &[],
     }
 }
@@ -84,13 +79,13 @@ pub enum Usage {
     Ui,
 }
 
-/// Một bằng chứng: nguồn, mô tả, phiếu bầu cho class nào và trọng số.
+/// Một bằng chứng: nguồn, mô tả, phiếu bầu cho class nào (`None` = chỉ ủng hộ tag usage Display / traits) và trọng số.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Signal {
     /// "measure" | "panose" | "os2_class" | "name" | "cmap" | "post"
     pub source: String,
     pub detail: String,
-    pub vote: Class,
+    pub vote: Option<Class>,
     pub weight: f32,
 }
 
@@ -101,6 +96,9 @@ pub struct Classification {
     pub subclass: Option<String>,
     /// 0–1.
     pub confidence: f32,
+    /// Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    #[serde(default)]
+    pub traits: Vec<String>,
     /// Lớp tốt nhất máy đoán khi `class = Uncertain` vì độ tin cậy dưới `CONF_MIN` (để UI hiện "có lẽ là …").
     #[serde(default)]
     pub candidate: Option<Class>,
@@ -243,18 +241,23 @@ struct Votes {
 }
 
 impl Votes {
-    fn add(&mut self, source: &str, detail: impl Into<String>, vote: Class, weight: f32) {
-        self.list.push(Signal { source: source.into(), detail: detail.into(), vote, weight });
+    fn add(&mut self, source: &str, detail: impl Into<String>, vote: impl Into<Option<Class>>, weight: f32) {
+        self.list.push(Signal { source: source.into(), detail: detail.into(), vote: vote.into(), weight });
+    }
+
+    /// Bằng chứng "nổi bật / dùng cho cỡ lớn" (không bỏ phiếu cho class nào).
+    fn display_ev(&self) -> f32 {
+        self.list.iter().filter(|s| s.vote.is_none()).map(|s| s.weight).sum()
     }
 
     fn score(&self, c: Class) -> f32 {
-        self.list.iter().filter(|s| s.vote == c).map(|s| s.weight).sum()
+        self.list.iter().filter(|s| s.vote == Some(c)).map(|s| s.weight).sum()
     }
 }
 
-pub fn classify(i: &ClassifyInput) -> Classification {
+/// Thu thập mọi tín hiệu (bỏ phiếu cho class hoặc chỉ ủng hộ usage Display/traits).
+fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
     let mut v = Votes { list: Vec::new() };
-    let nm = Nm::new(&i.name);
     let m = &i.m;
     let p = i.panose;
     // --- Symbol (cmap, Panose kind 5, tên)
@@ -264,14 +267,14 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if p.is_some_and(|p| p[0] == 5) {
         v.add("panose", "family kind = 5 (Latin Symbol)", Class::Symbol, 2.0);
     }
-    if let Some(k) = has_kw(&nm, SYMBOL_KW) {
+    if let Some(k) = has_kw(nm, SYMBOL_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Symbol, 2.0);
     }
     if i.latin_letters.is_some_and(|n| n < 10) && !v.list.is_empty() {
         v.add("cmap", "gần như không có chữ cái Latin", Class::Symbol, 1.0);
     }
     // --- Blackletter
-    if let Some(k) = has_kw(&nm, BLACKLETTER_KW) {
+    if let Some(k) = has_kw(nm, BLACKLETTER_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Blackletter, 3.0);
     }
     // --- Mono
@@ -284,7 +287,7 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if p.is_some_and(|p| p[3] == 9) {
         v.add("panose", "proportion = monospaced", Class::Mono, 1.5);
     }
-    if let Some(k) = has_kw(&nm, MONO_KW) {
+    if let Some(k) = has_kw(nm, MONO_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Mono, 1.0);
     }
     // --- Script
@@ -294,7 +297,7 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if i.family_class.is_some_and(|c| c.0 == 10) {
         v.add("os2_class", "sFamilyClass = 10 (Scripts)", Class::Script, 2.0);
     }
-    if let Some(k) = has_kw(&nm, SCRIPT_KW) {
+    if let Some(k) = has_kw(nm, SCRIPT_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Script, 1.5);
     }
     if !i.italic && m.slant_abs.is_some_and(|s| s >= 10.0) && m.spacing.is_some_and(|s| s < 0.06) {
@@ -302,20 +305,20 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     }
     // --- Display
     if p.is_some_and(|p| p[0] == 4) {
-        v.add("panose", "family kind = 4 (Latin Decorative)", Class::Display, 2.0);
+        v.add("panose", "family kind = 4 (Latin Decorative)", None, 2.0);
     }
     if i.family_class.is_some_and(|c| c.0 == 9) {
-        v.add("os2_class", "sFamilyClass = 9 (Ornamentals)", Class::Display, 1.5);
+        v.add("os2_class", "sFamilyClass = 9 (Ornamentals)", None, 1.5);
     }
-    if let Some(k) = has_kw(&nm, DISPLAY_KW) {
-        v.add("name", format!("từ khoá \"{k}\""), Class::Display, 1.5);
+    if let Some(k) = has_kw(nm, DISPLAY_KW) {
+        v.add("name", format!("từ khoá \"{k}\""), None, 1.5);
     }
     // --- Dấu hiệu "không phải chữ văn bản" từ số đo (font GF hầu như không khai Panose/sFamilyClass)
-    let cue = |v: &mut Votes, cond: bool, what: String, vote: Class, w: f32| {
+    fn cue(v: &mut Votes, cond: bool, what: String, vote: impl Into<Option<Class>>, w: f32) {
         if cond {
             v.add("measure", what, vote, w);
         }
-    };
+    }
     if let Some(x) = m.spacing {
         cue(&mut v, x < 0.04, format!("sidebearing rất nhỏ ({x:.2})"), Class::Script, 1.5);
         cue(&mut v, (0.04..0.06).contains(&x), format!("sidebearing nhỏ ({x:.2})"), Class::Script, 0.7);
@@ -335,30 +338,30 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     }
     if let Some(x) = m.x_height_em {
         cue(&mut v, x <= 0.38, format!("x-height thấp {x:.2}"), Class::Script, 0.8);
-        cue(&mut v, x >= 0.62, format!("x-height rất cao {x:.2}"), Class::Display, 0.8);
+        cue(&mut v, x >= 0.62, format!("x-height rất cao {x:.2}"), None, 0.8);
     }
     if let Some(x) = m.contrast {
-        cue(&mut v, x >= 6.0, format!("contrast rất cao {x:.1}"), Class::Display, 1.0);
+        cue(&mut v, x >= 6.0, format!("contrast rất cao {x:.1}"), None, 1.0);
     }
     if let Some(x) = m.stem {
-        cue(&mut v, x >= 0.30, format!("nét rất đậm {x:.2}"), Class::Display, 0.8);
-        cue(&mut v, x <= 0.08, format!("nét rất mảnh {x:.2}"), Class::Display, 0.8);
+        cue(&mut v, x >= 0.30, format!("nét rất đậm {x:.2}"), None, 0.8);
+        cue(&mut v, x <= 0.08, format!("nét rất mảnh {x:.2}"), None, 0.8);
     }
     if let Some(x) = m.width {
-        cue(&mut v, x <= 0.65, format!("rất hẹp {x:.2}"), Class::Display, 0.8);
-        cue(&mut v, x >= 1.2, format!("rất rộng {x:.2}"), Class::Display, 0.6);
+        cue(&mut v, x <= 0.65, format!("rất hẹp {x:.2}"), None, 0.8);
+        cue(&mut v, x >= 1.2, format!("rất rộng {x:.2}"), None, 0.6);
     }
     if let Some(x) = m.serif_foot {
-        cue(&mut v, x < 0.9, format!("serif_foot bất thường {x:.2}"), Class::Display, 0.7);
+        cue(&mut v, x < 0.9, format!("serif_foot bất thường {x:.2}"), None, 0.7);
     }
     if let Some(x) = m.width_cv {
-        cue(&mut v, x < 0.18 && !i.is_fixed_pitch, format!("bề rộng chữ đều bất thường {x:.2}"), Class::Display, 0.8);
+        cue(&mut v, x < 0.18 && !i.is_fixed_pitch, format!("bề rộng chữ đều bất thường {x:.2}"), None, 0.8);
     }
     if let Some(x) = m.aperture {
-        cue(&mut v, x < 45.0, format!("aperture rất khép {x:.0}°"), Class::Display, 0.6);
+        cue(&mut v, x < 45.0, format!("aperture rất khép {x:.0}°"), None, 0.6);
     }
     if let Some(x) = m.stress_abs {
-        cue(&mut v, x >= 18.0, format!("trục nhấn lệch {x:.0}°"), Class::Display, 0.7);
+        cue(&mut v, x >= 18.0, format!("trục nhấn lệch {x:.0}°"), None, 0.7);
     }
     // --- Serif / Sans
     if let Some(sf) = m.serif_foot {
@@ -382,25 +385,32 @@ pub fn classify(i: &ClassifyInput) -> Classification {
             _ => {}
         }
     }
-    if let Some(k) = has_kw(&nm, SERIF_KW).filter(|k| k != "serif" || !i.name.contains("sans")) {
+    if let Some(k) = has_kw(nm, SERIF_KW).filter(|k| k != "serif" || !i.name.contains("sans")) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Serif, 0.8);
     }
-    if let Some(k) = has_kw(&nm, SANS_KW) {
+    if let Some(k) = has_kw(nm, SANS_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Sans, 0.8);
     }
 
+    v
+}
+
+pub fn classify(i: &ClassifyInput) -> Classification {
+    let nm = Nm::new(&i.name);
+    let v = gather(i, &nm);
     let (class, confidence) = decide(&v);
     let (class, confidence, candidate) = calibrate(&v, i, class, confidence);
     let subclass = if class == Class::Uncertain { None } else { subclass_of(class, i, &nm) };
-    let usage = usage_of(candidate.unwrap_or(class), i);
-    Classification { class, subclass, confidence, candidate, signals: v.list, usage }
+    let traits = traits_of(i, &nm);
+    let usage = usage_of(candidate.unwrap_or(class), i, &v, &traits);
+    Classification { class, subclass, confidence, candidate, traits, signals: v.list, usage }
 }
 
-/// Chọn class: các nhóm "mạnh" (Symbol, Blackletter, Mono, Script, Display) cần đủ điểm; còn lại Serif/Sans.
+/// Chọn class theo hình dáng: Symbol, Blackletter, Mono, Script cần đủ điểm; còn lại Serif/Sans. Display không phải class.
 /// Tổng điểm Script+Display tối thiểu để coi là font không dùng cho chữ văn bản.
 const ODD_MIN: f32 = 1.6;
 const ODD_MARGIN: f32 = 1.0;
-/// Điểm Display tối thiểu để gán Display.
+/// Bằng chứng Display tối thiểu để thêm tag usage Display cho font chữ văn bản (Display không còn là class).
 const DISPLAY_MIN: f32 = 2.0;
 
 fn decide(v: &Votes) -> (Class, f32) {
@@ -410,7 +420,7 @@ fn decide(v: &Votes) -> (Class, f32) {
         }
     }
     let script = v.score(Class::Script);
-    let display = v.score(Class::Display);
+    let display = v.display_ev();
     let (serif, sans) = (v.score(Class::Serif), v.score(Class::Sans));
     let text = serif.max(sans);
     let odd = script + display;
@@ -419,11 +429,6 @@ fn decide(v: &Votes) -> (Class, f32) {
     let contested = odd < text * ODD_MARGIN && text >= 3.0;
     if script >= 1.5 && script >= display && odd >= ODD_MIN {
         return if contested { (Class::Uncertain, 0.0) } else { (Class::Script, (odd / (odd + 1.5)).min(0.99)) };
-    }
-    // Display chỉ khi có bằng chứng hình học rõ (từ khoá/Panose/sFamilyClass hoặc ≥ 2 số đo cực đoan);
-    // GF dùng "Display" theo mục đích nên một dấu hiệu yếu không đủ — rơi xuống Serif/Sans + tag usage Display.
-    if display >= DISPLAY_MIN && display >= script {
-        return if contested { (Class::Uncertain, 0.0) } else { (Class::Display, (display / (display + 1.5)).min(0.99)) };
     }
     let (hi, lo, class) = if serif >= sans { (serif, sans, Class::Serif) } else { (sans, serif, Class::Sans) };
     if hi < 1.5 {
@@ -437,16 +442,18 @@ fn decide(v: &Votes) -> (Class, f32) {
 }
 
 /// Độ tin cậy hiệu chỉnh: hồi quy logistic (L2) fit trên split `tune` của GF (973 họ), P(đúng | đặc trưng).
-/// Đặc trưng: class đoán (one-hot), lề điểm, bằng chứng Display/Script còn lại, và vài số đo "văn bản điển hình".
+/// Đặc trưng: class đoán (one-hot Serif/Sans/Script/Mono), lề điểm, bằng chứng nổi bật (Display) và Script còn lại, và vài số đo "văn bản điển hình".
 /// Dưới `CONF_MIN` thì trả `Uncertain` (giữ `candidate`). Sinh bởi `docs/team/eval/classify_calibrate.py`.
 pub const CONF_MIN: f32 = 0.88;
-const CAL_MU: [f32; 16] = [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 2.0752, 0.2164, 0.0897, 0.2436, 0.1270, 0.2079, 0.4104, 0.6469, 1.8144, 0.0296, 0.2547];
-const CAL_SD: [f32; 16] = [1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.4012, 0.4925, 0.3553, 0.0648, 0.0783, 0.1016, 0.1451, 0.5956, 0.8245, 0.0449, 0.2728];
-const CAL_W: [f32; 16] = [0.1711, -0.1138, -0.1637, 0.1493, -0.0429, 0.5978, -0.2214, -0.2868, 0.1824, -0.0226, 0.2793, 0.0966, -0.0245, -0.2226, 0.0478, -0.2427];
-const CAL_B: f32 = 1.6351;
+/// Cộng thêm vào CONF_MIN cho mặt italic.
+pub const ITALIC_EXTRA: f32 = 0.06;
+const CAL_MU: [f32; 15] = [0.0000, 0.0000, 0.0000, 0.0000, 2.5125, 0.2636, 0.0791, 0.2490, 0.1315, 0.2184, 0.4320, 0.5871, 1.7687, 0.0297, 0.2388];
+const CAL_SD: [f32; 15] = [1.0000, 1.0000, 1.0000, 1.0000, 1.2414, 0.5945, 0.2721, 0.0609, 0.0779, 0.0981, 0.1268, 0.5537, 0.8013, 0.0454, 0.2503];
+const CAL_W: [f32; 15] = [0.0936, -0.0304, -0.0415, -0.0217, 0.6601, -0.1710, -0.1775, 0.2951, 0.0727, 0.3341, 0.0523, -0.0254, -0.0173, 0.1259, -0.1350];
+const CAL_B: f32 = 2.4852;
 
 fn calibrate(v: &Votes, i: &ClassifyInput, class: Class, conf: f32) -> (Class, f32, Option<Class>) {
-    const SHAPES: [Class; 5] = [Class::Serif, Class::Sans, Class::Script, Class::Display, Class::Mono];
+    const SHAPES: [Class; 4] = [Class::Serif, Class::Sans, Class::Script, Class::Mono];
     let Some(own) = SHAPES.iter().position(|c| *c == class) else {
         return (class, conf, None); // Symbol/Blackletter/Uncertain giữ nguyên
     };
@@ -454,7 +461,7 @@ fn calibrate(v: &Votes, i: &ClassifyInput, class: Class, conf: f32) -> (Class, f
     // ngược lại: giữ Mono, không để hiệu chỉnh thống kê hạ về Uncertain.
     if class == Class::Mono
         && (i.is_fixed_pitch || i.m.width_cv.is_some_and(|x| x.abs() < 0.005))
-        && v.score(Class::Script) + v.score(Class::Display) < ODD_MIN
+        && v.score(Class::Script) + v.display_ev() < ODD_MIN
     {
         return (class, conf, None);
     }
@@ -462,24 +469,26 @@ fn calibrate(v: &Votes, i: &ClassifyInput, class: Class, conf: f32) -> (Class, f
     let sc = SHAPES.map(|c| v.score(c));
     let other = sc.iter().enumerate().filter(|(k, _)| *k != own).map(|(_, x)| *x).fold(f32::MIN, f32::max);
     let g = |x: Option<f32>, a: f32, b: f32, miss: f32| x.unwrap_or(miss).clamp(a, b);
-    let mut x = [0.0f32; 16];
+    let mut x = [0.0f32; 15];
     x[own] = 1.0;
-    x[5] = (sc[own] - other).clamp(-2.0, 5.0);
-    // Script ↔ Display cạnh tranh nhau nên bằng chứng của bên kia không bị tính là "nhiễu" cho cặp này
-    let pair = matches!(class, Class::Script | Class::Display);
-    x[6] = if pair { 0.0 } else { sc[3].clamp(0.0, 4.0) };
-    x[7] = if pair { 0.0 } else { sc[2].clamp(0.0, 4.0) };
-    x[8] = g(m.width_cv, 0.0, 0.5, 0.25);
-    x[9] = g(m.spacing, 0.0, 0.4, 0.15);
-    x[10] = g(m.aperture_e, 0.0, 0.4, 0.2);
-    x[11] = g(m.counter, 0.0, 0.7, 0.45);
-    x[12] = g(m.contrast, 1.0, 8.0, 1.5).ln();
-    x[13] = g(m.terminal, 0.0, 3.0, 1.2);
-    x[14] = g(m.bounce, 0.0, 0.2, 0.015);
-    x[15] = g(m.connect, 0.0, 1.0, 0.2);
-    let z = CAL_B + (0..16).map(|k| CAL_W[k] * (x[k] - CAL_MU[k]) / CAL_SD[k]).sum::<f32>();
+    x[4] = (sc[own] - other).clamp(-2.0, 5.0);
+    // Bằng chứng nổi bật (Display) và Script còn lại tính như "nhiễu" cho class văn bản; Script không bị phạt bởi chính nó.
+    let is_script = class == Class::Script;
+    x[5] = if is_script { 0.0 } else { v.display_ev().clamp(0.0, 4.0) };
+    x[6] = if is_script { 0.0 } else { sc[2].clamp(0.0, 4.0) };
+    x[7] = g(m.width_cv, 0.0, 0.5, 0.25);
+    x[8] = g(m.spacing, 0.0, 0.4, 0.15);
+    x[9] = g(m.aperture_e, 0.0, 0.4, 0.2);
+    x[10] = g(m.counter, 0.0, 0.7, 0.45);
+    x[11] = g(m.contrast, 1.0, 8.0, 1.5).ln();
+    x[12] = g(m.terminal, 0.0, 3.0, 1.2);
+    x[13] = g(m.bounce, 0.0, 0.2, 0.015);
+    x[14] = g(m.connect, 0.0, 1.0, 0.2);
+    let z = CAL_B + (0..15).map(|k| CAL_W[k] * (x[k] - CAL_MU[k]) / CAL_SD[k]).sum::<f32>();
     let p = 1.0 / (1.0 + (-z).exp());
-    if p < CONF_MIN { (Class::Uncertain, p, Some(class)) } else { (class, p, None) }
+    // Hiệu chỉnh fit trên mặt Regular; mặt italic (cue hình học lệch) đòi ngưỡng cao hơn. Chọn trên tune (mọi mặt).
+    let min = if i.italic { CONF_MIN + ITALIC_EXTRA } else { CONF_MIN };
+    if p < min { (Class::Uncertain, p, Some(class)) } else { (class, p, None) }
 }
 
 fn kw(n: &Nm, kws: &[&str]) -> bool {
@@ -577,46 +586,63 @@ fn subclass_of(class: Class, i: &ClassifyInput, nm: &Nm) -> Option<String> {
             }
             s("handwritten")
         }
-        Class::Display => {
-            if kw(nm, &["stencil"]) {
-                s("stencil")
-            } else if kw(nm, &["inline", "outline", "shadow"]) {
-                s("inline_outline")
-            } else if kw(nm, &["rounded", "round "]) {
-                s("rounded")
-            } else if kw(nm, &["fat face", "fatface"]) {
-                s("fat_face")
-            } else {
-                s("decorative")
-            }
-        }
         _ => None,
     }
 }
 
 /// Tag dùng cho một class cho trước (kể cả class do người dùng ghi đè).
 pub fn usage_for(i: &ClassifyInput, class: Class) -> Vec<Usage> {
-    usage_of(class, i)
+    let nm = Nm::new(&i.name);
+    let v = gather(i, &nm);
+    usage_of(class, i, &v, &traits_of(i, &nm))
 }
 
-fn usage_of(class: Class, i: &ClassifyInput) -> Vec<Usage> {
+/// Tag hình thái từ tên (và Panose/sFamilyClass): độc lập với class. Chỉ các dấu hiệu rõ.
+fn traits_of(i: &ClassifyInput, nm: &Nm) -> Vec<String> {
+    let mut t = Vec::new();
+    let mut add = |c: bool, name: &str| {
+        if c {
+            t.push(name.to_string());
+        }
+    };
+    add(kw(nm, &["stencil"]), "stencil");
+    add(kw(nm, &["inline", "outline", "shadow", "shaded"]), "inline_outline");
+    add(kw(nm, &["rounded"]), "rounded");
+    add(kw(nm, &["fat face", "fatface"]), "fat_face");
+    add(kw(nm, &["pixel*", "bitmap"]), "pixel");
+    add(
+        kw(nm, &["decorative", "ornate", "blobby", "wacky", "woodtype", "tuscan", "deco", "nouveau", "distressed", "grunge"])
+            || i.panose.is_some_and(|p| p[0] == 4)
+            || i.family_class.is_some_and(|c| c.0 == 9),
+        "decorative",
+    );
+    t
+}
+
+fn usage_of(class: Class, i: &ClassifyInput, v: &Votes, traits: &[String]) -> Vec<Usage> {
     let m = &i.m;
     let mut out = Vec::new();
+    // Display là tag mục đích: Script/Blackletter, font có trait hình thái, hoặc đủ bằng chứng nổi bật
+    let showy = !traits.is_empty() || v.display_ev() >= DISPLAY_MIN;
     match class {
-        Class::Script | Class::Display | Class::Blackletter => out.push(Usage::Display),
+        Class::Script | Class::Blackletter => out.push(Usage::Display),
         Class::Serif | Class::Sans | Class::Mono => {
             let contrast = m.contrast.unwrap_or(1.5);
-            if contrast >= 4.0 || i.opsz_max.is_some_and(|o| o >= 72.0) {
+            if showy || contrast >= 4.0 || i.opsz_max.is_some_and(|o| o >= 72.0) {
                 out.push(Usage::Display);
             }
-            if contrast < 4.0 && m.x_height_em.is_none_or(|x| x >= 0.44) && m.spacing.is_none_or(|s| s >= 0.08) {
+            if !showy && contrast < 4.0 && m.x_height_em.is_none_or(|x| x >= 0.44) && m.spacing.is_none_or(|s| s >= 0.08) {
                 out.push(Usage::Text);
             }
             if class != Class::Serif && contrast < 1.6 && m.x_height_em.is_some_and(|x| x >= 0.5) {
                 out.push(Usage::Ui);
             }
         }
-        _ => {}
+        _ => {
+            if showy {
+                out.push(Usage::Display);
+            }
+        }
     }
     out
 }

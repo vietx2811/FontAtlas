@@ -317,12 +317,14 @@ pub struct FaceQueryDto {
     pub hard: Vec<String>,
     /// Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
     pub face_keys: Option<Vec<FaceKeyDto>>,
-    /// Lọc theo class (OR trong nhóm): serif | sans | mono | script | display | blackletter | symbol | uncertain
+    /// Lọc theo class (OR trong nhóm): serif | sans | mono | script | blackletter | symbol | uncertain
     /// | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
     /// Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
     pub classes: Vec<String>,
     /// Lọc theo subclass (snake_case, OR trong nhóm; AND với `classes`).
     pub subclasses: Vec<String>,
+    /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    pub traits: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

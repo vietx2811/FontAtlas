@@ -55,6 +55,13 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
             None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
         }
     }
+    if !q.traits.is_empty() {
+        let ids = trait_face_ids(state, &q.traits)?;
+        match &mut scope {
+            Some(prev) => prev.retain(|x| ids.contains(&x.0)),
+            None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
+        }
+    }
     if !q.raw_axis_ranges.is_empty() {
         let b = crate::services::analysis::bundle(state)?;
         let raw: Vec<(i64, f32)> = b
@@ -141,6 +148,18 @@ pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
     Ok(map)
 }
 
+pub const TRAITS: [&str; 6] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative"];
+
+/// Face có ít nhất một trait trong `traits`. Traits lấy từ phân loại TỰ ĐỘNG (tên/Panose/sFamilyClass); ghi đè của
+/// người dùng chỉ đổi class/subclass, không đổi traits.
+fn trait_face_ids(state: &AppState, traits: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
+    if let Some(bad) = traits.iter().find(|t| !TRAITS.contains(&t.as_str())) {
+        return Err(CmdError::invalid_arg(format!("traits: tag không hợp lệ: {bad}")));
+    }
+    let b = crate::services::analysis::bundle(state)?;
+    Ok(b.meta.values().filter(|m| m.auto_traits.iter().any(|t| traits.contains(t))).map(|m| m.face_id).collect())
+}
+
 fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
     use fontatlas_core::classify::{Class, subclasses_of};
     let classes: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
@@ -149,7 +168,7 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
             return Err(CmdError::invalid_arg(format!("classes: class không hợp lệ: {c}")));
         }
     }
-    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script, Class::Display]
+    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script]
         .into_iter()
         .flat_map(subclasses_of)
         .copied()

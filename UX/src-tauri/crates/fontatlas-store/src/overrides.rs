@@ -8,7 +8,7 @@ use crate::open::{Store, now_ms};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassificationOverride {
     pub key: FaceKey,
-    /// snake_case: serif | sans | mono | script | display | blackletter | symbol
+    /// snake_case: serif | sans | mono | script | blackletter | symbol
     pub class: String,
     pub subclass: Option<String>,
     pub updated_at: i64,

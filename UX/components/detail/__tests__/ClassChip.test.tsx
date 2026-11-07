@@ -9,7 +9,7 @@ import { ClassChip } from '../ClassChip';
 
 const r0 = mockRows()[0];
 const face = { hashHex: r0.hashHex, faceIndex: r0.faceIndex };
-const info = (o: Partial<ClassificationDto> = {}): ClassificationDto => ({ class: 'serif', label: 'Serif', subclass: 'didone', confidence: 0.94, candidate: null, signals: [{ source: 'measure', detail: 'contrast 4,89', vote: 'serif', weight: 0.7 }, { source: 'panose', detail: 'serif style 11', vote: 'serif', weight: 0.4 }], usage: ['display'], source: 'auto', autoClass: null, ...o });
+const info = (o: Partial<ClassificationDto> = {}): ClassificationDto => ({ class: 'serif', label: 'Serif', subclass: 'didone', confidence: 0.94, candidate: null, traits: [], signals: [{ source: 'measure', detail: 'contrast 4,89', vote: 'serif', weight: 0.7 }, { source: 'panose', detail: 'serif style 11', vote: 'serif', weight: 0.4 }], usage: ['display'], source: 'auto', autoClass: null, ...o });
 const mount = (i: ClassificationDto, api = createMockApi(), onChanged = vi.fn()) => { render(<ClassChip api={api} face={face} info={i} onChanged={onChanged} />); return { api, onChanged }; };
 
 describe('ClassChip', () => {

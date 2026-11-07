@@ -385,7 +385,7 @@ pub struct ClassSignalDto {
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct ClassificationDto {
-    /// serif | sans | mono | script | display | blackletter | symbol | uncertain
+    /// serif | sans | mono | script | blackletter | symbol | uncertain (Display là `usage`, không phải class)
     pub class: String,
     /// Nhãn hiển thị tiếng Anh (thuật ngữ font giữ tiếng Anh): "Serif", "Uncertain"…
     pub label: String,
@@ -394,6 +394,8 @@ pub struct ClassificationDto {
     pub confidence: f32,
     /// Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
     pub candidate: Option<String>,
+    /// Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    pub traits: Vec<String>,
     pub signals: Vec<ClassSignalDto>,
     /// "text" | "display" | "ui"
     pub usage: Vec<String>,
