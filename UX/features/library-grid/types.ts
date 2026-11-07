@@ -10,6 +10,8 @@ export type FaceQuery = {
   descending?: boolean; offset?: number; limit?: number;
   /** 6a (b2cc0fd): chỉ các face này, ≤ 2000; sort='match' giữ thứ tự đưa vào. Dùng cho "Gần đây"/"Đang bật". */
   faceKeys?: Array<{ hashHex: string; faceIndex: number }>;
+  /** D1 (feat/classify): lọc theo phân loại hiệu lực; OR trong nhóm, AND giữa hai nhóm. */
+  classes?: string[]; subclasses?: string[];
 };
 
 export type FaceRow = {

@@ -211,6 +211,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       const row = findRow(k);
       return ok({
         row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
+        classificationInfo: mockClassification(row.family),
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
           license: 'SIL Open Font License 1.1', licenseUrl: 'https://openfontlicense.org', designer: 'Studio Mock', manufacturer: 'Mock Foundry',
@@ -271,4 +272,11 @@ export function createMockApi(o: MockOptions = {}): Api {
     async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
     ...act,
   };
+}
+
+/** Phân loại giả cho mock: cùng quy tắc với `classification`, confidence cố định. */
+function mockClassification(family: string): FaceDetailDto['classificationInfo'] {
+  const cls = /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(family) ? 'serif' : /Mono/.test(family) ? 'mono' : 'sans';
+  const label = cls === 'serif' ? 'Serif' : cls === 'mono' ? 'Mono' : 'Sans';
+  return { class: cls, label, subclass: null, confidence: 0.9, candidate: null, signals: [], usage: [], source: 'auto', autoClass: null };
 }
