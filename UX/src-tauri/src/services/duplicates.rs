@@ -65,7 +65,7 @@ fn norm(s: &str) -> String {
 }
 
 /// Thuần: nhóm các dòng (face × vị trí) thành nhóm trùng lặp. `info` tra phiên bản theo (hash, face_index).
-pub fn group_rows(rows: &[DupRow], info: &dyn Fn(&FaceKey) -> VersionInfo) -> Vec<RawGroup> {
+pub fn group_rows(rows: &[DupRow], info: &dyn Fn(&DupRow) -> VersionInfo) -> Vec<RawGroup> {
     let mut groups = Vec::new();
 
     // (a) cùng nội dung ở nhiều đường dẫn
@@ -82,7 +82,7 @@ pub fn group_rows(rows: &[DupRow], info: &dyn Fn(&FaceKey) -> VersionInfo) -> Ve
             let members = paths
                 .iter()
                 .map(|r| {
-                    let i = info(&r.key);
+                    let i = info(r);
                     Member { face_id: r.face_id, key: r.key, path: Some(r.path.clone()), format: format_of(&r.path, r.container.as_deref()), version: i.version, revision: i.revision, modified: i.modified, is_newest: false }
                 })
                 .collect();
@@ -100,7 +100,7 @@ pub fn group_rows(rows: &[DupRow], info: &dyn Fn(&FaceKey) -> VersionInfo) -> Ve
         }).or_insert(r);
     }
     let member_of = |r: &DupRow| {
-        let i = info(&r.key);
+        let i = info(r);
         Member { face_id: r.face_id, key: r.key, path: Some(r.path.clone()), format: format_of(&r.path, r.container.as_deref()), version: i.version, revision: i.revision, modified: i.modified, is_newest: false }
     };
 
@@ -180,14 +180,38 @@ fn mark_newest(g: &mut RawGroup) {
     }
 }
 
-fn info_of(meta: &HashMap<IxKey, FaceMeta>, k: &FaceKey) -> VersionInfo {
-    meta.get(&ix_key(k)).map(|m| VersionInfo { version: m.version.clone(), revision: m.revision, modified: m.modified_ts }).unwrap_or_default()
+/// head.fontRevision / head.modified đọc từ tệp khi cần (chỉ cho thành viên của nhóm), nhớ theo (hash, face):
+/// nội dung theo hash là bất biến nên cache không bao giờ cũ. Tệp mất/không đọc được thì không nhớ (thử lại lần sau).
+type HeadCache = std::sync::Mutex<HashMap<([u8; 32], u32), (Option<f32>, Option<i64>)>>;
+static HEAD_CACHE: std::sync::OnceLock<HeadCache> = std::sync::OnceLock::new();
+
+fn head_of(r: &DupRow) -> (Option<f32>, Option<i64>) {
+    let cache = HEAD_CACHE.get_or_init(Default::default);
+    let k = (r.key.hash, r.key.face_index);
+    if let Some(v) = cache.lock().ok().and_then(|c| c.get(&k).copied()) {
+        return v;
+    }
+    match fontatlas_core::extras::head_info(std::path::Path::new(&r.path), r.key.face_index) {
+        Some(h) => {
+            let v = (h.revision, h.modified);
+            if let Ok(mut c) = cache.lock() {
+                c.insert(k, v);
+            }
+            v
+        }
+        None => (None, None),
+    }
+}
+
+fn info_of(meta: &HashMap<IxKey, FaceMeta>, r: &DupRow) -> VersionInfo {
+    let (revision, modified) = head_of(r);
+    VersionInfo { version: meta.get(&ix_key(&r.key)).and_then(|m| m.version.clone()), revision, modified }
 }
 
 fn groups_for(state: &AppState, q: &FaceQueryDto) -> Result<Vec<RawGroup>, CmdError> {
     let b = bundle(state)?;
     let rows = state.with_store(|s| Ok(s.duplicate_rows()?))?;
-    let mut groups = group_rows(&rows, &|k| info_of(&b.meta, k));
+    let mut groups = group_rows(&rows, &|r| info_of(&b.meta, r));
     // chỉ giữ nhóm có ít nhất một thành viên khớp bộ lọc hiện tại
     let filtered = q.text.is_some()
         || q.vi.is_some()
@@ -265,7 +289,7 @@ mod tests {
         DupRow { face_id, key: FaceKey { hash: [n; 32], face_index: 0 }, family: family.into(), subfamily: Some(style.into()), postscript: Some(ps.into()), weight: Some(400), italic: false, container: Some("sfnt".into()), path: path.into() }
     }
 
-    fn no_info(_: &FaceKey) -> VersionInfo {
+    fn no_info(_: &DupRow) -> VersionInfo {
         VersionInfo::default()
     }
 
@@ -281,7 +305,7 @@ mod tests {
     #[test]
     fn versions_mark_newest_by_revision_then_modified_only_when_unique() {
         let rows = vec![row(1, 1, "A-Regular", "A", "Regular", "/old/a.ttf"), row(2, 2, "A-Regular", "A", "Regular", "/new/a.ttf")];
-        let info = |k: &FaceKey| match k.hash[0] {
+        let info = |r: &DupRow| match r.key.hash[0] {
             1 => VersionInfo { version: Some("Version 1.0".into()), revision: Some(1.0), modified: Some(2_000) },
             _ => VersionInfo { version: Some("Version 2.0".into()), revision: Some(2.0), modified: Some(1_000) },
         };
@@ -292,11 +316,11 @@ mod tests {
         // revision thắng ngày sửa
         assert_eq!(g[0].members.iter().filter(|m| m.is_newest).map(|m| m.key.hash[0]).collect::<Vec<_>>(), vec![2]);
         // cùng revision, khác ngày → ngày quyết định
-        let same_rev = |k: &FaceKey| VersionInfo { revision: Some(1.5), modified: Some(i64::from(k.hash[0])), ..Default::default() };
+        let same_rev = |r: &DupRow| VersionInfo { revision: Some(1.5), modified: Some(i64::from(r.key.hash[0])), ..Default::default() };
         let g = group_rows(&rows, &same_rev);
         assert_eq!(g[0].members.iter().filter(|m| m.is_newest).map(|m| m.key.hash[0]).collect::<Vec<_>>(), vec![2]);
         // hoà hoàn toàn hoặc không có số liệu → không đánh dấu ai
-        let tie = |_: &FaceKey| VersionInfo { revision: Some(1.5), modified: Some(5), ..Default::default() };
+        let tie = |_: &DupRow| VersionInfo { revision: Some(1.5), modified: Some(5), ..Default::default() };
         let g = group_rows(&rows, &tie);
         assert!(!g[0].newest_known && g[0].members.iter().all(|m| !m.is_newest));
         let g = group_rows(&rows, &no_info);

@@ -61,10 +61,6 @@ pub struct Embedding {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FontExtras {
-    /// head.fontRevision (số phiên bản của nhà thiết kế, vd 2.137); `None` khi 0/thiếu.
-    pub font_revision: Option<f32>,
-    /// head.modified (unix giây UTC); `None` khi 0/ngoài khoảng.
-    pub modified_ts: Option<i64>,
     pub years: Years,
     pub ot_groups: Vec<OtGroup>,
     pub kerning: Kerning,
@@ -75,6 +71,27 @@ pub struct FontExtras {
 }
 
 /// Năm từ `LONGDATETIME` (giây từ 1904-01-01 UTC). `None` khi 0 hoặc ngoài 1950–2100.
+/// Số phiên bản và ngày sửa từ bảng `head` (đọc nhẹ, không phân tích glyph) — dùng lúc cần so phiên bản.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct HeadInfo {
+    /// head.fontRevision (vd 2.137); `None` khi 0/thiếu.
+    pub revision: Option<f32>,
+    /// head.modified (unix giây UTC); `None` khi 0/ngoài khoảng.
+    pub modified: Option<i64>,
+}
+
+/// Đọc `head` của face `face_index` trong tệp; `None` khi không mở/parse được.
+pub fn head_info(path: &std::path::Path, face_index: u32) -> Option<HeadInfo> {
+    let file = crate::FontFile::open(path).ok()?;
+    let faces = file.faces().ok()?;
+    let face = faces.iter().find(|f| f.index() == face_index)?;
+    let head = face.font().head().ok()?;
+    Some(HeadInfo {
+        revision: Some(head.font_revision().to_f64() as f32).filter(|r| r.is_finite() && *r > 0.0),
+        modified: unix_from_longdatetime(head.modified().as_secs()),
+    })
+}
+
 /// `LONGDATETIME` (giây từ 1904-01-01) → unix giây; `None` khi 0 hoặc trước 1970 hoặc sau 2100.
 pub fn unix_from_longdatetime(secs: i64) -> Option<i64> {
     let u = secs.checked_sub(2_082_844_800)?;
@@ -363,8 +380,6 @@ pub(crate) fn compute(font: &FontRef, features: &[String], copyright: Option<&st
     };
     let fs = font.os2().ok().map(|o| o.fs_type());
     FontExtras {
-        font_revision: head.as_ref().map(|h| h.font_revision().to_f64() as f32).filter(|r| r.is_finite() && *r > 0.0),
-        modified_ts: head.as_ref().and_then(|h| unix_from_longdatetime(h.modified().as_secs())),
         years,
         ot_groups: ot_groups(features, &ss_names(font)),
         kerning: kerning(font),

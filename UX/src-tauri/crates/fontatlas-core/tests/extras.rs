@@ -88,13 +88,17 @@ fn fixtures_carry_d2_data() {
 }
 
 #[test]
-fn revision_and_modified_timestamp_are_read() {
+fn revision_and_modified_timestamp_are_read_lazily_from_head() {
     assert_eq!(unix_from_longdatetime(0), None);
     assert_eq!(unix_from_longdatetime(2_082_844_800), Some(0));
     assert_eq!(unix_from_longdatetime(1_577_836_800 + 2_082_844_800), Some(1_577_836_800));
+    let h = head_info(&fixture("roboto.ttf"), 0).expect("head");
+    assert!(h.revision.is_some_and(|r| r > 1.0), "{h:?}");
+    let ts = h.modified.expect("head.modified");
+    // khớp năm đã lưu trong extras.years.modified
     let (_, e) = extras("roboto.ttf");
-    assert!(e.font_revision.is_some_and(|r| r > 1.0), "{:?}", e.font_revision);
-    let ts = e.modified_ts.expect("head.modified");
-    // khớp năm đã suy ra
     assert_eq!(year_from_longdatetime(ts + 2_082_844_800), e.years.modified);
+    // face không tồn tại / tệp không tồn tại
+    assert_eq!(head_info(&fixture("roboto.ttf"), 9), None);
+    assert_eq!(head_info(&fixture("khong-co.ttf"), 0), None);
 }
