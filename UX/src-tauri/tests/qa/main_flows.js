@@ -87,7 +87,7 @@
     const inputs = fp ? [...fp.querySelectorAll('input[type=text], input[type=number], input[inputmode]')].slice(0, 4).map(i => i.value) : [];
     const ranges = fp ? [...fp.querySelectorAll('p, small, span')].map(e => e.textContent).filter(t => /Min .* max/.test(t)).slice(0, 3) : [];
     const before = cells().length;
-    const it = fp && [...fp.querySelectorAll('label')].find(l => l.textContent.includes('In nghiêng'))?.querySelector('input');
+    const it = fp && [...fp.querySelectorAll('label')].find(l => (l.textContent.includes('Italic') || l.textContent.includes('In nghiêng')))?.querySelector('input');
     it?.click();
     await sleep(1500);
     const chip2 = document.querySelector('.fa-family-chip');

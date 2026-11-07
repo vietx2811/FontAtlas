@@ -64,6 +64,16 @@ mod qa_snapshot {
             );
             std::mem::forget(token);
         }
+        // App Nap chỉ giữ tiến trình app; nội dung web chạy ở tiến trình WebContent riêng và
+        // bị WebKit hãm/treo timer khi cửa sổ bị che. Tắt hãm cho webview QA (macOS 14+).
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.with_webview(|wv| unsafe {
+                let wk: &objc2_web_kit::WKWebView = &*(wv.inner() as *const objc2_web_kit::WKWebView);
+                wk.configuration()
+                    .preferences()
+                    .setInactiveSchedulingPolicy(objc2_web_kit::WKInactiveSchedulingPolicy::None);
+            });
+        }
         let Some(dir) = std::env::var_os("FONTATLAS_DATA_DIR") else { return };
         let dir = std::path::PathBuf::from(dir);
         let h = app.clone();
