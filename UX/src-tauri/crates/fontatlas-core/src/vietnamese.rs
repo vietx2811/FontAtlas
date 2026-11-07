@@ -43,6 +43,8 @@ pub struct VietnameseCoverage {
     pub stacked_marks_top_em: Option<f32>,
     /// Đỉnh dấu chồng vượt hhea.ascender → dễ va dòng khi leading chặt.
     pub stacked_marks_overflow: Option<bool>,
+    /// hhea.ascender (em) — mốc để tính dấu chồng vượt bao nhiêu % em.
+    pub hhea_ascender_em: Option<f32>,
     /// Cách đặt dấu và độ đậm dấu (Estimated cho tới khi kiểm định).
     pub marks: ViMarks,
 }
@@ -164,6 +166,7 @@ pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
         dong_sign: map('₫').is_some(),
         stacked_marks_top_em,
         stacked_marks_overflow,
+        hhea_ascender_em: hhea_ascender_em(font),
         marks: vi_marks(font),
     }
 }
@@ -295,6 +298,12 @@ fn mark_weight_ratio(ctx: &GlyphCtx, xh: f64) -> Metric {
         FailReason::Degenerate,
         MARK_RATIO_METHOD,
     )
+}
+
+fn hhea_ascender_em(font: &FontRef) -> Option<f32> {
+    let upm = font.head().ok()?.units_per_em() as f32;
+    (upm > 0.0).then_some(())?;
+    Some(font.hhea().ok()?.ascender().to_i16() as f32 / upm)
 }
 
 fn stacked_marks(font: &FontRef) -> (Option<f32>, Option<bool>) {

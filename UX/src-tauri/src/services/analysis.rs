@@ -25,21 +25,21 @@ pub fn bundle(state: &AppState) -> Result<Arc<IndexBundle>, CmdError> {
         .ok_or_else(|| CmdError::busy("Index chưa dựng xong"))
 }
 
-fn lang_of(l: LangDto) -> Lang {
+pub(crate) fn lang_of(l: LangDto) -> Lang {
     match l {
         LangDto::Vi => Lang::Vi,
         LangDto::En => Lang::En,
     }
 }
 
-fn dto_key(k: &IxKey) -> FaceKeyDto {
+pub(crate) fn dto_key(k: &IxKey) -> FaceKeyDto {
     FaceKeyDto {
         hash_hex: k.hash.clone(),
         face_index: k.index,
     }
 }
 
-fn ix_of(b: &IndexBundle, k: &FaceKeyDto) -> Result<IxKey, CmdError> {
+pub(crate) fn ix_of(b: &IndexBundle, k: &FaceKeyDto) -> Result<IxKey, CmdError> {
     let sk = FaceKey::try_from(k)?;
     let key = ix_key(&sk);
     if b.meta.contains_key(&key) {
@@ -50,7 +50,7 @@ fn ix_of(b: &IndexBundle, k: &FaceKeyDto) -> Result<IxKey, CmdError> {
 }
 
 /// Hàng lưới của các face theo thứ tự đưa vào (một truy vấn, không N+1).
-fn rows_of(
+pub(crate) fn rows_of(
     state: &AppState,
     b: &IndexBundle,
     keys: &[IxKey],
@@ -386,7 +386,7 @@ fn relation(r: Relation) -> (&'static str, &'static str) {
     }
 }
 
-fn candidate_dto(
+pub(crate) fn candidate_dto(
     x: &PairAssessment,
     pa: &FaceProfile,
     pb: &FaceProfile,
@@ -449,7 +449,7 @@ fn candidate_dto(
     }
 }
 
-fn roles(o: &PairOptsDto) -> (Role, Role) {
+pub(crate) fn roles(o: &PairOptsDto) -> (Role, Role) {
     match o.role {
         PairRoleDto::Heading => (Role::Heading, Role::Body),
         PairRoleDto::Body => (Role::Body, Role::Heading),
@@ -813,6 +813,7 @@ pub fn get_face(
         },
         axes,
         similar_top,
+        extras: extras_of(&m),
     })
 }
 
@@ -921,4 +922,37 @@ pub fn clear_classification_override(state: &AppState, face: &FaceKeyDto) -> Res
     state.with_user(|u| Ok(u.clear_classification_override(&k)?))?;
     crate::services::library::bump_class_generation();
     Ok(())
+}
+
+/// Dữ liệu D2 từ `metadata_json` (rỗng với phân tích cũ chưa chạy lại).
+pub(crate) fn extras_of(m: &Value) -> FaceExtrasDto {
+    let x: fontatlas_core::extras::FontExtras = m.get("extras").and_then(|e| serde_json::from_value(e.clone()).ok()).unwrap_or_default();
+    FaceExtrasDto {
+        vendor_id: opt_str(m, "vendor_id"),
+        years: YearsDto { created: x.years.created, modified: x.years.modified, copyright: x.years.copyright },
+        ot_groups: x
+            .ot_groups
+            .into_iter()
+            .map(|g| OtGroupDto {
+                group: g.group,
+                tags: g.tags,
+                sets: g.sets.into_iter().map(|s| StylisticSetDto { tag: s.tag, name: s.name }).collect(),
+            })
+            .collect(),
+        kerning: KerningDto { source: if x.kerning.source.is_empty() { "none".into() } else { x.kerning.source }, pairs: x.kerning.pairs, class_pairs: x.kerning.class_pairs },
+        style: StyleStructureDto {
+            italic_kind: if x.style.italic_kind.is_empty() { "upright".into() } else { x.style.italic_kind },
+            ital_axis: x.style.ital_axis,
+            slnt_axis: x.style.slnt_axis,
+            wght_range: x.style.wght_range,
+            wdth_range: x.style.wdth_range,
+            opsz_range: x.style.opsz_range,
+        },
+        embedding: EmbeddingDto {
+            fs_type: x.embedding.fs_type,
+            level: if x.embedding.level.is_empty() { "unknown".into() } else { x.embedding.level },
+            flags: x.embedding.flags,
+        },
+        license_kind: if x.license_kind.is_empty() { "unknown".into() } else { x.license_kind },
+    }
 }

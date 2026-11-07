@@ -55,6 +55,63 @@
       "display"
     ]
   },
+  "extras": {
+    "embedding": {
+      "flags": [],
+      "fsType": 0,
+      "level": "installable"
+    },
+    "kerning": {
+      "classPairs": 3417,
+      "pairs": 8780,
+      "source": "gpos"
+    },
+    "licenseKind": "ofl",
+    "otGroups": [
+      {
+        "group": "figures",
+        "sets": [],
+        "tags": [
+          "lnum",
+          "onum"
+        ]
+      },
+      {
+        "group": "stylistic_sets",
+        "sets": [
+          {
+            "name": "Alternate a",
+            "tag": "ss01"
+          },
+          {
+            "name": null,
+            "tag": "ss02"
+          }
+        ],
+        "tags": [
+          "ss01",
+          "ss02"
+        ]
+      }
+    ],
+    "style": {
+      "italAxis": false,
+      "italicKind": "upright",
+      "opszRange": null,
+      "slntAxis": false,
+      "wdthRange": null,
+      "wghtRange": [
+        400.0,
+        900.0
+      ]
+    },
+    "vendorId": "FTH",
+    "years": {
+      "copyright": 2017,
+      "created": 2017,
+      "modified": 2021
+    }
+  },
   "file": {
     "container": "sfnt",
     "format": "ttf",
