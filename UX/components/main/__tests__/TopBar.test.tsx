@@ -97,7 +97,7 @@ describe('TopBar', () => {
     expect(await tipOf(chip)).toBe('9/18 kiểu · có lọc — bấm để bỏ phạm vi family');
     fireEvent.click(chip);
     expect(useUiStore.getState().familyScope).toBeNull();
-    expect(useUiStore.getState().filters).toEqual({ italic: true });
+    expect(useUiStore.getState().filters).toEqual({ italic: true, vi: 'full' });
     expect(useUiStore.getState().viOnly).toBe(true);
   });
 

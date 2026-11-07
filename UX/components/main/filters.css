@@ -24,3 +24,11 @@
 .fa-range-inputs input { width: 0; min-width: 0; flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--fg); background: var(--sheet); font-size: 12px; font-variant-numeric: tabular-nums; }
 .fa-range-sliders { display: flex; gap: 8px; margin-top: 8px; }
 .fa-range-sliders input { width: 0; min-width: 0; flex: 1; }
+.fa-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fa-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 10px; border-radius: 12px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; font-weight: 500; }
+.fa-chip button { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 9px; }
+.fa-chip button:hover { background: var(--chrome-active); }
+.fa-filters .fa-linkbtn { color: var(--accent-ink); font-size: 12px; text-decoration: underline; }
+.fa-filters fieldset + fieldset { margin-top: 16px; }
+.fa-filters fieldset:not(.fa-axis-filter) { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; }
+.fa-filters legend { flex-basis: 100%; }

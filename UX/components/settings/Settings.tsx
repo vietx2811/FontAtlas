@@ -40,7 +40,11 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
   const [s, setS] = useState<SettingsDto | null>(null);
   useEffect(() => { let alive = true; api.getSettings().then(v => { if (alive) setS(v); }); return () => { alive = false; }; }, [api]);
   useEffect(() => {
-    const on = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const on = (e: KeyboardEvent) => {
+      // Esc thuộc về lớp con đang mở (menu ngữ cảnh, hộp thoại xác nhận) trước.
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('[role="menu"], [aria-modal="true"]')) return;
+      onClose();
+    };
     document.addEventListener('keydown', on);
     return () => document.removeEventListener('keydown', on);
   }, [onClose]);

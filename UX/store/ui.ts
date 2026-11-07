@@ -18,7 +18,7 @@ export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly'>;
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 
 export interface UiState {
@@ -90,7 +90,7 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viO
   else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
   if (s.tag !== null) q.tagIds = [Number(s.tag)];
   if (s.query.trim()) q.text = s.query.trim();
-  if (s.viOnly) q.vi = 'full';
+  if (s.viOnly && !q.vi) q.vi = 'full';
   return q;
 }
 
@@ -133,12 +133,12 @@ export function createUiStore(): UiStore {
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, libraryRev: 0, gridRev: 0, ...initial,
 
-    setFilters: filters => set({ filters }),
+    setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false }),
     setView: v => set({ view: v, tag: null, familyScope: null, settingsOpen: false }),
     setTag: t => set({ tag: t, familyScope: null, settingsOpen: false }),
     setQuery: q => set({ query: q, familyScope: null }),
-    setViOnly: on => set({ viOnly: on }),
+    setViOnly: on => set(s => { const { vi: _vi, ...rest } = s.filters; return { viOnly: on, filters: on ? { ...rest, vi: 'full' } : rest }; }),
     setLayout: l => set({ layout: l }),
     setSample: s => set({ sample: s }),
     setSampleSize: n => set({ sampleSize: Math.min(SAMPLE_MAX, Math.max(SAMPLE_MIN, Math.round(n))) }),
