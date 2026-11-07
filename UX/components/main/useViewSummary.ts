@@ -3,7 +3,7 @@ import type { Api } from '../../api';
 import { useScanStore } from '../../store/scan';
 import { toGridQuery, useUiStore, type View } from '../../store/ui';
 
-const FIXED: Record<string, string> = { all: 'Tất cả', star: 'Yêu thích', recent: 'Gần đây', active: 'Đang bật' };
+const FIXED: Record<string, string> = { all: 'Tất cả', star: 'Yêu thích', recent: 'Gần đây', active: 'Đang bật', dups: 'Trùng lặp' };
 
 async function titleOf(api: Api, view: View): Promise<string> {
   if (view in FIXED) return FIXED[view];

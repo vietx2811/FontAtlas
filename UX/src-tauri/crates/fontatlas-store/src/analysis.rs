@@ -9,6 +9,21 @@ use crate::error::StoreError;
 use crate::ingest::{FaceKey, hash_from_blob};
 use crate::open::{BACKUP_DIR, Store, now_ms};
 
+/// Một (face, đường dẫn) cho việc nhóm trùng lặp.
+#[derive(Debug, Clone)]
+pub struct DupRow {
+    pub face_id: i64,
+    pub key: FaceKey,
+    pub family: String,
+    pub subfamily: Option<String>,
+    pub postscript: Option<String>,
+    pub weight: Option<u16>,
+    pub italic: bool,
+    /// sfnt | collection | woff1 | woff2
+    pub container: Option<String>,
+    pub path: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct StoredAnalysis {
     pub face_id: i64,
@@ -128,6 +143,49 @@ impl Store {
         )?;
         let ids = st.query_map([collection_id], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(ids)
+    }
+
+    /// Mọi (face, vị trí chưa missing) của thư viện, để nhóm trùng lặp (cùng nội dung ở nhiều đường dẫn,
+    /// cùng PostScript name khác hash, cùng family+style khác định dạng). Không có face nào chỉ còn vị trí missing.
+    pub fn duplicate_rows(&self) -> Result<Vec<DupRow>, StoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT f.face_id, fi.hash, f.face_index, f.family_name, f.subfamily, f.postscript_name,
+                    f.weight_class, f.is_italic, fi.container, l.path
+             FROM faces f
+             JOIN files fi ON fi.file_id = f.file_id
+             JOIN file_locations l ON l.file_id = fi.file_id AND l.missing = 0
+             ORDER BY f.face_id, l.location_id",
+        )?;
+        let rows = st.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, Vec<u8>>(1)?,
+                r.get::<_, u32>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<u16>>(6)?,
+                r.get::<_, bool>(7)?,
+                r.get::<_, Option<String>>(8)?,
+                r.get::<_, String>(9)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            let (face_id, hash, face_index, family, subfamily, postscript, weight, italic, container, path) = r?;
+            let Ok(hash) = <[u8; 32]>::try_from(hash.as_slice()) else { continue };
+            out.push(DupRow { face_id, key: FaceKey { hash, face_index }, family, subfamily, postscript, weight, italic, container, path });
+        }
+        Ok(out)
+    }
+
+    /// `path` có là một vị trí (chưa missing) đang lưu trong thư viện không (so khớp nguyên văn).
+    pub fn has_location(&self, path: &str) -> Result<bool, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT 1 FROM file_locations WHERE path = ?1 AND missing = 0 LIMIT 1", [path], |_| Ok(()))
+            .optional()?
+            .is_some())
     }
 
     /// Vị trí chưa missing có location_id nhỏ nhất.

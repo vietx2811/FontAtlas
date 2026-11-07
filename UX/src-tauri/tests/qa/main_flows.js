@@ -299,6 +299,27 @@
     chips?.querySelector('button')?.click();
     await wait(() => !document.querySelector('.fa-chips'), 5000);
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
+    // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
+    const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
+    const dsum = await inv('duplicate_summary', { q: dq });
+    const dupBtn = () => [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(x => /Trùng lặp/.test(x.textContent));
+    await wait(() => (dsum.total > 0) === !!dupBtn(), 8000);
+    await log('duplicates-sidebar-item', (dsum.total > 0) === !!dupBtn() && (dsum.total === 0 || Number((dupBtn().textContent.match(/(\d+)\s*$/) || [])[1]) === dsum.total), { dsum, item: dupBtn()?.textContent ?? null });
+    if (dsum.total > 0) {
+      dupBtn().click();
+      await wait(() => document.querySelector('.dup [data-testid=dup-group]'), 20000);
+      await sleep(400); await snap('duplicates-view');
+      const dgroups = document.querySelectorAll('[data-testid=dup-group]').length;
+      const dmembers = document.querySelectorAll('[data-testid=dup-member]').length;
+      const dbtn = [...document.querySelectorAll('.dup button')].map(x => x.textContent.trim());
+      const risky = dbtn.filter(x => /xoá|xóa|delete|di chuyển|move|gộp/i.test(x));
+      const openBtn = [...document.querySelectorAll('.dup button')].find(x => x.textContent.trim() === 'Mở chi tiết');
+      openBtn?.click();
+      const panel = await wait(() => document.querySelector('aside.fa-panel h2'), 15000);
+      await log('duplicates-view', dgroups === dsum.total && dmembers >= 2 && risky.length === 0 && !!panel && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { dgroups, dmembers, risky, panel: panel?.textContent });
+    } else {
+      await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
+    }
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

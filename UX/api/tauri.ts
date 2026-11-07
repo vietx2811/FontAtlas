@@ -125,6 +125,9 @@ export function createTauriApi(): Api {
       let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
       return call('save_png', { suggestedName, pngBase64: btoa(bin) });
     },
+    revealLocation: path => none(call('reveal_location', { path })),
+    duplicateSummary: (q = {}) => call('duplicate_summary', { q: toFaceQueryDto(q) }),
+    duplicateGroups: (q = {}) => call('duplicate_groups', { q: toFaceQueryDto(q) }),
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
     setClassificationOverride: over => none(call('set_classification_override', { over })),
     clearClassificationOverride: face => none(call('clear_classification_override', { face })),

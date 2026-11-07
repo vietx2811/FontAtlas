@@ -232,6 +232,32 @@ fn detail() -> FaceDetailDto {
     }
 }
 
+fn duplicate_groups_fixture() -> Vec<DuplicateGroupDto> {
+    let m = |id: i64, path: &str, fmt: &str, ver: &str, rev: f32, modified: i64, newest: bool| DuplicateMemberDto {
+        row: row(id, id as u8, "Playfair Display", "Regular", 400, false),
+        path: Some(path.into()),
+        format: fmt.into(),
+        version: Some(ver.into()),
+        revision: Some(rev),
+        modified: Some(modified),
+        is_newest: newest,
+    };
+    vec![
+        DuplicateGroupDto {
+            kind: DuplicateKindDto::SameFile,
+            key: "03".repeat(32),
+            faces: vec![m(3, "/Users/u/Fonts/PlayfairDisplay-Regular.ttf", "ttf", "Version 1.203", 1.203, 1_600_000_000, false), m(3, "/Users/u/Downloads/PlayfairDisplay-Regular.ttf", "ttf", "Version 1.203", 1.203, 1_600_000_000, false)],
+            newest_known: false,
+        },
+        DuplicateGroupDto {
+            kind: DuplicateKindDto::Versions,
+            key: "playfairdisplay-regular".into(),
+            faces: vec![m(3, "/Users/u/Fonts/old/PlayfairDisplay-Regular.ttf", "ttf", "Version 1.203", 1.203, 1_600_000_000, false), m(4, "/Users/u/Fonts/PlayfairDisplay-Regular.ttf", "ttf", "Version 1.204", 1.204, 1_650_000_000, true)],
+            newest_known: true,
+        },
+    ]
+}
+
 fn extras() -> FaceExtrasDto {
     FaceExtrasDto {
         extras_available: true,
@@ -347,6 +373,8 @@ fn fixtures() -> Vec<(&'static str, Value)> {
         ("face_page", v(&page)),
         ("face_detail_playfair", v(&detail())),
         ("compare_two", v(&compare())),
+        ("duplicate_groups", v(&duplicate_groups_fixture())),
+        ("duplicate_summary", v(&DuplicateSummaryDto { same_file: 1, versions: 1, formats: 0, total: 2 })),
         ("pair_these_combos", v(&vec![PairComboDto { heading: row(3, 3, "Playfair Display", "Regular", 400, false), body: row(5, 5, "Libre Baskerville", "Regular", 400, false), assessment: candidate(), rank: 1 }])),
         ("similar_hits", v(&vec![detail().similar_top[0].clone()])),
         (

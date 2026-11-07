@@ -19,7 +19,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, compare, describe, embed, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, compare, describe, duplicates, embed, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -92,6 +92,9 @@ macro_rules! command_list {
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
+            async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
+            async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
+            async reveal_location(path: String) -> Result<(), CmdError>;
             async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
             async pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
@@ -285,6 +288,11 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
+cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
+    tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
+}));
+cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));
+cmd!(duplicate_summary(q: FaceQueryDto) -> DuplicateSummaryDto => |s| duplicates::duplicate_summary(s, &q));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
 cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));

@@ -1,0 +1,33 @@
+.dup { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
+.dup-h { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex: none; flex-wrap: wrap; }
+.dup-h h1 { margin: 0; font-size: 14px; font-weight: 600; }
+.dup-sp { flex: 1; }
+.dup-note { font-size: 11px; color: var(--muted); }
+.dup-total { display: inline-flex; margin-left: 6px; padding: 0 8px; height: 20px; align-items: center; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; }
+.dup-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 24px; display: flex; flex-direction: column; gap: 20px; }
+.dup-state { padding: 24px 0; color: var(--muted); }
+.dup-state.warn { color: var(--warn); }
+.dup-state button { color: var(--accent-ink); text-decoration: underline; }
+.dup-kind h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; }
+.dup-kind h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
+.dup-group { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); margin-bottom: 12px; overflow: hidden; }
+.dup-group > header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.dup-count { color: var(--muted); font-size: 12px; }
+.dup-unknown { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--warn); }
+.dup-group ul { list-style: none; margin: 0; padding: 0; }
+.dup-member { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(280px, 2.4fr) 250px 200px; gap: 8px 16px; align-items: center; padding: 10px 14px; }
+.dup-member + .dup-member { border-top: 1px solid var(--border); }
+.dup-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dup-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.dup-fmt { flex: none; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--surface-2); color: var(--muted); }
+.dup-new { white-space: nowrap; flex: none; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); }
+.dup-path { display: flex; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.dup-head { flex: 0 100 auto; min-width: 2ch; overflow: hidden; text-overflow: ellipsis; }
+.dup-tail { flex: 0 0 auto; min-width: 8ch; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
+.dup-member.same { grid-template-columns: minmax(200px, 1fr) minmax(280px, 2.4fr) 200px; }
+.dup-meta { display: flex; gap: 12px; white-space: nowrap; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.dup-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.dup-acts button { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 12px; white-space: nowrap; }
+.dup-acts button:hover { background: var(--chrome-active); }
+.dup button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 1180px) { .dup-member, .dup-member.same { grid-template-columns: minmax(0, 1fr) auto; } .dup-path, .dup-meta { grid-column: 1 / -1; } }
