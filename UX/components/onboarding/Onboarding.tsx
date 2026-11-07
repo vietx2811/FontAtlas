@@ -241,9 +241,9 @@ function O4({ api, next }: Ctx) {
   return (
     <>
       <ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />
-      <h1>Đang quét thư viện</h1>
+      <h1>{st.done ? 'Quét xong' : 'Đang quét thư viện'}</h1>
       <p className="sr-only" data-testid="scan-summary" aria-live="polite">{text}</p>
-      <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>
+      {!st.done && <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>}
       <Actions><Primary onClick={() => void next()}>Tiếp tục</Primary></Actions>
     </>
   );
@@ -253,7 +253,7 @@ function O5({ api, reload, next }: Ctx) {
   return (
     <>
       <h1>Giấy phép và trách nhiệm</h1>
-      <p>Font Atlas phân tích mọi font bạn đưa vào thư viện, kể cả font thương mại. Bạn tự chịu trách nhiệm tuân thủ giấy phép của từng font. Dữ liệu phân tích và hình ảnh không bao giờ rời khỏi máy.</p>
+      <p>Font Atlas phân tích mọi font bạn thêm, kể cả font thương mại. Bạn tự chịu trách nhiệm về giấy phép. Dữ liệu không rời khỏi máy.</p>
       <Actions><Primary onClick={async () => { await api.setSettings({ licenseNoticeAck: true }); await reload(); await next(); }}>Đã hiểu</Primary></Actions>
     </>
   );
@@ -307,13 +307,13 @@ function O7({ api, state, next }: Ctx) {
   return (
     <>
       <h1>Kích hoạt font cho app thiết kế</h1>
-      <p>Bật một font trong Font Atlas để dùng ngay trong Photoshop, Illustrator, Figma… mà không cần cài vào hệ thống. File font giữ nguyên chỗ cũ.</p>
-      <fieldset className="fa-onb-field"><legend>Khi tắt Font Atlas</legend>
-        <label><input type="radio" name="keep" checked={!keep} onChange={() => setKeep(false)} />Tắt luôn các font đã kích hoạt <small>Font chỉ hoạt động khi Font Atlas đang mở; mở lại thì tự kích hoạt lại.</small></label>
-        <label><input type="radio" name="keep" checked={keep} onChange={() => setKeep(true)} />Giữ font hoạt động cả khi tắt Font Atlas <small>Dùng được cho tới khi bạn tắt nó trong Font Atlas.</small></label>
+      <p>Dùng font trong Photoshop, Figma… mà không cần cài vào hệ thống.</p>
+      <fieldset className="fa-onb-field"><legend>Khi thoát Font Atlas</legend>
+        <label><input type="radio" name="keep" checked={!keep} onChange={() => setKeep(false)} />Tắt các font đã kích hoạt <small>Mở lại app sẽ tự bật lại.</small></label>
+        <label><input type="radio" name="keep" checked={keep} onChange={() => setKeep(true)} />Giữ font hoạt động <small>Cho tới khi bạn tắt trong Font Atlas.</small></label>
       </fieldset>
-      {managers.map(m => (
-        <p key={m.name} className="fa-onb-warn">⚠ Phát hiện {m.name}{m.activeCount ? ` đang kích hoạt khoảng ${m.activeCount} font` : ' đã cài trên máy'}. Kích hoạt cùng một font ở hai app sẽ tạo bản trùng tên; app thiết kế có thể chọn nhầm bản.</p>))}
+      {managers.length > 0 && (
+        <p className="fa-onb-warn">⚠ Phát hiện {managers.map(m => m.name).join(', ')}. Đừng kích hoạt cùng một font ở hai app.</p>)}
       <Actions><button type="button" onClick={() => void next()}>Để sau</button><Primary onClick={async () => { await api.activationSetKeep(keep); await next(); }}>Bật kích hoạt font</Primary></Actions>
     </>
   );

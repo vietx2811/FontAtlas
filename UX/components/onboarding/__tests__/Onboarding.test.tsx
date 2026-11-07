@@ -91,7 +91,7 @@ describe('Onboarding', () => {
     render(<Onboarding api={api} onDone={() => {}} />);
     await settle();
     expect(screen.queryByRole('button', { name: 'Để sau' })).toBeNull();
-    expect(screen.getByText(/Dữ liệu phân tích và hình ảnh không bao giờ rời khỏi máy/)).toBeTruthy();
+    expect(screen.getByText(/Dữ liệu không rời khỏi máy/)).toBeTruthy();
     await click('Quay lại');
     expect(heading()).toBe('Thư mục font');
   });
@@ -151,7 +151,7 @@ describe('Onboarding', () => {
     const keep = vi.spyOn(api, 'activationSetKeep');
     render(<Onboarding api={api} onDone={() => {}} />);
     await settle();
-    expect((screen.getByRole('radio', { name: /Tắt luôn các font đã kích hoạt/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio', { name: /Tắt các font đã kích hoạt/ }) as HTMLInputElement).checked).toBe(true);
     await click('Bật kích hoạt font');
     expect(keep).toHaveBeenLastCalledWith(false);
     expect(heading()).toBe('Xong');
