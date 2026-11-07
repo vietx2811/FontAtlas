@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { toGridQuery, useUiStore } from '../../../store/ui';
 import { FilterPanel } from '../FilterPanel';
@@ -127,5 +127,28 @@ describe('filter facets', () => {
   it('Uncertain and Unclassified are separate buckets with their own labels', () => {
     useUiStore.getState().setFilters({ classes: ['uncertain', 'unclassified'] });
     expect(filterChips(useUiStore.getState().filters).map(c => c.label)).toEqual(['Uncertain', 'Chưa phân loại']);
+  });
+
+  it('unclassified is its own bucket, separate from uncertain, and the totals add up to the library', async () => {
+    const api = createMockApi();
+    const facets = await api.classFacets({});
+    const un = facets.find(f => f.class === 'unclassified')!;
+    expect(un.count).toBeGreaterThan(0);
+    expect(facets.find(f => f.class === 'uncertain')!.count).toBeGreaterThan(0);
+    expect((await api.queryFaces({ classes: ['unclassified'] })).total).toBe(un.count);
+    await mount();
+    const grp = await screen.findByRole('group', { name: 'Phân loại' });
+    fireEvent.click(await within(grp).findByRole('checkbox', { name: /^Chưa phân loại/ }));
+    expect(toGridQuery(useUiStore.getState()).classes).toEqual(['unclassified']);
+  });
+
+  it('a selected class stays listed even when facets fail or its count is 0', async () => {
+    useUiStore.getState().setFilters({ classes: ['blackletter'] });
+    const api = createMockApi();
+    vi.spyOn(api, 'classFacets').mockRejectedValue(new Error('down'));
+    render(<FilterPanel api={api} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Lọc/ }));
+    const grp = await screen.findByRole('group', { name: 'Phân loại' });
+    expect((within(grp).getByRole('checkbox', { name: /Blackletter/ }) as HTMLInputElement).checked).toBe(true);
   });
 });

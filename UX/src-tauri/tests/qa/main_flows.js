@@ -250,10 +250,11 @@
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
     const chips = await wait(() => document.querySelector('.fa-chips'), 8000);
-    await wait(() => countNow() !== total0 || countNow() === total0 && boxes.length === 1, 8000);
+    const facetCount = Number((boxes[0]?.closest('label')?.querySelector('.fa-count')?.textContent ?? '').replace(/\D/g, ''));
+    await wait(() => countNow() === facetCount, 10000);
     await sleep(300); await snap('class-filter');
     const total1 = countNow();
-    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 <= total0, { chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
+    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
     chips?.querySelector('button')?.click();
     await wait(() => !document.querySelector('.fa-chips'), 5000);
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
