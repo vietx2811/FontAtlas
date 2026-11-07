@@ -237,3 +237,11 @@ describe('duplicates', () => {
     expect(last()).toEqual({ cmd: 'duplicate_groups', args: { q: toFaceQueryDto(q) } });
   });
 });
+
+describe('reveal_location', () => {
+  it('sends the exact path', async () => {
+    reply = () => null;
+    await createTauriApi().revealLocation('/Users/u/Downloads/A.ttf');
+    expect(last()).toEqual({ cmd: 'reveal_location', args: { path: '/Users/u/Downloads/A.ttf' } });
+  });
+});

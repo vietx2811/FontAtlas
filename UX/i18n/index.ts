@@ -49,7 +49,7 @@ const vi = {
   'dup.title': 'Trùng lặp', 'dup.loading': 'Đang tìm font trùng…', 'dup.error': 'Không đọc được danh sách trùng: {msg}', 'dup.retry': 'Thử lại', 'dup.empty': 'Không có font trùng',
   'dup.kind.same_file': 'Same file', 'dup.kind.same_file.gloss': 'cùng tệp, nhiều đường dẫn', 'dup.kind.versions': 'Versions', 'dup.kind.versions.gloss': 'nhiều phiên bản của một font',
   'dup.kind.formats': 'Formats', 'dup.kind.formats.gloss': 'cùng font, khác định dạng',
-  'dup.newest': 'Mới nhất', 'dup.newestUnknown': 'Không xác định được bản mới nhất', 'dup.reveal': 'Hiện trong Finder', 'dup.open': 'Mở chi tiết', 'dup.revision': 'rev {n}',
+  'dup.newest': 'Mới nhất', 'dup.newestUnknown': 'Không xác định được bản mới nhất', 'dup.reveal': 'Hiện trong Finder', 'dup.revealFail': 'Không mở được Finder: {msg}', 'dup.open': 'Mở chi tiết', 'dup.revision': 'rev {n}',
   'dup.count': '{n} nhóm', 'dup.members': '{n} bản', 'dup.note': 'Chỉ để xem: app không xoá hay di chuyển file của bạn.',
   'compare.title': 'Compare', 'compare.back': 'Quay lại thư viện', 'compare.sameSize': 'Same size', 'compare.matchXh': 'Match x-height',
   'compare.sameSize.gloss': 'cùng cỡ chữ', 'compare.matchXh.gloss': 'cùng chiều cao chữ thường', 'compare.overlay': 'Overlay', 'compare.overlay.gloss': 'chồng glyph, chung baseline',

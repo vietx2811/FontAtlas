@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
 import { DuplicatesPage } from '../DuplicatesPage';
 
@@ -40,18 +41,28 @@ describe('DuplicatesPage', () => {
     expect(screen.getByText('SFNT')).toBeTruthy();
   });
 
-  it('offers only viewing actions: open detail and (when the path is the face path) reveal in Finder — never delete or move', async () => {
+  it('offers only viewing actions: every member with a path can be revealed at exactly its own path; never delete or move', async () => {
     const api = await mount();
-    const reveal = vi.spyOn(api, 'revealInFinder');
+    const reveal = vi.spyOn(api, 'revealLocation');
     expect(screen.queryByRole('button', { name: /xoá|xóa|delete|di chuyển|move|gộp/i })).toBeNull();
-    const first = screen.getAllByTestId('dup-member')[0];
-    fireEvent.click(within(first).getByRole('button', { name: 'Hiện trong Finder' }));
-    expect(reveal).toHaveBeenCalledTimes(1);
-    fireEvent.click(within(first).getByRole('button', { name: 'Mở chi tiết' }));
+    const same = screen.getAllByTestId('dup-group').find(x => /Be Vietnam Pro Regular/.test(x.textContent ?? '') && x.querySelectorAll('[data-testid=dup-member]').length === 2)!;
+    const [m1, m2] = within(same).getAllByTestId('dup-member');
+    fireEvent.click(within(m1).getByRole('button', { name: 'Hiện trong Finder' }));
+    fireEvent.click(within(m2).getByRole('button', { name: 'Hiện trong Finder' }));
+    expect(reveal.mock.calls.map(c => c[0])).toEqual([within(m1).getByTestId('dup-path').getAttribute('title'), within(m2).getByTestId('dup-path').getAttribute('title')]);
+    expect(reveal.mock.calls[0][0]).not.toBe(reveal.mock.calls[1][0]);
+    fireEvent.click(within(m1).getByRole('button', { name: 'Mở chi tiết' }));
     expect(useUiStore.getState().selectedId).toBeTruthy();
-    // đường dẫn khác đường dẫn của face: không có nút Finder (không chỉ sai chỗ)
-    const second = screen.getAllByTestId('dup-member')[1];
-    expect(within(second).queryByRole('button', { name: 'Hiện trong Finder' })).toBeNull();
+  });
+
+  it('a member without a path has no Finder button; a reveal failure shows an error notice', async () => {
+    const api = await mount();
+    const nopath = screen.getAllByTestId('dup-member').find(x => within(x).getByTestId('dup-path').textContent === '—')!;
+    expect(within(nopath).queryByRole('button', { name: 'Hiện trong Finder' })).toBeNull();
+    useNoticeStore.setState({ notices: [] });
+    vi.spyOn(api, 'revealLocation').mockRejectedValue(new Error('không có trong thư viện'));
+    fireEvent.click(within(screen.getAllByTestId('dup-member')[0]).getByRole('button', { name: 'Hiện trong Finder' }));
+    await waitFor(() => expect(useNoticeStore.getState().notices[0]?.text).toContain('không có trong thư viện'));
   });
 
   it('passes the current filters to both calls', async () => {

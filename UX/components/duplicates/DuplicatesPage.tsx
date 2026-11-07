@@ -3,6 +3,7 @@ import type { Api, DuplicateGroupDto, DuplicateMemberDto } from '../../api';
 import { hasKey, t, type I18nKey } from '../../i18n';
 import { faceKey, toMetadataQuery, useUiStore } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
+import { useNoticeStore } from '../../store/notices';
 import { Tooltip } from '../ui/Tooltip';
 import { ZeroState } from '../zero/ZeroState';
 import { dateText, groupTitle, midEllipsis, revisionText } from './duplicatesFormat';
@@ -15,8 +16,10 @@ const kindGloss = (k: string): string | null => (hasKey(`dup.kind.${k}.gloss`) ?
 
 function Member({ api, m }: { api: Api; m: DuplicateMemberDto }): React.JSX.Element {
   const key = { hashHex: m.row.hashHex, faceIndex: m.row.faceIndex };
-  // Chỉ chỉ đúng chỗ khi đường dẫn của thành viên chính là đường dẫn của face (same_file có nhiều đường dẫn cho một face).
-  const canReveal = !!m.path && m.path === m.row.path;
+  const reveal = async () => {
+    if (!m.path) return;
+    try { await api.revealLocation(m.path); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.revealFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+  };
   return (
     <li className="dup-member" data-testid="dup-member">
       <div className="dup-main">
@@ -33,7 +36,7 @@ function Member({ api, m }: { api: Api; m: DuplicateMemberDto }): React.JSX.Elem
         </>}
       </div>
       <div className="dup-acts">
-        {canReveal && <button type="button" onClick={() => void api.revealInFinder(key).catch(() => {})}>{t('dup.reveal')}</button>}
+        {m.path && <button type="button" onClick={() => void reveal()}>{t('dup.reveal')}</button>}
         <button type="button" onClick={() => useUiStore.getState().select(faceKey(key))}>{t('dup.open')}</button>
       </div>
     </li>

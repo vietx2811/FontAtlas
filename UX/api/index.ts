@@ -47,6 +47,8 @@ export interface Api extends LibraryApi {
   tagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   untagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   revealInFinder(face: FaceKeyDto): Promise<void>;
+  /** Mở Finder đúng một đường dẫn đã lưu trong thư viện (nhóm cùng tệp có nhiều đường dẫn cho một face). */
+  revealLocation(path: string): Promise<void>;
   getUiState(): Promise<UiStateDto>;
   setUiState(state: UiStateDto): Promise<void>;
   // Phân tích
