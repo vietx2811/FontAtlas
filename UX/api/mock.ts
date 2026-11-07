@@ -292,9 +292,10 @@ const MOCK_AUTO: Array<[RegExp, string, string | null, number]> = [
   [/Didone|Playfair|Abril|Bodoni/, 'serif', 'didone', 0.94],
   [/Serif|Fraunces|Cormorant/, 'serif', 'old_style', 0.9],
   [/Mono/, 'mono', null, 0.95],
-  [/Bebas|Oswald/, 'sans', 'grotesque', 0.9],
+  [/Bebas/, 'unclassified', null, 0],
+  [/Oswald/, 'sans', 'grotesque', 0.9],
 ];
-const CLASS_LABEL: Record<string, string> = { serif: 'Serif', sans: 'Sans', mono: 'Mono', script: 'Script', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain' };
+const CLASS_LABEL: Record<string, string> = { serif: 'Serif', sans: 'Sans', mono: 'Mono', script: 'Script', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain', unclassified: 'Chưa phân loại' };
 export function mockAutoClass(family: string): { class: string; subclass: string | null; confidence: number } {
   const hit = MOCK_AUTO.find(([re]) => re.test(family));
   return hit ? { class: hit[1], subclass: hit[2], confidence: hit[3] } : { class: 'sans', subclass: null, confidence: 0.9 };

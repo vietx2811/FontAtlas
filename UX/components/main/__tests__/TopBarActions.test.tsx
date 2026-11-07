@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createMockApi, mockRows } from '../../../api/mock';
+import { mockRows } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { rowKey, useSelectionStore } from '../../../store/selection';
 import { useUiStore } from '../../../store/ui';
@@ -15,12 +15,12 @@ beforeEach(() => { useUiStore.setState(ui0, true); useSelectionStore.getState().
 
 describe('TopBarActions', () => {
   it('shows nothing with no selection', () => {
-    render(<TopBarActions api={createMockApi()} />);
+    render(<TopBarActions />);
     expect(screen.queryByRole('group', { name: 'Pair / Compare' })).toBeNull();
   });
 
   it('1 font: Pair and Find similar; Pair opens the Pair tab on that font', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(1);
+    render(<TopBarActions />); pick(1);
     expect(screen.getByRole('button', { name: 'Pair' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Find similar' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
@@ -31,7 +31,7 @@ describe('TopBarActions', () => {
   });
 
   it('2–4 fonts: Compare and Pair these, with the selection count', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(3);
+    render(<TopBarActions />); pick(3);
     expect(screen.getByText('3 chọn')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Compare' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Pair these' })).toBeTruthy();
@@ -40,14 +40,14 @@ describe('TopBarActions', () => {
   });
 
   it('Compare has no backend yet: it opens the nearest screen (first font, Anatomy) and says so', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(2);
+    render(<TopBarActions />); pick(2);
     fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
     expect(useUiStore.getState()).toMatchObject({ selectedId: rowKey(rows[0]), panelTab: 'anat' });
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Compare/);
   });
 
   it('more than 4: Compare stays enabled and a narrowing hint can cut the selection to 4', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(6);
+    render(<TopBarActions />); pick(6);
     expect((screen.getByRole('button', { name: 'Compare' }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText('6 font — nên ≤ 4 để so rõ.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
@@ -56,13 +56,13 @@ describe('TopBarActions', () => {
   });
 
   it('the count chip clears the selection', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(2);
+    render(<TopBarActions />); pick(2);
     fireEvent.click(screen.getByRole('button', { name: 'Bỏ chọn' }));
     expect(useSelectionStore.getState().rows.size).toBe(0);
   });
 
   it('⇧P and ⇧C trigger Pair / Compare; ignored while typing in a field', () => {
-    render(<><input aria-label="x" /><TopBarActions api={createMockApi()} /></>); pick(2);
+    render(<><input aria-label="x" /><TopBarActions /></>); pick(2);
     fireEvent.keyDown(document.body, { key: 'P', shiftKey: true });
     expect(useUiStore.getState().panelTab).toBe('pair');
     fireEvent.keyDown(document.body, { key: 'C', shiftKey: true });
@@ -74,14 +74,45 @@ describe('TopBarActions', () => {
   });
 
   it('⇧C does nothing for a single font (Compare needs 2+)', () => {
-    render(<TopBarActions api={createMockApi()} />); pick(1);
+    render(<TopBarActions />); pick(1);
     fireEvent.keyDown(document.body, { key: 'C', shiftKey: true });
     expect(useUiStore.getState().panelTab).not.toBe('anat');
   });
 
   it('buttons carry the shortcut in their tooltip', async () => {
-    render(<TopBarActions api={createMockApi()} />); pick(2);
+    render(<TopBarActions />); pick(2);
     expect(await tipOf(screen.getByRole('button', { name: 'Compare' }))).toContain('⇧C');
     expect(names().length).toBeGreaterThan(2);
+  });
+
+  it('Pair these (2+) says there is no dedicated command yet; single Pair stays quiet', () => {
+    render(<TopBarActions />); pick(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Pair' }));
+    expect(useNoticeStore.getState().notices).toHaveLength(0);
+    pick(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Pair these' }));
+    expect(useNoticeStore.getState().notices[0].text).toMatch(/Pair these/);
+    expect(useUiStore.getState().panelTab).toBe('pair');
+  });
+
+  it('shortcuts are ignored under menus, dialogs, repeats, IME and prevented events', () => {
+    render(<TopBarActions />); pick(2);
+    const attempt = (init: KeyboardEventInit = {}) => { useUiStore.getState().setPanelTab('spec'); fireEvent.keyDown(document.body, { key: 'P', shiftKey: true, ...init }); return useUiStore.getState().panelTab; };
+    for (const role of ['menu', 'dialog', 'alertdialog']) {
+      const el = document.createElement('div'); el.setAttribute('role', role); document.body.append(el);
+      expect(attempt()).toBe('spec'); el.remove();
+    }
+    const modal = document.createElement('div'); modal.setAttribute('aria-modal', 'true'); document.body.append(modal);
+    expect(attempt()).toBe('spec'); modal.remove();
+    expect(attempt({ repeat: true })).toBe('spec');
+    expect(attempt({ isComposing: true })).toBe('spec');
+    expect(attempt()).toBe('pair');
+  });
+
+  it('narrowing keeps the anchor when it is still inside the first four', () => {
+    render(<TopBarActions />);
+    act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[2]), index: 2 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
+    expect(useSelectionStore.getState().anchor).toEqual({ key: rowKey(rows[2]), index: 2 });
   });
 });

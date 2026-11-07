@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockApi, mockRows } from '../../../api/mock';
+import { useNoticeStore } from '../../../store/notices';
+import { useUiStore } from '../../../store/ui';
 import type { ClassificationDto } from '../../../api';
 import { tipOf } from '../../../test/tip';
 import { ClassChip } from '../ClassChip';
@@ -56,12 +58,65 @@ describe('ClassChip', () => {
     const set = vi.spyOn(api, 'setClassificationOverride');
     fireEvent.click(screen.getByTestId('class-chip'));
     expect(screen.queryByRole('menuitem', { name: 'Về tự động' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /Display/ })).toBeNull();
+    expect(screen.queryByRole('menuitemradio', { name: /Display/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     fireEvent.click(screen.getByTestId('class-chip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Script/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Script/ }));
     await waitFor(() => expect(set).toHaveBeenCalledWith({ face, class: 'script', subclass: null }));
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('opening the menu focuses the current class; arrows move; Esc closes and returns focus to the chip', () => {
+    mount(info({ class: 'sans', label: 'Sans', subclass: null }));
+    const chip = screen.getByTestId('class-chip');
+    fireEvent.click(chip);
+    const items = screen.getAllByRole('menuitemradio');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: /^Sans/ }));
+    expect(screen.getByRole('menuitemradio', { name: /^Sans/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[2]);
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' }); fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(chip);
+  });
+
+  it('Tab closes the menu and the chip is spoken with its value', () => {
+    mount(info());
+    const chip = screen.getByTestId('class-chip');
+    expect(chip.getAttribute('aria-label')).toBe('Serif, Didone — Đổi phân loại');
+    fireEvent.click(chip);
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('a failing override shows an error notice, does not call onChanged and does not reload the grid', async () => {
+    useNoticeStore.setState({ notices: [] });
+    const api = createMockApi();
+    const rev = useUiStore.getState().gridRev;
+    vi.spyOn(api, 'setClassificationOverride').mockRejectedValue(new Error('db locked'));
+    const { onChanged } = mount(info(), api);
+    fireEvent.click(screen.getByTestId('class-chip'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Script/ }));
+    await waitFor(() => expect(useNoticeStore.getState().notices[0]?.text).toContain('db locked'));
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(useUiStore.getState().gridRev).toBe(rev);
+  });
+
+  it('a successful override reloads the grid (class filters must follow)', async () => {
+    const rev = useUiStore.getState().gridRev;
+    mount(info());
+    fireEvent.click(screen.getByTestId('class-chip'));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Script/ }));
+    await waitFor(() => expect(useUiStore.getState().gridRev).toBe(rev + 1));
+  });
+
+  it('tooltip uses translated signal and usage labels', async () => {
+    mount(info());
+    const tip = await tipOf(screen.getByTestId('class-chip'));
+    expect(tip).toContain('Số đo');
+    expect(tip).toContain('Display (tiêu đề lớn)');
   });
 });
