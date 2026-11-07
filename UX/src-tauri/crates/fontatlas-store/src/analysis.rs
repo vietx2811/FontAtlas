@@ -179,6 +179,15 @@ impl Store {
         Ok(out)
     }
 
+    /// `path` có là một vị trí (chưa missing) đang lưu trong thư viện không (so khớp nguyên văn).
+    pub fn has_location(&self, path: &str) -> Result<bool, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT 1 FROM file_locations WHERE path = ?1 AND missing = 0 LIMIT 1", [path], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
     /// Vị trí chưa missing có location_id nhỏ nhất.
     pub fn face_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
         let p: Option<String> = self

@@ -6,7 +6,7 @@ use app_lib::dto::analysis::*;
 use app_lib::dto::library::*;
 use app_lib::index_bundle::wait_rebuilt;
 use app_lib::services::activation::NoActivation;
-use app_lib::services::{analysis, boot, duplicates, library, sources};
+use app_lib::services::{analysis, boot, duplicates, library, sources, system};
 use app_lib::state::{AppDirs, AppState};
 
 fn fixture(name: &str) -> PathBuf {
@@ -258,4 +258,43 @@ fn ttc_copied_to_two_places_is_one_same_file_group() {
     assert_eq!(same.len(), 1, "{g:?}");
     assert_eq!(same[0].faces.len(), 2);
     assert!(same[0].faces.iter().all(|f| f.format == "ttc" && f.row.face_index == 0));
+}
+
+#[test]
+fn reveal_location_only_accepts_paths_known_to_the_store() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let roboto = std::fs::read(fixture("roboto.ttf")).unwrap();
+    let st = state_with(td.path(), &[("a/roboto.ttf", roboto.clone()), ("b/copy.ttf", roboto)]);
+    let known = groups(&st)[0].faces.iter().filter_map(|f| f.path.clone()).collect::<Vec<_>>();
+    assert_eq!(known.len(), 2);
+    let seen = std::cell::RefCell::new(Vec::<PathBuf>::new());
+    let reveal = |p: &Path| -> Result<(), String> {
+        seen.borrow_mut().push(p.to_path_buf());
+        Ok(())
+    };
+    // từng đường dẫn của nhóm: được mở đúng đường dẫn đó
+    for p in &known {
+        system::reveal_location(&st, p, &reveal).unwrap();
+    }
+    assert_eq!(seen.borrow().iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>(), known);
+    // đường dẫn lạ / tuỳ ý bị từ chối và KHÔNG gọi reveal
+    let before = seen.borrow().len();
+    for bad in ["/etc/passwd", "/", "", "relative/roboto.ttf", &format!("{}/../a/roboto.ttf.fake", td.path().display()), "/nonexistent/x.ttf", "a\0b"] {
+        let e = system::reveal_location(&st, bad, &reveal).unwrap_err();
+        assert_eq!(e.code, "invalid_arg", "{bad}: {e:?}");
+    }
+    // một tệp có thật trên đĩa nhưng KHÔNG thuộc thư viện cũng bị từ chối
+    let outside = td.path().join("outside.ttf");
+    std::fs::write(&outside, b"x").unwrap();
+    assert_eq!(system::reveal_location(&st, outside.to_str().unwrap(), &reveal).unwrap_err().code, "invalid_arg");
+    assert_eq!(seen.borrow().len(), before, "không mở gì ngoài thư viện");
+    // đường dẫn trong thư viện nhưng viết kiểu khác (có `..`) được chuẩn hoá về đúng vị trí đã lưu
+    let dotted = format!("{}/x/../{}", Path::new(&known[0]).parent().unwrap().display(), Path::new(&known[0]).file_name().unwrap().to_string_lossy());
+    std::fs::create_dir_all(Path::new(&known[0]).parent().unwrap().join("x")).unwrap();
+    system::reveal_location(&st, &dotted, &reveal).unwrap();
+    assert_eq!(seen.borrow().last().unwrap().to_string_lossy(), known[0]);
+    // lỗi từ opener được trả về dạng typed
+    let err = system::reveal_location(&st, &known[0], &|_| Err("finder lỗi".into())).unwrap_err();
+    assert_eq!(err.code, "io");
 }

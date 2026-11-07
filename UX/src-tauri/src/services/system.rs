@@ -59,6 +59,46 @@ pub fn reveal_in_finder(
     reveal(&path).map_err(|e| CmdError::new("io", e).with_detail(serde_json::json!({ "source": "app", "op": "reveal" })))
 }
 
+/// Mở Finder tại MỘT đường dẫn cụ thể của nhóm same_file. Chỉ nhận đường dẫn đang có trong Store (so nguyên văn, hoặc sau
+/// khi chuẩn hoá bằng `canonicalize` nếu tệp còn trên đĩa); đường dẫn lạ → `invalid_arg`: webview không được mở đường
+/// dẫn tuỳ ý.
+pub fn reveal_location(state: &AppState, path: &str, reveal: &dyn Fn(&StdPath) -> Result<(), String>) -> Result<(), CmdError> {
+    let p = StdPath::new(path);
+    if path.is_empty() || path.contains('\0') || !p.is_absolute() {
+        return Err(CmdError::invalid_arg("đường dẫn không hợp lệ"));
+    }
+    let known = |s: &str| state.with_store(|st| Ok(st.has_location(s)?));
+    // thử lần lượt: nguyên văn → chuẩn hoá chữ (bỏ `.`/`..`, không đụng đĩa) → canonicalize; chỉ mở đường dẫn ĐÃ LƯU
+    let lexical = {
+        let mut out = std::path::PathBuf::new();
+        for c in p.components() {
+            match c {
+                std::path::Component::ParentDir => {
+                    out.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => out.push(other.as_os_str()),
+            }
+        }
+        out
+    };
+    let mut candidates = vec![path.to_string(), lexical.to_string_lossy().into_owned()];
+    if let Ok(c) = std::fs::canonicalize(p) {
+        candidates.push(c.to_string_lossy().into_owned());
+    }
+    let mut target = None;
+    for c in candidates {
+        if known(&c)? {
+            target = Some(std::path::PathBuf::from(c));
+            break;
+        }
+    }
+    let Some(target) = target else {
+        return Err(CmdError::invalid_arg("đường dẫn không nằm trong thư viện"));
+    };
+    reveal(&target).map_err(|e| CmdError::new("io", e).with_detail(serde_json::json!({ "source": "app", "op": "reveal" })))
+}
+
 pub fn backup_user_db(state: &AppState) -> Result<String, CmdError> {
     state.with_user(|u| Ok(u.backup_user_db()?.to_string_lossy().into_owned()))
 }
