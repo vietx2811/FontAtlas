@@ -50,20 +50,22 @@ Thay vùng nội dung (sidebar vẫn còn). `Esc` hoặc nút ‹ quay lại th�
 - **License:** một dòng ghi chú ("Chỉ ghi chú, không chặn"). Không chặn bất cứ thao tác nào (memory *Tool, not gatekeeper*).
 - **Xuất PNG/PDF:** nút ở góc phải; bản mẫu chỉ hiện toast "chưa xuất thật". Bản build: xuất đúng bảng đang xem (cả Δ, percentile, dòng dấu).
 
-## 3. Chỗ cho Classification
+## 3. Classification trong Compare
 
-Nhóm "Classification" luôn có mặt (có thể tắt bằng `cls=0` trong prototype để thấy cách bố cục co lại). Tên trường theo kế hoạch D1 (DTO do 02 làm trên `feat/classify`):
+DTO do 02 làm trên `feat/classify` (SHA `1359fdf`); prototype dùng đúng tên trường. Mỗi face: `FaceDetailDto.classificationInfo = {class, label, subclass, confidence, signals[], usage[], source: "auto"|"override", autoClass}`.
 
 | Trường | Hiển thị |
 |---|---|
-| `class` | chữ đậm: Serif / Sans / Mono / Script / Display / Blackletter / Symbol |
-| `subclass` | chữ phụ: vd Didone/Modern, Geometric |
+| `label` | chữ đậm (Serif / Sans / Mono / Script / Display / Blackletter / Symbol) |
+| `subclass` | chữ phụ, vd Didone/Modern, Geometric |
 | `confidence` | thanh mảnh + `82%` |
-| `signals[]` | không hiện mặc định; chỉ dùng cho tooltip/Detail về sau |
-| **Uncertain** | khi tín hiệu mâu thuẫn: chip cam **Uncertain** + "Tín hiệu mâu thuẫn: serif_foot ↔ Panose". Không đoán |
+| `source = "override"` | chip **Đã sửa**, tooltip `auto: {autoClass}` (kết quả tự động bị ghi đè) |
+| `class = "uncertain"` | chip cam **Uncertain** + "Tín hiệu mâu thuẫn: …" lấy từ `signals[]`; không đoán |
+| `usage[]` | Text / Display / UI; chưa hiện trong Compare, dành cho Detail |
 
-- Người dùng ghi đè được (kế hoạch D1): ô class sẽ có menu "Sửa…" ở bản build; prototype chưa vẽ.
-- Cột có class khác mốc: để dành đánh dấu nhẹ (chưa làm; đề xuất vòng sau).
+- Sửa tay: `setClassificationOverride` / `clearClassificationOverride` (ô class sẽ có menu "Sửa…" / "Về tự động" ở bản build; prototype chưa vẽ).
+- Lọc Thư viện: `FaceQueryDto.classes[]`, `subclasses[]` (OR trong nhóm, AND giữa nhóm, dùng phân loại hiệu lực); số đếm cho mặt lọc từ `classFacets(q) → [{class,count,subclasses:[{subclass,count}]}]` (đếm bỏ qua chính classes/subclasses).
+- Để vòng sau: đánh dấu nhẹ cột có class khác mốc.
 
 ## 4. i18n
 
@@ -75,7 +77,7 @@ Nhóm "Classification" luôn có mặt (có thể tắt bằng `cls=0` trong pro
 
 | Việc | Trạng thái | Ghi chú |
 |---|---|---|
-| `classes` trong `FaceQuery` (lọc theo class) + DTO phân loại `class/subclass/confidence/signals` | D1, 02 trên `feat/classify` | Lead đã chuyển cho 02 |
+| Lọc phân loại + `classificationInfo` + override | **đã có** trên `feat/classify` (`1359fdf`): `classes`, `subclasses`, `classFacets`, `setClassificationOverride`/`clear…` | UI Thư viện thêm mặt lọc Phân loại khi merge |
 | Command Compare: trả số đo + percentile + Δ cho N face một lần | mới | tránh N lần `get_face`; kèm `vi_overflow_pct` cho từng face |
 | `vi_overflow_pct` (dấu tràn khỏi hộp dòng) | có logic ở `vietnamese.rs`, chưa lộ DTO | cần DTO |
 | `stress_deg` có cờ `estimated` | cần chốt | để hiện nhãn "Ước lượng" |
