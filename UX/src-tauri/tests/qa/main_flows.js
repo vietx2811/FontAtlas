@@ -204,6 +204,21 @@
     await wait(() => !document.querySelector('.cmp-tbl') && document.querySelector('[data-testid=selection-count]'), 8000);
     await log('compare-close-keeps-selection', !document.querySelector('.cmp-tbl') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });
 
+    // Pair these (2 font): màn Combo thật từ command pair_these; Esc về thư viện giữ vùng chọn
+    const pairBtn = [...document.querySelectorAll('header.fa-topbar [role=group][aria-label="Pair / Compare"] button')].find(x => x.getAttribute('aria-label') === 'Pair these');
+    pairBtn?.click();
+    const prRoot = await wait(() => document.querySelector('.pr'), 20000);
+    await wait(() => document.querySelector('[data-testid=pair-combo], [data-testid=zero-state], .pr-state[role=alert]'), 30000);
+    await sleep(500); await snap('pair-these-open');
+    const comboN = document.querySelectorAll('[data-testid=pair-combo]').length;
+    const prAlert = document.querySelector('.pr-state[role=alert]')?.textContent ?? null;
+    const prLabels = document.querySelectorAll('[data-testid=pair-label]').length;
+    const prCrashed = /Lỗi giao diện/.test(document.body.textContent ?? '');
+    await log('pair-these-open', !!prRoot && !prAlert && !prCrashed && (comboN === 0 ? !!document.querySelector('[data-testid=zero-state]') : comboN <= 3 && prLabels >= comboN), { comboN, prLabels, prAlert, prCrashed, first: document.querySelector('[data-testid=pair-summary]')?.textContent });
+    (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await wait(() => !document.querySelector('.pr') && document.querySelector('[data-testid=selection-count]'), 8000);
+    await log('pair-these-close-keeps-selection', !document.querySelector('.pr') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });
+
     // Menu ngữ cảnh trong vùng chọn → giữ vùng chọn, menu nhiều font
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));

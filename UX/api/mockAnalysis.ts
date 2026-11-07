@@ -73,3 +73,16 @@ export function pairFor(row: FaceRow, rows: FaceRow[], o: PairOptsDto): PairCand
     };
   });
 }
+
+/** Combo giả cho (heading, body): nhãn ●◐◆○ ổn định theo cặp, không có điểm số. */
+export function comboAssessment(heading: FaceRow, body: FaceRow, seed: number): PairCandidateDto {
+  const sym = (j: number): PairSymbol => (['●', '◐', '○', '●', '◆'] as const)[(seed + j + body.faceId) % 5];
+  const labels: PairLabelDto[] = PAIR_AXES.map((axis, j) => ({ axis, relation: RELATIONS[sym(j)], symbol: sym(j), delta: null, a: null, b: null, roleReversed: false }));
+  const clashes = labels.filter(l => l.symbol === '◆').map(l => l.axis);
+  return {
+    face: { hashHex: body.hashHex, faceIndex: body.faceIndex }, row: body, gate: clashes.length ? 'experimental' : 'safe', labels, clashes,
+    bodyWarnings: heading.viMissing > 0 ? ['no_vietnamese'] : [], headingOverflow: false, insufficientData: false, weightHint: null, block: null,
+    sentences: [`${heading.family} làm tiêu đề, ${body.family} làm nội dung: ${RELATIONS[labels[0].symbol]} về chiều cao x.`],
+    summary: `${body.family} đi cùng ${heading.family}: ${RELATIONS[labels[0].symbol]}, ${RELATIONS[labels[1].symbol]}.`,
+  };
+}

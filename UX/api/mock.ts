@@ -6,7 +6,7 @@ import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
 import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
-import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, similarFor, viMissingFor } from './mockAnalysis';
+import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
   type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
@@ -189,7 +189,32 @@ export function createMockApi(o: MockOptions = {}): Api {
     getUiState: () => ok(ui),
     async setUiState(s) { ui = { ...s }; },
 
-    async compareFaces(faces) { return composeCompare(this, faces); },
+    async compareFaces(faces) {
+      const c = await composeCompare(this, faces);
+      c.faces.forEach(f => {
+        const sib = rows.filter(r => r.family === f.row.family);
+        const weights = [...new Set(sib.map(r => r.weightClass ?? 400))].sort((a, b) => a - b);
+        const serif = mockAutoClass(f.row.family).class === 'serif';
+        f.extras = {
+          vendorId: f.row.faceId % 3 === 0 ? null : 'MOCK', years: { created: 2016 + (f.row.faceId % 6), modified: 2021, copyright: 2016 + (f.row.faceId % 6) },
+          otGroups: [{ group: 'figures', tags: ['lnum', 'onum'], sets: [] }, { group: 'ligatures', tags: ['liga'], sets: [] }, ...(serif ? [{ group: 'small_caps', tags: ['smcp'], sets: [] }, { group: 'stylistic_sets', tags: ['ss01', 'ss02'], sets: [{ tag: 'ss01', name: 'Alternate a' }, { tag: 'ss02', name: null }] }] : [])],
+          kerning: { source: 'gpos', pairs: 4000 + f.row.faceId * 37, classPairs: 1200 + f.row.faceId * 11 },
+          style: { italicKind: f.row.isItalic ? 'italic' : 'upright', italAxis: false, slntAxis: false, wghtRange: f.row.isVariable ? [400, 900] : null, wdthRange: null, opszRange: null },
+          embedding: { fsType: 0, level: 'installable', flags: [] }, licenseKind: 'ofl',
+        };
+        f.family = { family: f.row.family, faces: sib.length, weights, widths: [5], hasItalic: sib.some(r => r.isItalic), hasOblique: false, hasOpsz: false, hasVariable: sib.some(r => r.isVariable) };
+        f.licenseNote = { kind: 'ofl', description: 'SIL Open Font License 1.1', url: 'https://openfontlicense.org', embedding: f.extras.embedding };
+        f.license = 'ofl';
+        if (f.vi.stackedMarksTopEm != null) { f.vi.overCapPctEm = Math.max(0, Math.round((f.vi.stackedMarksTopEm - 0.7) * 1000) / 10); f.vi.overAscenderPctEm = f.vi.stackedMarksOverflow ? Math.max(1, f.vi.overCapPctEm - 30) : 0; }
+      });
+      return c;
+    },
+    async pairThese(faces, o = {}) {
+      if (faces.length < 2 || faces.length > 4) throw new CmdError('invalid_arg', 'pair these needs 2–4 faces');
+      const picked = faces.map(findRow);
+      const all: Array<[FaceRow, FaceRow]> = picked.flatMap(h => picked.filter(b => b !== h && (!o.projectVi || b.viMissing === 0)).map(b => [h, b] as [FaceRow, FaceRow]));
+      return all.slice(0, Math.min(3, Math.max(1, o.maxCombos ?? 3))).map(([h, b], i) => ({ heading: h, body: b, assessment: comboAssessment(h, b, i), rank: i + 1 }));
+    },
     async savePng(png, name) { return downloadBlob(png, name); },
     async classFacets(q = {}) {
       const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });

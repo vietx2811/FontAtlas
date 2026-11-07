@@ -4,7 +4,7 @@ import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  AxisStatsDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
@@ -62,6 +62,8 @@ export interface Api extends LibraryApi {
   compareFaces(faces: FaceKeyDto[]): Promise<CompareDto>;
   /** Lưu ảnh PNG: backend mở hộp thoại Lưu (lọc .png) và ghi file; trả đường dẫn đã lưu, `null` nếu người dùng huỷ. Mock/trình duyệt: tải xuống. */
   savePng(png: Blob, suggestedName: string): Promise<string | null>;
+  /** "Pair these": 2–4 font → 1–3 Combo (thử mọi cách gán vai heading/body), xếp hạng, không có điểm số. */
+  pairThese(faces: FaceKeyDto[], opts?: PairTheseOpts): Promise<PairComboDto[]>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */

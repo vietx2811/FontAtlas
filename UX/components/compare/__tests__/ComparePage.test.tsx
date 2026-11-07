@@ -5,6 +5,7 @@ import { buildCompare, type CompareDto, type CompareMetric } from '../../../api/
 import { useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
 import { ComparePage } from '../ComparePage';
+import { EmbeddingCell, KerningCell, OtCell, StyleCell, YearsCell } from '../MetaCells';
 
 const initial = useUiStore.getState();
 const rows = mockRows();
@@ -198,5 +199,68 @@ describe('ComparePage', () => {
     render(<ComparePage api={api} faces={[...faces(1), { hashHex: abril.hashHex, faceIndex: abril.faceIndex }]} />);
     await screen.findByRole('table');
     expect(screen.getByText(/Quirky new trait/)).toBeTruthy();
+  });
+
+  it('Vietnamese overflow is shown as a percentage of em when the backend gives it', async () => {
+    const api = await crafted(d => { d.faces[1].vi = { ...d.faces[1].vi, supports: true, stackedMarksOverflow: true, stackedMarksTopEm: 1.12, overAscenderPctEm: 4.5, overCapPctEm: 41.2 }; });
+    await mount(api);
+    expect(screen.getByText('Dấu tràn khung · 4,5% em')).toBeTruthy();
+  });
+
+  it('Meta rows list vendor, years, style, family, OpenType groups, kerning and embedding with English terms and glosses', async () => {
+    await mount();
+    for (const term of ['Vendor', 'Years', 'Style', 'Family', 'OpenType features', 'Kerning', 'Embedding']) expect(screen.getByText(term)).toBeTruthy();
+    expect(screen.getByText('nhà phát hành (OS/2 vendor ID)')).toBeTruthy();
+    expect(screen.getAllByText('Figures').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Installable').length).toBe(3);
+  });
+
+  it('Meta cells say "—" with an explanation when the analysis has no extras (old data)', async () => {
+    const api = await crafted(d => { d.faces[1].extras = null; d.faces[1].family = null; d.faces[1].licenseNote = null; });
+    await mount(api);
+    expect(screen.getAllByTitle('Chưa có dữ liệu — quét lại để cập nhật').length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('MetaCells', () => {
+  const face = (extras: unknown, family: unknown = null) => ({ extras, family, licenseNote: null }) as never;
+  it('real vs oblique italic, axes and kerning render readable text', () => {
+    render(<><StyleCell face={face({ style: { italicKind: 'oblique', italAxis: false, slntAxis: true, wghtRange: [300, 800], wdthRange: null, opszRange: [8, 144] } })} />
+      <KerningCell face={face({ kerning: { source: 'none', pairs: 0, classPairs: 0 } })} /><KerningCell face={face({ kerning: { source: 'gpos', pairs: 8780, classPairs: 3417 } })} /></>);
+    expect(screen.getByText('Oblique')).toBeTruthy();
+    expect(screen.getByText('Weight 300–800')).toBeTruthy();
+    expect(screen.getByText('Optical size 8–144')).toBeTruthy();
+    expect(screen.getByText('Không có kerning')).toBeTruthy();
+    expect(screen.getByText(/8780 cặp|8\.780 cặp/)).toBeTruthy();
+  });
+  it('stylistic sets show the count and the set names in the tooltip; unknown groups fall back to their key', () => {
+    render(<OtCell face={face({ otGroups: [{ group: 'stylistic_sets', tags: ['ss01', 'ss02'], sets: [{ tag: 'ss01', name: 'Alternate a' }, { tag: 'ss02', name: null }] }, { group: 'brand_new', tags: ['xx'], sets: [] }] })} />);
+    expect(screen.getByText('Stylistic sets 2').getAttribute('title')).toContain('ss01 Alternate a');
+    expect(screen.getByText('brand_new')).toBeTruthy();
+  });
+  it('years skip a modified year equal to created; embedding flags are translated', () => {
+    render(<><YearsCell face={face({ years: { created: 2017, modified: 2017, copyright: 2016 } })} /><EmbeddingCell face={face(null)} /></>);
+    expect(screen.getByText('Tạo 2017')).toBeTruthy();
+    expect(screen.queryByText('Sửa 2017')).toBeNull();
+    expect(screen.getByText('© 2016')).toBeTruthy();
+  });
+});
+
+describe('stale analysis and missing deltas', () => {
+  it('extrasAvailable=false shows "—" and "Cần quét lại" instead of "Không có kerning"', () => {
+    const f = { extras: { extrasAvailable: false, kerning: { source: 'none', pairs: 0, classPairs: 0 }, vendorId: null, years: {}, otGroups: [], style: null, embedding: null }, family: null, licenseNote: null } as never;
+    render(<><KerningCell face={f} /><OtCell face={f} /></>);
+    expect(screen.queryByText('Không có kerning')).toBeNull();
+    expect(screen.getAllByText('Cần quét lại')).toHaveLength(2);
+  });
+
+  it('a null Δ (angle unit or near-zero base) shows "—" with an explanation, never a made-up number', async () => {
+    const api = await crafted(d => {
+      d.faces[0].metrics.contrast = m(1.3, { unit: 'ratio' });
+      d.faces[1].metrics.contrast = m(2, { unit: 'ratio', delta: { abs: 0.7, pct: null } });
+    });
+    await mount(api);
+    const row = screen.getByText('contrast ⊥').closest('.row') as HTMLElement;
+    expect(within(row).getByTitle('Không có Δ cho số đo này')).toBeTruthy();
   });
 });

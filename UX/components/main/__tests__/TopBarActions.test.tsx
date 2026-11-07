@@ -64,7 +64,8 @@ describe('TopBarActions', () => {
   it('⇧P and ⇧C trigger Pair / Compare; ignored while typing in a field', () => {
     render(<><input aria-label="x" /><TopBarActions /></>); pick(2);
     fireEvent.keyDown(document.body, { key: 'P', shiftKey: true });
-    expect(useUiStore.getState().panelTab).toBe('pair');
+    expect(useUiStore.getState().pairThese).toHaveLength(2);
+    useUiStore.getState().closePairThese();
     fireEvent.keyDown(document.body, { key: 'C', shiftKey: true });
     expect(useUiStore.getState().compare).toHaveLength(2);
     useUiStore.getState().setPanelTab('spec');
@@ -85,19 +86,27 @@ describe('TopBarActions', () => {
     expect(names().length).toBeGreaterThan(2);
   });
 
-  it('Pair these (2+) says there is no dedicated command yet; single Pair stays quiet', () => {
+  it('Pair these (2+) opens the Pair these screen with the selected faces; single Pair opens the Pair tab quietly', () => {
     render(<TopBarActions />); pick(1);
     fireEvent.click(screen.getByRole('button', { name: 'Pair' }));
     expect(useNoticeStore.getState().notices).toHaveLength(0);
-    pick(2);
+    expect(useUiStore.getState()).toMatchObject({ panelTab: 'pair', pairThese: null });
+    pick(3);
     fireEvent.click(screen.getByRole('button', { name: 'Pair these' }));
-    expect(useNoticeStore.getState().notices[0].text).toMatch(/Pair these/);
-    expect(useUiStore.getState().panelTab).toBe('pair');
+    expect(useUiStore.getState().pairThese).toEqual(rows.slice(0, 3).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+    expect(useNoticeStore.getState().notices).toHaveLength(0);
+  });
+
+  it('Pair these takes at most four fonts and says so', () => {
+    render(<TopBarActions />); pick(6);
+    fireEvent.click(screen.getByRole('button', { name: 'Pair these' }));
+    expect(useUiStore.getState().pairThese).toHaveLength(4);
+    expect(useNoticeStore.getState().notices[0].text).toMatch(/tối đa 4/);
   });
 
   it('shortcuts are ignored under menus, dialogs, repeats, IME and prevented events', () => {
     render(<TopBarActions />); pick(2);
-    const attempt = (init: KeyboardEventInit = {}) => { useUiStore.getState().setPanelTab('spec'); fireEvent.keyDown(document.body, { key: 'P', shiftKey: true, ...init }); return useUiStore.getState().panelTab; };
+    const attempt = (init: KeyboardEventInit = {}) => { useUiStore.getState().closePairThese(); fireEvent.keyDown(document.body, { key: 'P', shiftKey: true, ...init }); return useUiStore.getState().pairThese ? 'pair' : 'spec'; };
     for (const role of ['menu', 'dialog', 'alertdialog']) {
       const el = document.createElement('div'); el.setAttribute('role', role); document.body.append(el);
       expect(attempt()).toBe('spec'); el.remove();

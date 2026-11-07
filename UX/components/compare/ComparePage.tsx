@@ -7,6 +7,7 @@ import { useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
+import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
 import { renderCompareBlob } from './exportPng';
 import './compare.css';
@@ -127,7 +128,8 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.class')}</b><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
 
           <Group k="meta" cols={cols} />
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <div className="cmp-lic"><b>{f.license ?? '—'}</b><span>{t('compare.licenseNote')}</span></div>)}</Row>
+          <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <LicenseCell face={f} />)}</Row>
+          {META_ROWS.map(r => <Row key={r.key}><div className="rh" role="rowheader"><b>{t(r.label)}</b><small>{t(r.gloss)}</small></div>{cells(f => <r.Cell face={f} />)}</Row>)}
         </div>
         <p className="cmp-foot">{t('compare.footnote')} · {t('compare.footnote2')}</p>
       </div>

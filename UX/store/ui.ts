@@ -45,6 +45,8 @@ export interface UiState {
   settingsOpen: boolean;
   /** Face đang so sánh (2–8); null = đang ở thư viện. */
   compare: FaceKeyDto[] | null;
+  /** Font đang ghép bằng "Pair these" (2–4); null = không mở. Loại trừ với `compare`. */
+  pairThese: FaceKeyDto[] | null;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
   /** Tăng khi dữ liệu thư viện đổi từ nơi khác (thêm vào dự án, gắn thẻ…): thanh bên nạp lại số đếm/danh sách. */
@@ -75,6 +77,8 @@ export interface UiActions {
   setSettingsOpen(on: boolean): void;
   openCompare(faces: FaceKeyDto[]): void;
   closeCompare(): void;
+  openPairThese(faces: FaceKeyDto[]): void;
+  closePairThese(): void;
   toggleSettings(): void;
   refreshActive(api: Api): Promise<void>;
   bumpLibrary(reloadGrid?: boolean): void;
@@ -135,12 +139,12 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, libraryRev: 0, gridRev: 0, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
-    openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null }),
-    setView: v => set({ view: v, tag: null, familyScope: null, settingsOpen: false, compare: null }),
-    setTag: t => set({ tag: t, familyScope: null, settingsOpen: false, compare: null }),
+    openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null }),
+    setView: v => set({ view: v, tag: null, familyScope: null, settingsOpen: false, compare: null, pairThese: null }),
+    setTag: t => set({ tag: t, familyScope: null, settingsOpen: false, compare: null, pairThese: null }),
     setQuery: q => set({ query: q, familyScope: null }),
     setViOnly: on => set(s => { const { vi: _vi, ...rest } = s.filters; return { viOnly: on, filters: on ? { ...rest, vi: 'full' } : rest }; }),
     setLayout: l => set({ layout: l }),
@@ -157,8 +161,10 @@ export function createUiStore(): UiStore {
     toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     toggleSection: k => set(s => ({ openSections: { ...s.openSections, [k]: !s.openSections[k] } })),
     setSettingsOpen: on => set({ settingsOpen: on }),
-    openCompare: faces => { if (faces.length >= 2) set({ compare: faces.slice(0, 8), settingsOpen: false }); },
+    openCompare: faces => { if (faces.length >= 2) set({ compare: faces.slice(0, 8), pairThese: null, settingsOpen: false }); },
     closeCompare: () => set({ compare: null }),
+    openPairThese: faces => { if (faces.length >= 2) set({ pairThese: faces.slice(0, 4), compare: null, settingsOpen: false }); },
+    closePairThese: () => set({ pairThese: null }),
     toggleSettings: () => set(s => ({ settingsOpen: !s.settingsOpen })),
     requestAddFolder: () => set(s => ({ addFolderRequest: s.addFolderRequest + 1 })),
     toggleInfo: () => set(s => ({ infoExpanded: !s.infoExpanded })),
