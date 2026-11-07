@@ -130,5 +130,6 @@ Mở file HTML trong trình duyệt (cần mạng để tải font Google). Tham
 - **Dấu chồng:** backend chỉ có cờ `stackedMarksOverflow` + `stackedMarksTopEm` (em), không có "% tràn" → UI hiện "Dấu tràn khung · {em} em". Nếu muốn % cần `vi_overflow_pct` trong DTO.
 - **Δ:** % cho độ dài/tỷ lệ; **độ tuyệt đối** cho slant/stress (mốc 0 vẫn có nghĩa). |Δ| < 1% hoặc < 0,5° → "±0".
 - **Match x-height:** cỡ cột = cỡ gốc × `x_height_em(mốc) / x_height_em(cột)`; thiếu hoặc giá trị vô lý → không đổi cỡ.
-- **TODO:** PDF (nút đang khoá). **PNG** vẽ canvas rồi tải qua `<a download>`: chạy được ở trình duyệt; trong WebView Tauri cần kiểm native — nếu không tải được thì cần lệnh lưu file (dialog `save` + ghi file ở backend; app chưa có plugin fs trong Cargo).
+- **TODO:** PDF (nút đang khoá). **PNG:** vẽ canvas (chờ font nạp xong, ×devicePixelRatio) rồi gọi `api.savePng(blob, tênGợiÝ)`. Mock/trình duyệt: tải xuống. **Tauri: cần lệnh `save_png`** (đề xuất `save_png(suggested_name: String, png_base64: String) -> Option<String>`: hộp thoại Lưu lọc .png + ghi file; trả đường dẫn hoặc `null` nếu huỷ). Chỉ báo "Đã lưu" khi có đường dẫn; huỷ thì im; lỗi báo lỗi.
+- **Face không đọc được:** cột đó được bỏ, banner ghi lý do; còn < 2 face thì cả màn lỗi + "Thử lại". Tối đa 8 font (Top Bar báo khi cắt).
 - **Chưa có:** đổi mốc, kéo đổi cột, thêm/bớt cột trong màn (làm khi cần). Hàng Meta chỉ có license (Designer, Foundry, Version… theo v3 để vòng sau).

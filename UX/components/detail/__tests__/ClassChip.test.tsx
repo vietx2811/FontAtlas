@@ -122,7 +122,7 @@ describe('ClassChip', () => {
 
   it('renders unknown signal votes, sources and traits instead of crashing', async () => {
     mount(info({ signals: [{ source: 'future_source', detail: 'x', vote: 'usage', weight: 0.1 }], traits: ['Quirky_new_trait'] }));
-    expect(screen.getByTestId('class-chip').textContent).toContain('Quirky_new_trait');
+    expect(screen.getByTestId('class-chip').textContent).toContain('Quirky new trait');
     expect(await tipOf(screen.getByTestId('class-chip'))).toContain('future_source');
   });
 });

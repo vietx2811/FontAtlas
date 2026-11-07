@@ -20,6 +20,7 @@ const PATHS = {
   pair: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   similar: 'M17.5 11a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0zM16 16l4 4M11 8v6M8 11h6',
   anchor: 'M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 7v14M6 13a6 6 0 0 0 12 0M9 11h6',
+  back: 'M15 18l-6-6 6-6',
   moon: 'M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z',
 } as const;
 export type IconName = keyof typeof PATHS;

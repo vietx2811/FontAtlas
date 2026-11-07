@@ -24,7 +24,7 @@ const mount = async (api = createMockApi(), n = 3) => { render(<ComparePage api=
 describe('ComparePage', () => {
   it('shows one column per face with the first as the base', async () => {
     await mount();
-    const heads = screen.getAllByRole('columnheader').filter(h => h.textContent);
+    const heads = [...document.querySelectorAll('.cmp-tbl .ch')];
     expect(heads).toHaveLength(3);
     expect(heads[0].className).toContain('base');
     expect(heads[0].textContent).toContain('mốc');
@@ -65,7 +65,7 @@ describe('ComparePage', () => {
     await mount(api);
     const row = screen.getByText('contrast ⊥').closest('.row') as HTMLElement;
     expect(within(row).getByText('Δ +273%')).toBeTruthy();
-    expect(within(row).getByRole('img', { name: 'P97' })).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Percentile 97' })).toBeTruthy();
     const stress = screen.getByText('stress').closest('.row') as HTMLElement;
     expect(within(stress).getAllByText('Ước lượng').length).toBeGreaterThan(0);
     expect(within(stress).getByText('Không đo được')).toBeTruthy();
@@ -114,11 +114,82 @@ describe('ComparePage', () => {
     expect(useUiStore.getState().compare).toBeNull();
   });
 
-  it('PNG export reports a failure when canvas is unavailable; PDF is a disabled TODO', async () => {
-    await mount();
+  it('PDF is a disabled TODO; PNG fails loudly when canvas is unavailable (no fake "exported")', async () => {
+    const api = await mount();
+    const save = vi.spyOn(api, 'savePng');
     expect(screen.getByRole('button', { name: 'PDF' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'PNG' }));
     await waitFor(() => expect(useNoticeStore.getState().notices[0]?.kind).toBe('error'));
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('PNG: a saved path is announced; a cancelled dialog (null) stays silent', async () => {
+    const mod = await import('../exportPng');
+    vi.spyOn(mod, 'renderCompareBlob').mockResolvedValue({ blob: new Blob(['x']), name: 'compare-a.png' });
+    const api = await mount();
+    vi.spyOn(api, 'savePng').mockResolvedValueOnce('/Users/me/Desktop/compare-a.png').mockResolvedValueOnce(null);
+    fireEvent.click(screen.getByRole('button', { name: 'PNG' }));
+    await waitFor(() => expect(useNoticeStore.getState().notices[0]?.text).toContain('compare-a.png'));
+    useNoticeStore.setState({ notices: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'PNG' }));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'PNG' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(useNoticeStore.getState().notices).toHaveLength(0);
+  });
+
+  it('moves focus to the title on open and back to the previous element on close', async () => {
+    const outside = document.createElement('button'); document.body.append(outside); outside.focus();
+    const { unmount } = render(<ComparePage api={createMockApi()} faces={faces(2)} />);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Compare/ }));
+    unmount();
+    expect(document.activeElement).toBe(outside); outside.remove();
+  });
+
+  it('a font without Vietnamese is never shown as fitting; its sample is dimmed', async () => {
+    const api = await crafted(d => { d.faces.forEach(f => { f.vi = { ...f.vi, supports: true, missing: 0, stackedMarksOverflow: false }; }); d.faces[1].vi = { ...d.faces[1].vi, supports: false }; });
+    await mount(api);
+    expect(screen.getByText('Không hỗ trợ tiếng Việt')).toBeTruthy();
+    expect(document.querySelectorAll('.cmp-vi[data-unsupported="true"]')).toHaveLength(1);
+    expect(screen.getAllByText('Dấu vừa khung')).toHaveLength(2);
+  });
+
+  it('Match x-height: a column without x-height keeps its size and says why; a missing base draws no x-height line', async () => {
+    const api = await crafted(d => { d.faces[1].metrics.x_height_em = m(null, { quality: 'failed' }); d.faces[0].metrics.x_height_em = m(null, { quality: 'failed' }); });
+    await mount(api);
+    fireEvent.click(screen.getByRole('button', { name: 'Match x-height' }));
+    expect(screen.getAllByText('Không đo được x-height').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('.cmp-overlay line.xh')).toHaveLength(0);
+    expect([...document.querySelectorAll<HTMLElement>('.cmp-line')].every(l => l.style.fontSize === '30px')).toBe(true);
+  });
+
+  it('clamps Match x-height scale to 0.5–2', async () => {
+    const api = await crafted(d => { d.faces[0].metrics.x_height_em = m(0.9); d.faces[1].metrics.x_height_em = m(0.2); d.faces[2].metrics.x_height_em = m(0.9); });
+    await mount(api);
+    fireEvent.click(screen.getByRole('button', { name: 'Match x-height' }));
+    expect(document.querySelectorAll<HTMLElement>('.cmp-line')[1].style.fontSize).toBe('60px');
+  });
+
+  it('a missing base measure shows "—" instead of a Δ, with an explanation', async () => {
+    const api = await crafted(d => { d.faces[0].metrics.contrast = m(null, { quality: 'failed' }); d.faces[1].metrics.contrast = m(2, { unit: 'ratio' }); });
+    await mount(api);
+    const row = screen.getByText('contrast ⊥').closest('.row') as HTMLElement;
+    expect(within(row).getAllByTitle('Mốc không đo được, không có Δ').length).toBeGreaterThan(0);
+  });
+
+  it('an unreadable face is reported with its reason while the others still compare', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'getFace').mockRejectedValueOnce(new Error('file gone'));
+    render(<ComparePage api={api} faces={faces(3)} />);
+    await screen.findByRole('table');
+    expect(screen.getAllByRole('alert')[0]).toHaveTextContent('file gone');
+    expect(document.querySelectorAll('.cmp-tbl .ch')).toHaveLength(2);
+  });
+
+  it('the table has real rows: every row has cells, row headers and column headers', async () => {
+    await mount();
+    const rowsEls = screen.getAllByRole('row');
+    expect(rowsEls.length).toBeGreaterThan(10);
+    expect(screen.getAllByRole('rowheader').length).toBeGreaterThan(8);
+    expect(screen.getAllByRole('columnheader').length).toBeGreaterThan(3);
   });
 
   it('does not crash on values the UI has no translation for (unknown vote/source/trait)', async () => {
@@ -126,6 +197,6 @@ describe('ComparePage', () => {
     const api = createMockApi();
     render(<ComparePage api={api} faces={[...faces(1), { hashHex: abril.hashHex, faceIndex: abril.faceIndex }]} />);
     await screen.findByRole('table');
-    expect(screen.getByText(/Quirky_new_trait/)).toBeTruthy();
+    expect(screen.getByText(/Quirky new trait/)).toBeTruthy();
   });
 });

@@ -60,6 +60,8 @@ export interface Api extends LibraryApi {
   clearClassificationOverride(face: FaceKeyDto): Promise<void>;
   /** So sánh 2–8 face: số đo thật + percentile + Dấu chồng. Hiện ghép từ getFace; khi có command compare_faces thì đổi ở tauri.ts. */
   compareFaces(faces: FaceKeyDto[]): Promise<CompareDto>;
+  /** Lưu ảnh PNG: backend mở hộp thoại Lưu (lọc .png) và ghi file; trả đường dẫn đã lưu, `null` nếu người dùng huỷ. Mock/trình duyệt: tải xuống. */
+  savePng(png: Blob, suggestedName: string): Promise<string | null>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */

@@ -16,8 +16,9 @@ describe('deltaOf', () => {
     expect(deltaOf('x_height_em', m(null, { quality: 'failed' }), m(0.5))).toBeNull();
     expect(deltaOf('x_height_em', m(0.5), m(null, { quality: 'failed' }))).toBeNull();
   });
-  it('is null against a zero base for percentage metrics', () => {
+  it('is null against a zero or near-zero base for percentage metrics', () => {
     expect(deltaOf('contrast', m(2), m(0))).toBeNull();
+    expect(deltaOf('contrast', m(2), m(0.0004))).toBeNull();
   });
 });
 
@@ -35,6 +36,10 @@ describe('fitScale (Match x-height)', () => {
   it('scales a column so its x-height equals the base', () => {
     expect(fitScale(0.528, 0.464)).toBeCloseTo(1.1379, 3);
     expect(fitScale(0.528, 0.528)).toBe(1);
+  });
+  it('clamps extreme ratios to 0.5–2', () => {
+    expect(fitScale(0.9, 0.2)).toBe(2);
+    expect(fitScale(0.2, 0.9)).toBe(0.5);
   });
   it('does not scale when either x-height is unknown or absurd', () => {
     expect(fitScale(null, 0.5)).toBe(1);

@@ -1,5 +1,6 @@
 // Backend giả cho dev (trình duyệt/`cargo tauri dev` không có 6a) và Vitest. Hành vi bám bảng lệnh 6a.
 import { composeCompare } from './compare';
+import { downloadBlob } from './download';
 import { cssSize, type FaceRow, type PxBucket } from '../features/library-grid/types';
 import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
@@ -189,6 +190,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async setUiState(s) { ui = { ...s }; },
 
     async compareFaces(faces) { return composeCompare(this, faces); },
+    async savePng(png, name) { return downloadBlob(png, name); },
     async classFacets(q = {}) {
       const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });
       const by = new Map<string, Map<string, number>>();

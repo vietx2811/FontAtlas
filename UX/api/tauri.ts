@@ -108,6 +108,12 @@ export function createTauriApi(): Api {
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
     compareFaces(faces) { return composeCompare(this, faces); },
+    async savePng(png, suggestedName) {
+      // Lệnh `save_png` do backend thêm (dialog Lưu + ghi file): chưa nằm trong bindings nên gọi invoke thẳng.
+      const bytes = new Uint8Array(await png.arrayBuffer());
+      let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      try { return await invoke<string | null>('save_png', { suggestedName, pngBase64: btoa(bin) }); } catch (e) { throw toCmdError(e); }
+    },
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
     setClassificationOverride: over => none(call('set_classification_override', { over })),
     clearClassificationOverride: face => none(call('clear_classification_override', { face })),

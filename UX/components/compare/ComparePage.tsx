@@ -1,19 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
-import { COMPARE_METRICS, type CompareDto } from '../../api/compare';
-import { hasKey, t } from '../../i18n';
+import { COMPARE_METRICS, type CompareDto, type CompareFace } from '../../api/compare';
+import { hasKey, t, type I18nKey } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
-import { ClassCell, MetricCell, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
+import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
 import { fitScale } from './compareMath';
-import { exportComparePng } from './exportPng';
+import { renderCompareBlob } from './exportPng';
 import './compare.css';
 
 const SPEC_SIZE = 30;
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const label = (k: string, gloss = false): string => { const key = `compare.m.${k}${gloss ? '.gloss' : ''}`; return hasKey(key) ? t(key) : gloss ? '' : k; };
+const gl = (key: string): string => (hasKey(key) ? t(key as I18nKey) : '');
+
+/** Ghi họ font đã nạp của một cột (cho xuất PNG) sau khi vẽ, không ghi trong lúc render. */
+function FamilyTap({ api, face, into }: { api: Api; face: CompareFace; into: Map<string, string | null> }): React.JSX.Element {
+  return <WithFamily api={api} face={face}>{fam => <Record id={keyOf(face.face)} fam={fam} into={into} />}</WithFamily>;
+}
+function Record({ id, fam, into }: { id: string; fam: string | null; into: Map<string, string | null> }): null {
+  useEffect(() => { into.set(id, fam); }, [id, fam, into]);
+  return null;
+}
+const Row = ({ children }: { children: React.ReactNode }) => <div className="row" role="row">{children}</div>;
+const Group = ({ k, cols }: { k: 'specimen' | 'metrics' | 'class' | 'meta'; cols: number }) => (
+  <Row><div role="columnheader" aria-colspan={cols} className="gh">{t(`compare.sec.${k}` as I18nKey)}{gl(`compare.sec.${k}.gloss`) && <small> · {gl(`compare.sec.${k}.gloss`)}</small>}</div></Row>
+);
 
 /** Màn Compare: 2–8 cột, cột đầu là mốc; toàn bộ số đo là số thật từ phân tích (không có thì ghi "Không đo được"). */
 export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): React.JSX.Element {
@@ -23,7 +37,9 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const [attempt, setAttempt] = useState(0);
   const [fit, setFit] = useState(false);
   const [overlay, setOverlay] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const families = useRef(new Map<string, string | null>());
+  const title = useRef<HTMLHeadingElement>(null);
   const close = () => useUiStore.getState().closeCompare();
   const idsKey = faces.map(keyOf).join('|');
 
@@ -32,6 +48,13 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     api.compareFaces(faces).then(d => { if (alive) setData(d); }, e => { if (alive) setError(e instanceof Error ? e.message : String(e)); });
     return () => { alive = false; };
   }, [api, idsKey, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tiêu điểm vào màn khi mở, trả về chỗ cũ khi đóng.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    title.current?.focus();
+    return () => { if (before && before.isConnected) before.focus(); };
+  }, []);
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -43,26 +66,29 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   }, []);
 
   const exportPng = async () => {
-    if (!data) return;
+    if (!data || exporting) return;
+    setExporting(true);
     try {
-      const name = await exportComparePng({ data, families: families.current, sample, fit, dark: document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) });
-      useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngDone', { name }) });
+      const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
+      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark });
+      const saved = await api.savePng(blob, name);
+      if (saved) useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngSaved', { name: saved.split(/[\\/]/).pop() ?? saved }) });
     } catch (e) {
       useNoticeStore.getState().push({ kind: 'error', text: t('compare.pngFail', { msg: e instanceof Error ? e.message : String(e) }) });
-    }
+    } finally { setExporting(false); }
   };
 
   const header = (
     <div className="cmp-h">
-      <Tooltip label={t('compare.back')} shortcut="Esc"><button type="button" className="cmp-back" aria-label={t('compare.back')} onClick={close}><Icon name="x" size={14} /></button></Tooltip>
-      <h1>{t('compare.title')} · {faces.length}</h1>
+      <Tooltip label={t('compare.back')} shortcut="Esc"><button type="button" className="cmp-back" aria-label={t('compare.back')} onClick={close}><Icon name="back" size={14} /></button></Tooltip>
+      <h1 ref={title} tabIndex={-1}>{t('compare.title')} · {data?.faces.length ?? faces.length}</h1>
       <div className="cmp-tog" role="group" aria-label={`${t('compare.sameSize')} / ${t('compare.matchXh')}`}>
         <Tooltip label={`${t('compare.sameSize')} — ${t('compare.sameSize.gloss')}`}><button type="button" aria-pressed={!fit} onClick={() => setFit(false)}>{t('compare.sameSize')}</button></Tooltip>
         <Tooltip label={`${t('compare.matchXh')} — ${t('compare.matchXh.gloss')}`}><button type="button" aria-pressed={fit} onClick={() => setFit(true)}>{t('compare.matchXh')}</button></Tooltip>
       </div>
       <div className="cmp-tog"><Tooltip label={`${t('compare.overlay')} — ${t('compare.overlay.gloss')}`}><button type="button" aria-pressed={overlay} onClick={() => setOverlay(v => !v)}>{t('compare.overlay')}</button></Tooltip></div>
       <span className="cmp-sp" />
-      <button type="button" className="cmp-btn" disabled={!data} onClick={() => void exportPng()}><Icon name="plus" size={13} />{t('compare.png')}</button>
+      <button type="button" className="cmp-btn" disabled={!data || exporting} onClick={() => void exportPng()}><Icon name="plus" size={13} />{t('compare.png')}</button>
       <Tooltip label={t('compare.pdfSoon')}><button type="button" className="cmp-btn" aria-disabled="true" onClick={e => e.preventDefault()}>{t('compare.pdf')}</button></Tooltip>
     </div>
   );
@@ -71,43 +97,39 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   if (!data) return <div className="cmp">{header}<div role="status" className="cmp-state">{t('compare.loading')}</div></div>;
 
   const base = data.faces[0];
-  const scale = (f: typeof base) => (fit && f !== base ? fitScale(base.metrics.x_height_em?.value ?? null, f.metrics.x_height_em?.value ?? null) : 1);
-  const cells = <T,>(fn: (f: typeof base) => T) => data.faces.map(f => fn(f));
+  const cols = data.faces.length + 1;
+  const scale = (f: CompareFace) => (fit && f !== base ? fitScale(base.metrics.x_height_em?.value ?? null, f.metrics.x_height_em?.value ?? null) : 1);
+  const cells = (fn: (f: CompareFace) => React.ReactNode) => data.faces.map(f => <div key={keyOf(f.face)} role="cell">{fn(f)}</div>);
   return (
     <div className="cmp">
       {header}
+      {data.failed.length > 0 && <div role="alert" className="cmp-state warn">{t('compare.skipped', { n: data.failed.length, reason: data.failed.map(x => x.reason).join('; ') })}</div>}
       <div className="cmp-body">
         <div className="cmp-tbl" role="table" aria-label={t('compare.title')} style={{ ['--n' as string]: data.faces.length }}>
-          <div className="rh" role="columnheader" />
-          {cells(f => <div key={keyOf(f.face)} role="columnheader" className={`ch${f === base ? ' base' : ''}`}>
-            <WithFamily api={api} face={f}>{fam => { families.current.set(keyOf(f.face), fam); return null; }}</WithFamily>
-            <div className="t">{f === base && <Icon name="anchor" size={13} />}{f.row.family}</div>
-            <div className="m">{f === base ? t('compare.base') : f.row.subfamily}{f === base && f.row.subfamily ? ` · ${f.row.subfamily}` : ''}</div>
-          </div>)}
+          {data.faces.map(f => <FamilyTap key={keyOf(f.face)} api={api} face={f} into={families.current} />)}
+          <Row>
+            <div className="rh" role="columnheader" />
+            {data.faces.map(f => <div key={keyOf(f.face)} role="columnheader" className={`ch${f === base ? ' base' : ''}`} title={`${f.row.family} ${f.row.subfamily ?? ''}`.trim()}>
+              <div className="t">{f === base && <Icon name="anchor" size={13} />}<span>{f.row.family}</span></div>
+              <div className="m">{[f === base ? t('compare.base') : null, f.row.subfamily].filter(Boolean).join(' · ')}</div>
+            </div>)}
+          </Row>
 
-          <div className="gh">{t('compare.sec.specimen')}</div>
-          <div className="rh"><b>{t('compare.row.line')}</b></div>
-          {cells(f => <div key={keyOf(f.face)} role="cell"><SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} /></div>)}
-          {overlay && <><div className="rh"><b>{t('compare.row.overlay')}</b><small>H x g ă</small></div>
-            {cells(f => <div key={keyOf(f.face)} role="cell"><OverlayCell api={api} base={base} face={f} scale={scale(f)} /></div>)}</>}
-          <div className="rh"><b>{t('compare.row.vi')}</b><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>
-          {cells(f => <div key={keyOf(f.face)} role="cell"><ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} /></div>)}
+          <Group k="specimen" cols={cols} />
+          <Row><div className="rh" role="rowheader"><b>{t('compare.row.line')}</b></div>{cells(f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} />)}</Row>
+          {overlay && <Row><div className="rh" role="rowheader"><b>{t('compare.row.overlay')}</b><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
+          <Row><div className="rh" role="rowheader"><b>{t('compare.row.vi')}</b><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
 
-          <div className="gh">{t('compare.sec.metrics')}</div>
-          {COMPARE_METRICS.map(k => <div key={k} className="row" role="row">
-            <div className="rh" role="rowheader"><b>{label(k)}</b><small>{label(k, true)}</small></div>
-            {cells(f => <div key={keyOf(f.face)} role="cell"><MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} /></div>)}
-          </div>)}
+          <Group k="metrics" cols={cols} />
+          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><b>{label(k)}</b><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
 
-          <div className="gh">{t('compare.sec.class')}</div>
-          <div className="rh"><b>{t('compare.row.class')}</b></div>
-          {cells(f => <div key={keyOf(f.face)} role="cell"><ClassCell face={f} /></div>)}
+          <Group k="class" cols={cols} />
+          <Row><div className="rh" role="rowheader"><b>{t('compare.row.class')}</b><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
 
-          <div className="gh">{t('compare.sec.meta')}</div>
-          <div className="rh"><b>{t('compare.row.license')}</b></div>
-          {cells(f => <div key={keyOf(f.face)} role="cell" className="cmp-lic"><b>{f.license ?? '—'}</b><span>{t('compare.licenseNote')}</span></div>)}
+          <Group k="meta" cols={cols} />
+          <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <div className="cmp-lic"><b>{f.license ?? '—'}</b><span>{t('compare.licenseNote')}</span></div>)}</Row>
         </div>
-        <p className="cmp-foot">{t('compare.footnote')}</p>
+        <p className="cmp-foot">{t('compare.footnote')} · {t('compare.footnote2')}</p>
       </div>
     </div>
   );

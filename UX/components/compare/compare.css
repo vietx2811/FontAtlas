@@ -1,4 +1,5 @@
-.cmp { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
+.cmp { --specimen-bg: #fff; --specimen-ink: #1f1d1b; --specimen-rule: var(--specimen-rule); --specimen-accent: #9a6b3c; --specimen-ok: #3f7f5f;
+  height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
 .cmp-h { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex-wrap: wrap; flex: none; }
 .cmp-h h1 { margin: 0 4px 0 0; font-size: 14px; font-weight: 600; }
 .cmp-sp { flex: 1; }
@@ -11,32 +12,36 @@
 .cmp button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cmp-state { padding: 24px 16px; color: var(--muted); }
 .cmp-state[role="alert"] { color: var(--warn); }
+.cmp-state.warn { padding: 6px 16px; font-size: 12px; }
 .cmp-state button { color: var(--accent-ink); text-decoration: underline; }
 .cmp-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 20px; }
 .cmp-tbl { --hw: 136px; display: grid; grid-template-columns: var(--hw) repeat(var(--n), minmax(150px, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; min-width: min-content; }
 .cmp-tbl .row { display: contents; }
-.cmp-tbl > div, .cmp-tbl .row > div { padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.cmp-tbl .row > div { padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
 .cmp-tbl .rh { position: sticky; left: 0; z-index: 2; background: var(--card); border-right: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 .rh b { display: block; color: var(--fg); font-weight: 600; font-size: 12px; }
 .rh small { font-size: 11px; }
-.cmp-tbl .gh { grid-column: 1 / -1; padding: 6px 12px; background: var(--surface-2); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cmp-tbl .row > .gh { grid-column: 1 / -1; padding: 6px 12px; background: var(--surface-2); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .cmp-tbl .ch { background: var(--card); display: flex; flex-direction: column; gap: 2px; }
 .cmp-tbl .ch.base { background: repeating-linear-gradient(135deg, transparent 0 7px, var(--chrome-hover) 7px 8px), var(--card); }
-.ch .t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.ch .t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; min-width: 0; }
+.ch .t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ch .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch .m { font-size: 11px; color: var(--muted); }
-.cmp-page { background: #fff; color: #1f1d1b; margin: -8px -12px; padding: 8px 12px; min-height: 100%; }
-.cmp-line { white-space: nowrap; line-height: 1.2; overflow: visible; }
-.cmp-vi { white-space: nowrap; line-height: 1; padding: 14px 0 4px; border-top: 1px dashed #d6d3d1; border-bottom: 1px dashed #d6d3d1; }
+.cmp-page { background: var(--specimen-bg); color: var(--specimen-ink); margin: -8px -12px; padding: 8px 12px; min-height: 100%; }
+.cmp-line { white-space: nowrap; line-height: 1.2; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; }
+.cmp-vi { white-space: nowrap; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; line-height: 1; padding: 14px 0 4px; border-top: 1px dashed var(--specimen-rule); border-bottom: 1px dashed var(--specimen-rule); }
+.cmp-vi[data-unsupported="true"] { opacity: .4; }
 .cmp-vi[data-overflow="true"] { border-top-color: var(--warn); }
 .cmp-overlay svg { display: block; width: 100%; height: auto; max-height: 104px; }
-.cmp-overlay .bl { stroke: #9a6b3c; stroke-width: 1; }
-.cmp-overlay .xh { stroke: #d6d3d1; stroke-dasharray: 3 3; }
-.cmp-overlay .ghost { fill: #1f1d1b; opacity: .28; }
-.cmp-overlay .over { fill: #9a6b3c; opacity: .85; }
-.cmp-overlay .solo { fill: #1f1d1b; }
+.cmp-overlay .bl { stroke: var(--specimen-accent); stroke-width: 1; }
+.cmp-overlay .xh { stroke: var(--specimen-rule); stroke-dasharray: 3 3; }
+.cmp-overlay .ghost { fill: var(--specimen-ink); opacity: .28; }
+.cmp-overlay .over { fill: var(--specimen-accent); opacity: .85; }
+.cmp-overlay .solo { fill: var(--specimen-ink); }
 .cmp-chip { display: inline-flex; margin-top: 6px; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
 .cmp-chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
-.cmp-ok { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 600; color: #3f7f5f; }
+.cmp-ok { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--specimen-ok); }
 .cmp-val { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-variant-numeric: tabular-nums; }
 .cmp-val b { font-size: 15px; }
 .cmp-val u { text-decoration: none; font-size: 11px; color: var(--muted); }
@@ -57,3 +62,7 @@
 .cmp-lic { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
 .cmp-lic b { color: var(--fg); }
 .cmp-foot { margin: 10px 2px 0; font-size: 11px; color: var(--muted); }
+
+.cmp h1:focus { outline: none; }
+.cmp h1:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.cmp-chip { margin-right: 6px; }

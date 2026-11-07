@@ -7,7 +7,7 @@ const DEGREE_METRICS = new Set(['slant_deg', 'stress_deg']);
 export function deltaOf(key: string, v: CompareMetric, base: CompareMetric): Delta | null {
   if (v.value === null || base.value === null) return null;
   if (DEGREE_METRICS.has(key)) return { kind: 'degrees', value: v.value - base.value };
-  if (base.value === 0) return null;
+  if (Math.abs(base.value) < 1e-3) return null; // mốc ~0: % vô nghĩa
   return { kind: 'percent', value: (v.value - base.value) / base.value * 100 };
 }
 
@@ -20,10 +20,12 @@ export function deltaText(d: Delta): { text: string; tone: 'up' | 'down' | 'zero
   return { text: `Δ ${sign}${body}`, tone: d.value > 0 ? 'up' : 'down' };
 }
 
-/** Hệ số cỡ chữ để x-height của cột bằng mốc (Match x-height). Thiếu số hoặc số vô lý → 1. */
+export const FIT_MIN = 0.5;
+export const FIT_MAX = 2;
+export const xhOk = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v > 0.1 && v < 1;
+/** Hệ số cỡ chữ để x-height của cột bằng mốc (Match x-height), kẹp trong 0,5–2. Thiếu số hoặc số vô lý → 1. */
 export function fitScale(baseXh: number | null, xh: number | null): number {
-  const ok = (v: number | null): v is number => v !== null && v > 0.1 && v < 1;
-  return ok(baseXh) && ok(xh) ? baseXh / xh : 1;
+  return xhOk(baseXh) && xhOk(xh) ? Math.min(FIT_MAX, Math.max(FIT_MIN, baseXh / xh)) : 1;
 }
 
 export const percentLabel = (p: number | null): string => (p === null ? '' : `P${Math.round(Math.min(100, Math.max(0, p)))}`);

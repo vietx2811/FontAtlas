@@ -195,8 +195,11 @@
     const sizeBefore = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
     btn('Match x-height')?.click(); await sleep(300);
     const sizeAfter = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
+    const xhRow = [...document.querySelectorAll('.cmp-tbl .row')].find(r => /x-height/.test(r.querySelector('.rh')?.textContent ?? ''));
+    const xhVals = [...(xhRow?.querySelectorAll('.cmp-val b') ?? [])].map(b => b.textContent);
+    const colResized = sizeAfter[1] !== sizeBefore[1] || xhVals[0] === xhVals[1]; // cột 2 đổi cỡ trừ khi x-height hai font bằng nhau
     await snap('compare-match-xheight');
-    await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0], { cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
+    await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0] && colResized, { colResized, xhVals, cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
     (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('.cmp-tbl') && document.querySelector('[data-testid=selection-count]'), 8000);
     await log('compare-close-keeps-selection', !document.querySelector('.cmp-tbl') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });

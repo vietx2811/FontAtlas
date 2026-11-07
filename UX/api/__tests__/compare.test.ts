@@ -36,9 +36,28 @@ describe('compareFaces', () => {
     await expect(api.compareFaces(keys(9))).rejects.toThrow();
   });
 
-  it('fails the whole call if one face cannot be read (no partial columns)', async () => {
+  it('one unreadable face is reported with its reason; the rest still compare', async () => {
     const api = createMockApi();
     vi.spyOn(api, 'getFace').mockRejectedValueOnce(new Error('gone'));
+    const c = await api.compareFaces(keys(3));
+    expect(c.faces).toHaveLength(2);
+    expect(c.failed).toEqual([{ face: keys(3)[0], reason: 'gone' }]);
+  });
+
+  it('fails when fewer than two faces can be read', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'getFace').mockRejectedValue(new Error('gone'));
     await expect(api.compareFaces(keys(2))).rejects.toThrow('gone');
+  });
+
+  it('tolerates sparse real data: missing axes, vietnamese, metadata and usage', async () => {
+    const api = createMockApi();
+    const d = await api.getFace(keys(1)[0], 'vi');
+    const sparse = { ...d, axes: undefined, vietnamese: undefined, metadata: undefined, classificationInfo: { ...d.classificationInfo, usage: undefined, signals: undefined } } as never;
+    const c = buildCompare([sparse]);
+    expect(c.faces[0].metrics.x_height_em.quality).toBe('failed');
+    expect(c.faces[0].vi).toMatchObject({ supports: false, missing: 0, stackedMarksOverflow: false });
+    expect(c.faces[0].license).toBeNull();
+    expect(c.faces[0].classification.usage).toEqual([]);
   });
 });
