@@ -99,4 +99,33 @@ describe('DuplicatesPage', () => {
     await mount(api);
     expect(screen.getByRole('heading', { name: /Brand new kind/ })).toBeTruthy();
   });
+
+  it('path column: the "parent/file" tail is its own always-visible element and the full path is in the tooltip', async () => {
+    await mount();
+    const same = screen.getAllByTestId('dup-group').find(x => x.querySelectorAll('[data-testid=dup-member]').length === 2 && /BeVietnamPro/.test(x.textContent ?? ''))!;
+    const [a, b] = within(same).getAllByTestId('dup-path');
+    const tailA = a.querySelector('.dup-tail')!.textContent, tailB = b.querySelector('.dup-tail')!.textContent;
+    expect(tailA).toMatch(/\/BeVietnamPro-Regular\.ttf$/);
+    expect(tailA).not.toBe(tailB); // hai bản trùng vẫn phân biệt được
+    expect(a.getAttribute('title')).toMatch(/\/BeVietnamPro-Regular\.ttf$/);
+  });
+
+  it('same_file members show no revision/date columns (only a version string if any); other kinds keep them', async () => {
+    await mount();
+    const same = screen.getAllByTestId('dup-group').find(x => x.querySelector('.dup-member.same'))!;
+    expect(same.querySelectorAll('.dup-meta')).toHaveLength(0);
+    expect(same.textContent).not.toMatch(/rev |—/);
+    const versions = screen.getAllByTestId('dup-group').find(x => /PlayfairDisplay-Regular/.test(x.textContent ?? ''))!;
+    expect(within(versions).getAllByText(/rev 1,20/).length).toBe(2);
+  });
+
+  it('a same_file member that does have a version string still shows it', async () => {
+    const api = createMockApi();
+    const g = await api.duplicateGroups();
+    const s = g.find(x => x.kind === 'same_file')!;
+    vi.spyOn(api, 'duplicateGroups').mockResolvedValue([{ ...s, faces: s.faces.map(f => ({ ...f, version: 'Version 2.0' })) }]);
+    await mount(api);
+    expect(screen.getAllByText('Version 2.0')).toHaveLength(2);
+    expect(document.body.textContent).not.toMatch(/rev /);
+  });
 });

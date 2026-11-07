@@ -6,7 +6,7 @@ import { useScanStore } from '../../store/scan';
 import { useNoticeStore } from '../../store/notices';
 import { Tooltip } from '../ui/Tooltip';
 import { ZeroState } from '../zero/ZeroState';
-import { dateText, groupTitle, midEllipsis, revisionText } from './duplicatesFormat';
+import { dateText, groupTitle, revisionText, splitPath, tailDepth } from './duplicatesFormat';
 import './duplicates.css';
 
 const KINDS = ['same_file', 'versions', 'formats'] as const;
@@ -14,27 +14,33 @@ const humanize = (code: string): string => { const x = code.replace(/_/g, ' ').t
 const kindName = (k: string): string => (hasKey(`dup.kind.${k}`) ? t(`dup.kind.${k}` as I18nKey) : humanize(k));
 const kindGloss = (k: string): string | null => (hasKey(`dup.kind.${k}.gloss`) ? t(`dup.kind.${k}.gloss` as I18nKey) : null);
 
-function Member({ api, m }: { api: Api; m: DuplicateMemberDto }): React.JSX.Element {
+function Member({ api, m, kind, depth }: { api: Api; m: DuplicateMemberDto; kind: string; depth: number }): React.JSX.Element {
+  const sameFile = kind === 'same_file'; // backend cố ý không đọc revision/ngày cho nhóm cùng tệp
+  const p = m.path ? splitPath(m.path, depth) : null;
   const key = { hashHex: m.row.hashHex, faceIndex: m.row.faceIndex };
   const reveal = async () => {
     if (!m.path) return;
     try { await api.revealLocation(m.path); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.revealFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
   };
   return (
-    <li className="dup-member" data-testid="dup-member">
+    <li className={`dup-member${sameFile ? ' same' : ''}`} data-testid="dup-member">
       <div className="dup-main">
         <b className="dup-name">{m.row.family}{m.row.subfamily ? ` ${m.row.subfamily}` : ''}</b>
         <span className="dup-fmt">{m.format.toUpperCase()}</span>
         {m.isNewest && <span className="dup-new">{t('dup.newest')}</span>}
       </div>
-      <Tooltip label={m.path ?? '—'}><span className="dup-path" data-testid="dup-path" title={m.path ?? undefined}>{m.path ? midEllipsis(m.path, 64) : '—'}</span></Tooltip>
-      <div className="dup-meta">
+      <Tooltip label={m.path ?? '—'}>
+        <span className="dup-path" data-testid="dup-path" title={m.path ?? undefined}>
+          {p ? <>{p.head && <span className="dup-head">{p.head}</span>}<span className="dup-tail">{p.tail}</span></> : '—'}
+        </span>
+      </Tooltip>
+      {sameFile ? (m.version && <div className="dup-meta"><span>{m.version}</span></div>) : <div className="dup-meta">
         {m.version === null && m.revision === null && m.modified === null ? <span>—</span> : <>
           <span>{m.version ?? '—'}</span>
           <span>{m.revision !== null ? t('dup.revision', { n: revisionText(m.revision) }) : '—'}</span>
           <span>{dateText(m.modified)}</span>
         </>}
-      </div>
+      </div>}
       <div className="dup-acts">
         {m.path && <button type="button" onClick={() => void reveal()}>{t('dup.reveal')}</button>}
         <button type="button" onClick={() => useUiStore.getState().select(faceKey(key))}>{t('dup.open')}</button>
@@ -44,6 +50,7 @@ function Member({ api, m }: { api: Api; m: DuplicateMemberDto }): React.JSX.Elem
 }
 
 function Group({ api, g }: { api: Api; g: DuplicateGroupDto }): React.JSX.Element {
+  const depth = tailDepth(g.faces.map(f => f.path));
   return (
     <article className="dup-group" data-testid="dup-group">
       <header>
@@ -51,7 +58,7 @@ function Group({ api, g }: { api: Api; g: DuplicateGroupDto }): React.JSX.Elemen
         <span className="dup-count">{t('dup.members', { n: g.faces.length })}</span>
         {g.kind === 'versions' && !g.newestKnown && <span className="dup-unknown">{t('dup.newestUnknown')}</span>}
       </header>
-      <ul>{g.faces.map((m, i) => <Member key={`${m.row.hashHex}:${m.row.faceIndex}:${m.path ?? i}`} api={api} m={m} />)}</ul>
+      <ul>{g.faces.map((m, i) => <Member key={`${m.row.hashHex}:${m.row.faceIndex}:${m.path ?? i}`} api={api} m={m} kind={g.kind} depth={depth} />)}</ul>
     </article>
   );
 }
