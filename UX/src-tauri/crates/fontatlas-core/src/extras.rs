@@ -280,9 +280,9 @@ fn kerning(font: &FontRef) -> Kerning {
 
 fn style_structure(font: &FontRef, name_hint: &str) -> StyleStructure {
     let axes = font.axes();
-    let range = |tag: &str| axes.iter().find(|a| a.tag().to_string() == tag).map(|a| [a.min_value(), a.max_value()]);
-    let ital_axis = axes.iter().any(|a| a.tag().to_string() == "ital");
-    let slnt_axis = axes.iter().any(|a| a.tag().to_string() == "slnt");
+    let range = |tag: &[u8; 4]| axes.iter().find(|a| a.tag() == Tag::new(tag)).map(|a| [a.min_value(), a.max_value()]);
+    let ital_axis = axes.iter().any(|a| a.tag() == Tag::new(b"ital"));
+    let slnt_axis = axes.iter().any(|a| a.tag() == Tag::new(b"slnt"));
     let os2 = font.os2().ok();
     let sel = os2.as_ref().map(|o| o.fs_selection().bits()).unwrap_or(0);
     let angle = font.post().ok().map(|p| p.italic_angle().to_f64()).unwrap_or(0.0);
@@ -298,7 +298,7 @@ fn style_structure(font: &FontRef, name_hint: &str) -> StyleStructure {
     } else {
         "upright"
     };
-    StyleStructure { italic_kind: kind.into(), ital_axis, slnt_axis, wght_range: range("wght"), wdth_range: range("wdth"), opsz_range: range("opsz") }
+    StyleStructure { italic_kind: kind.into(), ital_axis, slnt_axis, wght_range: range(b"wght"), wdth_range: range(b"wdth"), opsz_range: range(b"opsz") }
 }
 
 pub(crate) fn compute(font: &FontRef, features: &[String], copyright: Option<&str>, license: (Option<&str>, Option<&str>), name_hint: &str) -> FontExtras {
