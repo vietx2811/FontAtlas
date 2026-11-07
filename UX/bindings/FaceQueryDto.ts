@@ -18,7 +18,7 @@ hard: Array<string>,
  */
 faceKeys: Array<FaceKeyDto> | null, 
 /**
- * Lọc theo class (OR trong nhóm): serif | sans | mono | script | display | blackletter | symbol | uncertain
+ * Lọc theo class (OR trong nhóm): serif | sans | mono | script | blackletter | symbol | uncertain
  * | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
  * Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
  */

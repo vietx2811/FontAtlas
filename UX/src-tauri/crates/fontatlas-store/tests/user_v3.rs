@@ -151,5 +151,6 @@ fn v4_to_v5_drops_display_overrides_keeps_the_rest() {
     // CHECK mới không còn cho phép 'display'
     let mut s = s;
     assert!(s.set_classification_override(&key(9), "display", None).is_err());
+    assert_eq!(rep.dropped_display_overrides, 1);
     assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v4."));
 }

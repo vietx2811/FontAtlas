@@ -29,9 +29,8 @@ Uncertain + `candidate`); Display chỉ nằm trong `usage`; các dấu hiệu S
 ("Độ phủ" = tỉ lệ mặt được gán class (không phải Uncertain). Bảng Class bên dưới dùng cột "đúng/tổng" nên số khác.)
 
 Nói thẳng:
-- Bỏ Display khỏi class làm độ phủ tăng mạnh (Regular test 43,6% → 75,0%) ở cùng mức sai (~5%) vì các họ "Display theo mục đích" không còn bị tính là sai;
-  nhưng **tập đánh giá đã đổi** (loại 147 họ DISPLAY không tag hình dáng, DISPLAY có tag hình dáng được chấp nhận theo class hình dáng), nên không so trực tiếp với vòng 2b.
-- **Sai trên Regular test là 5,1% — thực tế chạm/vượt ngưỡng 5% một chút**; tune 4,8%. Mọi mặt tốt hơn (3,6%) nhờ nhiều mặt Light/Medium đúng.
+- **Tập đánh giá đã đổi** (loại 147 họ DISPLAY không tag hình dáng; DISPLAY có tag hình dáng được chấp nhận theo class hình dáng) nên các số Vòng 3 **không so được** với Vòng 2b; tôi không đặt chúng cạnh nhau và không kết luận "độ phủ tăng" từ hai bảng khác ground truth.
+- **Sai trên Regular test là 5,1% (34/671): vượt nhẹ mục tiêu ≤ 5%**; tune 4,8%. Mọi mặt tốt hơn (3,6%) nhờ nhiều mặt Light/Medium đúng.
 - **Subclass Regular test 68,8% (<70%)**, mọi mặt 61,4%: không đạt. Subclass Script formal/handwritten, Sans grotesque/neo_grotesque vẫn nhập nhằng.
 - **Traits có recall rất thấp** (chỉ dựa vào từ khoá trong tên; xem bảng). Tên font hiếm khi nói "Rounded"/"Stencil", nên đây mới là tín hiệu ban đầu — cần số đo hình học nếu muốn dùng làm bộ lọc chính.
 - Cờ italic: mặt italic sai 3,9% ở độ phủ 22% (test; ngưỡng cao hơn cho italic).

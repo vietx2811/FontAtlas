@@ -317,7 +317,7 @@ pub struct FaceQueryDto {
     pub hard: Vec<String>,
     /// Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
     pub face_keys: Option<Vec<FaceKeyDto>>,
-    /// Lọc theo class (OR trong nhóm): serif | sans | mono | script | display | blackletter | symbol | uncertain
+    /// Lọc theo class (OR trong nhóm): serif | sans | mono | script | blackletter | symbol | uncertain
     /// | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
     /// Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
     pub classes: Vec<String>,

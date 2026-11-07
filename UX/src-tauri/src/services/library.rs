@@ -150,6 +150,8 @@ pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
 
 pub const TRAITS: [&str; 6] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative"];
 
+/// Face có ít nhất một trait trong `traits`. Traits lấy từ phân loại TỰ ĐỘNG (tên/Panose/sFamilyClass); ghi đè của
+/// người dùng chỉ đổi class/subclass, không đổi traits.
 fn trait_face_ids(state: &AppState, traits: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
     if let Some(bad) = traits.iter().find(|t| !TRAITS.contains(&t.as_str())) {
         return Err(CmdError::invalid_arg(format!("traits: tag không hợp lệ: {bad}")));
