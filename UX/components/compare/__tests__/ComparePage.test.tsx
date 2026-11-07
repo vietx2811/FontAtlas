@@ -245,3 +245,22 @@ describe('MetaCells', () => {
     expect(screen.getByText('© 2016')).toBeTruthy();
   });
 });
+
+describe('stale analysis and missing deltas', () => {
+  it('extrasAvailable=false shows "—" and "Cần quét lại" instead of "Không có kerning"', () => {
+    const f = { extras: { extrasAvailable: false, kerning: { source: 'none', pairs: 0, classPairs: 0 }, vendorId: null, years: {}, otGroups: [], style: null, embedding: null }, family: null, licenseNote: null } as never;
+    render(<><KerningCell face={f} /><OtCell face={f} /></>);
+    expect(screen.queryByText('Không có kerning')).toBeNull();
+    expect(screen.getAllByText('Cần quét lại')).toHaveLength(2);
+  });
+
+  it('a null Δ (angle unit or near-zero base) shows "—" with an explanation, never a made-up number', async () => {
+    const api = await crafted(d => {
+      d.faces[0].metrics.contrast = m(1.3, { unit: 'ratio' });
+      d.faces[1].metrics.contrast = m(2, { unit: 'ratio', delta: { abs: 0.7, pct: null } });
+    });
+    await mount(api);
+    const row = screen.getByText('contrast ⊥').closest('.row') as HTMLElement;
+    expect(within(row).getByTitle('Không có Δ cho số đo này')).toBeTruthy();
+  });
+});

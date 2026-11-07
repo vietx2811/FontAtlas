@@ -83,7 +83,7 @@ export function MetricCell({ k, m, base, isBase }: { k: string; m: CompareMetric
     <div className="cmp-metric">
       <div className="cmp-val"><b>{numberText(m.value, m.unit)}</b><u>{unitText(m.unit)}</u>
         {m.quality === 'estimated' && <span className="cmp-est">{t('compare.est')}</span>}
-        {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : baseMissing && <span className="cmp-dl zero" title={t('compare.baseNa')}>—</span>}
+        {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : <span className="cmp-dl zero" title={baseMissing ? t('compare.baseNa') : t('compare.noDelta')}>—</span>}
       </div>
       {p !== null && <div className="cmp-pbar" role="img" aria-label={t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) })}><i style={{ left: `${Math.min(100, Math.max(0, p))}%` }} /><em style={{ left: `${Math.min(92, Math.max(8, p))}%` }}>{percentLabel(p)}</em></div>}
     </div>

@@ -21,6 +21,7 @@ const vi = {
   'compare.skipped': 'Không đọc được {n} font: {reason}', 'compare.pngSaved': 'Đã lưu {name}', 'compare.pngCancelled': '', 'compare.footnote2': '±0: lệch < 1% (hoặc < 0,5°)',
   'compare.fontsPending': 'Đang nạp font để xuất…', 'topbar.compareCut': 'Compare tối đa 8 font — đang lấy 8 font đầu trong {n}.',
   'compare.viWarnPct': 'Dấu tràn khung · {pct}% em', 'compare.viOkTip': 'Dấu cao hơn chữ hoa {pct}% em', 'compare.noExtras': 'Chưa có dữ liệu — quét lại để cập nhật',
+  'compare.rescan': 'Cần quét lại', 'compare.noDelta': 'Không có Δ cho số đo này',
   'meta.vendor': 'Vendor', 'meta.vendor.gloss': 'nhà phát hành (OS/2 vendor ID)', 'meta.years': 'Years', 'meta.years.gloss': 'năm tạo · sửa · bản quyền',
   'meta.style': 'Style', 'meta.style.gloss': 'kiểu chữ', 'meta.family': 'Family', 'meta.family.gloss': 'cả họ font', 'meta.ot': 'OpenType features', 'meta.ot.gloss': 'tính năng chữ',
   'meta.kerning': 'Kerning', 'meta.kerning.gloss': 'chỉnh khoảng cách cặp chữ', 'meta.embedding': 'Embedding', 'meta.embedding.gloss': 'quyền nhúng font (fsType)',
