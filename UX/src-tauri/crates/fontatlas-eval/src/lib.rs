@@ -1,4 +1,5 @@
 //! fontatlas-eval: bộ đánh giá Similar/Pairing theo phép chia cố định, dựng thư viện tham chiếu.
+pub mod classify_gt;
 mod corpus;
 mod csvio;
 mod embeds;

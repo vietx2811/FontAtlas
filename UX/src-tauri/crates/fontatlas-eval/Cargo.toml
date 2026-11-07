@@ -24,3 +24,7 @@ path = "src/bin/eval.rs"
 [[bin]]
 name = "refbuild"
 path = "src/bin/refbuild.rs"
+
+[[bin]]
+name = "classify_eval"
+path = "src/bin/classify_eval.rs"
