@@ -5,6 +5,14 @@ const vi = {
   'filter.license': 'Giấy phép', 'filter.license.ofl': 'OFL', 'filter.license.apache': 'Apache', 'filter.license.other': 'Khác / thương mại', 'filter.license.unknown': 'Chưa rõ',
   'filter.source': 'Nguồn', 'filter.kind': 'Loại font', 'filter.favorites': 'Yêu thích', 'filter.variable': 'Variable', 'filter.variable.gloss': 'font biến thiên theo trục',
   'filter.italic': 'Italic', 'filter.italic.gloss': 'chữ nghiêng', 'filter.forced': 'Đang theo mục bên trái',
+  'filter.class': 'Phân loại',
+  'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain', 'class.unclassified': 'Chưa phân loại',
+  'class.serif.gloss': 'có chân', 'class.sans.gloss': 'không chân', 'class.mono.gloss': 'cùng độ rộng', 'class.script.gloss': 'chữ viết tay', 'class.blackletter.gloss': 'chữ Gothic', 'class.symbol.gloss': 'ký hiệu', 'class.uncertain.gloss': 'chưa đủ chắc', 'class.unclassified.gloss': 'chưa phân tích',
+  'class.edited': 'Đã sửa', 'class.auto': 'Về tự động', 'class.maybe': 'có lẽ là {label}', 'class.machine': 'Máy nghĩ: {label}', 'class.menu': 'Đổi phân loại',
+  'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
+  'topbar.group': 'Pair / Compare', 'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar',
+  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font — nên ≤ 4 để so rõ.', 'topbar.useFirst': 'Chỉ lấy 4 đầu',
+  'topbar.compareSoon': 'Compare chưa có — đang mở Giải phẫu của font đầu tiên.',
   'chips.label': 'Bộ lọc đang bật', 'chips.remove': 'Bỏ lọc {label}',
 } as const;
 export type I18nKey = keyof typeof vi;

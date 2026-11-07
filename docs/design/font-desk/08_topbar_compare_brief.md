@@ -100,3 +100,24 @@ Mở file HTML trong trình duyệt (cần mạng để tải font Google). Tham
 ```
 
 Ảnh 1400×920 và 1000×700, sáng + tối, trong `shots-topbar/` (`01`–`05` Top Bar, `07`–`09` Compare). Ảnh dùng font Google stand-in, không phải font của chủ app.
+
+## 8. Trạng thái build — `feat/fontdesk-ui` (bước 3)
+
+Đã làm trong app (mock + Tauri), ảnh ở `docs/design/font-desk/shots-fontdesk-ui/`:
+
+| Phần | Ở đâu | Ghi chú |
+|---|---|---|
+| Cụm Pair/Compare trên Top Bar | `UX/components/main/TopBarActions.tsx` | 0 chọn: ẩn · 1: Pair · Find similar · 2–4: Compare · Pair these · >4: thêm hàng gợi ý + "Chỉ lấy 4 đầu". ⇧P/⇧C (bỏ qua khi đang gõ). Bên hẹp (panel chi tiết mở) nút chỉ còn icon, tooltip giữ nhãn + phím tắt |
+| Chip phân loại ở đầu panel chi tiết | `components/detail/ClassChip.tsx` | `class · subclass`; Uncertain → "có lẽ là {candidate}" mờ viền đứt; tooltip: độ chắc, signals, usage (Display nằm ở usage, **không** hiện như class); chip **Đã sửa** + tooltip "Máy nghĩ: …"; menu đổi class / "Về tự động" |
+| Nhóm "Phân loại" trong panel Lọc | `components/main/FilterPanel.tsx` | từ `classFacets` (đếm); subclass hiện khi chọn class; ẩn class `display`; chip gỡ ở dưới Top Bar |
+| API | `api/index.ts`, `tauri.ts`, `mock.ts` | `classFacets`, `setClassificationOverride`, `clearClassificationOverride` |
+| Chuỗi mới | `UX/i18n/index.ts` | khoá `topbar.*`, `class.*`, `filter.*`, `chips.*` |
+
+### TODO còn lại (không giả dữ liệu trong app thật)
+
+- **Compare:** chưa có màn Compare và chưa có command backend (số đo + percentile + Δ cho N face, `vi_overflow_pct`, cờ ước lượng stress). Nút **Compare** hiện mở tab **Giải phẫu** của font đầu tiên và báo bằng notice "Compare chưa có…". Khi có DTO: thay `compare()` trong `TopBarActions.tsx` bằng điều hướng sang màn Compare (prototype `topbar-compare-v1.html`).
+- **Pair these:** chưa có command (2–4 font → 2–3 Combo). Hiện mở tab **Pair** của font đầu tiên; ⇧P cũng vậy.
+- **Add to Case:** app chưa có khái niệm Case (chỉ có "dự án"/collection), nên chưa có nút; thêm khi Pairing Desk có Case mở.
+- **traits[]:** 02 đang làm trên `feat/classify-display-tag`. Hiện Display chỉ nằm trong `usage`; chỗ hiển thị traits để trống (tooltip của chip phân loại là nơi dự kiến).
+- **CONF_MIN 0.88:** áp dụng ở backend; UI chỉ hiển thị `class = uncertain` + `candidate` như backend trả.
+- Mục `formats`, `hasImage`, "thiếu dấu" của bộ lọc vẫn để vòng sau.

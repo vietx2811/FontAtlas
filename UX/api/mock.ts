@@ -66,6 +66,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const rows = mockRows();
   const byKey = new Map(rows.map(r => [keyOf(r), r]));
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
+  const classOver = new Map<string, { class: string; subclass: string | null }>();
+  const effClass = (r: FaceRow) => classOver.get(keyOf(r)) ?? mockAutoClass(r.family);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
@@ -127,6 +129,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.favoritesOnly || r.isFavorite) &&
         (!q.license?.length || q.license.includes(r.licenseClass)) &&
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
+        (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
         (q.includeMissing || !r.missing) &&
         (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
@@ -184,6 +187,15 @@ export function createMockApi(o: MockOptions = {}): Api {
     getUiState: () => ok(ui),
     async setUiState(s) { ui = { ...s }; },
 
+    async classFacets(q = {}) {
+      const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });
+      const by = new Map<string, Map<string, number>>();
+      for (const r of items) { const c = effClass(r); const m = by.get(c.class) ?? new Map(); if (c.subclass) m.set(c.subclass, (m.get(c.subclass) ?? 0) + 1); by.set(c.class, m); }
+      const count = (cls: string) => items.filter(r => effClass(r).class === cls).length;
+      return [...by].map(([cls, subs]) => ({ class: cls, count: count(cls), subclasses: [...subs].map(([subclass, n]) => ({ subclass, count: n })) }));
+    },
+    async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
+    async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
     async axisStats(q = {}) {
       const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: 1000 });
       return MEASURED_AXES.map(axis => {
@@ -211,7 +223,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       const row = findRow(k);
       return ok({
         row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
-        classificationInfo: mockClassification(row.family),
+        classificationInfo: mockClassification(row.family, classOver.get(keyOf(row))),
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
           license: 'SIL Open Font License 1.1', licenseUrl: 'https://openfontlicense.org', designer: 'Studio Mock', manufacturer: 'Mock Foundry',
@@ -274,9 +286,26 @@ export function createMockApi(o: MockOptions = {}): Api {
   };
 }
 
-/** Phân loại giả cho mock: cùng quy tắc với `classification`, confidence cố định. */
-function mockClassification(family: string): FaceDetailDto['classificationInfo'] {
-  const cls = /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(family) ? 'serif' : /Mono/.test(family) ? 'mono' : 'sans';
-  const label = cls === 'serif' ? 'Serif' : cls === 'mono' ? 'Mono' : 'Sans';
-  return { class: cls, label, subclass: null, confidence: 0.9, candidate: null, signals: [], usage: [], source: 'auto', autoClass: null };
+/** Phân loại tự động giả cho mock (cố định theo họ font). */
+const MOCK_AUTO: Array<[RegExp, string, string | null, number]> = [
+  [/Pacifico|Lobster/, 'uncertain', null, 0.55],
+  [/Didone|Playfair|Abril|Bodoni/, 'serif', 'didone', 0.94],
+  [/Serif|Fraunces|Cormorant/, 'serif', 'old_style', 0.9],
+  [/Mono/, 'mono', null, 0.95],
+  [/Bebas|Oswald/, 'sans', 'grotesque', 0.9],
+];
+const CLASS_LABEL: Record<string, string> = { serif: 'Serif', sans: 'Sans', mono: 'Mono', script: 'Script', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain' };
+export function mockAutoClass(family: string): { class: string; subclass: string | null; confidence: number } {
+  const hit = MOCK_AUTO.find(([re]) => re.test(family));
+  return hit ? { class: hit[1], subclass: hit[2], confidence: hit[3] } : { class: 'sans', subclass: null, confidence: 0.9 };
+}
+function mockClassification(family: string, over?: { class: string; subclass: string | null }): FaceDetailDto['classificationInfo'] {
+  const auto = mockAutoClass(family);
+  const cls = over?.class ?? auto.class;
+  return {
+    class: cls, label: CLASS_LABEL[cls] ?? cls, subclass: over ? over.subclass : auto.subclass, confidence: over ? 1 : auto.confidence,
+    candidate: cls === 'uncertain' ? 'script' : null,
+    signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }],
+    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
+  };
 }

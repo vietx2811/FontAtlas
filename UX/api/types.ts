@@ -1,4 +1,4 @@
-export type { AxisStatsDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto } from '../bindings';
+export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisStatsDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto } from '../bindings';
 // Kiểu IPC: lấy từ UX/bindings (ts-rs, sinh từ Rust). File này chỉ đặt lại tên cho gọn và thêm kiểu phía giao diện.
 import type {
   PreviewCacheInfoDto, ProblemDto,

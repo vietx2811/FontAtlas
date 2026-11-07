@@ -14,6 +14,10 @@ describe('applyDevPreset (dev-only state from the URL hash)', () => {
     expect([s.style, s.panelTab, s.infoExpanded, s.sampleSize, s.query]).toEqual(['Bold', 'vi', true, 50, 'sans']);
   });
 
+  it('classes sets the class filter', async () => {
+    await applyDevPreset(createMockApi(), '#classes=serif,sans');
+    expect(useUiStore.getState().filters.classes).toEqual(['serif', 'sans']);
+  });
   it('opens Settings', async () => {
     await applyDevPreset(createMockApi(), '#settings=1');
     expect(useUiStore.getState().settingsOpen).toBe(true);

@@ -106,6 +106,9 @@ export function createTauriApi(): Api {
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
+    classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
+    setClassificationOverride: over => none(call('set_classification_override', { over })),
+    clearClassificationOverride: face => none(call('clear_classification_override', { face })),
     pairCandidates: (face, opts) => call('pair_candidates', { face, opts }),
     // Dữ liệu và hệ thống
     backupUserDb: () => call('backup_user_db'),

@@ -1,0 +1,62 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { createMockApi, mockRows } from '../../../api/mock';
+import type { ClassificationDto } from '../../../api';
+import { tipOf } from '../../../test/tip';
+import { ClassChip } from '../ClassChip';
+
+const r0 = mockRows()[0];
+const face = { hashHex: r0.hashHex, faceIndex: r0.faceIndex };
+const info = (o: Partial<ClassificationDto> = {}): ClassificationDto => ({ class: 'serif', label: 'Serif', subclass: 'didone', confidence: 0.94, candidate: null, signals: [{ source: 'measure', detail: 'contrast 4,89', vote: 'serif', weight: 0.7 }, { source: 'panose', detail: 'serif style 11', vote: 'serif', weight: 0.4 }], usage: ['display'], source: 'auto', autoClass: null, ...o });
+const mount = (i: ClassificationDto, api = createMockApi(), onChanged = vi.fn()) => { render(<ClassChip api={api} face={face} info={i} onChanged={onChanged} />); return { api, onChanged }; };
+
+describe('ClassChip', () => {
+  it('shows class and subclass as English terms; Display is never shown as the class', () => {
+    mount(info());
+    const chip = screen.getByTestId('class-chip');
+    expect(chip.textContent).toContain('Serif');
+    expect(chip.textContent).toContain('Didone');
+    expect(chip.textContent).not.toMatch(/Display/);
+  });
+
+  it('tooltip lists confidence, signals and usage (Display lives in usage)', async () => {
+    mount(info());
+    const tip = await tipOf(screen.getByTestId('class-chip'));
+    expect(tip).toContain('94%');
+    expect(tip).toContain('contrast 4,89');
+    expect(tip).toContain('Display');
+  });
+
+  it('Uncertain shows a dimmed "có lẽ là {candidate}"', () => {
+    mount(info({ class: 'uncertain', label: 'Uncertain', subclass: null, confidence: 0.5, candidate: 'script' }));
+    const chip = screen.getByTestId('class-chip');
+    expect(chip.textContent).toContain('Uncertain');
+    expect(chip.textContent).toContain('có lẽ là Script');
+    expect(chip.getAttribute('data-uncertain')).toBe('true');
+  });
+
+  it('override: "Đã sửa" with the auto class; menu sets and clears through the api', async () => {
+    const { api, onChanged } = mount(info({ source: 'override', autoClass: 'sans', class: 'script', label: 'Script', subclass: null }));
+    expect(screen.getByText('Đã sửa')).toBeTruthy();
+    expect(await tipOf(screen.getByText('Đã sửa'))).toContain('Sans');
+    const clear = vi.spyOn(api, 'clearClassificationOverride');
+    fireEvent.click(screen.getByTestId('class-chip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Về tự động' }));
+    await waitFor(() => expect(clear).toHaveBeenCalledWith(face));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('picking a class from the menu writes an override and Esc closes the menu', async () => {
+    const { api, onChanged } = mount(info());
+    const set = vi.spyOn(api, 'setClassificationOverride');
+    fireEvent.click(screen.getByTestId('class-chip'));
+    expect(screen.queryByRole('menuitem', { name: 'Về tự động' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Display/ })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByTestId('class-chip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Script/ }));
+    await waitFor(() => expect(set).toHaveBeenCalledWith({ face, class: 'script', subclass: null }));
+    expect(onChanged).toHaveBeenCalled();
+  });
+});

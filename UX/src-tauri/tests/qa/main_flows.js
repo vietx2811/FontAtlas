@@ -172,6 +172,12 @@
     const barBox = bar?.closest('.fa-selbar')?.getBoundingClientRect(); const gridBox = document.querySelector('[role=grid]')?.getBoundingClientRect(); const hdr = document.querySelector('header.fa-topbar');
     await log('selection-bar-in-row', !!barBox && !!gridBox && barBox.bottom <= gridBox.top + 1 && !!hdr?.contains(bar) && !!bar.closest('.fa-family-row'), { bar: barBox && [Math.round(barBox.top), Math.round(barBox.bottom)], gridTop: gridBox && Math.round(gridBox.top), header: hdr?.className });
 
+    // Top Bar: 2 font đang chọn → Compare · Pair these (không có Find similar)
+    const pcGroup = document.querySelector('header.fa-topbar [role=group][aria-label="Pair / Compare"]');
+    const actNames = [...(pcGroup?.querySelectorAll('button') ?? [])].map(b => b.getAttribute('aria-label'));
+    await snap('topbar-actions-2');
+    await log('topbar-actions-two', !!pcGroup && actNames.includes('Compare') && actNames.includes('Pair these') && !actNames.includes('Find similar') && /2 chọn/.test(pcGroup.textContent), { actNames, text: pcGroup?.textContent });
+
     // Menu ngữ cảnh trong vùng chọn → giữ vùng chọn, menu nhiều font
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));
@@ -231,6 +237,26 @@
     themeBtn?.click(); await sleep(400);
     const css2 = document.documentElement.dataset.theme, native2 = await nativeTheme();
     await log('native-theme-follows', css1 === native1 && css2 === native2, { themeBefore, css1, native1, css2, native2 });
+    // Phân loại: chip ở đầu panel + lọc theo class bằng facet thật
+    const cchip = await wait(() => document.querySelector('[data-testid=class-chip]'), 10000);
+    await sleep(150); await snap('class-chip');
+    const chipText = (cchip?.textContent ?? '').trim();
+    const countNow = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, ''));
+    const total0 = countNow();
+    const filterBtn = [...document.querySelectorAll('button')].find(x => /^Lọc/.test(x.textContent.trim()));
+    filterBtn?.click();
+    const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
+    const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
+    const label0 = boxes[0]?.closest('label')?.textContent ?? '';
+    boxes[0]?.click();
+    const chips = await wait(() => document.querySelector('.fa-chips'), 8000);
+    await wait(() => countNow() !== total0 || countNow() === total0 && boxes.length === 1, 8000);
+    await sleep(300); await snap('class-filter');
+    const total1 = countNow();
+    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 <= total0, { chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
+    chips?.querySelector('button')?.click();
+    await wait(() => !document.querySelector('.fa-chips'), 5000);
+    await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();
