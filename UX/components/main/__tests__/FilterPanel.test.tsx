@@ -137,7 +137,7 @@ describe('FilterPanel', () => {
     useUiStore.getState().setView('src:2'); useUiStore.getState().setViOnly(true);
     const spy = vi.spyOn(api, 'axisStats').mockRejectedValueOnce(new Error('offline')).mockResolvedValue([axis]);
     render(<FilterPanel api={api} />);
-    const trigger = screen.getByRole('button', { name: 'Lọc' }); fireEvent.click(trigger);
+    const trigger = screen.getByRole('button', { name: /^Lọc/ }); fireEvent.click(trigger);
     expect(await screen.findByRole('alert')).toHaveTextContent('offline');
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })); await screen.findByRole('checkbox', { name: 'Độ nghiêng' });
     expect(spy).toHaveBeenLastCalledWith({ sourceIds: [2], vi: 'full' });

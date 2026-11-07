@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar } from '../../sidebar/Sidebar';
 import { SettingsOverlay } from '../SettingsOverlay';
+import { SettingsShortcut } from '../SettingsShortcut';
 
 const initial = useUiStore.getState();
 beforeEach(() => useUiStore.setState(initial, true));
@@ -51,6 +52,40 @@ describe('Settings as an overlay', () => {
     fireEvent.click(screen.getByRole('button', { name: /Yêu thích/ }));
     expect(useUiStore.getState().settingsOpen).toBe(false);
     expect(useUiStore.getState().view).toBe('star');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('moves focus into the sheet, makes the content below inert, and restores focus on close', () => {
+    const { container } = render(<div><main><button>outside</button></main><SettingsOverlay api={createMockApi()} onRerunOnboarding={() => {}} /></div>);
+    const outside = screen.getByText('outside'); outside.focus();
+    act(() => useUiStore.getState().setSettingsOpen(true));
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+    expect(container.querySelector('main')!.inert).toBe(true);
+    expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBeNull();
+    act(() => useUiStore.getState().setSettingsOpen(false));
+    expect(container.querySelector('main')!.inert).toBe(false);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it('Esc is left to an open context menu or confirm dialog (does not also close Settings)', () => {
+    open();
+    const menu = document.createElement('div'); menu.setAttribute('role', 'menu'); document.body.append(menu);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(useUiStore.getState().settingsOpen).toBe(true);
+    menu.remove();
+    const modal = document.createElement('div'); modal.setAttribute('aria-modal', 'true'); document.body.append(modal);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(useUiStore.getState().settingsOpen).toBe(true);
+    modal.remove();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(useUiStore.getState().settingsOpen).toBe(false);
+  });
+
+  it('⌘, through the real shortcut opens and closes the overlay', () => {
+    render(<><SettingsShortcut /><SettingsOverlay api={createMockApi()} onRerunOnboarding={() => {}} /></>);
+    fireEvent.keyDown(document.body, { key: ',', metaKey: true });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: ',', metaKey: true });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

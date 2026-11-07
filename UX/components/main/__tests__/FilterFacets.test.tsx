@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { toGridQuery, useUiStore } from '../../../store/ui';
 import { FilterPanel } from '../FilterPanel';
 import { FilterChips, filterChips } from '../FilterChips';
+import { LICENSE_OPTIONS } from '../filterOptions';
 
 const initial = useUiStore.getState();
 beforeEach(() => useUiStore.setState(initial, true));
@@ -52,5 +53,52 @@ describe('filter facets', () => {
     const chips = filterChips(useUiStore.getState().filters);
     expect(chips[0].id).toBe('axis:slant_deg');
     expect(chips[0].label).toMatch(/Độ nghiêng.*[-−]12.*0/);
+  });
+
+  it('license keys are the backend ones (ofl | apache | other | unknown)', () => {
+    expect(LICENSE_OPTIONS.map(o => o[0])).toEqual(['ofl', 'apache', 'other', 'unknown']);
+  });
+
+  it('license other and apache reach the query and the chips', async () => {
+    await mount();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Khác / thương mại' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Apache' }));
+    expect(toGridQuery(useUiStore.getState()).license).toEqual(['other', 'apache']);
+    expect(filterChips(useUiStore.getState().filters).map(c => c.label)).toEqual(['Khác / thương mại', 'Apache']);
+  });
+
+  it('the "Ặ vi" toggle and the vi facet are one state: supported is never overwritten by full', () => {
+    useUiStore.getState().setFilters({ vi: 'supported' });
+    expect(useUiStore.getState().viOnly).toBe(false);
+    expect(toGridQuery(useUiStore.getState()).vi).toBe('supported');
+    useUiStore.getState().setViOnly(true);
+    expect(useUiStore.getState().filters.vi).toBe('full');
+    expect(toGridQuery(useUiStore.getState()).vi).toBe('full');
+    expect(filterChips(useUiStore.getState().filters).map(c => c.id)).toEqual(['vi']);
+    useUiStore.getState().setViOnly(false);
+    expect(useUiStore.getState().filters).toEqual({});
+  });
+
+  it('a view that already forces the source/favorites hides those chips and disables the facet', async () => {
+    useUiStore.getState().setFilters({ sourceIds: [1], favoritesOnly: true });
+    useUiStore.getState().setView('src:2');
+    expect(toGridQuery(useUiStore.getState()).sourceIds).toEqual([2]);
+    expect(filterChips(useUiStore.getState().filters, [], 'src:2').map(c => c.id)).toEqual(['favorites']);
+    useUiStore.getState().setView('star');
+    expect(filterChips(useUiStore.getState().filters, [], 'star').map(c => c.id)).toEqual(['source:1']);
+    await mount();
+    expect((screen.getByRole('checkbox', { name: 'Yêu thích' }) as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('the "Bỏ" button clears only the Vietnamese facet', async () => {
+    useUiStore.getState().setFilters({ vi: 'supported', variable: true });
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ' }));
+    expect(useUiStore.getState().filters).toEqual({ variable: true });
+  });
+
+  it('Italic keeps its English term with a Vietnamese gloss', async () => {
+    await mount();
+    expect(screen.getByRole('checkbox', { name: 'Italic' }).closest('label')!.getAttribute('title')).toBe('chữ nghiêng');
   });
 });

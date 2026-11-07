@@ -6,7 +6,9 @@ import { useScanStore } from '../../store/scan';
 import { AXIS_META, numberText, roundedValue, unitText } from '../detail/tabs/measurements';
 import './filters.css';
 import { Tooltip } from '../ui/Tooltip';
-import { LICENSE_OPTIONS, VI_OPTIONS, useSources } from './FilterChips';
+import { useSources } from './FilterChips';
+import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
+import { t } from '../../i18n';
 
 // Intent: chọn miền số đo thật trong thư viện, thao tác gọn bên cạnh tìm kiếm.
 // Palette/depth/surfaces/type: token card/border/fg/accent và Inter hiện có. Spacing: 4/8/12/16.
@@ -42,8 +44,9 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', key, true); };
   }, [open]);
   const sources = useSources(api);
+  const forced = forcedFacets(state.view);
   const ranges = filters.rawAxisRanges ?? [];
-  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null) + Number(!!filters.vi) + (filters.license?.length ?? 0) + (filters.sourceIds?.length ?? 0) + Number(!!filters.favoritesOnly);
+  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null) + Number(!!filters.vi) + (filters.license?.length ?? 0) + (forced.source ? 0 : filters.sourceIds?.length ?? 0) + Number(!!filters.favoritesOnly && !forced.favorites);
   const toggle = <K extends 'license' | 'sourceIds'>(key: K, v: NonNullable<LibraryFilters[K]>[number], on: boolean) => {
     const cur = (useUiStore.getState().filters[key] ?? []) as Array<typeof v>;
     const next = on ? [...cur, v] : cur.filter(x => x !== v);
@@ -59,20 +62,20 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
     {open && <div ref={dialog} id="font-filters" className="fa-filters" role="dialog" aria-label="Bộ lọc font">
       <header><strong>Bộ lọc</strong><Tooltip label="Đóng bộ lọc" shortcut="Esc"><button type="button" aria-label="Đóng bộ lọc" onClick={() => { setOpen(false); trigger.current?.focus(); }}>×</button></Tooltip></header>
       <div className="fa-filter-content" aria-busy={loading}>
-        <fieldset><legend>Tiếng Việt</legend>
-          {VI_OPTIONS.map(([v, l]) => <label key={v}><input type="radio" name="fa-vi" checked={filters.vi === v} onChange={() => state.setFilters({ ...filters, vi: v })} />{l}</label>)}
-          {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => { const { vi: _, ...rest } = filters; state.setFilters(rest); }}>Bỏ</button>}
+        <fieldset><legend>{t('filter.vi')}</legend>
+          {VI_OPTIONS.map(([v, k]) => <label key={v}><input type="radio" name="fa-vi" checked={filters.vi === v} onChange={() => state.setFilters({ ...filters, vi: v })} />{t(k)}</label>)}
+          {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => { const { vi: _, ...rest } = filters; state.setFilters(rest); }}>{t('filter.vi.clear')}</button>}
         </fieldset>
-        <fieldset><legend>Giấy phép</legend>
-          {LICENSE_OPTIONS.map(([v, l]) => <label key={v}><input type="checkbox" checked={filters.license?.includes(v) ?? false} onChange={e => toggle('license', v, e.target.checked)} />{l}</label>)}
+        <fieldset><legend>{t('filter.license')}</legend>
+          {LICENSE_OPTIONS.map(([v, k]) => <label key={v}><input type="checkbox" checked={filters.license?.includes(v) ?? false} onChange={e => toggle('license', v, e.target.checked)} />{t(k)}</label>)}
         </fieldset>
-        {sources.length > 0 && <fieldset><legend>Nguồn</legend>
-          {sources.map(src => <label key={src.id}><input type="checkbox" checked={filters.sourceIds?.includes(src.id) ?? false} onChange={e => toggle('sourceIds', src.id, e.target.checked)} />{src.name}</label>)}
+        {sources.length > 0 && <fieldset><legend>{t('filter.source')}</legend>
+          {sources.map(src => <label key={src.id}><input type="checkbox" disabled={forced.source} title={forced.source ? t('filter.forced') : undefined} checked={filters.sourceIds?.includes(src.id) ?? false} onChange={e => toggle('sourceIds', src.id, e.target.checked)} />{src.name}</label>)}
         </fieldset>}
-        <fieldset><legend>Loại font</legend>
-          <label><input type="checkbox" checked={!!filters.favoritesOnly} onChange={e => { const { favoritesOnly: _, ...rest } = filters; state.setFilters(e.target.checked ? { ...rest, favoritesOnly: true } : rest); }} />Yêu thích</label>
-          <label><input type="checkbox" checked={filters.variable === true} onChange={e => state.setFilters({ ...filters, variable: e.target.checked ? true : undefined })} />Variable</label>
-          <label><input type="checkbox" checked={filters.italic === true} onChange={e => state.setFilters({ ...filters, italic: e.target.checked ? true : undefined })} />In nghiêng</label>
+        <fieldset><legend>{t('filter.kind')}</legend>
+          <label><input type="checkbox" disabled={forced.favorites} title={forced.favorites ? t('filter.forced') : undefined} checked={!!filters.favoritesOnly || forced.favorites} onChange={e => { const { favoritesOnly: _, ...rest } = filters; state.setFilters(e.target.checked ? { ...rest, favoritesOnly: true } : rest); }} />{t('filter.favorites')}</label>
+          <label title={t('filter.variable.gloss')}><input type="checkbox" checked={filters.variable === true} onChange={e => state.setFilters({ ...filters, variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>
+          <label title={t('filter.italic.gloss')}><input type="checkbox" checked={filters.italic === true} onChange={e => state.setFilters({ ...filters, italic: e.target.checked ? true : undefined })} />{t('filter.italic')}</label>
         </fieldset>
         <h3>Số đo</h3>
         <p className="fa-filter-help">Chỉ font có số đo phù hợp. Các điều kiện kết hợp cùng nhau.</p>

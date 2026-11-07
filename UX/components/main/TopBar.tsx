@@ -23,8 +23,9 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const selected = useSelectionStore(s => s.rows);
   const selectedRows = useMemo(() => [...selected.values()], [selected]);
   const showSelection = selectedRows.length >= 2;
-  const hasChips = filterChips(filters).length > 0;
-  const hasFilters = viOnly || filters.italic != null || filters.variable != null || !!filters.rawAxisRanges?.length;
+  const view = useUiStore(s => s.view);
+  const hasChips = filterChips(filters, [], view).length > 0;
+  const hasFilters = hasChips;
   return (
     <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection || hasChips ? ' has-row' : ''}`}>
       <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
