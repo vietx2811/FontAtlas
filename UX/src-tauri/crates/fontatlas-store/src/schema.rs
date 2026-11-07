@@ -267,9 +267,21 @@ CREATE TABLE pairs (
 CREATE INDEX pairs_collection ON pairs(collection_id);
 "#;
 
+/// v4 (Font Desk D1): ghi đè phân loại của người dùng.
+pub(crate) const USER_V4: &str = r#"
+CREATE TABLE classification_overrides (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  class      TEXT NOT NULL CHECK (class IN ('serif','sans','mono','script','display','blackletter','symbol')),
+  subclass   TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]

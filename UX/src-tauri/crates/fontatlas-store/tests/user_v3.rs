@@ -22,8 +22,8 @@ fn v1_to_v3_migrates() {
         c.execute("INSERT INTO collections(name,created_at,updated_at) VALUES ('Giữ',1,1)", []).unwrap();
     }
     let (s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(fontatlas_store::USER_VERSION, 3);
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 3);
+    assert_eq!(fontatlas_store::USER_VERSION, 4);
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(s.collections().unwrap().len(), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.sqlite_schema WHERE name IN ('activation_reasons','pairs')"), 2);
     assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v1."));
@@ -44,7 +44,7 @@ fn v2_to_v3_migrates_keeps_activation_rows() {
         c.execute("INSERT INTO activation_reasons(hash,reason,added_at) VALUES (?1,'manual',1)", [&[5u8; 32][..]]).unwrap();
     }
     let (s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 3);
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(count(&s, "SELECT count(*) FROM u.activation_state"), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.activation_reasons"), 1);
     assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v2."));
