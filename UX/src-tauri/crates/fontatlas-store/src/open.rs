@@ -29,6 +29,8 @@ pub struct Store {
 pub struct OpenReport {
     pub library_recreated: bool,
     pub user_backup: Option<PathBuf>,
+    /// Số override phân loại `display` bị bỏ khi lên user.db v5 (Display không còn là class).
+    pub dropped_display_overrides: u32,
 }
 
 impl Store {
@@ -44,6 +46,15 @@ impl Store {
             let found = user_version(&ro)?;
             if found > USER_VERSION {
                 return Err(StoreError::NewerSchema { db: "user", found, supported: USER_VERSION });
+            }
+            // v4 có bảng overrides, v5 loại 'display': đếm trước khi migration xoá
+            if found == 4 {
+                rep.dropped_display_overrides = ro
+                    .query_row("SELECT count(*) FROM classification_overrides WHERE class = 'display'", [], |r| r.get::<_, u32>(0))
+                    .unwrap_or(0);
+                if rep.dropped_display_overrides > 0 {
+                    eprintln!("user.db v4→v5: bỏ {} override phân loại 'display' (Display là tag usage, không phải class)", rep.dropped_display_overrides);
+                }
             }
         }
         {

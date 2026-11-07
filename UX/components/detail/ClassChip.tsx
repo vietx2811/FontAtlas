@@ -23,7 +23,7 @@ export function ClassChip({ api, face, info, onChanged }: Props): React.JSX.Elem
   const chip = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   // `traits` (Stencil, Rounded…) do backend thêm sau (feat/classify-display-tag): tuỳ chọn, chưa có thì bỏ qua.
-  const traits = (info as { traits?: string[] }).traits ?? [];
+  const traits = info.traits ?? [];
   const uncertain = info.class === 'uncertain';
   const overridden = info.source === 'override';
   const items = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];

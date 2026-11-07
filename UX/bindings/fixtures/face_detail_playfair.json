@@ -48,6 +48,9 @@
     ],
     "source": "auto",
     "subclass": "didone",
+    "traits": [
+      "decorative"
+    ],
     "usage": [
       "display"
     ]

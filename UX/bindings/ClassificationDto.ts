@@ -7,7 +7,7 @@ import type { ClassSignalDto } from "./ClassSignalDto";
  */
 export type ClassificationDto = { 
 /**
- * serif | sans | mono | script | display | blackletter | symbol | uncertain
+ * serif | sans | mono | script | blackletter | symbol | uncertain (Display là `usage`, không phải class)
  */
 class: string, 
 /**
@@ -21,7 +21,11 @@ subclass: string | null, confidence: number,
 /**
  * Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
  */
-candidate: string | null, signals: Array<ClassSignalDto>, 
+candidate: string | null, 
+/**
+ * Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative.
+ */
+traits: Array<string>, signals: Array<ClassSignalDto>, 
 /**
  * "text" | "display" | "ui"
  */

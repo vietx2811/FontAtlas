@@ -71,7 +71,7 @@ fn below_conf_min_is_uncertain_with_candidate_never_a_wrong_guess() {
 #[test]
 fn name_keywords_match_whole_words_only() {
     let i = ClassifyInput { name: "open sans regular".into(), ..Default::default() };
-    assert!(classify(&i).signals.iter().all(|s| s.vote != Class::Script), "\"open\" không được khớp \"pen\"");
+    assert!(classify(&i).signals.iter().all(|s| s.vote != Some(Class::Script)), "\"open\" không được khớp \"pen\"");
 }
 
 #[test]
@@ -115,8 +115,26 @@ fn metadata_exposes_new_fields() {
 #[test]
 fn every_subclass_the_classifier_can_emit_is_valid() {
     use fontatlas_core::classify::subclasses_of;
-    for c in [Class::Serif, Class::Sans, Class::Mono, Class::Script, Class::Display] {
+    for c in [Class::Serif, Class::Sans, Class::Mono, Class::Script] {
         assert!(!subclasses_of(c).is_empty());
     }
     assert!(subclasses_of(Class::Uncertain).is_empty());
+}
+
+#[test]
+fn display_is_a_usage_tag_not_a_class() {
+    assert!(Class::parse("display").is_none());
+    // tên có "Stencil": trait stencil, class vẫn theo hình dáng (ở đây không đủ bằng chứng → không phải Display)
+    let i = ClassifyInput { name: "foo stencil".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
+    let c = classify(&i);
+    assert_eq!(c.traits, vec!["stencil".to_string()], "{c:?}");
+    assert!(c.usage.contains(&Usage::Display), "{:?}", c.usage);
+    assert_ne!(c.class.label(), "Display");
+    // không có dấu hiệu → không có trait
+    assert!(classify(&ClassifyInput::default()).traits.is_empty());
+    // Monoton/Monofett không phải Mono, "rounded" cho trait rounded
+    let j = ClassifyInput { name: "monoton rounded".into(), ..Default::default() };
+    let cj = classify(&j);
+    assert!(cj.signals.iter().all(|s| s.vote != Some(Class::Mono)), "{cj:?}");
+    assert_eq!(cj.traits, vec!["rounded".to_string()]);
 }

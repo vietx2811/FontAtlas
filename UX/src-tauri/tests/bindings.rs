@@ -148,6 +148,7 @@ fn detail() -> FaceDetailDto {
             subclass: Some("didone".into()),
             confidence: 0.91,
             candidate: None,
+            traits: vec!["decorative".into()],
             signals: vec![ClassSignalDto {
                 source: "measure".into(),
                 detail: "contrast 3.4".into(),

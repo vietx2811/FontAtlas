@@ -31,6 +31,8 @@ pub struct FaceMeta {
     /// Phân loại tự động (snake_case), chưa áp ghi đè của người dùng.
     pub auto_class: String,
     pub auto_subclass: Option<String>,
+    /// Tag hình thái tự động (stencil, rounded…).
+    pub auto_traits: Vec<String>,
 }
 
 /// OpenType script tags whose presence marks a font as designed primarily for that script.
@@ -119,6 +121,7 @@ impl IndexBundle {
                 FaceMeta {
                     auto_class: auto.class.snake().into(),
                     auto_subclass: auto.subclass,
+                    auto_traits: auto.traits.clone(),
                     face_id: a.face_id,
                     source_ids: a.source_ids,
                     missing: a.missing,

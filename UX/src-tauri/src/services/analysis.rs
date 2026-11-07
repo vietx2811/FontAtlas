@@ -865,7 +865,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
     let signals: Vec<ClassSignalDto> = auto
         .signals
         .iter()
-        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: s.vote.snake().into(), weight: s.weight })
+        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: s.vote.map_or("usage", |c| c.snake()).into(), weight: s.weight })
         .collect();
     let snake = |c: Class| c.snake().to_string();
     if let Some(o) = ov
@@ -877,6 +877,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
             subclass: o.subclass,
             confidence: 1.0,
             candidate: None,
+            traits: auto.traits.clone(),
             signals,
             usage: usage_str(&usage_for(&input, c)),
             source: "override".into(),
@@ -889,6 +890,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
         subclass: auto.subclass,
         confidence: auto.confidence,
         candidate: auto.candidate.map(snake),
+        traits: auto.traits,
         signals,
         usage: usage_str(&auto.usage),
         source: "auto".into(),

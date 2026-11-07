@@ -592,18 +592,24 @@ fn class_filter_facets_and_override_use_effective_class() {
     let f2 = analysis::class_facets(&st, &q).unwrap();
     assert_eq!(f2, facets);
 
-    // override chuyển Roboto sang Display; lọc và facet phản ánh ngay
+    // override chuyển Roboto sang Script/formal; lọc và facet phản ánh ngay
     let roboto = find(&st, "Roboto");
     analysis::set_classification_override(
         &st,
-        &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("decorative".into()) },
+        &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: Some("formal".into()) },
     )
     .unwrap();
-    let qd = FaceQueryDto { classes: vec!["display".into()], subclasses: vec!["decorative".into()], limit: 50, ..Default::default() };
+    let qd = FaceQueryDto { classes: vec!["script".into()], subclasses: vec!["formal".into()], limit: 50, ..Default::default() };
     let hit = library::query_faces(&st, &qd).unwrap();
     assert!(hit.items.iter().any(|r| r.family == "Roboto"));
     let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
-    assert!(disp.iter().find(|f| f.class == "display").unwrap().subclasses.iter().any(|s| s.subclass == "decorative"));
+    assert!(disp.iter().find(|f| f.class == "script").unwrap().subclasses.iter().any(|s| s.subclass == "formal"));
+    // Display không còn là class: không lọc, không ghi đè được
+    assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["display".into()], ..Default::default() }).is_err());
+    assert!(analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: None }).is_err());
+    // lọc traits: giá trị lạ bị từ chối, giá trị hợp lệ chạy được
+    assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["wiggly".into()], ..Default::default() }).is_err());
+    assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["stencil".into()], ..Default::default() }).is_ok());
 
     // xoá override → trở lại tự động
     analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
@@ -623,4 +629,91 @@ fn class_filter_facets_and_override_use_effective_class() {
     // subclass không thuộc class bị từ chối khi ghi đè
     let invalid = ClassificationOverrideDto { face: key(&roboto), class: "sans".into(), subclass: Some("didone".into()) };
     assert!(analysis::set_classification_override(&st, &invalid).is_err());
+}
+
+/// Đổi tên họ trong bảng `name` (cùng độ dài, cả ASCII/Mac và UTF-16BE) để font có từ khoá trait trong tên.
+fn rename_in_font(bytes: &[u8], from: &str, to: &str) -> Vec<u8> {
+    assert_eq!(from.len(), to.len());
+    let u16be = |s: &str| s.encode_utf16().flat_map(|c| c.to_be_bytes()).collect::<Vec<u8>>();
+    let mut out = bytes.to_vec();
+    for (a, b) in [(from.as_bytes().to_vec(), to.as_bytes().to_vec()), (u16be(from), u16be(to))] {
+        let mut i = 0;
+        while i + a.len() <= out.len() {
+            if out[i..i + a.len()] == a[..] {
+                out[i..i + a.len()].copy_from_slice(&b);
+                i += a.len();
+            } else {
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn lib_with_traits(root: &Path) -> Arc<AppState> {
+    let st = AppState::new(AppDirs::under(&root.join("data")), Box::new(NoActivation));
+    boot::run_boot(&st);
+    let dir = root.join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    for n in SIX {
+        let raw = std::fs::read(fixture(n)).unwrap();
+        let raw = match n {
+            // "Open Sans" → "Rounded  " (token `rounded`); "Libre Baskerville" → "Stencil" + đệm
+            "open_sans.ttf" => rename_in_font(&raw, "Open Sans", "Rounded  "),
+            "libre_baskerville.ttf" => rename_in_font(&raw, "Libre Baskerville", "Stencil          "),
+            _ => raw,
+        };
+        std::fs::write(dir.join(n), raw).unwrap();
+    }
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(wait_rebuilt(&st, Duration::from_secs(60)));
+    st
+}
+
+#[test]
+fn traits_filter_or_and_facets_with_named_fonts() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib_with_traits(td.path());
+    let page = |q: FaceQueryDto| library::query_faces(&st, &FaceQueryDto { limit: 50, ..q }).unwrap();
+    let total = page(FaceQueryDto::default()).total;
+    assert_eq!(total, 6);
+
+    let stencil = page(FaceQueryDto { traits: vec!["stencil".into()], ..Default::default() });
+    let rounded = page(FaceQueryDto { traits: vec!["rounded".into()], ..Default::default() });
+    assert_eq!(stencil.total, 1, "{:?}", stencil.items.iter().map(|r| &r.family).collect::<Vec<_>>());
+    assert_eq!(rounded.total, 1);
+    assert_ne!(stencil.items[0].hash_hex, rounded.items[0].hash_hex);
+    // không có trait pixel → rỗng
+    assert_eq!(page(FaceQueryDto { traits: vec!["pixel".into()], ..Default::default() }).total, 0);
+    // OR trong traits
+    let both = page(FaceQueryDto { traits: vec!["stencil".into(), "rounded".into()], ..Default::default() });
+    assert_eq!(both.total, 2);
+
+    // traits được báo trong chi tiết face
+    let d = analysis::get_face(&st, &key(&stencil.items[0]), LangDto::Vi).unwrap();
+    assert_eq!(d.classification_info.traits, vec!["stencil".to_string()]);
+
+    // AND với classes/subclasses: dùng class hiệu lực của face stencil
+    let cls = d.classification_info.class.clone();
+    let other = if cls == "mono" { "script" } else { "mono" };
+    assert_eq!(page(FaceQueryDto { traits: vec!["stencil".into()], classes: vec![cls.clone()], ..Default::default() }).total, 1);
+    assert_eq!(page(FaceQueryDto { traits: vec!["stencil".into()], classes: vec![other.into()], ..Default::default() }).total, 0);
+    // ghi đè class đổi kết quả AND nhưng không đổi traits
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&stencil.items[0]), class: other.into(), subclass: None }).unwrap();
+    assert_eq!(page(FaceQueryDto { traits: vec!["stencil".into()], classes: vec![other.into()], ..Default::default() }).total, 1);
+    assert_eq!(page(FaceQueryDto { traits: vec!["stencil".into()], classes: vec![cls.clone()], ..Default::default() }).total, 0);
+    let d2 = analysis::get_face(&st, &key(&stencil.items[0]), LangDto::Vi).unwrap();
+    assert_eq!(d2.classification_info.traits, vec!["stencil".to_string()]);
+    // subclass không khớp → 0
+    assert_eq!(page(FaceQueryDto { traits: vec!["stencil".into()], classes: vec![other.into()], subclasses: vec!["didone".into()], ..Default::default() }).total, 0);
+
+    // facet: tổng = tổng thư viện; với traits thì tổng = số face có trait
+    let sum = |f: &[ClassFacetDto]| f.iter().map(|x| u64::from(x.count)).sum::<u64>();
+    assert_eq!(sum(&analysis::class_facets(&st, &FaceQueryDto::default()).unwrap()), total);
+    let with = analysis::class_facets(&st, &FaceQueryDto { traits: vec!["stencil".into(), "rounded".into()], ..Default::default() }).unwrap();
+    assert_eq!(sum(&with), 2);
+    // facet bỏ qua classes/subclasses nhưng giữ traits
+    let ign = analysis::class_facets(&st, &FaceQueryDto { traits: vec!["stencil".into()], classes: vec!["mono".into()], ..Default::default() }).unwrap();
+    assert_eq!(sum(&ign), 1);
 }

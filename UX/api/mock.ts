@@ -305,7 +305,7 @@ function mockClassification(family: string, over?: { class: string; subclass: st
   const cls = over?.class ?? auto.class;
   return {
     class: cls, label: CLASS_LABEL[cls] ?? cls, subclass: over ? over.subclass : auto.subclass, confidence: over ? 1 : auto.confidence,
-    candidate: cls === 'uncertain' ? 'script' : null,
+    candidate: cls === 'uncertain' ? 'script' : null, traits: /Bebas/.test(family) ? ['fat_face'] : [],
     signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }],
     usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
   };
