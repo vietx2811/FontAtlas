@@ -18,7 +18,7 @@ export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly'>;
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 
 export interface UiState {

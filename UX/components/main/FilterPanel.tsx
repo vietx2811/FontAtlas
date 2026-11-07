@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Api, AxisStatsDto } from '../../api';
-import { toMetadataQuery, useUiStore } from '../../store/ui';
+import { toMetadataQuery, useUiStore, type LibraryFilters } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { AXIS_META, numberText, roundedValue, unitText } from '../detail/tabs/measurements';
 import './filters.css';
 import { Tooltip } from '../ui/Tooltip';
+import { LICENSE_OPTIONS, VI_OPTIONS, useSources } from './FilterChips';
 
 // Intent: chọn miền số đo thật trong thư viện, thao tác gọn bên cạnh tìm kiếm.
 // Palette/depth/surfaces/type: token card/border/fg/accent và Inter hiện có. Spacing: 4/8/12/16.
@@ -40,8 +41,15 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
     document.addEventListener('keydown', key, true);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', key, true); };
   }, [open]);
+  const sources = useSources(api);
   const ranges = filters.rawAxisRanges ?? [];
-  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null);
+  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null) + Number(!!filters.vi) + (filters.license?.length ?? 0) + (filters.sourceIds?.length ?? 0) + Number(!!filters.favoritesOnly);
+  const toggle = <K extends 'license' | 'sourceIds'>(key: K, v: NonNullable<LibraryFilters[K]>[number], on: boolean) => {
+    const cur = (useUiStore.getState().filters[key] ?? []) as Array<typeof v>;
+    const next = on ? [...cur, v] : cur.filter(x => x !== v);
+    const { [key]: _, ...rest } = useUiStore.getState().filters;
+    state.setFilters(next.length ? { ...rest, [key]: next } as LibraryFilters : rest);
+  };
   const update = (axis: string, range: [number, number] | null) => {
     const others = (useUiStore.getState().filters.rawAxisRanges ?? []).filter(r => r.axis !== axis);
     state.setFilters({ ...useUiStore.getState().filters, rawAxisRanges: range ? [...others, { axis, range }] : others });
@@ -51,7 +59,18 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
     {open && <div ref={dialog} id="font-filters" className="fa-filters" role="dialog" aria-label="Bộ lọc font">
       <header><strong>Bộ lọc</strong><Tooltip label="Đóng bộ lọc" shortcut="Esc"><button type="button" aria-label="Đóng bộ lọc" onClick={() => { setOpen(false); trigger.current?.focus(); }}>×</button></Tooltip></header>
       <div className="fa-filter-content" aria-busy={loading}>
+        <fieldset><legend>Tiếng Việt</legend>
+          {VI_OPTIONS.map(([v, l]) => <label key={v}><input type="radio" name="fa-vi" checked={filters.vi === v} onChange={() => state.setFilters({ ...filters, vi: v })} />{l}</label>)}
+          {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => { const { vi: _, ...rest } = filters; state.setFilters(rest); }}>Bỏ</button>}
+        </fieldset>
+        <fieldset><legend>Giấy phép</legend>
+          {LICENSE_OPTIONS.map(([v, l]) => <label key={v}><input type="checkbox" checked={filters.license?.includes(v) ?? false} onChange={e => toggle('license', v, e.target.checked)} />{l}</label>)}
+        </fieldset>
+        {sources.length > 0 && <fieldset><legend>Nguồn</legend>
+          {sources.map(src => <label key={src.id}><input type="checkbox" checked={filters.sourceIds?.includes(src.id) ?? false} onChange={e => toggle('sourceIds', src.id, e.target.checked)} />{src.name}</label>)}
+        </fieldset>}
         <fieldset><legend>Loại font</legend>
+          <label><input type="checkbox" checked={!!filters.favoritesOnly} onChange={e => { const { favoritesOnly: _, ...rest } = filters; state.setFilters(e.target.checked ? { ...rest, favoritesOnly: true } : rest); }} />Yêu thích</label>
           <label><input type="checkbox" checked={filters.variable === true} onChange={e => state.setFilters({ ...filters, variable: e.target.checked ? true : undefined })} />Variable</label>
           <label><input type="checkbox" checked={filters.italic === true} onChange={e => state.setFilters({ ...filters, italic: e.target.checked ? true : undefined })} />In nghiêng</label>
         </fieldset>
