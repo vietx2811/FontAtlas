@@ -1,0 +1,68 @@
+.cmp { --specimen-bg: #fff; --specimen-ink: #1f1d1b; --specimen-rule: var(--specimen-rule); --specimen-accent: #9a6b3c; --specimen-ok: #3f7f5f;
+  height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
+.cmp-h { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex-wrap: wrap; flex: none; }
+.cmp-h h1 { margin: 0 4px 0 0; font-size: 14px; font-weight: 600; }
+.cmp-sp { flex: 1; }
+.cmp-back, .cmp-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--radius-md); background: var(--surface-2); font-size: 12px; font-weight: 600; }
+.cmp-back:hover, .cmp-btn:hover { background: var(--chrome-active); }
+.cmp-btn[aria-disabled="true"], .cmp-btn:disabled { opacity: .45; cursor: default; }
+.cmp-tog { display: flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-2); }
+.cmp-tog button { height: 26px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.cmp-tog button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / .1); }
+.cmp button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cmp-state { padding: 24px 16px; color: var(--muted); }
+.cmp-state[role="alert"] { color: var(--warn); }
+.cmp-state.warn { padding: 6px 16px; font-size: 12px; }
+.cmp-state button { color: var(--accent-ink); text-decoration: underline; }
+.cmp-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 20px; }
+.cmp-tbl { --hw: 136px; display: grid; grid-template-columns: var(--hw) repeat(var(--n), minmax(150px, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; min-width: min-content; }
+.cmp-tbl .row { display: contents; }
+.cmp-tbl .row > div { padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.cmp-tbl .rh { position: sticky; left: 0; z-index: 2; background: var(--card); border-right: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.rh b { display: block; color: var(--fg); font-weight: 600; font-size: 12px; }
+.rh small { font-size: 11px; }
+.cmp-tbl .row > .gh { grid-column: 1 / -1; padding: 6px 12px; background: var(--surface-2); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cmp-tbl .ch { background: var(--card); display: flex; flex-direction: column; gap: 2px; }
+.cmp-tbl .ch.base { background: repeating-linear-gradient(135deg, transparent 0 7px, var(--chrome-hover) 7px 8px), var(--card); }
+.ch .t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; min-width: 0; }
+.ch .t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ch .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch .m { font-size: 11px; color: var(--muted); }
+.cmp-page { background: var(--specimen-bg); color: var(--specimen-ink); margin: -8px -12px; padding: 8px 12px; min-height: 100%; }
+.cmp-line { white-space: nowrap; line-height: 1.2; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; }
+.cmp-vi { white-space: nowrap; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; line-height: 1; padding: 14px 0 4px; border-top: 1px dashed var(--specimen-rule); border-bottom: 1px dashed var(--specimen-rule); }
+.cmp-vi[data-unsupported="true"] { opacity: .4; }
+.cmp-vi[data-overflow="true"] { border-top-color: var(--warn); }
+.cmp-overlay svg { display: block; width: 100%; height: auto; max-height: 104px; }
+.cmp-overlay .bl { stroke: var(--specimen-accent); stroke-width: 1; }
+.cmp-overlay .xh { stroke: var(--specimen-rule); stroke-dasharray: 3 3; }
+.cmp-overlay .ghost { fill: var(--specimen-ink); opacity: .28; }
+.cmp-overlay .over { fill: var(--specimen-accent); opacity: .85; }
+.cmp-overlay .solo { fill: var(--specimen-ink); }
+.cmp-chip { display: inline-flex; margin-top: 6px; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.cmp-chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.cmp-ok { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 600; color: var(--specimen-ok); }
+.cmp-val { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-variant-numeric: tabular-nums; }
+.cmp-val b { font-size: 15px; }
+.cmp-val u { text-decoration: none; font-size: 11px; color: var(--muted); }
+.cmp-est { font-size: 10px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+.cmp-dl { font-size: 11px; font-weight: 600; color: var(--accent-ink); }
+.cmp-dl.zero { color: var(--muted); font-weight: 500; }
+.cmp-pbar { position: relative; height: 4px; border-radius: 2px; background: var(--surface-2); margin: 8px 0 14px; }
+.cmp-pbar i { position: absolute; top: -3px; width: 2px; height: 10px; border-radius: 1px; background: var(--accent-ink); }
+.cmp-pbar em { position: absolute; top: 8px; transform: translateX(-50%); font-style: normal; font-size: 10px; color: var(--muted); }
+.cmp-na { display: flex; flex-direction: column; gap: 2px; width: fit-content; max-width: 100%; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
+.cmp-na small { font-size: 11px; }
+.cmp-cls { display: flex; flex-direction: column; gap: 3px; }
+.cmp-cls .c { font-weight: 600; font-size: 13px; }
+.cmp-cls .c[data-uncertain="true"] { color: var(--warn); }
+.cmp-cls .s { font-size: 12px; color: var(--muted); }
+.cmp-conf { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 2px; }
+.cmp-conf i { display: block; height: 100%; background: var(--accent); }
+.cmp-lic { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+.cmp-lic b { color: var(--fg); }
+.cmp-foot { margin: 10px 2px 0; font-size: 11px; color: var(--muted); }
+
+.cmp h1:focus { outline: none; }
+.cmp h1:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.cmp-chip { margin-right: 6px; }

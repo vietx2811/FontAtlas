@@ -7,7 +7,8 @@ import { Icon, type IconName } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import './topbarActions.css';
 
-const COMPARE_MAX = 4;
+const COMPARE_MAX = 4; // ngưỡng gợi ý "nên ≤ 4"
+const COMPARE_MAX_FACES = 8; // trần cứng của màn Compare
 
 type Row = { hashHex: string; faceIndex: number };
 /** Mở panel chi tiết của font đầu tiên ở tab đã cho (chưa có màn Pairing Desk / Compare riêng — xem brief 08 mục TODO). */
@@ -16,7 +17,7 @@ function openOn(first: Row, tab: PanelTab): void {
   ui.select(rowKey(first));
   ui.setPanelTab(tab);
 }
-const soon = (key: 'topbar.compareSoon' | 'topbar.pairSoon') => useNoticeStore.getState().push({ kind: 'info', text: t(key) });
+const soon = (key: 'topbar.pairSoon') => useNoticeStore.getState().push({ kind: 'info', text: t(key) });
 const currentRows = () => [...useSelectionStore.getState().rows.values()];
 function doPair(): void {
   const rows = currentRows(); if (!rows.length) return;
@@ -26,11 +27,12 @@ function doPair(): void {
 const doSimilar = (): void => { const r = currentRows()[0]; if (r) openOn(r, 'sim'); };
 function doCompare(): void {
   const rows = currentRows(); if (rows.length < 2) return;
-  openOn(rows[0], 'anat');
-  soon('topbar.compareSoon');
+  if (rows.length > COMPARE_MAX_FACES) useNoticeStore.getState().push({ kind: 'info', text: t('topbar.compareCut', { n: rows.length }) });
+  useUiStore.getState().openCompare(rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
 }
 /** Phím tắt chỉ chạy khi không có lớp phủ/hộp thoại/menu, không gõ chữ, không đang IME hay giữ phím. */
 export function shortcutBlocked(e: KeyboardEvent): boolean {
+  if (useUiStore.getState().compare) return true; // đang ở màn Compare: ⇧P/⇧C không đổi thư viện ẩn
   const el = e.target as HTMLElement | null;
   if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return true;
   return e.defaultPrevented || e.isComposing || e.repeat || !!document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]');

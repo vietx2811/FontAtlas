@@ -3,7 +3,7 @@ import type { Api, ClassificationDto, FaceKeyDto } from '../../api';
 import { t, type I18nKey } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
-import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel } from '../main/classLabels';
+import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { Tooltip } from '../ui/Tooltip';
 
 const PICKABLE = ['serif', 'sans', 'mono', 'script', 'blackletter', 'symbol'];
@@ -61,7 +61,7 @@ export function ClassChip({ api, face, info, onChanged }: Props): React.JSX.Elem
   const tip = [
     t('class.tip.conf', { pct: Math.round(info.confidence * 100) }),
     ...info.signals.map(s => `${signalSource(s.source)}: ${s.detail} → ${classLabel(s.vote)}`),
-    traits.length ? traits.join(', ') : '',
+    traits.length ? traits.map(traitLabel).join(', ') : '',
     info.usage.length ? t('class.tip.usage', { usage: info.usage.map(usageLabel).join(', ') }) : '',
   ].filter(Boolean).join(' · ');
   const spoken = [classLabel(info.class), uncertain && info.candidate ? t('class.maybe', { label: classLabel(info.candidate) }) : info.subclass ? subclassLabel(info.subclass) : ''].filter(Boolean).join(', ');
@@ -71,7 +71,7 @@ export function ClassChip({ api, face, info, onChanged }: Props): React.JSX.Elem
         <button ref={chip} type="button" className="fa-class-chip" data-testid="class-chip" data-uncertain={uncertain} aria-haspopup="menu" aria-expanded={open} aria-label={`${spoken} — ${t('class.menu')}`} onClick={() => setOpen(v => !v)}>
           <span className="c" title={classGloss(info.class)}>{classLabel(info.class)}</span>
           {uncertain && info.candidate && <span className="m">{t('class.maybe', { label: classLabel(info.candidate) })}</span>}
-          {traits.map(x => <span key={x} className="m">· {x}</span>)}
+          {traits.map(x => <span key={x} className="m">· {traitLabel(x)}</span>)}
           {!uncertain && info.subclass && <span className="m">· {subclassLabel(info.subclass)}</span>}
         </button>
       </Tooltip>
