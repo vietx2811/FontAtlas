@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
+import { ClassChip } from './ClassChip';
 import { FontInfoCard } from './FontInfoCard';
 import { StyleDropdown, styleLabel } from './StyleDropdown';
 import { useActivationFlow } from '../activation/useActivationFlow';
@@ -58,6 +59,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
             <Tooltip label={isActive ? 'Tắt kích hoạt font' : 'Kích hoạt font trên máy'}><button type="button" role="switch" className="fa-switch" aria-checked={isActive} aria-label="Kích hoạt font" aria-disabled={!detail || undefined} onClick={() => { if (detail) toggle(); }} /></Tooltip>
           </div>
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}</div>
+          {detail && face && <ClassChip api={api} face={face} info={detail.classificationInfo} onChanged={retry} />}
           {styles.length > 0 && <StyleDropdown styles={styles} value={label} onChange={setStyle} loader={loaderFor(api)} />}
           <FontInfoCard detail={detail} expanded={infoExpanded} onToggle={toggleInfo} onReveal={() => { if (face) void api.revealInFinder(face); }} />
         </div>

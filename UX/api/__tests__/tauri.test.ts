@@ -64,6 +64,19 @@ describe('round2 contracts', () => {
   });
 });
 
+describe('classification commands', () => {
+  it('maps to class_facets / set_classification_override / clear_classification_override', async () => {
+    const api = createTauriApi();
+    await api.classFacets({ classes: ['serif'], italic: true });
+    expect(last()).toEqual({ cmd: 'class_facets', args: { q: toFaceQueryDto({ classes: ['serif'], italic: true }) } });
+    const face = { hashHex: 'ab', faceIndex: 0 };
+    await api.setClassificationOverride({ face, class: 'script', subclass: null });
+    expect(last()).toEqual({ cmd: 'set_classification_override', args: { over: { face, class: 'script', subclass: null } } });
+    await api.clearClassificationOverride(face);
+    expect(last()).toEqual({ cmd: 'clear_classification_override', args: { face } });
+  });
+});
+
 describe('errors', () => {
   it('rejections become CmdError with code, message and detail', async () => {
     reply = () => ({ __reject: { code: 'nested_source', message: 'nested', detail: { existingId: 4, existingPath: '/F' } } });

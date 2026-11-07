@@ -1,0 +1,23 @@
+.fa-acts { display: flex; align-items: center; gap: 6px; padding-left: 8px; margin-left: 2px; border-left: 1px solid var(--border); animation: fa-act-in .14s ease-out both; }
+@keyframes fa-act-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fa-acts { animation: none; } }
+.fa-act-n { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 9px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.fa-act-n button { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 9px; }
+.fa-act-n button:hover { background: var(--chrome-active); }
+.fa-act { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--radius-md); background: var(--surface-2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.fa-act:hover { background: var(--chrome-active); }
+.fa-act.pri { background: var(--accent); color: #2a1d10; }
+.fa-act kbd { font: inherit; font-size: 10px; opacity: .6; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.fa-act:focus-visible, .fa-act-n button:focus-visible, .fa-act-hint button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-act-hint { flex-basis: 100%; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--warn); }
+.fa-act-hint button { color: var(--accent-ink); text-decoration: underline; }
+@media (max-width: 1100px) { .fa-act kbd, .fa-act .l { display: none; } .fa-act { padding: 0 8px; } }
+/* Panel chi tiết mở thì Top Bar hẹp: nút chỉ còn icon (tooltip giữ nhãn + phím tắt), tiêu đề co lại. */
+.fa-topbar { container-type: inline-size; }
+@container (max-width: 960px) {
+  .fa-act .l, .fa-act kbd { display: none; }
+  .fa-act { padding: 0 9px; }
+  .fa-topbar .fa-ttl { width: auto; max-width: 96px; }
+  .fa-topbar .fa-search { min-width: 100px; }
+  .fa-topbar .fa-search .fa-kbd { display: none; }
+}

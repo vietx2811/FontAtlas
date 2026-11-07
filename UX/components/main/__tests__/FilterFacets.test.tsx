@@ -101,4 +101,31 @@ describe('filter facets', () => {
     await mount();
     expect(screen.getByRole('checkbox', { name: 'Italic' }).closest('label')!.getAttribute('title')).toBe('chữ nghiêng');
   });
+
+  it('Phân loại group lists classFacets with counts, no Display class, subclasses after picking a class', async () => {
+    await mount();
+    const grp = await screen.findByRole('group', { name: 'Phân loại' });
+    expect(within(grp).getByRole('checkbox', { name: /^Serif/ })).toBeTruthy();
+    expect(within(grp).queryByRole('checkbox', { name: /Display/ })).toBeNull();
+    expect(within(grp).queryByRole('checkbox', { name: /Didone/ })).toBeNull();
+    fireEvent.click(within(grp).getByRole('checkbox', { name: /^Serif/ }));
+    expect(toGridQuery(useUiStore.getState()).classes).toEqual(['serif']);
+    fireEvent.click(await within(grp).findByRole('checkbox', { name: /Didone/ }));
+    expect(toGridQuery(useUiStore.getState()).subclasses).toEqual(['didone']);
+    expect(filterChips(useUiStore.getState().filters).map(c => c.label)).toEqual(['Serif', 'Didone']);
+  });
+
+  it('class and subclass chips each remove only themselves', () => {
+    useUiStore.getState().setFilters({ classes: ['serif'], subclasses: ['didone'] });
+    render(<FilterChips api={createMockApi()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ lọc Didone' }));
+    expect(useUiStore.getState().filters).toEqual({ classes: ['serif'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ lọc Serif' }));
+    expect(useUiStore.getState().filters).toEqual({});
+  });
+
+  it('Uncertain and Unclassified are separate buckets with their own labels', () => {
+    useUiStore.getState().setFilters({ classes: ['uncertain', 'unclassified'] });
+    expect(filterChips(useUiStore.getState().filters).map(c => c.label)).toEqual(['Uncertain', 'Chưa phân loại']);
+  });
 });

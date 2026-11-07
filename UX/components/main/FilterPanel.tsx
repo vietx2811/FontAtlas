@@ -9,6 +9,8 @@ import { Tooltip } from '../ui/Tooltip';
 import { useSources } from './FilterChips';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
 import { t } from '../../i18n';
+import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel } from './classLabels';
+import type { ClassFacetDto } from '../../api';
 
 // Intent: chọn miền số đo thật trong thư viện, thao tác gọn bên cạnh tìm kiếm.
 // Palette/depth/surfaces/type: token card/border/fg/accent và Inter hiện có. Spacing: 4/8/12/16.
@@ -20,6 +22,7 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
   const trigger = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState<AxisStatsDto[] | null>(null);
+  const [facets, setFacets] = useState<ClassFacetDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -31,6 +34,7 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
     if (!open) return;
     let alive = true;
     setLoading(true); setError(null);
+    api.classFacets(statsQuery).then(f => { if (alive) setFacets(f); }, () => {});
     api.axisStats(statsQuery).then(s => { if (alive) setStats(s); }, e => { if (alive) setError(e instanceof Error ? e.message : String(e)); }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [api, open, statsQuery, version, retry]);
@@ -46,8 +50,8 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
   const sources = useSources(api);
   const forced = forcedFacets(state.view);
   const ranges = filters.rawAxisRanges ?? [];
-  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null) + Number(!!filters.vi) + (filters.license?.length ?? 0) + (forced.source ? 0 : filters.sourceIds?.length ?? 0) + Number(!!filters.favoritesOnly && !forced.favorites);
-  const toggle = <K extends 'license' | 'sourceIds'>(key: K, v: NonNullable<LibraryFilters[K]>[number], on: boolean) => {
+  const count = ranges.length + Number(filters.variable != null) + Number(filters.italic != null) + Number(!!filters.vi) + (filters.license?.length ?? 0) + (forced.source ? 0 : filters.sourceIds?.length ?? 0) + Number(!!filters.favoritesOnly && !forced.favorites) + (filters.classes?.length ?? 0) + (filters.subclasses?.length ?? 0);
+  const toggle = <K extends 'license' | 'sourceIds' | 'classes' | 'subclasses'>(key: K, v: NonNullable<LibraryFilters[K]>[number], on: boolean) => {
     const cur = (useUiStore.getState().filters[key] ?? []) as Array<typeof v>;
     const next = on ? [...cur, v] : cur.filter(x => x !== v);
     const { [key]: _, ...rest } = useUiStore.getState().filters;
@@ -66,6 +70,15 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
           {VI_OPTIONS.map(([v, k]) => <label key={v}><input type="radio" name="fa-vi" checked={filters.vi === v} onChange={() => state.setFilters({ ...filters, vi: v })} />{t(k)}</label>)}
           {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => { const { vi: _, ...rest } = filters; state.setFilters(rest); }}>{t('filter.vi.clear')}</button>}
         </fieldset>
+        {facets.some(f => !HIDDEN_CLASSES.has(f.class) && f.count > 0) && <fieldset role="group" aria-label={t('filter.class')}><legend>{t('filter.class')}</legend>
+          {facets.filter(f => !HIDDEN_CLASSES.has(f.class) && f.count > 0).map(f => <div key={f.class} className="fa-class-opt">
+            <label title={classGloss(f.class)}><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => {
+              toggle('classes', f.class, e.target.checked);
+              if (!e.target.checked) { const cur = useUiStore.getState().filters; const keep = (cur.subclasses ?? []).filter(x => !f.subclasses.some(sc => sc.subclass === x)); const { subclasses: _, ...rest } = cur; state.setFilters(keep.length ? { ...rest, subclasses: keep } : rest); }
+            }} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
+            {filters.classes?.includes(f.class) && f.subclasses.length > 0 && <div className="fa-sub-opts">{f.subclasses.map(sc => <label key={sc.subclass}><input type="checkbox" checked={filters.subclasses?.includes(sc.subclass) ?? false} onChange={e => toggle('subclasses', sc.subclass, e.target.checked)} />{subclassLabel(sc.subclass)} <span className="fa-count">{sc.count}</span></label>)}</div>}
+          </div>)}
+        </fieldset>}
         <fieldset><legend>{t('filter.license')}</legend>
           {LICENSE_OPTIONS.map(([v, k]) => <label key={v}><input type="checkbox" checked={filters.license?.includes(v) ?? false} onChange={e => toggle('license', v, e.target.checked)} />{t(k)}</label>)}
         </fieldset>

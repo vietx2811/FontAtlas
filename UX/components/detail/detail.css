@@ -115,3 +115,15 @@
 /* Tên kiểu vẽ bằng chính font: dòng cao cố định để không làm nút/mục nhảy. */
 .fa-dd-btn .cur .lbl, .fa-dd-list li .lbl { line-height: 20px; }
 .fa-switch-wrap { display: inline-flex; flex: none; }
+.fa-class { position: relative; display: flex; align-items: center; gap: 8px; margin-top: -4px; }
+.fa-class-chip { display: inline-flex; align-items: baseline; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--surface-2); font-size: 12px; font-weight: 600; align-items: center; }
+.fa-class-chip:hover { background: var(--chrome-active); }
+.fa-class-chip .m { color: var(--muted); font-weight: 500; }
+.fa-class-chip[data-uncertain="true"] { background: transparent; border: 1px dashed var(--border-2); color: var(--muted); }
+.fa-class-edited { font-size: 10px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 1px 6px; border-radius: 8px; }
+.fa-class-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 180px; display: flex; flex-direction: column; padding: 4px; border-radius: var(--radius-md); background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 24px rgb(0 0 0 / .14); }
+.fa-class-menu button { display: flex; justify-content: space-between; gap: 12px; height: 28px; align-items: center; padding: 0 10px; border-radius: var(--radius-sm); font-size: 13px; text-align: left; }
+.fa-class-menu button:hover { background: var(--chrome-hover); }
+.fa-class-menu button[data-current="true"] { font-weight: 600; }
+.fa-class-menu small { color: var(--muted); font-size: 11px; }
+.fa-class-menu .auto { border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); margin-top: 4px; color: var(--accent-ink); }

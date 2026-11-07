@@ -1,5 +1,5 @@
 // Chỉ cho dev/QA/ảnh chụp: dựng trạng thái UI từ hash URL (index.tsx chỉ gọi khi import.meta.env.DEV).
-// Ví dụ: #sel=Public%20Sans:Regular&style=Bold&tab=vi&info=1&size=50&q=sans
+// Ví dụ: #sel=Public%20Sans:Regular&style=Bold&tab=vi&info=1&size=50&q=sans  ·  #classes=serif,sans
 import type { Api } from '../api';
 import type { MockOptions } from '../api/mock';
 import { useModelStore } from './model';
@@ -20,6 +20,7 @@ export async function applyDevPreset(api: Api, hash: string): Promise<void> {
     const row = items.find(r => !sub || r.subfamily === sub) ?? items[0];
     if (row) ui.select(faceKey(row));
   }
+  const classes = p.get('classes'); if (classes) ui.setFilters({ ...useUiStore.getState().filters, classes: classes.split(',') });
   const style = p.get('style'); if (style) useUiStore.getState().setStyle(style);
   const tab = p.get('tab'); if (tab) ui.setPanelTab(tab as PanelTab);
   if (p.get('info') === '1' && !useUiStore.getState().infoExpanded) ui.toggleInfo();

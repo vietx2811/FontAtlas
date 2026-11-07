@@ -9,6 +9,7 @@ import { useViewSummary } from './useViewSummary';
 import './topbar.css';
 import { FilterPanel } from './FilterPanel';
 import { FilterChips, filterChips } from './FilterChips';
+import { TopBarActions } from './TopBarActions';
 import { Tooltip } from '../ui/Tooltip';
 
 export function TopBar({ api }: { api: Api }): React.JSX.Element {
@@ -27,11 +28,12 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const hasChips = filterChips(filters, [], view).length > 0;
   const hasFilters = hasChips;
   return (
-    <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection || hasChips ? ' has-row' : ''}`}>
+    <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection || hasChips || selectedRows.length > 4 ? ' has-row' : ''}`}>
       <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
       <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
       <FilterPanel api={api} />
+      <TopBarActions api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
         <Tooltip label="Hiện dạng lưới"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button></Tooltip>
         <Tooltip label="Hiện dạng danh sách"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button></Tooltip>

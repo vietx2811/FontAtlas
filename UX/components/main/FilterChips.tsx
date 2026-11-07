@@ -4,6 +4,7 @@ import { useUiStore, type LibraryFilters } from '../../store/ui';
 import { useSourcesStore } from '../../store/sources';
 import { useScanStore } from '../../store/scan';
 import { t } from '../../i18n';
+import { classLabel, subclassLabel } from './classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
 import { AXIS_META, numberText, unitText } from '../detail/tabs/measurements';
 import { Icon } from '../sidebar/icons';
@@ -22,6 +23,8 @@ export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view =
   if (f.italic != null) out.push({ id: 'italic', label: t('filter.italic'), remove: drop('italic') });
   if (f.favoritesOnly && !forced.favorites) out.push({ id: 'favorites', label: t('filter.favorites'), remove: drop('favoritesOnly') });
   for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? `Nguồn ${id}`, remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
+  for (const c of f.classes ?? []) out.push({ id: `class:${c}`, label: classLabel(c), remove: x => { const next = (x.classes ?? []).filter(v => v !== c); const { classes: _, ...rest } = x; return next.length ? { ...rest, classes: next } : rest; } });
+  for (const c of f.subclasses ?? []) out.push({ id: `subclass:${c}`, label: subclassLabel(c), remove: x => { const next = (x.subclasses ?? []).filter(v => v !== c); const { subclasses: _, ...rest } = x; return next.length ? { ...rest, subclasses: next } : rest; } });
   for (const r of f.rawAxisRanges ?? []) {
     const unit = r.axis === 'slant_deg' || r.axis === 'aperture_deg' ? 'deg' : null;
     out.push({ id: `axis:${r.axis}`, label: `${AXIS_META[r.axis]?.label ?? r.axis} ${numberText(r.range[0], unit)}–${numberText(r.range[1], unit)}${unit ? unitText(unit) : ''}`, remove: x => { const next = (x.rawAxisRanges ?? []).filter(a => a.axis !== r.axis); const { rawAxisRanges: _, ...rest } = x; return next.length ? { ...rest, rawAxisRanges: next } : rest; } });
