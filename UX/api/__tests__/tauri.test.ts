@@ -223,3 +223,17 @@ describe('save_png', () => {
     expect(await api.savePng(png, 'x.png')).toBeNull();
   });
 });
+
+describe('duplicates', () => {
+  it('maps duplicate_summary and duplicate_groups with the full FaceQueryDto', async () => {
+    const groups = (await import('../../bindings/fixtures/duplicate_groups.json')).default;
+    const sum = (await import('../../bindings/fixtures/duplicate_summary.json')).default;
+    reply = cmd => (cmd === 'duplicate_groups' ? groups : cmd === 'duplicate_summary' ? sum : null);
+    const api = createTauriApi();
+    const q = { text: 'play', italic: false };
+    expect(await api.duplicateSummary(q)).toEqual(sum);
+    expect(last()).toEqual({ cmd: 'duplicate_summary', args: { q: toFaceQueryDto(q) } });
+    expect(await api.duplicateGroups(q)).toHaveLength(groups.length);
+    expect(last()).toEqual({ cmd: 'duplicate_groups', args: { q: toFaceQueryDto(q) } });
+  });
+});

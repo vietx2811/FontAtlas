@@ -13,7 +13,7 @@ export const SAMPLE_MIN = 18;
 export const SAMPLE_MAX = 72;
 export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
 
-export type View = 'all' | 'star' | 'recent' | 'active' | `col:${string}` | `src:${string}`;
+export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';

@@ -61,7 +61,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-import type { BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent } from './types';
+import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
@@ -216,6 +216,25 @@ export function createMockApi(o: MockOptions = {}): Api {
       return all.slice(0, Math.min(3, Math.max(1, o.maxCombos ?? 3))).map(([h, b], i) => ({ heading: h, body: b, assessment: comboAssessment(h, b, i), rank: i + 1 }));
     },
     async savePng(png, name) { return downloadBlob(png, name); },
+    async duplicateGroups(q = {}) {
+      const keep = new Set((await this.queryFaces({ ...q, offset: 0, limit: 1000 })).items.map(keyOf));
+      const pick = (family: string, sub: string) => rows.find(r => r.family === family && r.subfamily === sub) ?? rows.find(r => r.family === family)!;
+      const m = (r: FaceRow, path: string | null, o: Partial<DuplicateMemberDto> = {}): DuplicateMemberDto => ({ row: r, path, format: 'ttf', version: null, revision: null, modified: null, isNewest: false, ...o });
+      const a = pick('Be Vietnam Pro', 'Regular'), p1 = pick('Playfair Display', 'Regular'), p2 = pick('Playfair Display', 'Bold');
+      const r1 = pick('Roboto', 'Regular'), r2 = pick('Public Sans', 'Regular'), o1 = pick('Oswald', 'Regular');
+      const all: DuplicateGroupDto[] = [
+        { kind: 'same_file', key: a.hashHex, newestKnown: false, faces: [m(a, a.path), m(a, (a.path ?? '/Fonts/x.ttf').replace('/Fonts/', '/Downloads/'))] },
+        { kind: 'versions', key: 'PlayfairDisplay-Regular', newestKnown: true, faces: [m(p1, p1.path, { version: 'Version 1.203', revision: 1.203, modified: 1_600_000_000 }), m(p2, p2.path, { version: 'Version 1.204', revision: 1.204, modified: 1_650_000_000, isNewest: true })] },
+        { kind: 'versions', key: 'Roboto-Regular', newestKnown: false, faces: [m(r1, r1.path), m(r2, null)] },
+        { kind: 'formats', key: 'Oswald|Regular|400|false', newestKnown: false, faces: [m(o1, o1.path), m(o1, '/Volumes/Ổ ngoài/Oswald-Regular.otf', { format: 'sfnt' }), m(o1, '/Fonts/Oswald-Regular.woff2', { format: 'woff2', version: 'Version 4.1', revision: 4.1 })] },
+      ];
+      return all.filter(g => g.faces.some(f => keep.has(keyOf(f.row))));
+    },
+    async duplicateSummary(q = {}) {
+      const g = await this.duplicateGroups(q);
+      const n = (k: string) => g.filter(x => x.kind === k).length;
+      return { sameFile: n('same_file'), versions: n('versions'), formats: n('formats'), total: g.length };
+    },
     async classFacets(q = {}) {
       const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });
       const by = new Map<string, Map<string, number>>();
