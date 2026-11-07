@@ -22,7 +22,7 @@ jobs:
       - run: npm test
       - run: npx vite build
   s2:
-    runs-on: macos-14
+    runs-on: macos-latest
     continue-on-error: true   # chỉ báo cáo, không chặn merge
     defaults: { run: { working-directory: UX } }
     steps:

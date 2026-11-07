@@ -82,29 +82,59 @@ fn is_composite(font: &FontRef, gid: GlyphId) -> bool {
     matches!(loca.get_glyf(gid, &glyf), Ok(Some(Glyph::Composite(_))))
 }
 
+/// Coverage is Unicode semantics, unlike a renderer's symbol cmap fallback.
+/// OpenType cmap: prefer full repertoire, then BMP; never Windows encoding 0.
+fn unicode_cmap<'a>(font: &FontRef<'a>) -> Option<read_fonts::tables::cmap::CmapSubtable<'a>> {
+    use read_fonts::tables::cmap::PlatformId;
+    let cmap = font.cmap().ok()?;
+    for (platform, encoding) in [
+        (PlatformId::Windows, 10),
+        (PlatformId::Unicode, 6),
+        (PlatformId::Unicode, 4),
+        (PlatformId::Windows, 1),
+        (PlatformId::Unicode, 3),
+        (PlatformId::Unicode, 2),
+        (PlatformId::Unicode, 1),
+        (PlatformId::Unicode, 0),
+    ] {
+        for record in cmap.encoding_records() {
+            if record.platform_id() == platform
+                && record.encoding_id() == encoding
+                && let Ok(subtable) = record.subtable(cmap.offset_data())
+            {
+                return Some(subtable);
+            }
+        }
+    }
+    None
+}
+
 pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
-    let cmap = font.charmap();
+    let unicode = unicode_cmap(font);
+    let map = |c: char| {
+        unicode
+            .as_ref()
+            .and_then(|m| m.map_codepoint(c))
+            .filter(|g| g.to_u32() != 0)
+    };
     let chars = vi_required_chars();
     let missing: Vec<char> = chars
         .iter()
         .copied()
-        .filter(|c| cmap.map(*c).is_none())
+        .filter(|c| map(*c).is_none())
         .collect();
     let present: Vec<GlyphId> = chars
         .iter()
         .filter(|c| !c.is_ascii())
-        .filter_map(|c| cmap.map(*c))
+        .filter_map(|c| map(*c))
         .collect();
     let precomposed_composite = present.iter().filter(|g| is_composite(font, **g)).count();
     let combining_marks_missing: Vec<u32> = VI_MARKS
         .iter()
         .copied()
-        .filter(|m| char::from_u32(*m).and_then(|c| cmap.map(c)).is_none())
+        .filter(|m| char::from_u32(*m).and_then(&map).is_none())
         .collect();
-    let bases_missing: Vec<char> = VI_BASES
-        .chars()
-        .filter(|c| cmap.map(*c).is_none())
-        .collect();
+    let bases_missing: Vec<char> = VI_BASES.chars().filter(|c| map(*c).is_none()).collect();
     let (gsub, gpos) = crate::metadata::feature_tags(font);
     let gpos_mark = gpos.iter().any(|t| t == "mark");
     let gpos_mkmk = gpos.iter().any(|t| t == "mkmk");
@@ -131,7 +161,7 @@ pub(crate) fn coverage(font: &FontRef) -> VietnameseCoverage {
         gpos_mark,
         gpos_mkmk,
         gsub_ccmp,
-        dong_sign: cmap.map('₫').is_some(),
+        dong_sign: map('₫').is_some(),
         stacked_marks_top_em,
         stacked_marks_overflow,
         marks: vi_marks(font),
@@ -206,6 +236,14 @@ fn tone_side(ctx: &GlyphCtx, ch: char, xh: f64) -> Result<Side, FailReason> {
 }
 
 pub(crate) fn vi_marks(font: &FontRef) -> ViMarks {
+    // GlyphCtx uses the renderer mapping; do not measure symbol glyphs as Vietnamese marks.
+    if font.charmap().is_symbol() {
+        return ViMarks {
+            stack_style: None,
+            stack_style_quality: Quality::Failed(FailReason::MissingGlyph),
+            mark_weight_ratio: Metric::failed(FailReason::MissingGlyph, MARK_RATIO_METHOD),
+        };
+    }
     let ctx = GlyphCtx::new(font.clone(), crate::anatomy::standard_location(font));
     let Some(xh) = ctx.glyph('x', true).map(|g| g.bbox.y1).filter(|v| *v > 0.0) else {
         let f = FailReason::NoLatinLowercase;
@@ -260,6 +298,9 @@ fn mark_weight_ratio(ctx: &GlyphCtx, xh: f64) -> Metric {
 }
 
 fn stacked_marks(font: &FontRef) -> (Option<f32>, Option<bool>) {
+    if font.charmap().is_symbol() {
+        return (None, None);
+    }
     // Thiếu head hoặc upm = 0 → không đo được (không mặc định im lặng).
     let Some(upm) = font
         .head()

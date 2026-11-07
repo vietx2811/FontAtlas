@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { FaceDetailDto } from '../../../api';
 import { ZeroState } from '../../zero/ZeroState';
+import { Tooltip } from '../../ui/Tooltip';
 
 const LOWER = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
 /** 67 chữ thường + 67 chữ hoa = 134 ký tự (UX 03 §6.2). */
@@ -33,7 +34,7 @@ export function ViTab({ detail, css }: { detail: FaceDetailDto; css: CSSProperti
 
       <div className="fa-vi-grid" style={css} role="list" aria-label="134 ký tự tiếng Việt">
         {VI_CHARS.map(c => missing.has(c)
-          ? <span key={c} role="listitem" className="fa-vi-cell miss" data-testid="vi-cell-missing" data-missing="true" title={`Thiếu ${c}`}>{c}<small>thiếu</small></span>
+          ? <Tooltip key={c} label={`Font không có ký tự ${c}`}><span role="listitem" className="fa-vi-cell miss" data-testid="vi-cell-missing" data-missing="true">{c}<small>thiếu</small></span></Tooltip>
           : <span key={c} role="listitem" className="fa-vi-cell" data-testid="vi-cell">{c}</span>)}
       </div>
 

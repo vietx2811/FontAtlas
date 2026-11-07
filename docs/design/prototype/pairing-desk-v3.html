@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FontAtlas · Pairing Desk — prototype v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&family=Josefin+Sans:wght@300;400;600;700&family=Alegreya:ital,wght@0,400;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Fraunces:ital,wght@0,400;0,600;0,800;1,400&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@300;400;600;700&family=Oswald:wght@300;400;500;600;700&family=Roboto+Slab:wght@300;400;600;700&family=Bricolage+Grotesque:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=Abril+Fatface&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/*
+  Pairing Desk — prototype vòng 3 (nền: phương án C "Cột vai + Cuộn chọn"). Tài liệu: docs/design/font-desk/06_v3_pairing_compare.md
+  · Hai chế độ: Pairing (tìm/thử font cho từng vai, có Pairing Style) và Compare (font hoặc combo đặt ngang, không có Pairing Style).
+  · Thuật ngữ font giữ tiếng Anh (TERMS), giải thích theo locale (gloss). Mọi chuỗi UI qua t(key).
+  · Số đo, meta (version, số glyph…) và nhãn ●◐◆○ là DỮ LIỆU GIẢ. Font Google là stand-in. Icon: lucide (ISC).
+  · Tham số URL: ?fresh=1&case=1&mode=pairing|compare&kind=font|combo&sel=body&reel=1&try=1&det=0|1&theme=dark
+*/
+:root{
+  --chrome:#F1EFEC; --hover:rgba(41,37,36,.06); --active:rgba(41,37,36,.10);
+  --sheet:#FAFAFA; --card:#FFFFFF; --page:#FFFFFF; --ink:#1F1D1B; --fg:#2A2A2A; --muted:#78716C; --border:#E7E5E4; --border-2:#D6D3D1; --surface-2:#F3F2F0;
+  --accent:#D4A574; --accent-ink:#9A6B3C; --accent-soft:#F5E6D3; --on:#3FA66B; --warn:#C2410C; --up:#3F7F5F; --down:#9A4B2C;
+  --shadow:0 1px 2px rgba(41,37,36,.05),0 8px 24px rgba(41,37,36,.08);
+  --pop-shadow:0 14px 36px rgba(41,37,36,.18),0 2px 6px rgba(41,37,36,.08);
+  --font-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --side-w:232px; --rail-w:216px; --reel-w:272px; --det-w:304px; --r-sm:7px; --r-md:10px; --r-lg:14px;
+  color-scheme:light;
+}
+[data-theme="dark"]{
+  --chrome:#171513; --hover:rgba(250,250,249,.06); --active:rgba(250,250,249,.11);
+  --sheet:#1C1917; --card:#23201E; --page:#F7F5F2; --fg:#F5F5F4; --muted:#A8A29E; --border:#2E2A27; --border-2:#3B3632; --surface-2:#2A2623;
+  --accent:#E0B07E; --accent-ink:#E0B07E; --accent-soft:rgba(224,176,126,.15); --on:#4ADE80; --warn:#FB923C; --up:#7FC29B; --down:#E9A07E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4); --pop-shadow:0 16px 40px rgba(0,0,0,.55);
+  color-scheme:dark;
+}
+@media (max-width:1279px){ :root{ --side-w:200px; --rail-w:196px; --reel-w:252px; } }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--chrome);color:var(--fg);font:13px/1.4 var(--font-ui);-webkit-font-smoothing:antialiased;min-width:1000px;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px;border-radius:5px}
+.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;display:inline-block;vertical-align:middle}
+.i.s{width:14px;height:14px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)}
+.term{border-bottom:1px dotted currentColor;cursor:help}
+
+/* shell */
+.app{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);height:100vh;padding:8px 8px 8px 0}
+.side{display:flex;flex-direction:column;min-height:0;padding:0 8px}
+.side-top{height:36px;display:flex;align-items:center;justify-content:flex-end;color:var(--muted)}
+.side-scroll{flex:1;overflow:auto;scrollbar-width:none}
+.nav{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 9px;border-radius:var(--r-sm);text-align:left;font-size:13.5px;white-space:nowrap}
+.nav:hover{background:var(--hover)}
+.nav[aria-current="true"]{background:var(--active);font-weight:500}
+.nav .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nav .n{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav .i{opacity:.75}
+.nav.sub{color:var(--muted);font-size:12.5px}
+.sec{margin-top:16px}
+.sec-row{display:flex;align-items:center}
+.sec-head{flex:1;display:flex;align-items:center;gap:7px;height:28px;padding:0 9px;color:var(--muted);font-size:12.5px;font-weight:500;border-radius:var(--r-sm);text-align:left}
+.sec-head:hover{color:var(--fg)}
+.sec-add{width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:var(--muted);opacity:0}
+.sec:hover .sec-add,.sec-add:focus-visible{opacity:1}
+.sec-add:hover{background:var(--hover);color:var(--fg)}
+.side-foot{display:flex;gap:2px;padding:6px 2px;color:var(--muted)}
+.ib{width:30px;height:30px;display:inline-grid;place-items:center;border-radius:var(--r-sm);color:var(--muted);flex:none;position:relative}
+.ib:hover{background:var(--hover);color:var(--fg)}
+.ib[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink)}
+.ib.sm{width:26px;height:26px}
+.ib .badge{position:absolute;top:2px;right:1px;min-width:14px;height:14px;border-radius:7px;background:var(--accent-ink);color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;padding:0 3px}
+.main{background:var(--sheet);border-radius:12px;box-shadow:var(--shadow);min-width:0;min-height:0;overflow:hidden;position:relative;display:flex;flex-direction:column}
+#tip{position:fixed;z-index:90;pointer-events:none;background:#1F1D1B;color:#FAFAF9;font-size:11.5px;line-height:1.45;padding:6px 9px;border-radius:7px;max-width:280px;box-shadow:var(--pop-shadow);opacity:0;transition:opacity .08s}
+#tip kbd{font:500 10.5px var(--font-ui);border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:0 4px;margin-left:6px;color:#D6D3D1}
+#tip b{font-weight:600}
+
+/* top bar */
+.bar{height:50px;flex:none;display:flex;align-items:center;gap:6px;padding:0 10px 0 14px;border-bottom:1px solid var(--border);min-width:0}
+.grp{display:flex;align-items:center;gap:4px;padding:0 6px;border-right:1px solid var(--border);height:28px;flex:none}
+.grp.last{border-right:0}
+.grp.name{min-width:0;flex:0 1 auto;padding-left:0}
+.pname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;padding:3px 5px;border-radius:5px;outline:none}
+.pname:hover{background:var(--hover)}
+.pname:focus{background:var(--card);box-shadow:0 0 0 1px var(--border-2)}
+.bar .sp{flex:1}
+.saved{font-size:11px;color:var(--muted);white-space:nowrap;display:flex;gap:4px;align-items:center}
+.saved.busy{color:var(--accent-ink)}
+.chips{display:flex;gap:6px;padding:6px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.chip{height:24px;padding:0 6px 0 8px;border-radius:99px;background:var(--surface-2);display:inline-flex;align-items:center;gap:5px;font-size:11.5px}
+.chip .x{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.chip .x:hover{background:var(--active);color:var(--fg)}
+@media (max-width:1279px){ .hide-n{display:none!important} .pname{max-width:150px} .grp{padding:0 4px} .stp .lb:has(.hide-n){min-width:0!important} }
+
+/* option stepper */
+.stp{display:inline-flex;align-items:center;height:28px;border:1px solid var(--border);border-radius:8px;background:var(--card);flex:none}
+.stp button{height:26px;display:inline-flex;align-items:center;gap:6px;color:var(--fg)}
+.stp .nv{width:22px;justify-content:center;color:var(--muted)}
+.stp .nv:hover:not([disabled]){color:var(--fg);background:var(--hover)}
+.stp .nv:first-child{border-radius:7px 0 0 7px}
+.stp .nv:last-child{border-radius:0 7px 7px 0}
+.stp .nv[disabled]{opacity:.3;cursor:default}
+.stp .lb{padding:0 6px;border-left:1px solid var(--border);border-right:1px solid var(--border);font-size:12.5px;white-space:nowrap;justify-content:space-between}
+.stp .lb:hover{background:var(--hover)}
+.stp .lb .t{overflow:hidden;text-overflow:ellipsis}
+.stp .lb .dv{color:var(--muted)}
+.stp[data-open="true"]{border-color:var(--accent-ink);box-shadow:0 0 0 1px var(--accent-ink)}
+.stp .lb em{font-style:italic;color:var(--accent-ink)}
+.stp.mode .lb{font-weight:600}
+.stp.mode{border-color:var(--border-2)}
+
+/* popover */
+#pop{position:fixed;z-index:70;display:none}
+#pop.on{display:block}
+.pop{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--pop-shadow);padding:5px;min-width:240px;max-height:min(72vh,560px);overflow:auto;font-size:12.5px}
+.pop .cap{font-size:10.5px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;font-weight:500;padding:8px 9px 4px;display:flex;gap:6px;align-items:center}
+.pop hr{border:0;border-top:1px solid var(--border);margin:4px 3px}
+.opt{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border-radius:7px;text-align:left;min-height:32px}
+.opt:hover,.opt.kb{background:var(--surface-2)}
+.opt .ck{width:14px;color:var(--accent-ink)}
+.opt .tx{flex:1;min-width:0}
+.opt .tx .d{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt .kbd{font-size:10.5px;color:var(--muted)}
+.filt{width:330px;padding:8px}
+.f-row{display:flex;flex-direction:column;gap:6px;padding:8px 6px;border-bottom:1px solid var(--border)}
+.f-row:last-child{border-bottom:0}
+.f-row .h{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--border);display:inline-flex;gap:5px;align-items:center;font-size:12px}
+.seg button:hover{border-color:var(--border-2)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.sw-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;width:100%;text-align:left}
+.sw{width:26px;height:15px;border-radius:99px;background:var(--border-2);position:relative;flex:none;transition:background .15s}
+.sw::after{content:"";position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;left:2px;top:2px;transition:left .15s}
+[aria-checked="true"] > .sw{background:var(--accent-ink)}
+[aria-checked="true"] > .sw::after{left:13px}
+.addlist{width:320px}
+.addlist .q{position:relative;padding:4px}
+.addlist .q input{width:100%;height:28px;border:1px solid var(--border);border-radius:7px;background:var(--sheet);padding:0 8px 0 28px}
+.addlist .q .i{position:absolute;left:12px;top:11px;color:var(--muted)}
+
+/* page + roles */
+.canvas{min-height:0;overflow:auto;position:relative;background:var(--sheet)}
+.page{background:var(--page);color:var(--ink);border:1px solid var(--border);position:relative;margin:0 auto}
+[data-theme="dark"] .page{border-color:transparent}
+.role{position:relative;border-radius:3px;outline:1px solid transparent;outline-offset:4px;transition:outline-color .1s}
+.page.live .role{cursor:pointer}
+.page.live .role:hover{outline-color:rgba(154,107,60,.35)}
+.page.live .role.sel{outline:1px dashed var(--accent-ink)}
+.role.try{box-shadow:-7px 0 0 -5px var(--accent)}
+.role[contenteditable="true"]{outline:1px solid var(--accent-ink)!important;cursor:text;background:#FFFCF8}
+.miss{background:rgba(194,65,12,.15);box-shadow:inset 0 -2px 0 #C2410C}
+.pg-editorial{width:640px;padding:50px 56px}
+.pg-editorial .cols{columns:2;column-gap:26px;margin-top:22px}
+.pg-editorial .cols p{margin:0 0 10px}
+.pg-editorial blockquote{margin:16px 0;break-inside:avoid}
+.pg-brand{width:720px;padding:42px 46px;display:grid;grid-template-columns:1.15fr 1fr;gap:24px 36px}
+.pg-brand .full{grid-column:1/-1}
+.aa{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--ink);padding-top:10px}
+.aa .big{font-size:58px;line-height:1}
+.aa .set{font-size:14px;letter-spacing:.04em;line-height:1.5;word-break:break-all}
+.aa .cap{font:500 10px var(--font-ui);color:#77716B;letter-spacing:.06em;text-transform:uppercase}
+.pg-poster{width:560px;min-height:700px;padding:48px 48px 40px;display:flex;flex-direction:column;gap:14px}
+.pg-poster .rule{height:2px;background:var(--ink);margin:8px 0}
+.pg-poster .bottom{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+.pg-poster .cta{border:1.5px solid var(--ink);padding:8px 14px;border-radius:99px;white-space:nowrap}
+.pg-ui{width:700px;padding:0 0 36px;overflow:hidden}
+.pg-ui .nav-mock{height:44px;border-bottom:1px solid #ECEAE7;display:flex;align-items:center;gap:18px;padding:0 28px;font:12px var(--font-ui);color:#8a847e}
+.pg-ui .nav-mock b{color:#1F1D1B;font-weight:600;margin-right:auto}
+.pg-ui .hero{padding:44px 56px 0;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.pg-ui .btnmock{background:#1F1D1B;color:#fff;padding:10px 18px;border-radius:8px}
+.pg-ui .stats{display:flex;gap:14px;align-items:baseline;padding:28px 56px 0;border-top:1px solid #ECEAE7;margin-top:34px}
+.pg-pack{width:520px;padding:34px 38px}
+.pg-pack .frame{border:1.5px solid var(--ink);border-radius:120px 120px 8px 8px;padding:64px 34px 26px;display:flex;flex-direction:column;gap:6px;text-align:center;align-items:center;min-height:440px}
+.pg-pack .row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;padding-top:18px;text-align:left;gap:16px;width:100%}
+.mini{overflow:hidden;border-radius:4px;pointer-events:none}
+.mini .page{margin:0}
+
+/* PAIRING: rail | reel | canvas | detail */
+.pv{flex:1;min-height:0;display:grid;grid-template-columns:var(--rail-w) auto minmax(0,1fr);position:relative}
+.c-rail{border-right:1px solid var(--border);overflow:auto;padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.c-rail .h{font-size:10.5px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;font-weight:500;padding:4px 8px 6px;display:flex;align-items:center;gap:6px}
+.rrow{display:grid;grid-template-columns:22px minmax(0,1fr);gap:0 8px;padding:7px 8px;border-radius:9px;text-align:left;align-items:center}
+.rrow:hover{background:var(--hover)}
+.rrow[aria-selected="true"]{background:var(--card);box-shadow:0 0 0 1px var(--accent-ink)}
+.rrow .vb{grid-row:1/4;width:20px;height:20px;border-radius:50%;border:1.2px solid var(--muted);color:var(--muted);display:grid;place-items:center;font-size:10px;font-weight:600}
+.rrow[aria-selected="true"] .vb{background:var(--accent-ink);border-color:var(--accent-ink);color:#fff}
+.rrow .rn{font-size:11px;color:var(--muted)}
+.rrow .fn{font-size:16px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .fn.trying{color:var(--accent-ink);font-style:italic}
+.c-reel{width:0;overflow:hidden;border-right:1px solid transparent;transition:width .16s ease;display:flex;flex-direction:column;background:var(--card)}
+.c-reel.on{width:var(--reel-w);border-right-color:var(--border)}
+.c-reel .rh{padding:8px 8px 6px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--border)}
+.c-reel .rh .t{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;padding:0 2px}
+.c-reel .rh .row{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.srcs{display:flex;gap:1px}
+.srcs button{height:28px;width:30px;border-radius:7px;display:inline-grid;place-items:center;color:var(--muted)}
+.srcs button:hover{color:var(--fg);background:var(--hover)}
+.srcs button[aria-pressed="true"]{color:var(--fg);background:var(--surface-2)}
+.pv .canvas{padding:28px 26px}
+.reel-hint{font-size:10.5px;color:var(--muted);padding:6px 10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.cl{overflow:auto;padding:4px;flex:1;min-height:0}
+.crow{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:7px 9px;border-radius:8px;cursor:pointer;position:relative}
+.crow:hover,.crow.kb{background:var(--surface-2)}
+.crow.cur{background:var(--accent-soft)}
+.crow .sp1{font-size:19px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.crow .meta{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden}
+.crow .acts{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:2px;opacity:0;background:var(--surface-2);border-radius:8px;padding:2px;align-items:center}
+.crow.cur .acts{background:var(--accent-soft)}
+.crow:hover .acts,.crow.kb .acts,.crow .acts:focus-within{opacity:1}
+.labs{display:inline-flex;gap:8px;font-size:11px;white-space:nowrap;color:var(--muted)}
+.lab b{font-weight:400;margin-right:2px;color:var(--fg)}
+.lab.k,.lab.k b{color:var(--warn)}
+.lab.u{opacity:.75}
+.empty{padding:14px 12px;color:var(--muted);font-size:12px;display:flex;flex-direction:column;gap:8px}
+.empty .acts{display:flex;gap:6px;flex-wrap:wrap}
+.btn{height:28px;padding:0 10px;border-radius:7px;font-size:12px;border:1px solid var(--border);background:var(--card);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--border-2)}
+.btn.pri{background:var(--fg);color:var(--card);border-color:var(--fg)}
+[data-theme="dark"] .btn.pri{background:var(--accent);color:#1C1917;border-color:var(--accent)}
+.btn[disabled]{opacity:.45;cursor:default}
+
+/* detail strip (dưới trang) */
+.center{display:flex;flex-direction:column;min-width:0;min-height:0}
+.center .canvas{flex:1}
+.det{flex:none;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;min-height:0;max-height:46%}
+.det-h{height:38px;flex:none;display:flex;align-items:center;gap:8px;padding:0 8px 0 12px;font-size:12px;color:var(--muted);white-space:nowrap;min-width:0}
+.det-h .t{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.det-h b{color:var(--fg);font-weight:600}
+.det-h .sp{flex:1}
+.det.closed .det-b{display:none}
+.det-b{flex:1;min-height:0;overflow:auto;padding:2px 12px 12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:12px}
+.det-b .colA{display:flex;flex-direction:column;gap:8px;min-width:0}
+.spec-card{border:1px solid var(--border);border-radius:10px;padding:7px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.spec-card .who{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted);min-width:0;white-space:nowrap}
+.spec-card .who b{color:var(--fg);font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.spec-card .s{font-size:20px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)}
+.spec-card .ml{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11px;color:var(--muted);align-items:center}
+.spec-card .ml span{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.spec-card.try{border-color:var(--accent);background:var(--accent-soft)}
+.spec-card.hint{border-style:dashed;color:var(--muted);font-size:11.5px;flex-direction:row;gap:8px;align-items:center;min-height:56px}
+.mtab{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;font-size:12px;align-content:start}
+.mtab > div{padding:4px 0;border-bottom:1px solid var(--border);white-space:nowrap}
+.mtab .h{font-size:10.5px;color:var(--muted);padding-top:0}
+.mtab .v{text-align:right;font-variant-numeric:tabular-nums;padding-left:12px}
+.mtab .v .u{color:var(--muted);font-size:10.5px;margin-left:2px}
+.mtab .v.try{color:var(--accent-ink)}
+.mtab .d{text-align:right;font-variant-numeric:tabular-nums;padding-left:12px;font-size:11px}
+.dlt.up{color:var(--up)} .dlt.dn{color:var(--down)} .dlt.z{color:var(--muted)}
+.axtag{display:inline-flex;gap:3px;align-items:center;font-size:10.5px;background:var(--surface-2);border-radius:5px;padding:1px 5px;font-variant-numeric:tabular-nums}
+.ring{width:14px;height:14px;flex:none}
+@media (max-width:1279px){ .det-b{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px} .det-h .labs{display:none} .spec-card .ml{display:none} .spec-card .s{font-size:16px} .det{max-height:52%} }
+
+/* COMPARE */
+.cmp{flex:1;min-height:0;display:flex;flex-direction:column}
+.cmp-h{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex:none;flex-wrap:wrap}
+.cmp-body{flex:1;min-height:0;overflow:auto;padding:12px 14px 20px}
+.cgrid{display:grid;border:1px solid var(--border);border-radius:12px;background:var(--card);width:max-content;min-width:100%}
+.cgrid > div{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:8px 12px;min-width:0;position:relative;background:var(--card)}
+.cgrid .rh{background:var(--sheet);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;position:sticky;left:0;z-index:2;white-space:nowrap}
+.cgrid .rh.sortable{cursor:pointer}
+.cgrid .rh.sortable:hover{color:var(--fg)}
+.cgrid .rh.sorted{color:var(--accent-ink);font-weight:500}
+.cgrid .gh{grid-column:1/-1;background:var(--surface-2);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:5px 12px;display:flex;align-items:center;gap:6px;cursor:pointer;position:sticky;left:0}
+.cgrid .ch{background:var(--sheet);display:flex;flex-direction:column;gap:4px;position:sticky;top:0;z-index:3}
+.cgrid .ch.base{position:sticky;left:160px;z-index:4;background:repeating-linear-gradient(135deg,var(--sheet),var(--sheet) 6px,var(--surface-2) 6px,var(--surface-2) 7px)}
+.cgrid .basecell{position:sticky;left:160px;z-index:1;box-shadow:2px 0 0 var(--border)}
+.cgrid .ch .r1{display:flex;align-items:center;gap:4px;font-weight:600;font-size:12.5px}
+.cgrid .ch .r1 .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cgrid .ch .hov{opacity:0;display:flex;gap:1px;position:absolute;right:6px;top:6px;background:var(--sheet);border-radius:7px;box-shadow:0 0 0 1px var(--border)}
+.cgrid .ch:hover .hov,.cgrid .ch:focus-within .hov{opacity:1}
+.cgrid .ch.pinned .pinb{color:var(--accent-ink)}
+
+.cgrid .grip{cursor:grab;color:var(--muted);display:inline-grid;place-items:center;width:18px;height:22px;border-radius:4px}
+.cgrid .grip:hover{background:var(--hover);color:var(--fg)}
+.cell-sp{font-size:20px;line-height:1.38;color:var(--fg);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cell-sp.body{font-size:13px;line-height:1.5;-webkit-line-clamp:3}
+.cell-sp.vi{font-size:26px;letter-spacing:.06em;-webkit-line-clamp:1}
+.cell-sp.aa{font-size:15px;letter-spacing:.04em;-webkit-line-clamp:2;line-height:1.5}
+.num{font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:5px;white-space:nowrap;font-size:12.5px}
+.num .u{font-size:10.5px;color:var(--muted)}
+.num .dlt{margin-left:auto;font-size:11px}
+.num .sym{font-size:12px} .num .sym.k{color:var(--warn)}
+.mval{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center}
+.cgrid .dragover{box-shadow:inset 3px 0 0 var(--accent-ink)}
+.cgrid .rdragover{box-shadow:inset 0 3px 0 var(--accent-ink)}
+.cgrid .addc{display:grid;place-items:center;background:var(--sheet)}
+.cspread{display:grid;gap:14px}
+.ccol{display:flex;flex-direction:column;gap:8px;min-width:0}
+.ccol-h{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card);font-weight:600;font-size:12.5px}
+.ccol-h .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ccol.base .ccol-h{background:var(--accent-soft);border-color:var(--accent)}
+
+/* home / lib */
+.home{flex:1;overflow:auto;padding:40px 52px 56px}
+.home-in{max-width:980px;margin:0 auto}
+.home h1{font-size:21px;font-weight:600;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.home .lede{color:var(--muted);margin:0 0 24px;max-width:540px}
+.start{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px;display:grid;gap:12px}
+.start h2{margin:0;font-size:14.5px;font-weight:600}
+.srow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.srow .k{width:70px;color:var(--muted);font-size:12px;display:flex;gap:5px;align-items:center}
+.seed{flex:1;min-width:260px;position:relative}
+.seed input{width:100%;height:36px;border:1px solid var(--border);border-radius:var(--r-md);padding:0 12px 0 34px;background:var(--sheet)}
+.seed > .i{position:absolute;left:11px;top:10px;color:var(--muted)}
+.seed-res{position:absolute;left:0;right:0;top:40px;z-index:5}
+.pill{height:30px;padding:0 11px;border-radius:99px;border:1px solid var(--border);background:var(--card);display:inline-flex;align-items:center;gap:6px}
+.pill:hover{border-color:var(--border-2)}
+.pill[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.lh{display:flex;align-items:baseline;justify-content:space-between;margin:30px 0 12px}
+.lh h3{margin:0;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.cgridh{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.ccard{text-align:left;display:flex;flex-direction:column;gap:7px}
+.thumb{aspect-ratio:16/10;background:var(--page);color:var(--ink);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;padding:14px 16px}
+.thumb .t3{font-size:7.5px;letter-spacing:.14em;color:#777;margin-bottom:7px;text-transform:uppercase}
+.thumb .t1{font-size:19px;line-height:1.1}
+.thumb .t2{font-size:9px;margin-top:8px;line-height:1.45;color:#444}
+.ccard .nm{font-weight:500;display:flex;gap:6px;align-items:center}
+.ccard .sub{font-size:11.5px;color:var(--muted)}
+.lib-top{height:50px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--border)}
+.lib-top h1{font-size:15px;margin:0;font-weight:600}
+.lib-grid{flex:1;overflow:auto;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;align-content:start}
+.fcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 14px 10px;text-align:left;display:flex;flex-direction:column;gap:16px;min-height:124px}
+.fcard .spec{font-size:28px;line-height:1.3;white-space:nowrap;overflow:hidden}
+.fcard .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1F1D1B;color:#fff;padding:9px 14px;border-radius:10px;font-size:12.5px;box-shadow:var(--pop-shadow);z-index:95;display:flex;gap:12px;align-items:center}
+.toast button{color:#E0B07E;text-decoration:underline}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="Điều hướng">
+    <div class="side-top"><button class="ib" data-tip="Thu gọn sidebar" aria-label="Thu gọn sidebar" data-ic="layout-grid"></button></div>
+    <nav class="side-scroll" id="side"></nav>
+    <div class="side-foot"><button class="ib" data-act="theme" id="themeBtn" aria-label="Sáng / tối" data-tip="Sáng / tối"></button><span style="flex:1"></span><button class="ib" data-act="reset" aria-label="Đặt lại dữ liệu mẫu" data-tip="Đặt lại dữ liệu mẫu (prototype)" data-ic="rotate-ccw"></button></div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div id="pop" role="dialog"></div>
+<div id="tip" role="tooltip"></div>
+<div class="sr" aria-live="polite" id="live"></div>
+<script>
+'use strict';
+const ICONS = {"chevron-left": "<path d=\"m15 18-6-6 6-6\"/>", "chevron-right": "<path d=\"m9 18 6-6-6-6\"/>", "chevron-down": "<path d=\"m6 9 6 6 6-6\"/>", "chevron-up": "<path d=\"m18 15-6-6-6 6\"/>", "star": "<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/>", "plus": "<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>", "search": "<path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/>", "sliders-horizontal": "<path d=\"M10 5H3\"/><path d=\"M12 19H3\"/><path d=\"M14 3v4\"/><path d=\"M16 17v4\"/><path d=\"M21 12h-9\"/><path d=\"M21 19h-5\"/><path d=\"M21 5h-7\"/><path d=\"M8 10v4\"/><path d=\"M8 12H3\"/>", "columns-3": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/><path d=\"M15 3v18\"/>", "x": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>", "pin": "<path d=\"M12 17v5\"/><path d=\"M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z\"/>", "pin-off": "<path d=\"M12 17v5\"/><path d=\"M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89\"/><path d=\"m2 2 20 20\"/><path d=\"M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11\"/>", "grip-vertical": "<circle cx=\"9\" cy=\"12\" r=\"1\"/><circle cx=\"9\" cy=\"5\" r=\"1\"/><circle cx=\"9\" cy=\"19\" r=\"1\"/><circle cx=\"15\" cy=\"12\" r=\"1\"/><circle cx=\"15\" cy=\"5\" r=\"1\"/><circle cx=\"15\" cy=\"19\" r=\"1\"/>", "arrow-up-down": "<path d=\"m21 16-4 4-4-4\"/><path d=\"M17 20V4\"/><path d=\"m3 8 4-4 4 4\"/><path d=\"M7 4v16\"/>", "check": "<path d=\"M20 6 9 17l-5-5\"/>", "undo-2": "<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"/>", "type": "<path d=\"M12 4v16\"/><path d=\"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2\"/><path d=\"M9 20h6\"/>", "case-sensitive": "<path d=\"m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16\"/><path d=\"M22 9v7\"/><path d=\"M3.304 13h6.392\"/><circle cx=\"18.5\" cy=\"12.5\" r=\"3.5\"/>", "bold": "<path d=\"M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8\"/>", "languages": "<path d=\"m5 8 6 6\"/><path d=\"m4 14 6-6 2-3\"/><path d=\"M2 5h12\"/><path d=\"M7 2h1\"/><path d=\"m22 22-5-10-5 10\"/><path d=\"M14 18h6\"/>", "sparkles": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\"/><path d=\"M20 2v4\"/><path d=\"M22 4h-4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/>", "copy": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"/><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"/>", "library": "<path d=\"m16 6 4 14\"/><path d=\"M12 6v14\"/><path d=\"M8 8v12\"/><path d=\"M4 4v16\"/>", "layers": "<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\"/><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\"/><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\"/>", "layout-template": "<rect width=\"18\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"9\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/><rect width=\"5\" height=\"7\" x=\"16\" y=\"14\" rx=\"1\"/>", "moon": "<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2\"/><path d=\"M12 20v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"m17.66 17.66 1.41 1.41\"/><path d=\"M2 12h2\"/><path d=\"M20 12h2\"/><path d=\"m6.34 17.66-1.41 1.41\"/><path d=\"m19.07 4.93-1.41 1.41\"/>", "eye": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>", "anchor": "<path d=\"M12 6v16\"/><path d=\"m19 13 2-1a9 9 0 0 1-18 0l2 1\"/><path d=\"M9 11h6\"/><circle cx=\"12\" cy=\"4\" r=\"2\"/>", "blend": "<circle cx=\"9\" cy=\"9\" r=\"7\"/><circle cx=\"15\" cy=\"15\" r=\"7\"/>", "arrow-down-wide-narrow": "<path d=\"m3 16 4 4 4-4\"/><path d=\"M7 20V4\"/><path d=\"M11 4h10\"/><path d=\"M11 8h7\"/><path d=\"M11 12h4\"/>", "keyboard": "<path d=\"M10 8h.01\"/><path d=\"M12 12h.01\"/><path d=\"M14 8h.01\"/><path d=\"M16 12h.01\"/><path d=\"M18 8h.01\"/><path d=\"M6 8h.01\"/><path d=\"M7 16h10\"/><path d=\"M8 12h.01\"/><rect width=\"20\" height=\"16\" x=\"2\" y=\"4\" rx=\"2\"/>", "folder": "<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/>", "layout-grid": "<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/>", "clock": "<path d=\"M12 6v6l4 2\"/><circle cx=\"12\" cy=\"12\" r=\"10\"/>", "power": "<path d=\"M12 2v10\"/><path d=\"M18.4 6.6a9 9 0 1 1-12.77.04\"/>", "file-text": "<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/>", "triangle-alert": "<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>", "text-cursor-input": "<path d=\"M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6\"/><path d=\"M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7\"/><path d=\"M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1\"/><path d=\"M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1\"/><path d=\"M9 6v12\"/>", "shield-check": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><path d=\"m9 12 2 2 4-4\"/>", "flask-conical": "<path d=\"M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2\"/><path d=\"M6.453 15h11.094\"/><path d=\"M8.5 2h7\"/>", "gauge": "<path d=\"m12 14 4-4\"/><path d=\"M3.34 19a10 10 0 1 1 17.32 0\"/>", "book-open-text": "<path d=\"M12 7v14\"/><path d=\"M16 12h2\"/><path d=\"M16 8h2\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/><path d=\"M6 12h2\"/><path d=\"M6 8h2\"/>", "panels-top-left": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M3 9h18\"/><path d=\"M9 21V9\"/>", "package": "<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\"/><path d=\"M12 22V12\"/><polyline points=\"3.29 7 12 12 20.71 7\"/><path d=\"m7.5 4.27 9 5.15\"/>", "presentation": "<path d=\"M2 3h20\"/><path d=\"M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3\"/><path d=\"m7 21 5-5 5 5\"/>", "trash-2": "<path d=\"M10 11v6\"/><path d=\"M14 11v6\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M3 6h18\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/>", "rotate-ccw": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/>", "swatch-book": "<path d=\"M11 17a4 4 0 0 1-8 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2Z\"/><path d=\"M16.7 13H19a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H7\"/><path d=\"M 7 17h.01\"/><path d=\"m11 8 2.3-2.3a2.4 2.4 0 0 1 3.404.004L18.6 7.6a2.4 2.4 0 0 1 .026 3.434L9.9 19.8\"/>", "tags": "<path d=\"M13.172 2a2 2 0 0 1 1.414.586l6.71 6.71a2.4 2.4 0 0 1 0 3.408l-4.592 4.592a2.4 2.4 0 0 1-3.408 0l-6.71-6.71A2 2 0 0 1 6 9.172V3a1 1 0 0 1 1-1z\"/><path d=\"M2 7v6.172a2 2 0 0 0 .586 1.414l6.71 6.71a2.4 2.4 0 0 0 3.191.193\"/><circle cx=\"10.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/>", "italic": "<line x1=\"19\" x2=\"10\" y1=\"4\" y2=\"4\"/><line x1=\"14\" x2=\"5\" y1=\"20\" y2=\"20\"/><line x1=\"15\" x2=\"9\" y1=\"4\" y2=\"20\"/>", "mouse-pointer-click": "<path d=\"M14 4.1 12 6\"/><path d=\"m5.1 8-2.9-.8\"/><path d=\"m6 12-1.9 2\"/><path d=\"M7.2 2.2 8 5.1\"/><path d=\"M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z\"/>", "panel-right-close": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M15 3v18\"/><path d=\"m8 9 3 3-3 3\"/>", "panel-right-open": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M15 3v18\"/><path d=\"m10 15-3-3 3-3\"/>", "info": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>", "pen-tool": "<path d=\"M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z\"/><path d=\"m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18\"/><path d=\"m2.3 2.3 7.286 7.286\"/><circle cx=\"11\" cy=\"11\" r=\"2\"/>", "building-2": "<path d=\"M10 12h4\"/><path d=\"M10 8h4\"/><path d=\"M14 21v-3a2 2 0 0 0-4 0v3\"/><path d=\"M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2\"/><path d=\"M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16\"/>", "hash": "<line x1=\"4\" x2=\"20\" y1=\"9\" y2=\"9\"/><line x1=\"4\" x2=\"20\" y1=\"15\" y2=\"15\"/><line x1=\"10\" x2=\"8\" y1=\"3\" y2=\"21\"/><line x1=\"16\" x2=\"14\" y1=\"3\" y2=\"21\"/>", "scale": "<path d=\"M12 3v18\"/><path d=\"m19 8 3 8a5 5 0 0 1-6 0zV7\"/><path d=\"M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1\"/><path d=\"m5 8 3 8a5 5 0 0 1-6 0zV7\"/><path d=\"M7 21h10\"/>", "sliders-vertical": "<path d=\"M10 8h4\"/><path d=\"M12 21v-9\"/><path d=\"M12 8V3\"/><path d=\"M17 16h4\"/><path d=\"M19 12V3\"/><path d=\"M19 21v-5\"/><path d=\"M3 14h4\"/><path d=\"M5 10V3\"/><path d=\"M5 21v-7\"/>", "arrow-left-right": "<path d=\"M8 3 4 7l4 4\"/><path d=\"M4 7h16\"/><path d=\"m16 21 4-4-4-4\"/><path d=\"M20 17H4\"/>", "corner-down-left": "<path d=\"M20 4v7a4 4 0 0 1-4 4H4\"/><path d=\"m9 10-5 5 5 5\"/>", "ruler": "<path d=\"M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z\"/><path d=\"m14.5 12.5 2-2\"/><path d=\"m11.5 9.5 2-2\"/><path d=\"m8.5 6.5 2-2\"/><path d=\"m17.5 15.5 2-2\"/>", "file-badge": "<path d=\"M13 22h5a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.3\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"m7.69 16.479 1.29 4.88a.5.5 0 0 1-.698.591l-1.843-.849a1 1 0 0 0-.879.001l-1.846.85a.5.5 0 0 1-.692-.593l1.29-4.88\"/><circle cx=\"6\" cy=\"14\" r=\"3\"/>", "list-tree": "<path d=\"M8 5h13\"/><path d=\"M13 12h8\"/><path d=\"M13 19h8\"/><path d=\"M3 10a2 2 0 0 0 2 2h3\"/><path d=\"M3 5v12a2 2 0 0 0 2 2h3\"/>"};
+const I = (n, cls='') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+
+/* ===================== i18n: chuỗi UI + thuật ngữ font ===================== */
+const LOCALE = 'vi';
+const STR = {vi:{
+  'pd.mode':'Chế độ', 'pd.mode.pairing':'Pairing', 'pd.mode.compare':'Compare',
+  'pd.mode.pairing.d':'Tìm và thử font cho từng vai, theo Pairing Style', 'pd.mode.compare.d':'Đặt nhiều font hoặc combo cạnh nhau theo chiều ngang',
+  'pd.layout':'Bố cục', 'pd.combo':'Combo', 'pd.role':'Vai', 'pd.kind':'So sánh', 'pd.kind.font':'Font', 'pd.kind.combo':'Combo',
+  'pd.kind.font.d':'Các ứng viên cho một vai', 'pd.kind.combo.d':'Các combo trong Case',
+  'pd.gate':'Mức ghép', 'pd.style':'Pairing Style', 'pd.source':'Nguồn gợi ý', 'pd.sort':'Sắp theo', 'pd.view':'Hiển thị',
+  'pd.view.table':'Bảng', 'pd.view.spread':'Song bản',
+  'det.title':'Chi tiết', 'det.current':'Đang dùng', 'det.trying':'Đang thử', 'det.hint':'Rê chuột lên một ứng viên để xem chênh lệch',
+  'det.metrics':'Số đo', 'det.meta':'Meta', 'det.pair':'Quan hệ với giọng ①', 'det.toCompare':'Đưa vào Compare', 'det.set':'Đặt vào vai',
+  'cmp.base':'mốc', 'cmp.add':'Thêm cột', 'cmp.useCombo':'Dùng combo này', 'cmp.tryPairing':'Thử trong Pairing',
+  'g.specimen':'Specimen', 'g.metrics':'Số đo', 'g.meta':'Meta', 'g.voices':'Giọng', 'g.relation':'Quan hệ giữa các giọng',
+}};
+const t = k => (STR[LOCALE] && STR[LOCALE][k]) || k;
+// Thuật ngữ: nhãn tiếng Anh cố định ở mọi locale; gloss dịch theo locale.
+const TERMS = {
+  x_height_em:{term:'x-height', unit:'em', gloss:{vi:'Chiều cao chữ thường x so với cỡ chữ (em). Cao hơn → chữ trông to, dễ đọc ở cỡ nhỏ.'}},
+  cap_height_em:{term:'cap height', unit:'em', gloss:{vi:'Chiều cao chữ HOA so với cỡ chữ (em).'}},
+  contrast:{term:'contrast', unit:': 1', gloss:{vi:'Tỉ lệ nét dày ÷ nét mảnh. Cao → nét tương phản mạnh, hợp cỡ lớn.'}},
+  width:{term:'width', unit:'× x', gloss:{vi:'Bề ngang chữ o so với x-height. Lớn → chữ bè; nhỏ → chữ hẹp, tiết kiệm chỗ.'}},
+  stem:{term:'weight', unit:'× x', gloss:{vi:'Độ dày thân nét chữ n so với x-height (đo ở kiểu Regular).'}},
+  stress_deg:{term:'stress', unit:'°', gloss:{vi:'Góc trục nhấn: đường nối hai chỗ mảnh nhất của chữ o. 0° là trục đứng.'}},
+  aperture:{term:'aperture', unit:'', gloss:{vi:'Độ mở của chữ c và e (0–1). Mở hơn → dễ đọc ở cỡ nhỏ và trên màn hình.'}},
+  serif:{term:'serif', unit:'', gloss:{vi:'Có chân (serif), không chân (sans), chân vuông (slab) hay đơn cách (mono).'}},
+  designer:{term:'Designer', gloss:{vi:'Người thiết kế (nameID 9).'}}, foundry:{term:'Foundry', gloss:{vi:'Hãng phát hành (nameID 8).'}},
+  version:{term:'Version', gloss:{vi:'Phiên bản file font (nameID 5).'}}, license:{term:'License', gloss:{vi:'Giấy phép ghi trong file. Chỉ để thông tin — bạn tự chịu trách nhiệm tuân thủ.'}},
+  glyphs:{term:'Glyphs', gloss:{vi:'Số glyph trong file.'}}, styles:{term:'Styles', gloss:{vi:'Số kiểu trong family.'}},
+  variable:{term:'Variable', gloss:{vi:'Trục biến thiên của variable font (min–max).'}}, italic:{term:'Italic', gloss:{vi:'Có italic thật (không phải nghiêng giả lập).'}},
+  vi:{term:'VI', gloss:{vi:'Độ phủ ký tự tiếng Việt: số ký tự có trên tổng 186.'}},
+};
+const term = (k, short) => { const T = TERMS[k]; return `<span class="term" data-tip="${esc(T.gloss[LOCALE] || T.gloss.vi)}" data-tipt="${esc(T.term)}">${esc(T.term)}</span>`; };
+const fmt = (v, d=2) => new Intl.NumberFormat(LOCALE, {minimumFractionDigits:d, maximumFractionDigits:d}).format(v);
+
+/* ===================== DỮ LIỆU GIẢ ===================== */
+const VI_RANGE = /[Ạ-ỹ]/;
+const F_ = (id, fam, cls, o) => ({id, fam, cls, ...o});
+const FONTS = [
+  F_('fraunces','Fraunces','serif',{sub:'display', xh:.50, cap:.70, ct:3.4, wd:.98, stem:.18, stress:12, ap:.42, w:[400,800], it:true, styles:18, by:'Phaedra Charles, Flavia Zimbardi', fd:'Undercase Type', ver:'1.000', gl:1081, axes:[['opsz',9,144],['wght',100,900],['SOFT',0,100],['WONK',0,1]]}),
+  F_('playfair','Playfair Display','serif',{sub:'display', xh:.51, cap:.71, ct:4.8, wd:.92, stem:.17, stress:0, ap:.36, w:[400,900], it:true, styles:12, by:'Claus Eggers Sørensen', fd:'Claus Eggers Sørensen', ver:'1.202', gl:690, axes:[['wght',400,900]]}),
+  F_('bevn','Be Vietnam Pro','sans',{xh:.53, cap:.70, ct:1.2, wd:1.02, stem:.15, stress:0, ap:.55, w:[300,700], it:true, styles:18, by:'Lâm Bảo, Tony Le, Viet Anh Nguyen', fd:'Be Vietnam', ver:'1.002', gl:612, axes:[]}),
+  F_('lora','Lora','serif',{xh:.50, cap:.70, ct:2.2, wd:.98, stem:.17, stress:18, ap:.46, w:[400,700], it:true, styles:8, by:'Olga Karpushina', fd:'Cyreal', ver:'3.008', gl:840, axes:[['wght',400,700]]}),
+  F_('sserif','Source Serif 4','serif',{xh:.48, cap:.67, ct:2.4, wd:.95, stem:.16, stress:14, ap:.48, w:[400,700], it:true, styles:16, sf:'source', by:'Frank Grießhammer', fd:'Adobe', ver:'4.005', gl:1407, axes:[['opsz',8,60],['wght',200,900]]}),
+  F_('ssans','Source Sans 3','sans',{xh:.49, cap:.66, ct:1.2, wd:.92, stem:.15, stress:0, ap:.58, w:[300,700], styles:16, sf:'source', by:'Paul D. Hunt', fd:'Adobe', ver:'3.052', gl:1914, axes:[['wght',200,900]]}),
+  F_('mont','Montserrat','sans',{sub:'geometric', xh:.52, cap:.70, ct:1.1, wd:1.18, stem:.16, stress:0, ap:.50, w:[300,700], styles:18, by:'Julieta Ulanovsky', fd:'Montserrat Project', ver:'8.000', gl:1951, axes:[['wght',100,900]]}),
+  F_('josefin','Josefin Sans','sans',{sub:'geometric', xh:.40, cap:.75, ct:1.2, wd:1.0, stem:.17, stress:0, ap:.52, w:[300,700], styles:14, by:'Santiago Orozco', fd:'Typemade', ver:'2.000', gl:476, axes:[['wght',100,700]]}),
+  F_('alegreya','Alegreya','serif',{xh:.45, cap:.66, ct:2.6, wd:.9, stem:.16, stress:20, ap:.40, w:[400,700], it:true, styles:12, lowConf:true, by:'Juan Pablo del Peral', fd:'Huerta Tipográfica', ver:'2.008', gl:1096, axes:[['wght',400,900]]}),
+  F_('ebg','EB Garamond','serif',{xh:.40, cap:.65, ct:2.8, wd:.88, stem:.14, stress:22, ap:.38, w:[400,600], it:true, styles:10, by:'Georg Duffner, Octavio Pardo', fd:'Georg Duffner', ver:'1.100', gl:1225, axes:[['wght',400,800]]}),
+  F_('oswald','Oswald','sans',{sub:'condensed', xh:.58, cap:.81, ct:1.3, wd:.72, stem:.19, stress:0, ap:.34, w:[300,700], styles:6, by:'Vernon Adams', fd:'Vernon Adams', ver:'4.103', gl:577, axes:[['wght',200,700]]}),
+  F_('rslab','Roboto Slab','slab',{xh:.54, cap:.71, ct:1.3, wd:1.0, stem:.17, stress:0, ap:.47, w:[300,700], styles:9, by:'Christian Robertson', fd:'Google', ver:'3.000', gl:938, axes:[['wght',100,900]]}),
+  F_('brico','Bricolage Grotesque','sans',{xh:.52, cap:.70, ct:1.4, wd:.96, stem:.16, stress:0, ap:.44, w:[400,700], styles:12, by:'Mathieu Triay', fd:'Ateliers Triay', ver:'1.001', gl:701, axes:[['opsz',12,96],['wdth',75,100],['wght',200,800]]}),
+  F_('dmserif','DM Serif Display','serif',{sub:'display', xh:.48, cap:.70, ct:4.2, wd:.9, stem:.19, stress:6, ap:.40, w:[400,400], it:true, styles:2, noVi:true, by:'Colophon Foundry', fd:'Colophon', ver:'1.100', gl:276, axes:[]}),
+  F_('abril','Abril Fatface','serif',{sub:'display', xh:.47, cap:.72, ct:6.0, wd:1.0, stem:.26, stress:0, ap:.33, w:[400,400], styles:1, noVi:true, by:'Veronika Burian, José Scaglione', fd:'TypeTogether', ver:'1.001', gl:263, axes:[]}),
+  F_('smono','Space Mono','mono',{xh:.52, cap:.70, ct:1.1, wd:1.2, stem:.16, stress:0, ap:.48, w:[400,700], styles:4, by:'Colophon Foundry', fd:'Colophon', ver:'1.001', gl:350, axes:[]}),
+];
+FONTS.forEach(f => { f.lic = 'OFL-1.1'; f.vi = f.noVi ? 96 : 186; });
+const F = Object.fromEntries(FONTS.map(f => [f.id, f]));
+const GROUP = f => (f.cls === 'slab' ? 'serif' : f.cls);
+const CLS_EN = {serif:'Serif', sans:'Sans', slab:'Slab serif', mono:'Mono'};
+const missingIn = (f, text) => f.noVi ? [...new Set([...text].filter(c => VI_RANGE.test(c)))] : [];
+const fstack = f => `"${f.fam}", ${GROUP(f) === 'serif' ? 'Georgia, serif' : 'Helvetica, sans-serif'}`;
+
+const ROLE = {
+  eyebrow:{n:'Eyebrow', v:2, step:-1, w:500, up:true, tr:.16, lh:1.3}, wordmark:{n:'Tên thương hiệu', v:1, step:5, w:700, tr:-.01, lh:1.05},
+  headline:{n:'Tiêu đề', v:1, step:4, w:600, tr:-.01, lh:1.1}, deck:{n:'Phụ đề', v:1, step:1, w:400, it:true, lh:1.3},
+  item:{n:'Tiêu đề phụ', v:2, step:.6, w:600, lh:1.3}, body:{n:'Đoạn văn', v:2, step:0, w:400, lh:1.55},
+  caption:{n:'Chú thích', v:2, step:-1, w:400, lh:1.45}, quote:{n:'Trích dẫn', v:1, step:2.2, w:400, it:true, lh:1.25},
+  numeral:{n:'Số lớn', v:1, step:4, w:700, lh:1}, cta:{n:'Nút / CTA', v:2, step:0, w:600, lh:1.2}, fine:{n:'Chữ nhỏ', v:2, step:-2, w:400, lh:1.45},
+};
+const LAYOUTS = {
+  editorial:{n:'Editorial', ic:'book-open-text', d:'Tạp chí, sách, báo cáo dài', base:12.5, ratio:1.333, roles:['eyebrow','headline','deck','caption','body','quote'], w:640,
+    text:{eyebrow:'Kiến trúc · Số 42', headline:'Những ngôi nhà ống biết thở', deck:'Năm kiến trúc sư trẻ kể chuyện ánh sáng, gió và khoảng lùi giữa phố đông', caption:'Bài: Ngọc Hân · Ảnh: Minh Tú',
+      b1:'Ở Hà Nội, một ngôi nhà ống rộng bốn mét có thể sâu tới ba mươi mét. Ánh sáng chỉ vào được từ hai đầu, gió gần như không đi qua. Nhóm kiến trúc sư trẻ bắt đầu từ một câu hỏi: nếu bỏ bớt một tầng sàn thì ngôi nhà được gì?',
+      b2:'Câu trả lời là một giếng trời chạy suốt chiều cao, những bậc thang mỏng như nét bút và một khoảng sân nhỏ đủ cho chậu khế. Chủ nhà bảo mùa hè năm nay họ chưa phải bật điều hoà ngày nào.', quote:'“Khoảng trống cũng là vật liệu.”'}},
+  brand:{n:'Brand sheet', ic:'swatch-book', d:'Hệ chữ thương hiệu, bảng Aa', base:13, ratio:1.333, roles:['eyebrow','wordmark','headline','body','caption'], w:720,
+    text:{eyebrow:'Hệ nhận diện · 2026', wordmark:'Lữ Hành Ký', headline:'Đi chậm, nhìn kỹ, kể thật.', body:'Giọng chính dùng cho tên thương hiệu, tiêu đề và các mục lớn. Giọng đọc lo đoạn văn, chú thích và mọi chữ nhỏ trên ấn phẩm. Không dùng quá hai giọng trên cùng một mặt in.', caption:'Thang cỡ 1,333 · cỡ đọc 13 pt · khoảng dòng 1,55'}},
+  poster:{n:'Poster', ic:'presentation', d:'Sự kiện, triển lãm, chữ HOA cỡ lớn', base:14, ratio:1.42, steps:{headline:5, numeral:3.4}, ups:{headline:true}, roles:['eyebrow','headline','numeral','deck','caption','cta'], w:560,
+    text:{eyebrow:'Triển lãm thiết kế chữ', headline:'Chữ Việt đương đại', numeral:'12—28.11', deck:'Bảo tàng Mỹ thuật TP. Hồ Chí Minh · 97A Phó Đức Chính', caption:'Vào cửa tự do · 9:00 – 17:00 · Thứ Hai nghỉ', cta:'Đăng ký tham quan nhóm'}},
+  ui:{n:'UI / Web', ic:'panels-top-left', d:'Landing, ứng dụng, cỡ nhỏ', base:13, ratio:1.3, steps:{headline:4.4, numeral:3}, roles:['eyebrow','headline','body','cta','caption','numeral'], w:700,
+    text:{eyebrow:'Mới · Phiên bản 3.0', headline:'Quản lý dự án gọn như một trang giấy', body:'Lập kế hoạch, giao việc và theo dõi tiến độ cho cả đội — không phải học thêm công cụ nào.', cta:'Dùng thử miễn phí', caption:'Không cần thẻ tín dụng · Huỷ bất cứ lúc nào', numeral:'12.000+', n2:'đội ngũ đang dùng mỗi ngày'}},
+  pack:{n:'Bao bì', ic:'package', d:'Nhãn, hộp, chữ nhỏ pháp lý', base:11.5, ratio:1.3, steps:{numeral:1.6}, roles:['eyebrow','wordmark','item','body','fine','numeral'], w:520,
+    text:{eyebrow:'Kem dưỡng ẩm', wordmark:'Mộc Hương', item:'Chiết xuất nghệ và dầu dừa ép lạnh', body:'Thành phần: nước, dầu dừa, chiết xuất nghệ, vitamin E. Thoa đều lên da sạch mỗi sáng và tối, tránh vùng mắt.', fine:'Sản xuất tại Việt Nam · HSD 24 tháng kể từ NSX · Số lô 0611', numeral:'50 ml'}},
+};
+const LKEYS = Object.keys(LAYOUTS);
+const keyRole = k => ROLE[k] ? k : ({b1:'body', b2:'body', n2:'caption'}[k] || null);
+const GATES = [['safe','An toàn','shield-check','Không va chạm, cấu trúc hoà hợp'],['controlled','Có kiểm soát','gauge','Cho ≤ 1 va chạm nhẹ, có tương phản rõ'],['experimental','Thử nghiệm','flask-conical','Mọi cặp, hiện hết chỗ va chạm']];
+const GATE_ORDER = {safe:0, controlled:1, experimental:2}, GATE_VI = {safe:'An toàn', controlled:'Có kiểm soát', experimental:'Thử nghiệm'}, GATE_IC = {safe:'shield-check', controlled:'gauge', experimental:'flask-conical'};
+const STYLES = [['all','Mọi kiểu','Không lọc','blend'],['family','Superfamily','Cùng họ, cùng nhà thiết kế','type'],['serifsans','Serif + Sans','Khác serif, giữ khung','case-sensitive'],['displaytext','Display + Text','Tiêu đề cá tính, chữ đọc lùi lại','presentation'],['keepone','Keep one, change one','Giống cấu trúc, khác bề mặt','anchor'],['break','Rule-breaking','Thử nghiệm, có va chạm','flask-conical']];
+const SOURCES = [['pair','Ghép','sparkles'],['similar','Giống','copy'],['family','Cùng họ','type'],['lib','Thư viện','library'],['pinned','Ghim','pin']];
+const METRICS = ['x_height_em','cap_height_em','contrast','width','stem','stress_deg','aperture'];
+const MV = {x_height_em:f => f.xh, cap_height_em:f => f.cap, contrast:f => f.ct, width:f => f.wd, stem:f => f.stem, stress_deg:f => f.stress, aperture:f => f.ap};
+const MD = {x_height_em:2, cap_height_em:2, contrast:1, width:2, stem:2, stress_deg:0, aperture:2};
+
+/* nhãn trục (mô phỏng R1–R9) */
+function axes(a, b){
+  const out = [], ln = (x,y) => Math.abs(Math.log(x/y));
+  const same = GROUP(a) === GROUP(b), sf = (a.sf && a.sf === b.sf) || a.id === b.id;
+  out.push({k:'xh', n:'x-height', g:'s', sym: ln(b.xh,a.xh) < .10 ? '●' : '◐'});
+  const dw = ln(b.wd,a.wd); out.push({k:'wd', n:'width', g:'s', sym: dw < .10 ? '●' : dw > .25 ? '◐' : '◆'});
+  if (a.lowConf || b.lowConf) out.push({k:'ap', n:'aperture', g:'s', sym:'○'});
+  out.push({k:'sf', n:'serif', g:'e', sym: same ? '●' : '◐'});
+  const dc = ln(b.ct,a.ct); out.push({k:'ct', n:'contrast', g:'e', sym: dc < .2 ? '●' : dc > .7 ? '◐' : (!same ? '◐' : '◆')});
+  const exprC = out.some(x => x.g === 'e' && x.sym === '◐');
+  const sAll = out.filter(x => x.g === 's').every(x => x.sym === '●' || x.sym === '○');
+  if (!sf && same && !exprC && sAll) out.push({k:'gl', n:'gần như nhau', g:'x', sym:'◆'});
+  else if (!sf && same && !exprC) out.push({k:'r8', n:'khung khác, da giống', g:'x', sym:'◆'});
+  if (sf && a.id !== b.id) out.unshift({k:'fam', n:'superfamily', g:'m', sym:'●'});
+  return out;
+}
+function assess(ref, cand, txt, projectVi){
+  const ax = axes(ref, cand), miss = missingIn(cand, txt);
+  const K = ax.filter(x => x.sym === '◆').length, sHarm = ax.filter(x => x.g === 's' && x.sym === '●').length;
+  const sf = ax.some(x => x.k === 'fam') || ref.id === cand.id, exprC = ax.some(x => x.g === 'e' && x.sym === '◐');
+  let gate = 'experimental';
+  if (sf || (K === 0 && ax.filter(x => x.g === 's').every(x => x.sym !== '◐' && x.sym !== '◆'))) gate = 'safe';
+  else if (K <= 1 && ax.filter(x => x.sym === '◆').every(x => x.k === 'wd') && exprC) gate = 'controlled';
+  const labels = [];
+  if (miss.length) labels.push({sym:'◆', n:'thiếu ' + miss.slice(0,3).join(' ') + (miss.length > 3 ? '…' : '')});
+  ax.filter(x => x.sym === '◆').forEach(x => labels.push(x)); ax.filter(x => x.sym !== '◆').forEach(x => labels.push(x));
+  return {ax, gate, K: K + (miss.length ? 1 : 0), sHarm, sf, labels, miss, blocked: projectVi && cand.noVi};
+}
+function styleOk(st, ref, c, r){
+  switch(st){ case 'family': return r.sf; case 'serifsans': return r.ax.some(x => x.k === 'sf' && x.sym === '◐') && r.K === 0;
+    case 'displaytext': return (ref.sub === 'display' || ref.ct > 4) && c.ct < 2.7 && c.xh >= .45;
+    case 'keepone': return r.sHarm >= 1 && r.ax.some(x => x.g === 'e' && x.sym === '◐') && r.K === 0; case 'break': return r.K > 0; default: return true; }
+}
+const SYM_VI = {'●':'hoà hợp','◐':'tương phản','◆':'cần xem','○':'chưa chắc'};
+const labsHTML = (labels, max=3) => `<span class="labs">${labels.slice(0,max).map(l => `<span class="lab ${l.sym==='◆'?'k':l.sym==='○'?'u':''}" ${TERMS[{xh:'x_height_em',wd:'width',ct:'contrast',sf:'serif',ap:'aperture'}[l.k]] ? `data-tip="${esc(SYM_VI[l.sym] + ' · ' + TERMS[{xh:'x_height_em',wd:'width',ct:'contrast',sf:'serif',ap:'aperture'}[l.k]].gloss.vi)}"` : ''}><b aria-hidden="true">${l.sym}</b>${esc(l.n)}<span class="sr"> (${SYM_VI[l.sym]})</span></span>`).join('')}</span>`;
+function ring(n, total=186){ const p = n/total; const c = 2*Math.PI*5.5; const col = p >= 1 ? 'var(--on)' : p > .6 ? '#D97706' : 'var(--warn)';
+  return `<svg class="ring" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border-2)" stroke-width="2"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="${(c*p).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 7 7)"/></svg>`; }
+
+/* ===================== TRẠNG THÁI ===================== */
+const KEY = 'fa-pairing-desk-v3';
+const mkCombo = (v1, v2) => ({id: Math.random().toString(36).slice(2,8), name:null, voices:[{slot:1, font:v1, wAdj:0, anchor:true},{slot:2, font:v2, wAdj:0}], roleVoice:{}});
+const mkCase = (id, name, layout, combos, sel, extra={}) => ({id, name, layout, starred:false, projectVi:true, gate:'safe', style:'all', src:'pair', xnorm:false, italicOnly:false, multiW:false, showLabels:true, showDelta:true,
+  combos, ci:0, main:0, sel, texts:{}, roleStyle:{}, pinned:{}, mode:'pairing', det:true,
+  cmp:{kind:'font', cols:[], pinned:[], sort:'none', dir:1, view:'table', rows:null, closed:{}}, ccmp:{order:null, pinned:[], sort:'none', dir:1, view:'table', closed:{}}, updated:Date.now(), ...extra});
+const seedCases = () => ([
+  mkCase(1, 'Tạp chí Kiến trúc · số 42', 'editorial', [mkCombo('fraunces','bevn'), mkCombo('fraunces','lora'), mkCombo('playfair','ssans')], 'body', {starred:true, pinned:{2:['sserif']}, updated:Date.now()-3600e3*5}),
+  mkCase(2, 'Lữ Hành Ký — nhận diện', 'brand', [mkCombo('playfair','bevn')], 'wordmark', {starred:true, updated:Date.now()-3600e3*30}),
+  mkCase(3, 'Poster Chữ Việt đương đại', 'poster', [mkCombo('oswald','sserif')], 'headline', {gate:'controlled', updated:Date.now()-3600e3*24*4}),
+]);
+let S; try { S = JSON.parse(localStorage.getItem(KEY)) } catch(e) { S = null }
+const freshState = () => ({cases:seedCases(), view:'home', open:null, nextId:4, lastLayout:'editorial', theme:'light', libSel:null});
+if (!S || !Array.isArray(S.cases)) S = freshState();
+const ui = {pv:null, pvCombo:null, dd:null, tryIdx:-1, q:'', addQ:'', seedQ:'', editing:null, highlight:false, reel:false, reelIdx:-1, drag:null, list:[]};
+let saveT = null, saveBusy = false;
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch(e) {} };
+function touch(){ const c = cur(); if (c) c.updated = Date.now(); saveBusy = true; paintSaved(); clearTimeout(saveT); saveT = setTimeout(() => { persist(); saveBusy = false; paintSaved(); }, 500); }
+const cur = () => S.cases.find(c => c.id === S.open && !c.deleted);
+const combo = (cs, i) => cs.combos[i ?? cs.ci];
+const voice = (cb, slot) => cb.voices.find(v => v.slot === slot);
+function roleSlot(cb, role){ let s = cb.roleVoice[role] ?? ROLE[role].v; if (!voice(cb, s)) s = voice(cb, 2) ? 2 : 1; return s; }
+const $ = (s, el=document) => el.querySelector(s), $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const live = m => { $('#live').textContent = m };
+function toast(msg, act){ $$('.toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role','status'); el.innerHTML = `<span>${esc(msg)}</span>` + (act ? `<button type="button">${esc(act.label)}</button>` : ''); if (act) el.querySelector('button').onclick = () => { el.remove(); act.run(); }; document.body.appendChild(el); setTimeout(() => el.remove(), 4000); }
+const ago = x => { const m = Math.round((Date.now()-x)/60000); if (m < 1) return 'vừa xong'; if (m < 60) return m + ' phút trước'; const h = Math.round(m/60); return h < 24 ? h + ' giờ trước' : Math.round(h/24) + ' ngày trước'; };
+const comboName = cb => cb.name || cb.voices.map(v => F[v.font].fam).join(' + ');
+const SLOT_N = s => s === 1 ? 'Giọng chính' : s === 2 ? 'Giọng đọc' : 'Giọng nhấn';
+
+function texts(cs){ return {...LAYOUTS[cs.layout].text, ...(cs.texts[cs.layout] || {})}; }
+function isUp(cs, role){ const rs = (cs.roleStyle[cs.layout] || {})[role] || {}; if (rs.up != null) return rs.up; const L = LAYOUTS[cs.layout]; return (L.ups && L.ups[role]) || ROLE[role].up || false; }
+function roleSample(cs, role){ const tx = texts(cs); const k = Object.keys(tx).find(k => keyRole(k) === role); return isUp(cs, role) ? tx[k].toUpperCase() : tx[k]; }
+function voiceText(cs, cb, slot){ let s = ''; for (const [k, v] of Object.entries(texts(cs))) { const r = keyRole(k); if (r && LAYOUTS[cs.layout].roles.includes(r) && roleSlot(cb, r) === slot) s += ' ' + (isUp(cs, r) ? v.toUpperCase() : v); } return s; }
+const refFont = (cb, slot) => F[(slot === 1 ? (voice(cb,2) || voice(cb,1)) : voice(cb,1)).font];
+const activeSlot = cs => roleSlot(combo(cs), cs.sel);
+function candidates(cs, slot, src){
+  const cb = combo(cs), v = voice(cb, slot); if (!v) return [];
+  const ref = refFont(cb, slot), txt = voiceText(cs, cb, slot), base = F[v.font];
+  const mk = (f, extra={}) => ({f, r: assess(ref, f, txt, cs.projectVi), current: f.id === v.font && (extra.wAdj ?? 0) === v.wAdj, ...extra});
+  let list; src = src || cs.src;
+  if (src === 'pair') {
+    if (cs.projectVi && ref.noVi && slot !== 1) list = [];
+    else { list = FONTS.filter(f => f.id !== ref.id).map(f => mk(f)).filter(x => !x.r.blocked && GATE_ORDER[x.r.gate] <= GATE_ORDER[cs.gate]);
+      if (cs.style !== 'all') list = list.filter(x => styleOk(cs.style, ref, x.f, x.r));
+      list.sort((a,b) => (b.r.sf - a.r.sf) || (a.r.K - b.r.K) || (b.r.sHarm - a.r.sHarm) || GATE_ORDER[a.r.gate] - GATE_ORDER[b.r.gate] || a.f.fam.localeCompare(b.f.fam)); }
+  } else if (src === 'similar') {
+    const d = f => Math.abs(Math.log(f.xh/base.xh))/.1 + Math.abs(Math.log(f.ct/base.ct))/.5 + Math.abs(Math.log(f.wd/base.wd))/.15 + (GROUP(f)!==GROUP(base)?2.5:0) + (f.sub!==base.sub?.8:0);
+    list = FONTS.filter(f => f.id !== base.id).sort((a,b) => d(a)-d(b)).slice(0,8).map(f => mk(f));
+  } else if (src === 'family') {
+    list = [[-100,'Light'],[0,'Regular'],[100,'Medium'],[200,'Bold']].map(([a, n]) => mk(base, {wAdj:a, style:n}));
+    FONTS.filter(f => f.sf && f.sf === base.sf && f.id !== base.id).forEach(f => list.push(mk(f)));
+  } else if (src === 'lib') { const q = ui.q.trim().toLowerCase(); list = FONTS.filter(f => !q || f.fam.toLowerCase().includes(q)).map(f => mk(f)); }
+  else list = (cs.pinned[slot] || []).map(id => mk(F[id], {pinned:true}));
+  if (cs.italicOnly) list = list.filter(x => x.f.it);
+  if (cs.multiW) list = list.filter(x => x.f.styles >= 4);
+  return list;
+}
+
+/* ===================== TRANG ===================== */
+function roleEl(cs, cb, key, pv, mini, tag='div', extra=''){
+  const role = keyRole(key), R = ROLE[role], L = LAYOUTS[cs.layout];
+  const slot = roleSlot(cb, role), v = voice(cb, slot);
+  const trying = !mini && pv && pv.slot === slot;
+  const f = trying ? F[pv.font] : F[v.font], wAdj = trying ? (pv.wAdj ?? v.wAdj) : v.wAdj;
+  const rs = (cs.roleStyle[cs.layout] || {})[role] || {};
+  const tx = texts(cs)[key], text = isUp(cs, role) ? tx.toUpperCase() : tx;
+  const step = ((L.steps && L.steps[role]) ?? R.step) + (rs.ds || 0);
+  const size = L.base * Math.pow(L.ratio, step);
+  const w = Math.max(f.w[0], Math.min(f.w[1], R.w + wAdj + (rs.dw || 0)));
+  const miss = missingIn(f, text);
+  const body = (ui.highlight && miss.length && !mini) ? [...text].map(c => miss.includes(c) ? `<span class="miss">${esc(c)}</span>` : esc(c)).join('') : esc(text);
+  const st = `font-family:${esc(fstack(f))};font-size:${size.toFixed(1)}px;font-weight:${w};line-height:${R.lh};letter-spacing:${R.tr||0}em;${R.it && f.it ? 'font-style:italic;' : ''}${role==='numeral'?'font-variant-numeric:tabular-nums;':''}${cs.xnorm ? 'font-size-adjust:0.52;' : ''}${extra}`;
+  if (mini) return `<${tag} class="role" style="${st}">${body}</${tag}>`;
+  return `<${tag} class="role ${cs.sel === role ? 'sel' : ''} ${trying ? 'try' : ''}" data-role="${role}" data-key="${key}" tabindex="0" role="group" aria-label="${esc(R.n + ' — ' + f.fam)}" style="${st}"${ui.editing === key ? ' contenteditable="true"' : ''}>${body}</${tag}>`;
+}
+function pageHTML(cs, cb, pv, mini){
+  const r = (k, tag, ex) => roleEl(cs, cb, k, pv, mini, tag, ex), lv = mini ? '' : ' live';
+  switch(cs.layout){
+    case 'editorial': return `<div class="page pg-editorial${lv}">${r('eyebrow')}<div style="height:12px"></div>${r('headline')}<div style="height:10px"></div>${r('deck')}<div style="height:12px"></div>${r('caption')}<div class="cols">${r('b1','p')}<blockquote>${r('quote')}</blockquote>${r('b2','p')}</div></div>`;
+    case 'brand': { const aa = slot => { const v = voice(cb, slot); if (!v) return ''; const f = (!mini && pv && pv.slot === slot) ? F[pv.font] : F[v.font];
+        return `<div class="aa"><span class="cap">${'①②③'[slot-1]} ${SLOT_N(slot)} · ${esc(f.fam)}</span><span class="big" style="font-family:${esc(fstack(f))}">Aa Ưư</span><span class="set" style="font-family:${esc(fstack(f))}">AĂÂBCDĐEÊGHIKLMNOÔƠPQRSTUƯVXY ăâđêôơư Ữ Ặ Ệ Ỗ 0123456789 ₫</span></div>`; };
+      return `<div class="page pg-brand${lv}"><div class="full">${r('eyebrow')}<div style="height:8px"></div>${r('wordmark')}</div><div>${r('headline')}<div style="height:14px"></div>${r('body')}<div style="height:12px"></div>${r('caption')}</div><div style="display:flex;flex-direction:column;gap:16px">${aa(1)}${aa(2)}${aa(3)}</div></div>`; }
+    case 'poster': return `<div class="page pg-poster${lv}">${r('eyebrow')}<div class="rule"></div>${r('headline')}<div style="height:6px"></div>${r('numeral')}${r('deck')}<div class="bottom">${r('caption','div','max-width:60%')}<div class="cta">${r('cta','span')}</div></div></div>`;
+    case 'ui': return `<div class="page pg-ui${lv}"><div class="nav-mock"><b>Trang Giấy</b><span>Tính năng</span><span>Bảng giá</span><span>Đăng nhập</span></div><div class="hero">${r('eyebrow')}${r('headline')}${r('body','div','max-width:520px')}<div style="display:flex;gap:14px;align-items:center;margin-top:6px"><span class="btnmock">${r('cta','span')}</span>${r('caption','span')}</div></div><div class="stats">${r('numeral','span')}${r('n2','span')}</div></div>`;
+    case 'pack': return `<div class="page pg-pack${lv}"><div class="frame">${r('eyebrow')}<div style="height:6px"></div>${r('wordmark')}${r('item')}<div style="height:10px"></div>${r('body','div','max-width:330px')}<div class="row">${r('fine','div','max-width:66%')}${r('numeral','div','white-space:nowrap')}</div></div></div>`;
+  }
+}
+const miniPage = (cs, cb, width) => `<div class="mini" style="width:${width}px"><div style="zoom:${(width/LAYOUTS[cs.layout].w).toFixed(4)}">${pageHTML(cs, cb, null, true)}</div></div>`;
+
+/* ===================== OPTION STEPPER ===================== */
+const SORTS_F = [['none','Thứ tự kéo thả','grip-vertical'],['x_height_em','x-height','type'],['contrast','contrast','bold'],['width','width','arrow-left-right'],['stem','weight','bold'],['glyphs','Glyphs','hash'],['vi','VI','languages'],['name','Tên','arrow-down-wide-narrow']];
+const SORTS_C = [['none','Thứ tự kéo thả','grip-vertical'],['dxh','Δ x-height ①②','type'],['K','Số chỗ ◆','triangle-alert'],['vi','VI thấp nhất','languages'],['name','Tên','arrow-down-wide-narrow']];
+function stepperDefs(cs){
+  const cb = combo(cs);
+  return {
+    mode:{tip:t('pd.mode'), key:'⌘1 / ⌘2', items:() => [['pairing','blend'],['compare','columns-3']].map(([k, ic]) => ({id:k, label:t('pd.mode.'+k), ic, d:t('pd.mode.'+k+'.d')})), idx:() => cs.mode === 'compare' ? 1 : 0, set:i => setMode(cs, i ? 'compare' : 'pairing')},
+    layout:{tip:t('pd.layout'), key:'⌥1–5', items:() => LKEYS.map(k => ({id:k, label:LAYOUTS[k].n, ic:LAYOUTS[k].ic, d:LAYOUTS[k].d})), idx:() => LKEYS.indexOf(cs.layout), set:i => setLayout(cs, LKEYS[i])},
+    combo:{tip:'Combo trong Case', key:'[ ]', items:() => cs.combos.map((c, i) => ({id:i, label:'Combo ' + (i+1), ic:'layers', d:comboName(c), main: i === cs.main, labs: assess(F[voice(c,1).font], F[(voice(c,2)||voice(c,1)).font], '', false).labels})),
+      idx:() => cs.ci, set:i => { cs.ci = i; ui.pv = null; ui.tryIdx = -1; touch(); render(); live('Combo ' + (i+1)); }},
+    gate:{tip:t('pd.gate'), key:'M', items:() => GATES.map(m => ({id:m[0], label:m[1], ic:m[2], d:m[3]})), idx:() => GATES.findIndex(m => m[0] === cs.gate), set:i => { cs.gate = GATES[i][0]; ui.tryIdx = -1; touch(); render(); }},
+    style:{tip:t('pd.style'), items:() => STYLES.map(s => ({id:s[0], label:s[1], ic:s[3], d:s[2]})), idx:() => STYLES.findIndex(s => s[0] === cs.style), set:i => { cs.style = STYLES[i][0]; if (cs.style === 'break' && cs.gate !== 'experimental') { cs.gate = 'experimental'; toast('Rule-breaking cần mức Thử nghiệm — đã chuyển.'); } ui.tryIdx = -1; touch(); render(); }},
+    role:{tip:t('pd.role'), key:'↑ ↓', items:() => LAYOUTS[cs.layout].roles.map(r => ({id:r, label:ROLE[r].n, ic:'type', d:'giọng ' + roleSlot(cb, r) + ' · ' + F[voice(cb, roleSlot(cb, r)).font].fam})), idx:() => LAYOUTS[cs.layout].roles.indexOf(cs.sel), set:i => { cs.sel = LAYOUTS[cs.layout].roles[i]; ui.pv = null; ui.tryIdx = -1; touch(); render(); }},
+    kind:{tip:t('pd.kind'), items:() => [['font','type'],['combo','layers']].map(([k, ic]) => ({id:k, label:t('pd.kind.'+k), ic, d:t('pd.kind.'+k+'.d')})), idx:() => cs.cmp.kind === 'combo' ? 1 : 0, set:i => { cs.cmp.kind = i ? 'combo' : 'font'; touch(); render(); }},
+    sort:{tip:t('pd.sort'), items:() => (cs.cmp.kind === 'combo' ? SORTS_C : SORTS_F).map(s => ({id:s[0], label:s[1], ic:s[2]})), idx:() => Math.max(0, (cs.cmp.kind === 'combo' ? SORTS_C : SORTS_F).findIndex(s => s[0] === (cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp).sort)), set:i => { const o = cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp; o.sort = (cs.cmp.kind === 'combo' ? SORTS_C : SORTS_F)[i][0]; touch(); render(); }},
+    view:{tip:t('pd.view'), items:() => [['table','rows-3'],['spread','layout-template']].map(([k, ic]) => ({id:k, label:t('pd.view.'+k), ic: ic === 'rows-3' ? 'list-tree' : ic})), idx:() => ((cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp).view === 'spread' ? 1 : 0), set:i => { (cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp).view = i ? 'spread' : 'table'; touch(); render(); }},
+  };
+}
+function stepperHTML(cs, id, opts={}){
+  const d = stepperDefs(cs)[id], items = d.items(), i = d.idx(), it = items[i] || items[0];
+  const open = ui.dd && ui.dd.id === id;
+  let label = it ? esc(it.label) : '—';
+  if (id === 'combo') label = ui.pvCombo != null ? `<em>Thử ${ui.pvCombo+1}/${items.length}</em>` : `Combo ${i+1}/${items.length}`;
+  return `<div class="stp ${opts.cls || ''}" data-stp="${id}" data-open="${open}">
+    <button class="nv" data-stp-step="-1" ${i <= 0 ? 'disabled' : ''} aria-label="${esc(d.tip)}: trước" data-tip="${esc(d.tip)} · trước">${I('chevron-left','s')}</button>
+    <button class="lb" data-stp-open ${opts.w ? `style="min-width:${opts.w}px"` : ''} aria-haspopup="listbox" aria-expanded="${open}" aria-label="${esc(d.tip)}: ${esc(it ? it.label : '')}" data-tip="${esc(d.tip)}" ${d.key ? `data-kbd="${esc(d.key)}"` : ''}>${I(it ? it.ic : 'layers','s')}<span class="t ${opts.hideLabel ? 'hide-n' : ''}">${label}</span>${I('chevron-down','s dv')}</button>
+    <button class="nv" data-stp-step="1" ${i >= items.length-1 ? 'disabled' : ''} aria-label="${esc(d.tip)}: sau" data-tip="${esc(d.tip)} · sau">${I('chevron-right','s')}</button></div>`;
+}
+function stepperPop(cs, id){
+  const d = stepperDefs(cs)[id], items = d.items(), i = d.idx();
+  if (id === 'combo') { const sug = comboSuggestions(cs);
+    return `<div class="pop" role="listbox" aria-label="Combo" style="width:380px">${items.map((it, k) => `<button class="opt" role="option" aria-selected="${k===i}" data-stp-pick="${k}" data-combo-try="${k}"><span class="ck">${k===i ? I('check','s') : ''}</span><span class="tx">${k+1}  ${esc(it.d)}<span class="d">${labsHTML(it.labs, 3)}</span></span>${it.main ? `<span data-tip="Combo chính của Case">${I('star','s')}</span>` : ''}</button>`).join('')}
+      <hr><div class="cap">${I('sparkles','s')}Gợi ý — chưa lưu</div>${sug.map(s => `<button class="opt" data-combo-add="${s.font}"><span class="ck">${I('sparkles','s')}</span><span class="tx">${esc(F[voice(combo(cs),1).font].fam)} + ${esc(F[s.font].fam)}<span class="d">${labsHTML(s.labels, 3)}</span></span>${I('plus','s')}</button>`).join('') || '<div class="cap" style="text-transform:none">Không có gợi ý ở mức này</div>'}
+      <hr><button class="opt" data-act="combo-save">${I('plus','s')}<span class="tx">Lưu combo hiện tại thành combo mới</span><span class="kbd">⌘⇧S</span></button>
+      <button class="opt" data-act="combo-main">${I('star','s')}<span class="tx">Đặt làm combo chính của Case</span></button>
+      <button class="opt" data-act="cmp-combos">${I('columns-3','s')}<span class="tx">So sánh các combo</span><span class="kbd">⌘2</span></button></div>`; }
+  return `<div class="pop" role="listbox" aria-label="${esc(d.tip)}">${items.map((it, k) => `<button class="opt" role="option" aria-selected="${k===i}" data-stp-pick="${k}"><span class="ck">${k===i ? I('check','s') : ''}</span>${I(it.ic,'s')}<span class="tx">${esc(it.label)}${it.d ? `<span class="d">${esc(it.d)}</span>` : ''}</span></button>`).join('')}</div>`;
+}
+function comboSuggestions(cs){
+  const cb = combo(cs), used = new Set(cs.combos.map(c => (voice(c,2)||{}).font)), ref = F[voice(cb,1).font], txt = voiceText(cs, cb, 2);
+  return FONTS.filter(f => f.id !== ref.id && !used.has(f.id)).map(f => ({font:f.id, r:assess(ref, f, txt, cs.projectVi)})).filter(x => !x.r.blocked && x.r.gate === 'safe').sort((a,b) => (a.r.K-b.r.K) || (b.r.sHarm-a.r.sHarm)).slice(0, 2).map(x => ({font:x.font, labels:x.r.labels}));
+}
+
+/* ===================== THANH TRÊN ===================== */
+function barHTML(cs){
+  const nF = activeFilters(cs).length;
+  return `<header class="bar">
+    <div class="grp name"><span class="pname" id="pname" contenteditable="true" spellcheck="false" role="textbox" aria-label="Tên Case" title="${esc(cs.name)}">${esc(cs.name)}</span>
+      <button class="ib sm" data-act="star" aria-pressed="${cs.starred}" aria-label="${cs.starred?'Bỏ sao':'Đánh sao'}" data-tip="${cs.starred?'Bỏ sao':'Đánh sao — hiện ở sidebar'}" data-kbd="⌘D">${cs.starred ? `<svg class="i" viewBox="0 0 24 24" style="fill:currentColor">${ICONS.star}</svg>` : I('star')}</button></div>
+    <div class="grp">${stepperHTML(cs, 'mode', {w:104, cls:'mode'})}</div>
+    <div class="grp">${stepperHTML(cs, 'layout', {w:112})}${stepperHTML(cs, 'combo', {w:110})}</div>
+    <div class="grp last"><button class="ib" data-act="filter" aria-label="Lọc và tuỳ chọn" aria-expanded="${ui.dd?.id==='filter'}" data-tip="Lọc và tuỳ chọn" data-kbd="F">${I('sliders-horizontal')}${nF ? `<span class="badge">${nF}</span>` : ''}</button>
+      <button class="ib" data-act="undo" aria-label="Hoàn tác" data-tip="Hoàn tác" data-kbd="⌘Z">${I('undo-2')}</button></div>
+    <span class="sp"></span>
+    <span class="saved ${saveBusy?'busy':''}" id="saved">${saveBusy ? 'Đang lưu…' : I('check','s') + '<span class="hide-n">Đã lưu</span>'}</span>
+  </header>${chipsHTML(cs)}`;
+}
+function activeFilters(cs){
+  const a = [];
+  if (cs.mode === 'pairing' && cs.style !== 'all') { const st = STYLES.find(s => s[0]===cs.style); a.push({k:'style', ic:st[3], t:st[1]}); }
+  if (!cs.projectVi) a.push({k:'vi', ic:'languages', t:'Không kiểm tiếng Việt'});
+  if (cs.xnorm) a.push({k:'xnorm', ic:'type', t:'Cân x-height'});
+  if (cs.italicOnly) a.push({k:'italicOnly', ic:'italic', t:'Có Italic thật'});
+  if (cs.multiW) a.push({k:'multiW', ic:'bold', t:'≥ 4 weight'});
+  if (!cs.showLabels) a.push({k:'labels', ic:'tags', t:'Ẩn nhãn ●◐◆○'});
+  if (!cs.showDelta) a.push({k:'delta', ic:'arrow-up-down', t:'Ẩn Δ'});
+  return a;
+}
+const chipsHTML = cs => { const a = activeFilters(cs); return a.length ? `<div class="chips" aria-label="Bộ lọc đang bật">${a.map(x => `<span class="chip">${I(x.ic,'s')}${esc(x.t)}<button class="x" data-act="unfilter" data-k="${x.k}" aria-label="Gỡ ${esc(x.t)}">${I('x','s')}</button></span>`).join('')}</div>` : ''; };
+function filterPop(cs){
+  const sw = (k, ic, txt, on) => `<button class="sw-row" role="switch" aria-checked="${on}" data-act="toggle" data-k="${k}"><span class="sw"></span>${I(ic,'s')}<span>${txt}</span></button>`;
+  const pairing = cs.mode === 'pairing';
+  return `<div class="pop filt" aria-label="Lọc và tuỳ chọn">
+    ${pairing ? `<div class="f-row"><span class="h">${I('sparkles','s')}${t('pd.source')}</span><div class="seg">${SOURCES.map(([k,n,ic]) => `<button data-act="src" data-v="${k}" aria-pressed="${cs.src===k}">${I(ic,'s')}${n}</button>`).join('')}</div></div>
+    <div class="f-row"><span class="h">${I('blend','s')}${t('pd.style')} <span style="text-transform:none;letter-spacing:0">(chỉ ở Pairing)</span></span><div class="seg">${STYLES.map(([k,n,,ic]) => `<button data-act="style" data-v="${k}" aria-pressed="${cs.style===k}">${I(ic,'s')}${n}</button>`).join('')}</div></div>` : `<div class="f-row"><span class="h">${I('columns-3','s')}Compare</span><span class="muted" style="font-size:12px">Pairing Style và mức ghép không áp dụng ở Compare.</span></div>`}
+    <div class="f-row"><span class="h">${I('shield-check','s')}Ràng buộc</span>${sw('vi','languages','Dự án tiếng Việt (chặn font thiếu ký tự ở nguồn Ghép)', cs.projectVi)}${pairing ? sw('italicOnly','italic','Chỉ font có Italic thật', cs.italicOnly) + sw('multiW','bold','Có ≥ 4 weight', cs.multiW) : ''}</div>
+    <div class="f-row"><span class="h">${I('eye','s')}Hiển thị</span>${sw('xnorm','type','Cân x-height giữa các giọng', cs.xnorm)}${sw('labels','tags','Nhãn ●◐◆○', cs.showLabels)}${sw('delta','arrow-up-down','Δ so với font hiện tại / mốc', cs.showDelta)}</div>
+  </div>`;
+}
+
+/* ===================== PAIRING: rail · reel · canvas · detail ===================== */
+function viewPairing(cs){
+  const cb = combo(cs), roles = LAYOUTS[cs.layout].roles;
+  return `<div class="pv"><aside class="c-rail" role="listbox" aria-label="Vai và font">
+      <div class="h">${I('type','s')}Vai · font</div>
+      ${roles.map(r => { const s = roleSlot(cb, r); const tr = ui.pv && ui.pv.slot === s; const f = tr ? F[ui.pv.font] : F[voice(cb,s).font]; const rr = s > 1 ? assess(F[voice(cb,1).font], f, '', false) : null;
+        return `<button class="rrow" role="option" aria-selected="${cs.sel===r}" data-act="c-role" data-role="${r}"><span class="vb">${s}</span><span class="rn">${ROLE[r].n}</span><span class="fn ${tr?'trying':''}" style="font-family:${esc(fstack(f))}">${esc(f.fam)}</span>${rr && cs.showLabels ? `<span>${labsHTML(rr.labels, 2)}</span>` : '<span></span>'}</button>`; }).join('')}
+      <button class="btn" data-act="add-voice" style="margin:8px 8px 0">${I('plus','s')}Giọng nhấn</button></aside>
+    <section class="c-reel ${ui.reel?'on':''}" aria-label="Cuộn chọn" id="reel">${ui.reel ? reelHTML(cs) : ''}</section>
+    <div class="center"><div class="canvas" id="canvas"><div id="pagehost" style="width:max-content;margin:0 auto">${pageHTML(cs, ui.pvCombo != null ? combo(cs, ui.pvCombo) : cb, ui.pv)}</div></div>
+    ${detailHTML(cs)}</div></div>`;
+}
+function reelHTML(cs){
+  const list = candidates(cs, activeSlot(cs));
+  return `<div class="rh"><span class="t">${I('sparkles','s')}<b style="color:var(--fg);font-weight:600">${esc(ROLE[cs.sel].n)}</b> · giọng ${activeSlot(cs)}<span style="flex:1"></span><button class="ib sm" data-act="reel-close" aria-label="Đóng cuộn chọn" data-tip="Đóng" data-kbd="←">${I('x','s')}</button></span>
+    <div class="row"><div class="srcs" role="tablist" aria-label="${t('pd.source')}">${SOURCES.map(([k,n,ic]) => `<button role="tab" data-act="src" data-v="${k}" aria-pressed="${cs.src===k}" data-tip="${n}" aria-label="${n}">${I(ic,'s')}</button>`).join('')}</div></div>
+    ${cs.src === 'pair' ? `<div class="row">${stepperHTML(cs,'style',{w:150})}</div><div class="row">${stepperHTML(cs,'gate',{w:150})}</div>` : ''}
+    ${cs.src === 'lib' ? `<div class="row" style="position:relative;width:100%"><input id="rq" placeholder="Tìm trong thư viện…" value="${esc(ui.q)}" aria-label="Tìm" style="width:100%;height:28px;border:1px solid var(--border);border-radius:7px;background:var(--sheet);padding:0 8px"></div>` : ''}</div>
+    <div class="cl" id="reelList">${candListHTML(cs, list)}</div>
+    <div class="reel-hint">${I('mouse-pointer-click','s')}<span>lăn / ↑↓ thử · ↵ đặt · ⇧C so sánh · ← đóng</span></div>`;
+}
+function candListHTML(cs, list){
+  const slot = activeSlot(cs), cb = combo(cs), R = ROLE[cs.sel], sample = roleSample(cs, cs.sel);
+  let note = '';
+  if (!list.length && cs.src === 'pair') { const ref = refFont(cb, slot);
+    note = `<div class="empty">${I('triangle-alert','s')} ${cs.projectVi && ref.noVi && slot !== 1 ? `Neo ${esc(ref.fam)} thiếu ký tự tiếng Việt: không có cặp qua kiểm tiếng Việt.` : `Không có ứng viên ${GATE_VI[cs.gate]}${cs.style!=='all' ? ' · ' + STYLES.find(s=>s[0]===cs.style)[1] : ''}.`}
+      <span class="acts">${cs.gate !== 'experimental' ? `<button class="btn" data-act="gate-next">${I(GATE_IC[cs.gate==='safe'?'controlled':'experimental'],'s')}Xem ${cs.gate==='safe'?'Có kiểm soát':'Thử nghiệm'}</button>` : ''}${cs.style!=='all' ? `<button class="btn" data-act="unfilter" data-k="style">${I('blend','s')}Mọi kiểu</button>` : ''}</span><span>Font giống để bạn vẫn có lựa chọn:</span></div>`;
+    list = candidates(cs, slot, 'similar').slice(0, 5).map(x => ({...x, fallback:true})); }
+  else if (!list.length) note = `<div class="empty">${cs.src === 'pinned' ? 'Chưa ghim font nào. Bấm ' + I('pin','s') + ' trên một dòng.' : 'Không có font khớp.'}</div>`;
+  ui.list = list;
+  return note + list.map((x, i) => { const w = Math.max(x.f.w[0], Math.min(x.f.w[1], R.w + (x.wAdj || 0))); const pinned = (cs.pinned[slot] || []).includes(x.f.id); const inCmp = cs.cmp.cols.includes(x.f.id);
+    return `<div class="crow ${x.current?'cur':''} ${ui.reelIdx===i?'kb':''}" role="option" aria-selected="${x.current}" data-cand="${i}" tabindex="-1">
+      <span class="sp1" style="font-family:${esc(fstack(x.f))};font-weight:${w};${R.it && x.f.it ? 'font-style:italic;' : ''}">${esc(sample)}</span>
+      <span class="meta"><b style="color:var(--fg);font-weight:500">${esc(x.f.fam)}${x.style ? ' ' + x.style : ''}</b>${cs.showLabels && cs.src !== 'family' ? labsHTML(x.r.labels, 3) : ''}</span>
+      <span class="acts">${x.fallback ? `<span data-tip="Từ nguồn Giống">${I('copy','s')}</span>` : `<span data-tip="${GATE_VI[x.r.gate]}">${I(GATE_IC[x.r.gate],'s')}</span>`}
+        <button class="ib sm" data-act="pin" data-font="${x.f.id}" aria-pressed="${pinned}" aria-label="${pinned?'Bỏ ghim':'Ghim'}" data-tip="${pinned?'Bỏ ghim':'Ghim'}" data-kbd="G">${I(pinned?'pin-off':'pin','s')}</button>
+        <button class="ib sm" data-act="to-cmp" data-font="${x.f.id}" aria-pressed="${inCmp}" aria-label="Đưa vào Compare" data-tip="${inCmp ? 'Đã có trong Compare' : t('det.toCompare')}" data-kbd="⇧C">${I('columns-3','s')}</button>
+        <button class="ib sm" data-act="cand-set" data-i="${i}" aria-label="Đặt ${esc(x.f.fam)}" data-tip="Đặt" data-kbd="↵">${I('check','s')}</button></span></div>`; }).join('');
+}
+function dHTML(a, b, d){ // Δ b − a
+  if (a == null || b == null) return '';
+  const v = b - a, z = Math.abs(v) < Math.pow(10, -d) / 2;
+  return `<span class="dlt ${z ? 'z' : v > 0 ? 'up' : 'dn'}">${z ? '±0' : (v > 0 ? '+' : '−') + fmt(Math.abs(v), d)}</span>`;
+}
+function detailHTML(cs){
+  const cb = combo(cs), slot = activeSlot(cs), v = voice(cb, slot), cf = F[v.font], tf = ui.pv && ui.pv.slot === slot ? F[ui.pv.font] : null;
+  const sample = roleSample(cs, cs.sel), R = ROLE[cs.sel];
+  const ref = refFont(cb, slot), txt = voiceText(cs, cb, slot), pr = assess(ref, cf, txt, cs.projectVi), pt = tf ? assess(ref, tf, txt, cs.projectVi) : null;
+  const mi = (k, ic, val) => `<span data-tip="${esc(TERMS[k].gloss.vi)}" data-tipt="${esc(TERMS[k].term)}">${ic ? I(ic,'s') : ''}${val}</span>`;
+  const card = (f, cls, who, other) => `<div class="spec-card ${cls}"><span class="who">${who}<b>${esc(f.fam)}</b><span style="flex:1"></span>${mi('vi', null, ring(f.vi) + ' VI ' + f.vi + '/186')}</span>
+    <span class="s" style="font-family:${esc(fstack(f))};font-weight:${Math.max(f.w[0], Math.min(f.w[1], R.w))};${R.it && f.it ? 'font-style:italic;' : ''}">${esc(sample)}</span>
+    <span class="ml">${mi('designer','pen-tool', esc(f.by))}${mi('foundry','building-2', esc(f.fd))}${mi('version','hash', 'v' + esc(f.ver))}${mi('license','file-badge', esc(f.lic))}${mi('glyphs','hash', fmt(f.gl,0) + ' glyphs' + (other && cs.showDelta ? ' ' + dHTML(other.gl, f.gl, 0) : ''))}${mi('styles','layers', f.styles + ' styles' + (f.it ? ' · Italic' : ''))}${mi('variable','sliders-vertical', f.axes.length ? f.axes.map(a => `<span class="axtag">${a[0]} ${a[1]}–${a[2]}</span>`).join(' ') : 'static')}</span></div>`;
+  const rows = METRICS.map(k => { const T = TERMS[k], a = MV[k](cf), b = tf ? MV[k](tf) : null;
+    return `<div>${term(k)}</div><div class="v">${fmt(a, MD[k])}<span class="u">${T.unit}</span></div><div class="v try">${tf ? fmt(b, MD[k]) + `<span class="u">${T.unit}</span>` : ''}</div><div class="d">${tf && cs.showDelta ? dHTML(a, b, MD[k]) : ''}</div>`; }).join('');
+  return `<section class="det ${cs.det ? '' : 'closed'}" aria-label="${t('det.title')}">
+    <div class="det-h"><button class="ib sm" data-act="det" aria-expanded="${cs.det}" aria-label="${cs.det ? 'Thu gọn' : 'Mở'} chi tiết" data-tip="${cs.det ? 'Thu gọn' : 'Mở'} chi tiết" data-kbd="I">${I(cs.det ? 'chevron-down' : 'chevron-up')}</button>
+      <span class="t">${I('info','s')}${t('det.title')} · <b>${esc(R.n)}</b> · giọng ${slot}${cs.showLabels && !cs.det ? '' : ''}</span>
+      ${cs.showLabels ? `<span class="t" data-tip="${slot === 1 ? 'So với giọng ②' : 'So với giọng ①'} · ${esc(ref.fam)}">${I('blend','s')}${labsHTML((pt || pr).labels, 4)}<span class="muted">${GATE_VI[(pt || pr).gate]}</span></span>` : ''}
+      <span class="sp"></span>${tf ? `<button class="btn pri" data-act="det-set">${I('corner-down-left','s')}${t('det.set')}</button>` : ''}<button class="btn" data-act="det-cmp" data-tip="Mở Compare với font đang dùng và các ứng viên" data-kbd="⌘2">${I('columns-3','s')}<span class="hide-n">${t('det.toCompare')}</span></button></div>
+    <div class="det-b"><div class="colA">${card(cf, '', I('check','s') + t('det.current'))}${tf ? card(tf, 'try', I('eye','s') + t('det.trying'), cf) : `<div class="spec-card hint">${I('mouse-pointer-click','s')}<span>${t('det.hint')}</span></div>`}</div>
+      <div class="mtab"><div class="h">${I('ruler','s')} ${t('det.metrics')}</div><div class="h v">${t('det.current')}</div><div class="h v">${tf ? t('det.trying') : ''}</div><div class="h d">${tf && cs.showDelta ? 'Δ' : ''}</div>${rows}
+        <div>${term('serif')}</div><div class="v">${CLS_EN[cf.cls]}</div><div class="v try">${tf ? CLS_EN[tf.cls] : ''}</div><div class="d"></div></div></div></section>`;
+}
+
+/* ===================== COMPARE ===================== */
+function setMode(cs, m, opts={}){
+  if (m === 'compare') {
+    const cb = combo(cs), slot = activeSlot(cs), base = voice(cb, slot).font;
+    const add = [opts.font, ui.pv && ui.pv.slot === slot ? ui.pv.font : null, ...(cs.pinned[slot] || [])].filter(Boolean);
+    let cols = [...add, ...cs.cmp.cols].filter((x, i, a) => a.indexOf(x) === i && x !== base);
+    if (cols.length < 2) cols = [...cols, ...candidates(cs, slot, 'pair').map(x => x.f.id).filter(id => id !== base && !cols.includes(id))].slice(0, 3);
+    cs.cmp.cols = cols; if (opts.kind) cs.cmp.kind = opts.kind;
+    if (!cs.cmp.rows) cs.cmp.rows = ['sp:role','sp:body','sp:vi','sp:aa', ...METRICS.map(k => 'm:' + k), 'm:serif', 'x:designer','x:foundry','x:version','x:license','x:glyphs','x:styles','x:variable','x:vi'];
+  }
+  cs.mode = m; ui.pv = null; ui.pvCombo = null; ui.dd = null; ui.tryIdx = -1;
+  if (m === 'pairing' && opts.tryFont) { ui.reel = true; ui.pv = {slot:activeSlot(cs), font:opts.tryFont, wAdj:voice(combo(cs), activeSlot(cs)).wAdj}; }
+  touch(); render(); live(m === 'compare' ? 'Chế độ Compare' : 'Chế độ Pairing');
+}
+const ROWDEF = {
+  'sp:role':{g:'sp', n:() => 'Vai đang chọn', ic:'type'}, 'sp:body':{g:'sp', n:() => 'Đoạn văn', ic:'text-cursor-input'}, 'sp:vi':{g:'sp', n:() => 'Dấu chồng', ic:'languages'}, 'sp:aa':{g:'sp', n:() => 'Bảng chữ', ic:'case-sensitive'},
+  'm:serif':{g:'m', term:'serif', ic:'case-sensitive'},
+  ...Object.fromEntries(METRICS.map(k => ['m:' + k, {g:'m', term:k, ic:{x_height_em:'type', cap_height_em:'type', contrast:'bold', width:'arrow-left-right', stem:'bold', stress_deg:'rotate-ccw', aperture:'eye'}[k], sort:k}])),
+  'x:designer':{g:'x', term:'designer', ic:'pen-tool'}, 'x:foundry':{g:'x', term:'foundry', ic:'building-2'}, 'x:version':{g:'x', term:'version', ic:'hash'}, 'x:license':{g:'x', term:'license', ic:'file-badge'},
+  'x:glyphs':{g:'x', term:'glyphs', ic:'hash', sort:'glyphs'}, 'x:styles':{g:'x', term:'styles', ic:'layers'}, 'x:variable':{g:'x', term:'variable', ic:'sliders-vertical'}, 'x:vi':{g:'x', term:'vi', ic:'languages', sort:'vi'},
+};
+const GROUPS = [['sp','g.specimen','eye'],['m','g.metrics','ruler'],['x','g.meta','file-text']];
+function fontOrder(cs){
+  const c = cs.cmp, pins = c.cols.filter(id => c.pinned.includes(id)), rest = c.cols.filter(id => !c.pinned.includes(id));
+  const val = id => { const f = F[id]; return c.sort === 'name' ? f.fam : c.sort === 'glyphs' ? f.gl : c.sort === 'vi' ? f.vi : MV[c.sort] ? MV[c.sort](f) : 0; };
+  if (c.sort !== 'none') rest.sort((a,b) => { const va = val(a), vb = val(b); return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * c.dir; });
+  return [...pins, ...rest];
+}
+function cmpHead(cs){
+  const kind = cs.cmp.kind, o = kind === 'combo' ? cs.ccmp : cs.cmp;
+  return `<div class="cmp-h">${stepperHTML(cs,'kind',{w:84})}${kind === 'font' ? stepperHTML(cs,'role',{w:120}) + `<span class="muted" style="font-size:12px">giọng ${activeSlot(cs)} · ${t('cmp.base')}: ${esc(F[voice(combo(cs), activeSlot(cs)).font].fam)}</span>` : `<span class="muted" style="font-size:12px">${t('cmp.base')}: Combo ${cs.ci+1}</span>`}
+    <span style="width:6px"></span>${stepperHTML(cs,'sort',{w:118})}<button class="ib" data-act="cmp-dir" aria-label="Đảo chiều sắp" data-tip="Đảo chiều sắp">${I('arrow-up-down')}</button>
+    ${stepperHTML(cs,'view',{w:84})}
+    <button class="btn" data-act="cmp-addmenu" aria-haspopup="listbox">${I('plus','s')}${t('cmp.add')}${I('chevron-down','s')}</button>
+    <span style="flex:1"></span><span class="muted hide-n" style="font-size:11px;display:flex;gap:6px;align-items:center">${I('keyboard','s')}kéo ${I('grip-vertical','s')} đổi chỗ · bấm tên hàng để sắp · ⌥←→</span></div>`;
+}
+function viewCompare(cs){ return `<div class="cmp">${cmpHead(cs)}<div class="cmp-body">${cs.cmp.kind === 'combo' ? compareCombos(cs) : compareFonts(cs)}</div></div>`; }
+function compareFonts(cs){
+  const c = cs.cmp, cb = combo(cs), slot = activeSlot(cs), base = F[voice(cb, slot).font];
+  const cols = [{id:base.id, base:true}, ...fontOrder(cs).map(id => ({id}))];
+  const R = ROLE[cs.sel], sample = roleSample(cs, cs.sel), tx = texts(cs);
+  const bk = Object.keys(tx).find(k => keyRole(k) === 'body') || Object.keys(tx).find(k => keyRole(k) === 'caption');
+  if (c.view === 'spread') {
+    const per = Math.min(cols.length, innerWidth > 1300 ? 3 : 2), width = Math.floor((innerWidth - parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w')) - 16 - 28 - 14*(per-1)) / per);
+    return `<div class="cspread" style="grid-template-columns:repeat(${per}, minmax(0,1fr))">${cols.map(col => { const f = F[col.id]; const cb2 = {...cb, voices:cb.voices.map(v => v.slot===slot ? {...v, font:f.id} : v)};
+      return `<div class="ccol ${col.base?'base':''}"><div class="ccol-h">${col.base ? I('anchor','s') : ''}<span class="t">${esc(f.fam)}</span>${col.base ? `<span class="muted" style="font-weight:400;font-size:11px">${t('cmp.base')}</span>` : `<button class="ib sm" data-act="cmp-set" data-id="${f.id}" aria-label="${t('det.set')}" data-tip="${t('det.set')} · giọng ${slot}">${I('corner-down-left','s')}</button>`}</div>${miniPage(cs, col.base ? cb : cb2, width)}</div>`; }).join('')}</div>`;
+  }
+  const gtc = `160px repeat(${cols.length}, minmax(190px, 230px)) 56px`;
+  let html = `<div class="rh" style="top:0;z-index:5">${I('ruler','s')}Hàng / cột</div>` + cols.map(col => { const f = F[col.id], pinned = c.pinned.includes(col.id);
+    return `<div class="ch ${col.base?'base':''} ${pinned?'pinned':''}" ${col.base ? '' : `draggable="true" data-col="${col.id}" tabindex="0" aria-label="Cột ${esc(f.fam)}. Alt + mũi tên để đổi chỗ"`}>
+      <div class="r1">${col.base ? `<span data-tip="Mốc cố định: font đang dùng cho vai này. Δ tính so với cột này.">${I('anchor','s')}</span>` : `<span class="grip" data-tip="Kéo để đổi chỗ">${I('grip-vertical','s')}</span>`}<span class="t" style="font-family:${esc(fstack(f))};font-size:14px;font-weight:500">${esc(f.fam)}</span>
+        ${col.base ? '' : `<span class="hov"><button class="ib sm pinb" data-act="cmp-pin" data-id="${col.id}" aria-pressed="${pinned}" aria-label="${pinned?'Bỏ ghim cột':'Ghim cột'}" data-tip="${pinned?'Bỏ ghim cột':'Ghim cột (không bị sắp lại)'}">${I(pinned?'pin-off':'pin','s')}</button><button class="ib sm" data-act="cmp-set" data-id="${col.id}" aria-label="${t('det.set')}" data-tip="${t('det.set')} · ${esc(R.n)} (giọng ${slot})">${I('corner-down-left','s')}</button><button class="ib sm" data-act="cmp-try" data-id="${col.id}" aria-label="${t('cmp.tryPairing')}" data-tip="${t('cmp.tryPairing')}" data-kbd="⌘1">${I('blend','s')}</button><button class="ib sm" data-act="cmp-rm" data-id="${col.id}" aria-label="Bỏ cột ${esc(f.fam)}" data-tip="Bỏ cột" data-kbd="⌫">${I('x','s')}</button></span>`}</div>
+      <span class="muted" style="font-size:11px">${col.base ? t('cmp.base') + ' · đang dùng' : CLS_EN[f.cls]}${pinned ? ' · ghim' : ''}</span></div>`; }).join('') + `<div class="ch addc"><button class="ib" data-act="cmp-add" aria-label="Thêm cột" data-tip="Thêm ứng viên kế tiếp">${I('plus')}</button></div>`;
+  for (const [g, gk, gic] of GROUPS) {
+    const closed = c.closed[g];
+    html += `<div class="gh" data-act="cmp-group" data-g="${g}" role="button" aria-expanded="${!closed}">${I(gic,'s')}${t(gk)}${I(closed ? 'chevron-right' : 'chevron-down','s')}</div>`;
+    if (closed) continue;
+    for (const rk of c.rows.filter(r => ROWDEF[r].g === g)) { const d = ROWDEF[rk];
+      const label = d.term ? term(d.term) : esc(d.n());
+      html += `<div class="rh ${d.sort?'sortable':''} ${d.sort && c.sort===d.sort ? 'sorted' : ''}" draggable="true" data-row="${rk}" ${d.sort ? `data-act="cmp-sortby" data-v="${d.sort}"` : ''}><span class="grip">${I('grip-vertical','s')}</span>${I(d.ic,'s')}${label}${d.sort && c.sort===d.sort ? I(c.dir>0?'arrow-down-wide-narrow':'arrow-up-down','s') : ''}</div>`;
+      html += cols.map(col => { const f = F[col.id]; let h;
+        const showD = cs.showDelta && !col.base;
+        if (rk === 'sp:role') h = `<div class="cell-sp" style="font-family:${esc(fstack(f))};font-weight:${Math.max(f.w[0], Math.min(f.w[1], R.w))};${R.it && f.it ? 'font-style:italic;' : ''}">${esc(sample)}</div>`;
+        else if (rk === 'sp:body') h = `<div class="cell-sp body" style="font-family:${esc(fstack(f))}">${esc(tx[bk])}</div>`;
+        else if (rk === 'sp:vi') h = `<div class="cell-sp vi" style="font-family:${esc(fstack(f))}">Ữ Ặ Ệ Ỗ ươ</div>`;
+        else if (rk === 'sp:aa') h = `<div class="cell-sp aa" style="font-family:${esc(fstack(f))}">AaBbGg Rr 0123 ₫ đ ơ ư</div>`;
+        else if (rk === 'm:serif') h = `<div class="mval">${CLS_EN[f.cls]}${f.sub ? ' · ' + f.sub : ''}</div>`;
+        else if (rk.startsWith('m:')) { const k = rk.slice(2); h = `<div class="num">${fmt(MV[k](f), MD[k])}<span class="u">${TERMS[k].unit}</span>${showD ? dHTML(MV[k](base), MV[k](f), MD[k]) : ''}</div>`; }
+        else if (rk === 'x:designer') h = `<div class="mval" title="${esc(f.by)}">${esc(f.by)}</div>`;
+        else if (rk === 'x:foundry') h = `<div class="mval">${esc(f.fd)}</div>`;
+        else if (rk === 'x:version') h = `<div class="mval">${esc(f.ver)}</div>`;
+        else if (rk === 'x:license') h = `<div class="mval">${I('file-badge','s')}${esc(f.lic)}</div>`;
+        else if (rk === 'x:glyphs') h = `<div class="num">${fmt(f.gl,0)}${showD ? dHTML(base.gl, f.gl, 0) : ''}</div>`;
+        else if (rk === 'x:styles') h = `<div class="mval">${f.styles}${f.it ? ' · Italic' : ''}</div>`;
+        else if (rk === 'x:variable') h = `<div class="mval" style="white-space:normal">${f.axes.length ? f.axes.map(a => `<span class="axtag">${a[0]} ${a[1]}–${a[2]}</span>`).join('') : '<span class="muted">static</span>'}</div>`;
+        else h = `<div class="num">${ring(f.vi)} ${f.vi}<span class="u">/186</span>${showD ? dHTML(base.vi, f.vi, 0) : ''}</div>`;
+        return `<div data-colcell="${col.id}" class="${col.base ? 'basecell' : ''}">${h}</div>`; }).join('') + '<div></div>';
+    }
+  }
+  return `<div class="cgrid" id="cgrid" style="grid-template-columns:${gtc}">${html}</div>`;
+}
+function comboOrder(cs){
+  const o = cs.ccmp, ids = cs.combos.map(c => c.id).filter(id => id !== combo(cs).id);
+  let order = (o.order || []).filter(id => ids.includes(id)); ids.forEach(id => { if (!order.includes(id)) order.push(id); });
+  const pins = order.filter(id => o.pinned.includes(id)), rest = order.filter(id => !o.pinned.includes(id));
+  const C = id => cs.combos.find(c => c.id === id);
+  const val = id => { const c = C(id), f1 = F[voice(c,1).font], f2 = F[(voice(c,2)||voice(c,1)).font]; return o.sort === 'dxh' ? Math.abs(f1.xh - f2.xh) : o.sort === 'K' ? assess(f1, f2, '', false).K : o.sort === 'vi' ? Math.min(...c.voices.map(v => F[v.font].vi)) : comboName(c); };
+  if (o.sort !== 'none') rest.sort((a,b) => { const va = val(a), vb = val(b); return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * o.dir; });
+  return [...pins, ...rest];
+}
+function compareCombos(cs){
+  const o = cs.ccmp, base = combo(cs);
+  const cols = [{c:base, base:true}, ...comboOrder(cs).map(id => ({c: cs.combos.find(x => x.id === id)}))];
+  const idx = c => cs.combos.indexOf(c) + 1;
+  if (o.view === 'spread') { const per = Math.min(cols.length, innerWidth > 1300 ? 3 : 2), wd = Math.floor((innerWidth - parseInt(getComputedStyle(document.documentElement).getPropertyValue('--side-w')) - 16 - 28 - 14*(per-1)) / per);
+    return `<div class="cspread" style="grid-template-columns:repeat(${per}, minmax(0,1fr))">${cols.map(col => `<div class="ccol ${col.base?'base':''}"><div class="ccol-h">${col.base ? I('anchor','s') : I('layers','s')}<span class="t">Combo ${idx(col.c)} · ${esc(comboName(col.c))}</span>${col.base ? '' : `<button class="ib sm" data-act="ccmp-use" data-id="${col.c.id}" aria-label="${t('cmp.useCombo')}" data-tip="${t('cmp.useCombo')}">${I('check','s')}</button>`}</div>${miniPage(cs, col.c, wd)}</div>`).join('')}</div>`; }
+  const width = 210;
+  const gtc = `160px repeat(${cols.length}, minmax(220px, 250px)) 56px`;
+  let html = `<div class="rh" style="top:0;z-index:5">${I('layers','s')}Hàng / combo</div>` + cols.map(col => { const c = col.c, pinned = o.pinned.includes(c.id);
+    return `<div class="ch ${col.base?'base':''} ${pinned?'pinned':''}" ${col.base ? '' : `draggable="true" data-ccol="${c.id}" tabindex="0" aria-label="Combo ${idx(c)}"`}>
+      <div class="r1">${col.base ? `<span data-tip="Mốc cố định: combo đang dùng">${I('anchor','s')}</span>` : `<span class="grip" data-tip="Kéo để đổi chỗ">${I('grip-vertical','s')}</span>`}${I('layers','s')}<span class="t">Combo ${idx(c)}${cs.combos.indexOf(c) === cs.main ? ' ★' : ''}</span>
+        ${col.base ? '' : `<span class="hov"><button class="ib sm pinb" data-act="ccmp-pin" data-id="${c.id}" aria-pressed="${pinned}" aria-label="${pinned?'Bỏ ghim':'Ghim'}" data-tip="${pinned?'Bỏ ghim':'Ghim cột'}">${I(pinned?'pin-off':'pin','s')}</button><button class="ib sm" data-act="ccmp-use" data-id="${c.id}" aria-label="${t('cmp.useCombo')}" data-tip="${t('cmp.useCombo')}">${I('check','s')}</button><button class="ib sm" data-act="ccmp-open" data-id="${c.id}" aria-label="${t('cmp.tryPairing')}" data-tip="Mở combo này trong Pairing" data-kbd="⌘1">${I('blend','s')}</button></span>`}</div>
+      <span class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(comboName(c))}</span></div>`; }).join('') + `<div class="ch addc"><button class="ib" data-act="ccmp-add" aria-label="Thêm combo từ gợi ý" data-tip="Thêm combo từ gợi ý">${I('plus')}</button></div>`;
+  const rows = [
+    ['g','sp'], ['spec', 'Trang thu nhỏ', 'layout-template', c => miniPage(cs, c, width)],
+    ['g','v'], ...[1,2,3].map(s => [`v${s}`, `${'①②③'[s-1]} ${SLOT_N(s)}`, 'type', c => { const v = voice(c, s); if (!v) return '<span class="muted">—</span>'; const f = F[v.font]; return `<div class="mval" style="font-family:${esc(fstack(f))};font-size:15px">${esc(f.fam)}</div><div class="muted" style="font-size:11px">${LAYOUTS[cs.layout].roles.filter(r => roleSlot(c, r) === s).map(r => ROLE[r].n).join(' · ')}</div>`; }]),
+    ['g','r'], ['rel', '①↔② nhãn', 'blend', c => { const f1 = F[voice(c,1).font], f2 = F[(voice(c,2)||voice(c,1)).font]; return labsHTML(assess(f1, f2, '', false).labels, 4); }],
+    ['dxh', 'Δ x-height ①②', 'type', c => { const f1 = F[voice(c,1).font], f2 = F[(voice(c,2)||voice(c,1)).font]; return `<div class="num">${fmt(Math.abs(f2.xh - f1.xh), 2)}<span class="u">em</span></div>`; }, 'dxh'],
+    ['ct', 'contrast ① · ②', 'bold', c => { const f1 = F[voice(c,1).font], f2 = F[(voice(c,2)||voice(c,1)).font]; return `<div class="num">${fmt(f1.ct,1)} · ${fmt(f2.ct,1)}<span class="u">: 1</span></div>`; }],
+    ['vi', 'VI thấp nhất', 'languages', c => { const m = Math.min(...c.voices.map(v => F[v.font].vi)); return `<div class="num">${ring(m)} ${m}<span class="u">/186</span></div>`; }, 'vi'],
+    ['n', 'Số font', 'hash', c => `<div class="num">${c.voices.length}</div>`],
+    ['lic', 'License', 'file-badge', c => `<div class="mval">${[...new Set(c.voices.map(v => F[v.font].lic))].join(' · ')}</div>`],
+  ];
+  const GN = {sp:'Specimen', v:t('g.voices'), r:t('g.relation')};
+  let g = null;
+  for (const r of rows) {
+    if (r[0] === 'g') { g = r[1]; const closed = o.closed[g]; html += `<div class="gh" data-act="ccmp-group" data-g="${g}" role="button" aria-expanded="${!closed}">${I(g==='sp'?'eye':g==='v'?'type':'blend','s')}${GN[g]}${I(closed ? 'chevron-right' : 'chevron-down','s')}</div>`; continue; }
+    if (o.closed[g]) continue;
+    const [k, n, ic, fn, sortKey] = r;
+    html += `<div class="rh ${sortKey ? 'sortable' : ''} ${sortKey && o.sort === sortKey ? 'sorted' : ''}" ${sortKey ? `data-act="ccmp-sortby" data-v="${sortKey}"` : ''}>${I(ic,'s')}${n.includes('x-height') ? n.replace('x-height', term('x_height_em')) : n.includes('contrast') ? n.replace('contrast', term('contrast')) : n === 'VI thấp nhất' ? term('vi') + ' thấp nhất' : n === 'License' ? term('license') : esc(n)}</div>` + cols.map(col => `<div data-ccell="${col.c.id}" class="${col.base ? 'basecell' : ''}">${fn(col.c)}</div>`).join('') + '<div></div>';
+  }
+  return `<div class="cgrid" id="cgrid" style="grid-template-columns:${gtc}">${html}</div>`;
+}
+function addMenuPop(cs){
+  const slot = activeSlot(cs), base = voice(combo(cs), slot).font, q = ui.addQ.trim().toLowerCase();
+  const group = (cap, ic, ids) => ids.length ? `<div class="cap">${I(ic,'s')}${cap}</div>` + ids.map(id => `<button class="opt" data-cmp-addid="${id}"><span class="tx" style="font-family:${esc(fstack(F[id]))};font-size:15px">${esc(F[id].fam)}</span><span class="kbd">${CLS_EN[F[id].cls]}</span></button>`).join('') : '';
+  const not = id => id !== base && !cs.cmp.cols.includes(id) && (!q || F[id].fam.toLowerCase().includes(q));
+  return `<div class="pop addlist"><div class="q">${I('search','s')}<input id="addq" placeholder="Tìm font để thêm…" value="${esc(ui.addQ)}" autocomplete="off"></div>
+    ${group('Đã ghim', 'pin', (cs.pinned[slot] || []).filter(not))}${group('Gợi ý ghép', 'sparkles', candidates(cs, slot, 'pair').map(x => x.f.id).filter(not).slice(0, 4))}${group('Giống', 'copy', candidates(cs, slot, 'similar').map(x => x.f.id).filter(not).slice(0, 4))}${q ? group('Thư viện', 'library', FONTS.map(f => f.id).filter(not)) : ''}</div>`;
+}
+
+/* ===================== HOME, LIB, SIDEBAR ===================== */
+function renderSide(){
+  const st = S.cases.filter(c => c.starred && !c.deleted), n = S.cases.filter(c => !c.deleted).length;
+  $('#side').innerHTML = `<button class="nav" data-act="nav-lib">${I('plus')}<span class="lbl">Thêm font</span></button>
+    <button class="nav" data-act="nav-lib" aria-current="${S.view==='lib'}">${I('layout-grid')}<span class="lbl">Tất cả</span><span class="n">${FONTS.length}</span></button>
+    <button class="nav">${I('star')}<span class="lbl">Yêu thích</span><span class="n">0</span></button><button class="nav">${I('clock')}<span class="lbl">Gần đây</span></button><button class="nav">${I('power')}<span class="lbl">Đang bật</span><span class="n">0</span></button>
+    <div class="sec" role="group" aria-label="Pairing Desk"><div class="sec-row"><button class="sec-head" data-act="nav-home">${I('blend','s')}<span>Pairing Desk</span></button><button class="sec-add" data-act="new-case" aria-label="Case mới" data-tip="Case mới" data-kbd="⌘⇧N">${I('plus','s')}</button></div>
+      ${st.map(c => `<button class="nav" data-act="open" data-id="${c.id}" aria-current="${S.view==='case' && S.open===c.id}">${I('file-text')}<span class="lbl">${esc(c.name)}</span></button>`).join('')}
+      <button class="nav sub" data-act="nav-home" aria-current="${S.view==='home'}"><span style="width:16px"></span><span class="lbl">${n ? 'Tất cả Case' : 'Case mới'}</span>${n ? `<span class="n">${n}</span>` : ''}</button></div>
+    <div class="sec"><div class="sec-row"><button class="sec-head">${I('chevron-down','s')}<span>Dự án</span></button></div></div>
+    <div class="sec"><div class="sec-row"><button class="sec-head">${I('chevron-down','s')}<span>Nguồn</span></button></div><button class="nav">${I('folder')}<span class="lbl">Google Fonts</span><span class="n">${FONTS.length}</span></button></div>`;
+}
+function thumbHTML(cs){ const cb = combo(cs, cs.main), tx = texts(cs), f1 = F[voice(cb,1).font], f2 = F[(voice(cb,2)||voice(cb,1)).font];
+  return `<div class="thumb" aria-hidden="true"><div class="t3" style="font-family:${esc(fstack(f2))}">${esc(tx.eyebrow || '')}</div><div class="t1" style="font-family:${esc(fstack(f1))};font-weight:600">${esc(tx.headline || tx.wordmark || '')}</div><div class="t2" style="font-family:${esc(fstack(f2))}">${esc(tx.b1 || tx.body || tx.deck || '')}</div></div>`; }
+function renderHome(){
+  const all = S.cases.filter(c => !c.deleted).sort((a,b) => b.updated - a.updated), st = all.filter(c => c.starred), rest = all.filter(c => !c.starred);
+  const q = ui.seedQ.trim().toLowerCase(), res = q ? FONTS.filter(f => f.fam.toLowerCase().includes(q)) : [];
+  const card = c => `<button class="ccard" data-act="open" data-id="${c.id}">${thumbHTML(c)}<span class="nm">${c.starred ? `<svg class="i s" viewBox="0 0 24 24" style="fill:var(--accent-ink);stroke:var(--accent-ink)">${ICONS.star}</svg>` : ''}${esc(c.name)}</span><span class="sub">${I(LAYOUTS[c.layout].ic,'s')} ${LAYOUTS[c.layout].n} · ${c.combos.length} combo · ${ago(c.updated)}</span></button>`;
+  $('#main').innerHTML = `<div class="home"><div class="home-in"><h1>${I('blend')}Pairing Desk</h1><p class="lede">Mỗi Case là một trang chữ bạn dựng quanh một font. Pairing để tìm và thử font cho từng vai; Compare để đặt các lựa chọn cạnh nhau.</p>
+    <section class="start" id="start"><h2>Bắt đầu từ font nào?</h2>
+      <div class="srow"><div class="seed">${I('search')}<input id="seedq" placeholder="Tìm trong thư viện… (vd. fraunces)" value="${esc(ui.seedQ)}" autocomplete="off" aria-label="Tìm font neo">
+        ${q ? `<div class="seed-res pop">${res.map(f => `<button class="opt" data-act="seed" data-font="${f.id}"><span class="tx" style="font-family:${esc(fstack(f))};font-size:18px">${esc(f.fam)}</span><span class="kbd">${f.styles} styles${f.noVi ? ' · ◆ VI ' + f.vi + '/186' : ''}</span></button>`).join('') || `<div class="cap" style="text-transform:none">Không có font tên “${esc(q)}”.</div>`}</div>` : ''}</div></div>
+      <div class="srow"><span class="k">${I('clock','s')}Gần đây</span>${['fraunces','playfair','oswald','bevn','dmserif'].map(id => `<button class="pill" data-act="seed" data-font="${id}" style="font-family:${esc(fstack(F[id]))};font-size:14px">${esc(F[id].fam)}</button>`).join('')}</div>
+      <div class="srow" role="radiogroup" aria-label="Bố cục"><span class="k">${I('layout-template','s')}Bố cục</span>${LKEYS.map(k => `<button class="pill" role="radio" aria-checked="${S.lastLayout===k}" aria-pressed="${S.lastLayout===k}" data-act="seed-layout" data-v="${k}">${I(LAYOUTS[k].ic,'s')}${LAYOUTS[k].n}</button>`).join('')}</div></section>
+    ${all.length ? `${st.length ? `<div class="lh"><h3>${I('star','s')}Case có sao</h3></div><div class="cgridh">${st.map(card).join('')}</div>` : ''}<div class="lh"><h3>${I('file-text','s')}${st.length ? 'Khác' : 'Tất cả Case'}</h3></div>${rest.length ? `<div class="cgridh">${rest.map(card).join('')}</div>` : '<p class="muted">Mọi Case đều đã có sao.</p>'}` : `<p class="muted" style="margin-top:24px">Chưa có Case nào.</p>`}
+  </div></div>`;
+  if (ui.focusSeed) { const i = $('#seedq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); ui.focusSeed = false; }
+}
+function renderLib(){
+  $('#main').innerHTML = `<div class="lib-top"><h1>Tất cả <span class="muted">${FONTS.length}</span></h1><span class="muted" style="margin-left:auto;font-size:12px">Chuột phải: Case mới từ font này · Thêm vào Case ▸</span></div>
+    <div class="lib-grid" role="listbox">${FONTS.map(f => `<button class="fcard" role="option" data-act="lib-sel" data-font="${f.id}" aria-selected="${S.libSel===f.id}"><div class="spec" style="font-family:${esc(fstack(f))}">Những ngôi nhà ống</div><div class="meta"><span>${esc(f.fam)}</span><span style="display:flex;gap:4px;align-items:center">${ring(f.vi)}VI</span></div></button>`).join('')}</div>`;
+}
+function createCase(fontId){
+  const f = F[fontId], layout = S.lastLayout;
+  const cs = mkCase(S.nextId++, 'Case mới · ' + f.fam, layout, [mkCombo(fontId, 'bevn')], ['body','caption'].find(r => LAYOUTS[layout].roles.includes(r)));
+  S.cases.push(cs); S.open = cs.id; S.view = 'case';
+  const first = candidates(cs, 2, 'pair')[0]; if (first) cs.combos[0].voices[1].font = first.f.id;
+  ui.pv = null; ui.reel = true; touch(); render(); live('Đã tạo Case từ ' + f.fam);
+}
+
+/* ===================== RENDER ===================== */
+function render(){
+  renderSide(); $('#themeBtn').innerHTML = I(S.theme === 'dark' ? 'sun' : 'moon'); document.documentElement.dataset.theme = S.theme;
+  if (S.view === 'case' && cur()) { const cs = cur();
+    $('#main').innerHTML = barHTML(cs) + (cs.mode === 'compare' ? viewCompare(cs) : viewPairing(cs));
+    fitPage();
+    if (ui.editing) { const el = $(`.page.live [data-key="${ui.editing}"]`); if (el) { el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); } }
+  } else if (S.view === 'lib') renderLib(); else { S.view = 'home'; renderHome(); }
+  $$('[data-ic]').forEach(b => { if (!b.innerHTML.trim()) b.innerHTML = I(b.dataset.ic); });
+  renderPop();
+}
+function paintPage(){ // vẽ lại trang + cột vai + panel chi tiết, giữ cuộn của cuộn chọn
+  const cs = cur(); const host = $('#pagehost'); if (!cs || !host) return render();
+  host.innerHTML = pageHTML(cs, ui.pvCombo != null ? combo(cs, ui.pvCombo) : combo(cs), ui.pv); fitPage();
+  const det = $('.det'); if (det) { const sc = det.querySelector('.det-b')?.scrollTop || 0; det.outerHTML = detailHTML(cs); const nb = $('.det .det-b'); if (nb) nb.scrollTop = sc; fitPage(); }
+  $$('.rrow').forEach(b => { const r = b.dataset.role, cb = combo(cs), s = roleSlot(cb, r); const tr = ui.pv && ui.pv.slot === s; const f = tr ? F[ui.pv.font] : F[voice(cb,s).font]; const fn = b.querySelector('.fn'); fn.textContent = f.fam; fn.style.fontFamily = fstack(f); fn.classList.toggle('trying', !!tr); });
+  $$('#reelList .crow').forEach((r, i) => r.classList.toggle('kb', i === ui.reelIdx));
+  const stp = $('[data-stp="combo"]'); if (stp) stp.outerHTML = stepperHTML(cs, 'combo', {w:110});
+}
+function fitPage(){
+  const host = $('#pagehost'), cv = $('#canvas'); if (!host || !cv) return; const pg = host.querySelector('.page'); if (!pg) return;
+  pg.style.zoom = 1; const st = getComputedStyle(cv); const avail = cv.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+  if (pg.offsetWidth > avail) pg.style.zoom = (avail / pg.offsetWidth).toFixed(4);
+}
+function renderPop(){
+  const pop = $('#pop'); const cs = cur();
+  if (!ui.dd || !cs || S.view !== 'case') { pop.className = ''; pop.innerHTML = ''; return; }
+  let html = '', anchor;
+  if (ui.dd.id === 'filter') { html = filterPop(cs); anchor = $('[data-act="filter"]'); }
+  else if (ui.dd.id === 'addmenu') { html = addMenuPop(cs); anchor = $('[data-act="cmp-addmenu"]'); }
+  else { html = stepperPop(cs, ui.dd.id); anchor = $(`[data-stp="${ui.dd.id}"]`); }
+  if (!anchor) { ui.dd = null; pop.className = ''; return; }
+  pop.innerHTML = html; pop.className = 'on';
+  const a = anchor.getBoundingClientRect(), p = pop.firstElementChild.getBoundingClientRect();
+  let left = Math.min(a.left, innerWidth - p.width - 10), top = a.bottom + 6;
+  if (top + p.height > innerHeight - 8) top = Math.max(8, a.top - p.height - 6);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  if (ui.dd.focusQ) { const q = $('#addq'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } ui.dd.focusQ = false; }
+}
+function paintSaved(){ const el = $('#saved'); if (!el) return; el.className = 'saved' + (saveBusy ? ' busy' : ''); el.innerHTML = saveBusy ? 'Đang lưu…' : I('check','s') + '<span class="hide-n">Đã lưu</span>'; }
+
+/* ===================== HÀNH ĐỘNG ===================== */
+const undoStack = [];
+function snapshot(cs){ undoStack.push(JSON.stringify(cs)); if (undoStack.length > 40) undoStack.shift(); }
+function setVoice(cs, slot, fontId, wAdj){
+  const cb = combo(cs), v = voice(cb, slot); if (!v) return; snapshot(cs);
+  if (v.font !== fontId) { cs.pinned[slot] = [v.font, ...(cs.pinned[slot] || []).filter(x => x !== v.font && x !== fontId)].slice(0, 12); }
+  if (cs.mode === 'compare') cs.cmp.cols = [v.font, ...cs.cmp.cols.filter(x => x !== fontId && x !== v.font)];
+  v.font = fontId; v.wAdj = wAdj ?? v.wAdj; ui.pv = null; ui.tryIdx = -1; ui.reelIdx = -1; touch(); render(); live(`Đã đặt ${F[fontId].fam} cho giọng ${slot}`);
+}
+function setLayout(cs, k){ cs.layout = k; S.lastLayout = k; if (!LAYOUTS[k].roles.includes(cs.sel)) cs.sel = ['body','caption'].find(r => LAYOUTS[k].roles.includes(r)) || LAYOUTS[k].roles[0]; ui.pv = null; ui.editing = null; touch(); render(); }
+function tryCand(cs, i){ const x = ui.list[i]; if (!x) return; ui.tryIdx = i; ui.reelIdx = i; ui.pv = {slot:activeSlot(cs), font:x.f.id, wAdj:x.wAdj}; paintPage(); live('Đang thử ' + x.f.fam); }
+function endTry(){ if (!ui.pv && ui.pvCombo == null) return; ui.pv = null; ui.pvCombo = null; ui.tryIdx = -1; paintPage(); }
+function addVoice(cs){ const cb = combo(cs); snapshot(cs); const slot = Math.max(...cb.voices.map(v => v.slot)) + 1; cb.voices.push({slot, font:(voice(cb,2) || voice(cb,1)).font, wAdj:0});
+  const role = cs.sel && !['headline','wordmark'].includes(cs.sel) ? cs.sel : (LAYOUTS[cs.layout].roles.includes('numeral') ? 'numeral' : 'eyebrow'); cb.roleVoice[role] = slot; cs.sel = role; touch(); render(); if (cb.voices.length > 3) toast('Trên 3 font, trang dễ rời rạc. Vẫn thêm được.'); }
+function togglePin(cs, slot, id){ const a = cs.pinned[slot] = cs.pinned[slot] || []; const i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.unshift(id); touch(); render(); }
+function toCompare(cs, id){ if (!cs.cmp.cols.includes(id)) cs.cmp.cols.push(id); touch(); render(); toast(`Đã đưa ${F[id].fam} vào Compare (${cs.cmp.cols.length} cột)`, {label:'Mở Compare', run:() => setMode(cs, 'compare', {kind:'font'})}); }
+function saveCombo(cs){ snapshot(cs); const n = JSON.parse(JSON.stringify(combo(cs))); n.id = Math.random().toString(36).slice(2,8); cs.combos.push(n); cs.ci = cs.combos.length - 1; ui.dd = null; touch(); render(); toast('Đã lưu thành Combo ' + cs.combos.length); }
+function stepStepper(id, d){ const cs = cur(), def = stepperDefs(cs)[id], n = def.items().length, i = def.idx() + d; if (i < 0 || i >= n) return; def.set(i); }
+
+document.addEventListener('click', e => {
+  const cs = cur();
+  const stp = e.target.closest('[data-stp]');
+  if (stp) { const id = stp.dataset.stp;
+    if (e.target.closest('[data-stp-step]')) { stepStepper(id, +e.target.closest('[data-stp-step]').dataset.stpStep); return; }
+    if (e.target.closest('[data-stp-open]')) { ui.dd = ui.dd?.id === id ? null : {id}; render(); return; } }
+  const pick = e.target.closest('[data-stp-pick]'); if (pick && ui.dd) { const id = ui.dd.id; ui.dd = null; ui.pvCombo = null; stepperDefs(cs)[id].set(+pick.dataset.stpPick); return; }
+  const addC = e.target.closest('[data-combo-add]'); if (addC) { snapshot(cs); const n = JSON.parse(JSON.stringify(combo(cs))); n.id = Math.random().toString(36).slice(2,8); voice(n,2).font = addC.dataset.comboAdd; cs.combos.push(n); cs.ci = cs.combos.length - 1; ui.dd = null; ui.pvCombo = null; touch(); render(); toast('Đã thêm combo ' + cs.combos.length + ' từ gợi ý'); return; }
+  const addId = e.target.closest('[data-cmp-addid]'); if (addId) { cs.cmp.cols.push(addId.dataset.cmpAddid); ui.dd = null; touch(); render(); return; }
+  const cand = e.target.closest('[data-cand]'), b = e.target.closest('[data-act]');
+  if (!b && cand) { const x = ui.list[+cand.dataset.cand]; if (x) setVoice(cs, activeSlot(cs), x.f.id, x.wAdj); return; }
+  if (!b) {
+    if (ui.dd && !e.target.closest('#pop')) { ui.dd = null; ui.pvCombo = null; render(); }
+    const role = e.target.closest('.page.live .role');
+    if (role && cs && !role.isContentEditable) { if (cs.sel !== role.dataset.role) { cs.sel = role.dataset.role; ui.pv = null; ui.tryIdx = -1; ui.reelIdx = -1; } ui.reel = true; touch(); render(); }
+    return;
+  }
+  const a = b.dataset.act;
+  if (ui.dd && !e.target.closest('#pop') && !['filter','cmp-addmenu'].includes(a)) { ui.dd = null; ui.pvCombo = null; }
+  switch(a){
+    case 'nav-lib': S.view = 'lib'; S.open = null; render(); break;
+    case 'nav-home': S.view = 'home'; S.open = null; render(); break;
+    case 'open': S.open = +b.dataset.id; S.view = 'case'; ui.pv = null; ui.reel = false; render(); break;
+    case 'new-case': S.view = 'home'; S.open = null; ui.focusSeed = true; render(); break;
+    case 'seed': ui.seedQ = ''; createCase(b.dataset.font); break;
+    case 'seed-layout': S.lastLayout = b.dataset.v; persist(); render(); break;
+    case 'lib-sel': S.libSel = b.dataset.font; render(); break;
+    case 'theme': S.theme = S.theme === 'dark' ? 'light' : 'dark'; persist(); render(); break;
+    case 'reset': localStorage.removeItem(KEY); location.search = ''; break;
+    case 'star': cs.starred = !cs.starred; touch(); render(); break;
+    case 'filter': ui.dd = ui.dd?.id === 'filter' ? null : {id:'filter'}; render(); break;
+    case 'undo': { const last = undoStack.pop(); if (!last) { toast('Không còn gì để hoàn tác'); break; } Object.assign(cs, JSON.parse(last)); render(); break; }
+    case 'unfilter': { const k = b.dataset.k; if (k === 'style') cs.style = 'all'; else if (k === 'vi') cs.projectVi = true; else if (k === 'labels') cs.showLabels = true; else if (k === 'delta') cs.showDelta = true; else cs[k] = false; touch(); render(); break; }
+    case 'toggle': { const k = b.dataset.k; if (k === 'vi') cs.projectVi = !cs.projectVi; else if (k === 'labels') cs.showLabels = !cs.showLabels; else if (k === 'delta') cs.showDelta = !cs.showDelta; else cs[k] = !cs[k]; touch(); render(); break; }
+    case 'src': cs.src = b.dataset.v; ui.tryIdx = -1; ui.reelIdx = -1; ui.pv = null; touch(); render(); break;
+    case 'style': cs.style = b.dataset.v; if (cs.style === 'break') cs.gate = 'experimental'; touch(); render(); break;
+    case 'gate-next': cs.gate = cs.gate === 'safe' ? 'controlled' : 'experimental'; touch(); render(); break;
+    case 'combo-save': saveCombo(cs); break;
+    case 'combo-main': cs.main = cs.ci; touch(); render(); break;
+    case 'cmp-combos': setMode(cs, 'compare', {kind:'combo'}); break;
+    case 'c-role': cs.sel = b.dataset.role; ui.reel = true; ui.reelIdx = -1; ui.pv = null; touch(); render(); break;
+    case 'reel-close': ui.reel = false; ui.pv = null; render(); break;
+    case 'add-voice': addVoice(cs); break;
+    case 'pin': togglePin(cs, activeSlot(cs), b.dataset.font); break;
+    case 'to-cmp': toCompare(cs, b.dataset.font); break;
+    case 'cand-set': { const x = ui.list[+b.dataset.i]; if (x) setVoice(cs, activeSlot(cs), x.f.id, x.wAdj); break; }
+    case 'det': cs.det = !cs.det; touch(); render(); break;
+    case 'det-set': if (ui.pv) setVoice(cs, ui.pv.slot, ui.pv.font, ui.pv.wAdj); break;
+    case 'det-cmp': setMode(cs, 'compare', {kind:'font'}); break;
+    case 'cmp-dir': { const o = cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp; o.dir *= -1; if (o.sort === 'none') o.sort = cs.cmp.kind === 'combo' ? 'dxh' : 'x_height_em'; touch(); render(); break; }
+    case 'cmp-sortby': if (cs.cmp.sort === b.dataset.v) cs.cmp.dir *= -1; else { cs.cmp.sort = b.dataset.v; cs.cmp.dir = 1; } touch(); render(); break;
+    case 'ccmp-sortby': if (cs.ccmp.sort === b.dataset.v) cs.ccmp.dir *= -1; else { cs.ccmp.sort = b.dataset.v; cs.ccmp.dir = 1; } touch(); render(); break;
+    case 'cmp-pin': { const p = cs.cmp.pinned, id = b.dataset.id, i = p.indexOf(id); if (i >= 0) p.splice(i,1); else p.push(id); touch(); render(); break; }
+    case 'ccmp-pin': { const p = cs.ccmp.pinned, id = b.dataset.id, i = p.indexOf(id); if (i >= 0) p.splice(i,1); else p.push(id); touch(); render(); break; }
+    case 'cmp-rm': cs.cmp.cols = cs.cmp.cols.filter(x => x !== b.dataset.id); cs.cmp.pinned = cs.cmp.pinned.filter(x => x !== b.dataset.id); touch(); render(); break;
+    case 'cmp-set': setVoice(cs, activeSlot(cs), b.dataset.id); toast(`Đã đặt ${F[b.dataset.id].fam} vào vai ${ROLE[cs.sel].n}`); break;
+    case 'cmp-try': setMode(cs, 'pairing', {tryFont:b.dataset.id}); break;
+    case 'cmp-add': { const slot = activeSlot(cs), base = voice(combo(cs), slot).font; const nx = [...candidates(cs, slot, 'pair'), ...candidates(cs, slot, 'similar')].map(x => x.f.id).find(id => id !== base && !cs.cmp.cols.includes(id)); if (nx) { cs.cmp.cols.push(nx); touch(); render(); } else toast('Hết ứng viên để thêm'); break; }
+    case 'cmp-addmenu': if (cs.cmp.kind === 'combo') { $('[data-act="ccmp-add"]')?.click(); break; } ui.dd = ui.dd?.id === 'addmenu' ? null : {id:'addmenu', focusQ:true}; render(); break;
+    case 'cmp-group': cs.cmp.closed[b.dataset.g] = !cs.cmp.closed[b.dataset.g]; touch(); render(); break;
+    case 'ccmp-group': cs.ccmp.closed[b.dataset.g] = !cs.ccmp.closed[b.dataset.g]; touch(); render(); break;
+    case 'ccmp-use': { const i = cs.combos.findIndex(c => c.id === b.dataset.id); cs.ci = i; touch(); render(); toast('Đang dùng Combo ' + (i+1)); break; }
+    case 'ccmp-open': { cs.ci = cs.combos.findIndex(c => c.id === b.dataset.id); setMode(cs, 'pairing'); break; }
+    case 'ccmp-add': { const sug = comboSuggestions(cs)[0]; if (!sug) { toast('Không còn gợi ý ở mức này'); break; } const n = JSON.parse(JSON.stringify(combo(cs))); n.id = Math.random().toString(36).slice(2,8); voice(n,2).font = sug.font; cs.combos.push(n); touch(); render(); toast('Đã thêm Combo ' + cs.combos.length + ' từ gợi ý'); break; }
+  }
+});
+document.addEventListener('dblclick', e => { const r = e.target.closest('.page.live .role'); if (!r) return; ui.editing = r.dataset.key; render(); });
+document.addEventListener('focusout', e => {
+  const el = e.target, cs = cur();
+  if (el.id === 'pname' && cs) { const v = el.textContent.trim(); if (v && v !== cs.name) { cs.name = v; touch(); renderSide(); } }
+  if (el.classList?.contains('role') && el.isContentEditable && cs) { const key = el.dataset.key; let v = el.textContent.replace(/\s+/g,' ').trim(); const orig = texts(cs)[key];
+    if (isUp(cs, keyRole(key)) && v === orig.toUpperCase()) v = orig; if (v && v !== orig) { cs.texts[cs.layout] = {...(cs.texts[cs.layout] || {}), [key]: v}; touch(); } ui.editing = null; setTimeout(render, 0); }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'seedq') { ui.seedQ = e.target.value; ui.focusSeed = true; renderHome(); }
+  if (e.target.id === 'addq') { ui.addQ = e.target.value; ui.dd.focusQ = true; renderPop(); }
+  if (e.target.id === 'rq') { ui.q = e.target.value; const pos = e.target.selectionStart; render(); const i = $('#rq'); i.focus(); i.setSelectionRange(pos, pos); }
+});
+document.addEventListener('pointerover', e => {
+  const cs = cur(); if (!cs) return;
+  const row = e.target.closest('#reelList .crow[data-cand]'); if (row && !e.target.closest('[data-act]')) { const i = +row.dataset.cand; if (ui.tryIdx !== i) tryCand(cs, i); return; }
+  const ct = e.target.closest('[data-combo-try]'); if (ct && cs.mode === 'pairing') { const i = +ct.dataset.comboTry; if (ui.pvCombo !== i && i !== cs.ci) { ui.pvCombo = i; ui.pv = null; paintPage(); } }
+});
+document.addEventListener('pointerout', e => {
+  const cs = cur(); if (!cs) return;
+  const pop = e.target.closest('#pop'); if (pop && !pop.contains(e.relatedTarget) && ui.pvCombo != null) { ui.pvCombo = null; paintPage(); }
+});
+document.addEventListener('wheel', e => {
+  const cs = cur(); if (!cs) return;
+  const stp = e.target.closest('.stp[data-stp]'); if (stp) { e.preventDefault(); if (Math.abs(e.deltaY) < 4) return; const now = Date.now(); if (now - (ui.wt || 0) < 180) return; ui.wt = now; stepStepper(stp.dataset.stp, e.deltaY > 0 ? 1 : -1); return; }
+  const reel = e.target.closest('#reelList'); if (reel && ui.list.length) { e.preventDefault(); const now = Date.now(); if (now - (ui.wt || 0) < 140) return; ui.wt = now; const i = Math.max(0, Math.min(ui.list.length-1, ui.reelIdx + (e.deltaY > 0 ? 1 : -1))); tryCand(cs, i); $(`#reelList .crow[data-cand="${i}"]`)?.scrollIntoView({block:'nearest'}); }
+}, {passive:false});
+document.addEventListener('contextmenu', e => {
+  const fc = e.target.closest('.fcard'); if (!fc) return; e.preventDefault(); const id = fc.dataset.font; const pop = $('#pop');
+  const cases = S.cases.filter(c => !c.deleted).sort((a,b) => b.updated - a.updated).slice(0, 5);
+  pop.innerHTML = `<div class="pop" role="menu"><button class="opt" data-ctx="new">${I('plus','s')}<span class="tx">Case mới từ font này</span></button><hr><div class="cap">${I('pin','s')} Thêm vào Case ▸</div>${cases.map(c => `<button class="opt" data-ctx="${c.id}">${I('file-text','s')}<span class="tx">${esc(c.name)}</span></button>`).join('')}</div>`;
+  pop.className = 'on'; pop.style.left = Math.min(e.clientX, innerWidth - 280) + 'px'; pop.style.top = Math.min(e.clientY, innerHeight - 260) + 'px';
+  pop.onclick = ev => { const b = ev.target.closest('[data-ctx]'); if (!b) return; pop.className = ''; pop.onclick = null; if (b.dataset.ctx === 'new') return createCase(id);
+    const c = S.cases.find(x => x.id === +b.dataset.ctx); c.pinned[2] = [id, ...(c.pinned[2] || []).filter(x => x !== id)]; c.updated = Date.now(); persist(); toast(`Đã ghim ${F[id].fam} vào “${c.name}”`); };
+});
+/* kéo thả cột / hàng Compare */
+document.addEventListener('dragstart', e => {
+  const col = e.target.closest('[data-col]'), ccol = e.target.closest('[data-ccol]'), row = e.target.closest('[data-row]');
+  ui.drag = col ? {col:col.dataset.col} : ccol ? {ccol:ccol.dataset.ccol} : row ? {row:row.dataset.row} : null;
+  if (ui.drag) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', JSON.stringify(ui.drag)); }
+});
+document.addEventListener('dragover', e => {
+  const d = ui.drag; if (!d) return; $$('.dragover,.rdragover').forEach(x => x.classList.remove('dragover','rdragover'));
+  if (d.col) { const tg = e.target.closest('[data-col],[data-colcell]'); if (tg) { const id = tg.dataset.col || tg.dataset.colcell; if (id === F[voice(combo(cur()), activeSlot(cur())).font].id) return; e.preventDefault(); $$(`[data-col="${id}"],[data-colcell="${id}"]`).forEach(x => x.classList.add('dragover')); } }
+  else if (d.ccol) { const tg = e.target.closest('[data-ccol],[data-ccell]'); if (tg) { const id = tg.dataset.ccol || tg.dataset.ccell; if (id === combo(cur()).id) return; e.preventDefault(); $$(`[data-ccol="${id}"],[data-ccell="${id}"]`).forEach(x => x.classList.add('dragover')); } }
+  else if (d.row) { const tg = e.target.closest('[data-row]'); if (tg) { e.preventDefault(); tg.classList.add('rdragover'); } }
+});
+function moveIn(list, item, target){ const from = list.indexOf(item), to = list.indexOf(target); if (from < 0 || to < 0 || from === to) return list; const out = list.filter(x => x !== item); out.splice(out.indexOf(target) + (from < to ? 1 : 0), 0, item); return out; }
+document.addEventListener('drop', e => {
+  const d = ui.drag, cs = cur(); ui.drag = null; $$('.dragover,.rdragover').forEach(x => x.classList.remove('dragover','rdragover')); if (!d || !cs) return; e.preventDefault();
+  if (d.col) { const tg = e.target.closest('[data-col],[data-colcell]'); if (!tg) return; cs.cmp.cols = moveIn(fontOrder(cs), d.col, tg.dataset.col || tg.dataset.colcell); cs.cmp.sort = 'none'; touch(); render(); live('Đã đổi chỗ cột'); }
+  if (d.ccol) { const tg = e.target.closest('[data-ccol],[data-ccell]'); if (!tg) return; cs.ccmp.order = moveIn(comboOrder(cs), d.ccol, tg.dataset.ccol || tg.dataset.ccell); cs.ccmp.sort = 'none'; touch(); render(); }
+  if (d.row) { const tg = e.target.closest('[data-row]'); if (!tg) return; const g = ROWDEF[d.row].g; if (ROWDEF[tg.dataset.row].g !== g) { toast('Chỉ đổi chỗ trong cùng nhóm'); return; } cs.cmp.rows = moveIn(cs.cmp.rows, d.row, tg.dataset.row); touch(); render(); }
+});
+document.addEventListener('dragend', () => { ui.drag = null; $$('.dragover,.rdragover').forEach(x => x.classList.remove('dragover','rdragover')); });
+
+document.addEventListener('keydown', e => {
+  const cs = cur(), typing = e.target.closest('input,select,textarea,[contenteditable="true"]');
+  if (e.target.id === 'pname' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); return; }
+  if (e.target.isContentEditable && e.key === 'Escape') { e.preventDefault(); e.target.blur(); return; }
+  if (e.key === 'Escape') { if ($('#pop').className === 'on') { ui.dd = null; ui.pvCombo = null; render(); return; } if (ui.pv) { endTry(); return; } if (ui.reel) { ui.reel = false; render(); return; } }
+  if ((e.metaKey || e.ctrlKey) && (e.key === '1' || e.key === '2') && cs) { e.preventDefault(); setMode(cs, e.key === '2' ? 'compare' : 'pairing'); return; }
+  const stp = e.target.closest('.stp[data-stp]');
+  if (stp && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); stepStepper(stp.dataset.stp, e.key === 'ArrowRight' ? 1 : -1); $(`[data-stp="${stp.dataset.stp}"] .lb`)?.focus(); return; }
+  if (stp && e.key === 'ArrowDown') { e.preventDefault(); ui.dd = {id:stp.dataset.stp}; render(); return; }
+  const col = e.target.closest('[data-col]');
+  if (col && cs && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); const ord = fontOrder(cs); const i = ord.indexOf(col.dataset.col), j = i + (e.key === 'ArrowRight' ? 1 : -1); if (j < 0 || j >= ord.length) return; [ord[i], ord[j]] = [ord[j], ord[i]]; cs.cmp.cols = ord; cs.cmp.sort = 'none'; touch(); render(); $(`[data-col="${col.dataset.col}"]`)?.focus(); return; }
+  if (col && cs && (e.key === 'Backspace' || e.key === 'Delete')) { e.preventDefault(); cs.cmp.cols = cs.cmp.cols.filter(x => x !== col.dataset.col); touch(); render(); return; }
+  if (typing || !cs || S.view !== 'case') return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('[data-act="undo"]')?.click(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); $('[data-act="star"]')?.click(); return; }
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveCombo(cs); return; }
+  if (e.altKey && /^Digit[1-5]$/.test(e.code)) { e.preventDefault(); setLayout(cs, LKEYS[+e.code.slice(-1)-1]); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '[' || e.key === ']') { e.preventDefault(); stepStepper('combo', e.key === ']' ? 1 : -1); return; }
+  if (e.key.toLowerCase() === 'f') { ui.dd = {id:'filter'}; render(); return; }
+  if (cs.mode === 'compare') return;
+  if (e.key.toLowerCase() === 'm') { stepStepper('gate', GATES.findIndex(g => g[0] === cs.gate) === 2 ? -2 : 1); return; }
+  if (e.key.toLowerCase() === 'i') { cs.det = !cs.det; touch(); render(); return; }
+  if (e.key === 'C' && e.shiftKey) { const id = ui.pv ? ui.pv.font : ui.list[ui.reelIdx]?.f.id; if (id) toCompare(cs, id); return; }
+  if (ui.reel) {
+    if (!e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); const n = ui.list.length; if (!n) return; const i = Math.max(0, Math.min(n-1, ui.reelIdx + (e.key === 'ArrowDown' ? 1 : -1))); tryCand(cs, i); $(`#reelList .crow[data-cand="${i}"]`)?.scrollIntoView({block:'nearest'}); return; }
+    if (e.key === 'Enter' && ui.pv) { e.preventDefault(); setVoice(cs, ui.pv.slot, ui.pv.font, ui.pv.wAdj); return; }
+    if (e.key === 'ArrowLeft') { ui.reel = false; ui.pv = null; render(); return; }
+    if (e.key.toLowerCase() === 'g' && ui.pv) { togglePin(cs, ui.pv.slot, ui.pv.font); return; }
+    if (e.shiftKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); stepStepper('role', e.key === 'ArrowDown' ? 1 : -1); return; }
+  } else {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); stepStepper('role', e.key === 'ArrowDown' ? 1 : -1); return; }
+    if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); ui.reel = true; render(); return; }
+  }
+});
+/* tooltip: data-tip (+ data-tipt cho tên thuật ngữ) */
+document.addEventListener('pointerover', e => {
+  const tg = e.target.closest('[data-tip]'), tip = $('#tip'); if (!tg) { tip.style.opacity = 0; return; }
+  tip.innerHTML = (tg.dataset.tipt ? `<b>${esc(tg.dataset.tipt)}</b> — ` : '') + esc(tg.dataset.tip) + (tg.dataset.kbd ? `<kbd>${esc(tg.dataset.kbd)}</kbd>` : '');
+  const r = tg.getBoundingClientRect(); tip.style.opacity = 1; const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.max(6, Math.min(innerWidth - w - 6, r.left + r.width/2 - w/2)) + 'px'; tip.style.top = (r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6) + 'px';
+});
+addEventListener('resize', () => { if (S.view === 'case') render(); });
+(() => { const q = new URLSearchParams(location.search);
+  if (q.get('fresh') === '1') S = freshState();
+  if (q.get('theme')) S.theme = q.get('theme');
+  if (q.get('case')) { S.open = +q.get('case'); S.view = 'case'; const cs = cur(); if (cs) { if (q.get('layout')) cs.layout = q.get('layout'); if (q.get('sel')) cs.sel = q.get('sel'); if (q.get('det')) cs.det = q.get('det') === '1'; if (q.get('reel')) ui.reel = true; } }
+  if (q.get('view') === 'lib') S.view = 'lib';
+  render();
+  const cs = cur();
+  if (cs && q.get('mode') === 'compare') setMode(cs, 'compare', {kind:q.get('kind') || 'font'});
+  if (cs && q.get('cview')) { (cs.cmp.kind === 'combo' ? cs.ccmp : cs.cmp).view = q.get('cview'); render(); }
+  if (cs && q.get('try')) tryCand(cs, +q.get('try'));
+  if (cs && q.get('dd')) { ui.dd = {id:q.get('dd')}; render(); }
+})();
+</script>
+</body>
+</html>

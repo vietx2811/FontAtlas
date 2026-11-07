@@ -9,22 +9,25 @@ const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => {
 const app = <div data-testid="app">thư viện</div>;
 beforeEach(() => useNoticeStore.setState({ notices: [] }));
 
-describe('BootGate', () => {
+describe('BootGate', { timeout: 15000 }, () => {
   it('ready and settled: straight to the library', async () => {
     render(<BootGate api={createMockApi()}>{app}</BootGate>);
-    await settle();
-    expect(screen.getByTestId('app')).toBeTruthy();
+    expect(await screen.findByTestId('app', {}, { timeout: 8000 })).toBeTruthy(); // chờ theo kết quả, không theo số lượt
   });
 
   it('first run: onboarding first, the library after "Vào thư viện"', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('end');
     render(<BootGate api={api}>{app}</BootGate>);
-    await settle();
+    const h1 = await screen.findByRole('heading', { level: 1 }, { timeout: 8000 });
     expect(screen.queryByTestId('app')).toBeNull();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Xong');
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' })); });
-    await waitFor(() => expect(screen.getByTestId('app')).toBeTruthy(), { timeout: 3000 }); // không phụ thuộc số lượt chờ khi máy bận
+    expect(h1.textContent).toBe('Xong');
+    // Onboarding có thể render lại (reload trạng thái) khi máy bận, làm nút đã tìm bị tách khỏi DOM.
+    // Luôn bấm nút hiện tại cho tới khi vào thư viện; finish() là idempotent.
+    await waitFor(() => {
+      if (!screen.queryByTestId('app')) fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' }));
+      expect(screen.getByTestId('app')).toBeTruthy();
+    }, { timeout: 8000 });
   });
 
   it('shows what the backend is doing until it is ready, then moves on', async () => {
@@ -36,22 +39,21 @@ describe('BootGate', () => {
       .mockResolvedValue({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
     vi.spyOn(api, 'bootSubscribe').mockImplementation(async l => { push = l; return () => {}; });
     render(<BootGate api={api}>{app}</BootGate>);
-    await settle();
-    expect(screen.getByRole('status').textContent).toMatch(/Đang mở thư viện/);
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Đang mở thư viện/), { timeout: 8000 });
     expect(screen.queryByTestId('app')).toBeNull();
     act(() => push({ type: 'phase', phase: 'indexing' }));
     expect(screen.getByRole('status').textContent).toMatch(/chỉ mục/);
     act(() => push({ type: 'phase', phase: 'ready' }));
-    await settle();
-    expect(screen.getByTestId('app')).toBeTruthy();
+    expect(await screen.findByTestId('app', {}, { timeout: 8000 })).toBeTruthy();
   });
 
   it('a failed start shows the code and message with a retry, never a blank window', async () => {
     const api = createMockApi();
     vi.spyOn(api, 'startupStatus').mockResolvedValue({ phase: 'failed', storeError: { code: 'store_unavailable', message: 'không mở được user.db', detail: null }, libraryRecreated: false, userBackup: '/b/user.db.bak', legacy: { found: false, preview: null, imported: null, resolved: null, error: null } });
     render(<BootGate api={api}>{app}</BootGate>);
-    await settle();
-    const alert = screen.getByRole('alert');
+    // Chọn đúng alert lỗi khởi động; timer mock của test trước có thể đẩy thêm alert quét nguồn.
+    const alert = (await screen.findByText(/store_unavailable/, {}, { timeout: 8000 })).closest('[role="alert"]') as HTMLElement;
+    expect(alert).not.toBeNull();
     expect(alert.textContent).toMatch(/store_unavailable/);
     expect(alert.textContent).toMatch(/không mở được user.db/);
     expect(alert.textContent).toMatch(/\/b\/user\.db\.bak/);
@@ -63,7 +65,7 @@ describe('BootGate', () => {
     const api = createMockApi();
     vi.spyOn(api, 'startupStatus').mockResolvedValue({ phase: 'ready', storeError: null, libraryRecreated: true, userBackup: null, legacy: { found: false, preview: null, imported: null, resolved: null, error: null } });
     render(<BootGate api={api}>{app}</BootGate>);
-    await settle();
+    await waitFor(() => expect(useNoticeStore.getState().notices.length).toBeGreaterThan(0), { timeout: 8000 });
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Thư viện đã được tạo lại.*yêu thích.*còn nguyên/);
   });
 
@@ -71,7 +73,6 @@ describe('BootGate', () => {
     const api = createMockApi();
     vi.spyOn(api, 'startupStatus').mockRejectedValue(new CmdError('internal', 'boom'));
     render(<BootGate api={api}>{app}</BootGate>);
-    await settle();
-    expect(screen.getByRole('alert').textContent).toMatch(/boom/);
+    expect((await screen.findByText(/boom/, {}, { timeout: 8000 })).closest('[role="alert"]')).not.toBeNull();
   });
 });

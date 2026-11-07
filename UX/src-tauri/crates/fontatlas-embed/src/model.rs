@@ -2,22 +2,30 @@
 //! (server không hỗ trợ Range → stream cả file, chỉ ghi phần cần, kiểm sha toàn file), ghép thành file
 //! safetensors cục bộ tất định; ghi `.part`, kiểm sha từng đoạn + file cục bộ, fsync, đổi tên nguyên tử,
 //! sidecar `.ok`, khoá chống chạy chồng.
+use futures_util::StreamExt;
+use futures_util::future::{Either, select};
+use std::cell::{Cell, RefCell};
 use std::fs::{self, File, OpenOptions};
-use std::cell::Cell;
+use std::future::Future;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::EmbedError;
+use crate::{EmbedError, NetworkErrorKind};
+use std::error::Error;
 
 /// Thời gian tối đa chờ một chunk dữ liệu (không phải cả file).
 pub const READ_TIMEOUT: Duration = Duration::from_secs(30);
-const CHUNK: usize = 64 << 10;
+/// Sliding window: at most CONCURRENCY bodies in flight and CONCURRENCY chunks buffered
+/// (48 MiB worst case). Large chunks amortize per-request TTFB.
+const RANGE_CHUNK: u64 = 16 << 20;
+const PARALLEL_AT: u64 = 8 << 20;
+const CONCURRENCY: usize = 3;
+const ATTEMPTS: usize = 3;
 /// fsync phần vision đã ghi mỗi 8 MiB (và ghi `.part.json`), để tải tiếp được sau khi app chết.
 const SYNC_EVERY: u64 = 8 << 20;
 
@@ -78,7 +86,8 @@ struct HeaderOut {
 /// và đoạn dữ liệu `[start, end)` (tương đối với vùng dữ liệu) chứa mọi tensor `vision_model.*`.
 /// Đoạn phải liền, không lẫn tensor khác.
 pub fn vision_header(json: &[u8]) -> Result<(Vec<u8>, u64, u64), EmbedError> {
-    let v: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(json).map_err(|e| bad(&e.to_string()))?;
+    let v: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(json).map_err(|e| bad(&e.to_string()))?;
     let offs = |x: &serde_json::Value| -> Option<(u64, u64)> {
         let o = x.get("data_offsets")?.as_array()?;
         Some((o.first()?.as_u64()?, o.get(1)?.as_u64()?))
@@ -89,12 +98,24 @@ pub fn vision_header(json: &[u8]) -> Result<(Vec<u8>, u64, u64), EmbedError> {
         if k == "__metadata__" {
             continue;
         }
-        let (a, b) = offs(x).filter(|(a, b)| a <= b).ok_or_else(|| bad(&format!("offset của {k}")))?;
-        if k.starts_with(VISION_PREFIX) { vis.push((k, a, b)) } else { other.push((a, b)) }
+        let (a, b) = offs(x)
+            .filter(|(a, b)| a <= b)
+            .ok_or_else(|| bad(&format!("offset của {k}")))?;
+        if k.starts_with(VISION_PREFIX) {
+            vis.push((k, a, b))
+        } else {
+            other.push((a, b))
+        }
     }
-    let start = vis.iter().map(|t| t.1).min().ok_or_else(|| bad("không có tensor vision_model.*"))?;
+    let start = vis
+        .iter()
+        .map(|t| t.1)
+        .min()
+        .ok_or_else(|| bad("không có tensor vision_model.*"))?;
     let end = vis.iter().map(|t| t.2).max().unwrap_or(start);
-    if vis.iter().map(|t| t.2 - t.1).sum::<u64>() != end - start || other.iter().any(|&(a, b)| a < end && b > start) {
+    if vis.iter().map(|t| t.2 - t.1).sum::<u64>() != end - start
+        || other.iter().any(|&(a, b)| a < end && b > start)
+    {
         return Err(bad("tensor vision không nằm liền một đoạn"));
     }
     // Ghi tường minh (struct + BTreeMap) để byte header không phụ thuộc feature `preserve_order` của serde_json:
@@ -102,17 +123,29 @@ pub fn vision_header(json: &[u8]) -> Result<(Vec<u8>, u64, u64), EmbedError> {
     let mut tensors = std::collections::BTreeMap::new();
     for (k, a, b) in vis {
         let x = &v[k.as_str()];
-        let dtype = x.get("dtype").and_then(|d| d.as_str()).ok_or_else(|| bad(&format!("dtype của {k}")))?;
+        let dtype = x
+            .get("dtype")
+            .and_then(|d| d.as_str())
+            .ok_or_else(|| bad(&format!("dtype của {k}")))?;
         let shape: Vec<u64> = x
             .get("shape")
             .and_then(|s| s.as_array())
             .and_then(|s| s.iter().map(|d| d.as_u64()).collect())
             .ok_or_else(|| bad(&format!("shape của {k}")))?;
-        tensors.insert(k.clone(), TensorEntry { data_offsets: [a - start, b - start], dtype: dtype.to_string(), shape });
+        tensors.insert(
+            k.clone(),
+            TensorEntry {
+                data_offsets: [a - start, b - start],
+                dtype: dtype.to_string(),
+                shape,
+            },
+        );
     }
     let metadata: Option<std::collections::BTreeMap<String, String>> = match v.get("__metadata__") {
         None => None,
-        Some(m) => Some(serde_json::from_value(m.clone()).map_err(|e| bad(&format!("__metadata__: {e}")))?),
+        Some(m) => Some(
+            serde_json::from_value(m.clone()).map_err(|e| bad(&format!("__metadata__: {e}")))?,
+        ),
     };
     let out = HeaderOut { metadata, tensors };
     let mut h = serde_json::to_vec(&out).map_err(|e| bad(&e.to_string()))?;
@@ -179,7 +212,10 @@ impl<'a> Extract<'a> {
     }
 
     fn mismatch(&self, what: &str, got: String) -> EmbedError {
-        EmbedError::ChecksumMismatch { expected: what.into(), got }
+        EmbedError::ChecksumMismatch {
+            expected: what.into(),
+            got,
+        }
     }
 
     fn on_header(&mut self) -> Result<(), EmbedError> {
@@ -291,7 +327,8 @@ impl<'a> Extract<'a> {
     }
 
     fn finish(self) -> Result<Extracted, EmbedError> {
-        let (Some((vo, ve)), Some(hs), Some(ht)) = (self.span, self.header_sha, self.hdr_total) else {
+        let (Some((vo, ve)), Some(hs), Some(ht)) = (self.span, self.header_sha, self.hdr_total)
+        else {
             return Err(bad("thiếu header"));
         };
         Ok(Extracted {
@@ -327,7 +364,13 @@ pub fn extract_vision_file(src: &Path, dst: &Path) -> Result<(), EmbedError> {
 }
 
 /// Tính manifest từ file nguồn đã có trong máy (tool phát hành: examples/make_manifest.rs).
-pub fn make_manifest(src: &Path, url: &str, file: &str, license: &str, notice_files: Vec<String>) -> Result<Manifest, EmbedError> {
+pub fn make_manifest(
+    src: &Path,
+    url: &str,
+    file: &str,
+    license: &str,
+    notice_files: Vec<String>,
+) -> Result<Manifest, EmbedError> {
     let mut f = File::open(src)?;
     let mut ex = Extract::new(None, None);
     let mut buf = vec![0u8; 1 << 20];
@@ -365,14 +408,18 @@ pub fn make_manifest(src: &Path, url: &str, file: &str, license: &str, notice_fi
 pub enum ModelStatus {
     Missing,
     /// `.part` còn lại: `bytes` đã có (header cục bộ + vision bền), `total` = kích thước file cục bộ.
-    Partial { bytes: u64, total: u64 },
+    Partial {
+        bytes: u64,
+        total: u64,
+    },
     Ready(PathBuf),
     Corrupt,
 }
 
 /// Manifest phát hành kèm app (nguồn: repo chính thức trên Hugging Face, đã ghim revision).
 pub fn bundled_manifest() -> Manifest {
-    serde_json::from_str(include_str!("../data/model-manifest.json")).expect("data/model-manifest.json hợp lệ")
+    serde_json::from_str(include_str!("../data/model-manifest.json"))
+        .expect("data/model-manifest.json hợp lệ")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -409,9 +456,22 @@ pub fn disk_free(path: &Path) -> std::io::Result<u64> {
     fs2::available_space(p)
 }
 
+#[cfg(test)]
+struct TestResolver(std::sync::Arc<dyn reqwest::dns::Resolve>);
+#[cfg(test)]
+impl reqwest::dns::Resolve for TestResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        self.0.resolve(name)
+    }
+}
+
 pub struct ModelStore {
     dir: PathBuf,
     m: Manifest,
+    read_timeout: Duration,
+    chunk: u64,
+    #[cfg(test)]
+    dns_resolver: Option<std::sync::Arc<dyn reqwest::dns::Resolve>>,
 }
 
 pub fn sha256_file(p: &Path) -> std::io::Result<String> {
@@ -429,12 +489,39 @@ pub fn sha256_file(p: &Path) -> std::io::Result<String> {
 }
 
 fn mtime_ns(p: &Path) -> Option<u128> {
-    fs::metadata(p).ok()?.modified().ok()?.duration_since(UNIX_EPOCH).ok().map(|d| d.as_nanos())
+    fs::metadata(p)
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_nanos())
 }
 
 impl ModelStore {
     pub fn new(dir: PathBuf, m: Manifest) -> Self {
-        ModelStore { dir, m }
+        ModelStore {
+            dir,
+            m,
+            read_timeout: READ_TIMEOUT,
+            chunk: RANGE_CHUNK,
+            #[cfg(test)]
+            dns_resolver: None,
+        }
+    }
+
+    /// Local HTTP fixture tests only; production uses READ_TIMEOUT.
+    #[doc(hidden)]
+    pub fn with_read_timeout_for_test(mut self, timeout: Duration) -> Self {
+        self.read_timeout = timeout;
+        self
+    }
+
+    /// Local HTTP fixture tests only; production uses RANGE_CHUNK.
+    #[doc(hidden)]
+    pub fn with_range_chunk_for_test(mut self, chunk: u64) -> Self {
+        self.chunk = chunk.max(1);
+        self
     }
 
     pub fn file_name(&self) -> &str {
@@ -455,8 +542,20 @@ impl ModelStore {
     }
 
     fn write_meta(&self, local_header_len: u64, vision_done: u64) -> std::io::Result<()> {
-        let m = PartMeta { manifest_sha256: self.m.sha256.clone(), local_header_len, vision_done };
-        fs::write(self.meta_path(), serde_json::to_vec(&m).unwrap_or_default())
+        let m = PartMeta {
+            manifest_sha256: self.m.sha256.clone(),
+            local_header_len,
+            vision_done,
+        };
+        let tmp = self.path(".part.json.tmp");
+        let bytes = serde_json::to_vec(&m).map_err(std::io::Error::other)?;
+        let mut file = File::create(&tmp)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(tmp, self.meta_path())?;
+        best_effort_sync_directory(&self.dir, sync_directory);
+        Ok(())
     }
 
     /// `.part.json` đúng manifest hiện tại và `.part` đủ dài; còn dở (chưa hết vision).
@@ -464,15 +563,19 @@ impl ModelStore {
         let m: PartMeta = serde_json::from_slice(&fs::read(self.meta_path()).ok()?).ok()?;
         let len = fs::metadata(self.path(".part")).ok()?.len();
         (m.manifest_sha256 == self.m.sha256
+            && Some(m.local_header_len) == self.m.size.checked_sub(self.m.source.vision_len)
             && m.vision_done > 0
             && m.vision_done < self.m.source.vision_len
-            && len >= m.local_header_len + m.vision_done)
-            .then_some(m)
+            && m.local_header_len
+                .checked_add(m.vision_done)
+                .is_some_and(|n| len >= n))
+        .then_some(m)
     }
 
     fn drop_part(&self) {
         let _ = fs::remove_file(self.path(".part"));
         let _ = fs::remove_file(self.meta_path());
+        let _ = fs::remove_file(self.path(".part.json.tmp"));
     }
 
     fn path(&self, suffix: &str) -> PathBuf {
@@ -492,8 +595,12 @@ impl ModelStore {
                 return ModelStatus::Ready(file);
             }
             // .ok thiếu/lệch → băm lại
-            let good = fs::metadata(&file).map(|m| m.len() == self.m.size).unwrap_or(false)
-                && sha256_file(&file).map(|h| h == self.m.sha256).unwrap_or(false);
+            let good = fs::metadata(&file)
+                .map(|m| m.len() == self.m.size)
+                .unwrap_or(false)
+                && sha256_file(&file)
+                    .map(|h| h == self.m.sha256)
+                    .unwrap_or(false);
             if good {
                 if let Some(l) = cur {
                     let _ = fs::write(self.path(".ok"), l);
@@ -503,15 +610,21 @@ impl ModelStore {
             return ModelStatus::Corrupt;
         }
         if self.path(".part").exists() {
-            let bytes = self.usable_meta().map(|m| m.local_header_len + m.vision_done).unwrap_or(0);
-            ModelStatus::Partial { bytes, total: self.m.size }
+            let bytes = self
+                .usable_meta()
+                .map(|m| m.local_header_len + m.vision_done)
+                .unwrap_or(0);
+            ModelStatus::Partial {
+                bytes,
+                total: self.m.size,
+            }
         } else {
             ModelStatus::Missing
         }
     }
 
     pub fn remove(&self) -> std::io::Result<()> {
-        for s in ["", ".part", ".part.json", ".ok"] {
+        for s in ["", ".part", ".part.json", ".part.json.tmp", ".ok"] {
             match fs::remove_file(self.path(s)) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
                 _ => {}
@@ -521,15 +634,36 @@ impl ModelStore {
     }
 
     /// Như `ensure_resumable`, báo tiến độ dạng (đã tải, tổng).
-    pub fn ensure(&self, progress: &dyn Fn(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, EmbedError> {
+    pub fn ensure(
+        &self,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+    ) -> Result<PathBuf, EmbedError> {
         self.ensure_resumable(&|p| progress(p.done, p.total), cancel)
     }
 
     /// Tải model; huỷ hoặc lỗi mạng giữ `.part` + `.part.json` để lần sau tiếp từ byte đã ghi.
     /// Sai checksum thì xoá `.part`. Server bỏ qua Range → tải lại từ đầu (`resumed = false`).
-    pub fn ensure_resumable(&self, progress: &dyn Fn(DownloadProgress), cancel: &AtomicBool) -> Result<PathBuf, EmbedError> {
+    /// Synchronous: call only on a dedicated std::thread outside Tokio, including outside spawn_blocking.
+    pub fn ensure_resumable(
+        &self,
+        progress: &dyn Fn(DownloadProgress),
+        cancel: &AtomicBool,
+    ) -> Result<PathBuf, EmbedError> {
+        // Dedicated std::thread only: even Tokio spawn_blocking carries a runtime context.
+        // Reject unsupported callers before acquiring a lock or touching any model files.
+        if tokio::runtime::Handle::try_current().is_ok() {
+            return Err(EmbedError::Model(
+                "ensure_resumable requires a dedicated std::thread outside Tokio runtime context"
+                    .into(),
+            ));
+        }
         fs::create_dir_all(&self.dir)?;
-        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(self.path(".lock"))?;
+        let lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.path(".lock"))?;
         lock.lock()?; // nhả khi drop
         match self.status() {
             ModelStatus::Ready(p) => return Ok(p),
@@ -542,31 +676,76 @@ impl ModelStore {
         let part = self.path(".part");
         let started = Instant::now();
         let (base, resumed) = (Cell::new(0u64), Cell::new(false));
+        let high_water = Cell::new(0u64);
+        let last_total = Cell::new(0u64);
+        let phase_started = Cell::new(started);
         let report = |done: u64, total: u64| {
-            let secs = started.elapsed().as_secs_f64().max(1e-3);
+            if last_total.get() != 0 && last_total.get() != total {
+                high_water.set(0);
+                base.set(0);
+                phase_started.set(Instant::now());
+            }
+            last_total.set(total);
+            let done = done.max(high_water.get()).min(total);
+            high_water.set(done);
+            let secs = phase_started.get().elapsed().as_secs_f64().max(1e-3);
             let bytes_per_sec = done.saturating_sub(base.get()) as f64 / secs;
-            progress(DownloadProgress { done, total, bytes_per_sec, resumed: resumed.get() });
+            progress(DownloadProgress {
+                done,
+                total,
+                bytes_per_sec,
+                resumed: resumed.get(),
+            });
         };
-        let r = self.download(&part, &report, cancel, &base, &resumed);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let r = runtime.block_on(self.download(&part, &report, cancel, &base, &resumed));
+        // getaddrinfo may still be blocked inside Tokio's resolver blocking pool. Never
+        // let Runtime::drop keep the model worker/lock alive while waiting for DNS.
+        runtime.shutdown_background();
         if let Err(e) = &r {
             // chỉ giữ khi dừng giữa chừng (huỷ, mạng) và đã có mốc tiếp được
-            let keep = matches!(e, EmbedError::Cancelled | EmbedError::Io(_)) && self.usable_meta().is_some();
+            let keep = preserve_partial(e) && self.usable_meta().is_some();
             if !keep {
                 self.drop_part();
             }
         }
         r?;
+        // Re-read the entire durable local artifact, not only the incoming stream hash.
+        if cancel.load(Ordering::SeqCst) {
+            return Err(EmbedError::Cancelled);
+        }
+        let got = sha256_file(&part)?;
+        if got != self.m.sha256 || fs::metadata(&part)?.len() != self.m.size {
+            self.drop_part();
+            return Err(EmbedError::ChecksumMismatch {
+                expected: self.m.sha256.clone(),
+                got,
+            });
+        }
+        if cancel.load(Ordering::SeqCst) {
+            return Err(EmbedError::Cancelled);
+        }
+        self.publish_verified(&part, sync_directory)
+    }
+
+    fn publish_verified(
+        &self,
+        part: &Path,
+        sync: fn(&Path) -> std::io::Result<()>,
+    ) -> Result<PathBuf, EmbedError> {
         let file = self.path("");
-        fs::rename(&part, &file)?;
+        fs::rename(part, &file)?;
         let _ = fs::remove_file(self.meta_path());
-        File::open(&self.dir)?.sync_all()?;
+        best_effort_sync_directory(&self.dir, sync);
         if let Some(l) = self.ok_line(&file) {
             fs::write(self.path(".ok"), l)?;
         }
         Ok(file)
     }
 
-    fn download(
+    async fn download(
         &self,
         part: &Path,
         progress: &dyn Fn(u64, u64),
@@ -574,31 +753,73 @@ impl ModelStore {
         base: &Cell<u64>,
         resumed: &Cell<bool>,
     ) -> Result<(), EmbedError> {
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_connect(Some(Duration::from_secs(30)))
-            .timeout_recv_response(Some(READ_TIMEOUT))
-            .http_status_as_error(false)
-            .build()
-            .into();
-        if let Some(m) = self.usable_meta() {
-            match self.resume(&agent, part, &m, progress, cancel, base, resumed)? {
-                Attempt::Done => return Ok(()),
-                // server bỏ qua Range: bỏ phần dở, tải lại từ đầu
-                Attempt::RangeIgnored => {
-                    self.drop_part();
-                    base.set(0);
-                    resumed.set(false);
+        let builder = reqwest::Client::builder()
+            .connect_timeout(self.read_timeout)
+            .read_timeout(self.read_timeout)
+            .pool_max_idle_per_host(CONCURRENCY);
+        #[cfg(test)]
+        let builder = if let Some(resolver) = &self.dns_resolver {
+            builder.dns_resolver(std::sync::Arc::new(TestResolver(resolver.clone())))
+        } else {
+            builder
+        };
+        let agent = Http {
+            client: builder.build().map_err(network_error)?,
+            timeout: self.read_timeout,
+            full_only: Cell::new(false),
+            cdn: RefCell::new(None),
+        };
+        let mut force_full = false;
+        for attempt in 0..ATTEMPTS {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(EmbedError::Cancelled);
+            }
+            let r = if force_full || agent.full_only.get() {
+                self.full(&agent, part, progress, cancel).await
+            } else if let Some(m) = self.usable_meta() {
+                match self
+                    .resume(&agent, part, &m, progress, cancel, base, resumed)
+                    .await
+                {
+                    Ok(Attempt::Done) => Ok(()),
+                    Ok(Attempt::RangeIgnored) => {
+                        self.drop_part();
+                        base.set(0);
+                        resumed.set(false);
+                        force_full = true;
+                        self.full(&agent, part, progress, cancel).await
+                    }
+                    Err(e) => Err(e),
                 }
+            } else {
+                match self.fresh(&agent, part, progress, cancel).await {
+                    Ok(Attempt::Done) => Ok(()),
+                    Ok(Attempt::RangeIgnored) => {
+                        self.drop_part();
+                        base.set(0);
+                        resumed.set(false);
+                        force_full = true;
+                        self.full(&agent, part, progress, cancel).await
+                    }
+                    Err(e) => Err(e),
+                }
+            };
+            match r {
+                Err(ref e) if retryable(e) && attempt + 1 < ATTEMPTS => {
+                    let delay = Duration::from_millis(250 * (1 << attempt));
+                    cancel_wait(delay, cancel).await?;
+                }
+                other => return other,
             }
         }
-        self.fresh(&agent, part, progress, cancel)
+        unreachable!()
     }
 
     /// Tiếp từ `.part`: lấy lại header (nhỏ), phát lại phần vision đã ghi để khôi phục sha, rồi xin phần còn lại.
     #[allow(clippy::too_many_arguments)]
-    fn resume(
+    async fn resume(
         &self,
-        agent: &ureq::Agent,
+        agent: &Http,
         part: &Path,
         m: &PartMeta,
         progress: &dyn Fn(u64, u64),
@@ -608,18 +829,20 @@ impl ModelStore {
     ) -> Result<Attempt, EmbedError> {
         let src = &self.m.source;
         let hdr_bytes = 8 + src.header_len;
-        let total = hdr_bytes + src.vision_len;
         let mut out = OpenOptions::new().read(true).write(true).open(part)?;
         out.set_len(m.local_header_len + m.vision_done)?; // bỏ phần chưa chắc đã bền
         let mut ex = Extract::new(Some(src), None);
-        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)))?;
+        let (status, cr, body) = get_range(agent, src, 0, hdr_bytes - 1, cancel).await?;
         match status {
             206 => {}
             200 => return Ok(Attempt::RangeIgnored),
             s => return Err(http(s)),
         }
         check_range(cr.as_deref(), 0, hdr_bytes - 1, src.size)?;
-        pump(body, hdr_bytes, cancel, &|_| {}, &mut |c| ex.feed(c))?;
+        pump(body, hdr_bytes, agent.timeout, cancel, &|_| {}, &mut |c| {
+            ex.feed(c)
+        })
+        .await?;
         if ex.hdr_local_len != m.local_header_len {
             return Ok(Attempt::RangeIgnored);
         }
@@ -627,38 +850,36 @@ impl ModelStore {
         let mut left = m.vision_done;
         let mut buf = vec![0u8; 1 << 20];
         while left > 0 {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(EmbedError::Cancelled);
+            }
             let n = (left as usize).min(buf.len());
             out.read_exact(&mut buf[..n])?;
             ex.replay_vision(&buf[..n]);
             left -= n as u64;
         }
         out.seek(SeekFrom::End(0))?;
-        let (a, b) = (src.vision_offset + m.vision_done, src.vision_offset + src.vision_len - 1);
-        let (status, cr, body) = get(agent, &src.url, Some((a, b)))?;
-        match status {
-            206 => {}
-            200 => return Ok(Attempt::RangeIgnored),
-            s => return Err(http(s)),
-        }
-        check_range(cr.as_deref(), a, b, src.size)?;
+        let a = src.vision_offset + m.vision_done;
         ex.out = Some(&mut out);
         ex.seek(a);
         resumed.set(true);
         let done0 = hdr_bytes + m.vision_done;
         base.set(done0);
-        let r = pump(body, src.vision_len - m.vision_done, cancel, &|d| progress(done0 + d, total), &mut |c| {
-            ex.feed(c)?;
-            self.checkpoint(&mut ex)
-        });
+        let r = self.vision(agent, &mut ex, a, progress, cancel).await;
         if let Err(e) = &r
-            && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+            && preserve_partial(e)
         {
             self.save_meta(&mut ex);
         }
-        r?;
+        if matches!(r?, Attempt::RangeIgnored) {
+            return Ok(Attempt::RangeIgnored);
+        }
         let x = ex.finish()?;
         if x.vision_sha != src.vision_sha256 {
-            return Err(EmbedError::ChecksumMismatch { expected: src.vision_sha256.clone(), got: x.vision_sha });
+            return Err(EmbedError::ChecksumMismatch {
+                expected: src.vision_sha256.clone(),
+                got: x.vision_sha,
+            });
         }
         self.check_local(x, &mut out)?;
         Ok(Attempt::Done)
@@ -682,134 +903,491 @@ impl ModelStore {
         }
     }
 
-    fn fresh(&self, agent: &ureq::Agent, part: &Path, progress: &dyn Fn(u64, u64), cancel: &AtomicBool) -> Result<(), EmbedError> {
+    async fn fresh(
+        &self,
+        agent: &Http,
+        part: &Path,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+    ) -> Result<Attempt, EmbedError> {
         let src = &self.m.source;
         let _ = fs::remove_file(self.meta_path());
         let mut out = File::create(part)?;
         let hdr_bytes = 8 + src.header_len;
         let mut ex = Extract::new(Some(src), Some(&mut out));
-        let (status, cr, body) = get(agent, &src.url, Some((0, hdr_bytes - 1)))?;
+        let (status, cr, body) = get_range(agent, src, 0, hdr_bytes - 1, cancel).await?;
         match status {
             206 => {
                 check_range(cr.as_deref(), 0, hdr_bytes - 1, src.size)?;
-                let total = hdr_bytes + src.vision_len;
-                pump(body, hdr_bytes, cancel, &|d| progress(d, total), &mut |c| ex.feed(c))?;
-                let (a, b) = (src.vision_offset, src.vision_offset + src.vision_len - 1);
-                let (status, cr, body) = get(agent, &src.url, Some((a, b)))?;
-                if status != 206 {
-                    return Err(http(status));
-                }
-                check_range(cr.as_deref(), a, b, src.size)?;
-                ex.seek(a);
-                let r = pump(body, src.vision_len, cancel, &|d| progress(hdr_bytes + d, total), &mut |c| {
-                    ex.feed(c)?;
-                    self.checkpoint(&mut ex)
-                });
+                pump(
+                    body,
+                    hdr_bytes,
+                    agent.timeout,
+                    cancel,
+                    &|d| progress(d, hdr_bytes + src.vision_len),
+                    &mut |c| ex.feed(c),
+                )
+                .await?;
+                ex.seek(src.vision_offset);
+                let r = self
+                    .vision(agent, &mut ex, src.vision_offset, progress, cancel)
+                    .await;
                 if let Err(e) = &r
-                    && matches!(e, EmbedError::Cancelled | EmbedError::Io(_))
+                    && preserve_partial(e)
                 {
                     self.save_meta(&mut ex);
                 }
-                r?;
+                if matches!(r?, Attempt::RangeIgnored) {
+                    return Ok(Attempt::RangeIgnored);
+                }
                 let x = ex.finish()?;
                 if x.vision_sha != src.vision_sha256 {
-                    return Err(EmbedError::ChecksumMismatch { expected: src.vision_sha256.clone(), got: x.vision_sha });
+                    return Err(EmbedError::ChecksumMismatch {
+                        expected: src.vision_sha256.clone(),
+                        got: x.vision_sha,
+                    });
                 }
-                self.check_local(x, &mut out)
+                self.check_local(x, &mut out)?;
+                Ok(Attempt::Done)
             }
-            // Server bỏ qua Range: stream cả file, chỉ ghi header + đoạn vision. Không tiếp được.
             200 => {
-                pump(body, src.size, cancel, &|d| progress(d, src.size), &mut |c| ex.feed(c))?;
+                progress(0, src.size);
+                pump(
+                    body,
+                    src.size,
+                    agent.timeout,
+                    cancel,
+                    &|d| progress(d, src.size),
+                    &mut |c| ex.feed(c),
+                )
+                .await?;
                 let x = ex.finish()?;
-                if x.size != src.size || x.full_sha != src.sha256 {
-                    return Err(EmbedError::ChecksumMismatch { expected: src.sha256.clone(), got: x.full_sha });
-                }
-                self.check_local(x, &mut out)
+                self.check_full(x, &mut out)?;
+                Ok(Attempt::Done)
             }
             s => Err(http(s)),
         }
     }
 
+    /// Range unsupported or changed after probe: all range futures have been dropped before entering here.
+    async fn full(
+        &self,
+        agent: &Http,
+        part: &Path,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+    ) -> Result<(), EmbedError> {
+        progress(0, self.m.source.size);
+        let mut out = File::create(part)?;
+        let mut ex = Extract::new(Some(&self.m.source), Some(&mut out));
+        let (status, _, body) = get(agent, &self.m.source.url, None, cancel).await?;
+        if status != 200 {
+            return Err(http(status));
+        }
+        pump(
+            body,
+            self.m.source.size,
+            agent.timeout,
+            cancel,
+            &|d| progress(d, self.m.source.size),
+            &mut |c| ex.feed(c),
+        )
+        .await?;
+        self.check_full(ex.finish()?, &mut out)
+    }
+
+    fn check_full(&self, x: Extracted, out: &mut File) -> Result<(), EmbedError> {
+        if x.size != self.m.source.size || x.full_sha != self.m.source.sha256 {
+            return Err(EmbedError::ChecksumMismatch {
+                expected: self.m.source.sha256.clone(),
+                got: x.full_sha,
+            });
+        }
+        self.check_local(x, out)
+    }
+
+    /// Only a contiguous prefix reaches Extract/checkpoints. Batches cap both active transfers
+    /// and out-of-order storage, and try_join_all drops every sibling on any failed response.
+    async fn vision(
+        &self,
+        agent: &Http,
+        ex: &mut Extract<'_>,
+        mut a: u64,
+        progress: &dyn Fn(u64, u64),
+        cancel: &AtomicBool,
+    ) -> Result<Attempt, EmbedError> {
+        let src = &self.m.source;
+        let end = src.vision_offset + src.vision_len;
+        let hdr_bytes = 8 + src.header_len;
+        let total = hdr_bytes + src.vision_len;
+        let parallel = end - a >= PARALLEL_AT;
+        if !parallel {
+            let (status, cr, body) = get_range(agent, src, a, end - 1, cancel).await?;
+            if status == 200 {
+                return Ok(Attempt::RangeIgnored);
+            }
+            if status != 206 {
+                return Err(http(status));
+            }
+            check_range(cr.as_deref(), a, end - 1, src.size)?;
+            let done0 = hdr_bytes + ex.vision_written;
+            pump(
+                body,
+                end - a,
+                agent.timeout,
+                cancel,
+                &|d| progress(done0 + d, total),
+                &mut |c| {
+                    ex.feed(c)?;
+                    self.checkpoint(ex)
+                },
+            )
+            .await?;
+            return Ok(Attempt::Done);
+        }
+        // Header probe was validated before this call; a single vision chunk confirms the
+        // same behavior for payload before opening concurrent transfers.
+        let chunk = self.chunk;
+        let first_end = (a + chunk).min(end);
+        match range_bytes(agent, src, a, first_end - 1, cancel, &|d| {
+            progress(hdr_bytes + ex.vision_written + d, total)
+        })
+        .await
+        {
+            Ok(bytes) => {
+                ex.feed(&bytes)?;
+                self.checkpoint(ex)?;
+                a = first_end;
+                progress(hdr_bytes + ex.vision_written, total);
+            }
+            Err(RangeError::Ignored) => return Ok(Attempt::RangeIgnored),
+            Err(RangeError::Failed(e)) => return Err(e),
+        }
+        // Sliding window: `buffered` keeps up to CONCURRENCY requests in flight, yields results
+        // strictly in order, and starts chunk i + CONCURRENCY only after chunk i was yielded,
+        // so at most CONCURRENCY chunks are in memory. Dropping the stream aborts all transfers.
+        let mut ranges = Vec::new();
+        while a < end {
+            let b = (a + chunk).min(end);
+            ranges.push((a, b - 1));
+            a = b;
+        }
+        let slots = Cell::new([0u64; CONCURRENCY]);
+        let done0 = Cell::new(hdr_bytes + ex.vision_written);
+        let mut jobs = futures_util::stream::iter(ranges.into_iter().enumerate())
+            .map(|(i, (lo, hi))| {
+                let (slots, done0) = (&slots, &done0);
+                async move {
+                    range_bytes(agent, src, lo, hi, cancel, &|d| {
+                        let mut v = slots.get();
+                        v[i % CONCURRENCY] = d;
+                        slots.set(v);
+                        progress(done0.get() + v.iter().sum::<u64>(), total);
+                    })
+                    .await
+                }
+            })
+            .buffered(CONCURRENCY);
+        let mut i = 0usize;
+        while let Some(r) = jobs.next().await {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(EmbedError::Cancelled);
+            }
+            let bytes = match r {
+                Ok(v) => v,
+                Err(RangeError::Ignored) => return Ok(Attempt::RangeIgnored),
+                Err(RangeError::Failed(e)) => return Err(e),
+            };
+            ex.feed(&bytes)?;
+            self.checkpoint(ex)?;
+            let mut v = slots.get();
+            v[i % CONCURRENCY] = 0;
+            slots.set(v);
+            done0.set(done0.get() + bytes.len() as u64);
+            i += 1;
+            progress(done0.get() + v.iter().sum::<u64>(), total);
+        }
+        Ok(Attempt::Done)
+    }
+
     fn check_local(&self, x: Extracted, out: &mut File) -> Result<(), EmbedError> {
         out.sync_all()?;
         if x.local_len != self.m.size || x.local_sha != self.m.sha256 {
-            return Err(EmbedError::ChecksumMismatch { expected: self.m.sha256.clone(), got: x.local_sha });
+            return Err(EmbedError::ChecksumMismatch {
+                expected: self.m.sha256.clone(),
+                got: x.local_sha,
+            });
         }
         Ok(())
     }
 }
 
 fn http(status: u16) -> EmbedError {
-    EmbedError::Io(std::io::Error::other(format!("http {status}")))
+    EmbedError::Http {
+        status,
+        retry_after: None,
+    }
 }
 
-type Body = ureq::Body;
+fn preserve_partial(e: &EmbedError) -> bool {
+    matches!(
+        e,
+        EmbedError::Cancelled
+            | EmbedError::Io(_)
+            | EmbedError::Http { .. }
+            | EmbedError::Network { .. }
+    )
+}
 
-fn get(agent: &ureq::Agent, url: &str, range: Option<(u64, u64)>) -> Result<(u16, Option<String>, Body), EmbedError> {
-    let mut rq = agent.get(url);
+fn retryable(e: &EmbedError) -> bool {
+    match e {
+        EmbedError::Http {
+            status: 500 | 502 | 503 | 504,
+            ..
+        } => true,
+        EmbedError::Network { kind, .. } => matches!(
+            kind,
+            NetworkErrorKind::Timeout
+                | NetworkErrorKind::Connect
+                | NetworkErrorKind::Body
+                | NetworkErrorKind::RequestIo
+        ),
+        EmbedError::Io(io) => matches!(
+            io.kind(),
+            std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::UnexpectedEof
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::BrokenPipe
+        ),
+        _ => false,
+    }
+}
+
+fn network_error(e: reqwest::Error) -> EmbedError {
+    let mut chain: Vec<&(dyn Error + 'static)> = vec![&e];
+    let mut source = e.source();
+    while let Some(cause) = source {
+        chain.push(cause);
+        source = cause.source();
+    }
+    let kind = if chain.iter().any(|e| e.is::<rustls::Error>()) {
+        NetworkErrorKind::Tls
+    } else if e.is_builder() {
+        NetworkErrorKind::Builder
+    } else if e.is_redirect() {
+        NetworkErrorKind::Redirect
+    } else if e.is_timeout() {
+        NetworkErrorKind::Timeout
+    } else if e.is_connect() {
+        NetworkErrorKind::Connect
+    } else if chain.iter().any(|e| {
+        e.downcast_ref::<reqwest::Error>()
+            .is_some_and(|e| e.is_body())
+    }) {
+        NetworkErrorKind::Body
+    } else if e.is_request() && chain.iter().any(|e| e.is::<std::io::Error>()) {
+        NetworkErrorKind::RequestIo
+    } else {
+        NetworkErrorKind::Other
+    };
+    let message = chain
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(": ");
+    EmbedError::Network { kind, message }
+}
+
+struct Http {
+    client: reqwest::Client,
+    timeout: Duration,
+    full_only: Cell<bool>,
+    /// Final URL the official URL redirected to; reused for later Range requests.
+    cdn: RefCell<Option<String>>,
+}
+type Body = reqwest::Response;
+
+async fn cancel_wait(duration: Duration, cancel: &AtomicBool) -> Result<(), EmbedError> {
+    let until = tokio::time::Instant::now() + duration;
+    while tokio::time::Instant::now() < until {
+        if cancel.load(Ordering::SeqCst) {
+            return Err(EmbedError::Cancelled);
+        }
+        tokio::time::sleep_until(
+            until.min(tokio::time::Instant::now() + Duration::from_millis(50)),
+        )
+        .await;
+    }
+    Ok(())
+}
+
+/// Poll cancellation while waiting on headers or an individual body read. Dropping the
+/// future cancels I/O; there is no blocking reader thread to leak on timeout/retry.
+async fn cancellable<T>(
+    future: impl Future<Output = Result<T, reqwest::Error>>,
+    cancel: &AtomicBool,
+    timeout: Duration,
+) -> Result<T, EmbedError> {
+    if cancel.load(Ordering::SeqCst) {
+        return Err(EmbedError::Cancelled);
+    }
+    let io = async {
+        tokio::time::timeout(timeout, future)
+            .await
+            .map_err(|_| EmbedError::Network {
+                kind: NetworkErrorKind::Timeout,
+                message: "HTTP read timeout".into(),
+            })?
+            .map_err(network_error)
+    };
+    let cancelled = async {
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    };
+    match select(Box::pin(io), Box::pin(cancelled)).await {
+        Either::Left((r, _)) => r,
+        Either::Right(_) => Err(EmbedError::Cancelled),
+    }
+}
+
+async fn get(
+    agent: &Http,
+    url: &str,
+    range: Option<(u64, u64)>,
+    cancel: &AtomicBool,
+) -> Result<(u16, Option<String>, Body), EmbedError> {
+    let mut rq = agent.client.get(url).header("Accept-Encoding", "identity");
     if let Some((a, b)) = range {
         rq = rq.header("Range", format!("bytes={a}-{b}"));
     }
-    let resp = rq.call().map_err(|e| EmbedError::Io(std::io::Error::other(e.to_string())))?;
+    let resp = cancellable(rq.send(), cancel, agent.timeout).await?;
     let status = resp.status().as_u16();
-    let cr = resp.headers().get("content-range").and_then(|v| v.to_str().ok()).map(str::to_string);
-    Ok((status, cr, resp.into_body()))
+    if status == 429 {
+        let retry_after = resp
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        return Err(EmbedError::Http {
+            status,
+            retry_after,
+        });
+    }
+    if range.is_some() && status == 200 {
+        agent.full_only.set(true);
+    }
+    let cr = resp
+        .headers()
+        .get("content-range")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    Ok((status, cr, resp))
+}
+
+/// Ranged GET. The first success follows the official URL's redirect once and remembers the
+/// final URL; later ranges go straight there. If that URL is rejected (expired signature),
+/// re-resolve from the official URL exactly once for this request.
+async fn get_range(
+    agent: &Http,
+    src: &Source,
+    a: u64,
+    b: u64,
+    cancel: &AtomicBool,
+) -> Result<(u16, Option<String>, Body), EmbedError> {
+    let cached = agent.cdn.borrow().clone();
+    if let Some(cdn) = cached {
+        let r = get(agent, &cdn, Some((a, b)), cancel).await?;
+        if !matches!(r.0, 401 | 403 | 410) {
+            return Ok(r);
+        }
+        let mut slot = agent.cdn.borrow_mut();
+        if slot.as_deref() == Some(cdn.as_str()) {
+            *slot = None;
+        }
+    }
+    let r = get(agent, &src.url, Some((a, b)), cancel).await?;
+    if r.0 == 206 {
+        let fin = r.2.url().as_str();
+        if fin != src.url && same_or_https(&src.url, fin) {
+            *agent.cdn.borrow_mut() = Some(fin.to_string());
+        }
+    }
+    Ok(r)
+}
+
+/// A redirect may only keep the scheme or upgrade to https, never downgrade.
+fn same_or_https(origin: &str, fin: &str) -> bool {
+    fin.starts_with("https://") || origin.split(':').next() == fin.split(':').next()
 }
 
 fn check_range(cr: Option<&str>, a: u64, b: u64, total: u64) -> Result<(), EmbedError> {
     let want = format!("bytes {a}-{b}/{total}");
     if cr != Some(want.as_str()) {
-        return Err(EmbedError::Io(std::io::Error::other(format!("content-range {cr:?}, cần {want}"))));
+        return Err(EmbedError::Network {
+            kind: NetworkErrorKind::Other,
+            message: format!("content-range {cr:?}, cần {want}"),
+        });
     }
     Ok(())
 }
 
-/// Đọc thân phản hồi ở luồng phụ; luồng gọi chờ từng chunk có timeout, kiểm cờ huỷ, chặn quá `expected` byte.
-fn pump(
-    body: Body,
+enum RangeError {
+    Ignored,
+    Failed(EmbedError),
+}
+impl From<EmbedError> for RangeError {
+    fn from(e: EmbedError) -> Self {
+        Self::Failed(e)
+    }
+}
+
+async fn range_bytes(
+    agent: &Http,
+    src: &Source,
+    a: u64,
+    b: u64,
+    cancel: &AtomicBool,
+    progress: &dyn Fn(u64),
+) -> Result<Vec<u8>, RangeError> {
+    let (status, cr, body) = get_range(agent, src, a, b, cancel).await?;
+    if status == 200 {
+        return Err(RangeError::Ignored);
+    }
+    if status != 206 {
+        return Err(http(status).into());
+    }
+    check_range(cr.as_deref(), a, b, src.size)?;
+    let mut bytes = Vec::with_capacity((b - a + 1) as usize);
+    pump(body, b - a + 1, agent.timeout, cancel, progress, &mut |c| {
+        bytes.extend_from_slice(c);
+        Ok(())
+    })
+    .await?;
+    Ok(bytes)
+}
+
+async fn pump(
+    mut body: Body,
     expected: u64,
+    timeout: Duration,
     cancel: &AtomicBool,
     progress: &dyn Fn(u64),
     sink: &mut dyn FnMut(&[u8]) -> Result<(), EmbedError>,
 ) -> Result<(), EmbedError> {
-    let mut reader = body.into_with_config().limit(expected.saturating_add(1)).reader();
-    let (tx, rx) = mpsc::sync_channel::<std::io::Result<Vec<u8>>>(4);
-    std::thread::spawn(move || {
-        let mut buf = vec![0u8; CHUNK];
-        loop {
-            let r = reader.read(&mut buf).map(|n| buf[..n].to_vec());
-            let end = matches!(&r, Ok(v) if v.is_empty()) || r.is_err();
-            if tx.send(r).is_err() || end {
-                return;
-            }
-        }
-    });
-    let oversize = || EmbedError::ChecksumMismatch { expected: format!("{expected} byte"), got: "oversize".into() };
-    let (mut done, mut last_mb) = (0u64, 0u64);
-    let mut idle_since = Instant::now();
-    loop {
-        if cancel.load(Ordering::SeqCst) {
-            return Err(EmbedError::Cancelled);
-        }
-        let chunk = match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(Ok(v)) => v,
-            Ok(Err(_)) if done >= expected => return Err(oversize()), // vượt limit size+1 của ureq
-            Ok(Err(e)) => return Err(EmbedError::Io(e)),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if idle_since.elapsed() > READ_TIMEOUT {
-                    return Err(EmbedError::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, "read timeout")));
-                }
-                continue;
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => break,
-        };
-        if chunk.is_empty() {
-            break;
-        }
-        idle_since = Instant::now();
+    let mut done = 0u64;
+    let mut last_mb = 0u64;
+    while let Some(chunk) = cancellable(body.chunk(), cancel, timeout).await? {
         done += chunk.len() as u64;
         if done > expected {
-            return Err(oversize());
+            return Err(EmbedError::ChecksumMismatch {
+                expected: format!("{expected} byte"),
+                got: "oversize".into(),
+            });
         }
         sink(&chunk)?;
         if done / (1 << 20) > last_mb {
@@ -818,8 +1396,224 @@ fn pump(
         }
     }
     if done != expected {
-        return Err(EmbedError::ChecksumMismatch { expected: format!("{expected} byte"), got: format!("{done} byte") });
+        return Err(EmbedError::Network {
+            kind: NetworkErrorKind::Body,
+            message: format!("expected {expected} bytes, received {done}"),
+        });
     }
     progress(done);
     Ok(())
+}
+
+/// Unix supports opening a directory for fsync. Standard File::open on Windows does not
+/// request FILE_FLAG_BACKUP_SEMANTICS, so avoid failing a verified, renamed download there.
+/// File contents are sync_all'd on every platform; directory-rename crash durability is Unix-only.
+#[cfg(unix)]
+fn sync_directory(dir: &Path) -> std::io::Result<()> {
+    File::open(dir)?.sync_all()
+}
+#[cfg(not(unix))]
+fn sync_directory(dir: &Path) -> std::io::Result<()> {
+    sync_directory_unavailable(dir)
+}
+
+// Compile the portable branch in native unit tests too; it contains no platform-specific API.
+#[cfg(any(not(unix), test))]
+fn sync_directory_unavailable(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+fn best_effort_sync_directory(dir: &Path, sync: fn(&Path) -> std::io::Result<()>) {
+    if let Err(e) = sync(dir) {
+        log::warn!("model directory fsync failed at {}: {e}", dir.display());
+    }
+}
+
+#[cfg(test)]
+mod durability_tests {
+    use super::*;
+    #[test]
+    fn portable_directory_sync_does_not_open_a_directory_as_a_regular_file() {
+        // The non-Unix path succeeds even when File::open would fail; no OS flags are guessed.
+        assert!(
+            sync_directory_unavailable(Path::new("/nonexistent-fontatlas-durability-fixture"))
+                .is_ok()
+        );
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    struct BlockingResolver {
+        started: Arc<AtomicBool>,
+    }
+    impl reqwest::dns::Resolve for BlockingResolver {
+        fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
+            let started = self.started.clone();
+            Box::pin(async move {
+                tokio::task::spawn_blocking(move || {
+                    started.store(true, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_secs(2));
+                })
+                .await
+                .unwrap();
+                Err(std::io::Error::other("synthetic slow getaddrinfo").into())
+            })
+        }
+    }
+    #[test]
+    fn cancelling_slow_blocking_dns_releases_model_worker_and_lock_under_one_second() {
+        let d = tempfile::tempdir().unwrap();
+        let mut m = bundled_manifest();
+        m.source.url = "http://fontatlas-dns-fixture.invalid/model".into();
+        let started = Arc::new(AtomicBool::new(false));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut st = ModelStore::new(d.path().into(), m);
+        st.dns_resolver = Some(Arc::new(BlockingResolver {
+            started: started.clone(),
+        }));
+        let c = cancel.clone();
+        let watcher = std::thread::spawn(move || {
+            let t = Instant::now();
+            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(3) {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(started.load(Ordering::SeqCst));
+            c.store(true, Ordering::SeqCst);
+        });
+        let t = Instant::now();
+        let result = st.ensure_resumable(&|_| {}, &cancel);
+        let elapsed = t.elapsed();
+        watcher.join().unwrap();
+        assert!(matches!(result, Err(EmbedError::Cancelled)));
+        assert!(elapsed < Duration::from_secs(1), "{elapsed:?}");
+        let lock = OpenOptions::new()
+            .write(true)
+            .open(st.path(".lock"))
+            .unwrap();
+        lock.try_lock()
+            .expect("model lock must be released, even while resolver blocking task finishes");
+    }
+
+    struct CertificateFailure {
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl reqwest::dns::Resolve for CertificateFailure {
+        fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Err(
+                    rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer)
+                        .into(),
+                )
+            })
+        }
+    }
+    #[test]
+    fn typed_certificate_failure_is_not_retried_or_reported_as_disk_permission() {
+        let d = tempfile::tempdir().unwrap();
+        let mut m = bundled_manifest();
+        m.source.url = "https://fontatlas-certificate-fixture.invalid/model".into();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut st = ModelStore::new(d.path().into(), m);
+        st.dns_resolver = Some(Arc::new(CertificateFailure {
+            calls: calls.clone(),
+        }));
+        let e = st
+            .ensure_resumable(&|_| {}, &AtomicBool::new(false))
+            .unwrap_err();
+        assert!(
+            matches!(
+                e,
+                EmbedError::Network {
+                    kind: NetworkErrorKind::Tls,
+                    ..
+                }
+            ),
+            "{e:?}"
+        );
+        assert_eq!(e.code(), "tls");
+        assert!(!retryable(&e));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn invalid_request_builder_is_not_retried() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let err = rt.block_on(async {
+            reqwest::Client::new()
+                .get("http://[invalid")
+                .send()
+                .await
+                .unwrap_err()
+        });
+        rt.shutdown_background();
+        let e = network_error(err);
+        assert!(matches!(
+            e,
+            EmbedError::Network {
+                kind: NetworkErrorKind::Builder,
+                ..
+            }
+        ));
+        assert!(!retryable(&e));
+        assert_eq!(e.code(), "http_config");
+    }
+    #[test]
+    fn verified_publish_succeeds_despite_directory_fsync_failure() {
+        let d = tempfile::tempdir().unwrap();
+        let bytes = b"verified fixture";
+        let mut m = bundled_manifest();
+        m.file = "verified.bin".into();
+        m.size = bytes.len() as u64;
+        m.sha256 = format!("{:x}", Sha256::digest(bytes));
+        let st = ModelStore::new(d.path().into(), m);
+        let part = st.path(".part");
+        fs::write(&part, bytes).unwrap();
+        let p = st
+            .publish_verified(&part, |_| {
+                Err(std::io::Error::other("injected directory fsync failure"))
+            })
+            .unwrap();
+        assert_eq!(fs::read(&p).unwrap(), bytes);
+        assert_eq!(st.status(), ModelStatus::Ready(p));
+    }
+    #[test]
+    fn metadata_checkpoint_is_atomic_and_keeps_previous_checkpoint_on_failure() {
+        let d = tempfile::tempdir().unwrap();
+        let st = ModelStore::new(d.path().into(), bundled_manifest());
+        st.write_meta(100, 200).unwrap();
+        assert!(!st.path(".part.json.tmp").exists());
+        let before = fs::read(st.meta_path()).unwrap();
+        fs::create_dir(st.path(".part.json.tmp")).unwrap();
+        assert!(st.write_meta(100, 300).is_err());
+        assert_eq!(fs::read(st.meta_path()).unwrap(), before);
+        fs::remove_dir(st.path(".part.json.tmp")).unwrap();
+        st.write_meta(100, 300).unwrap();
+        let got: PartMeta = serde_json::from_slice(&fs::read(st.meta_path()).unwrap()).unwrap();
+        assert_eq!(got.vision_done, 300);
+        assert!(!st.path(".part.json.tmp").exists());
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let meta = st.meta_path();
+        let reader = std::thread::spawn(move || {
+            let started = Instant::now();
+            while !stopped.load(Ordering::SeqCst) && started.elapsed() < Duration::from_secs(5) {
+                let bytes = fs::read(&meta).unwrap();
+                let m: PartMeta = serde_json::from_slice(&bytes)
+                    .expect("reader must never see a partial JSON checkpoint");
+                assert_eq!(m.local_header_len, 100);
+            }
+        });
+        for n in 301..331 {
+            st.write_meta(100, n).unwrap();
+        }
+        stop.store(true, Ordering::SeqCst);
+        reader.join().unwrap();
+    }
 }

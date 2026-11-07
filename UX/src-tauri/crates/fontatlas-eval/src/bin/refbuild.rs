@@ -50,7 +50,7 @@ fn terminal_pairs(dirs: &[PathBuf]) -> Vec<(f32, f32)> {
                     continue;
                 }
                 let a = face.measure(MeasureAt::Standard);
-                if a.contrast.method != "o_radial_thickness_max_min" {
+                if a.contrast.method != "o_stroke_width_max_min" {
                     continue;
                 }
                 let ctx = GlyphCtx::new(face.font().clone(), standard_location(face.font()));

@@ -2,31 +2,28 @@ import type { CSSProperties } from 'react';
 import type { AxisReadingDto, FaceDetailDto } from '../../../api';
 import { AxisIcon } from './axisIcons';
 
-export const AXIS_META: Record<string, { label: string; hint?: string }> = {
-  x_height: { label: 'Chiều cao x' }, cap_height: { label: 'Chiều cao chữ hoa' }, ascender: { label: 'Nét lên (ascender)' }, descender: { label: 'Nét xuống (descender)' },
-  stem_weight: { label: 'Độ đậm nét' }, contrast: { label: 'Tương phản nét' }, stress_deg: { label: 'Trục nhấn' }, slant_deg: { label: 'Độ nghiêng' },
-  avg_width: { label: 'Độ rộng chữ' }, aperture: { label: 'Độ mở' }, counter_ratio: { label: 'Lòng chữ' }, letterspacing: { label: 'Khoảng cách chữ' },
-  serif_foot: { label: 'Chân serif' }, arm_length: { label: 'Tay chữ' }, tail_length: { label: 'Đuôi chữ' }, roundness: { label: 'Độ tròn' },
-  terminal: { label: 'Đầu nét' }, a_storeys: { label: 'Chữ a' }, g_storeys: { label: 'Chữ g' },
-};
+import { AXIS_META, numberText, unitText } from './measurements';
+import { Tooltip } from '../../ui/Tooltip';
+export { AXIS_META } from './measurements';
+
 const CATEGORY_TEXT: Record<string, Record<string, string>> = {
   a_storeys: { '1': 'a một tầng', '2': 'a hai tầng' }, g_storeys: { '1': 'g một tầng', '2': 'g hai tầng' },
-  terminal: { flat: 'đầu nét phẳng', round: 'đầu nét tròn', sheared: 'đầu nét vát' },
+  serif_foot: { sans: 'không chân', serif: 'có chân', uncertain: 'chưa rõ phân loại' },
 };
 const REASONS: Record<string, string> = {
-  no_latin_lowercase: 'thiếu chữ thường Latin', missing_glyph: 'thiếu glyph cần đo', no_outlines: 'không có đường nét',
+  no_latin_lowercase: 'thiếu chữ thường Latin', missing_glyph: 'thiếu glyph cần đo', no_outlines: 'không có đường nét', low_contrast: 'tương phản quá thấp để đo', degenerate: 'đường nét không đủ để đo',
 };
 
 export function percentileWord(p: number): string {
-  return p < 20 ? 'rất thấp' : p < 40 ? 'thấp' : p < 60 ? 'trung bình' : p < 80 ? 'cao' : 'rất cao';
+  return p < .2 ? 'rất thấp' : p < .4 ? 'thấp' : p < .6 ? 'trung bình' : p < .8 ? 'cao' : 'rất cao';
 }
 
 export type GuideLine = { id: 'cap' | 'x' | 'baseline'; y: number };
 /** Đường dẫn của glyph Hxg: chỉ vẽ đường có số đo thật (không đoán). `size` = cỡ chữ SVG, `baseline` = toạ độ y của đường nền. */
 export function glyphLines(axes: AxisReadingDto[], size: number, baseline: number): GuideLine[] {
-  const v = (key: string) => { const a = axes.find(x => x.key === key); return a && a.quality !== 'failed' && typeof a.value === 'number' ? a.value : null; };
+  const v = (key: string) => { const a = axes.find(x => x.key === key); return a && a.quality !== 'failed' && typeof a.rawValue === 'number' && Number.isFinite(a.rawValue) ? a.rawValue : null; };
   const out: GuideLine[] = [];
-  const cap = v('cap_height'); const x = v('x_height');
+  const cap = v('cap_height_em'); const x = v('x_height_em');
   if (cap !== null) out.push({ id: 'cap', y: baseline - cap * size });
   if (x !== null) out.push({ id: 'x', y: baseline - x * size });
   out.push({ id: 'baseline', y: baseline });
@@ -36,25 +33,26 @@ const LINE_LABEL = { cap: 'cap', x: 'x', baseline: 'nền' } as const;
 
 function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const meta = AXIS_META[a.key] ?? { label: a.key };
-  const cat = CATEGORY_TEXT[a.key];
-  const dashed = a.quality === 'estimated';
+  const failed = a.quality === 'failed';
+  const numeric = !failed && !['a_storeys', 'g_storeys'].includes(a.key) && a.rawValue !== null && Number.isFinite(a.rawValue);
+  const category = CATEGORY_TEXT[a.key]?.[String(a.value)];
+  const estimated = a.quality === 'estimated';
+  const missing = !numeric && !category;
+  const noRaw = a.key === 'serif_foot' && !numeric && !failed;
   return (
+    <Tooltip label={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
     <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
       <span className="fa-axis-name">{meta.label}</span>
-      {a.quality === 'failed' ? (
-        <span className="fa-axis-note wide">Không đo được: {REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do'}</span>
-      ) : cat ? (
-        <span className="fa-axis-note wide">{cat[String(a.value)] ?? String(a.value)}{dashed && <> · <em>ước lượng</em></>}</span>
-      ) : (
-        <>
-          <span className={`fa-axis-track${dashed ? ' dashed' : ''}`} data-track>
-            {a.percentile !== null && <i data-marker style={{ left: `${a.percentile}%` }} />}
-          </span>
-          <span className="fa-axis-note">{a.percentile !== null ? percentileWord(a.percentile) : ''}{dashed && <> · <em>ước lượng</em></>}</span>
-        </>
-      )}
+      <span className="fa-axis-value">{failed ? 'Không đo được' : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? 'Chưa đo'}</span>
+      {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
+        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do' : <>
+          {missing ? 'Chưa có dữ liệu' : noRaw ? 'Chưa có số đo' : estimated ? 'Ước lượng' : category && numeric ? category : ''}
+          {!missing && a.percentile !== null && <Tooltip label="Vị trí so với tập tham chiếu; không phải độ tin cậy"><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
+        </>}
+      </span>}
     </li>
+    </Tooltip>
   );
 }
 

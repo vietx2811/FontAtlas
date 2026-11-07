@@ -7,12 +7,19 @@ import { useNoticeStore } from './notices';
 export const BUMP_THROTTLE_MS = 1500;
 
 export type AccessProblem = 'denied' | 'timeout';
-type State = { scanning: boolean; written: number; paused: boolean; version: number; access: Record<number, AccessProblem>; bump(): void };
+type State = {
+  scanning: boolean; written: number; paused: boolean; version: number; access: Record<number, AccessProblem>;
+  /** Số file chỉ là placeholder đám mây (chưa tải về) đã bỏ qua trong lần quét đang chạy, theo nguồn. */
+  cloud: Record<number, number>;
+  cloudTotal(): number;
+  bump(): void;
+};
 export type ScanStore = UseBoundStore<StoreApi<State>>;
 
 export function createScanStore(): ScanStore {
-  return create<State>()(set => ({
-    scanning: false, written: 0, paused: false, version: 0, access: {},
+  return create<State>()((set, get) => ({
+    scanning: false, written: 0, paused: false, version: 0, access: {}, cloud: {},
+    cloudTotal: () => Object.values(get().cloud).reduce((a, b) => a + b, 0),
     bump: () => set(s => ({ version: s.version + 1 })),
   }));
 }
@@ -29,12 +36,13 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
   const off = await api.scanSubscribe(e => {
     const set = store.setState;
     const clear = (id: number) => set(s => { const { [id]: _drop, ...rest } = s.access; return { access: rest }; });
-    if (e.type === 'queued') { set({ scanning: true }); clear(e.sourceId); }
-    else if (e.type === 'progress') set({ scanning: true, written: e.progress.facesWritten });
+    const dropCloud = (id: number) => set(s => { const { [id]: _d, ...rest } = s.cloud; return { cloud: rest }; });
+    if (e.type === 'queued') { set({ scanning: true }); clear(e.sourceId); dropCloud(e.sourceId); }
+    else if (e.type === 'progress') set(s => ({ scanning: true, written: e.progress.facesWritten, cloud: { ...s.cloud, [e.sourceId]: e.progress.notDownloaded } }));
     else if (e.type === 'facesAdded') bumpSoon();
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); bumpNow(); }
+    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); bumpNow(); } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
     else if (e.type === 'failed') {
       set({ scanning: false });
       const d = e.error.detail as { source?: string; op?: string; reason?: string } | null;

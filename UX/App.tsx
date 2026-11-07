@@ -6,10 +6,11 @@ import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
-import { Settings } from './components/settings/Settings';
+import { SettingsOverlay } from './components/settings/SettingsOverlay';
 import { SettingsShortcut } from './components/settings/SettingsShortcut';
 import { BootGate } from './components/boot/BootGate';
 import { NoticeStack } from './components/NoticeStack';
+import { FaceActionsProvider } from './components/faces/FaceActions';
 import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -38,7 +39,6 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 /** Thư viện: chỉ dựng sau khi backend sẵn sàng và onboarding xong (BootGate). */
 const Library_: React.FC<{ api: Api }> = ({ api }) => {
     const collapsed = useUiStore(s => s.sidebarCollapsed);
-    const settingsOpen = useUiStore(s => s.settingsOpen);
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
@@ -59,19 +59,19 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     }, [api]);
 
     return (
+        <FaceActionsProvider api={api}>
         <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
-            {settingsOpen ? (
-                <Settings api={api} onClose={() => useUiStore.getState().setSettingsOpen(false)}
-                    onRerunOnboarding={() => location.reload()} />
-            ) : <div className="h-full flex text-[var(--foreground)]">
+            <div className="h-full flex text-[var(--foreground)] relative">
                 <main className="flex-1 min-w-0 h-full flex flex-col relative">
                     <TopBar api={api} />
                     <div className="flex-1 min-h-0"><Library api={api} /></div>
                     <SampleComposer />
                 </main>
                 <DetailPanel api={api} />
-            </div>}
+                <SettingsOverlay api={api} onRerunOnboarding={() => location.reload()} />
+            </div>
         </WindowShell>
+        </FaceActionsProvider>
     );
 };
 

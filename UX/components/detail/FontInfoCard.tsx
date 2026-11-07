@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FaceDetailDto } from '../../api';
+import { Tooltip } from '../ui/Tooltip';
 
 type Props = { detail: FaceDetailDto | null; expanded: boolean; onToggle(): void; onReveal(): void };
 const clean = (v: string | null | undefined): string | null => (v && v.trim() ? v.trim() : null);
@@ -19,7 +20,7 @@ export function FontInfoCard({ detail, expanded, onToggle, onReveal }: Props): R
       {rows.map(([k, v, cls]) => (
         <div key={k}>
           <dt>{k}</dt>
-          <dd className={cls} title={cls === 'mono' ? v! : undefined} onContextMenu={cls === 'mono' ? e => { e.preventDefault(); setMenu(true); } : undefined}>{v}</dd>
+          <Tooltip label={v!} onlyIfTruncated><dd className={cls} onContextMenu={cls === 'mono' ? e => { e.preventDefault(); setMenu(true); } : undefined}>{v}</dd></Tooltip>
           {k === 'Tệp' && menu && (
             <div role="menu" className="fa-ctx" onMouseLeave={() => setMenu(false)}>
               <button role="menuitem" type="button" onClick={() => { setMenu(false); onReveal(); }}>Hiện trong Finder</button>

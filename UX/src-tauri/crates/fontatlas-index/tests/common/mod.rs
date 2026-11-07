@@ -19,7 +19,7 @@ pub fn profile(name: &str) -> FaceProfile {
 use fontatlas_index::{AxisId, AxisQuantiles, FaceKey, Q, Reading, ReferenceTable};
 
 pub const M_WIDTH: &str = "o_bbox_width_over_xh";
-pub const M_CONTRAST: &str = "o_radial_thickness_max_min";
+pub const M_CONTRAST: &str = "o_stroke_width_max_min";
 pub const M_STRESS: &str = "o_harmonic_fit";
 pub const M_STEM: &str = "n_stem_at_35pct_xh";
 pub const M_XH: &str = "x_bbox_top";

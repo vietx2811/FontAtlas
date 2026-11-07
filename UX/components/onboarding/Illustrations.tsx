@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 // Minh hoạ cho từng bước onboarding: tối giản, vẽ bằng chính chữ (glyph lớn, đường x-height/baseline, dấu Việt), SVG nội tuyến,
 // chỉ dùng token màu của theme nên đổi sáng/tối theo ứng dụng. Không ảnh bitmap, không emoji.
 import type { ReactNode } from 'react';
@@ -71,10 +72,18 @@ const ART: Record<S, { label: string; node: ReactNode }> = {
 
 export function Illustration({ step }: { step: Step | S }): React.JSX.Element | null {
   const art = (ART as Record<string, { label: string; node: ReactNode }>)[step];
+  const g = useRef<SVGGElement>(null);
+  const [box, setBox] = useState<[number, number] | null>(null);
+  // Hình vẽ nằm giữa khung 240; cắt khung theo đúng bề ngang hình để mép trái thẳng hàng với tiêu đề.
+  useLayoutEffect(() => {
+    const b = g.current && typeof g.current.getBBox === 'function' ? g.current.getBBox() : null;
+    setBox(b && b.width > 0 ? [Math.floor(b.x), Math.ceil(b.width)] : null);
+  }, [step]);
   if (!art) return null;
+  const [x, w] = box ?? [0, 240];
   return (
-    <svg className="fa-illus" role="img" aria-label={art.label} viewBox="0 -14 240 134" width="240" height="134">
-      {art.node}
+    <svg className="fa-illus" role="img" aria-label={art.label} viewBox={`${x} -14 ${w} 134`} width={w} height="134">
+      <g ref={g}>{art.node}</g>
     </svg>
   );
 }

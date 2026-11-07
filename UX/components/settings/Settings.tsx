@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
+import { notDownloadedOf } from '../zero/zeroStates';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { Modal } from '../Modal';
 import './settings.css';
+import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'Chung' }, { id: 'library', label: 'Thư viện và nguồn' }, { id: 'vision', label: 'Phân tích hình ảnh' },
@@ -38,7 +40,11 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
   const [s, setS] = useState<SettingsDto | null>(null);
   useEffect(() => { let alive = true; api.getSettings().then(v => { if (alive) setS(v); }); return () => { alive = false; }; }, [api]);
   useEffect(() => {
-    const on = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const on = (e: KeyboardEvent) => {
+      // Esc thuộc về lớp con đang mở (menu ngữ cảnh, hộp thoại xác nhận) trước.
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('[role="menu"], [aria-modal="true"]')) return;
+      onClose();
+    };
     document.addEventListener('keydown', on);
     return () => document.removeEventListener('keydown', on);
   }, [onClose]);
@@ -106,6 +112,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   const refresh = useCallback(async () => setSources(await api.listSources()), [api]);
   useEffect(() => { void refresh(); }, [refresh]);
   const access = useScanStore(x => x.access);
+  const cloud = useScanStore(x => x.cloud);
   const state = (x: SourceDto) => (x.id in access ? 'Cần quyền truy cập' : !x.available ? 'Không khả dụng' : x.scanning ? 'Đang quét' : 'Sẵn sàng');
   return (
     <>
@@ -114,7 +121,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         {sources.map(x => (
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}</strong><span className="path">{x.path}</span></div>
-            <span className="meta">{x.faceCount} font · {state(x)}</span>
+            <span className="meta">{x.faceCount} font · {state(x)}{notDownloadedOf(x, cloud) > 0 ? ` · ${notDownloadedOf(x, cloud)} chưa tải về` : ''}</span>
             {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>Cấp quyền</button>}
             <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? 'Thử lại' : 'Quét lại'}</button>
             <button type="button" className="danger" onClick={() => setRemoving(x)}>Xoá nguồn</button>
@@ -139,14 +146,14 @@ function Vision({ api, s, patch, store }: { api: Api; store: ModelStore } & SubP
   const ui = useModelUi(store);
   const embed = store(x => x.embed);
   const model = store(x => x.model);
-  const line = !s.embedEnabled ? 'Đã tắt: Similar và Ghép cặp dùng số đo.' : ui.text ?? (ui.imageReady ? 'Sẵn sàng' : 'Chưa có trạng thái');
+  const line = ui.text ?? (!s.embedEnabled ? 'Đã tắt: Similar và Ghép cặp dùng số đo.' : ui.imageReady ? 'Sẵn sàng' : 'Chưa có trạng thái');
   return (
     <>
       <Switch label="Bật phân tích hình ảnh" on={s.embedEnabled} onChange={async v => { await patch({ embedEnabled: v }); useModelStore.setState({ embedEnabled: v }); store.setState({ embedEnabled: v }); }} />
       <div className="fa-set-group">
-        <p data-testid="model-line">{line}</p>
-        {s.embedEnabled && ui.actions.length > 0 && <div className="fa-set-presets">{ui.actions.map(a => <button key={a.label} type="button" onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}</div>}
-        {ui.detail && <p className="fa-set-note">{ui.detail}</p>}
+        <p data-testid="model-line" role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{line}</p>
+        {ui.actions.length > 0 && <div className="fa-set-presets">{ui.actions.map(a => <button key={a.label} type="button" onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}</div>}
+        <ModelDetails detail={ui.detail} />
         {model && model.state === 'missing' && s.embedEnabled && <p className="fa-set-note">Tải một lần khoảng {Math.round(model.totalBytes / MB)} MB, có kiểm tra checksum.</p>}
         {ui.settingsText && <p className="fa-set-note">{ui.settingsText}</p>}
         {embed?.modelVersion && <p className="fa-set-note">Model: {embed.modelVersion}</p>}

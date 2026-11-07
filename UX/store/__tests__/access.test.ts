@@ -51,7 +51,7 @@ describe('source access problems', () => {
     push({ type: 'queued', sourceId: 3 });
     expect(s.getState().access[3]).toBeUndefined();
     push({ type: 'failed', sourceId: 3, error: denied('timeout') });
-    push({ type: 'finished', sourceId: 3, stats: { status: 'ok', seen: 1, unchanged: 1, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } });
+    push({ type: 'finished', sourceId: 3, stats: { status: 'ok', seen: 1, unchanged: 1, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [], notDownloaded: 0 } });
     expect(s.getState().access[3]).toBeUndefined();
     expect((await api.queryFaces({ sourceIds: [3] })).total).toBeGreaterThan(0); // vẫn còn font của nguồn đó
   });

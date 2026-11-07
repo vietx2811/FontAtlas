@@ -52,12 +52,26 @@ impl<'a> GlyphCtx<'a> {
             .post()
             .map(|p| p.italic_angle().to_f64())
             .unwrap_or(0.0);
-        GlyphCtx {
+        let mut ctx = GlyphCtx {
             font,
             loc,
             deskew: ia.to_radians().tan(),
             char_filter: None,
+        };
+        // Audit 2026-11-06: post.italicAngle=0 for Roboto Italic (-9.8°)
+        // and Avenir Next Condensed Medium Italic (-9.8°). Upright tolerance was ±2°;
+        // use >=3° measured stem slant only for declared italic/oblique faces.
+        // Upright scripts do not have a uniform shear: preserve their a/g topology heuristic.
+        if ia.abs() < 0.5
+            && ctx.declared_slanted()
+            && !ctx.font.charmap().is_symbol()
+            && let Some(slant) = ctx
+                .stem_slant_deg()
+                .filter(|v| v.is_finite() && v.abs() >= 3.0)
+        {
+            ctx.deskew = slant.to_radians().tan();
         }
+        ctx
     }
 
     /// Ẩn bớt ký tự (dùng để test nhánh font chỉ có chữ hoa).
@@ -68,6 +82,81 @@ impl<'a> GlyphCtx<'a> {
 
     pub fn font(&self) -> &FontRef<'a> {
         &self.font
+    }
+
+    /// Raw stem angle without deskew/rounding; shared by fallback deskew and the public metric.
+    /// Capital I and T stems first, then the bar '|' (Google Fonts eval 2026-11-07, italicAngle as truth:
+    /// MAE 0.87° → 0.48° on 297 italics, 0.37° → 0.31° on 72 uprights); lowercase l
+    /// (tails/hooks bias it) only when neither capital has a clean single stem.
+    pub(crate) fn stem_slant_deg(&self) -> Option<f64> {
+        let i = self.glyph_stem_slant('I', 0.25, 0.75);
+        let t = self.glyph_stem_slant('T', 0.15, 0.6);
+        match (i, t) {
+            (Some(i), Some(t)) if (i - t).abs() < 1.5 => Some((i + t) / 2.0),
+            (Some(i), _) => Some(i),
+            (None, Some(t)) => Some(t),
+            // '|' stays upright in ~1/3 of italics, so it never overrides I/T; it beats a
+            // hooked lowercase l when capitals are missing (Sirivennela: l -19.9°, | 0°).
+            (None, None) => self
+                .glyph_stem_slant('|', 0.2, 0.8)
+                .or_else(|| self.l_midline_slant()),
+        }
+    }
+
+    /// Midline offset of one stem between two height fractions; None unless both heights
+    /// cut exactly one ink run (a clean stem, no serif or crossbar).
+    pub(crate) fn glyph_stem_slant(&self, ch: char, f0: f64, f1: f64) -> Option<f64> {
+        let g = self.glyph(ch, false)?;
+        let (y1, y2) = (
+            g.bbox.y0 + g.bbox.height() * f0,
+            g.bbox.y0 + g.bbox.height() * f1,
+        );
+        let (r1, r2) = (hline(&g, y1), hline(&g, y2));
+        if r1.len() != 1 || r2.len() != 1 {
+            return None;
+        }
+        let (m1, m2) = ((r1[0].0 + r1[0].1) / 2.0, (r2[0].0 + r2[0].1) / 2.0);
+        Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
+    }
+
+    fn l_midline_slant(&self) -> Option<f64> {
+        let g = self.glyph('l', false)?;
+        let (y1, y2) = (
+            g.bbox.y0 + g.bbox.height() * 0.25,
+            g.bbox.y0 + g.bbox.height() * 0.75,
+        );
+        let m1 = hline(&g, y1).first().map(|(a, b)| (a + b) / 2.0)?;
+        let m2 = hline(&g, y2).first().map(|(a, b)| (a + b) / 2.0)?;
+        Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
+    }
+
+    fn declared_slanted(&self) -> bool {
+        use read_fonts::tables::{head::MacStyle, os2::SelectionFlags};
+        self.font.os2().is_ok_and(|o| {
+            o.fs_selection()
+                .intersects(SelectionFlags::ITALIC | SelectionFlags::OBLIQUE)
+        }) || self
+            .font
+            .head()
+            .is_ok_and(|h| h.mac_style().contains(MacStyle::ITALIC))
+            // Avenir Next Condensed Heavy/Ultra Light Italic: italicAngle 0, no flags, -10° stems.
+            || [
+                skrifa::string::StringId::SUBFAMILY_NAME,
+                skrifa::string::StringId::TYPOGRAPHIC_SUBFAMILY_NAME,
+                skrifa::string::StringId::POSTSCRIPT_NAME,
+            ]
+            .into_iter()
+            .any(|id| {
+                use skrifa::MetadataProvider;
+                self.font.localized_strings(id).english_or_first().is_some_and(|s| {
+                    let s = s.to_string();
+                    s.contains("Italic") || s.contains("Oblique")
+                })
+            })
+    }
+
+    pub(crate) fn is_slanted(&self) -> bool {
+        self.deskew.atan().to_degrees().abs() >= 0.5 || self.declared_slanted()
     }
 
     pub fn glyph(&self, ch: char, upright: bool) -> Option<GlyphShape> {

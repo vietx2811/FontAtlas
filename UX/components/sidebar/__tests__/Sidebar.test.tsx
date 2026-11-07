@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar, SidebarToggle } from '../Sidebar';
+import { tipOf } from '../../../test/tip';
 
 const initial = useUiStore.getState();
 const settle = async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
@@ -35,7 +36,28 @@ describe('Sidebar', () => {
     expect(useUiStore.getState().view).toBe('src:2');
     const gone = screen.getByRole('button', { name: /Ổ ngoài/ });
     expect(gone.getAttribute('data-unavailable')).toBe('true');
-    expect(gone.getAttribute('title')).toMatch(/chưa kết nối/i);
+    expect(await tipOf(gone)).toMatch(/chưa kết nối/i);
+  });
+
+  it('leaves Settings when selecting a sidebar view, including the current view', async () => {
+    await mount();
+    for (const [name, view] of [[/Tất cả/, 'all'], [/Yêu thích/, 'star'], [/Dự án khách/, 'src:2']] as const) {
+      act(() => useUiStore.getState().setSettingsOpen(true));
+      fireEvent.click(screen.getByRole('button', { name }));
+      expect(useUiStore.getState().view).toBe(view);
+      expect(useUiStore.getState().settingsOpen).toBe(false);
+    }
+  });
+
+  it('leaves Settings when selecting a tag filter', async () => {
+    const api = createMockApi();
+    await api.createTag('serif');
+    render(<Sidebar api={api} pickFolder={async () => null} />);
+    await settle();
+    act(() => useUiStore.getState().setSettingsOpen(true));
+    fireEvent.click(screen.getByRole('button', { name: 'serif' }));
+    expect(useUiStore.getState().tag).not.toBeNull();
+    expect(useUiStore.getState().settingsOpen).toBe(false);
   });
 
   it('sections collapse with aria-expanded and persist through the store', async () => {
@@ -197,7 +219,29 @@ describe('Sidebar', () => {
   it('a source that needs access is marked in the list (title says so)', async () => {
     await mount();
     act(() => useScanStore.setState({ access: { 3: 'denied' } }));
-    expect(screen.getByRole('button', { name: /Ổ ngoài/ }).getAttribute('title')).toBe('Ổ ngoài: cần quyền truy cập');
+    expect(await tipOf(screen.getByRole('button', { name: /Ổ ngoài/ }))).toBe('Ổ ngoài: cần quyền truy cập');
     act(() => useScanStore.setState({ access: {} }));
+  });
+
+  describe('files still in the cloud (not downloaded)', () => {
+    it('a source whose last scan skipped placeholders says how many, with a tooltip on how to download them', async () => {
+      await mount();
+      const line = screen.getByTestId('not-downloaded');
+      expect(line.textContent).toBe('12 font chưa tải về');
+      const tip = await tipOf(line);
+      expect(tip).toMatch(/Finder/);
+      expect(tip).toMatch(/Tải về/);
+      expect(within(line).queryByRole('button')).toBeNull(); // không có nút tự tải
+      expect(screen.getAllByTestId('not-downloaded')).toHaveLength(1); // chỉ nguồn có file chưa tải
+    });
+
+    it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
+      await mount();
+      act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));
+      const status = screen.getByRole('status', { name: 'Đang quét' });
+      expect(within(status).getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
+      act(() => useScanStore.setState({ scanning: false, cloud: {} }));
+      expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
+    });
   });
 });

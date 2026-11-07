@@ -32,3 +32,8 @@ button.danger { color: var(--warn); }
 .fa-set-about { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
 .fa-set-about dt { color: var(--muted); }
 .fa-set-about dd { margin: 0; }
+
+.fa-set-group [role="alert"] { color: var(--warn); }
+.fa-set-scrim { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; padding: 32px; background: color-mix(in srgb, var(--chrome) 55%, transparent); backdrop-filter: blur(2px); }
+.fa-set-sheet { width: min(100%, 960px); height: min(100%, 680px); border-radius: var(--radius-lg, 14px); border: 1px solid var(--border); overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.35); background: var(--sheet); }
+.fa-set-sheet:focus { outline: none; }

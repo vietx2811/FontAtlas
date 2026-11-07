@@ -105,8 +105,9 @@ pub fn key_of(env: &Env, file_name: &str) -> FaceKey {
     let h: Vec<u8> = s
         .conn()
         .query_row(
-            "SELECT f.hash FROM main.files f JOIN main.file_locations l USING(file_id) WHERE l.path LIKE ?1",
-            [format!("%/{file_name}")],
+            "SELECT f.hash FROM main.files f JOIN main.file_locations l USING(file_id) WHERE l.path LIKE ?1 OR l.path LIKE ?2",
+            // Dấu phân cách đường dẫn là `/` (Unix) hoặc `\\` (Windows).
+            [format!("%/{file_name}"), format!("%\\{file_name}")],
             |r| r.get(0),
         )
         .unwrap();

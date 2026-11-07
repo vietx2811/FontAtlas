@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import './libraryGrid.css';
+import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
+import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
 export const HOVER_DELAY_MS = 150;
 
@@ -23,9 +26,16 @@ type Props = {
   /** Cỡ chữ mẫu (css px). Có → ảnh bucket co về cỡ này; không → cỡ gốc của bucket (harness cũ). */
   fontSize?: number; layout?: 'grid' | 'list'; active?: boolean; favorite?: boolean;
   onToggleFavorite?(row: FaceRow): void; boxHeight?: number;
+  /** Vị trí của ô trong truy vấn hiện tại (để chọn dải bằng index). */
+  index?: number;
+  /** Bấm chọn kèm phím bổ trợ: ⌘/Ctrl bật tắt, Shift chọn dải. Thiếu → dùng onSelect. */
+  onPick?(row: FaceRow, index: number, mods: PickMods): void;
+  /** Chuột phải, phím ContextMenu hoặc Shift+F10. `rect` có khi mở bằng bàn phím. */
+  onContextMenu?(row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void;
 };
+export type PickMods = { meta: boolean; shift: boolean };
 
-export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight }: Props): React.JSX.Element {
+function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
@@ -35,6 +45,8 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
   const hovering = useRef(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acquired = useRef(false);
+  // Tên thẻ vẽ bằng chính font của thẻ; cuộn nhanh thì loader chưa nạp (ScrollVelocity), TTC face ≥ 1 giữ font giao diện.
+  const nameFamily = useLoadedFamily(loader, row ? { hashHex: row.hashHex, faceIndex: row.faceIndex, fileSize: row.fileSize } : null, true);
 
   // mask: tải một lần → blob URL; giữ ảnh cũ cho tới khi ảnh mới sẵn sàng.
   useEffect(() => {
@@ -102,12 +114,25 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
   const name = `${row.family}${row.subfamily ? ` ${row.subfamily}` : ''}`;
   const missing = row.viMissing > 0;
   const format = fileFormat(row.path);
+  const pick = (e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }) => {
+    if (onPick) onPick(row, index, { meta: e.metaKey || e.ctrlKey, shift: e.shiftKey });
+    else onSelect(row);
+  };
   return (
     <div
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
       data-face-id={row.faceId} data-state={shownState} data-shown-url={shownUrl} style={{ height: boxHeight }}
-      onClick={() => onSelect(row)}
-      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSelect(row); } }}
+      onClick={pick}
+      onContextMenu={onContextMenu ? e => { e.preventDefault(); onContextMenu(row, index, { x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); } : undefined}
+      onKeyDown={e => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e); }
+        else if (onContextMenu && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          onContextMenu(row, index, { x: r.left + 24, y: r.top + Math.min(r.height - 8, 40), keyboard: true, el: e.currentTarget });
+        }
+      }}
       onPointerEnter={() => {
         if (!canLive) return;
         hovering.current = true;
@@ -115,11 +140,13 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {active && <span className="fa-dot" data-testid="active-dot" title="Đang bật" />}
-      <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite} title="Yêu thích"
-        onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }}>
-        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
-      </button>
+      {active && <Tooltip label="Đang bật"><span className="fa-dot" data-testid="active-dot" /></Tooltip>}
+      <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
+        <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
+          onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
+        </button>
+      </Tooltip>
       <div className="fa-spec" data-preview-box data-aligned={layout === 'grid' ? 'middle' : 'start'} style={{ minHeight: ch }}>
         {live ? (
           // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
@@ -134,11 +161,17 @@ export function FaceCell({ row, url, px, text, selected, mode, blobs, loader, on
         )}
       </div>
       <div className="fa-meta">
-        <span className="fa-name" data-testid="face-name">{name}</span>
-        {format && <span className="fa-fmt" data-testid="face-format" title={`Định dạng file ${format}`}>{format}</span>}
-        <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}
-          title={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>{missing ? `−${row.viMissing}` : '●'}</span>
+        <Tooltip label={name} onlyIfTruncated>
+          <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
+        </Tooltip>
+        {format && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
+        <Tooltip label={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>
+          <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}>{missing ? `−${row.viMissing}` : '●'}</span>
+        </Tooltip>
       </div>
     </div>
   );
 }
+
+/** memo: đổi vùng chọn/yêu thích chỉ vẽ lại đúng những thẻ có `selected`/`favorite`/`active` đổi (các callback truyền vào phải ổn định). */
+export const FaceCell = memo(FaceCellImpl);

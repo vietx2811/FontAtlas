@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
   app:
     # macOS: kích hoạt font dùng CoreText; Windows chưa kiểm
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.96.0

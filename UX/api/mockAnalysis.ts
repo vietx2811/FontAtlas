@@ -4,41 +4,35 @@ import type { AxisReadingDto, PairCandidateDto, PairLabelDto, PairOptsDto, Simil
 
 type PairSymbol = '●' | '◐' | '◆' | '○' | '◑';
 
-/** 16 trục đo + terminal + hai trục phân loại (a_storeys, g_storeys). */
-export const MEASURED_AXES = [
-  'x_height', 'cap_height', 'ascender', 'descender', 'stem_weight', 'contrast', 'stress_deg', 'slant_deg',
-  'avg_width', 'aperture', 'counter_ratio', 'letterspacing', 'serif_foot', 'arm_length', 'tail_length', 'roundness',
-] as const;
+/** Mock theo đúng keys/units Rust; số dưới đây chỉ là fixture QA, không phải phép đo font. */
+export const MEASURED_AXES = ['x_height_em', 'x_height_cap', 'ascender_em', 'stem', 'darkness', 'contrast', 'stress_deg', 'aperture', 'aperture_e', 'width', 'mean_advance', 'width_cv', 'spacing', 'slant_deg', 'serif_foot', 'counter'] as const;
 export const CATEGORICAL_AXES = ['terminal', 'a_storeys', 'g_storeys'] as const;
-
-const rnd = (seed: number, k: number): number => ((seed * 9301 + k * 49297 + 233) % 233280) / 233280;
-const KEEP_FOR_LINES: Record<string, (s: number) => number> = {
-  x_height: s => 0.46 + 0.1 * rnd(s, 1), cap_height: s => 0.66 + 0.08 * rnd(s, 2), ascender: s => 0.74 + 0.08 * rnd(s, 3), descender: s => 0.2 + 0.06 * rnd(s, 4),
+export const MOCK_UNITS: Record<string, string> = {
+  x_height_em: 'em', cap_height_em: 'em', ascender_em: 'em', descender_em: 'em', x_height_cap: 'cap_height_ratio',
+  stem: 'x_height_ratio', aperture_e: 'x_height_ratio', width: 'x_height_ratio', mean_advance: 'x_height_ratio', spacing: 'x_height_ratio',
+  stress_deg: 'deg', slant_deg: 'deg', aperture: 'deg', darkness: 'area_ratio', counter: 'area_ratio',
+  contrast: 'ratio', contrast_h: 'ratio', width_cv: 'ratio', serif_foot: 'ratio', terminal: 'ratio',
 };
-
+const rnd = (seed: number, k: number): number => ((seed * 9301 + k * 49297 + 233) % 233280) / 233280;
 export function axesFor(row: FaceRow): AxisReadingDto[] {
-  const out: AxisReadingDto[] = MEASURED_AXES.map((key, i) => {
+  const keys = [...MEASURED_AXES, 'terminal', 'a_storeys', 'g_storeys', 'cap_height_em', 'descender_em', 'contrast_h'];
+  return keys.map((key, i) => {
     const r = rnd(row.faceId, i + 10);
-    const base = { key, reason: null as string | null, method: 'outline' as string | null };
-    if (i === 14 && row.faceId % 3 === 0) return { ...base, value: null, quality: 'failed', reason: 'no_latin_lowercase', method: null, percentile: null };
-    const quality = i % 6 === 5 ? 'estimated' : 'measured';
-    const value = KEEP_FOR_LINES[key] ? KEEP_FOR_LINES[key](row.faceId) : Math.round(r * 1000) / 1000;
-    return { ...base, value, quality, method: quality === 'estimated' ? 'stem_sampling' : 'outline', percentile: Math.round(r * 100) };
+    const quality = key === 'stress_deg' || i % 6 === 5 ? 'estimated' : 'measured';
+    const base = { key, reason: null, method: 'mock_fixture', unit: MOCK_UNITS[key] ?? null, quality, percentile: i < 16 && key !== 'serif_foot' ? r : null };
+    if (i === 12 && row.faceId % 3 === 0) return { ...base, value: null, rawValue: null, quality: 'failed', reason: 'no_latin_lowercase', percentile: null };
+    const value = key === 'x_height_em' ? 0.46 + 0.1 * r : key === 'cap_height_em' ? 0.7 : key === 'descender_em' ? -0.2 : MOCK_UNITS[key] === 'deg' ? 30 * r : 0.1 + r;
+    if (key === 'a_storeys' || key === 'g_storeys') return { ...base, value: row.faceId % 2 ? '1' : '2', rawValue: row.faceId % 2 ? 1 : 2, percentile: null };
+    return { ...base, value: key === 'serif_foot' ? 'sans' : value, rawValue: value };
   });
-  out.push(
-    { key: 'terminal', value: row.faceId % 2 ? 'flat' : 'round', quality: 'measured', reason: null, method: 'outline', percentile: null },
-    { key: 'a_storeys', value: row.faceId % 4 === 0 ? '1' : '2', quality: 'measured', reason: null, method: 'outline', percentile: null },
-    { key: 'g_storeys', value: row.faceId % 5 === 0 ? '2' : '1', quality: 'estimated', reason: null, method: 'glyph_class', percentile: null },
-  );
-  return out;
 }
 
 const VI_MISSING_POOL = [...'ẰẲẴẶẸẺẼỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ', ...'ằẳẵặẹẻẽềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ'];
 export const VI_TOTAL = 134; // 67 chữ thường + 67 chữ hoa có dấu hoặc đ
 export const viMissingFor = (n: number): string[] => VI_MISSING_POOL.slice(0, n);
 
-const SAME = ['x_height', 'avg_width', 'stem_weight', 'aperture', 'serif_foot', 'cap_height'];
-const DIFFER = ['contrast', 'slant_deg', 'roundness', 'letterspacing', 'terminal', 'stress_deg'];
+const SAME = ['x_height_em', 'width', 'stem', 'aperture', 'serif_foot', 'x_height_cap'];
+const DIFFER = ['contrast', 'slant_deg', 'darkness', 'spacing', 'terminal', 'stress_deg'];
 const pick = (list: string[], seed: number, n: number): string[] => Array.from({ length: n }, (_, i) => list[(seed + i * 2) % list.length]);
 
 export function similarFor(row: FaceRow, rows: FaceRow[], k: number): SimilarHitDto[] {
@@ -55,7 +49,7 @@ export function similarFor(row: FaceRow, rows: FaceRow[], k: number): SimilarHit
 }
 
 const RELATIONS: Record<PairSymbol, string> = { '●': 'hoà hợp', '◐': 'tương phản', '◆': 'va chạm', '○': 'chưa chắc', '◑': 'gợi ý độ đậm' };
-const PAIR_AXES = ['x_height', 'contrast', 'stem_weight', 'serif_foot'];
+const PAIR_AXES = ['x_height', 'contrast', 'weight', 'serif'];
 
 export function pairFor(row: FaceRow, rows: FaceRow[], o: PairOptsDto): PairCandidateDto[] {
   if (o.projectVi && row.viMissing > 0) return [];

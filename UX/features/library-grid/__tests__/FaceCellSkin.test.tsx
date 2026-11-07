@@ -4,6 +4,7 @@ import { createMockLibraryApi, makeRow } from '../api';
 import { LibraryGrid, type LibraryGridProps } from '../LibraryGrid';
 import { PreviewBlobs, type BlobDeps } from '../previewBlobs';
 import { cellMinWidth } from '../types';
+import { tipOf } from '../../../test/tip';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const blobs = () => {
@@ -36,10 +37,11 @@ describe('FaceCell skin (prototype)', () => {
     const [a, b] = cells();
     const ok = within(a).getByTestId('vi-mark');
     expect(ok.textContent).toBe('●');
-    expect(ok.getAttribute('title')).toBe('Đủ dấu tiếng Việt');
+    expect(ok).not.toHaveAttribute('title'); // chú thích do Tooltip chung hiện, không còn title gốc
+    expect(await tipOf(ok)).toBe('Đủ dấu tiếng Việt');
     const miss = within(b).getByTestId('vi-mark');
     expect(miss.textContent).toBe('−12');
-    expect(miss.getAttribute('title')).toBe('Thiếu 12 ký tự tiếng Việt');
+    expect(await tipOf(miss)).toBe('Thiếu 12 ký tự tiếng Việt');
     expect(miss.getAttribute('data-warn')).toBe('true');
   });
 

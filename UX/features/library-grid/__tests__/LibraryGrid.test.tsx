@@ -130,13 +130,14 @@ describe('LibraryGrid', () => {
     const { loader } = await mount();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const c = cells()[0];
+    const [acq, rel] = [loader.acquire.mock.calls.length, loader.release.mock.calls.length]; // tên thẻ đã nạp font của chính nó khi hiện
     fireEvent.pointerEnter(c);
-    expect(loader.acquire).not.toHaveBeenCalled();
+    expect(loader.acquire).toHaveBeenCalledTimes(acq);
     await act(async () => { await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS); });
-    expect(loader.acquire).toHaveBeenCalledTimes(1);
+    expect(loader.acquire).toHaveBeenCalledTimes(acq + 1);
     expect(c).toHaveAttribute('data-state', 'live');
     fireEvent.pointerLeave(c);
-    expect(loader.release).toHaveBeenCalledTimes(1);
+    expect(loader.release).toHaveBeenCalledTimes(rel + 1);
   });
 
   it('live font renders at the same size as the preview (no jump, no clipping)', async () => {
@@ -153,9 +154,10 @@ describe('LibraryGrid', () => {
     const { loader } = await mount({}, [makeRow(0, { faceIndex: 1 })]);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const c = cells()[0];
+    const acq = loader.acquire.mock.calls.length;
     fireEvent.pointerEnter(c);
     await act(async () => { await vi.advanceTimersByTimeAsync(HOVER_DELAY_MS); });
-    expect(loader.acquire).not.toHaveBeenCalled();
+    expect(loader.acquire).toHaveBeenCalledTimes(acq); // không nạp thêm để vẽ live
     expect(c).toHaveAttribute('data-state', 'ready');
   });
 
@@ -177,6 +179,25 @@ describe('LibraryGrid', () => {
     r.unmount();
     expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
+  });
+
+  it('never leaves orphan cells when a refetch briefly shows a face at two positions', async () => {
+    // Seen in the native app during a scan: pages refetched while the list grew, the same face sat at
+    // two indices of one row, and keying cells by faceId left a stale "loading" cell in the DOM.
+    const base = rows.slice(0, 6);
+    const dup = [base[0], base[1], base[1], base[3], base[4], base[4]];
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const loader = stubLoader(); const { b } = blobs();
+    const r = render(ui(createMockLibraryApi(base), {}, { loader, b }));
+    await settle();
+    r.rerender(ui(createMockLibraryApi(dup), {}, { loader, b }));
+    await settle();
+    r.rerender(ui(createMockLibraryApi(base), {}, { loader, b }));
+    await settle();
+    expect(cells()).toHaveLength(6);
+    expect(new Set(cells().map(c => c.getAttribute('data-face-id'))).size).toBe(6);
+    expect(err.mock.calls.filter(c => String(c[0]).includes('same key'))).toEqual([]);
+    err.mockRestore();
   });
 
   it('shows the empty state', async () => {

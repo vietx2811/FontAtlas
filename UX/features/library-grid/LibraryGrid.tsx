@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { List, type RowComponentProps } from 'react-window';
 import type { LibraryApi } from './api';
-import { DEFAULT_PREVIEW_MODE, FaceCell, type PreviewMode } from './FaceCell';
+import { DEFAULT_PREVIEW_MODE, FaceCell, type PickMods, type PreviewMode } from './FaceCell';
 import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from './fontFaceLoader';
 import { usePagedFaces, type PagedFaces } from './pagedFaces';
 import { PreviewBlobs } from './previewBlobs';
 import { DEFAULT_SAMPLE, bucketFor, cellMinWidth, cssSize, previewBox, type FaceRow, type GridQuery, type PxBucket } from './types';
 
-export { HOVER_DELAY_MS, DEFAULT_PREVIEW_MODE, type CellState, type PreviewMode } from './FaceCell';
+export { HOVER_DELAY_MS, DEFAULT_PREVIEW_MODE, type CellState, type PickMods, type PreviewMode } from './FaceCell';
 
 export type LibraryGridProps = {
   api: LibraryApi; query: GridQuery; sampleText?: string; px?: PxBucket; previewMode?: PreviewMode;
@@ -18,10 +18,18 @@ export type LibraryGridProps = {
   /** Hàng đệm ở đáy (px) cho ô nổi che thẻ cuối. */
   bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
+  /** Tập khoá `${hashHex}:${faceIndex}` đang được chọn (đa chọn). Có → thay cho selectedFaceId/selectedKey khi tô thẻ. */
+  /** Bộ nạp dùng chung toàn app kèm ScrollVelocity của nó (lưới đưa tốc độ cuộn vào). Thiếu → lưới tự tạo bộ nạp riêng. */
+  velocity?: ScrollVelocity;
+  selectedKeys?: ReadonlySet<string>;
+  /** Bấm thẻ kèm ⌘/Ctrl/Shift; index là vị trí trong truy vấn. Thiếu → onSelect. */
+  onPick?(row: FaceRow, index: number, mods: PickMods): void;
+  onContextMenu?(row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void;
   /** Thay cho dòng "Không có font nào khớp" khi kết quả rỗng. */
   emptyState?: React.ReactNode;
 };
 
+const NOOP = () => {};
 type Applied = { rendererVersion: string; generation: number; text: string; px: PxBucket };
 
 type RowProps = {
@@ -30,52 +38,71 @@ type RowProps = {
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
   fontSize?: number; layout: 'grid' | 'list'; boxHeight: number; rows: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
+  selectedKeys?: ReadonlySet<string>; onPick?: LibraryGridProps['onPick']; onContextMenu?: LibraryGridProps['onContextMenu'];
 };
 
-function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
+function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
   if (index >= rows) return <div role="presentation" style={style} />; // hàng đệm đáy
   const cells = [];
   for (let c = 0; c < cols; c++) {
     const i = index * cols + c;
-    if (i >= total) { cells.push(<div key={c} style={{ flex: 1, margin: 4 }} />); continue; }
+    // Ô trống cùng hộp với thẻ (padding + viền) để hàng cuối không kéo giãn thẻ.
+    if (i >= total) { cells.push(<div key={c} className="fa-cell" aria-hidden style={{ visibility: "hidden", height: boxHeight }} />); continue; }
     const row = paged?.rowAt(i);
     // URL dùng chữ/cỡ "đã áp dụng" (cùng thế hệ backend) → ảnh cũ giữ nguyên trong lúc xin thế hệ mới.
     const url = row && applied
       ? api.previewUrl(row, { text: applied.text, px: applied.px, generation: applied.generation, rendererVersion: applied.rendererVersion })
       : null;
     cells.push(
-      <FaceCell key={row ? row.faceId : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
-        selected={!!row && (selectedKey ? `${row.hashHex}:${row.faceIndex}` === selectedKey : row.faceId === selectedFaceId)} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
+      <FaceCell key={row ? `${i}:${row.faceId}` : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
+        selected={!!row && (selectedKeys ? selectedKeys.has(`${row.hashHex}:${row.faceIndex}`) || `${row.hashHex}:${row.faceIndex}` === selectedKey : selectedKey ? `${row.hashHex}:${row.faceIndex}` === selectedKey : row.faceId === selectedFaceId)} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
+        index={i} onPick={onPick} onContextMenu={onContextMenu}
         fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} />,
     );
   }
   return <div role="row" style={{ ...style, display: 'flex' }}>{cells}</div>;
 }
 
+/**
+ * Kích thước khung chứa. Đo ĐỒNG BỘ sau mỗi lần render (trước khi vẽ) bằng clientWidth/clientHeight, nên không phụ thuộc thời điểm
+ * ResizeObserver chạy (WebView ở nền/bị che có thể hoãn RO rất lâu, để lại số cột cũ khi panel/thanh chọn đổi bề rộng).
+ * ResizeObserver vẫn giữ để bắt các thay đổi không kéo theo render (kéo cửa sổ).
+ */
 function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: number; height?: number }) {
   const [size, setSize] = useState({ width: fixed.width ?? 1280, height: fixed.height ?? 800 });
+  const apply = useCallback((w: number, h: number) => {
+    const width = fixed.width ?? w; const height = fixed.height ?? h;
+    setSize(s => (s.width === width && s.height === height ? s : { width, height }));
+  }, [fixed.width, fixed.height]);
+  const both = fixed.width !== undefined && fixed.height !== undefined;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (both || !el) return;
+    if (el.clientWidth > 0 && el.clientHeight > 0) apply(el.clientWidth, el.clientHeight); // 0 = chưa có layout (ẩn/jsdom): giữ số cũ
+  });
   useEffect(() => {
-    if (fixed.width !== undefined && fixed.height !== undefined) return;
+    if (both) return;
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ width: fixed.width ?? e.contentRect.width, height: fixed.height ?? e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) => apply(e.contentRect.width, e.contentRect.height));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref, fixed.width, fixed.height]);
+  }, [ref, both, apply]);
   return size;
 }
 
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
-  selectedFaceId = null, selectedKey = null, onSelect = () => {}, loader: loaderProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite,
+  selectedFaceId = null, selectedKey = null, onSelect = NOOP, loader: loaderProp, velocity: velocityProp, blobs: blobsProp, width, height,
+  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, selectedKeys, onPick, onContextMenu,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
   const size = useSize(box, { width, height });
   const { paged, snap } = usePagedFaces(api, query);
   // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
-  const [velocity] = useState(() => new ScrollVelocity());
+  const [ownVelocity] = useState(() => new ScrollVelocity());
+  const velocity = velocityProp ?? ownVelocity;
   const [ownBlobs] = useState(() => (blobsProp ? null : new PreviewBlobs()));
   const blobs = blobsProp ?? ownBlobs!;
   // Loader tự tạo giữ FontFace trong document.fonts → tạo và huỷ trong cùng một effect.
@@ -175,8 +202,8 @@ export function LibraryGrid({
           rowHeight={(i: number) => (i >= rowCount ? bottomInset : rowH)}
           overscanCount={2}
           defaultHeight={size.height}
-          style={{ height: size.height, width: size.width }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, blobs, loader, onSelect, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
+          style={{ height: '100%', width: '100%' }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

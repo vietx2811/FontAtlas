@@ -44,10 +44,12 @@ pub struct ScanProgress {
     pub done: usize,
     pub total: usize,
     pub faces_written: usize,
+    /// Số font chỉ là placeholder (OneDrive/iCloud chưa tải về): không đọc, không đánh missing.
+    pub not_downloaded: usize,
 }
 
-fn progress(phase: ScanPhase, done: usize, total: usize, faces_written: usize) -> ScanProgress {
-    ScanProgress { phase, done, total, faces_written }
+fn progress(phase: ScanPhase, done: usize, total: usize, faces_written: usize, not_downloaded: usize) -> ScanProgress {
+    ScanProgress { phase, done, total, faces_written, not_downloaded }
 }
 
 enum Work {
@@ -61,6 +63,8 @@ pub struct RescanStats {
     pub status: RescanStatus,
     pub seen: usize,
     pub unchanged: usize,
+    /// Font còn là placeholder trên đám mây (chưa tải): bỏ qua đọc, giữ dữ liệu cũ.
+    pub not_downloaded: usize,
     pub relinked: usize,
     pub analyzed: usize,
     pub failed: usize,
@@ -76,12 +80,41 @@ fn is_font(p: &Path) -> bool {
 
 /// Đi cây thư mục: không theo symlink, bỏ mục ẩn, bỏ thư mục không đọc được; sắp theo đường dẫn.
 pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
-    walk_fonts_report(root).0
+    walk_fonts_report(root, &os_placeholder).0
+}
+
+/// Hàm kiểm "file giữ chỗ chưa tải về" (thay được trong test).
+pub type PlaceholderProbe<'a> = &'a (dyn Fn(&Path, &std::fs::Metadata) -> bool + Sync);
+
+/// macOS: cờ `SF_DATALESS` (OneDrive/iCloud File Provider); Windows: thuộc tính RECALL/OFFLINE.
+pub fn os_placeholder(_p: &Path, _m: &std::fs::Metadata) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::macos::fs::MetadataExt;
+        const SF_DATALESS: u32 = 0x4000_0000;
+        return _m.st_flags() & SF_DATALESS != 0;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const OFFLINE: u32 = 0x1000;
+        const RECALL_ON_DATA_ACCESS: u32 = 0x40_0000;
+        return _m.file_attributes() & (OFFLINE | RECALL_ON_DATA_ACCESS) != 0;
+    }
+    #[allow(unreachable_code)]
+    false
+}
+
+/// `".Tên.ttf.icloud"` → `Some("Tên.ttf")` khi tên thật là font (iCloud Drive thay file bằng stub ẩn).
+fn icloud_real_name(name: &str) -> Option<&str> {
+    let real = name.strip_prefix('.')?.strip_suffix(".icloud")?;
+    is_font(Path::new(real)).then_some(real)
 }
 
 /// Như `walk_fonts`, kèm các thư mục không đọc được (font bên trong không được coi là đã xoá).
-fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
+fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>, Vec<PathBuf>, Vec<PathBuf>) {
     let mut out = Vec::new();
+    let mut placeholders = Vec::new();
     let mut failed = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -95,7 +128,12 @@ fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
                 failed.push(dir.clone());
                 continue;
             };
-            if e.file_name().to_string_lossy().starts_with('.') {
+            let fname = e.file_name().to_string_lossy().into_owned();
+            if let Some(real) = icloud_real_name(&fname) {
+                placeholders.push(dir.join(real));
+                continue;
+            }
+            if fname.starts_with('.') {
                 continue;
             }
             let Ok(ft) = e.file_type() else {
@@ -110,6 +148,10 @@ fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
                     failed.push(dir.clone());
                     continue;
                 };
+                if probe(&p, &m) {
+                    placeholders.push(p);
+                    continue;
+                }
                 let mtime_ns = m
                     .modified()
                     .ok()
@@ -121,7 +163,8 @@ fn walk_fonts_report(root: &Path) -> (Vec<ScannedFile>, Vec<PathBuf>) {
         }
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    (out, failed)
+    placeholders.sort();
+    (out, failed, placeholders)
 }
 
 fn hash_file(p: &Path) -> std::io::Result<[u8; 32]> {
@@ -175,6 +218,19 @@ impl Store {
         on_progress: &mut dyn FnMut(&ScanProgress),
         cancel: &AtomicBool,
     ) -> Result<RescanStats, StoreError> {
+        self.rescan_root_with_probe(source_id, root, on_progress, cancel, &os_placeholder)
+    }
+
+    /// Như `rescan_root_with`, với hàm nhận diện placeholder thay được (test giả lập cờ dataless).
+    /// Placeholder không bị mở/băm, không bị đánh missing, bản ghi cũ giữ nguyên; chỉ được đếm.
+    pub fn rescan_root_with_probe(
+        &mut self,
+        source_id: i64,
+        root: &Path,
+        on_progress: &mut dyn FnMut(&ScanProgress),
+        cancel: &AtomicBool,
+        probe: PlaceholderProbe,
+    ) -> Result<RescanStats, StoreError> {
         let root = root.to_path_buf();
         let mut stats = RescanStats::default();
         if !root_available(&root) {
@@ -187,9 +243,10 @@ impl Store {
             [],
             |r| r.get(0),
         )?;
-        let (files, failed_dirs) = walk_fonts_report(&root);
+        let (files, failed_dirs, placeholders) = walk_fonts_report(&root, probe);
         stats.seen = files.len();
-        on_progress(&progress(ScanPhase::Walking, files.len(), files.len(), 0));
+        stats.not_downloaded = placeholders.len();
+        on_progress(&progress(ScanPhase::Walking, files.len(), files.len(), 0, stats.not_downloaded));
         if let Some(st) = interrupted(&root, cancel) {
             stats.status = st;
             return Ok(stats);
@@ -220,6 +277,13 @@ impl Store {
         });
         {
             let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
+            for p in &placeholders {
+                tx.execute(
+                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0 WHERE path=?1",
+                    params![p.to_string_lossy(), started, generation],
+                )?;
+            }
             for f in &unchanged {
                 tx.execute(
                     "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0 WHERE path=?1",
@@ -237,7 +301,7 @@ impl Store {
                 let h = if cancel.load(Ordering::Relaxed) { Err(std::io::ErrorKind::Interrupted.into()) } else { hash_file(&f.path) };
                 (f, h)
             }).collect();
-        on_progress(&progress(ScanPhase::Hashing, stats.seen, stats.seen, 0));
+        on_progress(&progress(ScanPhase::Hashing, stats.seen, stats.seen, 0, stats.not_downloaded));
         if let Some(st) = interrupted(&root, cancel) {
             stats.status = st;
             return Ok(stats);
@@ -314,7 +378,7 @@ impl Store {
                 .sum();
             self.ingest_counting(items, started, &mut stats)?;
             done += n;
-            on_progress(&progress(ScanPhase::Analyzing, done, total, faces_written));
+            on_progress(&progress(ScanPhase::Analyzing, done, total, faces_written, stats.not_downloaded));
             if let Some(st) = interrupted(&root, cancel) {
                 stats.status = st;
                 return Ok(stats);
@@ -333,7 +397,7 @@ impl Store {
             stats.status = st;
             return Ok(stats);
         }
-        on_progress(&progress(ScanPhase::MarkingMissing, 0, 0, 0));
+        on_progress(&progress(ScanPhase::MarkingMissing, 0, 0, 0, stats.not_downloaded));
         if let Some(st) = interrupted(&root, cancel) {
             stats.status = st;
             return Ok(stats);

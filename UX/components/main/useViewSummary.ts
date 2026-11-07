@@ -14,6 +14,8 @@ async function titleOf(api: Api, view: View): Promise<string> {
 
 /** Tiêu đề mục + số kết quả của bộ lọc hiện tại. count = null khi backend chưa lọc được mục này. */
 export function useViewSummary(api: Api): { title: string; count: number | null } {
+  const filters = useUiStore(s => s.filters);
+  const familyScope = useUiStore(s => s.familyScope);
   const view = useUiStore(s => s.view);
   const tag = useUiStore(s => s.tag);
   const query = useUiStore(s => s.query);
@@ -25,11 +27,11 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
 
   useEffect(() => {
     let alive = true;
-    const q = toGridQuery({ view, tag, query, viOnly, recentViews, active });
+    const q = toGridQuery({ view, tag, query, viOnly, recentViews, active, filters, familyScope });
     Promise.all([titleOf(api, view), api.queryFaces({ ...q, limit: 1 }).then(p => p.total)])
-      .then(([title, count]) => { if (alive) setOut({ title, count }); })
+      .then(([title, count]) => { if (alive) setOut({ title: familyScope?.name ?? title, count }); })
       .catch(() => { if (alive) setOut(o => ({ ...o, count: null })); });
     return () => { alive = false; };
-  }, [api, view, tag, query, viOnly, recentViews, active, scanVersion]);
+  }, [api, view, tag, query, viOnly, recentViews, active, scanVersion, filters, familyScope]);
   return out;
 }

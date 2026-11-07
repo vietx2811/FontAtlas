@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
-import { THEME_KEY } from '../../theme';
+import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
+import { notDownloadedOf } from '../zero/zeroStates';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -10,6 +11,7 @@ import { NavSection } from './NavSection';
 import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
 import './sidebar.css';
+import { Tooltip } from '../ui/Tooltip';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; active: number | null };
@@ -18,13 +20,17 @@ type Notice = { text: string; action?: { label: string; run(): void } };
 
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
+export const CLOUD_TIP = 'File đang ở iCloud/OneDrive, chưa tải về máy nên chưa quét được. Trong Finder: bấm chuột phải › Tải về, rồi quét lại.';
+
 export function SidebarToggle(): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const toggle = useUiStore(s => s.toggleSidebar);
   return (
-    <button type="button" className="fa-iconbtn" aria-pressed={collapsed} aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} onClick={toggle}>
-      <Icon name="panel" />
-    </button>
+    <Tooltip label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}>
+      <button type="button" className="fa-iconbtn" aria-pressed={collapsed} aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} onClick={toggle}>
+        <Icon name="panel" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -37,7 +43,10 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanning = useScanStore(s => s.scanning);
   const scanned = useScanStore(s => s.written);
   const access = useScanStore(s => s.access);
+  const cloud = useScanStore(s => s.cloud);
+  const cloudNow = Object.values(cloud).reduce((a, b) => a + b, 0);
   const addRequest = useUiStore(s => s.addFolderRequest);
+  const libraryRev = useUiStore(s => s.libraryRev);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
   const [sources, setSources] = useState<SourceDto[]>([]);
@@ -58,7 +67,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     setSources(s); setCols(c); setTags(t);
     setCounts({ all: all.total, star: star.total, active: act.filter(x => x.state === 'active').length });
   }, [api]);
-  useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion]);
+  useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
 
   const addPath = useCallback(async (path: string) => {
     try {
@@ -113,15 +122,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
 
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch { /* storage bị chặn */ }
-    if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
-    setDark(document.documentElement.dataset.theme === 'dark' || (!saved && prefersDark()));
+    const saved = savedTheme();
+    if (saved !== 'system') document.documentElement.dataset.theme = saved;
+    syncNativeTheme(saved);
+    setDark(saved === 'dark' || (saved === 'system' && prefersDark()));
   }, []);
   const toggleTheme = () => {
-    const next = dark ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* bỏ qua */ }
+    applyTheme(dark ? 'light' : 'dark');
     setDark(!dark);
   };
 
@@ -154,7 +161,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
                 onKeyDown={e => { if (e.key === 'Enter') void rename(c.id, e.currentTarget.value); if (e.key === 'Escape') setRenaming(null); }} onBlur={() => setRenaming(null)} />
             : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
                 more={<>
-                  <button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={menuFor === c.id} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}><Icon name="more" size={16} /></button>
+                  <Tooltip label={`Tuỳ chọn ${c.name}`}><button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={menuFor === c.id} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}><Icon name="more" size={16} /></button></Tooltip>
                   {menuFor === c.id && <div role="menu" className="fa-menu">
                     <button role="menuitem" type="button" onClick={() => { setMenuFor(null); setRenaming(c.id); }}>Đổi tên</button>
                     <button role="menuitem" type="button" onClick={() => void remove(c.id)}>Xoá dự án</button>
@@ -165,7 +172,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavSection title="Nguồn" open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
-              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} />
+              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)}
+              sub={notDownloadedOf(s, cloud) > 0 ? <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip> : undefined} />
           ))}
         </NavSection>
 
@@ -178,11 +186,11 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}</div>}
+        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}{cloudNow > 0 && <Tooltip label={CLOUD_TIP}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{cloudNow} font chưa tải về</span></Tooltip>}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
-          <button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button>
-          <button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button>
+          <Tooltip label={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}><button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>
+          <Tooltip label="Cài đặt" shortcut="⌘,"><button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button></Tooltip>
         </div>
       </div>
     </nav>

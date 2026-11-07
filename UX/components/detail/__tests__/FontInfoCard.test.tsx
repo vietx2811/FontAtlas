@@ -20,14 +20,14 @@ describe('FontInfoCard', () => {
     expect(screen.getByRole('button', { name: /Hãng · Phiên bản · Bản quyền · Tệp/ }).getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('expands to the rest, with the file path in mono and truncated by CSS (full path in title)', async () => {
+  it('expands to the rest, with the file path in mono and truncated by CSS (full path in tooltip when cut)', async () => {
     const d = await detail();
     const onToggle = vi.fn();
     render(<FontInfoCard detail={d} expanded onToggle={onToggle} onReveal={() => {}} />);
     for (const k of ['Hãng', 'Phiên bản', 'Bản quyền', 'Tệp']) expect(screen.getByText(k)).toBeTruthy();
     const path = screen.getByText(d.file.path!);
     expect(path.className).toContain('mono');
-    expect(path.getAttribute('title')).toBe(d.file.path);
+    expect(path).not.toHaveAttribute('title'); // đường dẫn dài: Tooltip chung chỉ hiện khi thật sự bị cắt
     fireEvent.click(screen.getByRole('button', { name: 'Thu gọn' }));
     expect(onToggle).toHaveBeenCalled();
   });

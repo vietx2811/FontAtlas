@@ -99,6 +99,12 @@ impl Store {
         }))
     }
 
+    /// `face_id` của mọi face trong thư viện (kể cả chưa có bản phân tích).
+    pub fn all_face_ids(&self) -> Result<Vec<i64>, StoreError> {
+        let mut st = self.conn.prepare("SELECT face_id FROM faces")?;
+        Ok(st.query_map([], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// Tra face_id theo khoá (bỏ khoá không có).
     pub fn face_ids_of(&self, keys: &[FaceKey]) -> Result<Vec<(FaceKey, i64)>, StoreError> {
         let mut st = self.conn.prepare(

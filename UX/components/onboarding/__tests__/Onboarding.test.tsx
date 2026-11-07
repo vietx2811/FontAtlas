@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { CmdError } from '../../../api';
 import { Onboarding } from '../Onboarding';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
@@ -90,12 +91,12 @@ describe('Onboarding', () => {
     render(<Onboarding api={api} onDone={() => {}} />);
     await settle();
     expect(screen.queryByRole('button', { name: 'Để sau' })).toBeNull();
-    expect(screen.getByText(/Dữ liệu phân tích và hình ảnh không bao giờ rời khỏi máy/)).toBeTruthy();
+    expect(screen.getByText(/Dữ liệu không rời khỏi máy/)).toBeTruthy();
     await click('Quay lại');
     expect(heading()).toBe('Thư mục font');
   });
 
-  it('O6: disk space check, "Không dùng" turns analysis off, "Tải ngay" starts the download and moves on', async () => {
+  it('O6: disk space check, "Không dùng" turns analysis off, "Tải ngay" shows progress until the user continues', async () => {
     const api = createMockApi({ firstRun: true, initial: { model: { diskFree: 100 * 1024 * 1024 } } });
     await api.setOnboardingStep('o6');
     render(<Onboarding api={api} onDone={() => {}} />);
@@ -112,6 +113,9 @@ describe('Onboarding', () => {
     await click('Tải ngay');
     expect((await api2.getSettings()).embedEnabled).toBe(true);
     expect(dl).toHaveBeenCalled();
+    expect(heading()).toBe('Phân tích hình ảnh (tuỳ chọn)');
+    expect(screen.getByText(/Đang tải model/)).toBeTruthy();
+    await click('Tiếp tục');
     expect(heading()).toBe('Kích hoạt font cho app thiết kế');
   });
 
@@ -126,13 +130,28 @@ describe('Onboarding', () => {
     expect(heading()).toBe('Kích hoạt font cho app thiết kế');
   });
 
+  it('O6 exposes checking and collapsed technical errors with cancellation resume', async () => {
+    const api = createMockApi({ firstRun: true, initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
+    await api.setOnboardingStep('o6');
+    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    expect(screen.getByText('Đang kiểm tra tệp…')).toBeTruthy();
+    expect(screen.getByTestId('model-spinner')).toBeTruthy();
+    const { useModelStore } = await import('../../../store/model');
+    act(() => useModelStore.setState(s => ({ model: { ...s.model!, state: 'paused', lastError: { code: 'tls', message: 'ONBOARD_TLS_DETAIL' } } })));
+    expect(screen.getByRole('alert')).toHaveTextContent('Không xác thực');
+    expect(screen.getByText('ONBOARD_TLS_DETAIL')).not.toBeVisible();
+    act(() => useModelStore.setState(s => ({ model: { ...s.model!, lastError: { code: 'cancelled', message: 'user stop' } } })));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tải' })).toBeTruthy();
+  });
+
   it('O7: default is "turn off with the app"; the choice is saved with activation_set_keep', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('o7');
     const keep = vi.spyOn(api, 'activationSetKeep');
     render(<Onboarding api={api} onDone={() => {}} />);
     await settle();
-    expect((screen.getByRole('radio', { name: /Tắt luôn các font đã kích hoạt/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('radio', { name: /Tắt các font đã kích hoạt/ }) as HTMLInputElement).checked).toBe(true);
     await click('Bật kích hoạt font');
     expect(keep).toHaveBeenLastCalledWith(false);
     expect(heading()).toBe('Xong');
@@ -167,6 +186,101 @@ describe('Onboarding', () => {
     await settle();
     await click(/Thêm thư mục/);
     expect(screen.getByRole('alert').textContent).toMatch(/đã nằm trong nguồn/);
+  });
+
+  it('keeps O3 after legacy import and can add several independent folders', async () => {
+    const api = createMockApi({ firstRun: false, legacy: true });
+    await api.legacyImport();
+    await api.setOnboardingStep('o1');
+    render(<Onboarding api={api} pickFolders={async () => ['/Users/me/Thiết kế/Khách hàng A', '/Volumes/Font/Thư viện chữ Việt rất dài']} onDone={() => {}} />);
+    await settle();
+    await click('Bắt đầu');
+    expect(heading()).toBe('Thư mục font');
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(false);
+    const before = (await api.listSources()).length;
+    await click(/Thêm thư mục/);
+    expect((await api.listSources()).length).toBe(before + 2);
+    expect(screen.getByText('/Volumes/Font/Thư viện chữ Việt rất dài')).toBeTruthy();
+    await click('Tiếp tục');
+    expect(heading()).toBe('Đang quét thư viện');
+  });
+
+  it('cancel is quiet; duplicate and containing sources keep the originals and continue the batch', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    const pickFolders = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(['/Users/me/Fonts/src1', '/Users/me/Fonts', '/Users/me/New']);
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    await settle();
+    const old = (await api.listSources()).map(s => s.id);
+    await click(/Thêm thư mục/);
+    expect(screen.queryByRole('alert')).toBeNull();
+    await click(/Thêm thư mục/);
+    expect(screen.getByRole('alert').textContent).toContain('đã có trong thư viện');
+    expect(screen.getByRole('alert').textContent).toContain('chứa nguồn đã có');
+    expect((await api.listSources()).map(s => s.id)).toEqual(expect.arrayContaining(old));
+    expect(screen.getByText('/Users/me/New')).toBeTruthy();
+  });
+
+  it('locks picker and navigation while pending, then reports permission failure without losing sources', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    let resolve!: (paths: string[]) => void;
+    const pickFolders = vi.fn(() => new Promise<string[]>(r => { resolve = r; }));
+    vi.spyOn(api, 'addSource').mockRejectedValue(new CmdError('io', 'Permission denied'));
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    await settle();
+    await click(/Thêm thư mục/);
+    await click(/Thêm thư mục/);
+    expect(pickFolders).toHaveBeenCalledTimes(1);
+    for (const name of ['Tiếp tục', 'Để sau', 'Quay lại']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => resolve(['/Protected/Fonts']));
+    await settle();
+    expect(screen.getByRole('alert').textContent).toContain('Kiểm tra quyền đọc');
+    expect((await api.listSources()).length).toBeGreaterThan(0);
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('source load can retry; a busy deletion is shown and never removes the source', async () => {
+    const api = createMockApi();
+    await api.setOnboardingStep('o3');
+    vi.spyOn(api, 'listSources').mockRejectedValueOnce(new Error('offline'));
+    vi.spyOn(api, 'removeSource').mockRejectedValue(new CmdError('busy', 'scanning'));
+    render(<Onboarding api={api} onDone={() => {}} />);
+    await settle();
+    expect(screen.getByRole('alert').textContent).toContain('offline');
+    await click('Thử lại');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const source = (await api.listSources())[0];
+    await click(`Xoá ${source.name}`);
+    expect(screen.getByRole('alert').textContent).toContain('Nguồn đang quét');
+    expect((await api.listSources()).some(s => s.id === source.id)).toBe(true);
+  });
+
+  it('preserves per-folder failures when refreshing the source list also fails', async () => {
+    const api = createMockApi(); await api.setOnboardingStep('o3');
+    const sources = vi.spyOn(api, 'listSources');
+    vi.spyOn(api, 'addSource').mockRejectedValueOnce(new CmdError('io', 'Folder A denied')).mockRejectedValueOnce(new CmdError('io', 'Folder B denied'));
+    render(<Onboarding api={api} pickFolders={async () => ['/A', '/B']} onDone={() => {}} />);
+    await settle();
+    sources.mockRejectedValueOnce(new Error('refresh unavailable'));
+    await click(/Thêm thư mục/);
+    const alerts = screen.getAllByRole('alert').map(e => e.textContent).join(' ');
+    expect(alerts).toContain('Folder A denied'); expect(alerts).toContain('Folder B denied');
+    expect(alerts).toContain('refresh unavailable');
+  });
+
+  it('does not delete current or queued sources from scan status', async () => {
+    const api = createMockApi(); await api.setOnboardingStep('o3');
+    const sources = await api.listSources();
+    vi.spyOn(api, 'scanStatus').mockResolvedValue({ running: true, paused: false, currentSourceId: sources[0].id, queued: [sources[1].id] });
+    const remove = vi.spyOn(api, 'removeSource');
+    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    for (const source of sources.slice(0, 2)) {
+      const button = screen.getByRole('button', { name: `Xoá ${source.name}` });
+      expect(button).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(button);
+    }
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Tiếp tục' })).not.toBeDisabled();
   });
 
   it('O4 counts the scan as it streams', async () => {

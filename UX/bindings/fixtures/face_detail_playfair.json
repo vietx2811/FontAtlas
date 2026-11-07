@@ -5,7 +5,9 @@
       "method": "method",
       "percentile": 0.9399999976158142,
       "quality": "measured",
+      "rawValue": 4.9,
       "reason": null,
+      "unit": "ratio",
       "value": 4.9
     },
     {
@@ -13,7 +15,9 @@
       "method": "method",
       "percentile": null,
       "quality": "measured",
+      "rawValue": null,
       "reason": null,
+      "unit": "ratio",
       "value": "serif"
     },
     {
@@ -21,11 +25,33 @@
       "method": "method",
       "percentile": null,
       "quality": "failed",
+      "rawValue": null,
       "reason": "missing_glyph",
+      "unit": "ratio",
       "value": null
     }
   ],
   "classification": "Serif",
+  "classificationInfo": {
+    "autoClass": null,
+    "candidate": null,
+    "class": "serif",
+    "confidence": 0.9100000262260437,
+    "label": "Serif",
+    "signals": [
+      {
+        "detail": "contrast 3.4",
+        "source": "measure",
+        "vote": "serif",
+        "weight": 1.5
+      }
+    ],
+    "source": "auto",
+    "subclass": "didone",
+    "usage": [
+      "display"
+    ]
+  },
   "file": {
     "container": "sfnt",
     "format": "ttf",
@@ -148,7 +174,9 @@
       "method": "method",
       "percentile": null,
       "quality": "estimated",
+      "rawValue": 0.8,
       "reason": null,
+      "unit": null,
       "value": 0.8
     },
     "missing": [],

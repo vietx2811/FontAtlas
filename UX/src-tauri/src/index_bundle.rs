@@ -25,6 +25,42 @@ pub struct FaceMeta {
     pub file_size: u64,
     /// `vi_status` ∈ {full, precomposed_only}
     pub vi_supported: bool,
+    /// Font built for a major non-Latin script (CJK, Indic, Thai, Arabic…), per OpenType
+    /// script tags in the stored metadata. Its Latin subset is secondary.
+    pub non_latin_primary: bool,
+    /// Phân loại tự động (snake_case), chưa áp ghi đè của người dùng.
+    pub auto_class: String,
+    pub auto_subclass: Option<String>,
+}
+
+/// OpenType script tags whose presence marks a font as designed primarily for that script.
+/// Arabic, Hebrew, Greek, Cyrillic, Georgian, Armenian are deliberately absent: pan-Latin
+/// families (macOS Arial, Times New Roman) carry them as secondary scripts.
+const NON_LATIN_PRIMARY: &[&str] = &[
+    "hani", "kana", "hang", "jamo", "bopo", "deva", "dev2", "beng", "bng2", "guru", "gur2", "gujr", "gjr2",
+    "orya", "ory2", "taml", "tml2", "telu", "tel2", "knda", "knd2", "mlym", "mlm2", "sinh", "thai", "lao ",
+    "khmr", "mymr", "mym2", "tibt", "ethi", "cans", "cher", "mong",
+];
+/// AAT-only CJK fonts (Songti, AppleGothic) have no OpenType script list; their glyph count
+/// gives them away. Pan-Latin families stay far below (Arial 3381 on macOS).
+const CJK_GLYPHS: u64 = 5000;
+
+pub fn is_non_latin_primary(scripts: &[&str], num_glyphs: Option<u64>) -> bool {
+    scripts.iter().any(|t| NON_LATIN_PRIMARY.contains(t)) || num_glyphs.is_some_and(|n| n > CJK_GLYPHS)
+}
+
+#[cfg(test)]
+mod script_tests {
+    #[test]
+    fn classifies_by_opentype_script_tags() {
+        use super::is_non_latin_primary as f;
+        assert!(f(&["cyrl", "grek", "hani", "kana", "latn"], Some(20339))); // Hiragino Sans
+        assert!(f(&["brah", "gran", "latn", "tml2"], Some(1522))); // Tamil Sangam MN
+        assert!(f(&[], Some(8535))); // Songti SC (AAT only)
+        assert!(!f(&["arab", "cyrl", "grek", "hebr", "latn"], Some(3381))); // Arial
+        assert!(!f(&["latn"], Some(1134))); // Georgia
+        assert!(!f(&[], Some(2252))); // Helvetica (AAT only)
+    }
 }
 
 pub struct IndexBundle {
@@ -77,15 +113,27 @@ impl IndexBundle {
             let hash = a.key.hash_hex();
             let Some(p) = FaceProfile::from_json(&hash, a.key.face_index, &m, &v, &an) else { return };
             let status = v.get("status").and_then(Value::as_str).unwrap_or("");
+            let auto = fontatlas_core::classify::classify(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
             meta.insert(
                 p.key.clone(),
                 FaceMeta {
+                    auto_class: auto.class.snake().into(),
+                    auto_subclass: auto.subclass,
                     face_id: a.face_id,
                     source_ids: a.source_ids,
                     missing: a.missing,
                     container: a.container,
                     file_size: a.file_size,
                     vi_supported: matches!(status, "full" | "precomposed_only"),
+                    non_latin_primary: is_non_latin_primary(
+                        &["scripts", "cmap_scripts"]
+                            .iter()
+                            .filter_map(|k| m.get(*k).and_then(Value::as_array))
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>(),
+                        m.get("num_glyphs").and_then(Value::as_u64),
+                    ),
                 },
             );
             profiles.push(p);

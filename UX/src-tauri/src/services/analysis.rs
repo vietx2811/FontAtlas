@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use fontatlas_index::{
-    AxisId, Block, BodyWarning, ClashKind, FaceKey as IxKey, FaceProfile, Gate, GroupWeights, IndexError, Lang, PairAssessment,
-    PairAxis, Q, Relation, Role, SimilarHit, SimilarOptions, SimilarSource, Side, explain_pair, fmt_num, summarize_face,
+    AxisId, Block, BodyWarning, ClashKind, FaceKey as IxKey, FaceProfile, Gate, GroupWeights,
+    IndexError, Lang, PairAssessment, PairAxis, Q, Relation, Role, Side, SimilarHit,
+    SimilarOptions, SimilarSource, explain_pair, fmt_num, summarize_face,
 };
 use fontatlas_store::{FaceKey, FaceQuery, SortKey};
 use serde_json::Value;
@@ -32,24 +33,43 @@ fn lang_of(l: LangDto) -> Lang {
 }
 
 fn dto_key(k: &IxKey) -> FaceKeyDto {
-    FaceKeyDto { hash_hex: k.hash.clone(), face_index: k.index }
+    FaceKeyDto {
+        hash_hex: k.hash.clone(),
+        face_index: k.index,
+    }
 }
 
 fn ix_of(b: &IndexBundle, k: &FaceKeyDto) -> Result<IxKey, CmdError> {
     let sk = FaceKey::try_from(k)?;
     let key = ix_key(&sk);
-    if b.meta.contains_key(&key) { Ok(key) } else { Err(CmdError::not_found("không có face này trong Index")) }
+    if b.meta.contains_key(&key) {
+        Ok(key)
+    } else {
+        Err(CmdError::not_found("không có face này trong Index"))
+    }
 }
 
 /// Hàng lưới của các face theo thứ tự đưa vào (một truy vấn, không N+1).
-fn rows_of(state: &AppState, b: &IndexBundle, keys: &[IxKey]) -> Result<HashMap<IxKey, FaceRowDto>, CmdError> {
+fn rows_of(
+    state: &AppState,
+    b: &IndexBundle,
+    keys: &[IxKey],
+) -> Result<HashMap<IxKey, FaceRowDto>, CmdError> {
     if keys.is_empty() {
         return Ok(HashMap::new());
     }
     let n = keys.len() as f32;
-    let scope: Vec<(i64, f32)> =
-        keys.iter().enumerate().filter_map(|(i, k)| Some((b.meta.get(k)?.face_id, n - i as f32))).collect();
-    let q = FaceQuery { include_missing: true, sort: SortKey::Match, limit: 1000, ..Default::default() };
+    let scope: Vec<(i64, f32)> = keys
+        .iter()
+        .enumerate()
+        .filter_map(|(i, k)| Some((b.meta.get(k)?.face_id, n - i as f32)))
+        .collect();
+    let q = FaceQuery {
+        include_missing: true,
+        sort: SortKey::Match,
+        limit: 1000,
+        ..Default::default()
+    };
     let page = state.with_store(|s| Ok(s.query_faces_scoped(&q, Some(&scope))?))?;
     Ok(page
         .items
@@ -70,7 +90,11 @@ fn source_dto(s: SimilarSource) -> SimilarSourceDto {
     }
 }
 
-fn hits_dto(state: &AppState, b: &IndexBundle, hits: Vec<SimilarHit>) -> Result<Vec<SimilarHitDto>, CmdError> {
+fn hits_dto(
+    state: &AppState,
+    b: &IndexBundle,
+    hits: Vec<SimilarHit>,
+) -> Result<Vec<SimilarHitDto>, CmdError> {
     let keys: Vec<IxKey> = hits.iter().map(|h| h.key.clone()).collect();
     let rows = rows_of(state, b, &keys)?;
     Ok(hits
@@ -88,7 +112,11 @@ fn hits_dto(state: &AppState, b: &IndexBundle, hits: Vec<SimilarHit>) -> Result<
         .collect())
 }
 
-pub fn similar(state: &AppState, face: &FaceKeyDto, opts: &SimilarOptsDto) -> Result<Vec<SimilarHitDto>, CmdError> {
+pub fn similar(
+    state: &AppState,
+    face: &FaceKeyDto,
+    opts: &SimilarOptsDto,
+) -> Result<Vec<SimilarHitDto>, CmdError> {
     let b = bundle(state)?;
     let q = ix_of(&b, face)?;
     let k = (opts.k as usize).clamp(1, 100);
@@ -96,7 +124,9 @@ pub fn similar(state: &AppState, face: &FaceKeyDto, opts: &SimilarOptsDto) -> Re
     let range = opts.weight_range;
     let vi_only = opts.vi_only;
     let filter = |p: &FaceProfile| {
-        let Some(m) = b.meta.get(&p.key) else { return false };
+        let Some(m) = b.meta.get(&p.key) else {
+            return false;
+        };
         !m.missing
             && (!vi_only || m.vi_supported)
             && (source_ids.is_empty() || m.source_ids.iter().any(|s| source_ids.contains(s)))
@@ -108,14 +138,219 @@ pub fn similar(state: &AppState, face: &FaceKeyDto, opts: &SimilarOptsDto) -> Re
         structure: opts.weights.structure,
         detail: opts.weights.detail,
     };
-    let so = SimilarOptions { weights: w, embed_weight: if opts.use_image { None } else { Some(0.0) }, k };
+    let so = SimilarOptions {
+        weights: w,
+        embed_weight: if opts.use_image { None } else { Some(0.0) },
+        k,
+    };
     let hits = match b.index.similar_with(&q, &so, &filter) {
         Ok(h) => h,
         // chỉ chữ hoa / không phải Latin: so theo ảnh nếu có
-        Err(IndexError::NotComparable(_)) if opts.use_image && b.index.has_image(&q) => b.index.similar_image_only(&q, k, &filter)?,
+        Err(IndexError::NotComparable(_)) if opts.use_image && b.index.has_image(&q) => {
+            b.index.similar_image_only(&q, k, &filter)?
+        }
         Err(e) => return Err(e.into()),
     };
     hits_dto(state, &b, hits)
+}
+
+/// Stable family pages: rank once over all filtered faces, then slice the family list.
+pub fn similar_families(
+    state: &AppState,
+    face: &FaceKeyDto,
+    opts: &SimilarOptsDto,
+    q: &FaceQueryDto,
+) -> Result<SimilarFamilyPageDto, CmdError> {
+    if opts.weight_range.is_some_and(|[lo, hi]| lo > hi) {
+        return Err(CmdError::invalid_arg("weightRange đảo ngược"));
+    }
+    let b = bundle(state)?;
+    let key = ix_of(&b, face)?;
+    let allowed = crate::services::library::matching_keys(state, q)?;
+    // A Latin source font should not be matched to CJK/Indic families by their Latin subset
+    // (real system fonts: Avenir Next -> Hiragino, Sangam MN). Non-Latin sources keep all.
+    let latin_source = !b.meta.get(&key).is_some_and(|m| m.non_latin_primary);
+    let filter = |p: &FaceProfile| {
+        allowed.contains(&p.key)
+            && (!latin_source || !b.meta.get(&p.key).is_some_and(|m| m.non_latin_primary))
+            && (!opts.vi_only || b.meta.get(&p.key).is_some_and(|m| m.vi_supported))
+            && (opts.source_ids.is_empty()
+                || b.meta
+                    .get(&p.key)
+                    .is_some_and(|m| m.source_ids.iter().any(|s| opts.source_ids.contains(s))))
+            && opts
+                .weight_range
+                .is_none_or(|[lo, hi]| p.weight_class.is_some_and(|w| w >= lo && w <= hi))
+    };
+    let o = SimilarOptions {
+        weights: GroupWeights {
+            proportion: opts.weights.proportion,
+            weight: opts.weights.weight,
+            structure: opts.weights.structure,
+            detail: opts.weights.detail,
+        },
+        embed_weight: if opts.use_image { None } else { Some(0.0) },
+        k: 0,
+    };
+    let mut groups = b.index.similar_families(&key, &o, &filter, 0, b.len())?;
+    // macOS hidden system families (".Aqua Kana", ".New York", ".Hiragino … Interface") are UI
+    // fonts that design apps do not list; never suggest them (seen on real /System/Library/Fonts).
+    groups.retain(|g| !is_hidden_family(&g.family));
+    let total = groups.len() as u32;
+    let limit = if q.limit == 0 { 12 } else { q.limit.min(100) } as usize;
+    let selected: Vec<_> = groups
+        .into_iter()
+        .skip(q.offset as usize)
+        .take(limit)
+        .collect();
+    let hits = hits_dto(
+        state,
+        &b,
+        selected.iter().map(|g| g.representative.clone()).collect(),
+    )?;
+    let by_key: HashMap<_, _> = hits
+        .into_iter()
+        .map(|h| ((h.face.hash_hex.clone(), h.face.face_index), h))
+        .collect();
+    let items = selected
+        .into_iter()
+        .filter_map(|g| {
+            Some(SimilarFamilyDto {
+                family: g.family,
+                representative: by_key
+                    .get(&(
+                        g.representative.key.hash.clone(),
+                        g.representative.key.index,
+                    ))?
+                    .clone(),
+                count: g.count as u32,
+                faces: g.faces.iter().map(dto_key).collect(),
+            })
+        })
+        .collect();
+    Ok(SimilarFamilyPageDto {
+        total,
+        offset: q.offset,
+        items,
+    })
+}
+
+/// Family names starting with '.' are macOS-private system fonts.
+pub fn is_hidden_family(family: &str) -> bool {
+    family.starts_with('.')
+}
+
+#[cfg(test)]
+mod hidden_family_tests {
+    #[test]
+    fn dot_prefixed_families_are_hidden() {
+        assert!(super::is_hidden_family(".Aqua Kana"));
+        assert!(super::is_hidden_family(".New York"));
+        assert!(!super::is_hidden_family("New York"));
+        assert!(!super::is_hidden_family("Avenir Next"));
+    }
+}
+
+/// Raw units from Core (never reference percentile units).
+pub fn axis_unit(axis: &str) -> Option<&'static str> {
+    Some(match axis {
+        "x_height_em" | "cap_height_em" | "ascender_em" | "descender_em" => "em",
+        "x_height_cap" => "cap_height_ratio",
+        "stem" | "aperture_e" | "width" | "mean_advance" | "spacing" => "x_height_ratio",
+        "stress_deg" | "slant_deg" | "aperture" => "deg",
+        "darkness" | "counter" => "area_ratio",
+        "contrast" | "contrast_h" | "width_cv" | "serif_foot" | "terminal" => "ratio",
+        "a_storeys" | "g_storeys" => "count",
+        _ => return None,
+    })
+}
+
+pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto>, CmdError> {
+    // Reject invalid ranges even though range filters are omitted from domain calculation.
+    crate::services::library::validate_raw_ranges(&q.raw_axis_ranges)?;
+    let b = bundle(state)?;
+    let mut query = q.clone();
+    query.axis_filters.clear();
+    query.raw_axis_ranges.clear();
+    query.hard.clear();
+    let allowed = crate::services::library::matching_keys(state, &query)?;
+    Ok(AxisId::ALL
+        .iter()
+        .copied()
+        .map(|a| {
+            let values = b
+                .index
+                .profiles_for_test()
+                .iter()
+                .filter(|p| allowed.contains(&p.key))
+                .filter_map(|p| crate::services::library::raw_reading(p, a))
+                .collect();
+            stats_of(a, values)
+        })
+        .collect())
+}
+
+/// Đếm face theo class/subclass trong tập thoả mọi bộ lọc *khác* (bỏ `classes`/`subclasses`
+/// để facet không tự triệt tiêu chính nó).
+pub fn class_facets(state: &AppState, q: &FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError> {
+    let mut query = q.clone();
+    query.classes.clear();
+    query.subclasses.clear();
+    let allowed = crate::services::library::matching_keys(state, &query)?;
+    let b = bundle(state)?;
+    let eff = crate::services::library::effective_classes(state)?;
+    let mut classified = 0usize;
+    let mut by: std::collections::BTreeMap<String, (u32, std::collections::BTreeMap<String, u32>)> = Default::default();
+    for (k, m) in &b.meta {
+        if !allowed.contains(k) {
+            continue;
+        }
+        let Some((c, sub)) = eff.get(&m.face_id) else { continue };
+        classified += 1;
+        let e = by.entry(c.clone()).or_default();
+        e.0 += 1;
+        if let Some(s) = sub {
+            *e.1.entry(s.clone()).or_default() += 1;
+        }
+    }
+    // Face thoả bộ lọc nhưng không có hồ sơ trong Index (chưa phân tích / JSON hỏng): tách thành bucket riêng
+    // để tổng facet = tổng thư viện.
+    let unclassified = allowed.len().saturating_sub(classified) as u32;
+    let mut out: Vec<ClassFacetDto> = by
+        .into_iter()
+        .map(|(class, (count, subs))| ClassFacetDto {
+            class,
+            count,
+            subclasses: subs.into_iter().map(|(subclass, count)| SubclassFacetDto { subclass, count }).collect(),
+        })
+        .collect();
+    if unclassified > 0 {
+        out.push(ClassFacetDto { class: "unclassified".into(), count: unclassified, subclasses: Vec::new() });
+    }
+    Ok(out)
+}
+
+fn stats_of(axis: AxisId, mut values: Vec<f32>) -> AxisStatsDto {
+    values.retain(|v| v.is_finite());
+    values.sort_by(f32::total_cmp);
+    let percentile = |p: f64| -> Option<f32> {
+        if values.is_empty() {
+            return None;
+        }
+        let x = (values.len() - 1) as f64 * p;
+        let lo = x.floor() as usize;
+        let hi = x.ceil() as usize;
+        Some((values[lo] as f64 * (1.0 - x.fract()) + values[hi] as f64 * x.fract()) as f32)
+    };
+    AxisStatsDto {
+        axis: axis.key().into(),
+        unit: axis_unit(axis.key()).unwrap_or("ratio").into(),
+        count: values.len() as u32,
+        min: values.first().copied(),
+        max: values.last().copied(),
+        p1: percentile(0.01),
+        p99: percentile(0.99),
+    }
 }
 
 fn gate_str(g: Gate) -> &'static str {
@@ -204,7 +439,10 @@ fn candidate_dto(
         insufficient_data: x.insufficient_data,
         weight_hint: x.weight_hint.map(|v| fmt_num(v, lang)),
         block: x.block.map(|Block::MissingVietnamese { side, missing }| {
-            format!("missing_vietnamese:{}:{missing}", if side == Side::A { "a" } else { "b" })
+            format!(
+                "missing_vietnamese:{}:{missing}",
+                if side == Side::A { "a" } else { "b" }
+            )
         }),
         sentences: explain_pair(x, pa, pb, lang),
         summary: String::new(),
@@ -223,15 +461,27 @@ fn collection_faces(state: &AppState, id: i64) -> Result<std::collections::HashS
     state.with_store(|s| Ok(s.collection_face_ids(id)?.into_iter().collect()))
 }
 
-pub fn pair_candidates(state: &AppState, face: &FaceKeyDto, opts: &PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError> {
+pub fn pair_candidates(
+    state: &AppState,
+    face: &FaceKeyDto,
+    opts: &PairOptsDto,
+) -> Result<Vec<PairCandidateDto>, CmdError> {
     let b = bundle(state)?;
     let q = ix_of(&b, face)?;
     let (qr, cr) = roles(opts);
     let k = (opts.k as usize).clamp(1, 100);
-    let in_collection = opts.collection_id.map(|c| collection_faces(state, c)).transpose()?;
+    let in_collection = opts
+        .collection_id
+        .map(|c| collection_faces(state, c))
+        .transpose()?;
     let filter = |p: &FaceProfile| {
-        let Some(m) = b.meta.get(&p.key) else { return false };
-        !m.missing && in_collection.as_ref().is_none_or(|s| s.contains(&m.face_id))
+        let Some(m) = b.meta.get(&p.key) else {
+            return false;
+        };
+        !m.missing
+            && in_collection
+                .as_ref()
+                .is_none_or(|s| s.contains(&m.face_id))
     };
     // cổng áp TRƯỚC khi cắt top-k (lọc sau sẽ rỗng khi top-k toàn cổng khác)
     let want = opts.mode.map(|m| match m {
@@ -239,11 +489,16 @@ pub fn pair_candidates(state: &AppState, face: &FaceKeyDto, opts: &PairOptsDto) 
         PairModeDto::Controlled => Gate::Controlled,
         PairModeDto::Experimental => Gate::Experimental,
     });
-    let got = b.index.pair_candidates_gated(&q, qr, cr, opts.project_vi, k, &filter, want)?;
+    let got = b
+        .index
+        .pair_candidates_gated(&q, qr, cr, opts.project_vi, k, &filter, want)?;
     let keys: Vec<IxKey> = got.iter().map(|(k, _)| k.clone()).collect();
     let rows = rows_of(state, &b, &keys)?;
     let lang = lang_of(opts.lang);
-    let pa = b.index.profile(&q).ok_or_else(|| CmdError::not_found("face"))?;
+    let pa = b
+        .index
+        .profile(&q)
+        .ok_or_else(|| CmdError::not_found("face"))?;
     let reference = b.index.reference();
     Ok(got
         .into_iter()
@@ -256,14 +511,21 @@ pub fn pair_candidates(state: &AppState, face: &FaceKeyDto, opts: &PairOptsDto) 
         .collect())
 }
 
-pub fn assess_pair(state: &AppState, a: &FaceKeyDto, b_key: &FaceKeyDto, opts: &PairOptsDto) -> Result<PairCandidateDto, CmdError> {
+pub fn assess_pair(
+    state: &AppState,
+    a: &FaceKeyDto,
+    b_key: &FaceKeyDto,
+    opts: &PairOptsDto,
+) -> Result<PairCandidateDto, CmdError> {
     let b = bundle(state)?;
     let (ka, kb) = (ix_of(&b, a)?, ix_of(&b, b_key)?);
     let (ra, rb) = roles(opts);
     let x = b.index.assess_pair(&ka, ra, &kb, rb, opts.project_vi)?;
     let rows = rows_of(state, &b, std::slice::from_ref(&kb))?;
     let (pa, pb) = (b.index.profile(&ka), b.index.profile(&kb));
-    let (Some(pa), Some(pb), Some(row)) = (pa, pb, rows.get(&kb)) else { return Err(CmdError::not_found("face")) };
+    let (Some(pa), Some(pb), Some(row)) = (pa, pb, rows.get(&kb)) else {
+        return Err(CmdError::not_found("face"));
+    };
     let lang = lang_of(opts.lang);
     let mut d = candidate_dto(&x, pa, pb, row.clone(), lang);
     d.summary = summarize_face(pb, b.index.reference(), lang);
@@ -277,15 +539,38 @@ fn reading_json(key: &str, m: &Value, percentile: Option<f32>) -> AxisReadingDto
     AxisReadingDto {
         key: key.into(),
         value: m.get("value").filter(|v| !v.is_null()).cloned(),
-        quality: q.and_then(|q| q.get("kind")).and_then(Value::as_str).unwrap_or("failed").into(),
-        reason: q.and_then(|q| q.get("reason")).and_then(Value::as_str).map(String::from),
+        raw_value: m
+            .get("value")
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite()),
+        unit: if key == "stem" && m.get("method").and_then(Value::as_str) == Some("H_stem_over_cap")
+        {
+            Some("cap_height_ratio".into())
+        } else {
+            axis_unit(key).map(String::from)
+        },
+        quality: q
+            .and_then(|q| q.get("kind"))
+            .and_then(Value::as_str)
+            .unwrap_or("failed")
+            .into(),
+        reason: q
+            .and_then(|q| q.get("reason"))
+            .and_then(Value::as_str)
+            .map(String::from),
         method: m.get("method").and_then(Value::as_str).map(String::from),
         percentile,
     }
 }
 
 fn strs(v: Option<&Value>) -> Vec<String> {
-    v.and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default()
+    v.and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn opt_str(m: &Value, k: &str) -> Option<String> {
@@ -293,7 +578,10 @@ fn opt_str(m: &Value, k: &str) -> Option<String> {
 }
 
 fn file_format(path: Option<&str>, container: Option<&str>, outline: &str) -> String {
-    if let Some(ext) = path.and_then(|p| std::path::Path::new(p).extension()).and_then(|e| e.to_str()) {
+    if let Some(ext) = path
+        .and_then(|p| std::path::Path::new(p).extension())
+        .and_then(|e| e.to_str())
+    {
         let e = ext.to_ascii_lowercase();
         if ["ttf", "otf", "ttc", "otc", "woff", "woff2"].contains(&e.as_str()) {
             return e;
@@ -310,17 +598,35 @@ fn file_format(path: Option<&str>, container: Option<&str>, outline: &str) -> St
     .into()
 }
 
-pub fn get_face(state: &AppState, face: &FaceKeyDto, lang: LangDto) -> Result<FaceDetailDto, CmdError> {
+pub fn get_face(
+    state: &AppState,
+    face: &FaceKeyDto,
+    lang: LangDto,
+) -> Result<FaceDetailDto, CmdError> {
     let b = bundle(state)?;
     let key = ix_of(&b, face)?;
     let sk = store_key(&key).ok_or_else(|| CmdError::invalid_arg("khoá face"))?;
     let a = state
         .with_store(|s| Ok(s.analysis_of(&sk)?))?
         .ok_or_else(|| CmdError::not_found("chưa có bản phân tích của face này"))?;
-    let path = state.with_store(|s| Ok(s.face_path(&sk)?)).ok().flatten().map(|p| p.to_string_lossy().into_owned());
-    let parse = |s: &str| serde_json::from_str::<Value>(s).map_err(|e| CmdError::internal(format!("JSON phân tích hỏng: {e}")));
-    let (m, v, an) = (parse(&a.metadata_json)?, parse(&a.vietnamese_json)?, parse(&a.anatomy_json)?);
-    let profile = b.index.profile(&key).ok_or_else(|| CmdError::not_found("face"))?;
+    let path = state
+        .with_store(|s| Ok(s.face_path(&sk)?))
+        .ok()
+        .flatten()
+        .map(|p| p.to_string_lossy().into_owned());
+    let parse = |s: &str| {
+        serde_json::from_str::<Value>(s)
+            .map_err(|e| CmdError::internal(format!("JSON phân tích hỏng: {e}")))
+    };
+    let (m, v, an) = (
+        parse(&a.metadata_json)?,
+        parse(&a.vietnamese_json)?,
+        parse(&a.anatomy_json)?,
+    );
+    let profile = b
+        .index
+        .profile(&key)
+        .ok_or_else(|| CmdError::not_found("face"))?;
     let reference = b.index.reference();
     let l = lang_of(lang);
 
@@ -328,42 +634,71 @@ pub fn get_face(state: &AppState, face: &FaceKeyDto, lang: LangDto) -> Result<Fa
     for ax in AxisId::ALL {
         let raw = an.get(ax.key()).cloned().unwrap_or(Value::Null);
         let rd = profile.get(ax);
-        let pct = rd.value.filter(|_| rd.q != Q::Failed).and_then(|val| match ax {
-            AxisId::StressDeg | AxisId::SlantDeg => reference.magnitude_percentile(ax, &rd.method, val),
-            AxisId::SerifFoot => None,
-            _ => reference.percentile(ax, &rd.method, val),
-        });
+        let pct = rd
+            .value
+            .filter(|_| rd.q != Q::Failed)
+            .and_then(|val| match ax {
+                AxisId::StressDeg | AxisId::SlantDeg => {
+                    reference.magnitude_percentile(ax, &rd.method, val)
+                }
+                AxisId::SerifFoot => None,
+                _ => reference.percentile(ax, &rd.method, val),
+            });
         let mut d = reading_json(ax.key(), &raw, pct);
         if ax == AxisId::SerifFoot
             && let Some(val) = rd.value.filter(|_| rd.q != Q::Failed)
         {
-            d.value = Some(Value::String(if val < 1.2 { "sans" } else if val > 1.6 { "serif" } else { "uncertain" }.into()));
+            d.value = Some(Value::String(
+                if val < 1.2 {
+                    "sans"
+                } else if val > 1.6 {
+                    "serif"
+                } else {
+                    "uncertain"
+                }
+                .into(),
+            ));
         }
         axes.push(d);
     }
-    for extra in ["terminal", "a_storeys", "g_storeys"] {
-        axes.push(reading_json(extra, an.get(extra).unwrap_or(&Value::Null), None));
+    for extra in [
+        // Stem/bar of H: stays stable on condensed faces where o-contrast inflates (eval 2026-11-07).
+        "contrast_h",
+        "cap_height_em",
+        "descender_em",
+        "terminal",
+        "a_storeys",
+        "g_storeys",
+    ] {
+        axes.push(reading_json(
+            extra,
+            an.get(extra).unwrap_or(&Value::Null),
+            None,
+        ));
     }
 
     let outline = opt_str(&m, "outline_format").unwrap_or_else(|| "none".into());
     let marks = v.get("marks").cloned().unwrap_or(Value::Null);
-    let width_cv = profile.get(AxisId::WidthCv);
-    let classification = if width_cv.q == Q::Measured && width_cv.value.is_some_and(|x| x.abs() < 0.005) {
-        Some("Mono".to_string())
-    } else {
-        let sf = profile.get(AxisId::SerifFoot);
-        match (sf.q, sf.value) {
-            (Q::Failed, _) | (_, None) => None,
-            (_, Some(x)) if x < 1.2 => Some("Sans".into()),
-            (_, Some(x)) if x > 1.6 => Some("Serif".into()),
-            _ => None,
-        }
+    let classification_info = classification_of(state, &sk, &m, &an)?;
+    let classification = match classification_info.class.as_str() {
+        "uncertain" => None,
+        _ => Some(classification_info.label.clone()),
     };
     let rows = rows_of(state, &b, std::slice::from_ref(&key))?;
-    let row = rows.get(&key).cloned().ok_or_else(|| CmdError::not_found("hàng của face"))?;
+    let row = rows
+        .get(&key)
+        .cloned()
+        .ok_or_else(|| CmdError::not_found("hàng của face"))?;
     let has_image = b.index.has_image(&key);
-    let similar_top =
-        similar(state, face, &SimilarOptsDto { k: 3, ..Default::default() }).unwrap_or_default();
+    let similar_top = similar(
+        state,
+        face,
+        &SimilarOptsDto {
+            k: 3,
+            ..Default::default()
+        },
+    )
+    .unwrap_or_default();
 
     let named_instances = m
         .get("named_instance_coords")
@@ -377,7 +712,12 @@ pub fn get_face(state: &AppState, face: &FaceKeyDto, lang: LangDto) -> Result<Fa
                         .and_then(Value::as_array)
                         .map(|c| {
                             c.iter()
-                                .filter_map(|p| Some(AxisCoordDto { tag: p.get(0)?.as_str()?.into(), value: p.get(1)?.as_f64()? as f32 }))
+                                .filter_map(|p| {
+                                    Some(AxisCoordDto {
+                                        tag: p.get(0)?.as_str()?.into(),
+                                        value: p.get(1)?.as_f64()? as f32,
+                                    })
+                                })
                                 .collect()
                         })
                         .unwrap_or_default(),
@@ -401,13 +741,17 @@ pub fn get_face(state: &AppState, face: &FaceKeyDto, lang: LangDto) -> Result<Fa
                 .collect()
         })
         .unwrap_or_default();
-    let opsz = m.get("os2_optical_size_pt").and_then(Value::as_array).and_then(|x| Some([x.first()?.as_f64()? as f32, x.get(1)?.as_f64()? as f32]));
+    let opsz = m
+        .get("os2_optical_size_pt")
+        .and_then(Value::as_array)
+        .and_then(|x| Some([x.first()?.as_f64()? as f32, x.get(1)?.as_f64()? as f32]));
     let flag = |k: &str| v.get(k).and_then(Value::as_bool).unwrap_or(false);
 
     Ok(FaceDetailDto {
         row,
         summary: summarize_face(profile, reference, l),
         classification,
+        classification_info,
         source: if has_image { "axes_and_image" } else { "axes" }.into(),
         has_image,
         file: FileInfoDto {
@@ -430,26 +774,149 @@ pub fn get_face(state: &AppState, face: &FaceKeyDto, lang: LangDto) -> Result<Fa
             named_instances,
             scripts: strs(m.get("scripts")),
             opsz_range: opsz,
-            features: FeaturesDto { gsub: strs(m.get("gsub_features")), gpos: strs(m.get("gpos_features")) },
+            features: FeaturesDto {
+                gsub: strs(m.get("gsub_features")),
+                gpos: strs(m.get("gpos_features")),
+            },
         },
         vietnamese: VietnameseDto {
             status: opt_str(&v, "status").unwrap_or_default(),
             supports: flag("supports_vietnamese"),
             missing: strs(v.get("missing")),
             // required_total gồm 52 chữ ASCII a–z/A–Z; "134" là số chữ tiếng Việt (có dấu hoặc đ)
-            total: v.get("required_total").and_then(Value::as_u64).map_or(134, |t| t.saturating_sub(52).max(1)) as u32,
-            precomposed_composite: v.get("precomposed_composite").and_then(Value::as_u64).is_some_and(|n| n > 0),
+            total: v
+                .get("required_total")
+                .and_then(Value::as_u64)
+                .map_or(134, |t| t.saturating_sub(52).max(1)) as u32,
+            precomposed_composite: v
+                .get("precomposed_composite")
+                .and_then(Value::as_u64)
+                .is_some_and(|n| n > 0),
             gpos_mark: flag("gpos_mark"),
             gpos_mkmk: flag("gpos_mkmk"),
             gsub_ccmp: flag("gsub_ccmp"),
             dong_sign: flag("dong_sign"),
-            stacked_marks_top_em: v.get("stacked_marks_top_em").and_then(Value::as_f64).map(|x| x as f32),
+            stacked_marks_top_em: v
+                .get("stacked_marks_top_em")
+                .and_then(Value::as_f64)
+                .map(|x| x as f32),
             stacked_marks_overflow: flag("stacked_marks_overflow"),
-            stack_style: marks.get("stack_style").and_then(Value::as_str).map(String::from),
-            mark_weight_ratio: reading_json("mark_weight_ratio", marks.get("mark_weight_ratio").unwrap_or(&Value::Null), None),
+            stack_style: marks
+                .get("stack_style")
+                .and_then(Value::as_str)
+                .map(String::from),
+            mark_weight_ratio: reading_json(
+                "mark_weight_ratio",
+                marks.get("mark_weight_ratio").unwrap_or(&Value::Null),
+                None,
+            ),
         },
         axes,
         similar_top,
     })
 }
 
+#[cfg(test)]
+mod raw_stats_tests {
+    use super::*;
+    #[test]
+    fn empty_single_constant_nan_and_outlier() {
+        let a = AxisId::Width;
+        let s = stats_of(a, vec![f32::NAN, f32::INFINITY]);
+        assert_eq!(
+            (s.count, s.min, s.max, s.p1, s.p99),
+            (0, None, None, None, None)
+        );
+        for v in [vec![2.0], vec![2.0; 10]] {
+            let s = stats_of(a, v);
+            assert_eq!(
+                (s.min, s.max, s.p1, s.p99),
+                (Some(2.0), Some(2.0), Some(2.0), Some(2.0))
+            );
+        }
+        let mut v = vec![1.0; 100];
+        v.push(1000.0);
+        let s = stats_of(a, v);
+        assert_eq!(
+            (s.count, s.min, s.max, s.p1, s.p99),
+            (101, Some(1.0), Some(1000.0), Some(1.0), Some(1.0))
+        );
+        let s = stats_of(a, vec![0.0, 100.0]);
+        assert_eq!((s.p1, s.p99), (Some(1.0), Some(99.0)));
+    }
+}
+
+/// Phân loại tự động từ JSON đã lưu, rồi áp ghi đè của người dùng (ưu tiên hơn).
+pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy: &Value) -> Result<ClassificationDto, CmdError> {
+    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify, usage_for};
+    let input = ClassifyInput::from_json(meta, anatomy);
+    let auto = classify(&input);
+    let ov = state.with_user(|u| Ok(u.classification_override(key)?))?;
+    let usage_str = |u: &[Usage]| -> Vec<String> {
+        u.iter()
+            .map(|x| match x {
+                Usage::Text => "text",
+                Usage::Display => "display",
+                Usage::Ui => "ui",
+            })
+            .map(String::from)
+            .collect()
+    };
+    let signals: Vec<ClassSignalDto> = auto
+        .signals
+        .iter()
+        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: s.vote.snake().into(), weight: s.weight })
+        .collect();
+    let snake = |c: Class| c.snake().to_string();
+    if let Some(o) = ov
+        && let Some(c) = Class::parse(&o.class)
+    {
+        return Ok(ClassificationDto {
+            class: snake(c),
+            label: c.label().into(),
+            subclass: o.subclass,
+            confidence: 1.0,
+            candidate: None,
+            signals,
+            usage: usage_str(&usage_for(&input, c)),
+            source: "override".into(),
+            auto_class: Some(snake(auto.class)),
+        });
+    }
+    Ok(ClassificationDto {
+        class: snake(auto.class),
+        label: auto.class.label().into(),
+        subclass: auto.subclass,
+        confidence: auto.confidence,
+        candidate: auto.candidate.map(snake),
+        signals,
+        usage: usage_str(&auto.usage),
+        source: "auto".into(),
+        auto_class: None,
+    })
+}
+
+/// Ghi đè phân loại của người dùng (lưu ở user.db). `class` và `subclass` phải thuộc taxonomy.
+pub fn set_classification_override(state: &AppState, o: &ClassificationOverrideDto) -> Result<(), CmdError> {
+    use fontatlas_core::classify::{Class, subclasses_of};
+    let c = Class::parse(&o.class).filter(|c| *c != Class::Uncertain).ok_or_else(|| CmdError::invalid_arg(format!("class không hợp lệ: {}", o.class)))?;
+    if let Some(sub) = &o.subclass
+        && !subclasses_of(c).contains(&sub.as_str())
+    {
+        return Err(CmdError::invalid_arg(format!("subclass {sub} không thuộc {}", c.label())));
+    }
+    let k = FaceKey::try_from(&o.face)?;
+    if state.with_store(|s| Ok(s.face_ids_of(&[k])?))?.is_empty() {
+        return Err(CmdError::not_found("không có face này trong thư viện"));
+    }
+    state.with_user(|u| Ok(u.set_classification_override(&k, &o.class.to_ascii_lowercase(), o.subclass.as_deref())?))?;
+    crate::services::library::bump_class_generation();
+    Ok(())
+}
+
+pub fn clear_classification_override(state: &AppState, face: &FaceKeyDto) -> Result<(), CmdError> {
+    let k = FaceKey::try_from(face)?;
+    state.with_user(|u| Ok(u.clear_classification_override(&k)?))?;
+    crate::services::library::bump_class_generation();
+    Ok(())
+}

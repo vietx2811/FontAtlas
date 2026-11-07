@@ -91,6 +91,7 @@
 /* THEME VARIABLES (Logo-Aligned Color System) */
 /* ============================================================ */
 :root {
+    color-scheme: light;
     /* ===== Token prototype v1 (Plan 6b §4) ===== */
     /* Nền vùng nội dung (sheet) — đặc, nằm trên nền vibrancy trong suốt */
     --sheet: #FAFAFA;
@@ -170,6 +171,7 @@
 
 /* Tối: theo hệ thống; nút sáng/tối ghi đè bằng data-theme trên :root (Plan 6b §4). */
 :root[data-theme="dark"], .dark {
+    color-scheme: dark;
     --sheet: #1C1917;
     --card: #23201E;
     --fg: #FAFAF9;
@@ -190,6 +192,7 @@
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+        color-scheme: dark;
         --sheet: #1C1917;
         --card: #23201E;
         --fg: #FAFAF9;

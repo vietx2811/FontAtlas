@@ -3,7 +3,7 @@ import type { SourceDto } from '../../../api';
 import { libraryEmpty, type EmptyCtx } from '../zeroStates';
 
 const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, faceCount: 10, lastScan: null, scanning: false, ...o });
-const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, ...o });
+const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
 
 describe('libraryEmpty', () => {
   it('no sources at all: add-folder call to action, mentioning drag and drop', () => {
@@ -17,6 +17,14 @@ describe('libraryEmpty', () => {
     expect(sc.kind).toBe('scanning');
     expect(sc.action).toBeUndefined();
     expect(libraryEmpty(ctx({ sources: [src({ faceCount: 0 })] }))).toMatchObject({ kind: 'sources-empty', action: { id: 'rescan', label: 'Quét lại' } });
+  });
+  it('filtered no-match never masks no sources, scanning or permission failure', () => {
+    const filters = { filtered: true, query: 'x', viOnly: true };
+    expect(libraryEmpty(ctx({ ...filters, sources: [] })).kind).toBe('no-sources');
+    expect(libraryEmpty(ctx({ ...filters, scanning: true })).kind).toBe('scanning');
+    expect(libraryEmpty(ctx({ ...filters, view: 'src:1', access: { 1: 'timeout' } })).kind).toBe('source-access');
+    expect(libraryEmpty(ctx({ ...filters, sources: [src({ faceCount: 0 })] })).kind).toBe('sources-empty');
+    expect(libraryEmpty(ctx({ filtered: true, familyName: 'Family A' })).text).toContain('Family A');
   });
   it('a search with no hits: names the text and offers to clear the filters', () => {
     const e = libraryEmpty(ctx({ query: 'phở' }));
@@ -70,5 +78,19 @@ describe('libraryEmpty', () => {
   it('with no fonts at all and every source blocked, the library page says access is needed too', () => {
     const e = libraryEmpty(ctx({ sources: [src({ faceCount: 0 })], access: { 1: 'denied' } }));
     expect(e.kind).toBe('source-access');
+  });
+
+  it('a source whose files are all still in the cloud says so (no auto-download), offering a rescan once they are downloaded', () => {
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } })] }));
+    expect(e.kind).toBe('source-cloud');
+    expect(e.text).toMatch(/đám mây/);
+    expect(e.action).toEqual({ id: 'rescan', label: 'Quét lại' });
+  });
+  it('the same for the whole library when every source is only cloud placeholders', () => {
+    const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] };
+    expect(libraryEmpty(ctx({ sources: [src({ faceCount: 0, lastScan: stats })] })).kind).toBe('source-cloud');
+  });
+  it('an empty source with no cloud files stays "source-empty"', () => {
+    expect(libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0 })] })).kind).toBe('source-empty');
   });
 });

@@ -6,7 +6,7 @@ use fontatlas_index::{AxisId, FaceProfile, Q};
 fn profile_from_report_has_16_readings_in_order() {
     let p = profile("playfair_display.ttf");
     assert_eq!(p.readings.len(), 16);
-    assert_eq!(p.get(AxisId::Contrast).method, "o_radial_thickness_max_min");
+    assert_eq!(p.get(AxisId::Contrast).method, "o_stroke_width_max_min");
     assert!(p.get(AxisId::Contrast).value.unwrap() > 4.0);
     assert_eq!(p.family, "Playfair Display");
     assert!(p.open_license);

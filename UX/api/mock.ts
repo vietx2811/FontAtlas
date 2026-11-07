@@ -4,7 +4,7 @@ import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
 import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
-import { VI_TOTAL, axesFor, pairFor, similarFor, viMissingFor } from './mockAnalysis';
+import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
   type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
@@ -66,6 +66,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const rows = mockRows();
   const byKey = new Map(rows.map(r => [keyOf(r), r]));
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
+  const classOver = new Map<string, { class: string; subclass: string | null }>();
+  const effClass = (r: FaceRow) => classOver.get(keyOf(r)) ?? mockAutoClass(r.family);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
@@ -73,6 +75,8 @@ export function createMockApi(o: MockOptions = {}): Api {
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
     { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, faceCount: 0, lastScan: null, scanning: false },
   ];
+  // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
+  const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
   const countOf = (id: number) => rows.filter(r => sourceOf(r) === id).length;
   const collections = new Map<number, CollectionDto & { faces: Set<string> }>();
   const tags = new Map<number, TagDto & { faces: Set<string> }>();
@@ -93,10 +97,10 @@ export function createMockApi(o: MockOptions = {}): Api {
     scanning = true;
     emit({ type: 'queued', sourceId: id });
     [0.25, 0.5, 0.75, 1].forEach((f, i) => setTimeout(() => {
-      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180) } });
+      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180), notDownloaded: Math.round(f * 7) } });
       emit({ type: 'facesAdded', sourceId: id, count: 45 });
       if (f === 1) {
-        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [] } });
+        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [], notDownloaded: 7 } });
         emit({ type: 'idle' }); scanning = false;
       }
     }, (i + 1) * t));
@@ -123,6 +127,11 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!t || fold(r.family).includes(t) || fold(r.fullName ?? '').includes(t)) &&
         (!q.sourceIds?.length || q.sourceIds.includes(sourceOf(r))) &&
         (!q.favoritesOnly || r.isFavorite) &&
+        (!q.license?.length || q.license.includes(r.licenseClass)) &&
+        (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
+        (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
+        (q.includeMissing || !r.missing) &&
+        (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
@@ -138,7 +147,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     fontUrl: () => null,
 
-    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id) }))),
+    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), lastScan: s.lastScan ?? lastScanOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
@@ -178,10 +187,43 @@ export function createMockApi(o: MockOptions = {}): Api {
     getUiState: () => ok(ui),
     async setUiState(s) { ui = { ...s }; },
 
+    async classFacets(q = {}) {
+      const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });
+      const by = new Map<string, Map<string, number>>();
+      for (const r of items) { const c = effClass(r); const m = by.get(c.class) ?? new Map(); if (c.subclass) m.set(c.subclass, (m.get(c.subclass) ?? 0) + 1); by.set(c.class, m); }
+      const count = (cls: string) => items.filter(r => effClass(r).class === cls).length;
+      return [...by].map(([cls, subs]) => ({ class: cls, count: count(cls), subclasses: [...subs].map(([subclass, n]) => ({ subclass, count: n })) }));
+    },
+    async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
+    async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
+    async axisStats(q = {}) {
+      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: 1000 });
+      return MEASURED_AXES.map(axis => {
+        const values = items.flatMap(r => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? [a.rawValue] : []; }).sort((a, b) => a - b);
+        const quantile = (p: number) => { if (!values.length) return null; const at = (values.length - 1) * p; const i = Math.floor(at); return values[i] + (values[Math.ceil(at)] - values[i]) * (at - i); };
+        return { axis, unit: MOCK_UNITS[axis], count: values.length, min: values[0] ?? null, max: values.at(-1) ?? null, p1: quantile(.01), p99: quantile(.99) };
+      });
+    },
+    async similarFamilies(face, opts = {}, q = {}) {
+      const row = findRow(face);
+      const { items } = await this.queryFaces({ ...q, offset: 0, limit: 1000 });
+      const candidates = items.filter(r => (!opts.viOnly || r.viMissing === 0) && (!opts.sourceIds?.length || opts.sourceIds.includes(sourceOf(r))) && (!opts.weightRange || (r.weightClass != null && r.weightClass >= opts.weightRange[0] && r.weightClass <= opts.weightRange[1])));
+      const ranked = similarFor(row, candidates, candidates.length).map(h => opts.useImage === false ? { ...h, source: 'axes' as const } : h);
+      const groups = new Map<string, { family: string; representative: typeof ranked[number]; faces: FaceKeyDto[]; count: number }>();
+      for (const hit of ranked) {
+        const group = groups.get(hit.row.family);
+        if (group) { group.faces.push(hit.face); group.count++; }
+        else groups.set(hit.row.family, { family: hit.row.family, representative: hit, faces: [hit.face], count: 1 });
+      }
+      const offset = q.offset ?? 0;
+      return { total: groups.size, offset, items: [...groups.values()].slice(offset, offset + (q.limit ?? 12)) };
+    },
+
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
         row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
+        classificationInfo: mockClassification(row.family, classOver.get(keyOf(row))),
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
           license: 'SIL Open Font License 1.1', licenseUrl: 'https://openfontlicense.org', designer: 'Studio Mock', manufacturer: 'Mock Foundry',
@@ -192,7 +234,7 @@ export function createMockApi(o: MockOptions = {}): Api {
           status: row.viStatus, supports: row.supportsVi, missing: viMissingFor(row.viMissing), total: VI_TOTAL,
           precomposedComposite: row.viMissing === 0, gposMark: true, gposMkmk: row.faceId % 2 === 0, gsubCcmp: true, dongSign: true,
           stackedMarksTopEm: 1.08, stackedMarksOverflow: row.faceId % 4 === 1, stackStyle: row.faceId % 4 === 1 ? 'tight' : null,
-          markWeightRatio: { key: 'mark_weight_ratio', value: 0.82, quality: 'measured', reason: null, method: 'outline', percentile: 55 },
+          markWeightRatio: { key: 'mark_weight_ratio', value: 0.82, rawValue: 0.82, unit: 'ratio', quality: 'measured', reason: null, method: 'outline', percentile: 55 },
         },
         axes: axesFor(row),
         similarTop: similarFor(row, rows, 3),
@@ -241,5 +283,30 @@ export function createMockApi(o: MockOptions = {}): Api {
     async scanPause() {}, async scanResume() {}, async scanCancel() {},
     async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
     ...act,
+  };
+}
+
+/** Phân loại tự động giả cho mock (cố định theo họ font). */
+const MOCK_AUTO: Array<[RegExp, string, string | null, number]> = [
+  [/Pacifico|Lobster/, 'uncertain', null, 0.55],
+  [/Didone|Playfair|Abril|Bodoni/, 'serif', 'didone', 0.94],
+  [/Serif|Fraunces|Cormorant/, 'serif', 'old_style', 0.9],
+  [/Mono/, 'mono', null, 0.95],
+  [/Bebas/, 'unclassified', null, 0],
+  [/Oswald/, 'sans', 'grotesque', 0.9],
+];
+const CLASS_LABEL: Record<string, string> = { serif: 'Serif', sans: 'Sans', mono: 'Mono', script: 'Script', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain', unclassified: 'Chưa phân loại' };
+export function mockAutoClass(family: string): { class: string; subclass: string | null; confidence: number } {
+  const hit = MOCK_AUTO.find(([re]) => re.test(family));
+  return hit ? { class: hit[1], subclass: hit[2], confidence: hit[3] } : { class: 'sans', subclass: null, confidence: 0.9 };
+}
+function mockClassification(family: string, over?: { class: string; subclass: string | null }): FaceDetailDto['classificationInfo'] {
+  const auto = mockAutoClass(family);
+  const cls = over?.class ?? auto.class;
+  return {
+    class: cls, label: CLASS_LABEL[cls] ?? cls, subclass: over ? over.subclass : auto.subclass, confidence: over ? 1 : auto.confidence,
+    candidate: cls === 'uncertain' ? 'script' : null,
+    signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }],
+    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
   };
 }

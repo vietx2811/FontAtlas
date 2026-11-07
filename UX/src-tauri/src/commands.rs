@@ -10,15 +10,18 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::activation::*;
+use crate::dto::analysis::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
-use crate::dto::model::*;
 use crate::dto::library::*;
+use crate::dto::model::*;
+use crate::dto::preview::*;
 use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
-use crate::dto::analysis::*;
-use crate::dto::preview::*;
-use crate::services::{activation, analysis, boot, describe, embed, library, model, onboarding, pairs, preview, settings, sources, system};
 use crate::error::CmdError;
+use crate::services::{
+    activation, analysis, boot, describe, embed, library, model, onboarding, pairs, preview,
+    settings, sources, system,
+};
 use crate::state::AppState;
 
 pub struct CommandSig {
@@ -29,7 +32,12 @@ pub struct CommandSig {
 }
 
 /// Lệnh được phép đồng bộ: không đụng Store/Index/embed.
-pub const SYNC_OK: &[&str] = &["startup_status", "scan_status", "preview_info", "activation_caps"];
+pub const SYNC_OK: &[&str] = &[
+    "startup_status",
+    "scan_status",
+    "preview_info",
+    "activation_caps",
+];
 
 /// Danh sách lệnh (nguồn duy nhất). Cú pháp mỗi dòng: `async|sync tên(đối số: kiểu, …) -> kiểu_kết_quả;`
 /// Gọi `command_list!(__command_table)` để sinh `COMMANDS`, `command_list!(__command_handler)` cho handler.
@@ -78,12 +86,17 @@ macro_rules! command_list {
             async detect_font_managers() -> Result<Vec<FontManagerDto>, CmdError>;
             async get_face(face: FaceKeyDto, lang: LangDto) -> Result<FaceDetailDto, CmdError>;
             async similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Result<Vec<SimilarHitDto>, CmdError>;
+            async similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> Result<SimilarFamilyPageDto, CmdError>;
+            async axis_stats(q: FaceQueryDto) -> Result<Vec<AxisStatsDto>, CmdError>;
+            async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
             async describe(text: String) -> Result<DescribeDto, CmdError>;
+            async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
+            async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
             async get_settings() -> Result<SettingsDto, CmdError>;
             async set_settings(patch: SettingsPatchDto) -> Result<SettingsDto, CmdError>;
             async model_status() -> Result<ModelStatusDto, CmdError>;
@@ -170,11 +183,19 @@ pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, 
 }
 
 #[tauri::command]
-pub async fn boot_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<BootEvent>) -> Result<(), CmdError> {
+pub async fn boot_subscribe(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<BootEvent>,
+) -> Result<(), CmdError> {
     // đăng ký TRƯỚC rồi mới gửi pha hiện tại (có thể trùng, không mất `Ready` rơi giữa hai bước)
     let ch = on_event.clone();
-    state.hubs.boot.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
-    let _ = ch.send(BootEvent::Phase { phase: boot::snapshot(&state).phase });
+    state
+        .hubs
+        .boot
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    let _ = ch.send(BootEvent::Phase {
+        phase: boot::snapshot(&state).phase,
+    });
     Ok(())
 }
 
@@ -184,7 +205,10 @@ pub async fn onboarding_state(state: State<'_, Arc<AppState>>) -> Result<Onboard
 }
 
 #[tauri::command]
-pub async fn set_onboarding_step(state: State<'_, Arc<AppState>>, step: Option<String>) -> Result<(), CmdError> {
+pub async fn set_onboarding_step(
+    state: State<'_, Arc<AppState>>,
+    step: Option<String>,
+) -> Result<(), CmdError> {
     blocking(&state, move |s| onboarding::set_onboarding_step(s, step)).await
 }
 
@@ -235,11 +259,16 @@ cmd!(get_setting(key: String) -> Option<String> => |s| system::get_setting(s, &k
 cmd!(set_setting(key: String, value: String) -> () => |s| system::set_setting(s, &key, &value));
 cmd!(get_face(face: FaceKeyDto, lang: LangDto) -> FaceDetailDto => |s| analysis::get_face(s, &face, lang));
 cmd!(similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Vec<SimilarHitDto> => |s| analysis::similar(s, &face, &opts));
+cmd!(similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> SimilarFamilyPageDto => |s| analysis::similar_families(s, &face, &opts, &q));
+cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stats(s, &q));
+cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
 cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
 cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
+cmd!(set_classification_override(over: ClassificationOverrideDto) -> () => |s| analysis::set_classification_override(s, &over));
+cmd!(clear_classification_override(face: FaceKeyDto) -> () => |s| analysis::clear_classification_override(s, &face));
 cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
 cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));
@@ -269,21 +298,39 @@ cmd!(queue_resume_all() -> () => |s| {
 });
 
 #[tauri::command]
-pub async fn model_download(state: State<'_, Arc<AppState>>, on_event: Channel<ModelEvent>) -> Result<(), CmdError> {
-    state.hubs.model.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn model_download(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<ModelEvent>,
+) -> Result<(), CmdError> {
+    state
+        .hubs
+        .model
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     blocking(&state, model::start_download).await
 }
 
 #[tauri::command]
-pub async fn model_redownload(state: State<'_, Arc<AppState>>, on_event: Channel<ModelEvent>) -> Result<(), CmdError> {
-    state.hubs.model.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn model_redownload(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<ModelEvent>,
+) -> Result<(), CmdError> {
+    state
+        .hubs
+        .model
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     blocking(&state, model::redownload).await
 }
 
 #[tauri::command]
-pub async fn embed_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<EmbedEvent>) -> Result<(), CmdError> {
+pub async fn embed_subscribe(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<EmbedEvent>,
+) -> Result<(), CmdError> {
     let ch = on_event.clone();
-    state.hubs.embed.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    state
+        .hubs
+        .embed
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
         let _ = ch.send(EmbedEvent::Status { status });
     }
@@ -320,8 +367,14 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
 
 #[tauri::command]
-pub async fn activation_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ActivationEvent>) -> Result<(), CmdError> {
-    state.hubs.activation.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn activation_subscribe(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<ActivationEvent>,
+) -> Result<(), CmdError> {
+    state
+        .hubs
+        .activation
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -343,17 +396,26 @@ pub async fn list_sources(state: State<'_, Arc<AppState>>) -> Result<Vec<SourceD
 }
 
 #[tauri::command]
-pub async fn add_source(state: State<'_, Arc<AppState>>, path: String) -> Result<SourceDto, CmdError> {
+pub async fn add_source(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> Result<SourceDto, CmdError> {
     blocking(&state, move |s| sources::add_source(s, &path)).await
 }
 
 #[tauri::command]
-pub async fn remove_source(state: State<'_, Arc<AppState>>, source_id: i64) -> Result<(), CmdError> {
+pub async fn remove_source(
+    state: State<'_, Arc<AppState>>,
+    source_id: i64,
+) -> Result<(), CmdError> {
     blocking(&state, move |s| sources::remove_source(s, source_id)).await
 }
 
 #[tauri::command]
-pub async fn rescan_sources(state: State<'_, Arc<AppState>>, source_ids: Option<Vec<i64>>) -> Result<(), CmdError> {
+pub async fn rescan_sources(
+    state: State<'_, Arc<AppState>>,
+    source_ids: Option<Vec<i64>>,
+) -> Result<(), CmdError> {
     blocking(&state, move |s| sources::rescan_sources(s, source_ids)).await
 }
 
@@ -381,8 +443,14 @@ pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, Cmd
 }
 
 #[tauri::command]
-pub async fn scan_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<ScanEvent>) -> Result<(), CmdError> {
-    state.hubs.scan.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn scan_subscribe(
+    state: State<'_, Arc<AppState>>,
+    on_event: Channel<ScanEvent>,
+) -> Result<(), CmdError> {
+    state
+        .hubs
+        .scan
+        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -398,15 +466,24 @@ pub fn async_violations(table: &[CommandSig], src: &str) -> Vec<String> {
         let sync_def = format!("pub fn {}(", c.name);
         let async_def = format!("pub async fn {}(", c.name);
         if !c.is_async && !SYNC_OK.contains(&c.name) {
-            v.push(format!("{} khai báo sync nhưng không nằm trong SYNC_OK", c.name));
+            v.push(format!(
+                "{} khai báo sync nhưng không nằm trong SYNC_OK",
+                c.name
+            ));
         }
         // `cmd!(tên(` sinh `pub async fn tên(`
         let via_macro = format!("cmd!({}(", c.name);
         if c.is_async && !src.contains(&async_def) && !src.contains(&via_macro) {
-            v.push(format!("{} khai báo async trong bảng nhưng hàm không phải `pub async fn`", c.name));
+            v.push(format!(
+                "{} khai báo async trong bảng nhưng hàm không phải `pub async fn`",
+                c.name
+            ));
         }
         if !c.is_async && !src.contains(&sync_def) {
-            v.push(format!("{} khai báo sync trong bảng nhưng không thấy `pub fn`", c.name));
+            v.push(format!(
+                "{} khai báo sync trong bảng nhưng không thấy `pub fn`",
+                c.name
+            ));
         }
     }
     // mọi `#[tauri::command]` trần phải đi cùng hàm trong SYNC_OK

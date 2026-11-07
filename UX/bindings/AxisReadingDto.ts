@@ -2,6 +2,10 @@
 
 export type AxisReadingDto = { key: string, value: number | string | null, 
 /**
+ * Giá trị số gốc, kể cả khi `value` là lớp serif; không đổi dấu hay làm tròn.
+ */
+rawValue: number | null, unit: string | null, 
+/**
  * "measured" | "estimated" | "failed"
  */
 quality: string, reason: string | null, method: string | null, percentile: number | null, };

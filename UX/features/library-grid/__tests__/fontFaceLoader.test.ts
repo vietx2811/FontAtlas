@@ -105,6 +105,91 @@ describe('FontFaceLoader', () => {
   });
 });
 
+describe('FontFaceLoader: name lane (soft refs)', () => {
+  const soft = { soft: true };
+
+  it('names wait for the scroll to stop, even when slow enough for content to load; content is unaffected', () => {
+    const f = fake({ velocity: LOADER.V_MAX - 1 }); const l = new FontFaceLoader(f.deps);
+    l.onScroll();
+    l.acquire(makeRow(1), soft);
+    l.acquire(makeRow(2)); // nội dung: tải ngay vì chậm hơn V_MAX
+    expect(f.sources).toHaveLength(1);
+    f.setV(0); f.advance(LOADER.IDLE_MS);
+    expect(f.sources).toHaveLength(2);
+  });
+
+  it('at most NAME_MAX_ACTIVE name loads at once, and they never take a hover/live/panel slot', () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps);
+    for (let i = 0; i < 6; i++) l.acquire(makeRow(i), soft);
+    expect(l.stats()).toMatchObject({ lowActive: LOADER.NAME_MAX_ACTIVE, active: 0 });
+    expect(f.sources).toHaveLength(LOADER.NAME_MAX_ACTIVE);
+    for (let i = 100; i < 100 + LOADER.MAX_ACTIVE; i++) l.acquire(makeRow(i)); // hover/live: đủ 6 slot dù làn tên đang bận
+    expect(l.stats()).toMatchObject({ active: LOADER.MAX_ACTIVE, lowActive: LOADER.NAME_MAX_ACTIVE });
+    expect(f.sources).toHaveLength(LOADER.NAME_MAX_ACTIVE + LOADER.MAX_ACTIVE);
+  });
+
+  it('a hard acquire of a face still queued for its name jumps to the high lane at once', () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps);
+    const rows = [0, 1, 2, 3].map(i => makeRow(i));
+    rows.forEach(r => l.acquire(r, soft));
+    expect(f.sources).toHaveLength(2); // hai tên đang tải, hai tên chờ
+    l.acquire(rows[3]);                // hover vào thẻ thứ 4
+    expect(f.sources).toHaveLength(3);
+    expect(l.stats()).toMatchObject({ active: 1, lowActive: 2 });
+  });
+
+  it('a face larger than NAME_MAX_BYTES is never loaded just for its name; content still loads it and then the name can use it', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps);
+    const big = makeRow(1, { fileSize: LOADER.NAME_MAX_BYTES + 1 });
+    expect(await l.acquire(big, soft)).toBeNull();
+    expect(f.sources).toHaveLength(0);
+    expect(l.stats().entries).toBe(0);
+    const hard = l.acquire(big); await f.settle();
+    expect(await hard).toBe(familyName(big));
+    expect(await l.acquire(big, soft)).toBe(familyName(big)); // đã có sẵn → tên dùng luôn
+  });
+
+  it('over budget: faces held only by names are evicted (UI font fallback) before anything else; hard refs never are', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps, { BUDGET_BYTES: 250_000 });
+    const content = makeRow(1, { fileSize: 200_000 }), name = makeRow(2, { fileSize: 200_000 });
+    const a = l.acquire(content); await f.settle(); await a;
+    const b = l.acquire(name, soft); await f.settle(); expect(await b).toBe(familyName(name));
+    expect(l.stats()).toMatchObject({ evictions: 1, readyBytes: 200_000 });
+    expect(f.added.size).toBe(1);
+    expect(l.stats()).toMatchObject({ refs: 1, soft: 1 }); // ref của tên vẫn còn để release cân bằng
+    l.release(name, soft);
+    expect(l.stats()).toMatchObject({ refs: 1, soft: 0, entries: 1 });
+    expect(f.added.size).toBe(1);
+  });
+
+  it('over budget with only hard refs: nothing in use is evicted', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps, { BUDGET_BYTES: 100 });
+    l.acquire(makeRow(1, { fileSize: 200 })); l.acquire(makeRow(2, { fileSize: 200 })); await f.settle();
+    expect(l.stats()).toMatchObject({ evictions: 0, readyBytes: 400 });
+  });
+
+  it('refs balance: every acquire released → no refs left, queued names are cancelled', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps);
+    const rows = [0, 1, 2, 3, 4].map(i => makeRow(i));
+    rows.forEach(r => l.acquire(r, soft)); l.acquire(rows[0]);
+    expect(l.stats()).toMatchObject({ refs: 1, soft: 5 });
+    rows.forEach(r => l.release(r, soft)); l.release(rows[0]);
+    expect(l.stats()).toMatchObject({ refs: 0, soft: 0 });
+    expect(l.stats().cancels).toBe(3); // 3 tên còn chờ trong làn thấp bị huỷ (2 cái đang tải thì để tải xong)
+  });
+
+  it('an evicted face that someone needs again is reloaded', async () => {
+    const f = fake(); const l = new FontFaceLoader(f.deps, { BUDGET_BYTES: 250_000 });
+    const content = makeRow(1, { fileSize: 200_000 }), name = makeRow(2, { fileSize: 200_000 });
+    l.acquire(content); await f.settle();
+    l.acquire(name, soft); await f.settle();
+    expect(f.added.size).toBe(1);
+    const again = l.acquire(name); await f.settle(); // hover vào thẻ → ref cứng
+    expect(await again).toBe(familyName(name));
+    expect(f.sources.filter(x => x.includes(name.hashHex))).toHaveLength(2);
+  });
+});
+
 describe('ScrollVelocity', () => {
   it('measures px/s and decays to 0 after idle', () => {
     const v = new ScrollVelocity();

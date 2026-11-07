@@ -1,5 +1,6 @@
 import { useUiStore } from '../../store/ui';
 import './composer.css';
+import { Tooltip } from '../ui/Tooltip';
 
 export const COMPOSER_INSET = 120; // khoảng chừa ở đáy lưới để thẻ cuối không bị ô nổi che
 const PRESETS: Array<[label: string, text: string, name: string]> = [['Aa', 'Aa', 'Aa'], ['Ặẫ', 'Ặẫỡự', 'Dấu chồng'], ['12', '0123456789', 'Số']];
@@ -14,14 +15,14 @@ export function SampleComposer(): React.JSX.Element {
       <input type="text" value={sample} autoComplete="off" aria-label="Chữ mẫu" onChange={e => setSample(e.target.value)} />
       <div className="fa-presets">
         {PRESETS.map(([label, text, name]) => (
-          <button key={text} type="button" title={name} aria-label={name} onClick={() => setSample(text)}>{label}</button>
+          <Tooltip key={text} label={`Chữ mẫu: ${name}`}><button type="button" aria-label={name} onClick={() => setSample(text)}>{label}</button></Tooltip>
         ))}
       </div>
-      <div className="fa-size" title="Cỡ chữ mẫu">
+      <Tooltip label={`Cỡ chữ mẫu · ${size}px`}><div className="fa-size">
         <span className="a1" aria-hidden="true">A</span>
         <input type="range" min={18} max={72} value={size} aria-label="Cỡ chữ mẫu" onChange={e => setSize(Number(e.target.value))} />
         <span className="a2" aria-hidden="true">A</span>
-      </div>
+      </div></Tooltip>
     </div>
   );
 }

@@ -55,6 +55,21 @@ pub struct Metadata {
     pub width_class: Option<u16>,
     pub fs_type: Option<u16>,
     pub panose: Option<[u8; 10]>,
+    /// OS/2 sFamilyClass: (lớp IBM, lớp con). `None` khi không có OS/2 hoặc bằng 0 (không phân loại).
+    #[serde(default)]
+    pub family_class: Option<(u8, u8)>,
+    /// OS/2 achVendID (4 ký tự, đã bỏ khoảng trắng cuối).
+    #[serde(default)]
+    pub vendor_id: Option<String>,
+    /// `post.isFixedPitch != 0`.
+    #[serde(default)]
+    pub is_fixed_pitch: bool,
+    /// cmap chỉ có subtable Windows Symbol (3,0), không có subtable Unicode.
+    #[serde(default)]
+    pub symbol_cmap: bool,
+    /// Số chữ cái ASCII (a–z, A–Z; tối đa 52) có glyph trong cmap.
+    #[serde(default)]
+    pub latin_letters: u8,
     pub italic_angle: Option<f32>,
     pub outline_format: OutlineFormat,
     pub color_tables: Vec<String>,
@@ -73,6 +88,10 @@ pub struct Metadata {
     pub gpos_features: Vec<String>,
     /// Tag script OpenType (GSUB + GPOS ScriptList, bỏ DFLT), đã sort.
     pub scripts: Vec<String>,
+    /// Non-Latin script blocks with >= CMAP_SCRIPT_MIN mapped code points (cmap, not layout),
+    /// for fonts whose layout is AAT-only and has no OpenType script list (Thonburi, Sangam MN).
+    #[serde(default)]
+    pub cmap_scripts: Vec<String>,
     /// Dải optical size (pt) từ OS/2 v5; None nếu OS/2 < v5.
     pub os2_optical_size_pt: Option<(f32, f32)>,
 }
@@ -114,6 +133,50 @@ pub(crate) fn outline_format(font: &FontRef) -> OutlineFormat {
     } else {
         OutlineFormat::None
     }
+}
+
+/// Minimum mapped code points in a block to count the script as covered (whole alphabets,
+/// not a few borrowed signs). Thai alone is 87; Cherokee 85; Malayalam ~100.
+const CMAP_SCRIPT_MIN: usize = 40;
+const CMAP_BLOCKS: &[(&str, u32, u32)] = &[
+    ("deva", 0x0900, 0x097F), ("beng", 0x0980, 0x09FF), ("guru", 0x0A00, 0x0A7F),
+    ("gujr", 0x0A80, 0x0AFF), ("orya", 0x0B00, 0x0B7F), ("taml", 0x0B80, 0x0BFF),
+    ("telu", 0x0C00, 0x0C7F), ("knda", 0x0C80, 0x0CFF), ("mlym", 0x0D00, 0x0D7F),
+    ("sinh", 0x0D80, 0x0DFF), ("thai", 0x0E00, 0x0E7F), ("lao ", 0x0E80, 0x0EFF),
+    ("tibt", 0x0F00, 0x0FFF), ("mymr", 0x1000, 0x109F), ("ethi", 0x1200, 0x137F),
+    ("cher", 0x13A0, 0x13FF), ("cans", 0x1400, 0x167F), ("khmr", 0x1780, 0x17FF),
+    ("mong", 0x1800, 0x18AF), ("kana", 0x3040, 0x30FF), ("hani", 0x4E00, 0x9FFF),
+    ("hang", 0xAC00, 0xD7AF),
+];
+
+fn cmap_scripts(font: &FontRef) -> Vec<String> {
+    let mut counts = vec![0usize; CMAP_BLOCKS.len()];
+    for (cp, _) in font.charmap().mappings() {
+        if let Some(i) = CMAP_BLOCKS.iter().position(|&(_, lo, hi)| cp >= lo && cp <= hi) {
+            counts[i] += 1;
+        }
+    }
+    CMAP_BLOCKS
+        .iter()
+        .zip(counts)
+        .filter(|(_, n)| *n >= CMAP_SCRIPT_MIN)
+        .map(|((tag, _, _), _)| tag.to_string())
+        .collect()
+}
+
+/// cmap có subtable Windows Symbol (3,0) và không có subtable Unicode nào (Webdings, Wingdings…).
+fn symbol_only_cmap(font: &FontRef) -> bool {
+    use read_fonts::tables::cmap::PlatformId;
+    let Ok(cmap) = font.cmap() else { return false };
+    let (mut symbol, mut unicode) = (false, false);
+    for r in cmap.encoding_records() {
+        match (r.platform_id(), r.encoding_id()) {
+            (PlatformId::Windows, 0) => symbol = true,
+            (PlatformId::Unicode, _) | (PlatformId::Windows, 1 | 10) => unicode = true,
+            _ => {}
+        }
+    }
+    symbol && !unicode
 }
 
 fn script_tags(font: &FontRef) -> Vec<String> {
@@ -185,6 +248,14 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         width_class: os2.as_ref().map(|o| o.us_width_class()),
         fs_type: os2.as_ref().map(|o| o.fs_type()),
         panose: os2.as_ref().and_then(|o| o.panose_10().try_into().ok()),
+        family_class: os2.as_ref().and_then(|o| {
+            let v = o.s_family_class();
+            (v != 0).then_some(((v >> 8) as u8, (v & 0xff) as u8))
+        }),
+        vendor_id: os2.as_ref().map(|o| o.ach_vend_id().to_string().trim().to_string()).filter(|s| !s.is_empty()),
+        is_fixed_pitch: font.post().is_ok_and(|p| p.is_fixed_pitch() != 0),
+        symbol_cmap: symbol_only_cmap(font),
+        latin_letters: ('a'..='z').chain('A'..='Z').filter(|c| font.charmap().map(*c).is_some()).count() as u8,
         italic_angle: font.post().ok().map(|p| p.italic_angle().to_f64() as f32),
         outline_format: outline_format(font),
         color_tables: [b"COLR", b"CBDT", b"sbix", b"SVG "]
@@ -226,6 +297,7 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         gsub_features,
         gpos_features,
         scripts: script_tags(font),
+        cmap_scripts: cmap_scripts(font),
         // OS/2 lưu theo TWIP (1/20 pt).
         os2_optical_size_pt: os2.as_ref().and_then(|o| {
             Some((

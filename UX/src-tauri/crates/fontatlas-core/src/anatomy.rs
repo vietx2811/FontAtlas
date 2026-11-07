@@ -43,6 +43,10 @@ pub struct Anatomy {
     pub g_storeys: Metric,
     /// Đầu nét trên 'c' (Estimated). |Spearman r với contrast| = 0.447 trên google/fonts (Plan 3).
     pub terminal: Metric,
+    /// Tỉ lệ chữ a–z có mực chạm cả hai mép advance (chữ viết liền nét).
+    pub connect: Metric,
+    /// Độ nhảy đỉnh/đáy của chữ cao bằng x-height, ÷ x-height.
+    pub bounce: Metric,
 }
 
 fn settings(font: &FontRef, at: &MeasureAt) -> Vec<(String, f32)> {
@@ -139,6 +143,8 @@ pub fn measure_with_filter(
         a_storeys: detail::a_storeys(&ctx),
         g_storeys: detail::g_storeys(&ctx),
         terminal: detail::terminal_c_normal(&ctx),
+        connect: detail::connect_lc(&ctx, xh),
+        bounce: detail::bounce_lc(&ctx, xh),
         location: set,
     }
 }
@@ -156,12 +162,7 @@ fn caps_only(ctx: &GlyphCtx, upm: f64, set: Vec<(String, f32)>) -> Anatomy {
         );
     }
     if let Some(o) = ctx.glyph('O', true) {
-        a.contrast = Metric::from_opt(
-            stroke::contrast_on(&o).map(|v| v.0),
-            Quality::Measured,
-            FailReason::Degenerate,
-            "O_radial_thickness_max_min",
-        );
+        a.contrast = stroke::contrast_metric(ctx, &o, "O_stroke_width_max_min");
     }
     a.contrast_h = stroke::contrast_h(ctx);
     a.slant_deg = stroke::slant_deg(ctx);
@@ -179,7 +180,7 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
         descender_em: f("p_bbox_bottom"),
         stem: f("n_stem_at_35pct_xh"),
         darkness: f("ink_area_n_o"),
-        contrast: f("o_radial_thickness_max_min"),
+        contrast: f("o_stroke_width_max_min"),
         contrast_h: f("H_stem_over_bar"),
         stress_deg: f("o_harmonic_fit"),
         aperture: f("c_angular_opening"),
@@ -188,11 +189,13 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
         mean_advance: f("mean_advance_a_z_over_xh"),
         width_cv: f("cv_advance_a_z"),
         spacing: f("mean_sidebearings_a_z_over_xh"),
-        slant_deg: f("l_or_I_midline_offset"),
+        slant_deg: f("I_T_stem_midline"),
         serif_foot: f("baseline_foot_over_stem_median_iln"),
         counter: f("o_inner_over_outer_area"),
         a_storeys: f("a_center_vertical_runs"),
         g_storeys: f("g_center_vertical_runs"),
         terminal: f("c_upper_terminal_normal_over_thin"),
+        connect: f("frac_a_z_ink_touches_both_advance_edges"),
+        bounce: f("xheight_letters_top_bottom_jitter_over_xh"),
     }
 }

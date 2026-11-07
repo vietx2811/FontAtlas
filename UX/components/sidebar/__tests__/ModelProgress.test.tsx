@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { createModelStore } from '../../../store/model';
 import { ModelProgress, SR_THROTTLE_MS } from '../ModelProgress';
+import { tipOf } from '../../../test/tip';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -53,7 +54,7 @@ describe('ModelProgress', () => {
     await mount({ initial: { model: { state: 'ready' }, embed: { enabled: true, running: true, pending: 3000, done: 800, device: 'metal', etaMs: 120_000 } } });
     const row = screen.getByTestId('model-progress');
     expect(row.textContent).toContain('Phân tích hình ảnh 800/3.800');
-    expect(row.getAttribute('title')).toBe('Đang dùng: Metal (GPU)');
+    expect(await tipOf(row)).toBe('Đang dùng: Metal (GPU)');
     expect(row.querySelector('[data-ring]')).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tạm dừng' })); });
     expect(screen.getByTestId('model-progress').textContent).toContain('tạm dừng');
@@ -64,12 +65,27 @@ describe('ModelProgress', () => {
     await mount({ initial: { model: { state: 'checksum_mismatch' } } });
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('Model tải về bị hỏng');
-    expect(screen.getByRole('button', { name: 'Tải lại' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+  });
+
+  it('checking is indeterminate and errors keep technical text collapsed; cancellation is not red', async () => {
+    const { store } = await mount({ initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
+    expect(screen.getByTestId('model-progress').textContent).toContain('Đang kiểm tra tệp…');
+    expect(screen.getByTestId('model-spinner')).toBeTruthy();
+    expect(screen.getByTestId('model-progress').querySelector('[data-ring]')).toBeNull();
+    act(() => store.setState(s => ({ model: { ...s.model!, state: 'paused', lastError: { code: 'tls', message: 'SECRET_TECHNICAL_TLS' } } })));
+    expect(screen.getByTestId('model-progress')).not.toHaveAttribute('title');
+    expect(screen.getByText('SECRET_TECHNICAL_TLS')).not.toBeVisible();
+    expect(screen.getByText('SECRET_TECHNICAL_TLS').closest('details')).not.toHaveAttribute('open');
+    act(() => store.setState(s => ({ model: { ...s.model!, lastError: { code: 'cancelled', message: 'cancelled by user' } } })));
+    expect(screen.getByTestId('model-progress').className).not.toContain('err');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tiếp tục tải' })).toBeTruthy();
   });
 
   it('E6 offers both [Tải lại] and [Xoá model]', async () => {
     await mount({ initial: { model: { state: 'corrupt' } } });
-    expect(screen.getByRole('button', { name: 'Tải lại' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Xoá model' })).toBeTruthy();
   });
 

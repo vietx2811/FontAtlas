@@ -19,7 +19,7 @@ type Props = {
 
 export function WindowShell({ collapsed = false, sidebar, titlebarAccessory, children }: Props): React.JSX.Element {
   return (
-    <div data-testid="window-shell" className="fa-shell" data-collapsed={collapsed} style={{ ['--sidebar-w' as string]: `${collapsed ? RAIL_WIDTH : SIDEBAR_WIDTH}px` }}>
+    <div data-testid="window-shell" className="fa-shell" data-native={typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window} data-collapsed={collapsed} style={{ ['--sidebar-w' as string]: `${collapsed ? RAIL_WIDTH : SIDEBAR_WIDTH}px` }}>
       <aside className="fa-shell-sidebar">
         <div className="fa-shell-titlebar" data-tauri-drag-region>
           {titlebarAccessory}

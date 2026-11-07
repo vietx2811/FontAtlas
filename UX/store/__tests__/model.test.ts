@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../api/mock';
 import type { EmbedStatusDto, ModelStatusDto } from '../../api';
-import { createModelStore, deriveModelUi, formatEta, fmtInt } from '../model';
+import { createModelStore, deriveModelUi, formatEta, fmtInt, modelErrorText } from '../model';
 
 const MB = 1024 * 1024;
 const model = (o: Partial<ModelStatusDto> = {}): ModelStatusDto => ({
@@ -22,6 +22,51 @@ describe('formatting', () => {
     expect(formatEta(130_000)).toBe('~2 phút');
     expect(formatEta(3 * 3600_000)).toBe('~3 giờ');
     expect(formatEta(null)).toBe('');
+  });
+});
+
+describe('download mapping and verification', () => {
+  it.each([
+    ['http', 'Máy chủ tải model'], ['tls', 'Không xác thực'], ['http_redirect', 'chuyển hướng'],
+    ['http_config', 'Cấu hình'], ['network', 'Kết nối'], ['io', 'ổ đĩa'], ['checksum', 'bị hỏng'],
+    ['cancelled', 'Đã dừng'], ['future_code', 'Không tải được'],
+  ])('maps %s without leaking the technical message', (code, text) => {
+    const u = ui(model({ state: 'paused', lastError: { code, message: 'TECHNICAL_ONLY' } }), embed());
+    expect(u.text).toContain(text); expect(u.text).not.toContain('TECHNICAL_ONLY');
+    expect(u.detail).toBe('TECHNICAL_ONLY');
+    expect(u.actions[0].label).toBe(code === 'cancelled' ? 'Tiếp tục tải' : 'Thử lại');
+    expect(u.severity).toBe(code === 'cancelled' ? 'info' : 'error');
+  });
+  it('recognizes HTTP429 and Retry-After; HTTP403 never becomes a disk permission error', () => {
+    expect(modelErrorText({ code: 'http', message: 'http 429; Retry-After: Some("120")' })).toContain('120 giây');
+    expect(modelErrorText({ code: 'http', message: 'http 429; Retry-After: None' })).toContain('giới hạn yêu cầu');
+    expect(modelErrorText({ code: 'http', message: 'http 403; Retry-After: None' })).not.toMatch(/ổ đĩa|quyền/);
+  });
+  it('waits for Ready after all bytes and shows speed using decimal MB/s', () => {
+    const checking = ui(model({ state: 'downloading' }), embed());
+    expect(checking.text).toBe('Đang kiểm tra tệp…'); expect(checking.progress).toBeNull();
+    expect(checking.checking).toBe(true); expect(checking.imageReady).toBe(false);
+    const downloading = ui(model({ state: 'downloading', doneBytes: 50, totalBytes: 100, bytesPerSec: 2_500_000 }), embed());
+    expect(downloading.text).toContain('2,5 MB/s');
+    expect(ui(model({ state: 'downloading', totalBytes: 0 }), embed()).progress).toBeNull();
+    expect(ui(model({ state: 'downloading', doneBytes: 99.9, totalBytes: 100 }), embed()).text).not.toContain('100%');
+  });
+  it('updates both counters on a Range to full-stream phase reset, then waits for Ready', async () => {
+    const api = createMockApi(); await api.setSettings({ embedEnabled: true });
+    const s = createModelStore(); await s.getState().sync(api);
+    let emit!: (e: import('../../api').ModelEvent) => void;
+    vi.spyOn(api, 'modelDownload').mockImplementation(async onEvent => { emit = onEvent; });
+    await s.getState().act(api, 'download');
+    emit({ type: 'progress', done: 100, total: 100, bytesPerSec: 0, etaMs: null, resumed: true });
+    expect(s.getState().ui().checking).toBe(true);
+    emit({ type: 'progress', done: 0, total: 1000, bytesPerSec: 0, etaMs: null, resumed: false });
+    expect(s.getState().model).toMatchObject({ doneBytes: 0, totalBytes: 1000 });
+    expect(s.getState().ui().checking).not.toBe(true);
+    expect(s.getState().ui().progress).toBe(0);
+    emit({ type: 'progress', done: 1000, total: 1000, bytesPerSec: 0, etaMs: null, resumed: false });
+    expect(s.getState().ui().imageReady).toBe(false);
+    emit({ type: 'ready' });
+    expect(s.getState().ui().imageReady).toBe(true);
   });
 });
 
@@ -51,7 +96,7 @@ describe('deriveModelUi — one case per UX 03 §3.1 state', () => {
   it('E4 network error (also when the last error is io/network on a missing or paused model): [Thử lại]', () => {
     for (const state of ['missing', 'paused'] as const) {
       const u = ui(model({ state, lastError: { code: 'network', message: 'x' } }), embed());
-      expect([u.code, u.text, u.severity, u.actions.map(a => a.id)]).toEqual(['E4', 'Tải model lỗi mạng', 'error', ['download']]);
+      expect([u.code, u.text, u.severity, u.actions.map(a => a.id)]).toEqual(['E4', 'Kết nối tải model bị gián đoạn.', 'error', ['download']]);
     }
     expect(ui(model({ state: 'missing', lastError: { code: 'io', message: 'x' } }), embed()).code).toBe('E4');
   });

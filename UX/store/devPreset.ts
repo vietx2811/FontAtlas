@@ -1,5 +1,5 @@
 // Chỉ cho dev/QA/ảnh chụp: dựng trạng thái UI từ hash URL (index.tsx chỉ gọi khi import.meta.env.DEV).
-// Ví dụ: #sel=Public%20Sans:Regular&style=Bold&tab=vi&info=1&size=50&q=sans
+// Ví dụ: #sel=Public%20Sans:Regular&style=Bold&tab=vi&info=1&size=50&q=sans  ·  #classes=serif,sans
 import type { Api } from '../api';
 import type { MockOptions } from '../api/mock';
 import { useModelStore } from './model';
@@ -20,18 +20,22 @@ export async function applyDevPreset(api: Api, hash: string): Promise<void> {
     const row = items.find(r => !sub || r.subfamily === sub) ?? items[0];
     if (row) ui.select(faceKey(row));
   }
+  const classes = p.get('classes'); if (classes) ui.setFilters({ ...useUiStore.getState().filters, classes: classes.split(',') });
   const style = p.get('style'); if (style) useUiStore.getState().setStyle(style);
   const tab = p.get('tab'); if (tab) ui.setPanelTab(tab as PanelTab);
   if (p.get('info') === '1' && !useUiStore.getState().infoExpanded) ui.toggleInfo();
 }
 
 const MB = 1024 * 1024;
-/** #model=missing|downloading|paused|checksum|corrupt|ready  #embed=running|paused|done|failed  (mock: mở app ở đúng trạng thái E*) */
+/** #model=missing|downloading|checking|tls|cancelled|paused|checksum|corrupt|ready  #embed=running|paused|done|failed  (mock: mở app ở đúng trạng thái E*) */
 export function devInitial(hash: string): NonNullable<MockOptions['initial']> {
   const p = new URLSearchParams(hash.replace(/^#/, ''));
   const out: NonNullable<MockOptions['initial']> = {};
   const model = p.get('model'); const embed = p.get('embed');
-  if (model === 'downloading') out.model = { state: 'downloading', doneBytes: 140 * MB, etaMs: 60_000 };
+  if (model === 'downloading') out.model = { state: 'downloading', doneBytes: 140 * MB, bytesPerSec: 8_500_000, etaMs: 60_000 };
+  else if (model === 'checking') out.model = { state: 'downloading', doneBytes: 371 * MB, totalBytes: 371 * MB, bytesPerSec: 0, etaMs: null };
+  else if (model === 'tls') out.model = { state: 'paused', doneBytes: 12 * MB, lastError: { code: 'tls', message: 'invalid peer certificate: UnknownIssuer; proxy CA missing' } };
+  else if (model === 'cancelled') out.model = { state: 'paused', doneBytes: 100 * MB, lastError: { code: 'cancelled', message: 'download cancelled by user' } };
   else if (model === 'paused') out.model = { state: 'paused', doneBytes: 100 * MB };
   else if (model === 'checksum') out.model = { state: 'checksum_mismatch' };
   else if (model === 'corrupt') out.model = { state: 'corrupt' };
