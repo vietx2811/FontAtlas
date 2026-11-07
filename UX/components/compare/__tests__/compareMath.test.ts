@@ -22,6 +22,17 @@ describe('deltaOf', () => {
   });
 });
 
+describe('deltaOf with backend deltas', () => {
+  it('uses the backend absolute delta for angles and the backend percent otherwise', () => {
+    expect(deltaOf('slant_deg', m(5, { unit: 'deg', delta: { abs: 4.5, pct: 900 } }), m(0.5, { unit: 'deg' }))).toEqual({ kind: 'degrees', value: 4.5 });
+    expect(deltaOf('contrast', m(2, { delta: { abs: 0.7, pct: 53.8 } }), m(1.3))).toEqual({ kind: 'percent', value: 53.8 });
+  });
+  it('a backend null delta means no delta (never recomputed)', () => {
+    expect(deltaOf('contrast', m(2, { delta: { abs: null, pct: null } }), m(1.3))).toBeNull();
+    expect(deltaOf('contrast', m(2, { delta: null }), m(1.3))).toBeNull();
+  });
+});
+
 describe('deltaText', () => {
   it('uses Vietnamese decimals, the real minus sign and ±0 for tiny changes', () => {
     expect(deltaText({ kind: 'percent', value: -2.65 })).toEqual({ text: 'Δ −2,7%', tone: 'down' });

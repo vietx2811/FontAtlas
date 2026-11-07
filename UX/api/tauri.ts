@@ -1,5 +1,8 @@
 // Cài đặt thật của Api: invoke + Channel của Tauri, kiểu từ UX/bindings (ts-rs). Tên lệnh và khoá đối số do TauriCommandMap kiểm lúc biên dịch.
-import { composeCompare } from './compare';
+import { COMPARE_MAX, COMPARE_MIN } from './compare';
+import { fromWire } from './compareWire';
+import type { PairComboDto } from '../bindings/PairComboDto';
+import type { CompareDto as WireCompareDto } from '../bindings/CompareDto';
 import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } from '../bindings';
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
@@ -107,7 +110,16 @@ export function createTauriApi(): Api {
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
-    compareFaces(faces) { return composeCompare(this, faces); },
+    async compareFaces(faces) {
+      if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
+      // Lệnh `compare_faces` (D2) chưa nằm trong TauriCommandMap ở nhánh này: gọi invoke thẳng; sau khi bindings có thì đổi sang call().
+      try { return fromWire(await invoke<WireCompareDto>('compare_faces', { faces, opts: { lang: 'vi' } })); } catch (e) { throw toCmdError(e); }
+    },
+    async pairThese(faces, o = {}) {
+      if (faces.length < 2 || faces.length > 4) throw new Error(`pair these needs 2–4 faces, got ${faces.length}`);
+      // Lệnh `pair_these` (D2) chưa nằm trong TauriCommandMap ở nhánh này: gọi invoke thẳng.
+      try { return await invoke<PairComboDto[]>('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: 'vi', maxCombos: o.maxCombos ?? 3 } }); } catch (e) { throw toCmdError(e); }
+    },
     async savePng(png, suggestedName) {
       // Lệnh `save_png` do backend thêm (dialog Lưu + ghi file): chưa nằm trong bindings nên gọi invoke thẳng.
       const bytes = new Uint8Array(await png.arrayBuffer());

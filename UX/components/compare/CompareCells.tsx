@@ -49,15 +49,24 @@ export function OverlayCell({ api, base, face, scale }: { api: Api; base: Compar
   );
 }
 
+const pct1 = (v: number) => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, useGrouping: false }).format(v);
+/** Chữ cảnh báo tràn: % em vượt hhea.ascender (backend); thiếu thì lùi về đỉnh dấu chồng tính bằng em. */
+function overText(face: CompareFace): string {
+  const { overAscenderPctEm: a, overCapPctEm: c, stackedMarksTopEm: em } = face.vi;
+  const p = a != null && a > 0 ? a : c;
+  if (p != null && p > 0) return t('compare.viWarnPct', { pct: pct1(p) });
+  return em !== null ? t('compare.viWarnEm', { em: numberText(em, 'em') }) : t('compare.viWarn');
+}
+
 export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
-  const { stackedMarksOverflow: over, stackedMarksTopEm: em, supports, missing } = face.vi;
+  const { stackedMarksOverflow: over, supports, missing } = face.vi;
   return (
     <WithFamily api={api} face={face}>{fam => (
       <div className="cmp-page">
         <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
         {!supports && <span className="cmp-chip warn">{missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone')}</span>}
-        {supports && over && <span className="cmp-chip warn" role="status">{em !== null ? t('compare.viWarnEm', { em: numberText(em, 'em') }) : t('compare.viWarn')}</span>}
-        {supports && !over && <span className="cmp-ok">{t('compare.viOk')}</span>}
+        {supports && over && <span className="cmp-chip warn" role="status">{overText(face)}</span>}
+        {supports && !over && <span className="cmp-ok" title={face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined}>{t('compare.viOk')}</span>}
         {!supports && over && <span className="cmp-chip warn">{t('compare.viWarn')}</span>}
       </div>
     )}</WithFamily>

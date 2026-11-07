@@ -77,6 +77,25 @@ describe('classification commands', () => {
   });
 });
 
+describe('compare_faces', () => {
+  it('invokes the real command with lang and maps the fixture to the UI model', async () => {
+    const wire = (await import('../../bindings/fixtures/compare_two.json')).default;
+    reply = cmd => (cmd === 'compare_faces' ? wire : null);
+    const faces = wire.faces.map(f => f.face);
+    const c = await createTauriApi().compareFaces(faces);
+    expect(last()).toEqual({ cmd: 'compare_faces', args: { faces, opts: { lang: 'vi' } } });
+    expect(c.faces[0].face).toEqual(wire.baseline);
+    expect(c.faces[0].extras?.vendorId).toBe(wire.faces[0].extras.vendorId);
+  });
+  it('rejects 1 or 9 faces without calling the backend and wraps backend errors', async () => {
+    const api = createTauriApi();
+    await expect(api.compareFaces([{ hashHex: 'a', faceIndex: 0 }])).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    reply = () => ({ __reject: { code: 'not_found', message: 'face' } });
+    await expect(api.compareFaces([{ hashHex: 'a', faceIndex: 0 }, { hashHex: 'b', faceIndex: 0 }])).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
 describe('errors', () => {
   it('rejections become CmdError with code, message and detail', async () => {
     reply = () => ({ __reject: { code: 'nested_source', message: 'nested', detail: { existingId: 4, existingPath: '/F' } } });
@@ -172,5 +191,23 @@ describe('preview and font URLs', () => {
     expect(u).toBe('fontatlas-preview://localhost/ab_0_48.png?t=Phở&g=2&r=r1'.replace('Phở', encodeURIComponent('Phở')));
     expect(api.fontUrl({ hashHex: 'ab', faceIndex: 0 })).toBe('fontatlas-font://localhost/ab_0.font');
     expect(api.fontUrl({ hashHex: 'ab', faceIndex: 1 })).toBeNull();
+  });
+});
+
+describe('pair_these', () => {
+  it('invokes the real command with Vietnamese project flag, lang and maxCombos', async () => {
+    const combos = (await import('../../bindings/fixtures/pair_these_combos.json')).default;
+    reply = cmd => (cmd === 'pair_these' ? combos : null);
+    const faces = [{ hashHex: 'a', faceIndex: 0 }, { hashHex: 'b', faceIndex: 0 }];
+    const r = await createTauriApi().pairThese(faces, { projectVi: false, maxCombos: 2 });
+    expect(last()).toEqual({ cmd: 'pair_these', args: { faces, opts: { projectVi: false, lang: 'vi', maxCombos: 2 } } });
+    expect(r).toHaveLength(combos.length);
+  });
+  it('defaults to project Vietnamese on and 3 combos; validates 2–4 faces', async () => {
+    reply = () => [];
+    const api = createTauriApi();
+    await api.pairThese([{ hashHex: 'a', faceIndex: 0 }, { hashHex: 'b', faceIndex: 0 }]);
+    expect(last().args.opts).toEqual({ projectVi: true, lang: 'vi', maxCombos: 3 });
+    await expect(api.pairThese([{ hashHex: 'a', faceIndex: 0 }])).rejects.toThrow();
   });
 });

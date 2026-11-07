@@ -6,6 +6,10 @@ const DEGREE_METRICS = new Set(['slant_deg', 'stress_deg']);
 /** Δ của một cột so với mốc: % cho độ dài/tỷ lệ, độ tuyệt đối cho góc (mốc 0 vẫn có nghĩa). Không đo được → null. */
 export function deltaOf(key: string, v: CompareMetric, base: CompareMetric): Delta | null {
   if (v.value === null || base.value === null) return null;
+  if (v.delta !== undefined) { // backend đã tính: dùng nguyên, không tự tính lại
+    const x = v.delta ? (DEGREE_METRICS.has(key) ? v.delta.abs : v.delta.pct) : null;
+    return x === null || x === undefined || !Number.isFinite(x) ? null : { kind: DEGREE_METRICS.has(key) ? 'degrees' : 'percent', value: x };
+  }
   if (DEGREE_METRICS.has(key)) return { kind: 'degrees', value: v.value - base.value };
   if (Math.abs(base.value) < 1e-3) return null; // mốc ~0: % vô nghĩa
   return { kind: 'percent', value: (v.value - base.value) / base.value * 100 };

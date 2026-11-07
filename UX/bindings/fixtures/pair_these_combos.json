@@ -1,0 +1,98 @@
+[
+  {
+    "assessment": {
+      "block": null,
+      "bodyWarnings": [
+        "low_x_height"
+      ],
+      "clashes": [],
+      "face": {
+        "faceIndex": 0,
+        "hashHex": "0202020202020202020202020202020202020202020202020202020202020202"
+      },
+      "gate": "controlled",
+      "headingOverflow": false,
+      "insufficientData": false,
+      "labels": [
+        {
+          "a": 4.900000095367432,
+          "axis": "contrast",
+          "b": 1.2999999523162842,
+          "delta": 3.5999999046325684,
+          "relation": "contrast",
+          "roleReversed": false,
+          "symbol": "◐"
+        }
+      ],
+      "row": {
+        "addedAt": 1700000000002,
+        "faceId": 2,
+        "faceIndex": 0,
+        "family": "Roboto",
+        "fileSize": 176002,
+        "fullName": "Roboto Regular",
+        "hashHex": "0202020202020202020202020202020202020202020202020202020202020202",
+        "isFavorite": false,
+        "isItalic": false,
+        "isVariable": false,
+        "licenseClass": "ofl",
+        "missing": false,
+        "path": "/Users/u/Fonts/Roboto-Regular.ttf",
+        "subfamily": "Regular",
+        "supportsVi": true,
+        "viMissing": 0,
+        "viStatus": "full",
+        "weightClass": 400,
+        "widthClass": 5
+      },
+      "sentences": [
+        "tương phản nét chênh rõ (4,89 và 1,30)"
+      ],
+      "summary": "Sans. Đủ 134 ký tự Việt.",
+      "weightHint": "0,14"
+    },
+    "body": {
+      "addedAt": 1700000000005,
+      "faceId": 5,
+      "faceIndex": 0,
+      "family": "Libre Baskerville",
+      "fileSize": 176005,
+      "fullName": "Libre Baskerville Regular",
+      "hashHex": "0505050505050505050505050505050505050505050505050505050505050505",
+      "isFavorite": false,
+      "isItalic": false,
+      "isVariable": false,
+      "licenseClass": "ofl",
+      "missing": false,
+      "path": "/Users/u/Fonts/LibreBaskerville-Regular.ttf",
+      "subfamily": "Regular",
+      "supportsVi": true,
+      "viMissing": 0,
+      "viStatus": "full",
+      "weightClass": 400,
+      "widthClass": 5
+    },
+    "heading": {
+      "addedAt": 1700000000003,
+      "faceId": 3,
+      "faceIndex": 0,
+      "family": "Playfair Display",
+      "fileSize": 176003,
+      "fullName": "Playfair Display Regular",
+      "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+      "isFavorite": false,
+      "isItalic": false,
+      "isVariable": false,
+      "licenseClass": "ofl",
+      "missing": false,
+      "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+      "subfamily": "Regular",
+      "supportsVi": true,
+      "viMissing": 0,
+      "viStatus": "full",
+      "weightClass": 400,
+      "widthClass": 5
+    },
+    "rank": 1
+  }
+]

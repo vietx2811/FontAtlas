@@ -66,3 +66,10 @@
 .cmp h1:focus { outline: none; }
 .cmp h1:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .cmp-chip { margin-right: 6px; }
+
+.cmp-meta-list { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.cmp-meta-list b { font-weight: 600; }
+.cmp-meta-na { color: var(--muted); font-size: 12px; }
+.cmp-mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.cmp-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.cmp-tag { display: inline-flex; height: 20px; align-items: center; padding: 0 7px; border-radius: 10px; background: var(--surface-2); font-size: 11px; font-weight: 500; }

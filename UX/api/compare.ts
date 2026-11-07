@@ -1,3 +1,6 @@
+import type { FaceExtrasDto } from '../bindings/FaceExtrasDto';
+import type { FamilyStructureDto } from '../bindings/FamilyStructureDto';
+import type { LicenseNoteDto } from '../bindings/LicenseNoteDto';
 import type { AxisReadingDto, ClassificationDto, FaceDetailDto, FaceKeyDto, FaceRowDto } from '../bindings';
 
 /** Các số đo hiện trong Compare, theo thứ tự hàng. Khoá = `AxisReadingDto.key` canonical. */
@@ -7,12 +10,21 @@ export type CompareMetricKey = typeof COMPARE_METRICS[number];
 export type CompareMetric = {
   key: string; value: number | null; unit: string | null;
   quality: 'measured' | 'estimated' | 'failed'; reason: string | null; percentile: number | null;
+  /** Chênh lệch so với mốc do backend tính (tuyệt đối + %); `null` ở mốc hoặc khi thiếu số; `undefined` = chưa có (UI tự tính). */
+  delta?: { abs: number | null; pct: number | null } | null;
 };
 export type CompareFace = {
   face: FaceKeyDto; row: FaceRowDto; classification: ClassificationDto;
   metrics: Record<string, CompareMetric>;
-  vi: { supports: boolean; missing: number; total: number; stackedMarksOverflow: boolean; stackedMarksTopEm: number | null };
+  vi: {
+    supports: boolean; missing: number; total: number; stackedMarksOverflow: boolean; stackedMarksTopEm: number | null;
+    /** % em dấu chồng vượt hhea.ascender (0 khi không vượt) / cao hơn cap height; `null` khi backend chưa tính. */
+    overAscenderPctEm?: number | null; overCapPctEm?: number | null;
+  };
+  /** Tên giấy phép hiển thị (kind từ backend hoặc chuỗi license của font). */
   license: string | null; designer: string | null;
+  /** D2: vendor, năm, nhóm OpenType, kerning, cấu trúc style, fsType. `null` khi nguồn dữ liệu không có (phân tích cũ). */
+  extras?: FaceExtrasDto | null; family?: FamilyStructureDto | null; licenseNote?: LicenseNoteDto | null;
 };
 export type CompareDto = { faces: CompareFace[]; /** Face không đọc được (kèm lý do); các cột còn lại vẫn so sánh. */ failed: Array<{ face: FaceKeyDto; reason: string }> };
 export const COMPARE_MIN = 2;
