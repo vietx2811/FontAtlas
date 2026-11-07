@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use fontatlas_store::{FaceKey, NewPair, Store, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test};
+use fontatlas_store::{FaceKey, NewPair, Store, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test};
 
 fn key(n: u8) -> FaceKey {
     FaceKey { hash: [n; 32], face_index: 0 }
@@ -22,7 +22,7 @@ fn v1_to_v3_migrates() {
         c.execute("INSERT INTO collections(name,created_at,updated_at) VALUES ('Giữ',1,1)", []).unwrap();
     }
     let (s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(fontatlas_store::USER_VERSION, 4);
+    assert_eq!(fontatlas_store::USER_VERSION, 5);
     assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(s.collections().unwrap().len(), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.sqlite_schema WHERE name IN ('activation_reasons','pairs')"), 2);
@@ -120,11 +120,36 @@ fn v3_to_v4_migrates_keeps_data_and_adds_overrides() {
         .unwrap();
     }
     let (mut s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 4);
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(s.collections().unwrap().len(), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.activation_state"), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.sqlite_schema WHERE name = 'classification_overrides'"), 1);
     s.set_classification_override(&key(7), "serif", Some("didone")).unwrap();
     assert_eq!(s.classification_overrides().unwrap().len(), 1);
     assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v3."));
+}
+
+#[test]
+fn v4_to_v5_drops_display_overrides_keeps_the_rest() {
+    let d = tmp();
+    let user = d.path().join(fontatlas_store::USER_FILE);
+    create_user_v4_for_test(&user);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        for (n, class, sub) in [(1u8, "serif", Some("didone")), (2, "display", None), (3, "script", Some("formal"))] {
+            c.execute(
+                "INSERT INTO classification_overrides(hash,face_index,class,subclass,updated_at) VALUES (?1,0,?2,?3,9)",
+                rusqlite::params![&[n; 32][..], class, sub],
+            )
+            .unwrap();
+        }
+    }
+    let (s, rep) = Store::open(d.path()).unwrap();
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
+    let left: Vec<String> = s.classification_overrides().unwrap().into_iter().map(|o| o.class).collect();
+    assert_eq!(left, vec!["serif".to_string(), "script".to_string()]);
+    // CHECK mới không còn cho phép 'display'
+    let mut s = s;
+    assert!(s.set_classification_override(&key(9), "display", None).is_err());
+    assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v4."));
 }

@@ -6,10 +6,10 @@ Lưu ý: bản gốc fit trên dump có cột pred/s_* của classifier trước
 """
 import pandas as pd, numpy as np, sys, json
 d=pd.read_csv(sys.argv[2])
+d=d[d.pred.isin(["Serif","Sans","Script","Mono"]) & d.accept.notna()].reset_index(drop=True)
 d["ok"]=[p in a.split("|") for p,a in zip(d.pred,d.accept)]
-d=d[d.pred.isin(["Serif","Sans","Script","Display","Mono"])].reset_index(drop=True)
-CL=["Serif","Sans","Script","Display","Mono"]
-SC={"Serif":"s_serif","Sans":"s_sans","Script":"s_script","Display":"s_display","Mono":"s_mono"}
+CL=["Serif","Sans","Script","Mono"]
+SC={"Serif":"s_serif","Sans":"s_sans","Script":"s_script","Mono":"s_mono"}  # s_display = bằng chứng nổi bật (vote None)
 def clamp(x,a,b,miss):
     x=np.where(np.isnan(x),miss,x); return np.clip(x,a,b)
 def feats(d):
@@ -22,8 +22,8 @@ def feats(d):
     S2=S.copy(); S2[np.arange(len(d)),idx]=-9
     margin=np.clip(own-S2.max(1),-2,5)
     cols.append(margin); names.append("margin")
-    cols.append(np.where(d.pred.isin(["Display","Script"]),0,np.clip(d.s_display.values,0,4))); names.append("odd_display")
-    cols.append(np.where(d.pred.isin(["Display","Script"]),0,np.clip(d.s_script.values,0,4))); names.append("odd_script")
+    cols.append(np.where(d.pred=="Script",0,np.clip(d.s_display.values,0,4))); names.append("odd_display")
+    cols.append(np.where(d.pred=="Script",0,np.clip(d.s_script.values,0,4))); names.append("odd_script")
     cols.append(clamp(d.width_cv.values,0,.5,.25)); names.append("width_cv")
     cols.append(clamp(d.spacing.values,0,.4,.15)); names.append("spacing")
     cols.append(clamp(d.aperture_e.values,0,.4,.2)); names.append("aperture_e")
@@ -36,7 +36,7 @@ def feats(d):
 X,names=feats(d); y=d.ok.values.astype(float)
 mu=X.mean(0); sd=X.std(0)+1e-9
 # one-hots: keep unscaled
-for i in range(5): mu[i]=0; sd[i]=1
+for i in range(4): mu[i]=0; sd[i]=1
 Z=(X-mu)/sd
 def fit(Z,y,lam):
     w=np.zeros(Z.shape[1]); b=0.0

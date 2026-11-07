@@ -46,7 +46,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     sourceIds: q.sourceIds ?? [], favoritesOnly: q.favoritesOnly ?? false, collectionId: q.collectionId ?? null, tagIds: q.tagIds ?? [],
     includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
-    classes: q.classes ?? [], subclasses: q.subclasses ?? [],
+    classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({

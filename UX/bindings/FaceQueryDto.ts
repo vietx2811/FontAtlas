@@ -26,4 +26,8 @@ classes: Array<string>,
 /**
  * Lọc theo subclass (snake_case, OR trong nhóm; AND với `classes`).
  */
-subclasses: Array<string>, };
+subclasses: Array<string>, 
+/**
+ * Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
+ */
+traits: Array<string>, };

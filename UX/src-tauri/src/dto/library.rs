@@ -323,6 +323,8 @@ pub struct FaceQueryDto {
     pub classes: Vec<String>,
     /// Lọc theo subclass (snake_case, OR trong nhóm; AND với `classes`).
     pub subclasses: Vec<String>,
+    /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    pub traits: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

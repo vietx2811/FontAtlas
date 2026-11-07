@@ -278,5 +278,5 @@ export function createMockApi(o: MockOptions = {}): Api {
 function mockClassification(family: string): FaceDetailDto['classificationInfo'] {
   const cls = /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(family) ? 'serif' : /Mono/.test(family) ? 'mono' : 'sans';
   const label = cls === 'serif' ? 'Serif' : cls === 'mono' ? 'Mono' : 'Sans';
-  return { class: cls, label, subclass: null, confidence: 0.9, candidate: null, signals: [], usage: [], source: 'auto', autoClass: null };
+  return { class: cls, label, subclass: null, confidence: 0.9, candidate: null, traits: [], signals: [], usage: [], source: 'auto', autoClass: null };
 }

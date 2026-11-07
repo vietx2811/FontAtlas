@@ -279,9 +279,26 @@ CREATE TABLE classification_overrides (
 ) WITHOUT ROWID;
 "#;
 
+/// v5 (Font Desk D1, quyết định 2026-11-08): Display là tag mục đích dùng, không phải class. Dựng lại bảng không còn
+/// `display` trong CHECK; override `display` cũ bị bỏ (không có nhãn hình dáng để chuyển — class tự động áp dụng lại).
+pub(crate) const USER_V5: &str = r#"
+CREATE TABLE classification_overrides_v5 (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  class      TEXT NOT NULL CHECK (class IN ('serif','sans','mono','script','blackletter','symbol')),
+  subclass   TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+INSERT INTO classification_overrides_v5 (hash, face_index, class, subclass, updated_at)
+  SELECT hash, face_index, class, subclass, updated_at FROM classification_overrides WHERE class <> 'display';
+DROP TABLE classification_overrides;
+ALTER TABLE classification_overrides_v5 RENAME TO classification_overrides;
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]
@@ -297,6 +314,15 @@ pub fn create_user_v2_for_test(path: &Path) {
     c.execute_batch(USER_V1).expect("USER_V1");
     c.execute_batch(USER_V2).expect("USER_V2");
     c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
+}
+/// Chỉ cho test: tạo user.db ở v4 để kiểm migration lên v5.
+#[doc(hidden)]
+pub fn create_user_v4_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v4");
+    for m in [USER_V1, USER_V2, USER_V3, USER_V4] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 4;").expect("user_version");
 }
 /// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
 #[doc(hidden)]

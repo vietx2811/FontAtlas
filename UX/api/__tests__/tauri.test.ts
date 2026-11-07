@@ -29,7 +29,7 @@ describe('query_faces', () => {
   it('fills every FaceQueryDto field with the 6a defaults (camelCase, no missing keys)', () => {
     expect(toFaceQueryDto({})).toEqual({
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
-      includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [],
+      includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [],
     });
   });
 

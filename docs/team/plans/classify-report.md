@@ -1,4 +1,222 @@
-# Font Desk D1 — báo cáo phân loại — Vòng 2b (sau review độc lập, core-0.6.0)
+# Font Desk D1 — báo cáo phân loại — Vòng 3: Display là tag mục đích dùng (core-0.7.0)
+
+Quyết định của chủ app (2026-11-08): **Display không phải class.** Mọi face xếp theo hình dáng (Serif/Sans/Mono/Script/Blackletter/Symbol hoặc
+Uncertain + `candidate`); Display chỉ nằm trong `usage`; các dấu hiệu Stencil/Inline-Outline/Rounded/Fat face/Pixel/Decorative là **`traits`**
+(mảng độc lập với class), không còn là subclass. `CONF_MIN = 0.88` giữ nguyên.
+
+## Thay đổi
+
+- Core: bỏ `Class::Display` và subclass Display; bằng chứng "nổi bật" (x-height/contrast/stem cực đoan, từ khoá, Panose 4, sFamilyClass 9)
+  giờ là tín hiệu `vote = null` (DTO: `"usage"`) chỉ ủng hộ `usage: Display` và `traits`. `Classification.traits`, `ClassificationDto.traits`.
+- Hiệu chỉnh confidence fit lại trên tune (4 class × đặc trưng mới, 15 hệ số); mặt italic đòi ngưỡng `CONF_MIN + 0.06` (chọn trên tune, mọi mặt).
+- Store: user.db **v5** — dựng lại `classification_overrides` không còn `display` trong CHECK; override `display` cũ **bị xoá** (không có nhãn hình dáng để chuyển;
+  class tự động áp dụng lại). Test migration v4→v5 có dữ liệu.
+- App: `classes` không nhận `display` (invalid_arg), `set_classification_override` từ chối `display`; thêm lọc `FaceQueryDto.traits` (OR, giá trị lạ bị từ chối).
+  Chưa có facet đếm theo traits (không bắt buộc).
+- Ground truth: GF `DISPLAY` → chấp nhận class hình dáng theo tag GF; họ DISPLAY **không có tag hình dáng** (147 họ) bị loại khỏi bảng class
+  (không biết đáp án). Tag `/Sans/Rounded`, `/Serif/Fat Face` giờ là Sans/Serif + trait.
+- `reference-v1.json`: chỉ đổi `analyzer_version` (core-0.7.0); profile/phân vị không đổi.
+
+## Kết quả (test split, ground truth mới)
+
+| Phép đo | Số mặt | Sai / đã gán | Độ phủ | Subclass đúng/đã gán |
+|---|---|---|---|---|
+| Regular (test) | 895 | **5.1%** (34/671) | 75.0% | 68.8% |
+| Mọi mặt (test) | 1831 | **3.6%** (42/1169) | 63.8% | 61.4% |
+| Regular (tune) | 827 | 4.8% (29/600) | 72.6% | 72.7% |
+| Mọi mặt (tune) | 1561 | 4.2% (41/966) | 61.9% | 64.5% |
+
+("Độ phủ" = tỉ lệ mặt được gán class (không phải Uncertain). Bảng Class bên dưới dùng cột "đúng/tổng" nên số khác.)
+
+Nói thẳng:
+- Bỏ Display khỏi class làm độ phủ tăng mạnh (Regular test 43,6% → 75,0%) ở cùng mức sai (~5%) vì các họ "Display theo mục đích" không còn bị tính là sai;
+  nhưng **tập đánh giá đã đổi** (loại 147 họ DISPLAY không tag hình dáng, DISPLAY có tag hình dáng được chấp nhận theo class hình dáng), nên không so trực tiếp với vòng 2b.
+- **Sai trên Regular test là 5,1% — thực tế chạm/vượt ngưỡng 5% một chút**; tune 4,8%. Mọi mặt tốt hơn (3,6%) nhờ nhiều mặt Light/Medium đúng.
+- **Subclass Regular test 68,8% (<70%)**, mọi mặt 61,4%: không đạt. Subclass Script formal/handwritten, Sans grotesque/neo_grotesque vẫn nhập nhằng.
+- **Traits có recall rất thấp** (chỉ dựa vào từ khoá trong tên; xem bảng). Tên font hiếm khi nói "Rounded"/"Stencil", nên đây mới là tín hiệu ban đầu — cần số đo hình học nếu muốn dùng làm bộ lọc chính.
+- Cờ italic: mặt italic sai 3,9% ở độ phủ 22% (test; ngưỡng cao hơn cho italic).
+- Test `fontatlas-embed … cancelling_slow_blocking_dns…` là test thời gian, đôi khi đỏ khi cả workspace chạy song song (qua khi chạy riêng, 2/2) — không thuộc phần này.
+
+## Test: Regular — class
+
+## Class — tập `test` (895 họ có đáp án)
+
+| đúng | Uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 637 | 224 | 34 | 71.2% | 94.9% |
+
+Hàng = đáp án (primary), cột = dự đoán.
+
+| GT \ dự đoán | Serif | Sans | Mono | Script | Blackletter | Symbol | Uncertain |
+|---|---|---|---|---|---|---|---|
+| Serif | 146 | 3 | 1 | 1 | 0 | 0 | 56 |
+| Sans | 5 | 350 | 6 | 2 | 0 | 4 | 82 |
+| Mono | 0 | 0 | 31 | 0 | 0 | 0 | 3 |
+| Script | 1 | 8 | 0 | 109 | 0 | 0 | 77 |
+| Blackletter | 1 | 1 | 0 | 1 | 1 | 0 | 6 |
+
+## Test: Regular — precision/coverage
+
+## Precision/coverage — toàn bộ (895 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 849 | 94.9% | 763 | 89.9% |
+| 0.50 | 841 | 94.0% | 760 | 90.4% |
+| 0.60 | 825 | 92.2% | 753 | 91.3% |
+| 0.70 | 798 | 89.2% | 743 | 93.1% |
+| 0.75 | 780 | 87.2% | 730 | 93.6% |
+| 0.80 | 756 | 84.5% | 713 | 94.3% |
+| 0.85 | 694 | 77.5% | 662 | 95.4% |
+| 0.88 | 631 | 70.5% | 606 | 96.0% |
+| 0.90 | 586 | 65.5% | 571 | 97.4% |
+| 0.93 | 447 | 49.9% | 440 | 98.4% |
+| 0.95 | 279 | 31.2% | 277 | 99.3% |
+| class cuối (CONF_MIN) | 671 | 75.0% | 637 | 94.9% |
+
+Nhóm văn bản (Serif/Sans/Mono):
+
+## Precision/coverage — chỉ nhóm văn bản (đáp án Serif/Sans/Mono) (690 họ)
+
+| ngưỡng confidence | đã gán | độ phủ | đúng | precision (đúng/đã gán) |
+|---|---|---|---|---|
+| 0.00 | 659 | 95.5% | 612 | 92.9% |
+| 0.50 | 653 | 94.6% | 610 | 93.4% |
+| 0.60 | 643 | 93.2% | 604 | 93.9% |
+| 0.70 | 629 | 91.2% | 596 | 94.8% |
+| 0.75 | 614 | 89.0% | 585 | 95.3% |
+| 0.80 | 599 | 86.8% | 574 | 95.8% |
+| 0.85 | 556 | 80.6% | 539 | 96.9% |
+| 0.88 | 510 | 73.9% | 497 | 97.5% |
+| 0.90 | 479 | 69.4% | 470 | 98.1% |
+| 0.93 | 359 | 52.0% | 353 | 98.3% |
+| 0.95 | 218 | 31.6% | 216 | 99.1% |
+| class cuối (CONF_MIN) | 549 | 79.6% | 527 | 96.0% |
+
+## Traits và usage Display so với tag GF (test, Regular)
+
+## Traits (tag hình thái) — so với tag GF
+
+| trait | họ GF có tag | đoán đúng (recall) | đoán dương tổng | trong đó có tag GF (precision) |
+|---|---|---|---|---|
+| stencil | 7 | 1 (14%) | 3 | 1 (33%) |
+| inline_outline | 11 | 4 (36%) | 7 | 4 (57%) |
+| rounded | 41 | 1 (2%) | 2 | 1 (50%) |
+| fat_face | 5 | 0 (0%) | 0 | 0 (0%) |
+| pixel | 21 | 3 (14%) | 3 | 3 (100%) |
+| decorative | 72 | 1 (1%) | 5 | 1 (20%) |
+
+## Tag usage Display — so với category DISPLAY của GF
+
+| họ DISPLAY | được gắn usage Display (recall) | tổng được gắn | trong đó là DISPLAY (precision) |
+|---|---|---|---|
+| 250 | 134 (54%) | 321 | 134 (42%) |
+
+Ghi chú: category DISPLAY của GF là mục đích dùng nên precision thấp là bình thường (font Sans/Serif đậm, cỡ lớn cũng hợp Display).
+
+Họ DISPLAY không có tag hình dáng (loại khỏi bảng class): 147.
+
+## Test: mọi mặt — class và theo nhóm style
+
+## Class — tập `test` (1831 họ có đáp án)
+
+| đúng | Uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 1127 | 662 | 42 | 61.6% | 96.4% |
+
+Hàng = đáp án (primary), cột = dự đoán.
+
+| GT \ dự đoán | Serif | Sans | Mono | Script | Blackletter | Symbol | Uncertain |
+|---|---|---|---|---|---|---|---|
+| Serif | 238 | 6 | 1 | 1 | 0 | 0 | 183 |
+| Sans | 6 | 704 | 7 | 2 | 0 | 4 | 368 |
+| Mono | 0 | 0 | 72 | 0 | 0 | 0 | 4 |
+| Script | 2 | 10 | 0 | 112 | 0 | 0 | 98 |
+| Blackletter | 1 | 1 | 0 | 1 | 1 | 0 | 9 |
+
+## Theo nhóm style (class cuối, tại CONF_MIN)
+
+| nhóm | số mặt | đúng | sai | Uncertain | sai/đã gán | độ phủ |
+|---|---|---|---|---|---|---|
+| black/heavy | 65 | 30 | 0 | 35 | 0.0% | 46.2% |
+| bold | 162 | 98 | 2 | 62 | 2.0% | 61.7% |
+| italic | 343 | 74 | 3 | 266 | 3.9% | 22.4% |
+| light/thin | 127 | 112 | 3 | 12 | 2.6% | 90.6% |
+| medium/semibold | 132 | 108 | 1 | 23 | 0.9% | 82.6% |
+| regular | 871 | 617 | 33 | 221 | 5.1% | 74.6% |
+| width (condensed/extended) | 131 | 88 | 0 | 43 | 0.0% | 67.2% |
+
+Tune (mọi mặt) theo nhóm style:
+
+## Theo nhóm style (class cuối, tại CONF_MIN)
+
+| nhóm | số mặt | đúng | sai | Uncertain | sai/đã gán | độ phủ |
+|---|---|---|---|---|---|---|
+| black/heavy | 55 | 21 | 0 | 34 | 0.0% | 38.2% |
+| bold | 124 | 74 | 2 | 48 | 2.6% | 61.3% |
+| italic | 296 | 63 | 3 | 230 | 4.5% | 22.3% |
+| light/thin | 102 | 93 | 2 | 7 | 2.1% | 93.1% |
+| medium/semibold | 98 | 76 | 4 | 18 | 5.0% | 81.6% |
+| regular | 816 | 564 | 29 | 223 | 4.9% | 72.7% |
+| width (condensed/extended) | 70 | 34 | 1 | 35 | 2.9% | 50.0% |
+
+## Subclass (test, Regular)
+
+## Subclass — họ đã đúng class và có nhãn con duy nhất (572)
+
+| đúng | uncertain | sai | đúng/tổng | đúng/đã gán |
+|---|---|---|---|---|
+| 393 | 1 | 178 | 68.7% | 68.8% |
+
+| GT subclass | dự đoán | số họ |
+|---|---|---|
+| casual_brush | casual_brush | 1 |
+| casual_brush | handwritten | 2 |
+| casual_brush | transitional | 1 |
+| didone | didone | 10 |
+| didone | humanist_oldstyle | 3 |
+| didone | slab | 2 |
+| didone | transitional | 8 |
+| formal | casual_brush | 1 |
+| formal | formal | 19 |
+| formal | handwritten | 7 |
+| geometric | geometric | 41 |
+| geometric | grotesque | 1 |
+| geometric | humanist | 8 |
+| grotesque | geometric | 13 |
+| grotesque | grotesque | 18 |
+| grotesque | humanist | 5 |
+| grotesque | neo_grotesque | 1 |
+| handwritten | formal | 34 |
+| handwritten | handwritten | 43 |
+| humanist | geometric | 16 |
+| humanist | grotesque | 6 |
+| humanist | humanist | 160 |
+| humanist | neo_grotesque | 2 |
+| humanist_oldstyle | didone | 1 |
+| humanist_oldstyle | glyphic | 1 |
+| humanist_oldstyle | humanist_oldstyle | 17 |
+| humanist_oldstyle | transitional | 8 |
+| neo_grotesque | geometric | 6 |
+| neo_grotesque | grotesque | 12 |
+| neo_grotesque | humanist | 7 |
+| neo_grotesque | neo_grotesque | 9 |
+| sans_mono | sans_mono | 19 |
+| sans_mono | serif_mono | 1 |
+| serif_mono | sans_mono | 2 |
+| serif_mono | serif_mono | 2 |
+| slab | slab | 14 |
+| slab | transitional | 3 |
+| slab | uncertain | 1 |
+| transitional | didone | 6 |
+| transitional | humanist_oldstyle | 18 |
+| transitional | slab | 3 |
+| transitional | transitional | 40 |
+
+---
+
+# Vòng 2b (core-0.6.0, trước quyết định Display) — giữ để đối chiếu
+
 
 Vòng 2b thay các số của "Vòng 2" bên dưới (giữ lại để đối chiếu). Cấu hình chốt: `CONF_MIN = 0.88`, hiệu chỉnh fit lại trên tune sau khi sửa
 tín hiệu cứng Mono / từ khoá / italic.

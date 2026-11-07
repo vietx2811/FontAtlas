@@ -12,6 +12,12 @@ pub struct Truth {
     pub accept: BTreeSet<Class>,
     /// Các subclass chấp nhận (rỗng = không đánh giá subclass).
     pub sub: BTreeSet<&'static str>,
+    /// Tag hình thái từ tag GF (stencil, inline_outline, rounded, fat_face, pixel, decorative).
+    pub traits: BTreeSet<&'static str>,
+    /// GF xếp vào DISPLAY theo mục đích dùng.
+    pub display_purpose: bool,
+    /// Họ DISPLAY không có tag hình dáng nào: không biết đáp án class → loại khỏi bảng class.
+    pub shape_unknown: bool,
 }
 
 /// `family,,/Tag/Path,score` → (family, tag, score). Tên họ có thể chứa dấu phẩy nên cắt từ phải.
@@ -62,49 +68,63 @@ fn tag_sub(t: &str) -> Option<&'static str> {
         "/Script/Formal" => "formal",
         "/Script/Handwritten" => "handwritten",
         "/Theme/Brush" => "casual_brush",
+        _ => return None,
+    })
+}
+
+fn tag_trait(t: &str) -> Option<&'static str> {
+    Some(match t {
         "/Theme/Stencil" => "stencil",
-        "/Theme/Inline" => "inline_outline",
+        "/Theme/Inline" | "/Theme/Shaded" => "inline_outline",
+        "/Sans/Rounded" => "rounded",
         "/Serif/Fat Face" => "fat_face",
+        "/Theme/Pixel" => "pixel",
+        "/Theme/Wacky" | "/Theme/Distressed" | "/Theme/Woodtype" | "/Theme/Blobby" | "/Theme/Tuscan" | "/Theme/Art Deco" | "/Theme/Art Nouveau" => "decorative",
         _ => return None,
     })
 }
 
 /// `category` của METADATA.pb: SERIF | SANS_SERIF | DISPLAY | HANDWRITING | MONOSPACE.
+/// Display là mục đích dùng, không phải class: họ DISPLAY được xếp theo tag hình dáng (nếu có).
 pub fn truth(category: &str, tags: &[(String, u32)]) -> Option<Truth> {
     let cat = match category {
-        "SERIF" => Class::Serif,
-        "SANS_SERIF" => Class::Sans,
-        "MONOSPACE" => Class::Mono,
-        "HANDWRITING" => Class::Script,
-        "DISPLAY" => Class::Display,
+        "SERIF" => Some(Class::Serif),
+        "SANS_SERIF" => Some(Class::Sans),
+        "MONOSPACE" => Some(Class::Mono),
+        "HANDWRITING" => Some(Class::Script),
+        "DISPLAY" => None,
         _ => return None,
     };
     let tag_classes: BTreeSet<Class> = tags.iter().filter_map(|(t, _)| tag_class(t)).collect();
+    let traits: BTreeSet<&'static str> = tags.iter().filter_map(|(t, _)| tag_trait(t)).collect();
+    let display_purpose = cat.is_none();
     let mut accept: BTreeSet<Class> = BTreeSet::new();
     let primary;
+    let mut shape_unknown = false;
     if tag_classes.contains(&Class::Blackletter) {
         primary = Class::Blackletter;
         accept.insert(Class::Blackletter);
-    } else if cat == Class::Display {
-        // Display của GF thường mang cả tag hình dạng (Sans/Serif/Script): chấp nhận cả hai
-        primary = Class::Display;
-        accept.insert(Class::Display);
+    } else if cat.is_none() {
+        // DISPLAY: chấp nhận mọi class hình dáng được tag; không có tag → không biết đáp án
         accept.extend(tag_classes.iter().copied());
-    } else if cat == Class::Mono || tag_classes.contains(&Class::Mono) {
+        match tag_classes.iter().next() {
+            Some(c) => primary = *c,
+            None => {
+                primary = Class::Uncertain;
+                shape_unknown = true;
+            }
+        }
+    } else if cat == Some(Class::Mono) || tag_classes.contains(&Class::Mono) {
         primary = Class::Mono;
         accept.insert(Class::Mono);
     } else {
-        // SERIF / SANS_SERIF / HANDWRITING: tag khác class với category (trừ Display/Rounded/Fat Face) = mâu thuẫn → bỏ
-        let other: Vec<&Class> = tag_classes.iter().filter(|c| **c != cat).collect();
-        let only_ok = tags.iter().all(|(t, _)| tag_class(t).is_none_or(|c| c == cat) || t == "/Sans/Rounded" || t == "/Serif/Fat Face");
-        if !other.is_empty() && !only_ok {
+        let cat = cat?;
+        // tag khác class với category = mâu thuẫn → bỏ
+        if tag_classes.iter().any(|c| *c != cat) {
             return None;
         }
         primary = cat;
         accept.insert(cat);
-        if tags.iter().any(|(t, _)| t == "/Sans/Rounded" || t == "/Serif/Fat Face") {
-            accept.insert(Class::Display);
-        }
     }
     let subs: BTreeSet<&'static str> = tags.iter().filter_map(|(t, _)| tag_sub(t)).collect();
     // Có đúng một nhãn con (cùng class) thì mới đánh giá subclass
@@ -116,12 +136,12 @@ pub fn truth(category: &str, tags: &[(String, u32)]) -> Option<Truth> {
             (false, true) => BTreeSet::from(["serif_mono"]),
             _ => BTreeSet::new(),
         }
-    } else if subs.len() == 1 && primary != Class::Display {
+    } else if subs.len() == 1 && !shape_unknown {
         subs
     } else {
         BTreeSet::new()
     };
-    Some(Truth { primary, accept, sub })
+    Some(Truth { primary, accept, sub, traits, display_purpose, shape_unknown })
 }
 
 #[cfg(test)]
@@ -151,16 +171,18 @@ mod tests {
     }
 
     #[test]
-    fn display_accepts_shape_class_and_has_no_subclass_eval() {
+    fn display_is_purpose_not_class() {
         let g = truth("DISPLAY", &t(&["/Sans/Grotesque"])).unwrap();
-        assert!(g.accept.contains(&Class::Display) && g.accept.contains(&Class::Sans));
-        assert!(g.sub.is_empty());
+        assert!(g.display_purpose && g.accept.contains(&Class::Sans) && !g.shape_unknown);
+        let u = truth("DISPLAY", &t(&["/Theme/Wacky"])).unwrap();
+        assert!(u.shape_unknown && u.traits.contains("decorative"));
     }
 
     #[test]
-    fn rounded_sans_accepts_display() {
+    fn rounded_sans_is_sans_with_rounded_trait() {
         let g = truth("SANS_SERIF", &t(&["/Sans/Rounded"])).unwrap();
-        assert!(g.accept.contains(&Class::Display) && g.accept.contains(&Class::Sans));
+        assert_eq!(g.accept.iter().copied().collect::<Vec<_>>(), vec![Class::Sans]);
+        assert!(g.traits.contains("rounded"));
     }
 
     #[test]

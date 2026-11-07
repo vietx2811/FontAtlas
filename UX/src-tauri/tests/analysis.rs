@@ -592,18 +592,24 @@ fn class_filter_facets_and_override_use_effective_class() {
     let f2 = analysis::class_facets(&st, &q).unwrap();
     assert_eq!(f2, facets);
 
-    // override chuyển Roboto sang Display; lọc và facet phản ánh ngay
+    // override chuyển Roboto sang Script/formal; lọc và facet phản ánh ngay
     let roboto = find(&st, "Roboto");
     analysis::set_classification_override(
         &st,
-        &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("decorative".into()) },
+        &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: Some("formal".into()) },
     )
     .unwrap();
-    let qd = FaceQueryDto { classes: vec!["display".into()], subclasses: vec!["decorative".into()], limit: 50, ..Default::default() };
+    let qd = FaceQueryDto { classes: vec!["script".into()], subclasses: vec!["formal".into()], limit: 50, ..Default::default() };
     let hit = library::query_faces(&st, &qd).unwrap();
     assert!(hit.items.iter().any(|r| r.family == "Roboto"));
     let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
-    assert!(disp.iter().find(|f| f.class == "display").unwrap().subclasses.iter().any(|s| s.subclass == "decorative"));
+    assert!(disp.iter().find(|f| f.class == "script").unwrap().subclasses.iter().any(|s| s.subclass == "formal"));
+    // Display không còn là class: không lọc, không ghi đè được
+    assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["display".into()], ..Default::default() }).is_err());
+    assert!(analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: None }).is_err());
+    // lọc traits: giá trị lạ bị từ chối, giá trị hợp lệ chạy được
+    assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["wiggly".into()], ..Default::default() }).is_err());
+    assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["stencil".into()], ..Default::default() }).is_ok());
 
     // xoá override → trở lại tự động
     analysis::clear_classification_override(&st, &key(&roboto)).unwrap();

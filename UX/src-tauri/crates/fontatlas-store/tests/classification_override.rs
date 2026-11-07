@@ -16,9 +16,9 @@ fn override_roundtrip_upsert_and_clear() {
     let o = s.classification_override(&key(1)).unwrap().unwrap();
     assert_eq!((o.class.as_str(), o.subclass.as_deref()), ("script", Some("formal")));
     // ghi đè lần nữa = cập nhật
-    s.set_classification_override(&key(1), "display", None).unwrap();
+    s.set_classification_override(&key(1), "blackletter", None).unwrap();
     let o = s.classification_override(&key(1)).unwrap().unwrap();
-    assert_eq!((o.class.as_str(), o.subclass), ("display", None));
+    assert_eq!((o.class.as_str(), o.subclass), ("blackletter", None));
     assert_eq!(s.classification_overrides().unwrap().len(), 2);
     s.clear_classification_override(&key(1)).unwrap();
     assert!(s.classification_override(&key(1)).unwrap().is_none());
