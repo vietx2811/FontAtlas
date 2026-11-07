@@ -103,6 +103,7 @@ export interface TauriCommandMap {
   save_png: { args: { suggestedName: string; pngBase64: string }; result: string | null };
   duplicate_groups: { args: { q: FaceQueryDto }; result: DuplicateGroupDto[] };
   duplicate_summary: { args: { q: FaceQueryDto }; result: DuplicateSummaryDto };
+  reveal_location: { args: { path: string }; result: null };
   compare_faces: { args: { faces: FaceKeyDto[]; opts: CompareOptsDto }; result: CompareDto };
   pair_these: { args: { faces: FaceKeyDto[]; opts: PairTheseOptsDto }; result: PairComboDto[] };
   save_pair: { args: { pair: NewPairDto }; result: number };
