@@ -4,3 +4,5 @@
 .fa-zero button { height: 30px; padding: 0 14px; border-radius: 8px; background: var(--surface-2); color: var(--fg); font-size: 13px; }
 .fa-zero button:hover { background: var(--chrome-active); }
 .fa-zero-actions { display: flex; gap: 8px; }
+/* Bộ lọc (360px, neo phải) đang mở: dời trạng thái rỗng sang trái để không bị che. */
+@media (min-width: 900px) { :root:has(#font-filters) .fa-lib .fa-zero { padding-right: 400px; } }
