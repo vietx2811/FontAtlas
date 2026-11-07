@@ -256,3 +256,91 @@ pub fn duplicate_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<Duplic
         })
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(face_id: i64, n: u8, ps: &str, family: &str, style: &str, path: &str) -> DupRow {
+        DupRow { face_id, key: FaceKey { hash: [n; 32], face_index: 0 }, family: family.into(), subfamily: Some(style.into()), postscript: Some(ps.into()), weight: Some(400), italic: false, container: Some("sfnt".into()), path: path.into() }
+    }
+
+    fn no_info(_: &FaceKey) -> VersionInfo {
+        VersionInfo::default()
+    }
+
+    #[test]
+    fn same_file_lists_every_path_and_ignores_single_copies() {
+        let rows = vec![row(1, 1, "A-Regular", "A", "Regular", "/x/a.ttf"), row(1, 1, "A-Regular", "A", "Regular", "/y/a.ttf"), row(2, 2, "B-Regular", "B", "Regular", "/x/b.ttf")];
+        let g = group_rows(&rows, &no_info);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].kind, DuplicateKindDto::SameFile);
+        assert_eq!(g[0].members.iter().filter_map(|m| m.path.as_deref()).collect::<Vec<_>>(), vec!["/x/a.ttf", "/y/a.ttf"]);
+    }
+
+    #[test]
+    fn versions_mark_newest_by_revision_then_modified_only_when_unique() {
+        let rows = vec![row(1, 1, "A-Regular", "A", "Regular", "/old/a.ttf"), row(2, 2, "A-Regular", "A", "Regular", "/new/a.ttf")];
+        let info = |k: &FaceKey| match k.hash[0] {
+            1 => VersionInfo { version: Some("Version 1.0".into()), revision: Some(1.0), modified: Some(2_000) },
+            _ => VersionInfo { version: Some("Version 2.0".into()), revision: Some(2.0), modified: Some(1_000) },
+        };
+        let g = group_rows(&rows, &info);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].kind, DuplicateKindDto::Versions);
+        assert!(g[0].newest_known);
+        // revision thắng ngày sửa
+        assert_eq!(g[0].members.iter().filter(|m| m.is_newest).map(|m| m.key.hash[0]).collect::<Vec<_>>(), vec![2]);
+        // cùng revision, khác ngày → ngày quyết định
+        let same_rev = |k: &FaceKey| VersionInfo { revision: Some(1.5), modified: Some(i64::from(k.hash[0])), ..Default::default() };
+        let g = group_rows(&rows, &same_rev);
+        assert_eq!(g[0].members.iter().filter(|m| m.is_newest).map(|m| m.key.hash[0]).collect::<Vec<_>>(), vec![2]);
+        // hoà hoàn toàn hoặc không có số liệu → không đánh dấu ai
+        let tie = |_: &FaceKey| VersionInfo { revision: Some(1.5), modified: Some(5), ..Default::default() };
+        let g = group_rows(&rows, &tie);
+        assert!(!g[0].newest_known && g[0].members.iter().all(|m| !m.is_newest));
+        let g = group_rows(&rows, &no_info);
+        assert!(!g[0].newest_known && g[0].members.iter().all(|m| !m.is_newest));
+    }
+
+    #[test]
+    fn formats_when_each_member_has_its_own_format() {
+        // cùng PostScript name, hai định dạng → formats
+        let g = group_rows(&[row(1, 1, "A-Regular", "A", "Regular", "/a.ttf"), row(2, 2, "A-Regular", "A", "Regular", "/a.otf")], &no_info);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].kind, DuplicateKindDto::Formats);
+        assert!(g[0].members.iter().all(|m| !m.is_newest) && !g[0].newest_known);
+        // PostScript name khác nhau nhưng cùng family+style+weight → vẫn formats
+        let g = group_rows(&[row(1, 1, "A-Regular", "A", "Regular", "/a.ttf"), row(2, 2, "A-Reg", "A", "Regular", "/a.woff2")], &no_info);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].kind, DuplicateKindDto::Formats);
+        assert_eq!(g[0].members.iter().map(|m| m.format.as_str()).collect::<Vec<_>>(), vec!["ttf", "woff2"]);
+    }
+
+    #[test]
+    fn same_format_with_different_postscript_is_not_a_duplicate() {
+        // static vs variable cùng family+style, cùng .ttf: không báo trùng
+        let g = group_rows(&[row(1, 1, "A-Regular", "A", "Regular", "/a.ttf"), row(2, 2, "A-VF", "A", "Regular", "/a-vf.ttf")], &no_info);
+        assert!(g.is_empty(), "{g:?}");
+    }
+
+    #[test]
+    fn a_face_is_in_at_most_one_name_based_group() {
+        // 3 bản cùng PS name: 2 TTF + 1 WOFF2 → một nhóm versions (không bị nhóm lại ở pass family/style)
+        let g = group_rows(
+            &[row(1, 1, "A-Regular", "A", "Regular", "/1/a.ttf"), row(2, 2, "A-Regular", "A", "Regular", "/2/a.ttf"), row(3, 3, "A-Regular", "A", "Regular", "/3/a.woff2")],
+            &no_info,
+        );
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].kind, DuplicateKindDto::Versions);
+        assert_eq!(g[0].members.len(), 3);
+    }
+
+    #[test]
+    fn format_detection_prefers_extension_then_container() {
+        assert_eq!(format_of("/x/A.WOFF2", Some("sfnt")), "woff2");
+        assert_eq!(format_of("/x/A", Some("woff1")), "woff");
+        assert_eq!(format_of("/x/A", Some("collection")), "ttc");
+        assert_eq!(format_of("/x/A.bin", None), "sfnt");
+    }
+}
