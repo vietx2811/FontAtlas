@@ -639,19 +639,11 @@ pub fn get_face(
 
     let outline = opt_str(&m, "outline_format").unwrap_or_else(|| "none".into());
     let marks = v.get("marks").cloned().unwrap_or(Value::Null);
-    let width_cv = profile.get(AxisId::WidthCv);
-    let classification =
-        if width_cv.q == Q::Measured && width_cv.value.is_some_and(|x| x.abs() < 0.005) {
-            Some("Mono".to_string())
-        } else {
-            let sf = profile.get(AxisId::SerifFoot);
-            match (sf.q, sf.value) {
-                (Q::Failed, _) | (_, None) => None,
-                (_, Some(x)) if x < 1.2 => Some("Sans".into()),
-                (_, Some(x)) if x > 1.6 => Some("Serif".into()),
-                _ => None,
-            }
-        };
+    let classification_info = classification_of(state, &sk, &m, &an)?;
+    let classification = match classification_info.class.as_str() {
+        "uncertain" => None,
+        _ => Some(classification_info.label.clone()),
+    };
     let rows = rows_of(state, &b, std::slice::from_ref(&key))?;
     let row = rows
         .get(&key)
@@ -719,6 +711,7 @@ pub fn get_face(
         row,
         summary: summarize_face(profile, reference, l),
         classification,
+        classification_info,
         source: if has_image { "axes_and_image" } else { "axes" }.into(),
         has_image,
         file: FileInfoDto {
@@ -811,4 +804,69 @@ mod raw_stats_tests {
         let s = stats_of(a, vec![0.0, 100.0]);
         assert_eq!((s.p1, s.p99), (Some(1.0), Some(99.0)));
     }
+}
+
+/// Phân loại tự động từ JSON đã lưu, rồi áp ghi đè của người dùng (ưu tiên hơn).
+pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy: &Value) -> Result<ClassificationDto, CmdError> {
+    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify};
+    let auto = classify(&ClassifyInput::from_json(meta, anatomy));
+    let ov = state.with_user(|u| Ok(u.classification_override(key)?))?;
+    let usage_str = |u: &[Usage]| -> Vec<String> {
+        u.iter()
+            .map(|x| match x {
+                Usage::Text => "text",
+                Usage::Display => "display",
+                Usage::Ui => "ui",
+            })
+            .map(String::from)
+            .collect()
+    };
+    let signals: Vec<ClassSignalDto> = auto
+        .signals
+        .iter()
+        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: format!("{:?}", s.vote).to_lowercase(), weight: s.weight })
+        .collect();
+    let snake = |c: Class| serde_json::to_value(c).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+    if let Some(o) = ov
+        && let Some(c) = Class::parse(&o.class)
+    {
+        return Ok(ClassificationDto {
+            class: snake(c),
+            label: c.label().into(),
+            subclass: o.subclass,
+            confidence: 1.0,
+            signals,
+            usage: usage_str(&auto.usage),
+            source: "override".into(),
+            auto_class: Some(snake(auto.class)),
+        });
+    }
+    Ok(ClassificationDto {
+        class: snake(auto.class),
+        label: auto.class.label().into(),
+        subclass: auto.subclass,
+        confidence: auto.confidence,
+        signals,
+        usage: usage_str(&auto.usage),
+        source: "auto".into(),
+        auto_class: None,
+    })
+}
+
+/// Ghi đè phân loại của người dùng (lưu ở user.db). `class` và `subclass` phải thuộc taxonomy.
+pub fn set_classification_override(state: &AppState, o: &ClassificationOverrideDto) -> Result<(), CmdError> {
+    use fontatlas_core::classify::{Class, subclasses_of};
+    let c = Class::parse(&o.class).filter(|c| *c != Class::Uncertain).ok_or_else(|| CmdError::invalid_arg(format!("class không hợp lệ: {}", o.class)))?;
+    if let Some(sub) = &o.subclass
+        && !subclasses_of(c).contains(&sub.as_str())
+    {
+        return Err(CmdError::invalid_arg(format!("subclass {sub} không thuộc {}", c.label())));
+    }
+    let k = FaceKey::try_from(&o.face)?;
+    state.with_user(|u| Ok(u.set_classification_override(&k, &o.class.to_ascii_lowercase(), o.subclass.as_deref())?))
+}
+
+pub fn clear_classification_override(state: &AppState, face: &FaceKeyDto) -> Result<(), CmdError> {
+    let k = FaceKey::try_from(face)?;
+    state.with_user(|u| Ok(u.clear_classification_override(&k)?))
 }

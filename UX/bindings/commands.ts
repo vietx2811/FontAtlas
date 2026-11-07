@@ -7,6 +7,7 @@ import type { ActivationStateDto } from './ActivationStateDto';
 import type { AxisStatsDto } from './AxisStatsDto';
 import type { BootEvent } from './BootEvent';
 import type { BootStatusDto } from './BootStatusDto';
+import type { ClassificationOverrideDto } from './ClassificationOverrideDto';
 import type { CollectionDto } from './CollectionDto';
 import type { DescribeDto } from './DescribeDto';
 import type { EmbedEvent } from './EmbedEvent';
@@ -95,6 +96,8 @@ export interface TauriCommandMap {
   list_pairs: { args: { collectionId: number | null }; result: SavedPairDto[] };
   delete_pair: { args: { id: number }; result: null };
   describe: { args: { text: string }; result: DescribeDto };
+  set_classification_override: { args: { over: ClassificationOverrideDto }; result: null };
+  clear_classification_override: { args: { face: FaceKeyDto }; result: null };
   get_settings: { args: Record<string, never>; result: SettingsDto };
   set_settings: { args: { patch: SettingsPatchDto }; result: SettingsDto };
   model_status: { args: Record<string, never>; result: ModelStatusDto };

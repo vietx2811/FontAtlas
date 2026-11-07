@@ -142,6 +142,21 @@ fn detail() -> FaceDetailDto {
         row: row(3, 3, "Playfair Display", "Regular", 400, false),
         summary: "Serif, tương phản cao, x-height thấp. Đủ 134 ký tự Việt.".into(),
         classification: Some("Serif".into()),
+        classification_info: ClassificationDto {
+            class: "serif".into(),
+            label: "Serif".into(),
+            subclass: Some("didone".into()),
+            confidence: 0.82,
+            signals: vec![ClassSignalDto {
+                source: "measure".into(),
+                detail: "contrast 3.4".into(),
+                vote: "serif".into(),
+                weight: 1.5,
+            }],
+            usage: vec!["display".into()],
+            source: "auto".into(),
+            auto_class: None,
+        },
         source: "axes_and_image".into(),
         has_image: true,
         file: FileInfoDto {

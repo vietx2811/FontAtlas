@@ -83,3 +83,12 @@ fn metadata_exposes_new_fields() {
     assert!(!m.symbol_cmap);
     assert!(m.vendor_id.is_some() || m.family_class.is_some() || m.panose.is_some());
 }
+
+#[test]
+fn every_subclass_the_classifier_can_emit_is_valid() {
+    use fontatlas_core::classify::subclasses_of;
+    for c in [Class::Serif, Class::Sans, Class::Mono, Class::Script, Class::Display] {
+        assert!(!subclasses_of(c).is_empty());
+    }
+    assert!(subclasses_of(Class::Uncertain).is_empty());
+}

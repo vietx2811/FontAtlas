@@ -32,6 +32,25 @@
     }
   ],
   "classification": "Serif",
+  "classificationInfo": {
+    "autoClass": null,
+    "class": "serif",
+    "confidence": 0.8199999928474426,
+    "label": "Serif",
+    "signals": [
+      {
+        "detail": "contrast 3.4",
+        "source": "measure",
+        "vote": "serif",
+        "weight": 1.5
+      }
+    ],
+    "source": "auto",
+    "subclass": "didone",
+    "usage": [
+      "display"
+    ]
+  },
   "file": {
     "container": "sfnt",
     "format": "ttf",

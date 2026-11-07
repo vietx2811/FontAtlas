@@ -48,6 +48,18 @@ impl Class {
     }
 }
 
+/// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng).
+pub fn subclasses_of(c: Class) -> &'static [&'static str] {
+    match c {
+        Class::Serif => &["humanist_oldstyle", "transitional", "didone", "slab", "glyphic"],
+        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist"],
+        Class::Mono => &["serif_mono", "sans_mono"],
+        Class::Script => &["formal", "casual_brush", "handwritten"],
+        Class::Display => &["decorative", "stencil", "inline_outline", "rounded", "fat_face"],
+        Class::Blackletter | Class::Symbol | Class::Uncertain => &[],
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Usage {

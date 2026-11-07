@@ -94,6 +94,8 @@ macro_rules! command_list {
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
             async describe(text: String) -> Result<DescribeDto, CmdError>;
+            async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
+            async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
             async get_settings() -> Result<SettingsDto, CmdError>;
             async set_settings(patch: SettingsPatchDto) -> Result<SettingsDto, CmdError>;
             async model_status() -> Result<ModelStatusDto, CmdError>;
@@ -263,6 +265,8 @@ cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandida
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
 cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
 cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
+cmd!(set_classification_override(over: ClassificationOverrideDto) -> () => |s| analysis::set_classification_override(s, &over));
+cmd!(clear_classification_override(face: FaceKeyDto) -> () => |s| analysis::clear_classification_override(s, &face));
 cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
 cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));
