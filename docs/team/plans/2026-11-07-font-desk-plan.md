@@ -120,6 +120,8 @@ Theo memory team-throttle: tối đa 2 worker chạy song song, worker và revie
 1. **Pair** và **Compare** đặt ở **Top Bar**, không đặt ở SelectionBar hay detail panel.
 2. Về độ chính xác: chủ app yêu cầu "cần giảm thêm sai số". Lead đã làm ngay ở analyzer core-0.4.3, xem `round2-analyzer-accuracy.md`. Ngưỡng nghiệm thu Phân loại giữ class ≥ 90%, subclass ≥ 70% cho tới khi chủ app nói khác.
 3. Thứ tự làm D trước hay UI trước: chưa trả lời. Mặc định theo mục E.
+4. (2026-11-08) Ngưỡng Uncertain: giữ `CONF_MIN = 0.88`. Trên phần đã gán chỉ sai khoảng 5%; font không có nhãn vẫn hiện `candidate` dạng "có lẽ là …".
+5. (2026-11-08) **Display là tag mục đích dùng, không phải class.** Mọi font được xếp theo hình dáng (Serif/Sans/Mono/Script/Blackletter/Symbol). Display chỉ xuất hiện trong `usage`. Các dấu hiệu Stencil / Inline-Outline / Rounded / Fat face / Decorative trở thành tag hình thái.
 
 ## Câu hỏi ban đầu
 1. SelectionBar hiện khi chọn 1 font, hay chỉ thêm nút Pair ở detail panel?
