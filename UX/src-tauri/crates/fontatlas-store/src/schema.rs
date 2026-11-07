@@ -267,9 +267,21 @@ CREATE TABLE pairs (
 CREATE INDEX pairs_collection ON pairs(collection_id);
 "#;
 
+/// v4 (Font Desk D1): ghi đè phân loại của người dùng.
+pub(crate) const USER_V4: &str = r#"
+CREATE TABLE classification_overrides (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  class      TEXT NOT NULL CHECK (class IN ('serif','sans','mono','script','display','blackletter','symbol')),
+  subclass   TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]
@@ -285,6 +297,15 @@ pub fn create_user_v2_for_test(path: &Path) {
     c.execute_batch(USER_V1).expect("USER_V1");
     c.execute_batch(USER_V2).expect("USER_V2");
     c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
+}
+/// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
+#[doc(hidden)]
+pub fn create_user_v3_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v3");
+    for m in [USER_V1, USER_V2, USER_V3] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 3;").expect("user_version");
 }
 pub const LIBRARY_VERSION: u32 = LIBRARY_MIGRATIONS.len() as u32;
 pub const USER_VERSION: u32 = USER_MIGRATIONS.len() as u32;

@@ -28,6 +28,9 @@ pub struct FaceMeta {
     /// Font built for a major non-Latin script (CJK, Indic, Thai, Arabic…), per OpenType
     /// script tags in the stored metadata. Its Latin subset is secondary.
     pub non_latin_primary: bool,
+    /// Phân loại tự động (snake_case), chưa áp ghi đè của người dùng.
+    pub auto_class: String,
+    pub auto_subclass: Option<String>,
 }
 
 /// OpenType script tags whose presence marks a font as designed primarily for that script.
@@ -110,9 +113,12 @@ impl IndexBundle {
             let hash = a.key.hash_hex();
             let Some(p) = FaceProfile::from_json(&hash, a.key.face_index, &m, &v, &an) else { return };
             let status = v.get("status").and_then(Value::as_str).unwrap_or("");
+            let auto = fontatlas_core::classify::classify(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
             meta.insert(
                 p.key.clone(),
                 FaceMeta {
+                    auto_class: auto.class.snake().into(),
+                    auto_subclass: auto.subclass,
                     face_id: a.face_id,
                     source_ids: a.source_ids,
                     missing: a.missing,

@@ -48,6 +48,13 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
 pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
+    if !q.classes.is_empty() || !q.subclasses.is_empty() {
+        let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
+        match &mut scope {
+            Some(prev) => prev.retain(|x| ids.contains(&x.0)),
+            None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
+        }
+    }
     if !q.raw_axis_ranges.is_empty() {
         let b = crate::services::analysis::bundle(state)?;
         let raw: Vec<(i64, f32)> = b
@@ -87,6 +94,86 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
     }
     let sq = to_store_query(q);
     state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?.into()))
+}
+
+type EffMap = std::sync::Arc<std::collections::HashMap<i64, (String, Option<String>)>>;
+static CLASS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+type EffCache = Option<(std::sync::Weak<crate::index_bundle::IndexBundle>, u64, EffMap)>;
+static EFF_CACHE: std::sync::Mutex<EffCache> = std::sync::Mutex::new(None);
+
+/// Gọi sau mỗi lần đổi/xoá ghi đè phân loại để cache phân loại hiệu lực dựng lại.
+pub(crate) fn bump_class_generation() {
+    CLASS_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Phân loại hiệu lực (ghi đè > tự động) của từng face trong Index: `face_id → (class, subclass)`.
+/// Cache theo (bundle, thế hệ ghi đè) nên không đọc lại user.db cho mỗi truy vấn/facet.
+pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
+    let b = crate::services::analysis::bundle(state)?;
+    let generation = CLASS_GEN.load(std::sync::atomic::Ordering::SeqCst);
+    if let Ok(g) = EFF_CACHE.lock()
+        && let Some((w, gen_, m)) = g.as_ref()
+        && *gen_ == generation
+        && w.upgrade().is_some_and(|a| std::sync::Arc::ptr_eq(&a, &b))
+    {
+        return Ok(m.clone());
+    }
+    let ov: std::collections::HashMap<(String, u32), _> = state
+        .with_store(|s| Ok(s.classification_overrides()?))?
+        .into_iter()
+        .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
+        .collect();
+    let map: EffMap = std::sync::Arc::new(
+        b.meta
+            .iter()
+            .map(|(k, m)| {
+                let eff = match ov.get(&(k.hash.clone(), k.index)) {
+                    Some(o) => (o.class.clone(), o.subclass.clone()),
+                    None => (m.auto_class.clone(), m.auto_subclass.clone()),
+                };
+                (m.face_id, eff)
+            })
+            .collect(),
+    );
+    if let Ok(mut g) = EFF_CACHE.lock() {
+        *g = Some((std::sync::Arc::downgrade(&b), generation, map.clone()));
+    }
+    Ok(map)
+}
+
+fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
+    use fontatlas_core::classify::{Class, subclasses_of};
+    let classes: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
+    for c in &classes {
+        if c != "unclassified" && Class::parse(c).is_none() {
+            return Err(CmdError::invalid_arg(format!("classes: class không hợp lệ: {c}")));
+        }
+    }
+    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script, Class::Display]
+        .into_iter()
+        .flat_map(subclasses_of)
+        .copied()
+        .collect();
+    for s in subclasses {
+        if !known.contains(&s.as_str()) {
+            return Err(CmdError::invalid_arg(format!("subclasses: subclass không hợp lệ: {s}")));
+        }
+    }
+    let mut out: std::collections::HashSet<i64> = effective_classes(state)?
+        .iter()
+        .filter(|(_, (c, sub))| {
+            (classes.is_empty() || classes.contains(c))
+                && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    // "unclassified": face chưa có hồ sơ trong Index (chưa phân tích / JSON hỏng) — luôn tách riêng, không lẫn vào "uncertain".
+    if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() {
+        let b = crate::services::analysis::bundle(state)?;
+        let known_ids: std::collections::HashSet<i64> = b.meta.values().map(|m| m.face_id).collect();
+        out.extend(state.with_store(|s| Ok(s.all_face_ids()?))?.into_iter().filter(|id| !known_ids.contains(id)));
+    }
+    Ok(out)
 }
 
 pub(crate) fn validate_raw_ranges(ranges: &[RawAxisRangeDto]) -> Result<(), CmdError> {

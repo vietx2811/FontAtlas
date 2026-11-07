@@ -157,9 +157,9 @@ fn public_sans_named_instances_have_wght() {
 }
 
 #[test]
-fn analyzer_version_is_core_0_4_3() {
+fn analyzer_version_is_core_0_6_0() {
     // 0.4.1: metadata.cmap_scripts (no anatomy change; reference quantiles identical).
-    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.4.3");
+    assert_eq!(fontatlas_core::ANALYZER_VERSION, "core-0.6.0");
 }
 
 #[test]

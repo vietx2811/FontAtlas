@@ -56,7 +56,7 @@ fn capabilities_minimal() {
     let c = json("capabilities/default.json");
     let mut got: Vec<&str> = c["permissions"].as_array().unwrap().iter().map(|p| p.as_str().expect("chỉ quyền dạng chuỗi")).collect();
     got.sort();
-    assert_eq!(got, ["core:default", "core:window:allow-start-dragging", "dialog:allow-open"]);
+    assert_eq!(got, ["core:default", "core:window:allow-set-theme", "core:window:allow-start-dragging", "dialog:allow-open"]);
 }
 
 #[test]

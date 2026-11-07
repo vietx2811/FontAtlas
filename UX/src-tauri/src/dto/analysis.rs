@@ -353,6 +353,8 @@ pub struct FaceDetailDto {
     pub summary: String,
     /// Sans · Serif · Mono: dòng dưới tên.
     pub classification: Option<String>,
+    /// Phân loại đầy đủ: class, subclass, độ tin cậy, lý do, tag dùng, nguồn (tự động / ghi đè).
+    pub classification_info: ClassificationDto,
     /// "axes" | "axes_and_image"
     pub source: String,
     pub has_image: bool,
@@ -361,4 +363,69 @@ pub struct FaceDetailDto {
     pub vietnamese: VietnameseDto,
     pub axes: Vec<AxisReadingDto>,
     pub similar_top: Vec<SimilarHitDto>,
+}
+
+// ---- phân loại (Font Desk D1) ----
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassSignalDto {
+    /// "measure" | "panose" | "os2_class" | "name" | "cmap" | "post"
+    pub source: String,
+    pub detail: String,
+    /// class mà tín hiệu này bỏ phiếu (snake_case).
+    pub vote: String,
+    pub weight: f32,
+}
+
+/// Kết quả phân loại hai tầng. `source = "override"` khi người dùng đã ghi đè (khi đó `signals` vẫn là của
+/// bản tự động, để giải thích vì sao máy nghĩ khác).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassificationDto {
+    /// serif | sans | mono | script | display | blackletter | symbol | uncertain
+    pub class: String,
+    /// Nhãn hiển thị tiếng Anh (thuật ngữ font giữ tiếng Anh): "Serif", "Uncertain"…
+    pub label: String,
+    /// snake_case, `null` khi chưa đủ chắc.
+    pub subclass: Option<String>,
+    pub confidence: f32,
+    /// Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
+    pub candidate: Option<String>,
+    pub signals: Vec<ClassSignalDto>,
+    /// "text" | "display" | "ui"
+    pub usage: Vec<String>,
+    /// "auto" | "override"
+    pub source: String,
+    /// Bản tự động khi đang bị ghi đè (để UI hiện "Máy nghĩ: …"); `null` nếu không ghi đè.
+    pub auto_class: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassificationOverrideDto {
+    pub face: FaceKeyDto,
+    pub class: String,
+    pub subclass: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SubclassFacetDto {
+    pub subclass: String,
+    pub count: u32,
+}
+
+/// Facet đếm cho bộ lọc phân loại ở Library (đã tính ghi đè của người dùng).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassFacetDto {
+    pub class: String,
+    pub count: u32,
+    pub subclasses: Vec<SubclassFacetDto>,
 }

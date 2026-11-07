@@ -8,12 +8,22 @@ import type { ViFilterDto } from "./ViFilterDto";
 /**
  * Mọi trường `FaceQuery` của store + lọc theo trục + `faceKeys` ("Gần đây", "Đang bật").
  */
-export type FaceQueryDto = { text: string | null, vi: ViFilterDto | null, license: Array<string>, variable: boolean | null, italic: boolean | null, sourceIds: Array<number>, favoritesOnly: boolean, collectionId: number | null, tagIds: Array<number>, includeMissing: boolean, sort: SortKeyDto, descending: boolean, offset: number, limit: number, axisFilters: Array<AxisFilterDto>, rawAxisRanges: Array<RawAxisRangeDto>,
+export type FaceQueryDto = { text: string | null, vi: ViFilterDto | null, license: Array<string>, variable: boolean | null, italic: boolean | null, sourceIds: Array<number>, favoritesOnly: boolean, collectionId: number | null, tagIds: Array<number>, includeMissing: boolean, sort: SortKeyDto, descending: boolean, offset: number, limit: number, axisFilters: Array<AxisFilterDto>, rawAxisRanges: Array<RawAxisRangeDto>, 
 /**
  * Ràng buộc cứng từ `describe` ("vi_supported" | "vi_complete"): loại face không đạt.
  */
-hard: Array<string>,
+hard: Array<string>, 
 /**
  * Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
  */
-faceKeys: Array<FaceKeyDto> | null, };
+faceKeys: Array<FaceKeyDto> | null, 
+/**
+ * Lọc theo class (OR trong nhóm): serif | sans | mono | script | display | blackletter | symbol | uncertain
+ * | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
+ * Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
+ */
+classes: Array<string>, 
+/**
+ * Lọc theo subclass (snake_case, OR trong nhóm; AND với `classes`).
+ */
+subclasses: Array<string>, };

@@ -96,6 +96,8 @@ fn get_face_playfair() {
     assert_eq!(ch.unit.as_deref(), Some("ratio"));
     assert!(ch.raw_value.is_some_and(|v| v > 1.0), "Playfair H stem/bar > 1");
     assert_eq!(f.classification.as_deref(), Some("Serif"));
+    assert_eq!(f.classification_info.class, "serif");
+    assert_eq!(f.classification_info.source, "auto");
     assert_eq!(f.vietnamese.total, 134);
     assert!(f.vietnamese.supports && f.vietnamese.missing.is_empty());
     assert!(
@@ -562,4 +564,63 @@ fn axis_stats_empty_library_and_no_index_readings() {
             .iter()
             .all(|s| s.count == 0 && s.min.is_none() && s.p99.is_none())
     );
+}
+
+#[test]
+fn class_filter_facets_and_override_use_effective_class() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let total = library::query_faces(&st, &FaceQueryDto { limit: 50, ..Default::default() }).unwrap().total;
+
+    // facet đếm đủ mọi face; mỗi class lọc ra đúng số facet báo
+    let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!(facets.iter().map(|f| u64::from(f.count)).sum::<u64>(), total);
+    let mono = facets.iter().find(|f| f.class == "mono").expect("Source Code Pro là Mono (tín hiệu cứng, không bị hạ về Uncertain)");
+    let q = FaceQueryDto { classes: vec!["mono".into()], limit: 50, ..Default::default() };
+    assert_eq!(library::query_faces(&st, &q).unwrap().total, u64::from(mono.count));
+
+    // thư viện khoẻ: không có face thiếu hồ sơ → không có bucket unclassified, và lọc "unclassified" rỗng
+    assert!(facets.iter().all(|f| f.class != "unclassified"));
+    let unc = FaceQueryDto { classes: vec!["unclassified".into()], limit: 50, ..Default::default() };
+    assert_eq!(library::query_faces(&st, &unc).unwrap().total, 0);
+
+    // class lạ bị từ chối
+    let bad = FaceQueryDto { classes: vec!["wingdings".into()], ..Default::default() };
+    assert!(library::query_faces(&st, &bad).is_err());
+
+    // facet bỏ qua chính bộ lọc class (không tự triệt tiêu)
+    let f2 = analysis::class_facets(&st, &q).unwrap();
+    assert_eq!(f2, facets);
+
+    // override chuyển Roboto sang Display; lọc và facet phản ánh ngay
+    let roboto = find(&st, "Roboto");
+    analysis::set_classification_override(
+        &st,
+        &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("decorative".into()) },
+    )
+    .unwrap();
+    let qd = FaceQueryDto { classes: vec!["display".into()], subclasses: vec!["decorative".into()], limit: 50, ..Default::default() };
+    let hit = library::query_faces(&st, &qd).unwrap();
+    assert!(hit.items.iter().any(|r| r.family == "Roboto"));
+    let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    assert!(disp.iter().find(|f| f.class == "display").unwrap().subclasses.iter().any(|s| s.subclass == "decorative"));
+
+    // xoá override → trở lại tự động
+    analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
+    assert!(!library::query_faces(&st, &qd).unwrap().items.iter().any(|r| r.family == "Roboto"));
+
+    // face không tồn tại bị từ chối khi ghi đè
+    let ghost = ClassificationOverrideDto { face: FaceKeyDto { hash_hex: "00".repeat(32), face_index: 0 }, class: "sans".into(), subclass: None };
+    assert!(analysis::set_classification_override(&st, &ghost).is_err());
+
+    // usage tính lại theo class ghi đè (Display không có "text")
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: None }).unwrap();
+    let d = analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap();
+    assert_eq!(d.classification_info.source, "override");
+    assert_eq!(d.classification_info.usage, vec!["display".to_string()]);
+    analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
+
+    // subclass không thuộc class bị từ chối khi ghi đè
+    let invalid = ClassificationOverrideDto { face: key(&roboto), class: "sans".into(), subclass: Some("didone".into()) };
+    assert!(analysis::set_classification_override(&st, &invalid).is_err());
 }

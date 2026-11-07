@@ -136,3 +136,34 @@ pub fn terminal_c_normal(ctx: &GlyphCtx) -> Metric {
     }
     Metric::estimated(t_end / t_thin, M)
 }
+
+/// Tỉ lệ chữ a–z mà mực chạm/vượt cả hai mép advance (sidebearing ≤ 0,04·x-height ở cả hai bên):
+/// chữ viết liền nét có đường vào/ra chạm mép nên số này cao; chữ rời thì thấp.
+pub fn connect_lc(ctx: &GlyphCtx, xh: f64) -> Metric {
+    const M: &str = "frac_a_z_ink_touches_both_advance_edges";
+    let t = 0.04 * xh;
+    let v: Vec<bool> = ('a'..='z')
+        .filter_map(|c| ctx.glyph(c, false))
+        .map(|g| g.bbox.x0 <= t && g.adv - g.bbox.x1 <= t)
+        .collect();
+    if v.len() < 10 {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    }
+    Metric::measured(v.iter().filter(|b| **b).count() as f64 / v.len() as f64, M)
+}
+
+/// Độ nhảy đỉnh/đáy của các chữ cao bằng x-height (a c e m n o r s u v w x z): căn(var(đỉnh)+var(đáy)) ÷ x-height.
+/// Chữ viết tay/bouncy lệch nhau về baseline và độ cao; chữ in đều ≈ chỉ còn overshoot.
+pub fn bounce_lc(ctx: &GlyphCtx, xh: f64) -> Metric {
+    const M: &str = "xheight_letters_top_bottom_jitter_over_xh";
+    let g: Vec<_> = "acemnorsuvwxz".chars().filter_map(|c| ctx.glyph(c, false)).collect();
+    if g.len() < 8 {
+        return Metric::failed(FailReason::MissingGlyph, M);
+    }
+    let var = |f: &dyn Fn(&crate::geom::GlyphShape) -> f64| {
+        let xs: Vec<f64> = g.iter().map(f).collect();
+        let mean = xs.iter().sum::<f64>() / xs.len() as f64;
+        xs.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / xs.len() as f64
+    };
+    Metric::measured((var(&|s| s.bbox.y1) + var(&|s| s.bbox.y0)).sqrt() / xh, M)
+}

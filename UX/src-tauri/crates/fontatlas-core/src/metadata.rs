@@ -55,6 +55,21 @@ pub struct Metadata {
     pub width_class: Option<u16>,
     pub fs_type: Option<u16>,
     pub panose: Option<[u8; 10]>,
+    /// OS/2 sFamilyClass: (lớp IBM, lớp con). `None` khi không có OS/2 hoặc bằng 0 (không phân loại).
+    #[serde(default)]
+    pub family_class: Option<(u8, u8)>,
+    /// OS/2 achVendID (4 ký tự, đã bỏ khoảng trắng cuối).
+    #[serde(default)]
+    pub vendor_id: Option<String>,
+    /// `post.isFixedPitch != 0`.
+    #[serde(default)]
+    pub is_fixed_pitch: bool,
+    /// cmap chỉ có subtable Windows Symbol (3,0), không có subtable Unicode.
+    #[serde(default)]
+    pub symbol_cmap: bool,
+    /// Số chữ cái ASCII (a–z, A–Z; tối đa 52) có glyph trong cmap.
+    #[serde(default)]
+    pub latin_letters: u8,
     pub italic_angle: Option<f32>,
     pub outline_format: OutlineFormat,
     pub color_tables: Vec<String>,
@@ -149,6 +164,21 @@ fn cmap_scripts(font: &FontRef) -> Vec<String> {
         .collect()
 }
 
+/// cmap có subtable Windows Symbol (3,0) và không có subtable Unicode nào (Webdings, Wingdings…).
+fn symbol_only_cmap(font: &FontRef) -> bool {
+    use read_fonts::tables::cmap::PlatformId;
+    let Ok(cmap) = font.cmap() else { return false };
+    let (mut symbol, mut unicode) = (false, false);
+    for r in cmap.encoding_records() {
+        match (r.platform_id(), r.encoding_id()) {
+            (PlatformId::Windows, 0) => symbol = true,
+            (PlatformId::Unicode, _) | (PlatformId::Windows, 1 | 10) => unicode = true,
+            _ => {}
+        }
+    }
+    symbol && !unicode
+}
+
 fn script_tags(font: &FontRef) -> Vec<String> {
     let mut v = Vec::new();
     if let Ok(sl) = font.gsub().and_then(|t| t.script_list()) {
@@ -218,6 +248,14 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
         width_class: os2.as_ref().map(|o| o.us_width_class()),
         fs_type: os2.as_ref().map(|o| o.fs_type()),
         panose: os2.as_ref().and_then(|o| o.panose_10().try_into().ok()),
+        family_class: os2.as_ref().and_then(|o| {
+            let v = o.s_family_class();
+            (v != 0).then_some(((v >> 8) as u8, (v & 0xff) as u8))
+        }),
+        vendor_id: os2.as_ref().map(|o| o.ach_vend_id().to_string().trim().to_string()).filter(|s| !s.is_empty()),
+        is_fixed_pitch: font.post().is_ok_and(|p| p.is_fixed_pitch() != 0),
+        symbol_cmap: symbol_only_cmap(font),
+        latin_letters: ('a'..='z').chain('A'..='Z').filter(|c| font.charmap().map(*c).is_some()).count() as u8,
         italic_angle: font.post().ok().map(|p| p.italic_angle().to_f64() as f32),
         outline_format: outline_format(font),
         color_tables: [b"COLR", b"CBDT", b"sbix", b"SVG "]
