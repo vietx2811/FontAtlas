@@ -1476,20 +1476,25 @@ mod review_tests {
             started: started.clone(),
         }));
         let c = cancel.clone();
+        // Measure from the moment of cancellation, not from start: under parallel builds the
+        // resolver can take >1 s just to start, which made this test flaky.
+        let cancelled_at = Arc::new(std::sync::Mutex::new(None::<Instant>));
+        let ca = cancelled_at.clone();
         let watcher = std::thread::spawn(move || {
             let t = Instant::now();
-            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(3) {
+            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(10) {
                 std::thread::sleep(Duration::from_millis(5));
             }
             assert!(started.load(Ordering::SeqCst));
+            *ca.lock().unwrap() = Some(Instant::now());
             c.store(true, Ordering::SeqCst);
         });
-        let t = Instant::now();
         let result = st.ensure_resumable(&|_| {}, &cancel);
-        let elapsed = t.elapsed();
+        let returned = Instant::now();
         watcher.join().unwrap();
         assert!(matches!(result, Err(EmbedError::Cancelled)));
-        assert!(elapsed < Duration::from_secs(1), "{elapsed:?}");
+        let since_cancel = returned.duration_since(cancelled_at.lock().unwrap().expect("cancelled"));
+        assert!(since_cancel < Duration::from_secs(1), "{since_cancel:?}");
         let lock = OpenOptions::new()
             .write(true)
             .open(st.path(".lock"))
