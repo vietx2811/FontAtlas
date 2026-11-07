@@ -211,3 +211,15 @@ describe('pair_these', () => {
     await expect(api.pairThese([{ hashHex: 'a', faceIndex: 0 }])).rejects.toThrow();
   });
 });
+
+describe('save_png', () => {
+  it('sends the suggested name and the PNG as base64 and returns the saved path (null when cancelled)', async () => {
+    reply = cmd => (cmd === 'save_png' ? '/Users/me/Desktop/compare-a.png' : null);
+    const api = createTauriApi();
+    const png = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
+    expect(await api.savePng(png, 'compare-a.png')).toBe('/Users/me/Desktop/compare-a.png');
+    expect(last()).toEqual({ cmd: 'save_png', args: { suggestedName: 'compare-a.png', pngBase64: btoa(String.fromCharCode(137, 80, 78, 71)) } });
+    reply = () => null;
+    expect(await api.savePng(png, 'x.png')).toBeNull();
+  });
+});

@@ -1,14 +1,15 @@
 // Cài đặt thật của Api: invoke + Channel của Tauri, kiểu từ UX/bindings (ts-rs). Tên lệnh và khoá đối số do TauriCommandMap kiểm lúc biên dịch.
 import { COMPARE_MAX, COMPARE_MIN } from './compare';
 import { fromWire } from './compareWire';
-import type { PairComboDto } from '../bindings/PairComboDto';
-import type { CompareDto as WireCompareDto } from '../bindings/CompareDto';
 import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } from '../bindings';
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
+
+/** Đọc Blob thành ArrayBuffer (jsdom và WebView cũ chưa có Blob.arrayBuffer: dùng FileReader). */
+const blobBuffer = (b: Blob): Promise<ArrayBuffer> => (typeof b.arrayBuffer === 'function' ? b.arrayBuffer() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as ArrayBuffer); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); }));
 
 /** Lệnh Tauri reject bằng object `{code, message, detail}` (CmdError của 6a); gói lại thành lớp để `instanceof` được. */
 export function toCmdError(e: unknown): CmdError {
@@ -112,19 +113,17 @@ export function createTauriApi(): Api {
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
-      // Lệnh `compare_faces` (D2) chưa nằm trong TauriCommandMap ở nhánh này: gọi invoke thẳng; sau khi bindings có thì đổi sang call().
-      try { return fromWire(await invoke<WireCompareDto>('compare_faces', { faces, opts: { lang: 'vi' } })); } catch (e) { throw toCmdError(e); }
+      return fromWire(await call('compare_faces', { faces, opts: { lang: 'vi' } }));
     },
     async pairThese(faces, o = {}) {
       if (faces.length < 2 || faces.length > 4) throw new Error(`pair these needs 2–4 faces, got ${faces.length}`);
-      // Lệnh `pair_these` (D2) chưa nằm trong TauriCommandMap ở nhánh này: gọi invoke thẳng.
-      try { return await invoke<PairComboDto[]>('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: 'vi', maxCombos: o.maxCombos ?? 3 } }); } catch (e) { throw toCmdError(e); }
+      return call('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: 'vi', maxCombos: o.maxCombos ?? 3 } });
     },
     async savePng(png, suggestedName) {
-      // Lệnh `save_png` do backend thêm (dialog Lưu + ghi file): chưa nằm trong bindings nên gọi invoke thẳng.
-      const bytes = new Uint8Array(await png.arrayBuffer());
+      // Backend mở hộp thoại Lưu (lọc .png), kiểm PNG magic và ≤ 32 MB, rồi ghi file; trả đường dẫn hoặc null nếu huỷ.
+      const bytes = new Uint8Array(await blobBuffer(png));
       let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-      try { return await invoke<string | null>('save_png', { suggestedName, pngBase64: btoa(bin) }); } catch (e) { throw toCmdError(e); }
+      return call('save_png', { suggestedName, pngBase64: btoa(bin) });
     },
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
     setClassificationOverride: over => none(call('set_classification_override', { over })),
