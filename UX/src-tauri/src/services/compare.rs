@@ -10,11 +10,13 @@ use crate::services::analysis::{bundle, candidate_dto, get_face, ix_of, lang_of,
 use crate::state::AppState;
 
 const MIN_FACES: usize = 2;
-const MAX_FACES: usize = 4;
+/// compareFaces: 2–8 cột (màn Compare hỗ trợ tới 8; >4 chỉ là gợi ý ở UI). pairThese giữ 2–4.
+const MAX_COMPARE: usize = 8;
+const MAX_PAIR: usize = 4;
 
-fn validate(faces: &[FaceKeyDto]) -> Result<(), CmdError> {
-    if !(MIN_FACES..=MAX_FACES).contains(&faces.len()) {
-        return Err(CmdError::invalid_arg(format!("cần {MIN_FACES}–{MAX_FACES} face, nhận {}", faces.len())));
+fn validate(faces: &[FaceKeyDto], max: usize) -> Result<(), CmdError> {
+    if !(MIN_FACES..=max).contains(&faces.len()) {
+        return Err(CmdError::invalid_arg(format!("cần {MIN_FACES}–{max} face, nhận {}", faces.len())));
     }
     let mut seen = HashSet::new();
     for f in faces {
@@ -86,7 +88,7 @@ fn hhea_ascender(state: &AppState, face: &FaceKeyDto) -> Option<f32> {
 }
 
 pub fn compare_faces(state: &AppState, faces: &[FaceKeyDto], opts: &CompareOptsDto) -> Result<CompareDto, CmdError> {
-    validate(faces)?;
+    validate(faces, MAX_COMPARE)?;
     let details: Vec<FaceDetailDto> = faces.iter().map(|f| get_face(state, f, opts.lang)).collect::<Result<_, _>>()?;
     let base = &details[0];
     let out = details
@@ -134,7 +136,7 @@ pub fn compare_faces(state: &AppState, faces: &[FaceKeyDto], opts: &CompareOptsD
 
 /// Thử mọi cách gán (heading, body) giữa các face đã chọn; xếp hạng lexicographic như Pairing; trả tối đa 3 Combo.
 pub fn pair_these(state: &AppState, faces: &[FaceKeyDto], opts: &PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError> {
-    validate(faces)?;
+    validate(faces, MAX_PAIR)?;
     let b = bundle(state)?;
     let keys = faces.iter().map(|f| ix_of(&b, f)).collect::<Result<Vec<_>, _>>()?;
     let rows = rows_of(state, &b, &keys)?;

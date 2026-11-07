@@ -6,6 +6,7 @@ pub mod describe;
 pub mod boot;
 pub mod compare;
 pub mod embed;
+pub mod export;
 pub mod keys;
 pub mod lifecycle;
 pub mod library;

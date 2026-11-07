@@ -98,6 +98,7 @@ export interface TauriCommandMap {
   class_facets: { args: { q: FaceQueryDto }; result: ClassFacetDto[] };
   pair_candidates: { args: { face: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto[] };
   assess_pair: { args: { a: FaceKeyDto; b: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto };
+  save_png: { args: { suggestedName: string; pngBase64: string }; result: string | null };
   compare_faces: { args: { faces: FaceKeyDto[]; opts: CompareOptsDto }; result: CompareDto };
   pair_these: { args: { faces: FaceKeyDto[]; opts: PairTheseOptsDto }; result: PairComboDto[] };
   save_pair: { args: { pair: NewPairDto }; result: number };

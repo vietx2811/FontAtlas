@@ -100,7 +100,14 @@ fn compare_rejects_bad_input() {
     assert!(compare::compare_faces(&st, std::slice::from_ref(&a), &opts()).is_err(), "1 face");
     assert!(compare::compare_faces(&st, &[a.clone(), a.clone()], &opts()).is_err(), "trùng");
     let five: Vec<FaceKeyDto> = ["Roboto", "Playfair Display", "Open Sans", "Libre Baskerville", "Source Code Pro"].iter().map(|f| key_of(&st, f)).collect();
-    assert!(compare::compare_faces(&st, &five, &opts()).is_err(), "5 face");
+    // compareFaces nhận tới 8 (UI chỉ gợi ý > 4); pairThese vẫn giới hạn 4
+    assert_eq!(compare::compare_faces(&st, &five, &opts()).unwrap().faces.len(), 5);
+    let po = PairTheseOptsDto { project_vi: false, lang: LangDto::Vi, max_combos: 3 };
+    let err = compare::pair_these(&st, &five, &po).unwrap_err();
+    assert!(err.code == "invalid_arg" && err.message.contains("2–4"), "{err:?}");
+    let nine: Vec<FaceKeyDto> = (0..9u8).map(|i| FaceKeyDto { hash_hex: format!("{i:02x}").repeat(32), face_index: 0 }).collect();
+    let err = compare::compare_faces(&st, &nine, &opts()).unwrap_err();
+    assert!(err.code == "invalid_arg" && err.message.contains("2–8"), "{err:?}");
     let ghost = FaceKeyDto { hash_hex: "00".repeat(32), face_index: 0 };
     assert!(compare::compare_faces(&st, &[a.clone(), ghost.clone()], &opts()).is_err());
     assert!(compare::compare_faces(&st, &[a, b], &opts()).is_ok());
