@@ -196,7 +196,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         const weights = [...new Set(sib.map(r => r.weightClass ?? 400))].sort((a, b) => a - b);
         const serif = mockAutoClass(f.row.family).class === 'serif';
         f.extras = {
-          vendorId: f.row.faceId % 3 === 0 ? null : 'MOCK', years: { created: 2016 + (f.row.faceId % 6), modified: 2021, copyright: 2016 + (f.row.faceId % 6) },
+          extrasAvailable: true, vendorId: f.row.faceId % 3 === 0 ? null : 'MOCK', years: { created: 2016 + (f.row.faceId % 6), modified: 2021, copyright: 2016 + (f.row.faceId % 6) },
           otGroups: [{ group: 'figures', tags: ['lnum', 'onum'], sets: [] }, { group: 'ligatures', tags: ['liga'], sets: [] }, ...(serif ? [{ group: 'small_caps', tags: ['smcp'], sets: [] }, { group: 'stylistic_sets', tags: ['ss01', 'ss02'], sets: [{ tag: 'ss01', name: 'Alternate a' }, { tag: 'ss02', name: null }] }] : [])],
           kerning: { source: 'gpos', pairs: 4000 + f.row.faceId * 37, classPairs: 1200 + f.row.faceId * 11 },
           style: { italicKind: f.row.isItalic ? 'italic' : 'upright', italAxis: false, slntAxis: false, wghtRange: f.row.isVariable ? [400, 900] : null, wdthRange: null, opszRange: null },
