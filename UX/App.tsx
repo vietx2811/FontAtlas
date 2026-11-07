@@ -4,6 +4,8 @@ import { DetailPanel } from './components/detail/DetailPanel';
 import { Library } from './components/main/Library';
 import { SampleComposer } from './components/main/SampleComposer';
 import { TopBar } from './components/main/TopBar';
+import { ComparePage } from './components/compare/ComparePage';
+import { PairThesePage } from './components/pair/PairThesePage';
 import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
 import { SettingsOverlay } from './components/settings/SettingsOverlay';
@@ -39,6 +41,8 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 /** Thư viện: chỉ dựng sau khi backend sẵn sàng và onboarding xong (BootGate). */
 const Library_: React.FC<{ api: Api }> = ({ api }) => {
     const collapsed = useUiStore(s => s.sidebarCollapsed);
+    const compare = useUiStore(s => s.compare);
+    const pairThese = useUiStore(s => s.pairThese);
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
@@ -62,12 +66,17 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
         <FaceActionsProvider api={api}>
         <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
             <div className="h-full flex text-[var(--foreground)] relative">
-                <main className="flex-1 min-w-0 h-full flex flex-col relative">
-                    <TopBar api={api} />
-                    <div className="flex-1 min-h-0"><Library api={api} /></div>
-                    <SampleComposer />
-                </main>
-                <DetailPanel api={api} />
+                {/* Thư viện giữ nguyên (ẩn) khi đang Compare: quay lại không mất vùng chọn và vị trí cuộn. */}
+                <div style={{ display: compare || pairThese ? 'none' : 'contents' }}>
+                    <main className="flex-1 min-w-0 h-full flex flex-col relative">
+                        <TopBar api={api} />
+                        <div className="flex-1 min-h-0"><Library api={api} /></div>
+                        <SampleComposer />
+                    </main>
+                    <DetailPanel api={api} />
+                </div>
+                {compare && <main className="flex-1 min-w-0 h-full"><ComparePage api={api} faces={compare} /></main>}
+                {pairThese && <main className="flex-1 min-w-0 h-full"><PairThesePage api={api} faces={pairThese} /></main>}
                 <SettingsOverlay api={api} onRerunOnboarding={() => location.reload()} />
             </div>
         </WindowShell>

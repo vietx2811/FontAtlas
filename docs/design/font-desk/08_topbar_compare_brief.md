@@ -121,3 +121,23 @@ Mở file HTML trong trình duyệt (cần mạng để tải font Google). Tham
 - **traits[]:** 02 đang làm trên `feat/classify-display-tag`. Hiện Display chỉ nằm trong `usage`; chỗ hiển thị traits để trống (tooltip của chip phân loại là nơi dự kiến).
 - **CONF_MIN 0.88:** áp dụng ở backend; UI chỉ hiển thị `class = uncertain` + `candidate` như backend trả.
 - Mục `formats`, `hasImage`, "thiếu dấu" của bộ lọc vẫn để vòng sau.
+
+## 9. Trạng thái build — `feat/compare-ui` (màn Compare)
+
+- **Màn:** `UX/components/compare/ComparePage.tsx` (+ `CompareCells.tsx`, `compareMath.ts`, `exportPng.ts`). Mở từ Top Bar (Compare / ⇧C) với 2–8 face; Esc hoặc ✕ quay lại, thư viện vẫn mount nên vùng chọn và vị trí cuộn còn nguyên. Ảnh: `shots-compare-ui/`.
+- **Dữ liệu thật, không giả:** `api.compareFaces(faces)` hiện **ghép từ `getFace`** (số đo `axes` + percentile + `quality`, `vietnamese.stackedMarksOverflow/TopEm`, `classificationInfo`, license). Một face lỗi → cả lệnh lỗi, màn hiện lỗi + "Thử lại". Số đo không đo được → ô "Không đo được" + lý do, không điền số.
+- **Khi 02 giao `compare_faces`:** chỉ đổi thân `compareFaces` trong `api/tauri.ts` (giữ kiểu `CompareDto` ở `api/compare.ts`; map DTO mới sang đó). Không phải đổi UI.
+- **Dấu chồng:** backend chỉ có cờ `stackedMarksOverflow` + `stackedMarksTopEm` (em), không có "% tràn" → UI hiện "Dấu tràn khung · {em} em". Nếu muốn % cần `vi_overflow_pct` trong DTO.
+- **Δ:** % cho độ dài/tỷ lệ; **độ tuyệt đối** cho slant/stress (mốc 0 vẫn có nghĩa). |Δ| < 1% hoặc < 0,5° → "±0".
+- **Match x-height:** cỡ cột = cỡ gốc × `x_height_em(mốc) / x_height_em(cột)`; thiếu hoặc giá trị vô lý → không đổi cỡ.
+- **TODO:** PDF (nút đang khoá). **PNG:** vẽ canvas (chờ font nạp xong, ×devicePixelRatio) rồi gọi `api.savePng(blob, tênGợiÝ)`. Mock/trình duyệt: tải xuống. **Tauri: cần lệnh `save_png`** (đề xuất `save_png(suggested_name: String, png_base64: String) -> Option<String>`: hộp thoại Lưu lọc .png + ghi file; trả đường dẫn hoặc `null` nếu huỷ). Chỉ báo "Đã lưu" khi có đường dẫn; huỷ thì im; lỗi báo lỗi.
+- **Face không đọc được:** cột đó được bỏ, banner ghi lý do; còn < 2 face thì cả màn lỗi + "Thử lại". Tối đa 8 font (Top Bar báo khi cắt).
+- **Chưa có:** đổi mốc, kéo đổi cột, thêm/bớt cột trong màn (làm khi cần). Hàng Meta chỉ có license (Designer, Foundry, Version… theo v3 để vòng sau).
+
+## 10. Trạng thái build — `feat/compare-wire`
+
+- **Compare dùng command thật `compare_faces`** (`api/tauri.ts` → `api/compareWire.ts` ghép sang `CompareDto`). Δ lấy nguyên từ backend (`delta` tuyệt đối cho góc, `deltaPct` cho còn lại), không tự tính lại; mock vẫn tự tính. `compare_faces`, `pair_these`, `save_png` đều gọi qua `call()` theo `bindings/commands.ts` của 02.
+- **Dấu tràn:** "Dấu tràn khung · N% em" lấy `overAscenderPctEm` (phần dấu chồng vượt `hhea.ascender`, khi `overflow`); `overCapPctEm` (cao hơn chữ hoa) hiện trong tooltip của "Dấu vừa khung". Nếu backend chưa có % thì lùi về "x em".
+- **Meta:** thêm hàng Vendor, Years, Style (upright/italic/oblique + trục), Family (số kiểu, dải weight, Italic/Oblique/Variable/Optical size), OpenType features (chip theo nhóm, tooltip = tag/tên stylistic set), Kerning, Embedding (fsType, chỉ ghi chú), License theo `kind`. Thiếu dữ liệu (phân tích cũ) → "—" kèm gợi ý quét lại. Chưa đưa các hàng Meta vào PNG.
+- **Pair these (2–4 font):** `components/pair/PairThesePage.tsx`; nút Top Bar và ⇧P (từ 2 font) mở màn này, bỏ notice. `api.pairThese(faces, {projectVi, maxCombos})` → `pair_these`. Mỗi Combo hiện heading/body bằng chính font, nhãn ●◐◆○ theo trục, câu giải thích, cổng (An toàn/Có kiểm soát/Thử nghiệm), cảnh báo (va chạm, tiêu đề tràn dấu, cảnh báo nội dung, chưa đủ dữ liệu), gợi ý độ đậm. Backend đã thử mọi cách gán vai nên các Combo khác nhau ở **ai là heading/body**; UI không có nút "đổi vai" riêng (đổi chỉ trên hình sẽ làm nhãn sai). Công tắc "Dự án dùng tiếng Việt" lấy mặc định từ cài đặt.
+- **Chưa làm:** đưa Combo vào Case/dự án; mở một Combo sang tab Pair của font; hiển thị `block`.

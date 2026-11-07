@@ -7,7 +7,9 @@ import { Icon, type IconName } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import './topbarActions.css';
 
-const COMPARE_MAX = 4;
+const COMPARE_MAX = 4; // ngưỡng gợi ý "nên ≤ 4"
+const COMPARE_MAX_FACES = 8; // trần cứng của màn Compare
+const PAIR_MAX_FACES = 4; // trần của Pair these
 
 type Row = { hashHex: string; faceIndex: number };
 /** Mở panel chi tiết của font đầu tiên ở tab đã cho (chưa có màn Pairing Desk / Compare riêng — xem brief 08 mục TODO). */
@@ -16,21 +18,22 @@ function openOn(first: Row, tab: PanelTab): void {
   ui.select(rowKey(first));
   ui.setPanelTab(tab);
 }
-const soon = (key: 'topbar.compareSoon' | 'topbar.pairSoon') => useNoticeStore.getState().push({ kind: 'info', text: t(key) });
 const currentRows = () => [...useSelectionStore.getState().rows.values()];
 function doPair(): void {
   const rows = currentRows(); if (!rows.length) return;
-  openOn(rows[0], 'pair');
-  if (rows.length >= 2) soon('topbar.pairSoon'); // Pair these: chưa có command riêng, mở Pair của font đầu
+  if (rows.length === 1) { openOn(rows[0], 'pair'); return; }
+  if (rows.length > PAIR_MAX_FACES) useNoticeStore.getState().push({ kind: 'info', text: t('pair.cut', { n: rows.length }) });
+  useUiStore.getState().openPairThese(rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
 }
 const doSimilar = (): void => { const r = currentRows()[0]; if (r) openOn(r, 'sim'); };
 function doCompare(): void {
   const rows = currentRows(); if (rows.length < 2) return;
-  openOn(rows[0], 'anat');
-  soon('topbar.compareSoon');
+  if (rows.length > COMPARE_MAX_FACES) useNoticeStore.getState().push({ kind: 'info', text: t('topbar.compareCut', { n: rows.length }) });
+  useUiStore.getState().openCompare(rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
 }
 /** Phím tắt chỉ chạy khi không có lớp phủ/hộp thoại/menu, không gõ chữ, không đang IME hay giữ phím. */
 export function shortcutBlocked(e: KeyboardEvent): boolean {
+  if (useUiStore.getState().compare || useUiStore.getState().pairThese) return true; // đang ở màn Compare/Pair these: ⇧P/⇧C không đổi thư viện ẩn
   const el = e.target as HTMLElement | null;
   if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return true;
   return e.defaultPrevented || e.isComposing || e.repeat || !!document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]');
