@@ -13,6 +13,8 @@ import type { CollectionDto } from './CollectionDto';
 import type { CompareDto } from './CompareDto';
 import type { CompareOptsDto } from './CompareOptsDto';
 import type { DescribeDto } from './DescribeDto';
+import type { DuplicateGroupDto } from './DuplicateGroupDto';
+import type { DuplicateSummaryDto } from './DuplicateSummaryDto';
 import type { EmbedEvent } from './EmbedEvent';
 import type { EmbedFailureDto } from './EmbedFailureDto';
 import type { EmbedStatusDto } from './EmbedStatusDto';
@@ -99,6 +101,9 @@ export interface TauriCommandMap {
   pair_candidates: { args: { face: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto[] };
   assess_pair: { args: { a: FaceKeyDto; b: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto };
   save_png: { args: { suggestedName: string; pngBase64: string }; result: string | null };
+  duplicate_groups: { args: { q: FaceQueryDto }; result: DuplicateGroupDto[] };
+  duplicate_summary: { args: { q: FaceQueryDto }; result: DuplicateSummaryDto };
+  reveal_location: { args: { path: string }; result: null };
   compare_faces: { args: { faces: FaceKeyDto[]; opts: CompareOptsDto }; result: CompareDto };
   pair_these: { args: { faces: FaceKeyDto[]; opts: PairTheseOptsDto }; result: PairComboDto[] };
   save_pair: { args: { pair: NewPairDto }; result: number };

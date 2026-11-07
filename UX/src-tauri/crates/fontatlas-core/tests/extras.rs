@@ -86,3 +86,96 @@ fn fixtures_carry_d2_data() {
     let (_, ri) = extras("roboto_italic_vf.ttf");
     assert!(ri.ot_groups.iter().any(|g| g.group == "small_caps"));
 }
+
+#[test]
+fn revision_and_modified_timestamp_are_read_lazily_from_head() {
+    assert_eq!(unix_from_longdatetime(0), None);
+    assert_eq!(unix_from_longdatetime(2_082_844_800), Some(0));
+    assert_eq!(unix_from_longdatetime(1_577_836_800 + 2_082_844_800), Some(1_577_836_800));
+    let h = head_info(&fixture("roboto.ttf"), 0).expect("head");
+    assert!(h.revision.is_some_and(|r| r > 1.0), "{h:?}");
+    let ts = h.modified.expect("head.modified");
+    // khớp năm đã lưu trong extras.years.modified
+    let (_, e) = extras("roboto.ttf");
+    assert_eq!(year_from_longdatetime(ts + 2_082_844_800), e.years.modified);
+    // face không tồn tại / tệp không tồn tại
+    assert_eq!(head_info(&fixture("roboto.ttf"), 9), None);
+    assert_eq!(head_info(&fixture("khong-co.ttf"), 0), None);
+}
+
+/// Gói các sfnt vào một TTC tổng hợp (sửa offset của bảng thư mục cho khớp vị trí mới).
+#[allow(clippy::manual_is_multiple_of)] // MSRV 1.85 của crate core
+fn make_ttc(fonts: &[Vec<u8>]) -> Vec<u8> {
+    let header = 12 + 4 * fonts.len();
+    let mut offsets = Vec::new();
+    let mut body: Vec<u8> = Vec::new();
+    for f in fonts {
+        let start = header + body.len();
+        offsets.push(start as u32);
+        let mut c = f.clone();
+        let n = u16::from_be_bytes([c[4], c[5]]) as usize;
+        for i in 0..n {
+            let rec = 12 + i * 16 + 8;
+            let off = u32::from_be_bytes(c[rec..rec + 4].try_into().unwrap()) + start as u32;
+            c[rec..rec + 4].copy_from_slice(&off.to_be_bytes());
+        }
+        body.extend_from_slice(&c);
+        while body.len() % 4 != 0 {
+            body.push(0);
+        }
+    }
+    let mut out = b"ttcf".to_vec();
+    out.extend_from_slice(&[0, 1, 0, 0]);
+    out.extend_from_slice(&(fonts.len() as u32).to_be_bytes());
+    for o in &offsets {
+        out.extend_from_slice(&o.to_be_bytes());
+    }
+    out.extend_from_slice(&body);
+    out
+}
+
+fn patch_rev(bytes: &[u8], rev: f64) -> Vec<u8> {
+    let mut out = bytes.to_vec();
+    let n = u16::from_be_bytes([out[4], out[5]]) as usize;
+    for i in 0..n {
+        let rec = 12 + i * 16;
+        if &out[rec..rec + 4] == b"head" {
+            let off = u32::from_be_bytes(out[rec + 8..rec + 12].try_into().unwrap()) as usize;
+            out[off + 4..off + 8].copy_from_slice(&((rev * 65536.0).round() as u32).to_be_bytes());
+        }
+    }
+    out
+}
+
+#[test]
+fn head_info_reads_only_head_and_handles_ttc_woff_and_garbage() {
+    let dir = std::env::temp_dir().join(format!("fa-head-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let a = patch_rev(&std::fs::read(fixture("roboto.ttf")).unwrap(), 3.25);
+    let b = patch_rev(&std::fs::read(fixture("playfair_display.ttf")).unwrap(), 7.5);
+    // TTF thường
+    std::fs::write(dir.join("a.ttf"), &a).unwrap();
+    let h = head_info(&dir.join("a.ttf"), 0).unwrap();
+    assert_eq!(h.revision, Some(3.25));
+    assert!(h.modified.is_some());
+    assert_eq!(head_info(&dir.join("a.ttf"), 1), None, "TTF chỉ có face 0");
+    // TTC: theo face_index
+    std::fs::write(dir.join("c.ttc"), make_ttc(&[a.clone(), b.clone()])).unwrap();
+    assert_eq!(head_info(&dir.join("c.ttc"), 0).unwrap().revision, Some(3.25));
+    assert_eq!(head_info(&dir.join("c.ttc"), 1).unwrap().revision, Some(7.5));
+    assert_eq!(head_info(&dir.join("c.ttc"), 2), None);
+    // WOFF/WOFF2 và rác → None (không giải nén)
+    let woff = std::fs::read(fixture("open_sans.woff")).unwrap();
+    std::fs::write(dir.join("w.woff"), &woff).unwrap();
+    assert_eq!(head_info(&dir.join("w.woff"), 0), None);
+    std::fs::write(dir.join("w2.woff2"), std::fs::read(fixture("open_sans.woff2")).unwrap()).unwrap();
+    assert_eq!(head_info(&dir.join("w2.woff2"), 0), None);
+    std::fs::write(dir.join("junk.ttf"), b"not a font at all").unwrap();
+    assert_eq!(head_info(&dir.join("junk.ttf"), 0), None);
+    // bị cắt ngắn giữa chừng → None, không panic
+    std::fs::write(dir.join("cut.ttf"), &a[..40]).unwrap();
+    assert_eq!(head_info(&dir.join("cut.ttf"), 0), None);
+    std::fs::write(dir.join("empty.ttf"), b"").unwrap();
+    assert_eq!(head_info(&dir.join("empty.ttf"), 0), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}

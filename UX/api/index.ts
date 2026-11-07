@@ -4,7 +4,7 @@ import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  AxisStatsDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
@@ -47,6 +47,8 @@ export interface Api extends LibraryApi {
   tagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   untagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   revealInFinder(face: FaceKeyDto): Promise<void>;
+  /** Mở Finder đúng một đường dẫn đã lưu trong thư viện (nhóm cùng tệp có nhiều đường dẫn cho một face). */
+  revealLocation(path: string): Promise<void>;
   getUiState(): Promise<UiStateDto>;
   setUiState(state: UiStateDto): Promise<void>;
   // Phân tích
@@ -64,6 +66,9 @@ export interface Api extends LibraryApi {
   savePng(png: Blob, suggestedName: string): Promise<string | null>;
   /** "Pair these": 2–4 font → 1–3 Combo (thử mọi cách gán vai heading/body), xếp hạng, không có điểm số. */
   pairThese(faces: FaceKeyDto[], opts?: PairTheseOpts): Promise<PairComboDto[]>;
+  /** Số nhóm trùng theo loại (cùng tệp / phiên bản / định dạng); tôn trọng bộ lọc `q`. */
+  duplicateSummary(q?: FaceQuery): Promise<DuplicateSummaryDto>;
+  duplicateGroups(q?: FaceQuery): Promise<DuplicateGroupDto[]>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */

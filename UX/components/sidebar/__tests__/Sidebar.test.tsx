@@ -244,4 +244,31 @@ describe('Sidebar', () => {
       expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
     });
   });
+
+  it('shows "Trùng lặp" with the group count, hides it at 0, and opens the duplicates view', async () => {
+    const api = createMockApi();
+    const spy = vi.spyOn(api, 'duplicateSummary');
+    const r = render(<Sidebar api={api} pickFolder={async () => null} />);
+    await settle();
+    const item = screen.getByRole('button', { name: /Trùng lặp/ });
+    expect(within(item).getByText(String((await spy.mock.results[0].value).total))).toBeTruthy();
+    fireEvent.click(item);
+    expect(useUiStore.getState().view).toBe('dups');
+    expect(screen.getByRole('button', { name: /Trùng lặp/ }).getAttribute('aria-current')).toBe('true');
+    r.unmount();
+    useUiStore.getState().setView('all');
+    spy.mockResolvedValue({ sameFile: 0, versions: 0, formats: 0, total: 0 });
+    render(<Sidebar api={api} pickFolder={async () => null} />);
+    await settle();
+    expect(screen.queryByRole('button', { name: /Trùng lặp/ })).toBeNull();
+  });
+
+  it('keeps the item while the current view is duplicates even if the count drops to 0 (so the user can leave)', async () => {
+    useUiStore.getState().setView('dups');
+    const api = createMockApi();
+    vi.spyOn(api, 'duplicateSummary').mockResolvedValue({ sameFile: 0, versions: 0, formats: 0, total: 0 });
+    render(<Sidebar api={api} pickFolder={async () => null} />);
+    await settle();
+    expect(screen.getByRole('button', { name: /Trùng lặp/ })).toBeTruthy();
+  });
 });

@@ -1,0 +1,132 @@
+[
+  {
+    "faces": [
+      {
+        "format": "ttf",
+        "isNewest": false,
+        "modified": 1600000000,
+        "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+        "revision": 1.2029999494552612,
+        "row": {
+          "addedAt": 1700000000003,
+          "faceId": 3,
+          "faceIndex": 0,
+          "family": "Playfair Display",
+          "fileSize": 176003,
+          "fullName": "Playfair Display Regular",
+          "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+          "isFavorite": false,
+          "isItalic": false,
+          "isVariable": false,
+          "licenseClass": "ofl",
+          "missing": false,
+          "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+          "subfamily": "Regular",
+          "supportsVi": true,
+          "viMissing": 0,
+          "viStatus": "full",
+          "weightClass": 400,
+          "widthClass": 5
+        },
+        "version": "Version 1.203"
+      },
+      {
+        "format": "ttf",
+        "isNewest": false,
+        "modified": 1600000000,
+        "path": "/Users/u/Downloads/PlayfairDisplay-Regular.ttf",
+        "revision": 1.2029999494552612,
+        "row": {
+          "addedAt": 1700000000003,
+          "faceId": 3,
+          "faceIndex": 0,
+          "family": "Playfair Display",
+          "fileSize": 176003,
+          "fullName": "Playfair Display Regular",
+          "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+          "isFavorite": false,
+          "isItalic": false,
+          "isVariable": false,
+          "licenseClass": "ofl",
+          "missing": false,
+          "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+          "subfamily": "Regular",
+          "supportsVi": true,
+          "viMissing": 0,
+          "viStatus": "full",
+          "weightClass": 400,
+          "widthClass": 5
+        },
+        "version": "Version 1.203"
+      }
+    ],
+    "key": "0303030303030303030303030303030303030303030303030303030303030303",
+    "kind": "same_file",
+    "newestKnown": false
+  },
+  {
+    "faces": [
+      {
+        "format": "ttf",
+        "isNewest": false,
+        "modified": 1600000000,
+        "path": "/Users/u/Fonts/old/PlayfairDisplay-Regular.ttf",
+        "revision": 1.2029999494552612,
+        "row": {
+          "addedAt": 1700000000003,
+          "faceId": 3,
+          "faceIndex": 0,
+          "family": "Playfair Display",
+          "fileSize": 176003,
+          "fullName": "Playfair Display Regular",
+          "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+          "isFavorite": false,
+          "isItalic": false,
+          "isVariable": false,
+          "licenseClass": "ofl",
+          "missing": false,
+          "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+          "subfamily": "Regular",
+          "supportsVi": true,
+          "viMissing": 0,
+          "viStatus": "full",
+          "weightClass": 400,
+          "widthClass": 5
+        },
+        "version": "Version 1.203"
+      },
+      {
+        "format": "ttf",
+        "isNewest": true,
+        "modified": 1650000000,
+        "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+        "revision": 1.2039999961853027,
+        "row": {
+          "addedAt": 1700000000004,
+          "faceId": 4,
+          "faceIndex": 0,
+          "family": "Playfair Display",
+          "fileSize": 176004,
+          "fullName": "Playfair Display Regular",
+          "hashHex": "0404040404040404040404040404040404040404040404040404040404040404",
+          "isFavorite": false,
+          "isItalic": false,
+          "isVariable": false,
+          "licenseClass": "ofl",
+          "missing": false,
+          "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+          "subfamily": "Regular",
+          "supportsVi": true,
+          "viMissing": 0,
+          "viStatus": "full",
+          "weightClass": 400,
+          "widthClass": 5
+        },
+        "version": "Version 1.204"
+      }
+    ],
+    "key": "playfairdisplay-regular",
+    "kind": "versions",
+    "newestKnown": true
+  }
+]

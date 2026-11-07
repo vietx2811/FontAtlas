@@ -46,3 +46,4 @@ export type Unsubscribe = () => void;
 export type { CompareDto, CompareFace, CompareMetric, CompareMetricKey } from './compare';
 export type { PairComboDto } from '../bindings/PairComboDto';
 export type PairTheseOpts = { projectVi?: boolean; maxCombos?: number };
+export type { DuplicateGroupDto, DuplicateKindDto, DuplicateMemberDto, DuplicateSummaryDto } from '../bindings';

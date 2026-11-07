@@ -7,6 +7,7 @@ import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
+import { t } from '../../i18n';
 import { NavSection } from './NavSection';
 import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
@@ -14,7 +15,7 @@ import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
-type Counts = { all: number | null; star: number | null; active: number | null };
+type Counts = { all: number | null; star: number | null; active: number | null; dups: number | null };
 type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
@@ -52,7 +53,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [sources, setSources] = useState<SourceDto[]>([]);
   const [cols, setCols] = useState<CollectionDto[]>([]);
   const [tags, setTags] = useState<TagDto[]>([]);
-  const [counts, setCounts] = useState<Counts>({ all: null, star: null, active: null });
+  const [counts, setCounts] = useState<Counts>({ all: null, star: null, active: null, dups: null });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [nested, setNested] = useState<Nested | null>(null);
   const [adding, setAdding] = useState(false);
@@ -60,12 +61,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [menuFor, setMenuFor] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    const [s, c, t, all, star, act] = await Promise.all([
+    const [s, c, t, all, star, act, dup] = await Promise.all([
       api.listSources(), api.listCollections(), api.listTags(),
       api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }), api.activationState(),
+      api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
     ]);
     setSources(s); setCols(c); setTags(t);
-    setCounts({ all: all.total, star: star.total, active: act.filter(x => x.state === 'active').length });
+    setCounts({ all: all.total, star: star.total, active: act.filter(x => x.state === 'active').length, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
 
@@ -144,6 +146,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="star" label="Yêu thích" count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} />
         <NavItem icon="power" label="Đang bật" count={counts.active} current={cur('active')} onClick={() => setView('active')} />
+        {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
 
         {notice && (
           <div className="fa-notice" role="status">
