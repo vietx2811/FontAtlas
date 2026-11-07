@@ -128,7 +128,7 @@ const T = {
   'compare.png': 'PNG', 'compare.pdf': 'PDF', 'compare.mock': 'Bản mẫu — chưa xuất thật', 'compare.est': 'Ước lượng', 'compare.na': 'Không đo được',
   'compare.sec.spec': 'Specimen', 'compare.sec.metrics': 'Số đo', 'compare.sec.class': 'Classification', 'compare.sec.meta': 'Meta',
   'compare.row.line': 'Phở bò', 'compare.row.vi': 'Dấu chồng', 'compare.row.overlay': 'Overlay',
-  'compare.viWarn': 'Dấu tràn {p}%', 'compare.viOk': 'Dấu vừa khung', 'compare.uncertain': 'Uncertain', 'compare.conflict': 'Tín hiệu mâu thuẫn', 'compare.license': 'Chỉ ghi chú, không chặn',
+  'compare.viWarn': 'Dấu tràn {p}%', 'compare.viOk': 'Dấu vừa khung', 'compare.uncertain': 'Uncertain', 'compare.conflict': 'Tín hiệu mâu thuẫn', 'compare.edited': 'Đã sửa', 'compare.license': 'Chỉ ghi chú, không chặn',
   'compare.base': 'mốc', 'compare.pct': 'P{p}', 'compare.footnote': 'Δ so với mốc · thanh = vị trí trong thư viện (percentile)',
 };
 const t = (k, v = {}) => (T[k] ?? k).replace(/\{(\w+)\}/g, (_, x) => v[x]);
@@ -141,10 +141,10 @@ const nf = (v, d) => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: d, 
 
 /* DỮ LIỆU GIẢ — tên trường theo kế hoạch D1 (class, subclass, confidence, signals[]). Không phải font của chủ app. */
 const FONTS = [
-  { id: 'a', fam: 'Be Vietnam Pro', css: "'Be Vietnam Pro'", cls: 'Sans', sub: 'Geometric', conf: .82, m: { xh: .528, cap: .708, cp: 1.31, ch: 1.12, sl: 0, st: null, ap: 83, sf: 1.0 }, p: { xh: 58, cap: 49, cp: 8, ch: 6, sl: 50, st: null, ap: 71, sf: 5 }, viOver: 0, lic: 'OFL', foundry: 'ildeva' },
-  { id: 'b', fam: 'Playfair Display', css: "'Playfair Display'", cls: 'Serif', sub: 'Didone/Modern', conf: .94, m: { xh: .514, cap: .708, cp: 4.89, ch: 3.4, sl: 0, st: 89, ap: 62, sf: 2.69 }, p: { xh: 41, cap: 49, cp: 97, ch: 95, sl: 50, st: 96, ap: 18, sf: 88 }, viOver: 9, lic: 'OFL', foundry: 'Claus Eggers Sørensen' },
-  { id: 'c', fam: 'Fraunces', css: "'Fraunces'", cls: 'Serif', sub: 'Humanist/Old-style', conf: .71, m: { xh: .464, cap: .7, cp: 2.4, ch: 1.9, sl: -1.5, st: 22, ap: 78, sf: 1.7 }, p: { xh: 18, cap: 44, cp: 63, ch: 58, sl: 31, st: 61, ap: 55, sf: 47 }, viOver: 0, lic: 'OFL', foundry: 'Undercase Type' },
-  { id: 'd', fam: 'Lora', css: "'Lora'", cls: null, sub: null, conf: .38, signals: ['serif_foot ↔ Panose'], m: { xh: .5, cap: .7, cp: 2.1, ch: 1.6, sl: 0, st: null, ap: 74, sf: 1.9 }, p: { xh: 33, cap: 47, cp: 52, ch: 49, sl: 50, st: null, ap: 44, sf: 52 }, viOver: 0, lic: 'OFL', foundry: 'Cyreal' },
+  { id: 'a', fam: 'Be Vietnam Pro', css: "'Be Vietnam Pro'", classificationInfo: { class: 'sans', label: 'Sans', subclass: 'Geometric', confidence: .82, signals: ['aperture','width','panose'], usage: ['Text','UI'], source: 'auto', autoClass: 'sans' }, m: { xh: .528, cap: .708, cp: 1.31, ch: 1.12, sl: 0, st: null, ap: 83, sf: 1.0 }, p: { xh: 58, cap: 49, cp: 8, ch: 6, sl: 50, st: null, ap: 71, sf: 5 }, viOver: 0, lic: 'OFL', foundry: 'ildeva' },
+  { id: 'b', fam: 'Playfair Display', css: "'Playfair Display'", classificationInfo: { class: 'serif', label: 'Serif', subclass: 'Didone/Modern', confidence: .94, signals: ['contrast','stress_deg','serif_foot'], usage: ['Display'], source: 'auto', autoClass: 'serif' }, m: { xh: .514, cap: .708, cp: 4.89, ch: 3.4, sl: 0, st: 89, ap: 62, sf: 2.69 }, p: { xh: 41, cap: 49, cp: 97, ch: 95, sl: 50, st: 96, ap: 18, sf: 88 }, viOver: 9, lic: 'OFL', foundry: 'Claus Eggers Sørensen' },
+  { id: 'c', fam: 'Fraunces', css: "'Fraunces'", classificationInfo: { class: 'serif', label: 'Serif', subclass: 'Humanist/Old-style', confidence: .71, signals: ['serif_foot','stress_deg'], usage: ['Text','Display'], source: 'override', autoClass: 'display' }, m: { xh: .464, cap: .7, cp: 2.4, ch: 1.9, sl: -1.5, st: 22, ap: 78, sf: 1.7 }, p: { xh: 18, cap: 44, cp: 63, ch: 58, sl: 31, st: 61, ap: 55, sf: 47 }, viOver: 0, lic: 'OFL', foundry: 'Undercase Type' },
+  { id: 'd', fam: 'Lora', css: "'Lora'", classificationInfo: { class: 'uncertain', label: 'Uncertain', subclass: null, confidence: .38, signals: ['serif_foot ↔ Panose'], usage: [], source: 'auto', autoClass: 'uncertain' }, m: { xh: .5, cap: .7, cp: 2.1, ch: 1.6, sl: 0, st: null, ap: 74, sf: 1.9 }, p: { xh: 33, cap: 47, cp: 52, ch: 49, sl: 50, st: null, ap: 44, sf: 52 }, viOver: 0, lic: 'OFL', foundry: 'Cyreal' },
 ];
 const ROWS = [ // key, label, đơn vị, số lẻ, "ước lượng"
   ['xh', 'x-height', 'em', 3], ['cap', 'cap height', 'em', 3], ['cp', 'contrast ⊥', '', 2], ['ch', 'contrast H', '', 2],
@@ -214,9 +214,9 @@ function compare() {
   h += `<div class="gh">${t('compare.sec.metrics')}</div>`;
   for (const r of ROWS) h += `<div class="rh"><b>${r[1]}</b><small>${GLOSS[r[1]] || ''}</small></div>` + cell(f => mCell(f, base, r));
   if (st.cls) {
-    h += `<div class="gh">${t('compare.sec.class')}</div><div class="rh"><b>class · subclass</b><small>confidence</small></div>` + cell(f => f.cls
-      ? `<div class="cls"><span class="c">${f.cls}</span><span class="sc">${f.sub}</span><div class="conf" aria-label="${Math.round(f.conf * 100)}%"><i style="width:${f.conf * 100}%"></i></div><span class="m" style="font-size:11px;color:var(--muted)">${nf(f.conf * 100, 0)}%</span></div>`
-      : `<div class="cls"><span class="unc">${I('alert', 's')}${t('compare.uncertain')}</span><span class="sc">${t('compare.conflict')}: ${f.signals.join(', ')}</span></div>`);
+    h += `<div class="gh">${t('compare.sec.class')}</div><div class="rh"><b>class · subclass</b><small>confidence</small></div>` + cell(f => f.classificationInfo.class !== 'uncertain'
+      ? `<div class="cls"><span class="c">${f.classificationInfo.label}${f.classificationInfo.source === 'override' ? ` <span class="est" data-tip="auto: ${f.classificationInfo.autoClass}">${t('compare.edited')}</span>` : ''}</span><span class="sc">${f.classificationInfo.subclass}</span><div class="conf" aria-label="${Math.round(f.classificationInfo.confidence * 100)}%"><i style="width:${f.classificationInfo.confidence * 100}%"></i></div><span class="m" style="font-size:11px;color:var(--muted)">${nf(f.classificationInfo.confidence * 100, 0)}%</span></div>`
+      : `<div class="cls"><span class="unc">${I('alert', 's')}${t('compare.uncertain')}</span><span class="sc">${t('compare.conflict')}: ${f.classificationInfo.signals.join(', ')}</span></div>`);
   }
   h += `<div class="gh">${t('compare.sec.meta')}</div><div class="rh"><b>license</b></div>` + cell(f => `<div class="lic">${I('info', 's')}<span><b style="color:var(--fg)">${f.lic}</b><br>${t('compare.license')}</span></div>`);
   h += '</div>';
