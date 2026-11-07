@@ -6,6 +6,7 @@ const P: Record<string, React.ReactNode> = {
   descender_em: <><path d="M4 8h16M4 21h16" strokeDasharray="2 2" /><path d="M14 4v17M14 9c-4 0-6 2-6 4s2 4 6 4" /></>,
   stem: <><rect x="8" y="4" width="8" height="16" rx="1" /><path d="M8 12h8" /></>,
   contrast: <><path d="M6 20c2-3 3-9 3-16M16 20c0-4 1-8 3-12" strokeWidth="2.6" /><path d="M6 20c2-3 3-9 3-16M16 20c0-4 1-8 3-12" /></>,
+  contrast_h: <><path d="M6 4v16M18 4v16" strokeWidth="2.6" /><path d="M6 12h12" /></>,
   stress_deg: <><ellipse cx="12" cy="12" rx="5" ry="8" transform="rotate(25 12 12)" /><path d="M5 18L19 6" strokeDasharray="2 2" /></>,
   slant_deg: <><path d="M9 20L15 4" strokeWidth="2.4" /><path d="M5 20h14" /></>,
   width: <><path d="M4 12h16M4 9v6M20 9v6" /><path d="M8 12l2-2m-2 2l2 2M16 12l-2-2m2 2l-2 2" /></>,

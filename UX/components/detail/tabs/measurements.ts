@@ -4,7 +4,7 @@ export const AXIS_META: Record<string, { label: string }> = {
   x_height: { label: 'Chiều cao x' }, weight: { label: 'Độ đậm nét' }, serif: { label: 'Chân serif' }, stress: { label: 'Trục nhấn' }, slant: { label: 'Độ nghiêng' },
   x_height_em: { label: 'Chiều cao x' }, x_height_cap: { label: 'x / chữ hoa' },
   cap_height_em: { label: 'Chiều cao chữ hoa' }, ascender_em: { label: 'Nét lên' }, descender_em: { label: 'Nét xuống' },
-  stem: { label: 'Độ dày thân nét' }, darkness: { label: 'Mật độ mực' }, contrast: { label: 'Tương phản nét' },
+  stem: { label: 'Độ dày thân nét' }, darkness: { label: 'Mật độ mực' }, contrast: { label: 'Tương phản nét' }, contrast_h: { label: 'Tương phản nét (H)' },
   stress_deg: { label: 'Trục nhấn' }, slant_deg: { label: 'Độ nghiêng' }, aperture: { label: 'Độ mở c' }, aperture_e: { label: 'Độ mở e' },
   width: { label: 'Độ rộng o' }, mean_advance: { label: 'Bước chữ trung bình' }, width_cv: { label: 'Biến thiên bước chữ' },
   spacing: { label: 'Khoảng cách chữ' }, serif_foot: { label: 'Chân serif' }, counter: { label: 'Lòng chữ o' },

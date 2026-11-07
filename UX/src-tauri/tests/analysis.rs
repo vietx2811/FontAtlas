@@ -91,7 +91,10 @@ fn get_face_playfair() {
     assert_eq!(f.file.format, "ttf");
     assert!(f.file.num_glyphs > 0 && f.file.size_bytes > 0 && f.file.path.is_some());
     assert!(f.metadata.copyright.is_some());
-    assert_eq!(f.axes.len(), 21);
+    assert_eq!(f.axes.len(), 22);
+    let ch = f.axes.iter().find(|a| a.key == "contrast_h").expect("contrast_h");
+    assert_eq!(ch.unit.as_deref(), Some("ratio"));
+    assert!(ch.raw_value.is_some_and(|v| v > 1.0), "Playfair H stem/bar > 1");
     assert_eq!(f.classification.as_deref(), Some("Serif"));
     assert_eq!(f.vietnamese.total, 134);
     assert!(f.vietnamese.supports && f.vietnamese.missing.is_empty());

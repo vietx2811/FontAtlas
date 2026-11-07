@@ -259,7 +259,7 @@ pub fn axis_unit(axis: &str) -> Option<&'static str> {
         "stem" | "aperture_e" | "width" | "mean_advance" | "spacing" => "x_height_ratio",
         "stress_deg" | "slant_deg" | "aperture" => "deg",
         "darkness" | "counter" => "area_ratio",
-        "contrast" | "width_cv" | "serif_foot" | "terminal" => "ratio",
+        "contrast" | "contrast_h" | "width_cv" | "serif_foot" | "terminal" => "ratio",
         "a_storeys" | "g_storeys" => "count",
         _ => return None,
     })
@@ -622,6 +622,8 @@ pub fn get_face(
         axes.push(d);
     }
     for extra in [
+        // Stem/bar of H: stays stable on condensed faces where o-contrast inflates (eval 2026-11-07).
+        "contrast_h",
         "cap_height_em",
         "descender_em",
         "terminal",

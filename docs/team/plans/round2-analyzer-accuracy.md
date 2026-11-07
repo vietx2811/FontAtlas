@@ -103,5 +103,17 @@ Font upright, `cargo run -p fontatlas-core --example dump`, core-0.4.1:
 - Bebas Neue (1,94) và Oswald (1,91) thực chất là sans contrast thấp, H-contrast lần lượt là 1,10 và 1,40.
 - Quyết định giữ nguyên:
   - Face hẹp vẫn được gắn **Estimated** như đã làm từ core-0.4.0.
-  - `contrast_h` đã đo trong core nhưng chưa đưa lên UI. Đề xuất hiện nó cạnh o-contrast cho face hẹp; việc này cần DTO mới.
+  - Tab Giải phẫu nay có thêm hàng **"Tương phản nét (H)"**, đơn vị tỷ lệ (`contrast_h`, không có percentile). Số này ổn định trên font hẹp và nằm cạnh o-contrast "Ước lượng".
+
+## Kiểm chéo trục nhấn bằng counter của o
+- Đo hướng trục chính (moment bậc 2) của lòng chữ o, thử tạm rồi gỡ:
+  - Palatino: 7°.
+  - Times New Roman: 7°.
+  - Didot, Hoefler Text và Georgia: 0°.
+- Ba phương pháp độc lập cùng chiều và cùng cỡ:
+  - khớp điều hoà;
+  - điểm mảnh nhất;
+  - trục của counter.
+- Kết luận: giá trị phản ánh đúng hình chữ thật. Mốc "15–30°" trong sách áp cho Venetian cổ, không áp cho các bản Garalde số hoá. Không cần hệ số hiệu chỉnh.
+- Nhãn "Ước lượng" chỉ nói rằng đây là trục suy ra từ hình học, không phải số đo trực tiếp.
   - Đổi công thức o-contrast sẽ phải regenerate reference-v1. Việc này để vòng Phân loại (D1), khi có tập kiểm lớn hơn.

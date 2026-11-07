@@ -37,13 +37,13 @@ describe('AnatomyTab', () => {
     expect(within(svg as unknown as HTMLElement).getAllByTestId('guide-line').map(l => l.getAttribute('data-line'))).toEqual(['cap', 'x', 'baseline']);
   });
 
-  it('lists all 21 axes, each with its own icon', async () => {
+  it('lists all 22 axes, each with its own icon', async () => {
     render(<AnatomyTab detail={await detail()} css={{}} />);
     const rows = screen.getAllByTestId('axis-row');
-    expect(rows).toHaveLength(21);
+    expect(rows).toHaveLength(22);
     const icons = rows.map(r => r.querySelector('[data-icon]')!.getAttribute('data-icon'));
-    expect(new Set(icons).size).toBe(21);
-    expect(Object.keys(AXIS_META).length).toBeGreaterThanOrEqual(21);
+    expect(new Set(icons).size).toBe(22);
+    expect(Object.keys(AXIS_META).length).toBeGreaterThanOrEqual(22);
   });
 
   it('shows numbers with units, estimated status and failure reasons', async () => {

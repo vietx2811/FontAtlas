@@ -11,11 +11,11 @@ export const MOCK_UNITS: Record<string, string> = {
   x_height_em: 'em', cap_height_em: 'em', ascender_em: 'em', descender_em: 'em', x_height_cap: 'cap_height_ratio',
   stem: 'x_height_ratio', aperture_e: 'x_height_ratio', width: 'x_height_ratio', mean_advance: 'x_height_ratio', spacing: 'x_height_ratio',
   stress_deg: 'deg', slant_deg: 'deg', aperture: 'deg', darkness: 'area_ratio', counter: 'area_ratio',
-  contrast: 'ratio', width_cv: 'ratio', serif_foot: 'ratio', terminal: 'ratio',
+  contrast: 'ratio', contrast_h: 'ratio', width_cv: 'ratio', serif_foot: 'ratio', terminal: 'ratio',
 };
 const rnd = (seed: number, k: number): number => ((seed * 9301 + k * 49297 + 233) % 233280) / 233280;
 export function axesFor(row: FaceRow): AxisReadingDto[] {
-  const keys = [...MEASURED_AXES, 'terminal', 'a_storeys', 'g_storeys', 'cap_height_em', 'descender_em'];
+  const keys = [...MEASURED_AXES, 'terminal', 'a_storeys', 'g_storeys', 'cap_height_em', 'descender_em', 'contrast_h'];
   return keys.map((key, i) => {
     const r = rnd(row.faceId, i + 10);
     const quality = key === 'stress_deg' || i % 6 === 5 ? 'estimated' : 'measured';
