@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
-import { THEME_KEY } from '../../theme';
+import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
 import { notDownloadedOf } from '../zero/zeroStates';
 import { useUiStore } from '../../store/ui';
@@ -122,15 +122,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
 
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch { /* storage bị chặn */ }
-    if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
-    setDark(document.documentElement.dataset.theme === 'dark' || (!saved && prefersDark()));
+    const saved = savedTheme();
+    if (saved !== 'system') document.documentElement.dataset.theme = saved;
+    syncNativeTheme(saved);
+    setDark(saved === 'dark' || (saved === 'system' && prefersDark()));
   }, []);
   const toggleTheme = () => {
-    const next = dark ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* bỏ qua */ }
+    applyTheme(dark ? 'light' : 'dark');
     setDark(!dark);
   };
 
