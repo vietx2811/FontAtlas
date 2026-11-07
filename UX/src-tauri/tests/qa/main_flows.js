@@ -304,7 +304,7 @@
     const dsum = await inv('duplicate_summary', { q: dq });
     const dupBtn = () => [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(x => /Trùng lặp/.test(x.textContent));
     await wait(() => (dsum.total > 0) === !!dupBtn(), 8000);
-    await log('duplicates-sidebar-item', (dsum.total > 0) === !!dupBtn() && (dsum.total === 0 || new RegExp('\\b' + dsum.total + '\\b').test(dupBtn().textContent)), { dsum, item: dupBtn()?.textContent ?? null });
+    await log('duplicates-sidebar-item', (dsum.total > 0) === !!dupBtn() && (dsum.total === 0 || Number((dupBtn().textContent.match(/(\d+)\s*$/) || [])[1]) === dsum.total), { dsum, item: dupBtn()?.textContent ?? null });
     if (dsum.total > 0) {
       dupBtn().click();
       await wait(() => document.querySelector('.dup [data-testid=dup-group]'), 20000);
