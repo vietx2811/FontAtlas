@@ -27,6 +27,11 @@ describe('ClassChip', () => {
     expect(tip).toContain('Display');
   });
 
+  it('shows traits when the backend sends them and works without them', () => {
+    mount({ ...info(), traits: ['Stencil', 'Rounded'] } as ClassificationDto);
+    expect(screen.getByTestId('class-chip').textContent).toContain('Stencil');
+  });
+
   it('Uncertain shows a dimmed "có lẽ là {candidate}"', () => {
     mount(info({ class: 'uncertain', label: 'Uncertain', subclass: null, confidence: 0.5, candidate: 'script' }));
     const chip = screen.getByTestId('class-chip');
