@@ -33,6 +33,12 @@ pub struct FaceMeta {
     pub auto_subclass: Option<String>,
     /// Tag hình thái tự động (stencil, rounded…).
     pub auto_traits: Vec<String>,
+    /// name ID 5 (chuỗi phiên bản).
+    pub version: Option<String>,
+    /// head.fontRevision.
+    pub revision: Option<f32>,
+    /// head.modified (unix giây).
+    pub modified_ts: Option<i64>,
 }
 
 /// OpenType script tags whose presence marks a font as designed primarily for that script.
@@ -122,6 +128,9 @@ impl IndexBundle {
                     auto_class: auto.class.snake().into(),
                     auto_subclass: auto.subclass,
                     auto_traits: auto.traits.clone(),
+                    version: m.get("version").and_then(Value::as_str).map(String::from),
+                    revision: m.get("extras").and_then(|e| e.get("font_revision")).and_then(Value::as_f64).map(|v| v as f32),
+                    modified_ts: m.get("extras").and_then(|e| e.get("modified_ts")).and_then(Value::as_i64),
                     face_id: a.face_id,
                     source_ids: a.source_ids,
                     missing: a.missing,

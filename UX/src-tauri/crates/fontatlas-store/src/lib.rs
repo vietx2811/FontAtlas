@@ -19,7 +19,7 @@ pub use activation::{
     PrunedReasons,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
-pub use analysis::StoredAnalysis;
+pub use analysis::{DupRow, StoredAnalysis};
 pub use embed::{EmbedJob, EmbedReader, EnqueueStats, JobResult, SETTING_EMBED_ENABLED, SETTING_LICENSE_NOTICE_ACK};
 pub use error::StoreError;
 pub use fold::vi_fold;

@@ -647,3 +647,60 @@ pub struct PairComboDto {
     /// Thứ hạng 1-based sau khi xếp lexicographic.
     pub rank: u32,
 }
+
+// ---- Trùng lặp và phiên bản (D2) — chỉ báo, không xoá/di chuyển file nào ----
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum DuplicateKindDto {
+    /// Cùng nội dung (BLAKE3) ở nhiều đường dẫn.
+    SameFile,
+    /// Cùng PostScript name, khác nội dung: các phiên bản của một font.
+    Versions,
+    /// Cùng font ở các định dạng khác nhau (TTF/OTF/WOFF…).
+    Formats,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DuplicateMemberDto {
+    pub row: FaceRowDto,
+    /// Với `same_file`: mỗi thành viên là một đường dẫn của cùng nội dung.
+    pub path: Option<String>,
+    /// ttf | otf | ttc | otc | woff | woff2 | sfnt
+    pub format: String,
+    /// Chuỗi phiên bản (name ID 5), ví dụ "Version 2.137".
+    pub version: Option<String>,
+    /// head.fontRevision.
+    pub revision: Option<f32>,
+    /// head.modified (unix giây UTC).
+    #[ts(type = "number | null")]
+    pub modified: Option<i64>,
+    /// Chỉ `versions`: bản mới nhất khi phân biệt được rõ (fontRevision, rồi head.modified); ngược lại false.
+    pub is_newest: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DuplicateGroupDto {
+    pub kind: DuplicateKindDto,
+    /// same_file: hash hex · versions: PostScript name · formats: "family|style|weight|italic".
+    pub key: String,
+    pub faces: Vec<DuplicateMemberDto>,
+    /// `versions`: có đúng một bản mới nhất xác định được (nếu false thì không face nào có `isNewest`).
+    pub newest_known: bool,
+}
+
+/// Số nhóm theo loại, cho sidebar ("Trùng lặp" N).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DuplicateSummaryDto {
+    pub same_file: u32,
+    pub versions: u32,
+    pub formats: u32,
+    pub total: u32,
+}

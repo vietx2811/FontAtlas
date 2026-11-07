@@ -86,3 +86,15 @@ fn fixtures_carry_d2_data() {
     let (_, ri) = extras("roboto_italic_vf.ttf");
     assert!(ri.ot_groups.iter().any(|g| g.group == "small_caps"));
 }
+
+#[test]
+fn revision_and_modified_timestamp_are_read() {
+    assert_eq!(unix_from_longdatetime(0), None);
+    assert_eq!(unix_from_longdatetime(2_082_844_800), Some(0));
+    assert_eq!(unix_from_longdatetime(1_577_836_800 + 2_082_844_800), Some(1_577_836_800));
+    let (_, e) = extras("roboto.ttf");
+    assert!(e.font_revision.is_some_and(|r| r > 1.0), "{:?}", e.font_revision);
+    let ts = e.modified_ts.expect("head.modified");
+    // khớp năm đã suy ra
+    assert_eq!(year_from_longdatetime(ts + 2_082_844_800), e.years.modified);
+}
