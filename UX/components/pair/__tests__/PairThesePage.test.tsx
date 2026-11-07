@@ -34,14 +34,19 @@ describe('PairThesePage', () => {
     const api = createMockApi();
     const base = await api.pairThese(faces(3));
     const first = base[0];
-    vi.spyOn(api, 'pairThese').mockResolvedValue([{ ...first, assessment: { ...first.assessment, clashes: ['contrast'], headingOverflow: true, insufficientData: true, bodyWarnings: ['low_x_height', 'brand_new_warning'], weightHint: 'Tăng độ đậm nội dung một nấc' } }]);
+    vi.spyOn(api, 'pairThese').mockResolvedValue([{ ...first, assessment: { ...first.assessment, clashes: ['axis:contrast', 'skeleton'], headingOverflow: true, insufficientData: true, bodyWarnings: ['low_x_height', 'high_contrast', 'missing_regular_or_bold', 'brand_new_warning'], block: 'missing_vietnamese:b:7', weightHint: 'Tăng độ đậm nội dung một nấc' } }]);
     await mount(api);
     const c = screen.getByTestId('pair-combo');
     expect(within(c).getByText(/Va chạm: /)).toBeTruthy();
     expect(within(c).getByText('Tiêu đề dễ tràn dấu')).toBeTruthy();
     expect(within(c).getByText('Chưa đủ dữ liệu')).toBeTruthy();
     expect(within(c).getByText('Nội dung có x-height thấp')).toBeTruthy();
-    expect(within(c).getByText('brand_new_warning')).toBeTruthy();
+    expect(within(c).getByText('Brand new warning')).toBeTruthy();
+    expect(within(c).getByText('Tương phản nét cao')).toBeTruthy();
+    expect(within(c).getByText('Thiếu Regular hoặc Bold')).toBeTruthy();
+    expect(within(c).getByText('Nội dung thiếu 7 ký tự tiếng Việt')).toBeTruthy();
+    expect(within(c).getByText('Va chạm: Tương phản nét, Cùng nét, khác khung')).toBeTruthy();
+    expect(c.textContent).not.toMatch(/[a-z]+_[a-z]+|axis:/); // không mã thô
     expect(within(c).getByText('Tăng độ đậm nội dung một nấc')).toBeTruthy();
   });
 

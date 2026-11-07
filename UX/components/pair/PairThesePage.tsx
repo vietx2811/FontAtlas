@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto, PairComboDto } from '../../api';
 import type { FaceRowDto } from '../../bindings/FaceRowDto';
-import { hasKey, t, type I18nKey } from '../../i18n';
+import { t } from '../../i18n';
 import { useUiStore } from '../../store/ui';
 import { AXIS_META } from '../detail/tabs/measurements';
 import { PARAGRAPH } from '../detail/tabs/SpecimenTab';
 import { useFontFamily } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
+import { blockLabel, clashLabel, gateLabel, warningLabel } from './pairCodes';
 import { Tooltip } from '../ui/Tooltip';
 import { ZeroState } from '../zero/ZeroState';
 import './pair.css';
 
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
-const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key as I18nKey) : fallback);
 const css = (family: string | null, row: FaceRowDto) => ({ fontFamily: family ? `"${family}", var(--font-ui)` : 'var(--font-ui)', fontWeight: row.weightClass ?? undefined, fontStyle: row.isItalic ? 'italic' as const : undefined });
 const name = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
 
@@ -28,7 +28,7 @@ function Combo({ api, c, sample }: { api: Api; c: PairComboDto; sample: string }
     <article className="pr-combo" data-testid="pair-combo" aria-label={t('pair.combo', { n: c.rank })}>
       <header>
         <b>{t('pair.combo', { n: c.rank })}</b>
-        <span className="pr-gate" data-testid="pair-gate" data-gate={a.gate}>{tr(`pair.gate.${a.gate}`, a.gate)}</span>
+        <span className="pr-gate" data-testid="pair-gate" data-gate={a.gate}>{gateLabel(a.gate)}</span>
       </header>
       <div className="pr-page">
         <Specimen api={api} row={c.heading} testId="pair-heading" text={sample} size={28} tag="div" />
@@ -47,10 +47,11 @@ function Combo({ api, c, sample }: { api: Api; c: PairComboDto; sample: string }
       <p className="pr-summary" data-testid="pair-summary">{a.summary}</p>
       {a.sentences.length > 1 && <ul className="pr-sentences">{a.sentences.map(s => <li key={s}>{s}</li>)}</ul>}
       <div className="pr-warns">
-        {a.clashes.length > 0 && <span className="pr-warn">{t('pair.clash', { axes: a.clashes.map(x => AXIS_META[x]?.label ?? x).join(', ') })}</span>}
+        {a.clashes.length > 0 && <span className="pr-warn">{t('pair.clash', { axes: a.clashes.map(clashLabel).join(', ') })}</span>}
         {a.headingOverflow && <span className="pr-warn">{t('pair.overflow')}</span>}
         {a.insufficientData && <span className="pr-note">{t('pair.unsure')}</span>}
-        {warns.map(w => <span key={w} className="pr-warn">{tr(`pair.warn.${w}`, w)}</span>)}
+        {a.block && <span className="pr-warn">{blockLabel(a.block)}</span>}
+        {warns.map(w => { const l = warningLabel(w); return <span key={w} className="pr-warn" title={l.gloss ?? undefined}>{l.text}</span>; })}
       </div>
       {a.weightHint && <p className="pr-hint">{a.weightHint}</p>}
     </article>
