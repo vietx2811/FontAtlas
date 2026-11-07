@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use fontatlas_store::{FaceKey, NewPair, Store, create_user_v1_for_test, create_user_v2_for_test};
+use fontatlas_store::{FaceKey, NewPair, Store, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test};
 
 fn key(n: u8) -> FaceKey {
     FaceKey { hash: [n; 32], face_index: 0 }
@@ -103,4 +103,28 @@ fn pairs_roundtrip_and_collection_delete_sets_null() {
     let mut bad = np(1, 2, None);
     bad.a_role = "title".into();
     assert!(s.save_pair(&bad).is_err());
+}
+
+#[test]
+fn v3_to_v4_migrates_keeps_data_and_adds_overrides() {
+    let d = tmp();
+    let user = d.path().join(fontatlas_store::USER_FILE);
+    create_user_v3_for_test(&user);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        c.execute("INSERT INTO collections(name,created_at,updated_at) VALUES ('Giữ v3',1,1)", []).unwrap();
+        c.execute(
+            "INSERT INTO activation_state(hash,state,scope,method,active_path,updated_at) VALUES (?1,'active','persistent','fake','/x.ttf',1)",
+            [&[7u8; 32][..]],
+        )
+        .unwrap();
+    }
+    let (mut s, rep) = Store::open(d.path()).unwrap();
+    assert_eq!(count(&s, "PRAGMA u.user_version"), 4);
+    assert_eq!(s.collections().unwrap().len(), 1);
+    assert_eq!(count(&s, "SELECT count(*) FROM u.activation_state"), 1);
+    assert_eq!(count(&s, "SELECT count(*) FROM u.sqlite_schema WHERE name = 'classification_overrides'"), 1);
+    s.set_classification_override(&key(7), "serif", Some("didone")).unwrap();
+    assert_eq!(s.classification_overrides().unwrap().len(), 1);
+    assert!(rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().starts_with("user.v3."));
 }

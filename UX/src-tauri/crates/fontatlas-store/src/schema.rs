@@ -298,6 +298,15 @@ pub fn create_user_v2_for_test(path: &Path) {
     c.execute_batch(USER_V2).expect("USER_V2");
     c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
 }
+/// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
+#[doc(hidden)]
+pub fn create_user_v3_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v3");
+    for m in [USER_V1, USER_V2, USER_V3] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 3;").expect("user_version");
+}
 pub const LIBRARY_VERSION: u32 = LIBRARY_MIGRATIONS.len() as u32;
 pub const USER_VERSION: u32 = USER_MIGRATIONS.len() as u32;
 

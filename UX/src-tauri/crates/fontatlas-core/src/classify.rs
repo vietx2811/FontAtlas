@@ -119,6 +119,8 @@ pub struct ClassifyInput {
     pub symbol_cmap: bool,
     pub latin_letters: Option<u8>,
     pub opsz_max: Option<f32>,
+    /// Mặt in nghiêng/oblique (italic_angle ≠ 0 hoặc tên có Italic/Oblique): độ nghiêng khi đó là kiểu chữ, không phải dấu hiệu Script.
+    pub italic: bool,
     pub m: Metrics,
 }
 
@@ -171,6 +173,8 @@ impl ClassifyInput {
             a.iter().find(|x| x.get("tag").and_then(Value::as_str) == Some("opsz"))?.get("max")?.as_f64().map(|v| v as f32)
         });
         let g = |k: &str| metric(anatomy, k);
+        let italic = meta.get("italic_angle").and_then(Value::as_f64).is_some_and(|a| a.abs() > 0.5)
+            || name.split(|c: char| !c.is_alphanumeric()).any(|t| matches!(t, "italic" | "oblique" | "slanted"));
         ClassifyInput {
             name,
             panose,
@@ -179,6 +183,7 @@ impl ClassifyInput {
             symbol_cmap: meta.get("symbol_cmap").and_then(Value::as_bool).unwrap_or(false),
             latin_letters: meta.get("latin_letters").and_then(Value::as_u64).map(|v| v as u8),
             opsz_max,
+            italic,
             m: Metrics {
                 serif_foot: g("serif_foot"),
                 contrast: g("contrast"),
@@ -202,27 +207,35 @@ impl ClassifyInput {
     }
 }
 
-const SYMBOL_KW: &[&str] = &["dingbat", "symbol", "wingding", "webding", "emoji", "icons", "pictogram", "ornament"];
-const BLACKLETTER_KW: &[&str] = &["blackletter", "fraktur", "textura", "old english", "unifraktur", "gotisch", "schwabacher", "rotunda", "germania"];
-const MONO_KW: &[&str] = &["mono", "typewriter", "courier", "consolas", "code", "terminal"];
-const SCRIPT_KW: &[&str] = &["script", "brush", "calligra", "cursive", "handwrit", "signature", "marker", "lettering", "copperplate", "spencer"];
-const DISPLAY_KW: &[&str] = &["stencil", "inline", "outline", "shadow", "fat face", "display", "poster", "decorative", "ornate", "rounded", "blobby", "pixel", "wacky"];
+/// Từ khoá khớp nguyên từ; hậu tố `*` = khớp tiền tố (Monoton/Monofett không khớp "mono", Romanesco không khớp "roman").
+const SYMBOL_KW: &[&str] = &["dingbat*", "symbol*", "wingding*", "webding*", "emoji", "icons", "pictogram*", "ornament*"];
+const BLACKLETTER_KW: &[&str] = &["blackletter", "fraktur", "textura", "old english", "unifraktur", "gotisch*", "schwabacher", "rotunda", "germania"];
+const MONO_KW: &[&str] = &["mono", "monospace", "monospaced", "typewriter", "courier", "consolas", "code", "terminal"];
+const SCRIPT_KW: &[&str] = &["script", "brush", "calligra*", "cursive", "handwrit*", "signature", "marker", "lettering", "copperplate", "spencer"];
+const DISPLAY_KW: &[&str] = &["stencil", "inline", "outline", "shadow", "fat face", "poster", "decorative", "ornate", "rounded", "blobby", "pixel", "wacky"];
 const SERIF_KW: &[&str] = &["serif", "garamond", "caslon", "baskerville", "didot", "bodoni", "slab", "roman", "times", "georgia", "palatino", "antiqua"];
-const SANS_KW: &[&str] = &["sans", "grotesk", "grotesque", "gothic", "helvet", "arial", "neue"];
+const SANS_KW: &[&str] = &["sans", "grotesk", "grotesque", "gothic", "helvet*", "arial", "neue"];
 
-/// Khớp theo từ (không khớp chuỗi con giữa từ: "open" không chứa "pen"). Từ khoá một từ khớp khi trùng
-/// hoặc là tiền tố của một từ (≥ 4 ký tự); cụm nhiều từ khớp theo chuỗi con.
-fn has_kw(name: &str, kws: &[&str]) -> Option<String> {
-    let tokens: Vec<&str> = name.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty()).collect();
+/// Tên đã tách từ một lần (family + full + postscript, chữ thường).
+struct Nm<'a> {
+    raw: &'a str,
+    toks: Vec<&'a str>,
+}
+
+impl<'a> Nm<'a> {
+    fn new(raw: &'a str) -> Self {
+        Nm { raw, toks: raw.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty()).collect() }
+    }
+}
+
+fn has_kw(n: &Nm, kws: &[&str]) -> Option<String> {
     kws.iter()
-        .find(|k| {
-            if k.contains(' ') {
-                name.contains(**k)
-            } else {
-                tokens.iter().any(|t| t == *k || (k.len() >= 4 && t.starts_with(**k)))
-            }
+        .find(|k| match k.strip_suffix('*') {
+            Some(p) => n.toks.iter().any(|t| t.starts_with(p)),
+            None if k.contains(' ') => n.raw.contains(**k),
+            None => n.toks.iter().any(|t| t == *k),
         })
-        .map(|k| (*k).to_string())
+        .map(|k| k.trim_end_matches('*').to_string())
 }
 
 struct Votes {
@@ -241,6 +254,7 @@ impl Votes {
 
 pub fn classify(i: &ClassifyInput) -> Classification {
     let mut v = Votes { list: Vec::new() };
+    let nm = Nm::new(&i.name);
     let m = &i.m;
     let p = i.panose;
     // --- Symbol (cmap, Panose kind 5, tên)
@@ -250,14 +264,14 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if p.is_some_and(|p| p[0] == 5) {
         v.add("panose", "family kind = 5 (Latin Symbol)", Class::Symbol, 2.0);
     }
-    if let Some(k) = has_kw(&i.name, SYMBOL_KW) {
+    if let Some(k) = has_kw(&nm, SYMBOL_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Symbol, 2.0);
     }
     if i.latin_letters.is_some_and(|n| n < 10) && !v.list.is_empty() {
         v.add("cmap", "gần như không có chữ cái Latin", Class::Symbol, 1.0);
     }
     // --- Blackletter
-    if let Some(k) = has_kw(&i.name, BLACKLETTER_KW) {
+    if let Some(k) = has_kw(&nm, BLACKLETTER_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Blackletter, 3.0);
     }
     // --- Mono
@@ -270,7 +284,7 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if p.is_some_and(|p| p[3] == 9) {
         v.add("panose", "proportion = monospaced", Class::Mono, 1.5);
     }
-    if let Some(k) = has_kw(&i.name, MONO_KW) {
+    if let Some(k) = has_kw(&nm, MONO_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Mono, 1.0);
     }
     // --- Script
@@ -280,10 +294,10 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if i.family_class.is_some_and(|c| c.0 == 10) {
         v.add("os2_class", "sFamilyClass = 10 (Scripts)", Class::Script, 2.0);
     }
-    if let Some(k) = has_kw(&i.name, SCRIPT_KW) {
+    if let Some(k) = has_kw(&nm, SCRIPT_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Script, 1.5);
     }
-    if m.slant_abs.is_some_and(|s| s >= 10.0) && m.spacing.is_some_and(|s| s < 0.06) {
+    if !i.italic && m.slant_abs.is_some_and(|s| s >= 10.0) && m.spacing.is_some_and(|s| s < 0.06) {
         v.add("measure", "nghiêng mạnh, sidebearing rất nhỏ (chữ nối)", Class::Script, 1.0);
     }
     // --- Display
@@ -293,7 +307,7 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     if i.family_class.is_some_and(|c| c.0 == 9) {
         v.add("os2_class", "sFamilyClass = 9 (Ornamentals)", Class::Display, 1.5);
     }
-    if let Some(k) = has_kw(&i.name, DISPLAY_KW) {
+    if let Some(k) = has_kw(&nm, DISPLAY_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Display, 1.5);
     }
     // --- Dấu hiệu "không phải chữ văn bản" từ số đo (font GF hầu như không khai Panose/sFamilyClass)
@@ -306,7 +320,7 @@ pub fn classify(i: &ClassifyInput) -> Classification {
         cue(&mut v, x < 0.04, format!("sidebearing rất nhỏ ({x:.2})"), Class::Script, 1.5);
         cue(&mut v, (0.04..0.06).contains(&x), format!("sidebearing nhỏ ({x:.2})"), Class::Script, 0.7);
     }
-    if let Some(x) = m.slant_abs {
+    if let Some(x) = m.slant_abs.filter(|_| !i.italic) {
         cue(&mut v, x >= 5.0, format!("nghiêng {x:.0}°"), Class::Script, 1.5);
         cue(&mut v, (3.0..5.0).contains(&x), format!("nghiêng nhẹ {x:.0}°"), Class::Script, 0.5);
     }
@@ -368,16 +382,16 @@ pub fn classify(i: &ClassifyInput) -> Classification {
             _ => {}
         }
     }
-    if let Some(k) = has_kw(&i.name, SERIF_KW).filter(|k| k != "serif" || !i.name.contains("sans")) {
+    if let Some(k) = has_kw(&nm, SERIF_KW).filter(|k| k != "serif" || !i.name.contains("sans")) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Serif, 0.8);
     }
-    if let Some(k) = has_kw(&i.name, SANS_KW) {
+    if let Some(k) = has_kw(&nm, SANS_KW) {
         v.add("name", format!("từ khoá \"{k}\""), Class::Sans, 0.8);
     }
 
     let (class, confidence) = decide(&v);
     let (class, confidence, candidate) = calibrate(&v, i, class, confidence);
-    let subclass = if class == Class::Uncertain { None } else { subclass_of(class, i) };
+    let subclass = if class == Class::Uncertain { None } else { subclass_of(class, i, &nm) };
     let usage = usage_of(candidate.unwrap_or(class), i);
     Classification { class, subclass, confidence, candidate, signals: v.list, usage }
 }
@@ -426,16 +440,24 @@ fn decide(v: &Votes) -> (Class, f32) {
 /// Đặc trưng: class đoán (one-hot), lề điểm, bằng chứng Display/Script còn lại, và vài số đo "văn bản điển hình".
 /// Dưới `CONF_MIN` thì trả `Uncertain` (giữ `candidate`). Sinh bởi `docs/team/eval/classify_calibrate.py`.
 pub const CONF_MIN: f32 = 0.88;
-const CAL_MU: [f32; 16] = [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 2.0562, 0.2135, 0.0873, 0.2436, 0.1269, 0.2080, 0.4105, 0.6476, 1.8145, 0.0295, 0.2544];
-const CAL_SD: [f32; 16] = [1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.4136, 0.4943, 0.3520, 0.0647, 0.0782, 0.1019, 0.1451, 0.5966, 0.8246, 0.0449, 0.2724];
-const CAL_W: [f32; 16] = [0.2015, -0.1058, -0.1584, 0.1032, -0.0405, 0.6125, -0.1869, -0.2677, 0.2043, 0.0004, 0.2617, 0.0519, -0.0606, -0.2117, 0.0393, -0.2024];
-const CAL_B: f32 = 1.6141;
+const CAL_MU: [f32; 16] = [0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 2.0752, 0.2164, 0.0897, 0.2436, 0.1270, 0.2079, 0.4104, 0.6469, 1.8144, 0.0296, 0.2547];
+const CAL_SD: [f32; 16] = [1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.4012, 0.4925, 0.3553, 0.0648, 0.0783, 0.1016, 0.1451, 0.5956, 0.8245, 0.0449, 0.2728];
+const CAL_W: [f32; 16] = [0.1711, -0.1138, -0.1637, 0.1493, -0.0429, 0.5978, -0.2214, -0.2868, 0.1824, -0.0226, 0.2793, 0.0966, -0.0245, -0.2226, 0.0478, -0.2427];
+const CAL_B: f32 = 1.6351;
 
 fn calibrate(v: &Votes, i: &ClassifyInput, class: Class, conf: f32) -> (Class, f32, Option<Class>) {
     const SHAPES: [Class; 5] = [Class::Serif, Class::Sans, Class::Script, Class::Display, Class::Mono];
     let Some(own) = SHAPES.iter().position(|c| *c == class) else {
         return (class, conf, None); // Symbol/Blackletter/Uncertain giữ nguyên
     };
+    // Tín hiệu cứng (post.isFixedPitch hoặc bề rộng a–z đều tuyệt đối) và không có bằng chứng Script/Display
+    // ngược lại: giữ Mono, không để hiệu chỉnh thống kê hạ về Uncertain.
+    if class == Class::Mono
+        && (i.is_fixed_pitch || i.m.width_cv.is_some_and(|x| x.abs() < 0.005))
+        && v.score(Class::Script) + v.score(Class::Display) < ODD_MIN
+    {
+        return (class, conf, None);
+    }
     let m = &i.m;
     let sc = SHAPES.map(|c| v.score(c));
     let other = sc.iter().enumerate().filter(|(k, _)| *k != own).map(|(_, x)| *x).fold(f32::MIN, f32::max);
@@ -460,28 +482,28 @@ fn calibrate(v: &Votes, i: &ClassifyInput, class: Class, conf: f32) -> (Class, f
     if p < CONF_MIN { (Class::Uncertain, p, Some(class)) } else { (class, p, None) }
 }
 
-fn kw(i: &ClassifyInput, kws: &[&str]) -> bool {
-    has_kw(&i.name, kws).is_some()
+fn kw(n: &Nm, kws: &[&str]) -> bool {
+    has_kw(n, kws).is_some()
 }
 
 /// Subclass cho một class đã biết (dùng cả khi class bị hạ về Uncertain vì độ tin cậy thấp — để đo riêng).
 pub fn subclass_for(i: &ClassifyInput, class: Class) -> Option<String> {
-    subclass_of(class, i)
+    subclass_of(class, i, &Nm::new(&i.name))
 }
 
-fn subclass_of(class: Class, i: &ClassifyInput) -> Option<String> {
+fn subclass_of(class: Class, i: &ClassifyInput, nm: &Nm) -> Option<String> {
     let m = &i.m;
     let sfc = i.family_class;
     let s = |x: &str| Some(x.to_string());
     match class {
         Class::Serif => {
-            if kw(i, &["slab", "rockwell", "clarendon", "egyptian", "memphis"]) || sfc.is_some_and(|c| c.0 == 5) {
+            if kw(nm, &["slab", "rockwell", "clarendon", "egyptian", "memphis"]) || sfc.is_some_and(|c| c.0 == 5) {
                 return s("slab");
             }
-            if kw(i, &["glyphic", "wedge", "trajan", "optima", "marcellus", "cinzel"]) {
+            if kw(nm, &["glyphic", "wedge", "trajan", "optima", "marcellus", "cinzel"]) {
                 return s("glyphic");
             }
-            if kw(i, &["fat face", "fatface"]) {
+            if kw(nm, &["fat face", "fatface"]) {
                 return s("fat_face");
             }
             let (c, st) = (m.contrast?, m.stress_abs);
@@ -533,9 +555,9 @@ fn subclass_of(class: Class, i: &ClassifyInput) -> Option<String> {
             // serif_foot đo trên font mono không đáng tin (i/l/j vốn có chân kể cả sans mono; tune: 19/19 sans mono,
             // serif_foot trung vị 2.8) nên chỉ gán serif_mono khi tên/Panose/sFamilyClass khai báo serif.
             let p = i.panose.filter(|p| p[0] == 2);
-            let named_sans = i.name.contains("sans") || kw(i, &["gothic", "grotesk"]);
+            let named_sans = i.name.contains("sans") || kw(nm, &["gothic", "grotesk"]);
             let serif = !named_sans
-                && (kw(i, &["courier", "typewriter", "mincho", "batang", "slab", "serif"])
+                && (kw(nm, &["courier", "typewriter", "mincho", "batang", "slab", "serif"])
                     || p.is_some_and(|p| matches!(p[1], 2..=10 | 14))
                     || sfc.is_some_and(|c| matches!(c.0, 1..=5 | 7)));
             if serif {
@@ -547,22 +569,22 @@ fn subclass_of(class: Class, i: &ClassifyInput) -> Option<String> {
             }
         }
         Class::Script => {
-            if kw(i, &["brush", "marker", "paint", "casual", "felt"]) {
+            if kw(nm, &["brush", "marker", "paint", "casual", "felt"]) {
                 return s("casual_brush");
             }
-            if kw(i, &["copperplate", "spencer", "formal", "calligra", "chancery", "roundhand"]) || m.contrast.is_some_and(|c| c > 3.0) {
+            if kw(nm, &["copperplate", "spencer", "formal", "calligra", "chancery", "roundhand"]) || m.contrast.is_some_and(|c| c > 3.0) {
                 return s("formal");
             }
             s("handwritten")
         }
         Class::Display => {
-            if kw(i, &["stencil"]) {
+            if kw(nm, &["stencil"]) {
                 s("stencil")
-            } else if kw(i, &["inline", "outline", "shadow"]) {
+            } else if kw(nm, &["inline", "outline", "shadow"]) {
                 s("inline_outline")
-            } else if kw(i, &["rounded", "round "]) {
+            } else if kw(nm, &["rounded", "round "]) {
                 s("rounded")
-            } else if kw(i, &["fat face", "fatface"]) {
+            } else if kw(nm, &["fat face", "fatface"]) {
                 s("fat_face")
             } else {
                 s("decorative")
@@ -570,6 +592,11 @@ fn subclass_of(class: Class, i: &ClassifyInput) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// Tag dùng cho một class cho trước (kể cả class do người dùng ghi đè).
+pub fn usage_for(i: &ClassifyInput, class: Class) -> Vec<Usage> {
+    usage_of(class, i)
 }
 
 fn usage_of(class: Class, i: &ClassifyInput) -> Vec<Usage> {

@@ -32,6 +32,10 @@ fn fixtures_get_expected_classes() {
     ] {
         let c = cls(file);
         assert_eq!(best(&c), want, "{file}: {c:?}");
+        // font điển hình phải được GÁN (không chỉ candidate), trừ Roboto nằm sát ngưỡng CONF_MIN
+        if file != "roboto.ttf" {
+            assert_eq!(c.class, want, "{file}: {c:?}");
+        }
         assert!(c.confidence > 0.0 && !c.signals.is_empty(), "{file}");
     }
 }
@@ -58,7 +62,8 @@ fn below_conf_min_is_uncertain_with_candidate_never_a_wrong_guess() {
         let c = cls(file);
         match c.class {
             Class::Uncertain => assert!(c.subclass.is_none() && (c.candidate.is_some() || c.confidence == 0.0), "{file}: {c:?}"),
-            _ => assert!(c.candidate.is_none() && c.confidence >= CONF_MIN, "{file}: {c:?}"),
+            // Mono/Symbol/Blackletter dựa trên tín hiệu cứng nên không qua hiệu chỉnh
+            k => assert!(c.candidate.is_none() && (c.confidence >= CONF_MIN || matches!(k, Class::Mono | Class::Symbol | Class::Blackletter)), "{file}: {c:?}"),
         }
     }
 }

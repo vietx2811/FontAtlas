@@ -30,5 +30,5 @@ pub use query::{DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, MAX_LIMIT, SortKey,
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;
 pub use pairs::{NewPair, SavedPair};
-pub use schema::{LIBRARY_VERSION, USER_VERSION, create_user_v1_for_test, create_user_v2_for_test};
+pub use schema::{LIBRARY_VERSION, USER_VERSION, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test};
 pub use user::{Collection, Source, SourceKind, Tag};

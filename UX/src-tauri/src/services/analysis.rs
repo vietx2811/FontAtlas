@@ -299,26 +299,35 @@ pub fn class_facets(state: &AppState, q: &FaceQueryDto) -> Result<Vec<ClassFacet
     let allowed = crate::services::library::matching_keys(state, &query)?;
     let b = bundle(state)?;
     let eff = crate::services::library::effective_classes(state)?;
+    let mut classified = 0usize;
     let mut by: std::collections::BTreeMap<String, (u32, std::collections::BTreeMap<String, u32>)> = Default::default();
     for (k, m) in &b.meta {
         if !allowed.contains(k) {
             continue;
         }
         let Some((c, sub)) = eff.get(&m.face_id) else { continue };
+        classified += 1;
         let e = by.entry(c.clone()).or_default();
         e.0 += 1;
         if let Some(s) = sub {
             *e.1.entry(s.clone()).or_default() += 1;
         }
     }
-    Ok(by
+    // Face thoả bộ lọc nhưng không có hồ sơ trong Index (chưa phân tích / JSON hỏng): tách thành bucket riêng
+    // để tổng facet = tổng thư viện.
+    let unclassified = allowed.len().saturating_sub(classified) as u32;
+    let mut out: Vec<ClassFacetDto> = by
         .into_iter()
         .map(|(class, (count, subs))| ClassFacetDto {
             class,
             count,
             subclasses: subs.into_iter().map(|(subclass, count)| SubclassFacetDto { subclass, count }).collect(),
         })
-        .collect())
+        .collect();
+    if unclassified > 0 {
+        out.push(ClassFacetDto { class: "unclassified".into(), count: unclassified, subclasses: Vec::new() });
+    }
+    Ok(out)
 }
 
 fn stats_of(axis: AxisId, mut values: Vec<f32>) -> AxisStatsDto {
@@ -839,8 +848,9 @@ mod raw_stats_tests {
 
 /// Phân loại tự động từ JSON đã lưu, rồi áp ghi đè của người dùng (ưu tiên hơn).
 pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy: &Value) -> Result<ClassificationDto, CmdError> {
-    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify};
-    let auto = classify(&ClassifyInput::from_json(meta, anatomy));
+    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify, usage_for};
+    let input = ClassifyInput::from_json(meta, anatomy);
+    let auto = classify(&input);
     let ov = state.with_user(|u| Ok(u.classification_override(key)?))?;
     let usage_str = |u: &[Usage]| -> Vec<String> {
         u.iter()
@@ -855,9 +865,9 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
     let signals: Vec<ClassSignalDto> = auto
         .signals
         .iter()
-        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: format!("{:?}", s.vote).to_lowercase(), weight: s.weight })
+        .map(|s| ClassSignalDto { source: s.source.clone(), detail: s.detail.clone(), vote: s.vote.snake().into(), weight: s.weight })
         .collect();
-    let snake = |c: Class| serde_json::to_value(c).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+    let snake = |c: Class| c.snake().to_string();
     if let Some(o) = ov
         && let Some(c) = Class::parse(&o.class)
     {
@@ -868,7 +878,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
             confidence: 1.0,
             candidate: None,
             signals,
-            usage: usage_str(&auto.usage),
+            usage: usage_str(&usage_for(&input, c)),
             source: "override".into(),
             auto_class: Some(snake(auto.class)),
         });
@@ -896,10 +906,17 @@ pub fn set_classification_override(state: &AppState, o: &ClassificationOverrideD
         return Err(CmdError::invalid_arg(format!("subclass {sub} không thuộc {}", c.label())));
     }
     let k = FaceKey::try_from(&o.face)?;
-    state.with_user(|u| Ok(u.set_classification_override(&k, &o.class.to_ascii_lowercase(), o.subclass.as_deref())?))
+    if state.with_store(|s| Ok(s.face_ids_of(&[k])?))?.is_empty() {
+        return Err(CmdError::not_found("không có face này trong thư viện"));
+    }
+    state.with_user(|u| Ok(u.set_classification_override(&k, &o.class.to_ascii_lowercase(), o.subclass.as_deref())?))?;
+    crate::services::library::bump_class_generation();
+    Ok(())
 }
 
 pub fn clear_classification_override(state: &AppState, face: &FaceKeyDto) -> Result<(), CmdError> {
     let k = FaceKey::try_from(face)?;
-    state.with_user(|u| Ok(u.clear_classification_override(&k)?))
+    state.with_user(|u| Ok(u.clear_classification_override(&k)?))?;
+    crate::services::library::bump_class_generation();
+    Ok(())
 }

@@ -95,10 +95,9 @@ fn get_face_playfair() {
     let ch = f.axes.iter().find(|a| a.key == "contrast_h").expect("contrast_h");
     assert_eq!(ch.unit.as_deref(), Some("ratio"));
     assert!(ch.raw_value.is_some_and(|v| v > 1.0), "Playfair H stem/bar > 1");
-    // Độ tin cậy hiệu chỉnh: Playfair (contrast rất cao) dưới CONF_MIN → Uncertain nhưng giữ candidate Serif.
-    let ci = &f.classification_info;
-    assert_eq!(ci.candidate.as_deref().or(Some(ci.class.as_str())), Some("serif"), "{ci:?}");
-    assert_eq!(f.classification.is_none(), ci.class == "uncertain");
+    assert_eq!(f.classification.as_deref(), Some("Serif"));
+    assert_eq!(f.classification_info.class, "serif");
+    assert_eq!(f.classification_info.source, "auto");
     assert_eq!(f.vietnamese.total, 134);
     assert!(f.vietnamese.supports && f.vietnamese.missing.is_empty());
     assert!(
@@ -576,13 +575,14 @@ fn class_filter_facets_and_override_use_effective_class() {
     // facet đếm đủ mọi face; mỗi class lọc ra đúng số facet báo
     let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
     assert_eq!(facets.iter().map(|f| u64::from(f.count)).sum::<u64>(), total);
-    // ngưỡng CONF_MIN có thể hạ Source Code Pro về Uncertain: ghi đè thủ công để có facet xác định
-    let scp = find(&st, "Source Code Pro");
-    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&scp), class: "mono".into(), subclass: Some("sans_mono".into()) }).unwrap();
-    let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
-    let mono = facets.iter().find(|f| f.class == "mono").expect("override → Mono");
+    let mono = facets.iter().find(|f| f.class == "mono").expect("Source Code Pro là Mono (tín hiệu cứng, không bị hạ về Uncertain)");
     let q = FaceQueryDto { classes: vec!["mono".into()], limit: 50, ..Default::default() };
     assert_eq!(library::query_faces(&st, &q).unwrap().total, u64::from(mono.count));
+
+    // thư viện khoẻ: không có face thiếu hồ sơ → không có bucket unclassified, và lọc "unclassified" rỗng
+    assert!(facets.iter().all(|f| f.class != "unclassified"));
+    let unc = FaceQueryDto { classes: vec!["unclassified".into()], limit: 50, ..Default::default() };
+    assert_eq!(library::query_faces(&st, &unc).unwrap().total, 0);
 
     // class lạ bị từ chối
     let bad = FaceQueryDto { classes: vec!["wingdings".into()], ..Default::default() };
@@ -608,6 +608,17 @@ fn class_filter_facets_and_override_use_effective_class() {
     // xoá override → trở lại tự động
     analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
     assert!(!library::query_faces(&st, &qd).unwrap().items.iter().any(|r| r.family == "Roboto"));
+
+    // face không tồn tại bị từ chối khi ghi đè
+    let ghost = ClassificationOverrideDto { face: FaceKeyDto { hash_hex: "00".repeat(32), face_index: 0 }, class: "sans".into(), subclass: None };
+    assert!(analysis::set_classification_override(&st, &ghost).is_err());
+
+    // usage tính lại theo class ghi đè (Display không có "text")
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: None }).unwrap();
+    let d = analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap();
+    assert_eq!(d.classification_info.source, "override");
+    assert_eq!(d.classification_info.usage, vec!["display".to_string()]);
+    analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
 
     // subclass không thuộc class bị từ chối khi ghi đè
     let invalid = ClassificationOverrideDto { face: key(&roboto), class: "sans".into(), subclass: Some("didone".into()) };
