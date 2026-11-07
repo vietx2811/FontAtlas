@@ -17,6 +17,6 @@ estimated: boolean, percentile: number | null,
  */
 delta: number | null, 
 /**
- * (giá trị − mốc) / |mốc| × 100; `None` ở mốc, khi mốc = 0 hoặc thiếu số.
+ * (giá trị − mốc) / |mốc| × 100; `None` ở mốc, thiếu số, khi |mốc| < 1e-3, và với trục đơn vị "deg" (góc: chỉ dùng `delta`).
  */
 deltaPct: number | null, };

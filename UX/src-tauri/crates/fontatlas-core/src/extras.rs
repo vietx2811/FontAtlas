@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use skrifa::{MetadataProvider, string::StringId};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Years {
     pub created: Option<u16>,
     pub modified: Option<u16>,
@@ -25,14 +26,18 @@ pub struct OtGroup {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Kerning {
     /// "gpos" | "kern" | "none"
     pub source: String,
+    /// Cặp glyph khai tường minh (PairPos format 1, hoặc bảng kern).
     pub pairs: u32,
+    /// Số ô ma trận lớp CÓ giá trị khác 0 (PairPos format 2). Mỗi ô đại diện nhiều cặp glyph — khác đơn vị với `pairs`, không cộng hai số.
     pub class_pairs: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct StyleStructure {
     /// "upright" | "italic" | "oblique"
     pub italic_kind: String,
@@ -44,6 +49,7 @@ pub struct StyleStructure {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Embedding {
     pub fs_type: Option<u16>,
     /// "installable" | "restricted" | "preview_print" | "editable" | "unknown"
@@ -53,6 +59,7 @@ pub struct Embedding {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct FontExtras {
     pub years: Years,
     pub ot_groups: Vec<OtGroup>,
@@ -82,10 +89,10 @@ pub fn year_from_longdatetime(secs: i64) -> Option<u16> {
     (1950..=2100).contains(&y).then_some(y as u16)
 }
 
-/// Năm sớm nhất (1900–2099) đứng riêng thành số 4 chữ số trong chuỗi copyright.
-pub fn copyright_year(s: &str) -> Option<u16> {
+/// Các năm (1900–2099) đứng riêng thành số 4 chữ số, kèm vị trí byte.
+fn years_in(s: &str) -> Vec<(usize, u16)> {
     let b = s.as_bytes();
-    let mut best: Option<u16> = None;
+    let mut out = Vec::new();
     let mut i = 0;
     while i < b.len() {
         if b[i].is_ascii_digit() {
@@ -94,14 +101,32 @@ pub fn copyright_year(s: &str) -> Option<u16> {
                 && let Ok(y) = s[i..j].parse::<u16>()
                 && (1900..=2099).contains(&y)
             {
-                best = Some(best.map_or(y, |m| m.min(y)));
+                out.push((i, y));
             }
             i = j;
         } else {
             i += 1;
         }
     }
-    best
+    out
+}
+
+/// Năm bản quyền: ưu tiên số đứng ngay sau `©` / `Copyright` / `(c)` (trong 24 byte), nếu không thì năm sớm nhất tìm thấy.
+pub fn copyright_year(s: &str) -> Option<u16> {
+    let years = years_in(s);
+    let lower = s.to_lowercase();
+    // vị trí byte trong `lower` có thể lệch với `s` khi có ký tự đổi độ dài khi hạ chữ: chỉ dùng khi độ dài bằng nhau
+    if lower.len() == s.len() {
+        let marked = ["©", "copyright", "(c)"]
+            .iter()
+            .flat_map(|m| lower.match_indices(m).map(move |(p, m)| p + m.len()))
+            .filter_map(|end| years.iter().find(|(p, _)| *p >= end && *p <= end + 24).map(|(_, y)| *y))
+            .min();
+        if marked.is_some() {
+            return marked;
+        }
+    }
+    years.iter().map(|(_, y)| *y).min()
 }
 
 /// OS/2 fsType: bit 1 restricted, 2 preview&print, 3 editable, 8 no subsetting, 9 bitmap only; 0 = installable.
@@ -222,6 +247,9 @@ fn ss_names(font: &FontRef) -> Vec<(String, Option<String>)> {
     out
 }
 
+/// Chặn trên số ô ma trận lớp duyệt cho mỗi font (font CJK có ma trận rất lớn).
+const MAX_CLASS_CELLS: u32 = 4_000_000;
+
 fn kerning(font: &FontRef) -> Kerning {
     use read_fonts::tables::gpos::{PairPos, PositionSubtables};
     let mut k = Kerning { source: "none".into(), ..Default::default() };
@@ -254,7 +282,22 @@ fn kerning(font: &FontRef) -> Kerning {
                         }
                     }
                     PairPos::Format2(p) => {
-                        k.class_pairs = k.class_pairs.saturating_add(u32::from(p.class1_count()) * u32::from(p.class2_count()));
+                        // chỉ đếm ô ma trận lớp có giá trị khác 0 (ma trận đầy đủ gồm cả lớp 0 và ô 0 — không phải "cặp"); chặn trên
+                        let mut budget = MAX_CLASS_CELLS;
+                        'cells: for c1 in p.class1_records().iter().flatten() {
+                            for c2 in c1.class2_records().iter().flatten() {
+                                if budget == 0 {
+                                    break 'cells;
+                                }
+                                budget -= 1;
+                                let nz = |v: &read_fonts::tables::gpos::ValueRecord| {
+                                    [v.x_placement(), v.y_placement(), v.x_advance(), v.y_advance()].iter().any(|x| x.is_some_and(|x| x != 0))
+                                };
+                                if nz(&c2.value_record1) || nz(&c2.value_record2) {
+                                    k.class_pairs = k.class_pairs.saturating_add(1);
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -56,6 +56,7 @@
           "fsType": 0,
           "level": "installable"
         },
+        "extrasAvailable": true,
         "kerning": {
           "classPairs": 3417,
           "pairs": 8780,
@@ -224,6 +225,7 @@
           "fsType": 0,
           "level": "installable"
         },
+        "extrasAvailable": true,
         "kerning": {
           "classPairs": 3417,
           "pairs": 8780,

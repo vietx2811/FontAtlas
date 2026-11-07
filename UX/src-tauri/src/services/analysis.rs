@@ -928,6 +928,7 @@ pub fn clear_classification_override(state: &AppState, face: &FaceKeyDto) -> Res
 pub(crate) fn extras_of(m: &Value) -> FaceExtrasDto {
     let x: fontatlas_core::extras::FontExtras = m.get("extras").and_then(|e| serde_json::from_value(e.clone()).ok()).unwrap_or_default();
     FaceExtrasDto {
+        extras_available: m.get("extras").is_some_and(|e| e.is_object()),
         vendor_id: opt_str(m, "vendor_id"),
         years: YearsDto { created: x.years.created, modified: x.years.modified, copyright: x.years.copyright },
         ot_groups: x
@@ -954,5 +955,24 @@ pub(crate) fn extras_of(m: &Value) -> FaceExtrasDto {
             flags: x.embedding.flags,
         },
         license_kind: if x.license_kind.is_empty() { "unknown".into() } else { x.license_kind },
+    }
+}
+
+#[cfg(test)]
+mod extras_tests {
+    use super::extras_of;
+    use serde_json::json;
+
+    #[test]
+    fn old_analysis_without_extras_is_flagged_unavailable() {
+        let old = extras_of(&json!({ "vendor_id": "GOOG", "family": "X" }));
+        assert!(!old.extras_available, "phân tích cũ phải báo extrasAvailable=false");
+        // mặc định không được hiểu là "font không có kerning": cờ mới là cách phân biệt
+        assert_eq!(old.kerning.source, "none");
+        assert_eq!(old.vendor_id.as_deref(), Some("GOOG"));
+        let new = extras_of(&json!({ "extras": { "kerning": { "source": "gpos", "pairs": 3, "class_pairs": 1 } } }));
+        assert!(new.extras_available);
+        assert_eq!(new.kerning.source, "gpos");
+        assert!(!extras_of(&json!({ "extras": null })).extras_available);
     }
 }

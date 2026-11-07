@@ -14,34 +14,58 @@ const MIN_FACES: usize = 2;
 const MAX_COMPARE: usize = 8;
 const MAX_PAIR: usize = 4;
 
+/// Ngưỡng mốc gần 0: dưới đây % thay đổi không có nghĩa.
+const BASE_EPS: f64 = 1e-3;
+
 fn validate(faces: &[FaceKeyDto], max: usize) -> Result<(), CmdError> {
     if !(MIN_FACES..=max).contains(&faces.len()) {
         return Err(CmdError::invalid_arg(format!("cần {MIN_FACES}–{max} face, nhận {}", faces.len())));
     }
     let mut seen = HashSet::new();
     for f in faces {
-        if !seen.insert((f.hash_hex.clone(), f.face_index)) {
+        if !seen.insert((f.hash_hex.trim().to_ascii_lowercase(), f.face_index)) {
             return Err(CmdError::invalid_arg("các face phải khác nhau"));
         }
     }
     Ok(())
 }
 
-fn delta(base: Option<f64>, v: Option<f64>) -> (Option<f64>, Option<f64>) {
+/// (Δ tuyệt đối, Δ%). Trục góc ("deg") và mốc ≈ 0 chỉ có Δ tuyệt đối.
+fn delta(base: Option<f64>, v: Option<f64>, unit: Option<&str>) -> (Option<f64>, Option<f64>) {
     match (base, v) {
         (Some(b), Some(v)) if b.is_finite() && v.is_finite() => {
             let d = v - b;
-            (Some(d), (b != 0.0).then(|| d / b.abs() * 100.0))
+            let pct = (unit != Some("deg") && b.abs() >= BASE_EPS).then(|| d / b.abs() * 100.0);
+            (Some(d), pct)
         }
         _ => (None, None),
     }
 }
 
+fn family_rows(state: &AppState, family: &str) -> Vec<FaceRowDto> {
+    let mut out = Vec::new();
+    let mut offset = 0u32;
+    loop {
+        let q = FaceQueryDto { text: Some(family.to_string()), limit: 1000, offset, ..Default::default() };
+        let page = match crate::services::library::query_faces(state, &q) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!("compare: không lấy được các face của họ {family:?}: {e:?}");
+                break;
+            }
+        };
+        let n = page.items.len() as u32;
+        out.extend(page.items.into_iter().filter(|r| r.family == family));
+        offset = offset.saturating_add(n);
+        if n == 0 || u64::from(offset) >= page.total {
+            break;
+        }
+    }
+    out
+}
+
 fn family_structure(state: &AppState, d: &FaceDetailDto) -> FamilyStructureDto {
-    let q = FaceQueryDto { text: Some(d.row.family.clone()), limit: 1000, ..Default::default() };
-    let rows: Vec<FaceRowDto> = crate::services::library::query_faces(state, &q)
-        .map(|p| p.items.into_iter().filter(|r| r.family == d.row.family).collect())
-        .unwrap_or_default();
+    let rows = family_rows(state, &d.row.family);
     let mut weights: Vec<u16> = rows.iter().filter_map(|r| r.weight_class).collect();
     weights.sort_unstable();
     weights.dedup();
@@ -100,7 +124,7 @@ pub fn compare_faces(state: &AppState, faces: &[FaceKeyDto], opts: &CompareOptsD
                 .iter()
                 .map(|a| {
                     let b = base.axes.iter().find(|x| x.key == a.key).and_then(|x| x.raw_value);
-                    let (delta, delta_pct) = if i == 0 { (None, None) } else { delta(b, a.raw_value) };
+                    let (delta, delta_pct) = if i == 0 { (None, None) } else { delta(b, a.raw_value, a.unit.as_deref()) };
                     CompareAxisDto {
                         key: a.key.clone(),
                         unit: a.unit.clone(),
@@ -165,4 +189,29 @@ pub fn pair_these(state: &AppState, faces: &[FaceKeyDto], opts: &PairTheseOptsDt
         .enumerate()
         .map(|(n, (_, heading, body, assessment))| PairComboDto { heading, body, assessment, rank: n as u32 + 1 })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delta_pct_skips_angles_and_near_zero_bases() {
+        // bình thường
+        let (d, p) = delta(Some(2.0), Some(3.0), Some("ratio"));
+        assert_eq!((d, p), (Some(1.0), Some(50.0)));
+        // mốc âm: % theo |mốc|
+        assert_eq!(delta(Some(-2.0), Some(-1.0), Some("ratio")), (Some(1.0), Some(50.0)));
+        // trục góc: chỉ Δ tuyệt đối
+        assert_eq!(delta(Some(5.0), Some(10.0), Some("deg")), (Some(5.0), None));
+        // mốc ≈ 0 (kể cả rất nhỏ): chỉ Δ tuyệt đối, không nổ ra hàng triệu %
+        assert_eq!(delta(Some(0.0), Some(1.0), Some("ratio")), (Some(1.0), None));
+        let (d, p) = delta(Some(1e-6), Some(0.5), Some("ratio"));
+        assert!(d.is_some() && p.is_none());
+        // đúng ngưỡng thì có %
+        assert!(delta(Some(1e-3), Some(2e-3), None).1.is_some());
+        // thiếu số
+        assert_eq!(delta(None, Some(1.0), None), (None, None));
+        assert_eq!(delta(Some(1.0), Some(f64::NAN), None), (None, None));
+    }
 }

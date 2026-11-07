@@ -63,6 +63,7 @@ fn compare_deltas_extras_and_vietnamese() {
     }
     // D2: dữ liệu mới có ở font vừa quét
     let r = &c.faces[0];
+    assert!(r.extras.extras_available);
     assert_eq!(r.extras.vendor_id.as_deref(), Some("GOOG"));
     assert_eq!(r.extras.years.created, Some(2008));
     assert_eq!(r.extras.kerning.source, "gpos");
@@ -70,6 +71,17 @@ fn compare_deltas_extras_and_vietnamese() {
     assert_eq!(r.license.kind, "ofl");
     assert_eq!(r.extras.embedding.level, "installable");
     assert!(r.extras.ot_groups.iter().any(|g| g.group == "ligatures"));
+    // trục góc: chỉ có Δ tuyệt đối, không có Δ%
+    for f in &c.faces[1..] {
+        for a in f.axes.iter().filter(|a| a.unit.as_deref() == Some("deg")) {
+            assert!(a.delta_pct.is_none(), "{a:?}");
+        }
+        // mọi Δ% (nếu có) khớp công thức và mốc không gần 0
+        for a in f.axes.iter().filter(|a| a.delta_pct.is_some()) {
+            let b = c.faces[0].axes.iter().find(|x| x.key == a.key).unwrap().raw_value.unwrap();
+            assert!(b.abs() >= 1e-3, "{a:?}");
+        }
+    }
     // phân loại có mặt, không có điểm tổng
     assert!(!r.classification.class.is_empty());
     // tiếng Việt: số % vượt không âm, và nhất quán với đỉnh dấu chồng
@@ -99,6 +111,8 @@ fn compare_rejects_bad_input() {
     let b = key_of(&st, "Playfair Display");
     assert!(compare::compare_faces(&st, std::slice::from_ref(&a), &opts()).is_err(), "1 face");
     assert!(compare::compare_faces(&st, &[a.clone(), a.clone()], &opts()).is_err(), "trùng");
+    let upper = FaceKeyDto { hash_hex: a.hash_hex.to_ascii_uppercase(), face_index: a.face_index };
+    assert!(compare::compare_faces(&st, &[a.clone(), upper], &opts()).is_err(), "trùng sau khi chuẩn hoá hex");
     let five: Vec<FaceKeyDto> = ["Roboto", "Playfair Display", "Open Sans", "Libre Baskerville", "Source Code Pro"].iter().map(|f| key_of(&st, f)).collect();
     // compareFaces nhận tới 8 (UI chỉ gợi ý > 4); pairThese vẫn giới hạn 4
     assert_eq!(compare::compare_faces(&st, &five, &opts()).unwrap().faces.len(), 5);

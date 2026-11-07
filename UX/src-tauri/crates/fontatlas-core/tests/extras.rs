@@ -19,6 +19,9 @@ fn years_from_longdatetime_and_copyright() {
     assert_eq!(copyright_year("Copyright 2011 Google Inc. 2013, 1850"), Some(2011));
     assert_eq!(copyright_year("(c) 20112 no, 18999 y"), None);
     assert_eq!(copyright_year("© 2008–2020"), Some(2008));
+    // ưu tiên số ngay sau © / Copyright, không phải năm sớm nhất ở chỗ khác (số phiên bản, tên dự án…)
+    assert_eq!(copyright_year("Rev 1999 build. Copyright (c) 2015 The Authors"), Some(2015));
+    assert_eq!(copyright_year("Project Q2 1985 notes; © 2011 Foo"), Some(2011));
 }
 
 #[test]

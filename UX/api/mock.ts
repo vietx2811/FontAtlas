@@ -308,7 +308,7 @@ export function mockAutoClass(family: string): { class: string; subclass: string
 /** Dữ liệu D2 giả cho mock (không có font thật để đọc). */
 function mockExtras(): FaceDetailDto['extras'] {
   return {
-    vendorId: 'MOCK', years: { created: 2017, modified: 2021, copyright: 2017 },
+    extrasAvailable: true, vendorId: 'MOCK', years: { created: 2017, modified: 2021, copyright: 2017 },
     otGroups: [{ group: 'figures', tags: ['lnum', 'onum'], sets: [] }],
     kerning: { source: 'gpos', pairs: 1200, classPairs: 800 },
     style: { italicKind: 'upright', italAxis: false, slntAxis: false, wghtRange: null, wdthRange: null, opszRange: null },

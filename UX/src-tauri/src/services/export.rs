@@ -50,7 +50,21 @@ pub fn force_png_ext(p: &Path) -> PathBuf {
 pub fn save_png_with(suggested_name: &str, png_base64: &str, pick: &dyn Fn(&str) -> Option<PathBuf>) -> Result<Option<String>, CmdError> {
     let bytes = decode_png(png_base64)?;
     let Some(path) = pick(&safe_name(suggested_name)) else { return Ok(None) };
-    let path = force_png_ext(&path);
-    std::fs::write(&path, &bytes).map_err(|e| CmdError::app_io("ghi PNG", &e))?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    let forced = force_png_ext(&path);
+    if forced == path {
+        // đường dẫn người dùng chọn đã được hộp thoại xác nhận ghi đè
+        std::fs::write(&forced, &bytes).map_err(|e| CmdError::app_io("ghi PNG", &e))?;
+    } else {
+        // ta tự thêm đuôi nên hộp thoại chưa xác nhận tệp này: không bao giờ ghi đè
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&forced).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                CmdError::new("exists", format!("{} đã tồn tại; chọn tên khác", forced.display()))
+            } else {
+                CmdError::app_io("ghi PNG", &e)
+            }
+        })?;
+        f.write_all(&bytes).map_err(|e| CmdError::app_io("ghi PNG", &e))?;
+    }
+    Ok(Some(forced.to_string_lossy().into_owned()))
 }

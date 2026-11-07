@@ -7,6 +7,11 @@ import type { YearsDto } from "./YearsDto";
 
 export type FaceExtrasDto = { 
 /**
+ * `false` khi face được phân tích trước core-0.8.0 (chưa phân tích lại): mọi trường dưới đây chỉ là mặc định,
+ * KHÔNG phải "font không có" (vd kerning.source = "none"). UI nên hiện "chưa phân tích lại".
+ */
+extrasAvailable: boolean, 
+/**
  * OS/2 achVendID, đã bỏ khoảng trắng.
  */
 vendorId: string | null, years: YearsDto, otGroups: Array<OtGroupDto>, kerning: KerningDto, style: StyleStructureDto, embedding: EmbeddingDto, 

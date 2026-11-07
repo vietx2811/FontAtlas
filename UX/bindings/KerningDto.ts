@@ -10,6 +10,6 @@ source: string,
  */
 pairs: number, 
 /**
- * Tổng số cặp lớp (class1 × class2) của PairPos format 2.
+ * Số ô ma trận lớp có giá trị khác 0 (PairPos format 2; mỗi ô áp cho nhiều cặp glyph). Khác đơn vị với `pairs`: không cộng hai số.
  */
 classPairs: number, };

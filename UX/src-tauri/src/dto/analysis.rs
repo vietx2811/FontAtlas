@@ -478,7 +478,7 @@ pub struct KerningDto {
     pub source: String,
     /// Số cặp glyph khai tường minh (GPOS PairPos format 1 / bảng kern).
     pub pairs: u32,
-    /// Tổng số cặp lớp (class1 × class2) của PairPos format 2.
+    /// Số ô ma trận lớp có giá trị khác 0 (PairPos format 2; mỗi ô áp cho nhiều cặp glyph). Khác đơn vị với `pairs`: không cộng hai số.
     pub class_pairs: u32,
 }
 
@@ -512,6 +512,9 @@ pub struct EmbeddingDto {
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct FaceExtrasDto {
+    /// `false` khi face được phân tích trước core-0.8.0 (chưa phân tích lại): mọi trường dưới đây chỉ là mặc định,
+    /// KHÔNG phải "font không có" (vd kerning.source = "none"). UI nên hiện "chưa phân tích lại".
+    pub extras_available: bool,
     /// OS/2 achVendID, đã bỏ khoảng trắng.
     pub vendor_id: Option<String>,
     pub years: YearsDto,
@@ -547,7 +550,7 @@ pub struct CompareAxisDto {
     pub percentile: Option<f32>,
     /// Chênh lệch tuyệt đối so với mốc (cùng đơn vị); `None` ở mốc hoặc khi một bên thiếu số.
     pub delta: Option<f64>,
-    /// (giá trị − mốc) / |mốc| × 100; `None` ở mốc, khi mốc = 0 hoặc thiếu số.
+    /// (giá trị − mốc) / |mốc| × 100; `None` ở mốc, thiếu số, khi |mốc| < 1e-3, và với trục đơn vị "deg" (góc: chỉ dùng `delta`).
     pub delta_pct: Option<f64>,
 }
 

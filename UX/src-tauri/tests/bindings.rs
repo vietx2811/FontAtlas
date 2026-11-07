@@ -234,6 +234,7 @@ fn detail() -> FaceDetailDto {
 
 fn extras() -> FaceExtrasDto {
     FaceExtrasDto {
+        extras_available: true,
         vendor_id: Some("FTH".into()),
         years: YearsDto { created: Some(2017), modified: Some(2021), copyright: Some(2017) },
         ot_groups: vec![
