@@ -19,7 +19,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, describe, embed, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, compare, describe, embed, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -91,6 +91,8 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
+            async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
+            async pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
@@ -264,6 +266,8 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
+cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
+cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
 cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
 cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));

@@ -363,6 +363,8 @@ pub struct FaceDetailDto {
     pub vietnamese: VietnameseDto,
     pub axes: Vec<AxisReadingDto>,
     pub similar_top: Vec<SimilarHitDto>,
+    /// Dữ liệu D2 (vendor, năm, nhóm feature, kerning, cấu trúc style, fsType). Rỗng với phân tích cũ (chưa chạy lại).
+    pub extras: FaceExtrasDto,
 }
 
 // ---- phân loại (Font Desk D1) ----
@@ -430,4 +432,215 @@ pub struct ClassFacetDto {
     pub class: String,
     pub count: u32,
     pub subclasses: Vec<SubclassFacetDto>,
+}
+
+// ---- dữ liệu D2 (Compare): vendor, năm, nhóm OpenType feature, kerning, cấu trúc family, fsType ----
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct YearsDto {
+    /// `head.created` (năm), `None` khi 0/không hợp lý.
+    pub created: Option<u16>,
+    /// `head.modified`.
+    pub modified: Option<u16>,
+    /// Năm sớm nhất tìm thấy trong chuỗi copyright (1900–2099).
+    pub copyright: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct StylisticSetDto {
+    /// "ss01"…"ss20"
+    pub tag: String,
+    /// Tên trong bảng `name` (FeatureParams.UINameID); `None` nếu font không khai.
+    pub name: Option<String>,
+}
+
+/// Nhóm feature dễ đọc. `group` ∈ figures | small_caps | fractions | case | ligatures | swash | stylistic_sets | other.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct OtGroupDto {
+    pub group: String,
+    /// Các tag thuộc nhóm có trong font (đã sort).
+    pub tags: Vec<String>,
+    /// Chỉ có ở `stylistic_sets`: tên từng ssXX.
+    pub sets: Vec<StylisticSetDto>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct KerningDto {
+    /// "gpos" | "kern" | "none"
+    pub source: String,
+    /// Số cặp glyph khai tường minh (GPOS PairPos format 1 / bảng kern).
+    pub pairs: u32,
+    /// Tổng số cặp lớp (class1 × class2) của PairPos format 2.
+    pub class_pairs: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct StyleStructureDto {
+    /// "upright" | "italic" | "oblique"
+    pub italic_kind: String,
+    /// Có trục `ital` / `slnt`.
+    pub ital_axis: bool,
+    pub slnt_axis: bool,
+    pub wght_range: Option<[f32; 2]>,
+    pub wdth_range: Option<[f32; 2]>,
+    pub opsz_range: Option<[f32; 2]>,
+}
+
+/// Diễn giải OS/2 fsType (bit nhúng font).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct EmbeddingDto {
+    pub fs_type: Option<u16>,
+    /// "installable" | "restricted" | "preview_print" | "editable" | "unknown"
+    pub level: String,
+    /// "no_subsetting" | "bitmap_only"
+    pub flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct FaceExtrasDto {
+    /// OS/2 achVendID, đã bỏ khoảng trắng.
+    pub vendor_id: Option<String>,
+    pub years: YearsDto,
+    pub ot_groups: Vec<OtGroupDto>,
+    pub kerning: KerningDto,
+    pub style: StyleStructureDto,
+    pub embedding: EmbeddingDto,
+    /// "ofl" | "apache" | "ufl" | "eula" | "other" | "unknown" — chỉ để ghi chú, không chặn.
+    pub license_kind: String,
+}
+
+// ---- Compare ----
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CompareOptsDto {
+    pub lang: LangDto,
+}
+
+/// Một số đo của một face, kèm chênh lệch so với face mốc. Không có điểm tổng.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CompareAxisDto {
+    pub key: String,
+    pub unit: Option<String>,
+    pub raw_value: Option<f64>,
+    /// "measured" | "estimated" | "failed"
+    pub quality: String,
+    /// `quality == "estimated"` (UI hiện dấu ≈).
+    pub estimated: bool,
+    pub percentile: Option<f32>,
+    /// Chênh lệch tuyệt đối so với mốc (cùng đơn vị); `None` ở mốc hoặc khi một bên thiếu số.
+    pub delta: Option<f64>,
+    /// (giá trị − mốc) / |mốc| × 100; `None` ở mốc, khi mốc = 0 hoặc thiếu số.
+    pub delta_pct: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CompareVietnameseDto {
+    pub supports: bool,
+    pub missing: u32,
+    pub total: u32,
+    /// Đỉnh chữ hoa có dấu chồng (em).
+    pub stacked_marks_top_em: Option<f32>,
+    pub hhea_ascender_em: Option<f32>,
+    pub cap_height_em: Option<f32>,
+    /// Dấu chồng vượt hhea.ascender (dễ va dòng), theo % em; 0 khi không vượt.
+    pub over_ascender_pct_em: Option<f32>,
+    /// Dấu chồng vượt cap height, theo % em (luôn ≥ 0): mức "cao hơn chữ hoa".
+    pub over_cap_pct_em: Option<f32>,
+    pub overflow: bool,
+    pub stack_style: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct LicenseNoteDto {
+    pub kind: String,
+    pub description: Option<String>,
+    pub url: Option<String>,
+    pub embedding: EmbeddingDto,
+}
+
+/// Cấu trúc family trong thư viện (từ các face cùng họ đã quét).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct FamilyStructureDto {
+    pub family: String,
+    pub faces: u32,
+    pub weights: Vec<u16>,
+    pub widths: Vec<u16>,
+    pub has_italic: bool,
+    pub has_oblique: bool,
+    pub has_variable: bool,
+    pub has_opsz: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CompareFaceDto {
+    pub face: FaceKeyDto,
+    pub row: FaceRowDto,
+    pub is_baseline: bool,
+    pub classification: ClassificationDto,
+    pub axes: Vec<CompareAxisDto>,
+    pub vietnamese: CompareVietnameseDto,
+    pub license: LicenseNoteDto,
+    pub extras: FaceExtrasDto,
+    pub family: FamilyStructureDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CompareDto {
+    pub baseline: FaceKeyDto,
+    /// Theo thứ tự đầu vào; phần tử đầu là mốc.
+    pub faces: Vec<CompareFaceDto>,
+}
+
+// ---- Pair these ----
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PairTheseOptsDto {
+    pub project_vi: bool,
+    pub lang: LangDto,
+    /// 1..=3 (mặc định 3)
+    pub max_combos: u32,
+}
+
+/// Một Combo: font nào đặt vai heading, font nào đặt vai body, và đánh giá cặp (nhãn ●◐◆○, cổng, giải thích).
+/// Không có điểm số.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PairComboDto {
+    pub heading: FaceRowDto,
+    pub body: FaceRowDto,
+    /// `face` = body; `row` = body; nhãn/va chạm/câu giải thích tính theo (heading, body).
+    pub assessment: PairCandidateDto,
+    /// Thứ hạng 1-based sau khi xếp lexicographic.
+    pub rank: u32,
 }

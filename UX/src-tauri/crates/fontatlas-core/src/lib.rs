@@ -3,6 +3,7 @@ mod anatomy;
 pub mod axes;
 mod error;
 pub mod classify;
+pub mod extras;
 pub mod geom;
 mod load;
 mod metadata;
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use serde::Serialize;
 
-pub const ANALYZER_VERSION: &str = "core-0.7.0";
+pub const ANALYZER_VERSION: &str = "core-0.8.0";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FaceReport {

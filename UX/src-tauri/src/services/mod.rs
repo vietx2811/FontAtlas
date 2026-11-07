@@ -4,6 +4,7 @@ pub mod activation;
 pub mod analysis;
 pub mod describe;
 pub mod boot;
+pub mod compare;
 pub mod embed;
 pub mod keys;
 pub mod lifecycle;
