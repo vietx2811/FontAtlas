@@ -987,7 +987,9 @@ fn persistent_timeout_stops_after_bounded_retries_and_leaves_no_active_worker() 
             ..
         })
     ));
-    assert!(t.elapsed() < Duration::from_secs(5));
+    // Retries are bounded by the request count below; the wall-clock bound only guards
+    // against an endless loop. 5 s flaked when the machine was busy (parallel builds).
+    assert!(t.elapsed() < Duration::from_secs(30), "{:?}", t.elapsed());
     s.wait_idle();
     assert!(s.peak.load(Ordering::SeqCst) <= 3);
     assert!(s.requests.load(Ordering::SeqCst) <= 9);

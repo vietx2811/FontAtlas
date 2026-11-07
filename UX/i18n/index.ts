@@ -21,4 +21,7 @@ const vi = {
   'chips.label': 'Bộ lọc đang bật', 'chips.remove': 'Bỏ lọc {label}',
 } as const;
 export type I18nKey = keyof typeof vi;
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => vi[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+/** Khoá có trong từ điển hay không (dùng cho khoá ghép động như `class.${x}`). */
+export const hasKey = (key: string): key is I18nKey => Object.prototype.hasOwnProperty.call(vi, key);
+/** Thiếu khoá thì trả chính khoá thay vì ném lỗi: dữ liệu thật có thể mang giá trị mới (vote, trait…) mà UI chưa dịch. */
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => ((vi as Record<string, string>)[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));

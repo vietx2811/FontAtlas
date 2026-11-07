@@ -2,7 +2,11 @@
   const T = window.__TAURI_INTERNALS__;
   const inv = (c, a) => T.invoke(c, a);
   let n = 0; const T0 = Date.now();
-  const log = async (step, ok, detail) => { n++; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
+  // Lỗi React (ErrorBoundary chỉ console.error): gom lại, đính vào bước FAIL để biết nguyên nhân.
+  const consoleErrors = []; const origErr = console.error.bind(console);
+  console.error = (...a) => { try { consoleErrors.push(a.map(x => x && x.stack ? String(x.stack) : String(x)).join(' ').slice(0, 800)); } catch (e) {} origErr(...a); };
+  window.addEventListener('error', e => consoleErrors.push(String(e.error && e.error.stack || e.message).slice(0, 800)));
+  const log = async (step, ok, detail) => { n++; if (!ok && consoleErrors.length) detail = { detail, consoleErrors: consoleErrors.splice(0, 3) }; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wait = async (fn, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; };
   const btn = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.trim() === text && !b.disabled);

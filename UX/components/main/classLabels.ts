@@ -1,9 +1,10 @@
-import { t, type I18nKey } from '../../i18n';
+import { hasKey, t } from '../../i18n';
 
 /** `display` là tag mục đích dùng (usage), không phải class: không hiện ở bộ lọc phân loại. */
 export const HIDDEN_CLASSES = new Set(['display']);
 
-const has = (k: string): k is I18nKey => k.startsWith('class.');
+// Chỉ coi là có nhãn khi khoá thật sự có trong từ điển (vote/trait mới từ backend không làm crash).
+const has = hasKey;
 export function classLabel(cls: string): string {
   const k = `class.${cls}`;
   return has(k) ? (t as (k: string) => string)(k) : cls;
