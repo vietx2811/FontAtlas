@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateText, groupTitle, midEllipsis, revisionText } from '../duplicatesFormat';
+import { dateText, groupTitle, midEllipsis, revisionText, splitPath, tailDepth } from '../duplicatesFormat';
 
 describe('midEllipsis', () => {
   it('keeps short paths and cuts the middle of long ones, keeping the file name end', () => {
@@ -37,5 +37,35 @@ describe('groupTitle', () => {
   });
   it('a strange kind or empty group still yields a readable title', () => {
     expect(groupTitle({ kind: 'weird_kind', key: 'some_key', faces: [] } as never)).toBe('some_key');
+  });
+});
+
+describe('splitPath', () => {
+  it('keeps "parent/file" as the always-visible tail and the rest as a shrinkable head', () => {
+    expect(splitPath('/Users/me/QA/A/roboto.ttf')).toEqual({ head: '/Users/me/QA/', tail: 'A/roboto.ttf' });
+    expect(splitPath('/Users/me/QA/C/roboto_copy.ttf')).toEqual({ head: '/Users/me/QA/', tail: 'C/roboto_copy.ttf' });
+  });
+  it('short or root-level paths have no head', () => {
+    expect(splitPath('/roboto.ttf')).toEqual({ head: '', tail: '/roboto.ttf' });
+    expect(splitPath('roboto.ttf')).toEqual({ head: '', tail: 'roboto.ttf' });
+    expect(splitPath('/A/roboto.ttf')).toEqual({ head: '', tail: '/A/roboto.ttf' });
+    expect(splitPath('/Users/me/QA/A/roboto.ttf', 3)).toEqual({ head: '/Users/me/', tail: 'QA/A/roboto.ttf' });
+  });
+  it('two same-file copies stay distinguishable by their tails', () => {
+    expect(splitPath('/x/A/roboto.ttf').tail).not.toBe(splitPath('/x/C/roboto_copy.ttf').tail);
+  });
+});
+
+describe('tailDepth', () => {
+  it('is 2 when the copies already differ in "parent/file"', () => {
+    expect(tailDepth(['/q/A/roboto.ttf', '/q/C/roboto_copy.ttf'])).toBe(2);
+  });
+  it('grows until same-named copies in same-named folders become distinguishable', () => {
+    expect(tailDepth(['/Fonts/src1/X.ttf', '/Downloads/src1/X.ttf'])).toBe(3);
+    expect(tailDepth(['/a/b/c/X.ttf', '/d/b/c/X.ttf'])).toBe(4);
+  });
+  it('ignores missing paths and stops at the longest path', () => {
+    expect(tailDepth([null, '/a/X.ttf'])).toBe(2);
+    expect(tailDepth(['/a/X.ttf', '/a/X.ttf'])).toBe(2);
   });
 });
