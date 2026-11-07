@@ -80,15 +80,54 @@ pub struct HeadInfo {
     pub modified: Option<i64>,
 }
 
-/// Đọc `head` của face `face_index` trong tệp; `None` khi không mở/parse được.
+/// Đọc `head` của face `face_index` thẳng từ tệp: chỉ bảng thư mục sfnt + 54 byte của `head` (không đọc cả tệp, không
+/// băm, không giải nén). Hỗ trợ TTF/OTF và TTC/OTC (theo `face_index`); WOFF/WOFF2 → `None` (bảng nén).
+/// Người gọi phải kiểm tệp có sẵn trên đĩa (không phải placeholder iCloud) TRƯỚC khi gọi.
 pub fn head_info(path: &std::path::Path, face_index: u32) -> Option<HeadInfo> {
-    let file = crate::FontFile::open(path).ok()?;
-    let faces = file.faces().ok()?;
-    let face = faces.iter().find(|f| f.index() == face_index)?;
-    let head = face.font().head().ok()?;
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let read_at = |f: &mut std::fs::File, off: u64, n: usize| -> Option<Vec<u8>> {
+        if off.checked_add(n as u64)? > len {
+            return None;
+        }
+        f.seek(SeekFrom::Start(off)).ok()?;
+        let mut b = vec![0u8; n];
+        f.read_exact(&mut b).ok()?;
+        Some(b)
+    };
+    let be32 = |b: &[u8], i: usize| u32::from_be_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]]);
+    let magic = read_at(&mut f, 0, 4)?;
+    let sfnt_off: u64 = match &magic[..] {
+        b"ttcf" => {
+            let h = read_at(&mut f, 0, 12)?;
+            let n = be32(&h, 8);
+            if face_index >= n || n > 4096 {
+                return None;
+            }
+            let o = read_at(&mut f, 12 + 4 * u64::from(face_index), 4)?;
+            u64::from(be32(&o, 0))
+        }
+        [0, 1, 0, 0] | b"OTTO" | b"true" | b"typ1" if face_index == 0 => 0,
+        _ => return None, // WOFF/WOFF2 hoặc không phải sfnt
+    };
+    let dir = read_at(&mut f, sfnt_off, 12)?;
+    let num_tables = usize::from(u16::from_be_bytes([dir[4], dir[5]]));
+    if num_tables == 0 || num_tables > 4096 {
+        return None;
+    }
+    let recs = read_at(&mut f, sfnt_off + 12, num_tables * 16)?;
+    let rec = recs.chunks_exact(16).find(|r| &r[0..4] == b"head")?;
+    let (off, tlen) = (u64::from(be32(rec, 8)), be32(rec, 12));
+    if tlen < 54 {
+        return None;
+    }
+    let head = read_at(&mut f, off, 54)?;
+    let revision = be32(&head, 4) as i32 as f64 / 65536.0;
+    let modified = i64::from_be_bytes(head[28..36].try_into().ok()?);
     Some(HeadInfo {
-        revision: Some(head.font_revision().to_f64() as f32).filter(|r| r.is_finite() && *r > 0.0),
-        modified: unix_from_longdatetime(head.modified().as_secs()),
+        revision: Some(revision as f32).filter(|r| r.is_finite() && *r > 0.0),
+        modified: unix_from_longdatetime(modified),
     })
 }
 

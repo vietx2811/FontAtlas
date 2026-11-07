@@ -62,12 +62,19 @@ fn state_with(root: &Path, files: &[(&str, Vec<u8>)]) -> Arc<AppState> {
     st
 }
 
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn groups(st: &AppState) -> Vec<DuplicateGroupDto> {
     duplicates::duplicate_groups(st, &FaceQueryDto::default()).unwrap()
 }
 
 #[test]
 fn same_content_in_two_places_is_one_face_and_one_same_file_group() {
+    let _g = serial();
     let td = tempfile::tempdir().unwrap();
     let roboto = std::fs::read(fixture("roboto.ttf")).unwrap();
     let st = state_with(td.path(), &[("a/roboto.ttf", roboto.clone()), ("b/copy-of-roboto.ttf", roboto), ("c/playfair.ttf", std::fs::read(fixture("playfair_display.ttf")).unwrap())]);
@@ -98,6 +105,7 @@ fn same_content_in_two_places_is_one_face_and_one_same_file_group() {
 
 #[test]
 fn two_versions_are_grouped_and_newest_is_known_only_when_unique() {
+    let _g = serial();
     let td = tempfile::tempdir().unwrap();
     let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
     let v_old = patch_revision(&base, 1.203);
@@ -123,6 +131,7 @@ fn two_versions_are_grouped_and_newest_is_known_only_when_unique() {
 
 #[test]
 fn identical_revision_and_date_means_no_newest() {
+    let _g = serial();
     let td = tempfile::tempdir().unwrap();
     let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
     // chỉ đổi chuỗi phiên bản (name 5): revision và head.modified giống hệt → không xác định được bản mới
@@ -136,6 +145,7 @@ fn identical_revision_and_date_means_no_newest() {
 
 #[test]
 fn same_font_in_different_formats_is_a_formats_group() {
+    let _g = serial();
     let td = tempfile::tempdir().unwrap();
     let base = std::fs::read(fixture("open_sans.ttf")).unwrap();
     // cùng PostScript name, nội dung khác (đổi chuỗi phiên bản), đuôi .otf: coi như định dạng khác
@@ -151,6 +161,7 @@ fn same_font_in_different_formats_is_a_formats_group() {
 
 #[test]
 fn no_duplicates_in_a_clean_library_and_nothing_is_ever_deleted() {
+    let _g = serial();
     let td = tempfile::tempdir().unwrap();
     let files: Vec<(&str, Vec<u8>)> = ["roboto.ttf", "open_sans.ttf", "playfair_display.ttf"].iter().map(|n| (*n, std::fs::read(fixture(n)).unwrap())).collect();
     let st = state_with(td.path(), &files);
@@ -160,4 +171,91 @@ fn no_duplicates_in_a_clean_library_and_nothing_is_ever_deleted() {
     for (n, b) in &files {
         assert_eq!(&std::fs::read(td.path().join("Fonts").join(n)).unwrap(), b);
     }
+}
+
+fn make_ttc(fonts: &[Vec<u8>]) -> Vec<u8> {
+    let header = 12 + 4 * fonts.len();
+    let mut offsets = Vec::new();
+    let mut body: Vec<u8> = Vec::new();
+    for f in fonts {
+        let start = header + body.len();
+        offsets.push(start as u32);
+        let mut c = f.clone();
+        let n = u16::from_be_bytes([c[4], c[5]]) as usize;
+        for i in 0..n {
+            let rec = 12 + i * 16 + 8;
+            let off = u32::from_be_bytes(c[rec..rec + 4].try_into().unwrap()) + start as u32;
+            c[rec..rec + 4].copy_from_slice(&off.to_be_bytes());
+        }
+        body.extend_from_slice(&c);
+        while !body.len().is_multiple_of(4) {
+            body.push(0);
+        }
+    }
+    let mut out = b"ttcf".to_vec();
+    out.extend_from_slice(&[0, 1, 0, 0]);
+    out.extend_from_slice(&(fonts.len() as u32).to_be_bytes());
+    for o in &offsets {
+        out.extend_from_slice(&o.to_be_bytes());
+    }
+    out.extend_from_slice(&body);
+    out
+}
+
+#[test]
+fn summary_reads_no_heads_and_groups_read_each_version_once_then_cache() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    // revision riêng (5.5/5.6) để không dính cache của test khác
+    let st = state_with(td.path(), &[("a/p.ttf", patch_revision(&base, 5.5)), ("b/p.ttf", patch_revision(&patch_name(&base, "Version 1.203", "Version 1.204"), 5.6))]);
+    let before = duplicates::head_reads();
+    let s = duplicates::duplicate_summary(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!((s.versions, s.total), (1, 1));
+    assert_eq!(duplicates::head_reads(), before, "summary không mở tệp nào");
+    let g1 = groups(&st);
+    assert_eq!(duplicates::head_reads(), before + 2, "mỗi bản đọc head đúng một lần");
+    assert!(g1[0].newest_known && g1[0].faces.iter().any(|f| f.is_newest && f.revision.is_some_and(|r| (r - 5.6).abs() < 0.01)));
+    let g2 = groups(&st);
+    assert_eq!(duplicates::head_reads(), before + 2, "lần sau dùng cache theo hash");
+    assert_eq!(g1, g2);
+
+    // thêm một bản sao rồi quét lại: cache nhóm cơ sở phải bị vô hiệu cùng Index
+    std::fs::create_dir_all(td.path().join("Fonts/c")).unwrap();
+    std::fs::write(td.path().join("Fonts/c/p.ttf"), patch_revision(&base, 5.5)).unwrap();
+    app_lib::services::sources::rescan_sources(&st, None).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(wait_rebuilt(&st, Duration::from_secs(60)));
+    let s2 = duplicates::duplicate_summary(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!((s2.same_file, s2.versions), (1, 1), "bản sao mới → nhóm same_file xuất hiện: {s2:?}");
+}
+
+#[test]
+fn missing_file_means_no_newest_instead_of_the_readable_one_winning() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("a/p.ttf", patch_revision(&base, 6.1)), ("b/p.ttf", patch_revision(&patch_name(&base, "Version 1.203", "Version 1.204"), 6.2))]);
+    // xoá bản mới trên đĩa nhưng chưa quét lại: head của nó không đọc được
+    std::fs::remove_file(td.path().join("Fonts/b/p.ttf")).unwrap();
+    let g = groups(&st);
+    assert_eq!(g.len(), 1);
+    assert_eq!(g[0].kind, DuplicateKindDto::Versions);
+    assert!(!g[0].newest_known && g[0].faces.iter().all(|f| !f.is_newest), "{g:?}");
+    assert_eq!(g[0].faces.iter().filter(|f| f.revision.is_none()).count(), 1);
+}
+
+#[test]
+fn ttc_copied_to_two_places_is_one_same_file_group() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let ttc = make_ttc(&[std::fs::read(fixture("roboto.ttf")).unwrap(), std::fs::read(fixture("playfair_display.ttf")).unwrap()]);
+    let st = state_with(td.path(), &[("a/fam.ttc", ttc.clone()), ("b/fam-copy.ttc", ttc)]);
+    // 2 face trong thư viện, một nhóm same_file (theo face đầu), định dạng ttc
+    assert_eq!(library::query_faces(&st, &FaceQueryDto { limit: 50, ..Default::default() }).unwrap().total, 2);
+    let g = groups(&st);
+    let same: Vec<_> = g.iter().filter(|x| x.kind == DuplicateKindDto::SameFile).collect();
+    assert_eq!(same.len(), 1, "{g:?}");
+    assert_eq!(same[0].faces.len(), 2);
+    assert!(same[0].faces.iter().all(|f| f.format == "ttc" && f.row.face_index == 0));
 }

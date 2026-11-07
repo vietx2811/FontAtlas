@@ -666,6 +666,7 @@ pub enum DuplicateKindDto {
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct DuplicateMemberDto {
+    /// Với `same_file` của tệp TTC/OTC: `row` là face đầu tiên của tệp (một nhóm cho cả tệp).
     pub row: FaceRowDto,
     /// Với `same_file`: mỗi thành viên là một đường dẫn của cùng nội dung.
     pub path: Option<String>,
@@ -673,9 +674,9 @@ pub struct DuplicateMemberDto {
     pub format: String,
     /// Chuỗi phiên bản (name ID 5), ví dụ "Version 2.137".
     pub version: Option<String>,
-    /// head.fontRevision.
+    /// head.fontRevision — CHỈ điền cho nhóm `versions` (đọc lười từ tệp; null khi tệp mất / iCloud chưa tải / WOFF).
     pub revision: Option<f32>,
-    /// head.modified (unix giây UTC).
+    /// head.modified (unix giây UTC) — như `revision`.
     #[ts(type = "number | null")]
     pub modified: Option<i64>,
     /// Chỉ `versions`: bản mới nhất khi phân biệt được rõ (fontRevision, rồi head.modified); ngược lại false.
