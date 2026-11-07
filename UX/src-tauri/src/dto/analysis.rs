@@ -409,3 +409,21 @@ pub struct ClassificationOverrideDto {
     pub class: String,
     pub subclass: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SubclassFacetDto {
+    pub subclass: String,
+    pub count: u32,
+}
+
+/// Facet đếm cho bộ lọc phân loại ở Library (đã tính ghi đè của người dùng).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassFacetDto {
+    pub class: String,
+    pub count: u32,
+    pub subclasses: Vec<SubclassFacetDto>,
+}

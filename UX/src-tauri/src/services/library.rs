@@ -48,6 +48,13 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
 pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
+    if !q.classes.is_empty() || !q.subclasses.is_empty() {
+        let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
+        match &mut scope {
+            Some(prev) => prev.retain(|x| ids.contains(&x.0)),
+            None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
+        }
+    }
     if !q.raw_axis_ranges.is_empty() {
         let b = crate::services::analysis::bundle(state)?;
         let raw: Vec<(i64, f32)> = b
@@ -87,6 +94,54 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
     }
     let sq = to_store_query(q);
     state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?.into()))
+}
+
+/// Phân loại hiệu lực (ghi đè > tự động) của từng face: `face_id → (class, subclass)`.
+pub(crate) fn effective_classes(state: &AppState) -> Result<std::collections::HashMap<i64, (String, Option<String>)>, CmdError> {
+    let b = crate::services::analysis::bundle(state)?;
+    let ov: std::collections::HashMap<(String, u32), _> = state
+        .with_store(|s| Ok(s.classification_overrides()?))?
+        .into_iter()
+        .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
+        .collect();
+    Ok(b.meta
+        .iter()
+        .map(|(k, m)| {
+            let eff = match ov.get(&(k.hash.clone(), k.index)) {
+                Some(o) => (o.class.clone(), o.subclass.clone()),
+                None => (m.auto_class.clone(), m.auto_subclass.clone()),
+            };
+            (m.face_id, eff)
+        })
+        .collect())
+}
+
+fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
+    use fontatlas_core::classify::{Class, subclasses_of};
+    for c in classes {
+        if Class::parse(c).is_none() {
+            return Err(CmdError::invalid_arg(format!("classes: class không hợp lệ: {c}")));
+        }
+    }
+    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script, Class::Display]
+        .into_iter()
+        .flat_map(subclasses_of)
+        .copied()
+        .collect();
+    for s in subclasses {
+        if !known.contains(&s.as_str()) {
+            return Err(CmdError::invalid_arg(format!("subclasses: subclass không hợp lệ: {s}")));
+        }
+    }
+    let classes: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
+    Ok(effective_classes(state)?
+        .into_iter()
+        .filter(|(_, (c, sub))| {
+            (classes.is_empty() || classes.contains(c))
+                && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
+        })
+        .map(|(id, _)| id)
+        .collect())
 }
 
 pub(crate) fn validate_raw_ranges(ranges: &[RawAxisRangeDto]) -> Result<(), CmdError> {

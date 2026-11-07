@@ -290,6 +290,37 @@ pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto
         .collect())
 }
 
+/// Đếm face theo class/subclass trong tập thoả mọi bộ lọc *khác* (bỏ `classes`/`subclasses`
+/// để facet không tự triệt tiêu chính nó).
+pub fn class_facets(state: &AppState, q: &FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError> {
+    let mut query = q.clone();
+    query.classes.clear();
+    query.subclasses.clear();
+    let allowed = crate::services::library::matching_keys(state, &query)?;
+    let b = bundle(state)?;
+    let eff = crate::services::library::effective_classes(state)?;
+    let mut by: std::collections::BTreeMap<String, (u32, std::collections::BTreeMap<String, u32>)> = Default::default();
+    for (k, m) in &b.meta {
+        if !allowed.contains(k) {
+            continue;
+        }
+        let Some((c, sub)) = eff.get(&m.face_id) else { continue };
+        let e = by.entry(c.clone()).or_default();
+        e.0 += 1;
+        if let Some(s) = sub {
+            *e.1.entry(s.clone()).or_default() += 1;
+        }
+    }
+    Ok(by
+        .into_iter()
+        .map(|(class, (count, subs))| ClassFacetDto {
+            class,
+            count,
+            subclasses: subs.into_iter().map(|(subclass, count)| SubclassFacetDto { subclass, count }).collect(),
+        })
+        .collect())
+}
+
 fn stats_of(axis: AxisId, mut values: Vec<f32>) -> AxisStatsDto {
     values.retain(|v| v.is_finite());
     values.sort_by(f32::total_cmp);

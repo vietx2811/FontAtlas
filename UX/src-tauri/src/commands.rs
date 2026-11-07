@@ -88,6 +88,7 @@ macro_rules! command_list {
             async similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Result<Vec<SimilarHitDto>, CmdError>;
             async similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> Result<SimilarFamilyPageDto, CmdError>;
             async axis_stats(q: FaceQueryDto) -> Result<Vec<AxisStatsDto>, CmdError>;
+            async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
@@ -260,6 +261,7 @@ cmd!(get_face(face: FaceKeyDto, lang: LangDto) -> FaceDetailDto => |s| analysis:
 cmd!(similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Vec<SimilarHitDto> => |s| analysis::similar(s, &face, &opts));
 cmd!(similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> SimilarFamilyPageDto => |s| analysis::similar_families(s, &face, &opts, &q));
 cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stats(s, &q));
+cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));

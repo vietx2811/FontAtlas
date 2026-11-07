@@ -7,6 +7,7 @@ import type { ActivationStateDto } from './ActivationStateDto';
 import type { AxisStatsDto } from './AxisStatsDto';
 import type { BootEvent } from './BootEvent';
 import type { BootStatusDto } from './BootStatusDto';
+import type { ClassFacetDto } from './ClassFacetDto';
 import type { ClassificationOverrideDto } from './ClassificationOverrideDto';
 import type { CollectionDto } from './CollectionDto';
 import type { DescribeDto } from './DescribeDto';
@@ -90,6 +91,7 @@ export interface TauriCommandMap {
   similar: { args: { face: FaceKeyDto; opts: SimilarOptsDto }; result: SimilarHitDto[] };
   similar_families: { args: { face: FaceKeyDto; opts: SimilarOptsDto; q: FaceQueryDto }; result: SimilarFamilyPageDto };
   axis_stats: { args: { q: FaceQueryDto }; result: AxisStatsDto[] };
+  class_facets: { args: { q: FaceQueryDto }; result: ClassFacetDto[] };
   pair_candidates: { args: { face: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto[] };
   assess_pair: { args: { a: FaceKeyDto; b: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto };
   save_pair: { args: { pair: NewPairDto }; result: number };

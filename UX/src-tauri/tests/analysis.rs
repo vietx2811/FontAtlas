@@ -563,3 +563,46 @@ fn axis_stats_empty_library_and_no_index_readings() {
             .all(|s| s.count == 0 && s.min.is_none() && s.p99.is_none())
     );
 }
+
+#[test]
+fn class_filter_facets_and_override_use_effective_class() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let total = library::query_faces(&st, &FaceQueryDto { limit: 50, ..Default::default() }).unwrap().total;
+
+    // facet đếm đủ mọi face; mỗi class lọc ra đúng số facet báo
+    let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!(facets.iter().map(|f| u64::from(f.count)).sum::<u64>(), total);
+    let mono = facets.iter().find(|f| f.class == "mono").expect("Source Code Pro là Mono");
+    let q = FaceQueryDto { classes: vec!["mono".into()], limit: 50, ..Default::default() };
+    assert_eq!(library::query_faces(&st, &q).unwrap().total, u64::from(mono.count));
+
+    // class lạ bị từ chối
+    let bad = FaceQueryDto { classes: vec!["wingdings".into()], ..Default::default() };
+    assert!(library::query_faces(&st, &bad).is_err());
+
+    // facet bỏ qua chính bộ lọc class (không tự triệt tiêu)
+    let f2 = analysis::class_facets(&st, &q).unwrap();
+    assert_eq!(f2, facets);
+
+    // override chuyển Roboto sang Display; lọc và facet phản ánh ngay
+    let roboto = find(&st, "Roboto");
+    analysis::set_classification_override(
+        &st,
+        &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("decorative".into()) },
+    )
+    .unwrap();
+    let qd = FaceQueryDto { classes: vec!["display".into()], subclasses: vec!["decorative".into()], limit: 50, ..Default::default() };
+    let hit = library::query_faces(&st, &qd).unwrap();
+    assert!(hit.items.iter().any(|r| r.family == "Roboto"));
+    let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    assert!(disp.iter().find(|f| f.class == "display").unwrap().subclasses.iter().any(|s| s.subclass == "decorative"));
+
+    // xoá override → trở lại tự động
+    analysis::clear_classification_override(&st, &key(&roboto)).unwrap();
+    assert!(!library::query_faces(&st, &qd).unwrap().items.iter().any(|r| r.family == "Roboto"));
+
+    // subclass không thuộc class bị từ chối khi ghi đè
+    let invalid = ClassificationOverrideDto { face: key(&roboto), class: "sans".into(), subclass: Some("didone".into()) };
+    assert!(analysis::set_classification_override(&st, &invalid).is_err());
+}

@@ -48,6 +48,22 @@ impl Class {
     }
 }
 
+impl Class {
+    /// Tên snake_case dùng trong DTO/lọc (khớp serde).
+    pub fn snake(self) -> &'static str {
+        match self {
+            Class::Serif => "serif",
+            Class::Sans => "sans",
+            Class::Mono => "mono",
+            Class::Script => "script",
+            Class::Display => "display",
+            Class::Blackletter => "blackletter",
+            Class::Symbol => "symbol",
+            Class::Uncertain => "uncertain",
+        }
+    }
+}
+
 /// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng).
 pub fn subclasses_of(c: Class) -> &'static [&'static str] {
     match c {
