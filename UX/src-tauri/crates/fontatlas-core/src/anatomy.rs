@@ -157,7 +157,7 @@ fn caps_only(ctx: &GlyphCtx, upm: f64, set: Vec<(String, f32)>) -> Anatomy {
     }
     if let Some(o) = ctx.glyph('O', true) {
         a.contrast = Metric::from_opt(
-            stroke::contrast_on(&o).map(|v| v.0),
+            stroke::contrast_narrow_aware(&o),
             stroke::contrast_quality(ctx, &o),
             FailReason::Degenerate,
             "O_radial_thickness_max_min",

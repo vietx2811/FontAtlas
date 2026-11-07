@@ -77,25 +77,16 @@ fn sans_above_old_stress_threshold_is_now_low_contrast() {
     );
 }
 #[test]
-fn condensed_radial_contrast_is_estimated_and_horizontal_stress_is_failed() {
-    for name in ["bebas_neue.ttf", "oswald_vf.ttf"] {
+fn condensed_contrast_is_width_corrected_and_stress_is_failed() {
+    // Raw radial ratio was 1.94 / 1.91; both are low-contrast sans (H stem/bar 1.10 / 1.40).
+    for (name, lo, hi) in [("bebas_neue.ttf", 1.15, 1.40), ("oswald_vf.ttf", 1.30, 1.60)] {
         let f = FontFile::open(&fixture(name)).unwrap();
         let a = f.faces().unwrap()[0].measure(MeasureAt::Standard);
-        assert_eq!(a.contrast.quality, Quality::Estimated, "{name}");
-        assert!(
-            (1.8..2.1).contains(&a.contrast.value.unwrap()),
-            "preserve raw ratio, not an invented correction"
-        );
-        if name == "bebas_neue.ttf" {
-            assert_eq!(
-                a.stress_deg.quality,
-                Quality::Failed(FailReason::Degenerate)
-            );
-            assert!(a.stress_deg.value.is_none());
-        }
-        if let Some(v) = a.stress_deg.value {
-            assert!(v.abs() <= 45.0);
-        }
+        assert_eq!(a.contrast.quality, Quality::Measured, "{name}");
+        let c = a.contrast.value.unwrap();
+        assert!((lo..hi).contains(&c), "{name}: {c}");
+        assert!(matches!(a.stress_deg.quality, Quality::Failed(_)), "{name}");
+        assert!(a.stress_deg.value.is_none());
     }
 }
 #[test]
@@ -181,7 +172,7 @@ fn macos_oblique_condensed_and_symbol_regressions() {
                 .as_deref()
                 .is_some_and(|n| n.contains("Oblique") || n.contains("Italic"))
             {
-                assert_eq!(a.serif_foot.quality, Quality::Estimated);
+                assert_eq!(a.serif_foot.quality, Quality::Estimated, "{:?}", m.postscript_name);
                 let ctx = GlyphCtx::new(
                     face.font().clone(),
                     fontatlas_core::standard_location(face.font()),
@@ -189,11 +180,8 @@ fn macos_oblique_condensed_and_symbol_regressions() {
                 assert!(stem_tilt(&ctx, true).abs() < 3.0);
             }
             if name.contains("DIN Condensed") {
-                assert_eq!(a.contrast.quality, Quality::Estimated);
-                assert_eq!(
-                    a.stress_deg.quality,
-                    Quality::Failed(FailReason::Degenerate)
-                );
+                assert_eq!(a.contrast.quality, Quality::Measured);
+                assert!(matches!(a.stress_deg.quality, Quality::Failed(_)));
             }
             if name.contains("Webdings") {
                 assert_eq!(face.vietnamese().missing.len(), 186);

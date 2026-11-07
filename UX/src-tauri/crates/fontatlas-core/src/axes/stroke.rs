@@ -1,6 +1,5 @@
 //! Tương phản nét, trục nhấn, aperture 'c', độ rộng, độ nghiêng, chân serif, counter.
 use kurbo::{Point, Shape, Vec2};
-use read_fonts::TableProvider;
 
 use crate::geom::{GlyphCtx, GlyphShape, first_stem, hline, ink_runs, vline};
 use crate::metric::{FailReason, Metric, Quality};
@@ -51,7 +50,7 @@ pub fn contrast_o(ctx: &GlyphCtx) -> Metric {
     match ctx.glyph('o', true) {
         None => Metric::failed(FailReason::MissingGlyph, M),
         Some(o) => Metric::from_opt(
-            contrast_on(&o).map(|v| v.0),
+            contrast_narrow_aware(&o),
             contrast_quality(ctx, &o),
             FailReason::Degenerate,
             M,
@@ -59,16 +58,29 @@ pub fn contrast_o(ctx: &GlyphCtx) -> Metric {
     }
 }
 
-/// Radial rays overestimate contrast in narrow o (Bebas 1.94, Oswald 1.91,
-/// DIN Condensed 1.40 in the audit). No validated correction formula: keep the raw
-/// ratio and lower confidence for declared condensed faces or o aspect <=0.65.
-pub(crate) fn contrast_quality(ctx: &GlyphCtx, o: &GlyphShape) -> Quality {
-    let narrow = o.bbox.width() / o.bbox.height() <= 0.65
-        || ctx
-            .font()
-            .os2()
-            .is_ok_and(|t| (1..=4).contains(&t.us_width_class()));
-    if narrow {
+/// Below this o width/height, radial rays cut the side strokes obliquely and inflate
+/// contrast (synthetic o, true 2.00: aspect 0.73 → 2.00, 0.53 → 2.26, 0.40 → 2.92).
+pub(crate) const NARROW_O_ASPECT: f64 = 0.7;
+
+/// Contrast with narrow-o correction: stretch x so the o is round, measure, then divide
+/// by the stretch (horizontal thickness scales by k, vertical does not). Exact on
+/// synthetic axis-aligned o; unchanged for o with aspect >= NARROW_O_ASPECT.
+pub(crate) fn contrast_narrow_aware(o: &GlyphShape) -> Option<f64> {
+    let (w, h) = (o.bbox.width(), o.bbox.height());
+    if w <= 0.0 || h <= 0.0 || w / h >= NARROW_O_ASPECT {
+        return contrast_on(o).map(|v| v.0);
+    }
+    let k = h / w;
+    let path = kurbo::Affine::scale_non_uniform(k, 1.0) * o.path.clone();
+    let g = GlyphShape { bbox: path.bounding_box(), path, adv: o.adv * k };
+    contrast_on(&g).map(|(c, _)| c / k)
+}
+
+/// Narrow o is now corrected by `contrast_narrow_aware` (validated on synthetic o down to
+/// aspect 0.30 and on Google Fonts condensed/regular siblings: mean error 7.2% → 4.1%).
+/// Below 0.30 the correction is untested, so confidence drops to Estimated.
+pub(crate) fn contrast_quality(_ctx: &GlyphCtx, o: &GlyphShape) -> Quality {
+    if o.bbox.width() / o.bbox.height() < 0.3 {
         Quality::Estimated
     } else {
         Quality::Measured
@@ -96,13 +108,15 @@ pub fn stress_deg(ctx: &GlyphCtx) -> Metric {
     let Some(o) = ctx.glyph('o', true) else {
         return Metric::failed(FailReason::MissingGlyph, M);
     };
-    match contrast_on(&o) {
+    // Gate on width-corrected contrast so a narrow low-contrast o (Bebas: raw 1.94,
+    // corrected 1.27) does not pass as a stressed design.
+    match contrast_on(&o).map(|(c, t)| (contrast_narrow_aware(&o).unwrap_or(c), t)) {
         None => Metric::failed(FailReason::Degenerate, M),
-        // Narrow o can flip the fitted stress to ±90° (Bebas/DIN in audit).
-        Some((_, tilt)) if tilt.abs() > 45.0 => Metric::failed(FailReason::Degenerate, M),
         // Audit: regular sans contrast 1.08..1.35; transitional minimum 1.89.
         // 1.7 leaves a margin on both groups; this is a confidence gate, not a classifier.
         Some((c, _)) if c < 1.7 => Metric::failed(FailReason::LowContrast, M),
+        // Narrow o can flip the fitted stress to ±90° (Bebas/DIN in audit).
+        Some((_, tilt)) if tilt.abs() > 45.0 => Metric::failed(FailReason::Degenerate, M),
         // Harmonic stress remains Estimated; canonicalize -0.0 after rounding.
         Some((_, tilt)) => Metric::estimated(tilt.round() + 0.0, M),
     }
@@ -214,4 +228,51 @@ pub fn counter_o(ctx: &GlyphCtx) -> Metric {
     }
     let v = (outer > 0.0).then(|| inner / outer);
     Metric::from_opt(v, Quality::Measured, FailReason::Degenerate, M)
+}
+
+#[cfg(test)]
+mod synthetic_stress {
+    use super::*;
+    use kurbo::{Affine, BezPath, Ellipse};
+
+    /// o tổng hợp: viền ngoài tròn đều, counter là ellipse quay `deg` (dương = nghiêng trái).
+    /// Điểm mảnh nhất nằm ở hai đầu trục dài của counter → trục nhấn đúng bằng `deg`.
+    fn synthetic_o(deg: f64, inner_rx: f64) -> GlyphShape {
+        synthetic_o_w(deg, 300.0, inner_rx)
+    }
+
+    fn synthetic_o_w(deg: f64, outer_rx: f64, inner_rx: f64) -> GlyphShape {
+        let outer = Ellipse::new((0.0, 0.0), (outer_rx, 300.0), 0.0);
+        let inner = Ellipse::new((0.0, 0.0), (inner_rx, 270.0), deg.to_radians());
+        let mut path = BezPath::from_vec(outer.path_elements(0.1).collect());
+        let hole = BezPath::from_vec(inner.path_elements(0.1).collect()).reverse_subpaths();
+        path.extend(hole);
+        let path = Affine::translate((outer_rx, 300.0)) * path;
+        GlyphShape { bbox: path.bounding_box(), path, adv: 2.0 * outer_rx }
+    }
+
+    #[test]
+    fn harmonic_fit_recovers_known_stress_angle() {
+        for inner_rx in [150.0, 200.0] {
+            for deg in [0.0, 10.0, 20.0, 30.0, -15.0] {
+                let (c, tilt) = contrast_on(&synthetic_o(deg, inner_rx)).expect("measurable");
+                // độ dày ngang 300-rx, dọc 30 → contrast thật (300-rx)/30
+                let truth_c = (300.0 - inner_rx) / 30.0;
+                assert!((tilt - deg).abs() < 0.5, "rx={inner_rx} truth={deg} got {tilt}");
+                assert!((c - truth_c).abs() / truth_c < 0.02, "contrast {c} vs {truth_c}");
+            }
+        }
+    }
+
+    #[test]
+    fn narrow_o_contrast_is_corrected() {
+        // nét ngang 60, nét dọc 30 → contrast thật 2.0 ở mọi độ rộng
+        for outer_rx in [300.0, 220.0, 160.0, 120.0, 90.0] {
+            let g = synthetic_o_w(0.0, outer_rx, outer_rx - 60.0);
+            let raw = contrast_on(&g).unwrap().0;
+            let c = contrast_narrow_aware(&g).unwrap();
+            eprintln!("aspect={:.2} truth=2.00 raw={raw:.2} corrected={c:.2}", outer_rx / 300.0);
+            assert!((c - 2.0).abs() < 0.04, "aspect {} got {c}", outer_rx / 300.0);
+        }
+    }
 }

@@ -94,6 +94,14 @@
     it?.click(); await sleep(1000);
     document.querySelector('[aria-label="Đóng bộ lọc"]')?.click();
     await log('filter-cleared', true, { cells: cells().length, chip: document.querySelector('.fa-family-chip')?.getAttribute('aria-label') });
+    // BỘ LỌC trên toàn thư viện: khoảng slider lấy p1–p99 của chính thư viện, không phải 0–1
+    document.querySelector('.fa-family-chip')?.click(); await sleep(1000);
+    document.querySelector('button[aria-controls="font-filters"]')?.click();
+    const fpAll = await wait(() => document.getElementById('font-filters'));
+    await sleep(800); await snap('filter-full-library');
+    const rangesAll = fpAll ? [...fpAll.querySelectorAll('p, small, span')].map(e => e.textContent).filter(t => /Min .* max/.test(t)).slice(0, 6) : [];
+    await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
+    document.querySelector('[aria-label="Đóng bộ lọc"]')?.click(); await sleep(300);
     // CÀI ĐẶT → SIDEBAR
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));

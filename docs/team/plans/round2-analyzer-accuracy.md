@@ -117,3 +117,52 @@ Font upright, `cargo run -p fontatlas-core --example dump`, core-0.4.1:
 - Kết luận: giá trị phản ánh đúng hình chữ thật. Mốc "15–30°" trong sách áp cho Venetian cổ, không áp cho các bản Garalde số hoá. Không cần hệ số hiệu chỉnh.
 - Nhãn "Ước lượng" chỉ nói rằng đây là trục suy ra từ hình học, không phải số đo trực tiếp.
   - Đổi công thức o-contrast sẽ phải regenerate reference-v1. Việc này để vòng Phân loại (D1), khi có tập kiểm lớn hơn.
+
+## core-0.4.2: kiểm bằng ground truth tổng hợp, sửa contrast font hẹp — Lead, 2026-11-07
+
+**Ground truth tổng hợp.** Test `axes::stroke::synthetic_stress` dựng chữ o có giá trị đúng biết trước: viền ngoài là ellipse, counter là ellipse quay một góc định sẵn.
+- **Stress:** đặt 0°, 10°, 20°, 30°, −15° → đo ra đúng đến 0,5°, ở cả hai độ dày nét.
+  - Phép đo không có bias. Trung vị 11° của nhóm Old Style là giá trị thật của các font đó.
+  - Mốc 15–30° trong sách mô tả kiểu Venetian cổ, không phải sai số của analyzer.
+- **Contrast:** đặt 5,00 và 3,33 → đo ra đúng (sai số < 2%).
+- **o hẹp, contrast thật 2,00:**
+
+| Tỷ lệ rộng/cao của o | Cách đo cũ (tia qua tâm) | core-0.4.2 |
+|---|---|---|
+| 1,00 | 2,00 | 2,00 |
+| 0,73 | 2,00 | 2,00 |
+| 0,53 | 2,26 | 2,00 |
+| 0,40 | 2,92 | 2,00 |
+| 0,30 | 4,15 | 2,00 |
+
+**Sửa contrast font hẹp** (`contrast_narrow_aware`):
+- Khi o có tỷ lệ rộng/cao < 0,7: kéo giãn trục x cho o tròn lại, đo, rồi chia cho hệ số kéo giãn.
+- Font thường không đổi.
+- Nhãn chất lượng:
+  - Measured cho tỷ lệ ≥ 0,3.
+  - Estimated chỉ khi tỷ lệ < 0,3 (ngoài vùng đã kiểm).
+- Cổng stress dùng contrast đã sửa, nên Bebas (thô 1,94, đã sửa 1,27) không còn bị coi là font có trục nhấn.
+
+**Đối chiếu với bản thường cùng family (Google Fonts):**
+- Sai số trung bình: 7,2% → **4,1%**.
+- Barlow Condensed: 24,5% → 4,4%.
+- Saira Condensed: 12,1% → 7,0%.
+- Fira, Plex, Roboto không đổi.
+- Bebas Neue: 1,94 → 1,27. Oswald: 1,91 → 1,46.
+
+**Sửa thêm một lỗi có sẵn:** Avenir Next Condensed Heavy/Ultra Light Italic có italicAngle bằng 0 và không bật cờ italic, nên trước đây không được dựng thẳng.
+- Nay tên (subfamily hoặc PostScript) chứa Italic/Oblique cũng được tính là khai báo nghiêng.
+- Test `macos_oblique_condensed_and_symbol_regressions` (ignored, chạy local) đã đỏ từ trước, nay pass.
+
+**Tham chiếu:**
+- `ANALYZER_VERSION` = core-0.4.2; thư viện cũ sẽ được phân tích lại.
+- reference-v1 dựng lại bằng refbuild (3.813 face).
+- Contrast p1/p50/p99: 1,039 / 1,385 / 20,35 → 1,006 / 1,348 / 17,65.
+- Stress không đổi (−37 / 2 / 43).
+
+**Kiểm tra:**
+- cargo test --workspace: 707 pass, 0 fail.
+- clippy -D warnings sạch.
+- Google Fonts stress eval không đổi (83%).
+- QA native có thêm bước `filter-full-library`. Ảnh chụp cho thấy slider x-height 0,343–0,686 em (p1–p99) trên min/max 0,332–0,700, tức là khoảng slider theo dữ liệu thư viện, không còn 0–1.
+- QA native 26/26 hai lượt; một lượt khác treo ở bước `dark-snapshots` (sau 24 bước OK), dừng PID của chính QA và chạy lại thì qua — ghi nhận flake, chưa rõ nguyên nhân.

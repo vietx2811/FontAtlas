@@ -105,6 +105,20 @@ impl<'a> GlyphCtx<'a> {
             .font
             .head()
             .is_ok_and(|h| h.mac_style().contains(MacStyle::ITALIC))
+            // Avenir Next Condensed Heavy/Ultra Light Italic: italicAngle 0, no flags, -10° stems.
+            || [
+                skrifa::string::StringId::SUBFAMILY_NAME,
+                skrifa::string::StringId::TYPOGRAPHIC_SUBFAMILY_NAME,
+                skrifa::string::StringId::POSTSCRIPT_NAME,
+            ]
+            .into_iter()
+            .any(|id| {
+                use skrifa::MetadataProvider;
+                self.font.localized_strings(id).english_or_first().is_some_and(|s| {
+                    let s = s.to_string();
+                    s.contains("Italic") || s.contains("Oblique")
+                })
+            })
     }
 
     pub(crate) fn is_slanted(&self) -> bool {
