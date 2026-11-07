@@ -228,7 +228,70 @@ fn detail() -> FaceDetailDto {
             same: vec!["contrast".into()],
             differ: vec!["width".into()],
         }],
+        extras: extras(),
     }
+}
+
+fn extras() -> FaceExtrasDto {
+    FaceExtrasDto {
+        extras_available: true,
+        vendor_id: Some("FTH".into()),
+        years: YearsDto { created: Some(2017), modified: Some(2021), copyright: Some(2017) },
+        ot_groups: vec![
+            OtGroupDto { group: "figures".into(), tags: vec!["lnum".into(), "onum".into()], sets: vec![] },
+            OtGroupDto {
+                group: "stylistic_sets".into(),
+                tags: vec!["ss01".into(), "ss02".into()],
+                sets: vec![StylisticSetDto { tag: "ss01".into(), name: Some("Alternate a".into()) }, StylisticSetDto { tag: "ss02".into(), name: None }],
+            },
+        ],
+        kerning: KerningDto { source: "gpos".into(), pairs: 8780, class_pairs: 3417 },
+        style: StyleStructureDto { italic_kind: "upright".into(), ital_axis: false, slnt_axis: false, wght_range: Some([400.0, 900.0]), wdth_range: None, opsz_range: None },
+        embedding: EmbeddingDto { fs_type: Some(0), level: "installable".into(), flags: vec![] },
+        license_kind: "ofl".into(),
+    }
+}
+
+fn compare() -> CompareDto {
+    let d = detail();
+    let axis = |key: &str, v: f64, base: f64, i: usize| CompareAxisDto {
+        key: key.into(),
+        unit: Some("ratio".into()),
+        raw_value: Some(v),
+        quality: if key == "terminal" { "estimated".into() } else { "measured".into() },
+        estimated: key == "terminal",
+        percentile: Some(0.9),
+        delta: (i > 0).then_some(v - base),
+        delta_pct: (i > 0).then_some((v - base) / base * 100.0),
+    };
+    let face = |i: usize| CompareFaceDto {
+        face: key(3 + i as u8),
+        row: row(3 + i as i64, 3 + i as u8, "Playfair Display", "Regular", 400, false),
+        is_baseline: i == 0,
+        classification: d.classification_info.clone(),
+        axes: vec![axis("contrast", 4.9 - 2.0 * i as f64, 4.9, i), axis("terminal", 1.6, 1.6, i)],
+        vietnamese: CompareVietnameseDto {
+            supports: true,
+            missing: 0,
+            total: 134,
+            stacked_marks_top_em: Some(1.05),
+            hhea_ascender_em: Some(1.082),
+            cap_height_em: Some(0.708),
+            over_ascender_pct_em: Some(0.0),
+            over_cap_pct_em: Some(34.2),
+            overflow: false,
+            stack_style: Some("right".into()),
+        },
+        license: LicenseNoteDto {
+            kind: "ofl".into(),
+            description: d.metadata.license.clone(),
+            url: d.metadata.license_url.clone(),
+            embedding: extras().embedding,
+        },
+        extras: extras(),
+        family: FamilyStructureDto { family: "Playfair Display".into(), faces: 6, weights: vec![400, 700, 900], widths: vec![5], has_italic: true, has_oblique: false, has_variable: true, has_opsz: false },
+    };
+    CompareDto { baseline: key(3), faces: vec![face(0), face(1)] }
 }
 
 fn candidate() -> PairCandidateDto {
@@ -283,6 +346,8 @@ fn fixtures() -> Vec<(&'static str, Value)> {
     vec![
         ("face_page", v(&page)),
         ("face_detail_playfair", v(&detail())),
+        ("compare_two", v(&compare())),
+        ("pair_these_combos", v(&vec![PairComboDto { heading: row(3, 3, "Playfair Display", "Regular", 400, false), body: row(5, 5, "Libre Baskerville", "Regular", 400, false), assessment: candidate(), rank: 1 }])),
         ("similar_hits", v(&vec![detail().similar_top[0].clone()])),
         (
             "similar_families",

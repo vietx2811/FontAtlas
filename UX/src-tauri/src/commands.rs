@@ -19,7 +19,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, describe, embed, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, compare, describe, embed, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -91,6 +91,9 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
+            async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
+            async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
+            async pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
@@ -175,6 +178,24 @@ where
     tauri::async_runtime::spawn_blocking(move || f(&st))
         .await
         .map_err(|e| CmdError::internal(format!("tác vụ nền lỗi: {e}")))?
+}
+
+/// Lưu PNG do UI vẽ: Rust mở hộp thoại lưu (lọc .png, ép đuôi), JS không cần quyền dialog/fs.
+#[tauri::command]
+pub async fn save_png<R: tauri::Runtime>(app: tauri::AppHandle<R>, suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError> {
+    use tauri_plugin_dialog::DialogExt;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::services::export::save_png_with(&suggested_name, &png_base64, &|name| {
+            app.dialog()
+                .file()
+                .add_filter("PNG", &["png"])
+                .set_file_name(name)
+                .blocking_save_file()
+                .and_then(|p| p.into_path().ok())
+        })
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("tác vụ nền lỗi: {e}")))?
 }
 
 #[tauri::command]
@@ -264,6 +285,8 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
+cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
+cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
 cmd!(list_pairs(collection_id: Option<i64>) -> Vec<SavedPairDto> => |s| pairs::list_pairs(s, collection_id));
 cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
@@ -473,7 +496,9 @@ pub fn async_violations(table: &[CommandSig], src: &str) -> Vec<String> {
         }
         // `cmd!(tên(` sinh `pub async fn tên(`
         let via_macro = format!("cmd!({}(", c.name);
-        if c.is_async && !src.contains(&async_def) && !src.contains(&via_macro) {
+        // lệnh generic theo Runtime (cần AppHandle<R> cho dialog): `pub async fn tên<R: …>(`
+        let async_generic = format!("pub async fn {}<", c.name);
+        if c.is_async && !src.contains(&async_def) && !src.contains(&async_generic) && !src.contains(&via_macro) {
             v.push(format!(
                 "{} khai báo async trong bảng nhưng hàm không phải `pub async fn`",
                 c.name

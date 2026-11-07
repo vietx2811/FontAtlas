@@ -94,6 +94,9 @@ pub struct Metadata {
     pub cmap_scripts: Vec<String>,
     /// Dải optical size (pt) từ OS/2 v5; None nếu OS/2 < v5.
     pub os2_optical_size_pt: Option<(f32, f32)>,
+    /// Dữ liệu D2 cho Compare (năm, nhóm feature, kerning, cấu trúc style, fsType, loại license).
+    #[serde(default)]
+    pub extras: crate::extras::FontExtras,
 }
 
 pub fn classify_license(description: Option<&str>, url: Option<&str>) -> LicenseClass {
@@ -230,6 +233,20 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
     let license_description = name(font, StringId::LICENSE_DESCRIPTION);
     let license_url = name(font, StringId::LICENSE_URL);
     let (gsub_features, gpos_features) = feature_tags(font);
+    let copyright = name(font, StringId::COPYRIGHT_NOTICE);
+    let all_features: Vec<String> = gsub_features.iter().chain(gpos_features.iter()).cloned().collect();
+    let hint = format!(
+        "{} {}",
+        name(font, StringId::FULL_NAME).unwrap_or_default(),
+        name(font, StringId::SUBFAMILY_NAME).unwrap_or_default()
+    );
+    let extras = crate::extras::compute(
+        font,
+        &all_features,
+        copyright.as_deref(),
+        (license_description.as_deref(), license_url.as_deref()),
+        &hint,
+    );
     Metadata {
         family: name(font, StringId::FAMILY_NAME),
         subfamily: name(font, StringId::SUBFAMILY_NAME),
@@ -252,7 +269,7 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
             let v = o.s_family_class();
             (v != 0).then_some(((v >> 8) as u8, (v & 0xff) as u8))
         }),
-        vendor_id: os2.as_ref().map(|o| o.ach_vend_id().to_string().trim().to_string()).filter(|s| !s.is_empty()),
+        vendor_id: os2.as_ref().map(|o| o.ach_vend_id().to_string().trim_matches(|c: char| c.is_whitespace() || c.is_control()).to_string()).filter(|s| !s.is_empty()),
         is_fixed_pitch: font.post().is_ok_and(|p| p.is_fixed_pitch() != 0),
         symbol_cmap: symbol_only_cmap(font),
         latin_letters: ('a'..='z').chain('A'..='Z').filter(|c| font.charmap().map(*c).is_some()).count() as u8,
@@ -292,7 +309,7 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
                     .collect(),
             })
             .collect(),
-        copyright: name(font, StringId::COPYRIGHT_NOTICE),
+        copyright,
         vendor_url: name(font, StringId::VENDOR_URL),
         gsub_features,
         gpos_features,
@@ -305,5 +322,6 @@ pub(crate) fn metadata(font: &FontRef) -> Metadata {
                 o.us_upper_optical_point_size()? as f32 / 20.0,
             ))
         }),
+        extras,
     }
 }

@@ -242,6 +242,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         },
         axes: axesFor(row),
         similarTop: similarFor(row, rows, 3),
+        extras: mockExtras(),
       });
     },
     async similar(k, o) { const r = findRow(k); return ok(similarFor(r, rows, o.k)); },
@@ -304,6 +305,17 @@ export function mockAutoClass(family: string): { class: string; subclass: string
   const hit = MOCK_AUTO.find(([re]) => re.test(family));
   return hit ? { class: hit[1], subclass: hit[2], confidence: hit[3] } : { class: 'sans', subclass: null, confidence: 0.9 };
 }
+/** Dữ liệu D2 giả cho mock (không có font thật để đọc). */
+function mockExtras(): FaceDetailDto['extras'] {
+  return {
+    extrasAvailable: true, vendorId: 'MOCK', years: { created: 2017, modified: 2021, copyright: 2017 },
+    otGroups: [{ group: 'figures', tags: ['lnum', 'onum'], sets: [] }],
+    kerning: { source: 'gpos', pairs: 1200, classPairs: 800 },
+    style: { italicKind: 'upright', italAxis: false, slntAxis: false, wghtRange: null, wdthRange: null, opszRange: null },
+    embedding: { fsType: 0, level: 'installable', flags: [] }, licenseKind: 'ofl',
+  };
+}
+
 function mockClassification(family: string, over?: { class: string; subclass: string | null }): FaceDetailDto['classificationInfo'] {
   const auto = mockAutoClass(family);
   const cls = over?.class ?? auto.class;

@@ -1,0 +1,346 @@
+{
+  "baseline": {
+    "faceIndex": 0,
+    "hashHex": "0303030303030303030303030303030303030303030303030303030303030303"
+  },
+  "faces": [
+    {
+      "axes": [
+        {
+          "delta": null,
+          "deltaPct": null,
+          "estimated": false,
+          "key": "contrast",
+          "percentile": 0.8999999761581421,
+          "quality": "measured",
+          "rawValue": 4.9,
+          "unit": "ratio"
+        },
+        {
+          "delta": null,
+          "deltaPct": null,
+          "estimated": true,
+          "key": "terminal",
+          "percentile": 0.8999999761581421,
+          "quality": "estimated",
+          "rawValue": 1.6,
+          "unit": "ratio"
+        }
+      ],
+      "classification": {
+        "autoClass": null,
+        "candidate": null,
+        "class": "serif",
+        "confidence": 0.9100000262260437,
+        "label": "Serif",
+        "signals": [
+          {
+            "detail": "contrast 3.4",
+            "source": "measure",
+            "vote": "serif",
+            "weight": 1.5
+          }
+        ],
+        "source": "auto",
+        "subclass": "didone",
+        "traits": [
+          "decorative"
+        ],
+        "usage": [
+          "display"
+        ]
+      },
+      "extras": {
+        "embedding": {
+          "flags": [],
+          "fsType": 0,
+          "level": "installable"
+        },
+        "extrasAvailable": true,
+        "kerning": {
+          "classPairs": 3417,
+          "pairs": 8780,
+          "source": "gpos"
+        },
+        "licenseKind": "ofl",
+        "otGroups": [
+          {
+            "group": "figures",
+            "sets": [],
+            "tags": [
+              "lnum",
+              "onum"
+            ]
+          },
+          {
+            "group": "stylistic_sets",
+            "sets": [
+              {
+                "name": "Alternate a",
+                "tag": "ss01"
+              },
+              {
+                "name": null,
+                "tag": "ss02"
+              }
+            ],
+            "tags": [
+              "ss01",
+              "ss02"
+            ]
+          }
+        ],
+        "style": {
+          "italAxis": false,
+          "italicKind": "upright",
+          "opszRange": null,
+          "slntAxis": false,
+          "wdthRange": null,
+          "wghtRange": [
+            400.0,
+            900.0
+          ]
+        },
+        "vendorId": "FTH",
+        "years": {
+          "copyright": 2017,
+          "created": 2017,
+          "modified": 2021
+        }
+      },
+      "face": {
+        "faceIndex": 0,
+        "hashHex": "0303030303030303030303030303030303030303030303030303030303030303"
+      },
+      "family": {
+        "faces": 6,
+        "family": "Playfair Display",
+        "hasItalic": true,
+        "hasOblique": false,
+        "hasOpsz": false,
+        "hasVariable": true,
+        "weights": [
+          400,
+          700,
+          900
+        ],
+        "widths": [
+          5
+        ]
+      },
+      "isBaseline": true,
+      "license": {
+        "description": "This Font Software is licensed under the SIL Open Font License, Version 1.1.",
+        "embedding": {
+          "flags": [],
+          "fsType": 0,
+          "level": "installable"
+        },
+        "kind": "ofl",
+        "url": "https://openfontlicense.org"
+      },
+      "row": {
+        "addedAt": 1700000000003,
+        "faceId": 3,
+        "faceIndex": 0,
+        "family": "Playfair Display",
+        "fileSize": 176003,
+        "fullName": "Playfair Display Regular",
+        "hashHex": "0303030303030303030303030303030303030303030303030303030303030303",
+        "isFavorite": false,
+        "isItalic": false,
+        "isVariable": false,
+        "licenseClass": "ofl",
+        "missing": false,
+        "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+        "subfamily": "Regular",
+        "supportsVi": true,
+        "viMissing": 0,
+        "viStatus": "full",
+        "weightClass": 400,
+        "widthClass": 5
+      },
+      "vietnamese": {
+        "capHeightEm": 0.7080000042915344,
+        "hheaAscenderEm": 1.0820000171661377,
+        "missing": 0,
+        "overAscenderPctEm": 0.0,
+        "overCapPctEm": 34.20000076293945,
+        "overflow": false,
+        "stackStyle": "right",
+        "stackedMarksTopEm": 1.0499999523162842,
+        "supports": true,
+        "total": 134
+      }
+    },
+    {
+      "axes": [
+        {
+          "delta": -2.0,
+          "deltaPct": -40.81632653061224,
+          "estimated": false,
+          "key": "contrast",
+          "percentile": 0.8999999761581421,
+          "quality": "measured",
+          "rawValue": 2.9000000000000004,
+          "unit": "ratio"
+        },
+        {
+          "delta": 0.0,
+          "deltaPct": 0.0,
+          "estimated": true,
+          "key": "terminal",
+          "percentile": 0.8999999761581421,
+          "quality": "estimated",
+          "rawValue": 1.6,
+          "unit": "ratio"
+        }
+      ],
+      "classification": {
+        "autoClass": null,
+        "candidate": null,
+        "class": "serif",
+        "confidence": 0.9100000262260437,
+        "label": "Serif",
+        "signals": [
+          {
+            "detail": "contrast 3.4",
+            "source": "measure",
+            "vote": "serif",
+            "weight": 1.5
+          }
+        ],
+        "source": "auto",
+        "subclass": "didone",
+        "traits": [
+          "decorative"
+        ],
+        "usage": [
+          "display"
+        ]
+      },
+      "extras": {
+        "embedding": {
+          "flags": [],
+          "fsType": 0,
+          "level": "installable"
+        },
+        "extrasAvailable": true,
+        "kerning": {
+          "classPairs": 3417,
+          "pairs": 8780,
+          "source": "gpos"
+        },
+        "licenseKind": "ofl",
+        "otGroups": [
+          {
+            "group": "figures",
+            "sets": [],
+            "tags": [
+              "lnum",
+              "onum"
+            ]
+          },
+          {
+            "group": "stylistic_sets",
+            "sets": [
+              {
+                "name": "Alternate a",
+                "tag": "ss01"
+              },
+              {
+                "name": null,
+                "tag": "ss02"
+              }
+            ],
+            "tags": [
+              "ss01",
+              "ss02"
+            ]
+          }
+        ],
+        "style": {
+          "italAxis": false,
+          "italicKind": "upright",
+          "opszRange": null,
+          "slntAxis": false,
+          "wdthRange": null,
+          "wghtRange": [
+            400.0,
+            900.0
+          ]
+        },
+        "vendorId": "FTH",
+        "years": {
+          "copyright": 2017,
+          "created": 2017,
+          "modified": 2021
+        }
+      },
+      "face": {
+        "faceIndex": 0,
+        "hashHex": "0404040404040404040404040404040404040404040404040404040404040404"
+      },
+      "family": {
+        "faces": 6,
+        "family": "Playfair Display",
+        "hasItalic": true,
+        "hasOblique": false,
+        "hasOpsz": false,
+        "hasVariable": true,
+        "weights": [
+          400,
+          700,
+          900
+        ],
+        "widths": [
+          5
+        ]
+      },
+      "isBaseline": false,
+      "license": {
+        "description": "This Font Software is licensed under the SIL Open Font License, Version 1.1.",
+        "embedding": {
+          "flags": [],
+          "fsType": 0,
+          "level": "installable"
+        },
+        "kind": "ofl",
+        "url": "https://openfontlicense.org"
+      },
+      "row": {
+        "addedAt": 1700000000004,
+        "faceId": 4,
+        "faceIndex": 0,
+        "family": "Playfair Display",
+        "fileSize": 176004,
+        "fullName": "Playfair Display Regular",
+        "hashHex": "0404040404040404040404040404040404040404040404040404040404040404",
+        "isFavorite": false,
+        "isItalic": false,
+        "isVariable": false,
+        "licenseClass": "ofl",
+        "missing": false,
+        "path": "/Users/u/Fonts/PlayfairDisplay-Regular.ttf",
+        "subfamily": "Regular",
+        "supportsVi": true,
+        "viMissing": 0,
+        "viStatus": "full",
+        "weightClass": 400,
+        "widthClass": 5
+      },
+      "vietnamese": {
+        "capHeightEm": 0.7080000042915344,
+        "hheaAscenderEm": 1.0820000171661377,
+        "missing": 0,
+        "overAscenderPctEm": 0.0,
+        "overCapPctEm": 34.20000076293945,
+        "overflow": false,
+        "stackStyle": "right",
+        "stackedMarksTopEm": 1.0499999523162842,
+        "supports": true,
+        "total": 134
+      }
+    }
+  ]
+}
