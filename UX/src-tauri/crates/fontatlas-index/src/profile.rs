@@ -75,7 +75,7 @@ impl AxisId {
             AxisId::AscenderEm => "d_bbox_top",
             AxisId::StemNXh => "n_stem_at_35pct_xh",
             AxisId::Darkness => "ink_area_n_o",
-            AxisId::Contrast => "o_radial_thickness_max_min",
+            AxisId::Contrast => "o_stroke_width_max_min",
             AxisId::StressDeg => "o_harmonic_fit",
             AxisId::Aperture => "c_angular_opening",
             AxisId::ApertureE => "e_min_vertical_gap_bar_to_terminal",
@@ -83,7 +83,7 @@ impl AxisId {
             AxisId::MeanAdvance => "mean_advance_a_z_over_xh",
             AxisId::WidthCv => "cv_advance_a_z",
             AxisId::Spacing => "mean_sidebearings_a_z_over_xh",
-            AxisId::SlantDeg => "l_or_I_midline_offset",
+            AxisId::SlantDeg => "I_T_stem_midline",
             AxisId::SerifFoot => "baseline_foot_over_stem_median_iln",
             AxisId::Counter => "o_inner_over_outer_area",
         }

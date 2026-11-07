@@ -46,16 +46,105 @@ pub(crate) fn contrast_on(g: &GlyphShape) -> Option<(f64, f64)> {
 }
 
 pub fn contrast_o(ctx: &GlyphCtx) -> Metric {
-    const M: &str = "o_radial_thickness_max_min";
+    const M: &str = "o_stroke_width_max_min";
     match ctx.glyph('o', true) {
         None => Metric::failed(FailReason::MissingGlyph, M),
-        Some(o) => Metric::from_opt(
-            contrast_narrow_aware(&o),
-            contrast_quality(ctx, &o),
+        Some(o) => contrast_metric(ctx, &o, M),
+    }
+}
+
+/// Perpendicular stroke-width contrast; radial (width-corrected) fallback when the glyph
+/// is not a plain two-contour ring (stencil, overlapping VF contours).
+pub(crate) fn contrast_metric(ctx: &GlyphCtx, o: &GlyphShape, method: &'static str) -> Metric {
+    match contrast_perpendicular(o) {
+        Some(c) => Metric::from_opt(Some(c), Quality::Measured, FailReason::Degenerate, method),
+        None => Metric::from_opt(
+            contrast_narrow_aware(o),
+            contrast_quality(ctx, o),
             FailReason::Degenerate,
-            M,
+            method,
         ),
     }
+}
+
+
+/// Polylines of each closed contour (flattened, tolerance in font units).
+pub(crate) fn contour_polys(path: &kurbo::BezPath, tol: f64) -> Vec<Vec<Point>> {
+    let mut out: Vec<Vec<Point>> = Vec::new();
+    let mut cur: Vec<Point> = Vec::new();
+    kurbo::flatten(path.iter(), tol, |el| match el {
+        kurbo::PathEl::MoveTo(p) => {
+            if cur.len() >= 3 { out.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+            cur.push(p);
+        }
+        kurbo::PathEl::LineTo(p) => cur.push(p),
+        kurbo::PathEl::ClosePath => {
+            if cur.len() >= 3 { out.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+        }
+        _ => {}
+    });
+    if cur.len() >= 3 { out.push(cur); }
+    out
+}
+
+fn poly_area(p: &[Point]) -> f64 {
+    let n = p.len();
+    (0..n).map(|i| p[i].x * p[(i + 1) % n].y - p[(i + 1) % n].x * p[i].y).sum::<f64>() / 2.0
+}
+
+fn seg_dist(p: Point, a: Point, b: Point) -> f64 {
+    let ab = b - a;
+    let t = ((p - a).dot(ab) / ab.hypot2().max(1e-12)).clamp(0.0, 1.0);
+    (p - (a + ab * t)).hypot()
+}
+
+/// Typographic stroke contrast of an o: local stroke width = distance from the outer
+/// contour to the nearest point of the counter (perpendicular to the stroke on smooth
+/// curves); contrast = thickest / thinnest, each taken as the mean of the extreme 3%
+/// of outer samples to resist single-node noise. Independent of o width and stress.
+pub(crate) fn contrast_perpendicular(o: &GlyphShape) -> Option<f64> {
+    let mut polys = contour_polys(&o.path, 0.25);
+    if polys.len() != 2 {
+        return None;
+    }
+    polys.sort_by(|a, b| poly_area(b).abs().total_cmp(&poly_area(a).abs()));
+    let (outer, inner) = (&polys[0], &polys[1]);
+    // a real counter sits inside the outer contour (stencil o = two side-by-side halves)
+    let bb = |p: &[Point]| p.iter().fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |b, q| (b.0.min(q.x), b.1.min(q.y), b.2.max(q.x), b.3.max(q.y)));
+    let (ob, ib) = (bb(outer), bb(inner));
+    if !(ib.0 > ob.0 && ib.1 > ob.1 && ib.2 < ob.2 && ib.3 < ob.3) {
+        return None;
+    }
+    // resample outer evenly by arc length
+    let per: f64 = (0..outer.len()).map(|i| (outer[(i + 1) % outer.len()] - outer[i]).hypot()).sum();
+    let n = 720usize;
+    let step = per / n as f64;
+    let mut samples = Vec::with_capacity(n);
+    let (mut acc, mut i, mut target) = (0.0, 0usize, 0.0);
+    while samples.len() < n && i < outer.len() * 2 {
+        let (a, b) = (outer[i % outer.len()], outer[(i + 1) % outer.len()]);
+        let len = (b - a).hypot();
+        while target <= acc + len && samples.len() < n {
+            let t = if len > 0.0 { (target - acc) / len } else { 0.0 };
+            samples.push(a + (b - a) * t);
+            target += step;
+        }
+        acc += len;
+        i += 1;
+    }
+    let mut w: Vec<f64> = samples
+        .iter()
+        .map(|&p| {
+            (0..inner.len())
+                .map(|j| seg_dist(p, inner[j], inner[(j + 1) % inner.len()]))
+                .fold(f64::MAX, f64::min)
+        })
+        .collect();
+    w.sort_by(f64::total_cmp);
+    let k = (w.len() * 3 / 100).max(1);
+    let thin = w[..k].iter().sum::<f64>() / k as f64;
+    let thick = w[w.len() - k..].iter().sum::<f64>() / k as f64;
+    (thin > 0.0).then(|| thick / thin)
 }
 
 /// Below this o width/height, radial rays cut the side strokes obliquely and inflate
@@ -110,7 +199,10 @@ pub fn stress_deg(ctx: &GlyphCtx) -> Metric {
     };
     // Gate on width-corrected contrast so a narrow low-contrast o (Bebas: raw 1.94,
     // corrected 1.27) does not pass as a stressed design.
-    match contrast_on(&o).map(|(c, t)| (contrast_narrow_aware(&o).unwrap_or(c), t)) {
+    match contrast_on(&o).map(|(c, t)| {
+        let c = contrast_perpendicular(&o).or_else(|| contrast_narrow_aware(&o)).unwrap_or(c);
+        (c, t)
+    }) {
         None => Metric::failed(FailReason::Degenerate, M),
         // Audit: regular sans contrast 1.08..1.35; transitional minimum 1.89.
         // 1.7 leaves a margin on both groups; this is a confidence gate, not a classifier.
@@ -176,7 +268,7 @@ pub fn mean_adv_lc_xh(ctx: &GlyphCtx, xh: f64) -> Metric {
 
 /// Độ nghiêng đo thật (không dựng thẳng) trên 'l' hoặc 'I'; âm = nghiêng phải như italic.
 pub fn slant_deg(ctx: &GlyphCtx) -> Metric {
-    const M: &str = "l_or_I_midline_offset";
+    const M: &str = "I_T_stem_midline";
     let v = ctx.stem_slant_deg();
     Metric::from_opt(
         v.map(|v| (v * 10.0).round() / 10.0 + 0.0),
@@ -260,6 +352,8 @@ mod synthetic_stress {
                 let truth_c = (300.0 - inner_rx) / 30.0;
                 assert!((tilt - deg).abs() < 0.5, "rx={inner_rx} truth={deg} got {tilt}");
                 assert!((c - truth_c).abs() / truth_c < 0.02, "contrast {c} vs {truth_c}");
+                let p = contrast_perpendicular(&synthetic_o(deg, inner_rx)).unwrap();
+                assert!((p - truth_c).abs() / truth_c < 0.03, "perpendicular {p} vs {truth_c}");
             }
         }
     }
@@ -273,6 +367,8 @@ mod synthetic_stress {
             let c = contrast_narrow_aware(&g).unwrap();
             eprintln!("aspect={:.2} truth=2.00 raw={raw:.2} corrected={c:.2}", outer_rx / 300.0);
             assert!((c - 2.0).abs() < 0.04, "aspect {} got {c}", outer_rx / 300.0);
+            let p = contrast_perpendicular(&g).unwrap();
+            assert!((p - 2.0).abs() < 0.06, "perpendicular aspect {} got {p}", outer_rx / 300.0);
         }
     }
 }

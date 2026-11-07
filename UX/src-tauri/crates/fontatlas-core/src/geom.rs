@@ -85,8 +85,42 @@ impl<'a> GlyphCtx<'a> {
     }
 
     /// Raw stem angle without deskew/rounding; shared by fallback deskew and the public metric.
+    /// Capital I and T stems first, then the bar '|' (Google Fonts eval 2026-11-07, italicAngle as truth:
+    /// MAE 0.87° → 0.48° on 297 italics, 0.37° → 0.31° on 72 uprights); lowercase l
+    /// (tails/hooks bias it) only when neither capital has a clean single stem.
     pub(crate) fn stem_slant_deg(&self) -> Option<f64> {
-        let g = self.glyph('l', false).or_else(|| self.glyph('I', false))?;
+        let i = self.glyph_stem_slant('I', 0.25, 0.75);
+        let t = self.glyph_stem_slant('T', 0.15, 0.6);
+        match (i, t) {
+            (Some(i), Some(t)) if (i - t).abs() < 1.5 => Some((i + t) / 2.0),
+            (Some(i), _) => Some(i),
+            (None, Some(t)) => Some(t),
+            // '|' stays upright in ~1/3 of italics, so it never overrides I/T; it beats a
+            // hooked lowercase l when capitals are missing (Sirivennela: l -19.9°, | 0°).
+            (None, None) => self
+                .glyph_stem_slant('|', 0.2, 0.8)
+                .or_else(|| self.l_midline_slant()),
+        }
+    }
+
+    /// Midline offset of one stem between two height fractions; None unless both heights
+    /// cut exactly one ink run (a clean stem, no serif or crossbar).
+    pub(crate) fn glyph_stem_slant(&self, ch: char, f0: f64, f1: f64) -> Option<f64> {
+        let g = self.glyph(ch, false)?;
+        let (y1, y2) = (
+            g.bbox.y0 + g.bbox.height() * f0,
+            g.bbox.y0 + g.bbox.height() * f1,
+        );
+        let (r1, r2) = (hline(&g, y1), hline(&g, y2));
+        if r1.len() != 1 || r2.len() != 1 {
+            return None;
+        }
+        let (m1, m2) = ((r1[0].0 + r1[0].1) / 2.0, (r2[0].0 + r2[0].1) / 2.0);
+        Some(-((m2 - m1) / (y2 - y1)).atan().to_degrees())
+    }
+
+    fn l_midline_slant(&self) -> Option<f64> {
+        let g = self.glyph('l', false)?;
         let (y1, y2) = (
             g.bbox.y0 + g.bbox.height() * 0.25,
             g.bbox.y0 + g.bbox.height() * 0.75,

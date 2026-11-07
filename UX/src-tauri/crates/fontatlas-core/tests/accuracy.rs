@@ -78,8 +78,9 @@ fn sans_above_old_stress_threshold_is_now_low_contrast() {
 }
 #[test]
 fn condensed_contrast_is_width_corrected_and_stress_is_failed() {
-    // Raw radial ratio was 1.94 / 1.91; both are low-contrast sans (H stem/bar 1.10 / 1.40).
-    for (name, lo, hi) in [("bebas_neue.ttf", 1.15, 1.40), ("oswald_vf.ttf", 1.30, 1.60)] {
+    // Raw radial ratio was 1.94 / 1.91; perpendicular stroke width gives 1.10 / 1.35,
+    // matching H stem/bar (1.10 / 1.40) for these low-contrast sans.
+    for (name, lo, hi) in [("bebas_neue.ttf", 1.0, 1.25), ("oswald_vf.ttf", 1.25, 1.50)] {
         let f = FontFile::open(&fixture(name)).unwrap();
         let a = f.faces().unwrap()[0].measure(MeasureAt::Standard);
         assert_eq!(a.contrast.quality, Quality::Measured, "{name}");

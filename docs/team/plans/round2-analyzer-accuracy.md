@@ -166,3 +166,51 @@ Font upright, `cargo run -p fontatlas-core --example dump`, core-0.4.1:
 - Google Fonts stress eval không đổi (83%).
 - QA native có thêm bước `filter-full-library`. Ảnh chụp cho thấy slider x-height 0,343–0,686 em (p1–p99) trên min/max 0,332–0,700, tức là khoảng slider theo dữ liệu thư viện, không còn 0–1.
 - QA native 26/26 hai lượt; một lượt khác treo ở bước `dark-snapshots` (sau 24 bước OK), dừng PID của chính QA và chạy lại thì qua — ghi nhận flake, chưa rõ nguyên nhân.
+
+## core-0.4.3: contrast đo vuông góc với nét, độ nghiêng theo I/T — Lead, 2026-11-07 (theo yêu cầu chủ app)
+
+**Định nghĩa contrast**
+- Typography: tỉ lệ độ dày nét dày nhất / nét mảnh nhất, đo vuông góc với hướng nét. PANOSE "Contrast" cũng đo trên chữ O.
+- Cách cũ:
+  - Đo dọc tia đi qua tâm bbox, nên chỉ xấp xỉ.
+  - Khi tia cắt xiên vào nét hai bên của o hẹp, độ dày bị thổi phồng.
+- Cách mới, `contrast_perpendicular`:
+  - Lấy mẫu 720 điểm đều trên viền ngoài của o.
+  - Độ dày tại mỗi điểm là khoảng cách ngắn nhất tới viền trong, tức vuông góc với nét trên đường cong trơn.
+  - contrast = (trung bình 3% mẫu dày nhất) / (trung bình 3% mẫu mảnh nhất).
+  - Không phụ thuộc độ rộng o hay hướng trục nhấn.
+- Lùi về cách kéo giãn (0.4.2) khi o không phải một vòng hai contour, ví dụ stencil hoặc contour VF chồng nhau. Trên 278 serif có 5 face phải lùi.
+- Method đổi tên thành `o_stroke_width_max_min` (chữ hoa: `O_stroke_width_max_min`).
+
+**Sai số so với bản thường cùng family** (15 cặp condensed / semi / extra-condensed với bản thường):
+
+| Cách đo | Trung bình | Trung vị | Lớn nhất |
+|---|---|---|---|
+| Tia qua tâm (≤ 0.4.1) | 8,1% | 6,6% | 24,5% |
+| Kéo giãn (0.4.2) | 5,2% | 5,6% | 9,5% |
+| **Vuông góc (0.4.3)** | **2,6%** | **1,8%** | **6,8%** |
+
+- Chữ o tổng hợp: sai < 3% ở mọi độ rộng và mọi góc nhấn.
+- Bebas Neue 1,10, khớp H stem/bar (1,10). Oswald 1,35 (H 1,40).
+- Serif không đổi bản chất: trung vị tỉ lệ vuông góc / tia = 1,00; Spearman 0,978.
+
+**Độ nghiêng**
+- Thứ tự ưu tiên:
+  1. Thân **I** và **T** hoa: nếu lệch nhau < 1,5° thì lấy trung bình, không thì lấy I, rồi T.
+  2. Dấu **"|"**.
+  3. `l` thường, vì l có đuôi/móc làm lệch kết quả.
+- Đối chiếu italicAngle, chỉ lấy sans/serif/mono và bỏ italic khai báo 0°:
+  - 297 italic: MAE **0,87° → 0,48°**, p90 2,07° → 0,98°.
+  - 72 upright: MAE 0,37° → 0,31°.
+- Dấu "|" (gợi ý của chủ app):
+  - 42/126 italic giữ "|" đứng, nên "|" không được ghi đè I/T.
+  - Khi thiếu I/T, "|" đúng hơn l: Sirivennela có l −19,9° nhưng "|" 0°.
+- Các ca lệch lớn còn lại phần lớn do metadata khai sai, cả ba glyph đều đồng ý với nhau: Tinos ghi −16,3° nhưng vẽ −10°; Arvo Bold Italic ghi 0° nhưng vẽ −13°.
+- Tham chiếu slant: p1/p99 −28,7°/6,0° → −24,0°/2,1°, bớt nghiêng giả trên font đứng. n tăng 3.671 → 3.719.
+- Method đổi tên thành `I_T_stem_midline`.
+
+**Kiểm tra:**
+- cargo test --workspace: 707 pass, 0 fail; clippy sạch.
+- Test macOS (ignored, chạy local) pass.
+- Vitest 559; QA native 26/26.
+- reference-v1 dựng lại (core-0.4.3, 3.813 face).
