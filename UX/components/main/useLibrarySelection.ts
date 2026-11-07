@@ -115,6 +115,7 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
+      if (useUiStore.getState().compare) return; // thư viện đang ẩn sau màn Compare: phím thuộc về Compare
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"]')) return;

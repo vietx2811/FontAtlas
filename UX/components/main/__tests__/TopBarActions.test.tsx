@@ -39,11 +39,11 @@ describe('TopBarActions', () => {
     expect(screen.queryByText(/nên ≤ 4/)).toBeNull();
   });
 
-  it('Compare has no backend yet: it opens the nearest screen (first font, Anatomy) and says so', () => {
-    render(<TopBarActions />); pick(2);
+  it('Compare opens the Compare screen with the selected faces, first one as the base', () => {
+    render(<TopBarActions />); pick(3);
     fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
-    expect(useUiStore.getState()).toMatchObject({ selectedId: rowKey(rows[0]), panelTab: 'anat' });
-    expect(useNoticeStore.getState().notices[0].text).toMatch(/Compare/);
+    expect(useUiStore.getState().compare).toEqual(rows.slice(0, 3).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+    expect(useNoticeStore.getState().notices).toHaveLength(0);
   });
 
   it('more than 4: Compare stays enabled and a narrowing hint can cut the selection to 4', () => {
@@ -66,7 +66,7 @@ describe('TopBarActions', () => {
     fireEvent.keyDown(document.body, { key: 'P', shiftKey: true });
     expect(useUiStore.getState().panelTab).toBe('pair');
     fireEvent.keyDown(document.body, { key: 'C', shiftKey: true });
-    expect(useUiStore.getState().panelTab).toBe('anat');
+    expect(useUiStore.getState().compare).toHaveLength(2);
     useUiStore.getState().setPanelTab('spec');
     const input = screen.getByLabelText('x'); input.focus();
     fireEvent.keyDown(input, { key: 'P', shiftKey: true });
@@ -76,7 +76,7 @@ describe('TopBarActions', () => {
   it('⇧C does nothing for a single font (Compare needs 2+)', () => {
     render(<TopBarActions />); pick(1);
     fireEvent.keyDown(document.body, { key: 'C', shiftKey: true });
-    expect(useUiStore.getState().panelTab).not.toBe('anat');
+    expect(useUiStore.getState().compare).toBeNull();
   });
 
   it('buttons carry the shortcut in their tooltip', async () => {
