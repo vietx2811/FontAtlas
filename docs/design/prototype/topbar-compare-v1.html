@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FontAtlas · Top Bar Pair/Compare — prototype v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,700;1,400&family=Lora:ital,wght@0,400;0,700;1,400&family=Fraunces:ital,wght@0,400;0,700;1,400&family=Source+Serif+4:wght@400;700&family=Oswald:wght@400;600&display=swap">
+<style>
+/*
+  Top Bar Pair / Compare — prototype v1. Brief: docs/design/font-desk/08_topbar_compare_brief.md
+  · Nền token: UX/components/main/topbar.css + pairing-desk-v3.html. Số đo, class, confidence là DỮ LIỆU GIẢ; font Google là stand-in.
+  · Mọi chuỗi UI qua t(key) (dict EN/VI bên dưới) — bản React dùng i18n key cùng tên.
+  · URL: ?screen=library|compare &sel=0|1|2|3|4|6 &case=1 &n=2|3|4 (số cột Compare) &theme=dark &fit=xh &overlay=0 &cls=0
+*/
+:root{
+  --chrome:#F1EFEC; --hover:rgba(41,37,36,.06); --active:rgba(41,37,36,.10);
+  --sheet:#FAFAFA; --card:#FFFFFF; --page:#FFFFFF; --fg:#2A2A2A; --muted:#78716C; --border:#E7E5E4; --border-2:#D6D3D1; --surface-2:#F3F2F0;
+  --accent:#D4A574; --accent-ink:#9A6B3C; --accent-soft:#F5E6D3; --on:#3FA66B; --warn:#C2410C; --warn-soft:#FDEBDD; --up:#3F7F5F; --down:#9A4B2C;
+  --pop-shadow:0 14px 36px rgba(41,37,36,.18),0 2px 6px rgba(41,37,36,.08);
+  --font-ui:"Inter",-apple-system,BlinkMacSystemFont,sans-serif;
+  --side-w:232px; --r-sm:7px; --r-md:10px; --r-lg:14px; color-scheme:light;
+}
+[data-theme="dark"]{
+  --chrome:#171513; --hover:rgba(250,250,249,.06); --active:rgba(250,250,249,.11);
+  --sheet:#1C1917; --card:#23201E; --page:#F7F5F2; --fg:#F5F5F4; --muted:#A8A29E; --border:#2E2A27; --border-2:#3B3632; --surface-2:#2A2623;
+  --accent:#E0B07E; --accent-ink:#E0B07E; --accent-soft:rgba(224,176,126,.15); --on:#4ADE80; --warn:#FB923C; --warn-soft:rgba(251,146,60,.14); --up:#7FC29B; --down:#E9A07E;
+  --pop-shadow:0 16px 40px rgba(0,0,0,.55); color-scheme:dark;
+}
+@media (max-width:1100px){ :root{ --side-w:196px; } }
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{font:13px/1.4 var(--font-ui);background:var(--sheet);color:var(--fg);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.i.s{width:14px;height:14px}
+.app{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);height:100vh}
+/* Sidebar (rút gọn, chỉ để giữ ngữ cảnh) */
+.side{background:var(--chrome);border-right:1px solid var(--border);padding:44px 10px 12px;display:flex;flex-direction:column;gap:2px}
+.side .it{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:var(--r-sm);color:var(--fg)}
+.side .it.on{background:var(--active);font-weight:500}.side .it .n{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.side .cap{margin:14px 10px 4px;font-size:11px;color:var(--muted);letter-spacing:.04em}
+/* Top Bar */
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--sheet)}
+.topbar{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 12px 0 16px;flex-wrap:wrap;padding-block:8px;flex:none}
+.ttl{display:flex;align-items:baseline;gap:8px;width:120px;flex:none}.ttl h1{margin:0;font-size:14px;font-weight:600}.cnt{color:var(--muted);font-size:12px}
+.search{flex:1 1 140px;min-width:120px;max-width:440px;margin-inline:auto;display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:var(--r-md);background:var(--surface-2);color:var(--muted)}
+.kbd{font-size:10px;border:1px solid var(--border-2);border-radius:4px;padding:0 4px;line-height:15px;color:var(--muted);font-weight:500}
+.tbtn{height:30px;padding:0 10px;border-radius:var(--r-md);background:var(--surface-2);font-weight:600;font-size:12px;color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.seg{display:flex;gap:2px;padding:2px;border-radius:var(--r-md);background:var(--surface-2)}
+.seg button{width:28px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}.seg button[aria-pressed=true]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+/* Cụm hành động theo số chọn */
+.acts{display:flex;align-items:center;gap:6px;padding-left:8px;margin-left:2px;border-left:1px solid var(--border-2);animation:in .14s ease-out both}
+@keyframes in{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.acts{animation:none}}
+.sel{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 4px 0 9px;border-radius:13px;background:var(--accent-soft);color:var(--accent-ink);font-weight:600;font-size:12px;white-space:nowrap}
+.sel button{width:18px;height:18px;border-radius:9px;display:grid;place-items:center}.sel button:hover{background:var(--active)}
+.btn{height:30px;padding:0 12px;border-radius:var(--r-md);display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;white-space:nowrap;background:var(--surface-2)}
+.btn:hover{background:var(--active)}
+.btn.pri{background:var(--accent);color:#2a1d10}.btn.pri:hover{filter:brightness(.96)}
+.btn .kbd{margin-left:2px;border-color:currentColor;opacity:.55}
+.btn.dash{background:none;border:1px dashed var(--border-2)}
+@media (max-width:1100px){.btn .kbd{display:none}.btn.lbl-opt span.l{display:none}.btn.lbl-opt{padding:0 8px}.ttl{width:72px}.search .kbd{display:none}.search{min-width:96px}}
+.hintrow{flex-basis:100%;display:flex;align-items:center;gap:8px;color:var(--warn);font-size:12px;animation:in .14s ease-out both}
+.hintrow button{color:var(--accent-ink);text-decoration:underline}
+/* Library (stand-in) */
+.grid{flex:1;min-height:0;overflow:hidden;padding:4px 16px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-content:start}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;height:108px;display:flex;flex-direction:column;justify-content:space-between;position:relative}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.card .nm{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center}.card .pv{font-size:26px;white-space:nowrap;overflow:hidden;color:var(--page-ink,var(--fg))}
+.card .ck{position:absolute;right:10px;top:10px;width:16px;height:16px;border-radius:8px;border:1.5px solid var(--border-2);display:grid;place-items:center}
+.card.sel .ck{background:var(--accent);border-color:var(--accent);color:#2a1d10}
+/* Compare */
+.cmp{flex:1;min-height:0;display:flex;flex-direction:column}
+.cmp-h{display:flex;align-items:center;gap:10px;padding:8px 16px;min-height:48px;flex-wrap:wrap}
+.cmp-h h1{margin:0;font-size:14px;font-weight:600;margin-right:4px}
+.tog{display:flex;gap:2px;padding:2px;border-radius:var(--r-md);background:var(--surface-2)}
+.tog button{height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.tog button[aria-pressed=true]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sp{flex:1}
+.tip{position:relative}.tip:hover::after,.tip:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--fg);color:var(--sheet);font-size:11px;font-weight:500;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none}
+.cmp-body{flex:1;min-height:0;overflow:auto;padding:4px 16px 20px}
+.tbl{--hw:136px;display:grid;grid-template-columns:var(--hw) repeat(var(--n),minmax(150px,1fr));border:1px solid var(--border);border-radius:var(--r-lg);background:var(--card);overflow:hidden;min-width:min-content}
+.tbl>div{padding:8px 12px;border-bottom:1px solid var(--border);min-width:0}
+.tbl>div.rh{color:var(--muted);font-size:12px;position:sticky;left:0;background:var(--card);z-index:2;border-right:1px solid var(--border)}
+.rh b{display:block;color:var(--fg);font-weight:600;font-size:12px}.rh small{font-size:11px}
+.gh{grid-column:1/-1;padding:6px 12px!important;background:var(--surface-2);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.ch{display:flex;flex-direction:column;gap:2px;background:var(--card)}
+.ch .t{font-weight:600;font-size:13px;display:flex;gap:6px;align-items:center}.ch .m{font-size:11px;color:var(--muted)}
+.ch.base{background:repeating-linear-gradient(135deg,transparent 0 7px,var(--hover) 7px 8px)}
+.pg{background:var(--page);color:#1F1D1B}
+.pg .big{white-space:nowrap;overflow:visible;line-height:1.15}
+.vi-test{line-height:1;border-top:1px dashed var(--border-2);border-bottom:1px dashed var(--border-2);position:relative;padding:14px 0 4px;white-space:nowrap}
+.warn{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:2px 7px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:11px;font-weight:600}
+.ok{color:var(--up);font-size:11px;font-weight:600;display:inline-flex;gap:4px;align-items:center;margin-top:6px}
+.val{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:4px;flex-wrap:wrap}
+.val u{text-decoration:none;font-size:11px;font-weight:400;color:var(--muted)}
+.est{font-size:10px;font-weight:600;color:var(--accent-ink);background:var(--accent-soft);padding:1px 6px;border-radius:8px}
+.dl{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}.dl.up{color:var(--up)}.dl.dn{color:var(--down)}.dl.z{color:var(--muted);font-weight:500}
+.pbar{position:relative;height:4px;border-radius:2px;background:var(--surface-2);margin:8px 0 14px}
+.pbar i{position:absolute;top:-3px;width:2px;height:10px;border-radius:1px;background:var(--accent-ink)}
+.pbar em{position:absolute;top:8px;font-style:normal;font-size:10px;color:var(--muted);transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.cls{display:flex;flex-direction:column;gap:4px}
+.cls .c{font-weight:600;font-size:13px}.cls .sc{font-size:12px;color:var(--muted)}
+.conf{height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}.conf i{display:block;height:100%;background:var(--accent)}
+.unc{display:inline-flex;gap:6px;align-items:center;font-weight:600;color:var(--warn)}
+.na{color:var(--muted);font-size:12px;border:1px dashed var(--border-2);border-radius:8px;padding:6px 8px}
+.ovl svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:10px;font-size:11px;color:var(--muted);margin-top:4px}.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-0}
+.lic{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:var(--muted)}
+.foot{display:flex;gap:8px;align-items:center;margin:10px 2px 0;color:var(--muted);font-size:11px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--sheet);padding:8px 14px;border-radius:10px;font-size:12px;box-shadow:var(--pop-shadow);z-index:50}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const st = { screen: Q.get('screen') || 'library', sel: +(Q.get('sel') ?? 2), cs: Q.get('case') === '1', n: +(Q.get('n') || 3), fit: Q.get('fit') === 'xh', overlay: Q.get('overlay') !== '0', cls: Q.get('cls') !== '0' };
+if (Q.get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+
+/* i18n: khoá → chuỗi. Bản React dùng cùng khoá (topbar.*, compare.*). Thuật ngữ font giữ EN, gloss ở title. */
+const T = {
+  'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar', 'topbar.addCase': 'Add to Case',
+  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font — nên ≤ 4 để so rõ.', 'topbar.useFirst': 'Chỉ lấy 4 đầu', 'topbar.search': 'Tìm font', 'topbar.filter': 'Lọc',
+  'compare.title': 'Compare', 'compare.back': 'Quay lại thư viện', 'compare.sameSize': 'Same size', 'compare.matchXh': 'Match x-height', 'compare.overlay': 'Overlay', 'compare.baseline': 'Mốc',
+  'compare.png': 'PNG', 'compare.pdf': 'PDF', 'compare.mock': 'Bản mẫu — chưa xuất thật', 'compare.est': 'Ước lượng', 'compare.na': 'Không đo được',
+  'compare.sec.spec': 'Specimen', 'compare.sec.metrics': 'Số đo', 'compare.sec.class': 'Classification', 'compare.sec.meta': 'Meta',
+  'compare.row.line': 'Phở bò', 'compare.row.vi': 'Dấu chồng', 'compare.row.overlay': 'Overlay',
+  'compare.viWarn': 'Dấu tràn {p}%', 'compare.viOk': 'Dấu vừa khung', 'compare.uncertain': 'Uncertain', 'compare.conflict': 'Tín hiệu mâu thuẫn', 'compare.edited': 'Đã sửa', 'compare.license': 'Chỉ ghi chú, không chặn',
+  'compare.base': 'mốc', 'compare.pct': 'P{p}', 'compare.footnote': 'Δ so với mốc · thanh = vị trí trong thư viện (percentile)',
+};
+const t = (k, v = {}) => (T[k] ?? k).replace(/\{(\w+)\}/g, (_, x) => v[x]);
+const GLOSS = { 'x-height': 'cao chữ thường', 'cap height': 'cao chữ hoa', 'contrast ⊥': 'tương phản nét (vuông góc)', 'contrast H': 'tương phản ngang', 'slant I/T': 'độ nghiêng (I, T)', 'stress': 'trục nhấn', 'aperture': 'độ mở', 'serif foot': 'chân serif' };
+
+const IC = { cmp:'<rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/>', pair:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>', sim:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/><path d="M11 8v6M8 11h6"/>', plus:'<path d="M12 5v14M5 12h14"/>', x:'<path d="M6 6l12 12M18 6 6 18"/>', back:'<path d="m15 18-6-6 6-6"/>', dl:'<path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/>', alert:'<path d="M12 4 2.5 20h19Z"/><path d="M12 10v4M12 17.5v.01"/>', check:'<path d="m5 12.5 4.5 4.5L19 7"/>', anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v14M5 13a7 7 0 0 0 14 0M8 11h8"/>', search:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/>', grid:'<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>', list:'<path d="M5 7h14M5 12h14M5 17h14"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>' };
+const I = (n, s = '') => `<svg class="i ${s}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nf = (v, d) => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false }).format(v).replace('-', '−');
+
+/* DỮ LIỆU GIẢ — tên trường theo kế hoạch D1 (class, subclass, confidence, signals[]). Không phải font của chủ app. */
+const FONTS = [
+  { id: 'a', fam: 'Be Vietnam Pro', css: "'Be Vietnam Pro'", classificationInfo: { class: 'sans', label: 'Sans', subclass: 'Geometric', confidence: .82, signals: ['aperture','width','panose'], usage: ['Text','UI'], source: 'auto', autoClass: 'sans' }, m: { xh: .528, cap: .708, cp: 1.31, ch: 1.12, sl: 0, st: null, ap: 83, sf: 1.0 }, p: { xh: 58, cap: 49, cp: 8, ch: 6, sl: 50, st: null, ap: 71, sf: 5 }, viOver: 0, lic: 'OFL', foundry: 'ildeva' },
+  { id: 'b', fam: 'Playfair Display', css: "'Playfair Display'", classificationInfo: { class: 'serif', label: 'Serif', subclass: 'Didone/Modern', confidence: .94, signals: ['contrast','stress_deg','serif_foot'], usage: ['Display'], source: 'auto', autoClass: 'serif' }, m: { xh: .514, cap: .708, cp: 4.89, ch: 3.4, sl: 0, st: 89, ap: 62, sf: 2.69 }, p: { xh: 41, cap: 49, cp: 97, ch: 95, sl: 50, st: 96, ap: 18, sf: 88 }, viOver: 9, lic: 'OFL', foundry: 'Claus Eggers Sørensen' },
+  { id: 'c', fam: 'Fraunces', css: "'Fraunces'", classificationInfo: { class: 'serif', label: 'Serif', subclass: 'Humanist/Old-style', confidence: .71, signals: ['serif_foot','stress_deg'], usage: ['Text','Display'], source: 'override', autoClass: 'display' }, m: { xh: .464, cap: .7, cp: 2.4, ch: 1.9, sl: -1.5, st: 22, ap: 78, sf: 1.7 }, p: { xh: 18, cap: 44, cp: 63, ch: 58, sl: 31, st: 61, ap: 55, sf: 47 }, viOver: 0, lic: 'OFL', foundry: 'Undercase Type' },
+  { id: 'd', fam: 'Lora', css: "'Lora'", classificationInfo: { class: 'uncertain', label: 'Uncertain', subclass: null, confidence: .38, signals: ['serif_foot ↔ Panose'], usage: [], source: 'auto', autoClass: 'uncertain' }, m: { xh: .5, cap: .7, cp: 2.1, ch: 1.6, sl: 0, st: null, ap: 74, sf: 1.9 }, p: { xh: 33, cap: 47, cp: 52, ch: 49, sl: 50, st: null, ap: 44, sf: 52 }, viOver: 0, lic: 'OFL', foundry: 'Cyreal' },
+];
+const ROWS = [ // key, label, đơn vị, số lẻ, "ước lượng"
+  ['xh', 'x-height', 'em', 3], ['cap', 'cap height', 'em', 3], ['cp', 'contrast ⊥', '', 2], ['ch', 'contrast H', '', 2],
+  ['sl', 'slant I/T', '°', 1], ['st', 'stress', '°', 0, true], ['ap', 'aperture', '°', 0], ['sf', 'serif foot', '×', 2],
+];
+const NAMES = ['Phở bò Hà Nội', 'Ở Hà Nội'];
+
+/* ───────── Library ───────── */
+const LIB = [['Be Vietnam Pro', 'Regular'], ['Playfair Display', 'Bold'], ['Fraunces', 'Regular'], ['Lora', 'Italic'], ['Inter', 'Medium'], ['Source Serif 4', 'Regular'], ['Oswald', 'Regular'], ['Be Vietnam Pro', 'Bold'], ['Playfair Display', 'Italic'], ['Fraunces', 'Bold'], ['Lora', 'Regular'], ['Inter', 'Bold']];
+function actions() {
+  const n = st.sel, kb = k => `<span class="kbd">${k}</span>`;
+  if (n === 0) return '';
+  const btn = (ic, k, cls = '', kbd = '') => `<button class="btn ${cls} lbl-opt" data-tip="${esc(t('topbar.' + k))}${kbd ? ' · ' + kbd : ''}" aria-label="${esc(t('topbar.' + k))}">${I(ic, 's')}<span class="l">${t('topbar.' + k)}</span>${kbd ? kb(kbd) : ''}</button>`;
+  const pill = `<span class="sel">${t('topbar.selected', { n })}<button aria-label="${t('topbar.clear')}" data-tip="${t('topbar.clear')}">${I('x', 's')}</button></span>`;
+  let h = pill;
+  if (n === 1) h += btn('pair', 'pair', 'pri', '⇧P') + btn('sim', 'similar', '', '');
+  else h += btn('cmp', 'compare', 'pri', '⇧C') + btn('pair', 'pairThese', '', '⇧P');
+  if (st.cs) h += btn('plus', 'addCase', 'dash');
+  return `<div class="acts" role="group" aria-label="${t('topbar.pair')} / ${t('topbar.compare')}">${h}</div>`;
+}
+function library() {
+  const cards = LIB.map(([f, s], i) => { const on = i < Math.min(st.sel, 12); return `<div class="card ${on ? 'sel' : ''}"><span class="ck">${on ? I('check', 's') : ''}</span><div class="pv" style="font-family:'${f}';font-weight:${/Bold/.test(s) ? 700 : /Medium/.test(s) ? 500 : 400};font-style:${/Italic/.test(s) ? 'italic' : 'normal'}">${NAMES[0]}</div><div class="nm"><span>${f} ${s}</span></div></div>`; }).join('');
+  const hint = st.sel > 4 ? `<div class="hintrow">${I('info', 's')}${t('topbar.narrow', { n: st.sel })}<button>${t('topbar.useFirst')}</button></div>` : '';
+  return `<header class="topbar"><div class="ttl"><h1>Tất cả</h1><span class="cnt">91</span></div>
+    <div class="search">${I('search', 's')}<span style="flex:1">${t('topbar.search')}</span><span class="kbd">⌘K</span></div>
+    <button class="tbtn">Ặ vi</button><button class="tbtn">${t('topbar.filter')}</button>${actions()}
+    <div class="seg"><button aria-pressed="true" aria-label="Lưới">${I('grid')}</button><button aria-pressed="false" aria-label="Danh sách">${I('list')}</button></div>${hint}</header><div class="grid">${cards}</div>`;
+}
+
+/* ───────── Compare ───────── */
+const pct = (v, b) => b ? (v - b) / b * 100 : 0;
+function mCell(f, base, [k, , unit, d, est]) {
+  const v = f.m[k];
+  if (v === null) return `<div><span class="na">${t('compare.na')}</span></div>`;
+  let dl = '';
+  if (f !== base && base.m[k] !== null) {
+    const p = k === 'sl' ? v - base.m[k] : pct(v, base.m[k]);
+    const txt = k === 'sl' ? `${p >= 0 ? '+' : '−'}${nf(Math.abs(p), 1)}°` : `${p >= 0 ? '+' : '−'}${nf(Math.abs(p), Math.abs(p) < 10 ? 1 : 0)}%`;
+    const z = Math.abs(p) < (k === 'sl' ? .5 : 1);
+    dl = `<span class="dl ${z ? 'z' : p > 0 ? 'up' : 'dn'}">${z ? '±0' : 'Δ ' + txt}</span>`;
+  } else if (f === base) dl = `<span class="dl z">${t('compare.base')}</span>`;
+  const p = f.p[k];
+  return `<div><div class="val">${nf(v, d)}<u>${unit}</u>${est ? `<span class="est" data-tip="">${t('compare.est')}</span>` : ''} ${dl}</div><div class="pbar" aria-label="${t('compare.pct', { p })}"><i style="left:${p}%"></i><em style="left:${Math.min(92, Math.max(8, p))}%">${t('compare.pct', { p })}</em></div></div>`;
+}
+function overlaySVG(f, base) {
+  const W = 300, H = 96, y = 66, sz = 64, sc = st.fit ? base.m.xh / f.m.xh : 1, s2 = sz * (st.fit ? 1 : 1), sf = sz * (f === base ? 1 : sc);
+  const txt = 'Hxgặ';
+  const xhB = base.m.xh * sz, xhF = f.m.xh * sf;
+  return `<div class="ovl"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('compare.row.overlay')} ${esc(f.fam)}">
+    <line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--accent-ink)" stroke-width="1"/>
+    <line x1="0" x2="${W}" y1="${y - xhB}" y2="${y - xhB}" stroke="var(--border-2)" stroke-dasharray="3 3"/>
+    ${f === base ? '' : `<text x="8" y="${y}" font-size="${sz}" font-family="${base.css}" fill="#1F1D1B" opacity=".28">${txt}</text>`}
+    <text x="8" y="${y}" font-size="${sf}" font-family="${f.css}" fill="${f === base ? '#1F1D1B' : 'var(--accent-ink)'}" opacity="${f === base ? 1 : .85}">${txt}</text></svg>
+    ${f === base ? '' : `<div class="legend"><span><i style="background:#1F1D1B;opacity:.35"></i>${esc(base.fam)}</span><span><i style="background:var(--accent-ink)"></i>${esc(f.fam)}</span></div>`}</div>`;
+}
+function compare() {
+  const cols = FONTS.slice(0, st.n), base = cols[0], c = cols.length;
+  const SZ = 30;
+  const ch = cols.map((f, i) => `<div class="ch ${i === 0 ? 'base' : ''}"><div class="t">${i === 0 ? I('anchor', 's') : ''}${esc(f.fam)}</div><div class="m">${i === 0 ? t('compare.base') : f.foundry}</div></div>`).join('');
+  const cell = (fn) => cols.map(fn).join('');
+  const fs = f => SZ * (st.fit && f !== base ? base.m.xh / f.m.xh : 1);
+  let h = `<div class="tbl" style="--n:${c}"><div class="rh"></div>${ch}`;
+  h += `<div class="gh">${t('compare.sec.spec')}</div>`;
+  h += `<div class="rh"><b>${t('compare.row.line')}</b></div>` + cell(f => `<div class="pg"><div class="big" style="font-family:${f.css};font-size:${fs(f)}px">${NAMES[0]}</div></div>`);
+  if (st.overlay) h += `<div class="rh"><b>${t('compare.row.overlay')}</b><small>H x g ặ</small></div>` + cell(f => `<div class="pg">${overlaySVG(f, base)}</div>`);
+  h += `<div class="rh"><b>${t('compare.row.vi')}</b><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>` + cell(f => `<div class="pg"><div class="vi-test" style="font-family:${f.css};font-size:${Math.round(fs(f) * 1.1)}px;${f.viOver ? 'border-top-color:var(--warn);' : ''}">ỮẶỆỖỞ ươ</div>${f.viOver ? `<span class="warn">${I('alert', 's')}${t('compare.viWarn', { p: f.viOver })}</span>` : `<span class="ok">${I('check', 's')}${t('compare.viOk')}</span>`}</div>`);
+  h += `<div class="gh">${t('compare.sec.metrics')}</div>`;
+  for (const r of ROWS) h += `<div class="rh"><b>${r[1]}</b><small>${GLOSS[r[1]] || ''}</small></div>` + cell(f => mCell(f, base, r));
+  if (st.cls) {
+    h += `<div class="gh">${t('compare.sec.class')}</div><div class="rh"><b>class · subclass</b><small>confidence</small></div>` + cell(f => f.classificationInfo.class !== 'uncertain'
+      ? `<div class="cls"><span class="c">${f.classificationInfo.label}${f.classificationInfo.source === 'override' ? ` <span class="est" data-tip="auto: ${f.classificationInfo.autoClass}">${t('compare.edited')}</span>` : ''}</span><span class="sc">${f.classificationInfo.subclass}</span><div class="conf" aria-label="${Math.round(f.classificationInfo.confidence * 100)}%"><i style="width:${f.classificationInfo.confidence * 100}%"></i></div><span class="m" style="font-size:11px;color:var(--muted)">${nf(f.classificationInfo.confidence * 100, 0)}%</span></div>`
+      : `<div class="cls"><span class="unc">${I('alert', 's')}${t('compare.uncertain')}</span><span class="sc">${t('compare.conflict')}: ${f.classificationInfo.signals.join(', ')}</span></div>`);
+  }
+  h += `<div class="gh">${t('compare.sec.meta')}</div><div class="rh"><b>license</b></div>` + cell(f => `<div class="lic">${I('info', 's')}<span><b style="color:var(--fg)">${f.lic}</b><br>${t('compare.license')}</span></div>`);
+  h += '</div>';
+  return `<div class="cmp"><div class="cmp-h"><button class="tbtn tip" data-tip="${t('compare.back')} · Esc" aria-label="${t('compare.back')}">${I('back', 's')}</button><h1>${t('compare.title')} · ${c}</h1>
+    <div class="tog" role="group"><button aria-pressed="${!st.fit}" data-fit="0">${t('compare.sameSize')}</button><button aria-pressed="${st.fit}" data-fit="1">${t('compare.matchXh')}</button></div>
+    <div class="tog"><button aria-pressed="${st.overlay}" data-ov="1">${t('compare.overlay')}</button></div><span class="sp"></span>
+    <button class="btn tip" data-act="exp" data-tip="${t('compare.mock')}">${I('dl', 's')}${t('compare.png')}</button><button class="btn tip" data-act="exp" data-tip="${t('compare.mock')}">${I('dl', 's')}${t('compare.pdf')}</button></div>
+    <div class="cmp-body">${h}<div class="foot">${I('info', 's')}${t('compare.footnote')}</div></div></div>`;
+}
+
+function render() {
+  const side = `<aside class="side"><div class="it on">Tất cả<span class="n">91</span></div><div class="it">Yêu thích<span class="n">12</span></div><div class="it">Gần đây</div><div class="it">Đang bật<span class="n">4</span></div><div class="cap">NGUỒN</div><div class="it">Fonts<span class="n">70</span></div><div class="it">Dự án khách<span class="n">20</span></div></aside>`;
+  document.getElementById('app').innerHTML = side + `<div class="main">${st.screen === 'compare' ? compare() : library()}</div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.fit) { st.fit = b.dataset.fit === '1'; render(); }
+  else if (b.dataset.ov) { st.overlay = !st.overlay; render(); }
+  else if (b.dataset.act === 'exp') { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t('compare.mock'); document.body.append(d); setTimeout(() => d.remove(), 1600); }
+  else if (/Compare|Pair these/.test(b.getAttribute('aria-label') || '')) { st.screen = 'compare'; st.n = Math.max(2, Math.min(4, st.sel)); render(); }
+  else if (b.getAttribute('aria-label') === t('compare.back')) { st.screen = 'library'; render(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && st.screen === 'compare') { st.screen = 'library'; render(); }
+  else if (e.shiftKey && e.key.toLowerCase() === 'c' && st.sel >= 2) { st.screen = 'compare'; st.n = Math.max(2, Math.min(4, st.sel)); render(); }
+});
+render();
+if (Q.get('scroll')) document.querySelector('.cmp-body')?.scrollTo(0, 9999);
+</script>
+</body>
+</html>

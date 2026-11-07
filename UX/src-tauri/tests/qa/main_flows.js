@@ -14,6 +14,8 @@
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
     const picks = []; window.__FA_QA_PICKS__ = picks;
     await log('dialog-stub', true, 'window.__FA_QA_PICKS__');
+    // Script chạy ngay khi trang load xong: chờ React vẽ onboarding hoặc thư viện (máy bận có thể > 10 s).
+    await wait(() => document.querySelector('.fa-onb, .fa-lib'), 90000);
     // ONBOARDING
     let foldersDone = false;
     for (let i = 0; i < 60 && document.querySelector('.fa-onb'); i++) {
@@ -220,6 +222,15 @@
     const gear2 = document.querySelector('button[aria-label="Cài đặt"]'); hover(gear2); await wait(tip, 3000); await sleep(100); await snap('tooltip-dark'); unhover(gear2);
     document.documentElement.dataset.theme = 'light';
     await log('dark-snapshots', true, '');
+    // Nút sáng/tối ở sidebar phải đổi cả appearance cửa sổ native (lớp kính vibrancy của sidebar)
+    const themeBtn = document.querySelector('button[aria-label="Giao diện sáng/tối"]');
+    const nativeTheme = () => inv('plugin:window|theme', { label: 'main' }).catch(e => 'err:' + e);
+    const themeBefore = await nativeTheme();
+    themeBtn?.click(); await sleep(400);
+    const css1 = document.documentElement.dataset.theme, native1 = await nativeTheme();
+    themeBtn?.click(); await sleep(400);
+    const css2 = document.documentElement.dataset.theme, native2 = await nativeTheme();
+    await log('native-theme-follows', css1 === native1 && css2 === native2, { themeBefore, css1, native1, css2, native2 });
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

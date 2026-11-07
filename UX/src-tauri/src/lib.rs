@@ -54,6 +54,16 @@ mod qa_snapshot {
     use tauri::{Listener, Manager};
 
     pub fn listen(app: &tauri::AppHandle) {
+        // Cửa sổ QA bị che khi người dùng đang làm việc: App Nap hãm timer JS, kịch bản
+        // dừng giữa chừng (từng treo ở bước dark-snapshots). Giữ app thức trong suốt lượt QA.
+        {
+            use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+            let token = NSProcessInfo::processInfo().beginActivityWithOptions_reason(
+                NSActivityOptions::UserInitiated | NSActivityOptions::LatencyCritical,
+                &NSString::from_str("FontAtlas QA"),
+            );
+            std::mem::forget(token);
+        }
         let Some(dir) = std::env::var_os("FONTATLAS_DATA_DIR") else { return };
         let dir = std::path::PathBuf::from(dir);
         let h = app.clone();
@@ -77,6 +87,26 @@ mod qa_snapshot {
     }
 }
 
+#[cfg(debug_assertions)]
+mod qa {
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    pub static SCRIPT: OnceLock<String> = OnceLock::new();
+    pub static PAGE_LOADED: AtomicBool = AtomicBool::new(false);
+    static RAN: AtomicBool = AtomicBool::new(false);
+    /// Chạy script QA đúng một lần, khi đã có script và trang đã load.
+    pub fn run_if_ready<R: tauri::Runtime>(w: &tauri::WebviewWindow<R>) {
+        if !PAGE_LOADED.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(js) = SCRIPT.get()
+            && !RAN.swap(true, Ordering::SeqCst)
+        {
+            let _ = w.eval(js);
+        }
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol(fontatlas_preview::PREVIEW_SCHEME, |ctx, request, responder| {
@@ -97,18 +127,26 @@ pub fn run() {
             // trên IPC thật, cùng FONTATLAS_DATA_DIR tạm. Không có trong bản release.
             #[cfg(debug_assertions)]
             if let Some(path) = std::env::var_os("FONTATLAS_QA_SCRIPT") {
-                let js = std::fs::read_to_string(path)?;
-                let h = app.handle().clone();
+                let _ = qa::SCRIPT.set(std::fs::read_to_string(path)?);
                 #[cfg(target_os = "macos")]
                 qa_snapshot::listen(app.handle());
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(4));
-                    if let Some(w) = h.get_webview_window("main") {
-                        let _ = w.eval(&js);
-                    }
-                });
+                // Trang có thể đã load xong trước setup: thử chạy ngay nếu vậy.
+                if let Some(w) = app.get_webview_window("main") {
+                    qa::run_if_ready(&w);
+                }
             }
             Ok(())
+        })
+        // QA: chạy script khi trang load xong thay vì sau một khoảng chờ cố định
+        // (máy bận → trang load > 4 s → script cũ bị mất, QA treo không ghi bước nào).
+        .on_page_load(|_webview, _payload| {
+            #[cfg(debug_assertions)]
+            if _payload.event() == tauri::webview::PageLoadEvent::Finished {
+                qa::PAGE_LOADED.store(true, std::sync::atomic::Ordering::SeqCst);
+                if let Some(w) = _webview.app_handle().get_webview_window("main") {
+                    qa::run_if_ready(&w);
+                }
+            }
         })
         .invoke_handler(app_handler!())
         .build(tauri::generate_context!())
