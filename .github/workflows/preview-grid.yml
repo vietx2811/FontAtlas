@@ -1,5 +1,6 @@
 name: preview-grid
-on: [push, pull_request]
+# CI chạy trên máy: tools/ci/local_ci.sh. Workflow này chỉ chạy tay.
+on: workflow_dispatch
 jobs:
   rust:
     runs-on: ubuntu-latest
