@@ -127,3 +127,8 @@ Theo memory team-throttle: tối đa 2 worker chạy song song, worker và revie
 1. SelectionBar hiện khi chọn 1 font, hay chỉ thêm nút Pair ở detail panel?
 2. Ngưỡng accuracy phân loại.
 3. Thứ tự ưu tiên: dữ liệu (D) trước UI (A–C) như mục E?
+
+## 2026-11-09 — chủ app chốt
+
+- Ngưỡng subclass: chấp nhận mức hiện tại (khoảng 69% trên Regular, khoảng 61% trên mọi face). Class giữ ≥ 90%, CONF_MIN 0.88; phần thiếu tin cậy vẫn rơi vào Uncertain.
+- Ưu tiên tiếp theo: phát hành app (0.2.0). Brief starter và Case để sau.

@@ -56,7 +56,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({ onClose }) => {
                         </div>
                         <div>
                             <h1 className="text-lg font-bold text-stone-900">FontAtlas</h1>
-                            <p className="text-xs text-stone-500">Version 0.1.0</p>
+                            <p className="text-xs text-stone-500">Version 0.2.0</p>
                         </div>
                     </div>
                     <button
