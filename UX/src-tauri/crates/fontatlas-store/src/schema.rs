@@ -321,28 +321,50 @@ CREATE TABLE face_lang_state (
 
 
 /// Library v3 (0.3.0): dải trục `wght`/`wdth` của font Variable (từ `fvar`) để lọc giao khoảng bằng SQL.
-/// NULL = không phải Variable hoặc không có trục đó. Backfill từ `analyses.metadata_json` (bản mới nhất).
+/// NULL = không phải Variable hoặc không có trục đó. Backfill từ bản phân tích MỚI NHẤT của mỗi face
+/// (min và max luôn lấy từ cùng một hàng). Face Variable mà bản phân tích mới nhất hỏng JSON, không có
+/// `axes` hoặc không có bản phân tích thì không thể điền: đánh dấu `pipeline_state.version = 'axes-backfill'`
+/// ở dòng `load` của file để lần quét sau phân tích lại (xem `AXES_REANALYZE_MARK`).
 pub(crate) const LIBRARY_V3: &str = r#"
 ALTER TABLE faces ADD COLUMN wght_min REAL;
 ALTER TABLE faces ADD COLUMN wght_max REAL;
 ALTER TABLE faces ADD COLUMN wdth_min REAL;
 ALTER TABLE faces ADD COLUMN wdth_max REAL;
 CREATE INDEX faces_wght ON faces(wght_min, wght_max) WHERE wght_min IS NOT NULL;
-UPDATE faces SET wght_min = (SELECT json_extract(j.value,'$.min') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
-        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
-          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wght'
-        ORDER BY a.analyzed_at DESC LIMIT 1), wght_max = (SELECT json_extract(j.value,'$.max') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
-        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
-          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wght'
-        ORDER BY a.analyzed_at DESC LIMIT 1) WHERE is_variable = 1;
-UPDATE faces SET wdth_min = (SELECT json_extract(j.value,'$.min') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
-        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
-          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wdth'
-        ORDER BY a.analyzed_at DESC LIMIT 1), wdth_max = (SELECT json_extract(j.value,'$.max') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
-        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
-          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wdth'
-        ORDER BY a.analyzed_at DESC LIMIT 1) WHERE is_variable = 1;
+CREATE TEMP TABLE latest_meta AS
+  SELECT hash, face_index, mj FROM (
+    SELECT hash, face_index, CASE WHEN json_valid(metadata_json) THEN metadata_json END AS mj,
+           row_number() OVER (PARTITION BY hash, face_index ORDER BY analyzed_at DESC, rowid DESC) AS rn
+    FROM analyses)
+  WHERE rn = 1;
+CREATE TEMP TABLE face_axes AS
+  SELECT f.face_id AS face_id,
+         json_extract(j.value, '$.tag') AS tag,
+         json_extract(j.value, '$.min') AS mn,
+         json_extract(j.value, '$.max') AS mx
+  FROM faces f
+  JOIN files fi ON fi.file_id = f.file_id
+  JOIN latest_meta l ON l.hash = fi.hash AND l.face_index = f.face_index
+  JOIN json_each(l.mj, '$.axes') j
+  WHERE f.is_variable = 1;
+UPDATE faces SET
+  wght_min = (SELECT mn FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wght' LIMIT 1),
+  wght_max = (SELECT mx FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wght' LIMIT 1),
+  wdth_min = (SELECT mn FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wdth' LIMIT 1),
+  wdth_max = (SELECT mx FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wdth' LIMIT 1)
+WHERE is_variable = 1;
+UPDATE pipeline_state SET version = 'axes-backfill'
+WHERE stage = 'load' AND face_index = -1 AND hash IN (
+  SELECT fi.hash FROM faces f JOIN files fi ON fi.file_id = f.file_id
+  LEFT JOIN latest_meta l ON l.hash = fi.hash AND l.face_index = f.face_index
+  WHERE f.is_variable = 1
+    AND (l.mj IS NULL OR json_type(l.mj, '$.axes') IS NOT 'array'));
+DROP TABLE latest_meta;
+DROP TABLE face_axes;
 "#;
+
+/// Giá trị `pipeline_state.version` mà migration library v3 đặt để buộc phân tích lại.
+pub const AXES_REANALYZE_MARK: &str = "axes-backfill";
 
 pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3];
 /// Chỉ cho test: library.db ở v2 (trước dải trục).

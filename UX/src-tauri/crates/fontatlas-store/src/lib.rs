@@ -27,7 +27,7 @@ pub use fold::vi_fold;
 pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyPreview, LegacyResolve, legacy_preview};
 pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, ScannedFile};
 pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, PlaceholderProbe, RescanStats, RescanStatus, ScanPhase, ScanProgress, os_placeholder, walk_fonts};
-pub use query::{ClassAxis, DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, LangFilter, LangHit, MAX_LIMIT, SortKey, ViFilter, WIDTH_PCT, width_pct_span};
+pub use query::{ClassAxis, ClassHistogram, DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, LangFilter, LangHit, MAX_LIMIT, SortKey, ViFilter, WIDTH_PCT, width_pct_span};
 pub use langs::{LangCount, LangPending, LangProgress, LangRow};
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;

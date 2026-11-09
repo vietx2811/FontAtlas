@@ -6,6 +6,7 @@ import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
 import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
+import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './mockFilters';
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
@@ -133,8 +134,8 @@ export function createMockApi(o: MockOptions = {}): Api {
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
         (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
         (q.includeMissing || !r.missing) &&
-        (!q.weightClass || (r.weightClass != null && r.weightClass >= q.weightClass[0] && r.weightClass <= q.weightClass[1])) &&
-        (!q.widthClass || (r.widthClass != null && r.widthClass >= q.widthClass[0] && r.widthClass <= q.widthClass[1])) &&
+        (!q.weightClass || matchesWeight(r, q.weightClass, q.varAxisMatch?.wght ?? true)) &&
+        (!q.widthClass || matchesWidth(r, q.widthClass, q.varAxisMatch?.wdth ?? true)) &&
         (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
@@ -142,7 +143,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
       else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
       const offset = q.offset ?? 0;
-      const limit = Math.min(q.limit || 100, 1000);
+      const limit = q.limit === Infinity ? Infinity : Math.min(q.limit || 100, 1000); // Infinity chỉ dùng nội bộ cho thống kê
       return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r })) };
     },
     previewUrl: (row, { text, px }) => {
@@ -250,7 +251,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
     async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
     async axisStats(q = {}) {
-      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: 1000 });
+      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], weightClass: undefined, widthClass: undefined, offset: 0, limit: Infinity });
       return MEASURED_AXES.map(axis => {
         const values = items.flatMap(r => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? [a.rawValue] : []; }).sort((a, b) => a - b);
         const quantile = (p: number) => { if (!values.length) return null; const at = (values.length - 1) * p; const i = Math.floor(at); return values[i] + (values[Math.ceil(at)] - values[i]) * (at - i); };
@@ -259,27 +260,25 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async axisHistogram(q = {}, bins = 0) {
       const nb = bins === 0 ? 24 : Math.min(64, Math.max(2, bins));
-      const stats = await this.axisStats(q);
-      const out: AxisHistogramDto[] = [];
-      for (const st of stats) {
-        const { items } = await this.queryFaces({ ...q, rawAxisRanges: (q.rawAxisRanges ?? []).filter(r => r.axis !== st.axis), offset: 0, limit: 1000 });
-        const lo = st.p1 ?? 0, hi = st.p99 ?? 0, span = Math.max(hi - lo, Number.EPSILON), hist = new Array<number>(nb).fill(0);
-        let count = 0;
-        for (const r of items) {
-          const a = axesFor(r).find(a => a.key === st.axis);
-          if (a?.rawValue == null || a.quality === 'failed') continue;
-          hist[Math.min(nb - 1, Math.max(0, Math.floor(((a.rawValue - lo) / span) * nb)))]++; count++;
-        }
-        out.push({ axis: st.axis, unit: st.unit, count, lo, hi, bins: hist });
-      }
-      const klass = async (axis: 'weight_class' | 'width_class', key: 'weightClass' | 'widthClass', lo: number, hi: number, step: number) => {
-        const { items } = await this.queryFaces({ ...q, [key]: undefined, offset: 0, limit: 1000 });
-        const hist = new Array<number>(9).fill(0);
-        for (const r of items) { const v = r[key]; if (v != null) { const i = Math.round((v - lo) / step); if (i >= 0 && i < 9) hist[i]++; } }
-        out.push({ axis, unit: 'class', count: hist.reduce((x, y) => x + y, 0), lo, hi, bins: hist });
+      const ranges = q.rawAxisRanges ?? [];
+      // miền: bỏ MỌI bộ lọc trục (kể cả weight/width class); đếm: còn weight/width class, trừ khoảng của chính trục
+      const domainRows = (await this.queryFaces({ ...q, rawAxisRanges: [], weightClass: undefined, widthClass: undefined, offset: 0, limit: Infinity })).items;
+      const countRows = (await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: Infinity })).items;
+      const val = (r: FaceRow, axis: string) => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? a.rawValue : null; };
+      const out: AxisHistogramDto[] = MEASURED_AXES.map(axis => {
+        const others = ranges.filter(r => r.axis !== axis);
+        const domain = domainRows.flatMap(r => { const v = val(r, axis); return v == null ? [] : [v]; });
+        const counted = countRows.flatMap(r => { const v = val(r, axis); return v != null && others.every(f => { const x = val(r, f.axis); return x != null && x >= f.range[0] && x <= f.range[1]; }) ? [v] : []; });
+        return measuredHistogram(axis, MOCK_UNITS[axis], domain, counted, nb);
+      });
+      const klass = async (axis: 'weight' | 'width') => {
+        const own = axis === 'weight' ? 'weightClass' : 'widthClass';
+        const { items } = await this.queryFaces({ ...q, [own]: undefined, offset: 0, limit: Infinity });
+        const { bins: b, spanBins } = classBins(items, axis);
+        out.push({ axis: `${axis}_class`, unit: 'class', count: b.reduce((x, y) => x + y, 0), lo: axis === 'weight' ? 100 : 1, hi: axis === 'weight' ? 900 : 9, bins: b, spanBins, empty: spanBins.every(n => n === 0) });
       };
-      await klass('weight_class', 'weightClass', 100, 900, 100);
-      await klass('width_class', 'widthClass', 1, 9, 1);
+      await klass('weight');
+      await klass('width');
       return out;
     },
     async similarFamilies(face, opts = {}, q = {}) {

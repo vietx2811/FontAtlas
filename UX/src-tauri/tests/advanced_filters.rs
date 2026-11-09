@@ -15,11 +15,15 @@ fn fixture(name: &str) -> PathBuf {
 const FILES: [&str; 4] = ["roboto.ttf", "bebas_neue.ttf", "oswald_vf.ttf", "public_sans_vf.ttf"];
 
 fn state(root: &Path) -> Arc<AppState> {
+    state_with(root, &FILES)
+}
+
+fn state_with(root: &Path, files: &[&str]) -> Arc<AppState> {
     let st = AppState::new(AppDirs::under(&root.join("data")), Box::new(NoActivation));
     boot::run_boot(&st);
     let dir = root.join("Fonts");
     std::fs::create_dir_all(&dir).unwrap();
-    for f in FILES {
+    for f in files {
         std::fs::copy(fixture(f), dir.join(f)).unwrap();
     }
     sources::add_source(&st, dir.to_str().unwrap()).unwrap();
@@ -134,4 +138,116 @@ fn describe_axis_filters_are_also_excluded_from_their_own_histogram() {
     assert!(total < 4, "bộ lọc phải thu hẹp tập ({total})");
     assert_eq!(hist(&st, &q, "x_height_em").count, 4, "trục bị lọc không tự co");
     assert_eq!(hist(&st, &q, "stem").count as u64, total);
+}
+
+#[test]
+fn histogram_edge_cases_single_font_empty_axis_and_two_series() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state_with(td.path(), &["roboto.ttf"]);
+    let h = analysis::axis_histograms(&st, &FaceQueryDto::default(), 8).unwrap();
+    let stem = h.iter().find(|x| x.axis == "stem").unwrap();
+    // một font ⇒ mọi giá trị bằng nhau: miền nới ±0.5, vẫn đếm đủ
+    assert_eq!(stem.count, 1);
+    assert!((stem.hi - stem.lo - 1.0).abs() < 1e-5, "{} {}", stem.lo, stem.hi);
+    assert_eq!(stem.bins.iter().sum::<u32>(), 1);
+    assert_eq!(stem.bins, stem.span_bins);
+    assert!(!stem.empty);
+    // trục không có số đo ở font nào
+    let stress = h.iter().find(|x| x.axis == "stress_deg").unwrap();
+    assert!(stress.empty && stress.count == 0 && stress.bins.iter().all(|n| *n == 0), "{stress:?}");
+    // hai chuỗi của weight_class: Roboto tĩnh ⇒ giống nhau
+    let wc = h.iter().find(|x| x.axis == "weight_class").unwrap();
+    assert_eq!(wc.bins, wc.span_bins);
+    assert!(!wc.empty);
+}
+
+#[test]
+fn weight_histogram_counts_variable_span_in_second_series() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let h = analysis::axis_histograms(&st, &FaceQueryDto::default(), 8).unwrap();
+    let wc = h.iter().find(|x| x.axis == "weight_class").unwrap();
+    assert_eq!(wc.bins.iter().sum::<u32>(), 4, "mỗi font một lần ở instance mặc định");
+    // Public Sans wght 100–900 phủ cả chín nấc; Oswald 200–700 phủ nấc 2–7
+    assert!(wc.span_bins.iter().sum::<u32>() > wc.bins.iter().sum::<u32>());
+    assert!(wc.span_bins[8] >= 1, "nấc 900 có Public Sans");
+    assert_eq!(wc.bins[8], 0);
+    // kéo 700–900 thì vẫn thấy cột ở chuỗi span dù không face nào mặc định ở đó
+    let q = FaceQueryDto { weight_class: Some([700, 900]), ..Default::default() };
+    let h = analysis::axis_histograms(&st, &q, 8).unwrap();
+    let wc = h.iter().find(|x| x.axis == "weight_class").unwrap();
+    assert_eq!(wc.bins.iter().sum::<u32>(), 4, "histogram weight bỏ chính bộ lọc weight");
+    // miền của trục đo bỏ qua cả bộ lọc weight/width (cố định khi kéo), dù số đếm co lại
+    let all = analysis::axis_histograms(&st, &FaceQueryDto::default(), 8).unwrap();
+    let narrow = FaceQueryDto { weight_class: Some([100, 100]), var_axis_match: VarAxisMatchDto { wght: false, wdth: false }, ..Default::default() };
+    let n = analysis::axis_histograms(&st, &narrow, 8).unwrap();
+    let (a, b) = (all.iter().find(|x| x.axis == "stem").unwrap(), n.iter().find(|x| x.axis == "stem").unwrap());
+    assert_eq!((a.lo, a.hi), (b.lo, b.hi));
+    assert!(b.count < a.count);
+    let stats = analysis::axis_stats(&st, &narrow).unwrap();
+    assert_eq!(stats.iter().find(|x| x.axis == "stem").unwrap().count, a.count, "axis_stats cũng bỏ weight/width");
+}
+
+#[test]
+fn outlier_class_values_validate_and_clamp_consistently() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    for bad in [[0, 900], [50, 900], [100, 1000], [900, 100]] {
+        let q = FaceQueryDto { weight_class: Some(bad), ..Default::default() };
+        assert!(library::query_faces(&st, &q).is_err(), "{bad:?}");
+        assert!(analysis::axis_histograms(&st, &q, 8).is_err(), "{bad:?}");
+    }
+    let all = FaceQueryDto { weight_class: Some([100, 900]), var_axis_match: VarAxisMatchDto { wght: false, wdth: false }, ..Default::default() };
+    assert_eq!(library::query_faces(&st, &all).unwrap().total, 4, "kéo hết 100–900 không làm mất font nào có class hợp lệ");
+}
+
+/// Đo trên thư viện tổng hợp 20k face: `cargo test -p app --release --test advanced_filters -- --ignored --nocapture perf`.
+#[test]
+#[ignore = "đo hiệu năng"]
+fn perf_axis_histogram_20k_faces() {
+    use fontatlas_store::{Analysis, IngestItem, ScannedFile, Store};
+    let td = tempfile::tempdir().unwrap();
+    let data = td.path().join("data");
+    {
+        let (mut s, _) = Store::open(&data).unwrap();
+        let base = fontatlas_core::analyze_path(&fixture("public_sans_vf.ttf")).unwrap();
+        for chunk in (0..20_000).collect::<Vec<u32>>().chunks(500) {
+            let items: Vec<IngestItem> = chunk
+                .iter()
+                .map(|i| {
+                    let mut r = base.clone();
+                    let mut h = [0u8; 32];
+                    h[..4].copy_from_slice(&i.to_le_bytes());
+                    h[31] = 0xA5;
+                    r.hash_hex = h.iter().map(|b| format!("{b:02x}")).collect();
+                    for f in &mut r.faces {
+                        f.metadata.family = Some(format!("Fam{}", i % 4000));
+                        f.metadata.typographic_family = None;
+                        f.metadata.weight_class = Some(100 + (i % 9) as u16 * 100);
+                    }
+                    IngestItem {
+                        source_id: 1,
+                        file: ScannedFile { path: format!("/perf/{i}.ttf").into(), size: 1, mtime_ns: 1 },
+                        hash: h,
+                        analysis: Analysis::Report(r),
+                    }
+                })
+                .collect();
+            s.ingest(items, 10).unwrap();
+        }
+    }
+    let st = AppState::new(AppDirs::under(&data), Box::new(NoActivation));
+    boot::run_boot(&st);
+    assert!(wait_rebuilt(&st, Duration::from_secs(300)));
+    let q = FaceQueryDto {
+        weight_class: Some([600, 900]),
+        raw_axis_ranges: vec![RawAxisRangeDto { axis: "stem".into(), range: [0.0, 10.0] }],
+        ..Default::default()
+    };
+    let t = std::time::Instant::now();
+    let h = analysis::axis_histograms(&st, &q, 24).unwrap();
+    let ms = t.elapsed().as_millis();
+    eprintln!("axis_histogram 20k faces: {ms} ms ({} trục)", h.len());
+    assert_eq!(h.len(), 18);
+    assert!(ms < 3000);
 }

@@ -31,6 +31,8 @@ pub struct OpenReport {
     pub user_backup: Option<PathBuf>,
     /// Số override phân loại `display` bị bỏ khi lên user.db v5 (Display không còn là class).
     pub dropped_display_overrides: u32,
+    /// Số file Variable library v3 không điền được dải trục (metadata hỏng/thiếu `axes`) và đã đánh dấu phân tích lại.
+    pub axes_reanalyze_files: u32,
 }
 
 impl Store {
@@ -64,15 +66,29 @@ impl Store {
             uc.execute_batch("PRAGMA journal_mode=WAL;")?;
         }
 
+        // library trước v3 → sau migration đếm số file Variable phải phân tích lại (không điền được dải trục)
+        let lib_was_before_v3 = lib_path.exists()
+            && Connection::open_with_flags(&lib_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .and_then(|c| user_version(&c))
+                .is_ok_and(|v| (1..3).contains(&v));
         let conn = match open_library(&lib_path, &dir.join(BACKUP_DIR)) {
             Ok(c) => c,
             Err(e) if library_is_broken(&e) => {
+                eprintln!("library.db dựng lại vì: {e}");
                 move_aside(&lib_path)?;
                 rep.library_recreated = true;
                 open_library(&lib_path, &dir.join(BACKUP_DIR))?
             }
             Err(e) => return Err(e),
         };
+        if lib_was_before_v3 && !rep.library_recreated {
+            rep.axes_reanalyze_files = conn
+                .query_row("SELECT count(*) FROM pipeline_state WHERE stage='load' AND version=?1", [crate::schema::AXES_REANALYZE_MARK], |r| r.get(0))
+                .unwrap_or(0);
+            if rep.axes_reanalyze_files > 0 {
+                eprintln!("library v2→v3: {} file Variable thiếu dải trục (metadata hỏng/không có axes), sẽ phân tích lại ở lần quét tới", rep.axes_reanalyze_files);
+            }
+        }
         conn.execute("ATTACH DATABASE ?1 AS u", [user_path.to_string_lossy()])?;
         conn.execute_batch(
             "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;

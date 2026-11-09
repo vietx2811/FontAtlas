@@ -75,7 +75,7 @@ pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<
         let b = crate::services::analysis::bundle(state)?;
         let raw: Vec<(i64, f32)> = b
             .index
-            .profiles_for_test()
+            .profiles()
             .iter()
             .filter(|p| raw_matches(p, &q.raw_axis_ranges))
             .filter_map(|p| Some((b.meta.get(&p.key)?.face_id, 1.0)))
@@ -225,14 +225,10 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
 }
 
 pub(crate) fn validate_class_ranges(q: &FaceQueryDto) -> Result<(), CmdError> {
-    if let Some([a, b]) = q.weight_class
-        && (a == 0 || a > b || b > 1000)
-    {
-        return Err(CmdError::invalid_arg("weightClass: khoảng không hợp lệ (1–1000, min ≤ max)"));
+    if q.weight_class.is_some_and(|[a, b]| a > b || !(100..=900).contains(&a) || !(100..=900).contains(&b)) {
+        return Err(CmdError::invalid_arg("weightClass: khoảng không hợp lệ (100–900, min ≤ max)"));
     }
-    if let Some([a, b]) = q.width_class
-        && (a == 0 || a > b || b > 9)
-    {
+    if q.width_class.is_some_and(|[a, b]| a == 0 || a > b || b > 9) {
         return Err(CmdError::invalid_arg("widthClass: khoảng không hợp lệ (1–9, min ≤ max)"));
     }
     Ok(())

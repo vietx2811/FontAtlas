@@ -273,6 +273,8 @@ pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto
     query.axis_filters.clear();
     query.raw_axis_ranges.clear();
     query.hard.clear();
+    query.weight_class = None;
+    query.width_class = None;
     let allowed = crate::services::library::matching_keys(state, &query)?;
     Ok(AxisId::ALL
         .iter()
@@ -280,7 +282,7 @@ pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto
         .map(|a| {
             let values = b
                 .index
-                .profiles_for_test()
+                .profiles()
                 .iter()
                 .filter(|p| allowed.contains(&p.key))
                 .filter_map(|p| crate::services::library::raw_reading(p, a))
@@ -293,75 +295,139 @@ pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto
 pub const HISTOGRAM_BINS_DEFAULT: u32 = 24;
 const HISTOGRAM_BINS_MAX: u32 = 64;
 
+/// Chạy `f` trên kết nối đọc riêng (không giữ khoá Store toàn cục); không mở được thì dùng Store chính.
+fn with_reader<T>(state: &AppState, f: impl Fn(&fontatlas_store::Store) -> Result<T, fontatlas_store::StoreError>) -> Result<T, CmdError> {
+    match fontatlas_store::Store::open_reader(&state.dirs.data).and_then(|r| f(&r)) {
+        Ok(v) => Ok(v),
+        Err(_) => state.with_store(|s| Ok(f(s)?)),
+    }
+}
+
+/// Bin của `v` trong `[lo, hi]` chia `nb` phần đều; ngoài miền (kể cả đúng `hi`) dồn vào bin cuối/đầu.
+pub fn bin_of(v: f32, lo: f32, hi: f32, nb: usize) -> usize {
+    let span = (hi - lo).max(f32::EPSILON);
+    (((v - lo) / span) * nb as f32).floor().clamp(0.0, (nb - 1) as f32) as usize
+}
+
 /// Histogram cho 16 trục đo + `weight_class` + `width_class`. Mỗi trục đếm trên tập thoả mọi bộ lọc
-/// khác, **trừ chính trục đó** (bộ lọc `rawAxisRanges`/`axisFilters` cùng trục và `weightClass`/`widthClass`).
-/// Miền `lo..hi` lấy p1–p99 của tập chưa áp bộ lọc trục nào, nên không đổi khi người dùng kéo slider.
-/// `bins` = 0 → mặc định 24; tối đa 64. Trục rời rạc luôn 9 bin.
+/// khác, **trừ chính trục đó** (`rawAxisRanges`/`axisFilters` cùng trục, và `weightClass`/`widthClass`).
+/// Miền `lo..hi` lấy p1–p99 của tập chưa áp bộ lọc trục nào (kể cả weight/width class), nên không đổi
+/// khi người dùng kéo slider. `bins` = 0 → 24; tối đa 64. Trục rời rạc luôn 9 bin.
+///
+/// Một lượt qua các profile: mỗi face tính tập trục mà nó TRƯỢT; nó được đếm cho trục `a` khi tập đó ⊆ {a}.
 pub fn axis_histograms(state: &AppState, q: &FaceQueryDto, bins: u32) -> Result<Vec<AxisHistogramDto>, CmdError> {
-    use crate::services::library::{matching_keys, raw_matches, raw_reading, scope_of, to_store_query};
-    crate::services::library::validate_raw_ranges(&q.raw_axis_ranges)?;
-    crate::services::library::validate_class_ranges(q)?;
+    use crate::index_bundle::describe_filters;
+    use crate::services::library::{raw_reading, scope_of, to_store_query, validate_class_ranges, validate_raw_ranges};
+    validate_raw_ranges(&q.raw_axis_ranges)?;
+    validate_class_ranges(q)?;
     let nb = if bins == 0 { HISTOGRAM_BINS_DEFAULT } else { bins.clamp(2, HISTOGRAM_BINS_MAX) } as usize;
     let b = bundle(state)?;
-    // Tập nền: mọi bộ lọc không phải trục đo (text, class, ngôn ngữ, license, weight/width class…).
-    let mut base = q.clone();
-    base.axis_filters.clear();
-    base.raw_axis_ranges.clear();
-    base.hard.clear();
-    let allowed = matching_keys(state, &base)?;
-    let id_of = |k: &fontatlas_index::FaceKey| b.meta.get(k).map(|m| m.face_id);
+
+    // Hai tập face_id, lấy một lần: `dom` bỏ MỌI bộ lọc trục (miền), `cnt` còn weight/width class (đếm trục đo).
+    let mut dom_q = q.clone();
+    dom_q.axis_filters.clear();
+    dom_q.raw_axis_ranges.clear();
+    dom_q.hard.clear();
+    dom_q.weight_class = None;
+    dom_q.width_class = None;
+    let mut cnt_q = dom_q.clone();
+    cnt_q.weight_class = q.weight_class;
+    cnt_q.width_class = q.width_class;
+    let (dom_scope, cnt_scope) = (scope_of(state, &dom_q)?, scope_of(state, &cnt_q)?);
+    let (dom_sq, cnt_sq) = (to_store_query(&dom_q), to_store_query(&cnt_q));
+    let full_scope = scope_of(state, q)?;
+    let full_sq = to_store_query(q);
+    let (dom_ids, cnt_ids, w_hist, wd_hist) = with_reader(state, |s| {
+        let dom: std::collections::HashSet<i64> = s.face_ids_matching(&dom_sq, dom_scope.as_deref())?.into_iter().collect();
+        let cnt: std::collections::HashSet<i64> = s.face_ids_matching(&cnt_sq, cnt_scope.as_deref())?.into_iter().collect();
+        let wh = s.class_histogram(&full_sq, full_scope.as_deref(), fontatlas_store::ClassAxis::Weight)?;
+        let wd = s.class_histogram(&full_sq, full_scope.as_deref(), fontatlas_store::ClassAxis::Width)?;
+        Ok((dom, cnt, wh, wd))
+    })?;
+
+    // Bộ lọc mô tả (describe) gom theo trục: mỗi nhóm đánh giá riêng để biết trục nào bị trượt.
     let hard = crate::services::describe::hard_of(&q.hard);
-    let scope_ids = |filters: &[AxisFilterDto]| -> Option<std::collections::HashSet<i64>> {
-        b.scope_for(filters, &hard).map(|v| v.into_iter().map(|x| x.0).collect())
-    };
-    let full_scope = scope_ids(&q.axis_filters);
-    let mut out: Vec<AxisHistogramDto> = Vec::new();
-    for a in AxisId::ALL.iter().copied() {
-        let key = a.key();
-        let others: Vec<RawAxisRangeDto> = q.raw_axis_ranges.iter().filter(|r| r.axis != key).cloned().collect();
-        let other_filters: Vec<AxisFilterDto> = q.axis_filters.iter().filter(|f| f.axis != key).cloned().collect();
-        let own_scope;
-        let scope = if other_filters.len() == q.axis_filters.len() {
-            &full_scope
-        } else {
-            own_scope = scope_ids(&other_filters);
-            &own_scope
-        };
-        let mut domain: Vec<f32> = Vec::new();
-        let mut counted: Vec<f32> = Vec::new();
-        for p in b.index.profiles_for_test().iter().filter(|p| allowed.contains(&p.key)) {
-            let Some(v) = raw_reading(p, a) else { continue };
-            domain.push(v);
-            let ok = raw_matches(p, &others) && scope.as_ref().is_none_or(|s| id_of(&p.key).is_some_and(|id| s.contains(&id)));
-            if ok {
-                counted.push(v);
+    let mut groups: Vec<(String, Vec<fontatlas_describe::AxisFilter>)> = Vec::new();
+    for f in describe_filters(&q.axis_filters) {
+        match groups.iter_mut().find(|g| g.0 == f.axis) {
+            Some(g) => g.1.push(f),
+            None => groups.push((f.axis.clone(), vec![f])),
+        }
+    }
+    let axes = AxisId::ALL;
+    let mut domain: Vec<Vec<f32>> = vec![Vec::new(); axes.len()];
+    let mut counted: Vec<Vec<f32>> = vec![Vec::new(); axes.len()];
+    for p in b.index.profiles() {
+        let Some(m) = b.meta.get(&p.key) else { continue };
+        if !dom_ids.contains(&m.face_id) {
+            continue;
+        }
+        let in_cnt = cnt_ids.contains(&m.face_id);
+        let mut failed: Vec<&str> = Vec::new();
+        let mut global_ok = in_cnt;
+        if global_ok && !hard.is_empty() && !b.passes(p, &[], &hard) {
+            global_ok = false;
+        }
+        if global_ok {
+            for r in &q.raw_axis_ranges {
+                let ok = axes
+                    .iter()
+                    .find(|a| a.key() == r.axis)
+                    .and_then(|a| raw_reading(p, *a))
+                    .is_some_and(|v| v >= r.range[0] && v <= r.range[1]);
+                if !ok {
+                    failed.push(r.axis.as_str());
+                }
+            }
+            for (axis, fl) in &groups {
+                if !b.passes(p, fl, &[]) {
+                    failed.push(axis.as_str());
+                }
             }
         }
-        let st = stats_of(a, domain);
-        let (lo, hi) = (st.p1.or(st.min).unwrap_or(0.0), st.p99.or(st.max).unwrap_or(0.0));
-        let span = (hi - lo).max(f32::EPSILON);
-        let mut hist = vec![0u32; nb];
-        for v in &counted {
-            let i = (((v - lo) / span) * nb as f32).floor().clamp(0.0, (nb - 1) as f32) as usize;
-            hist[i] += 1;
+        for (i, a) in axes.iter().enumerate() {
+            let Some(v) = raw_reading(p, *a) else { continue };
+            domain[i].push(v);
+            if global_ok && failed.iter().all(|x| *x == a.key()) {
+                counted[i].push(v);
+            }
         }
-        out.push(AxisHistogramDto { axis: key.into(), unit: st.unit, count: counted.len() as u32, lo, hi, bins: hist });
     }
-    // Trục rời rạc: đếm bằng SQL trên tập (trừ chính nó), áp luôn các bộ lọc trục đo (scope).
-    let scope = scope_of(state, q)?;
-    let sq = to_store_query(q);
-    for (axis, which, lo, hi) in [
-        ("weight_class", fontatlas_store::ClassAxis::Weight, 100.0, 900.0),
-        ("width_class", fontatlas_store::ClassAxis::Width, 1.0, 9.0),
-    ] {
-        let bins = state.with_store(|s| Ok(s.class_histogram(&sq, scope.as_deref(), which)?))?;
+
+    let mut out: Vec<AxisHistogramDto> = Vec::with_capacity(axes.len() + 2);
+    for (i, a) in axes.iter().enumerate() {
+        let empty = domain[i].is_empty();
+        let st = stats_of(*a, std::mem::take(&mut domain[i]));
+        let (mut lo, mut hi) = (st.p1.or(st.min).unwrap_or(0.0), st.p99.or(st.max).unwrap_or(0.0));
+        if !empty && hi <= lo {
+            // mọi giá trị (hoặc p1 = p99) bằng nhau: nới để có độ rộng và để slider không suy biến
+            (lo, hi) = (lo - 0.5, lo + 0.5);
+        }
+        let mut hist = vec![0u32; nb];
+        for v in &counted[i] {
+            hist[bin_of(*v, lo, hi, nb)] += 1;
+        }
+        out.push(AxisHistogramDto {
+            axis: a.key().into(),
+            unit: st.unit,
+            count: counted[i].len() as u32,
+            lo,
+            hi,
+            span_bins: hist.clone(),
+            bins: hist,
+            empty,
+        });
+    }
+    for (axis, h, lo, hi) in [("weight_class", w_hist, 100.0, 900.0), ("width_class", wd_hist, 1.0, 9.0)] {
         out.push(AxisHistogramDto {
             axis: axis.into(),
             unit: "class".into(),
-            count: bins.iter().sum(),
+            count: h.default_bins.iter().sum(),
             lo,
             hi,
-            bins: bins.to_vec(),
+            bins: h.default_bins.to_vec(),
+            span_bins: h.span_bins.to_vec(),
+            empty: h.span_bins.iter().all(|n| *n == 0),
         });
     }
     Ok(out)
@@ -1051,5 +1117,21 @@ mod extras_tests {
         assert!(new.extras_available);
         assert_eq!(new.kerning.source, "gpos");
         assert!(!extras_of(&json!({ "extras": null })).extras_available);
+    }
+}
+
+#[cfg(test)]
+mod histogram_tests {
+    use super::bin_of;
+
+    #[test]
+    fn bins_clamp_at_both_ends_and_include_hi() {
+        assert_eq!(bin_of(0.0, 0.0, 1.0, 4), 0);
+        assert_eq!(bin_of(0.24, 0.0, 1.0, 4), 0);
+        assert_eq!(bin_of(0.25, 0.0, 1.0, 4), 1);
+        assert_eq!(bin_of(1.0, 0.0, 1.0, 4), 3, "v == hi vào bin cuối, không tràn");
+        assert_eq!(bin_of(5.0, 0.0, 1.0, 4), 3);
+        assert_eq!(bin_of(-5.0, 0.0, 1.0, 4), 0);
+        assert_eq!(bin_of(2.0, 2.0, 2.0, 4), 0, "miền suy biến không chia cho 0");
     }
 }
