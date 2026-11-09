@@ -41,7 +41,7 @@ fn migration_v1_to_v2_backs_up_and_keeps_data() {
     let (s, rep) = Store::open(d.path()).unwrap();
     assert!(!rep.library_recreated, "migration thành công, không dựng lại");
     let v: i64 = s.conn().query_row("PRAGMA main.user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(v, 2);
+    assert_eq!(v, i64::from(fontatlas_store::LIBRARY_VERSION));
     let size: i64 = s.conn().query_row("SELECT size FROM files", [], |r| r.get(0)).unwrap();
     assert_eq!(size, 7, "dữ liệu cũ nguyên vẹn");
     for t in ["face_langs", "face_lang_state"] {

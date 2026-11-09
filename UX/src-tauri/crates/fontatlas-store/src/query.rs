@@ -69,6 +69,57 @@ pub struct FaceQuery {
     pub lang_any: bool,
     /// Ngôn ngữ để điền `FaceRow::lang_hit` (chỉ báo trên thẻ).
     pub badge_lang: Option<String>,
+    /// usWeightClass, khoảng đóng trong 100..=900 (giá trị ghi 1–9 coi như ×100).
+    pub weight_class: Option<[u16; 2]>,
+    /// usWidthClass, khoảng đóng trong 1..=9.
+    pub width_class: Option<[u16; 2]>,
+    /// Font Variable cũng khớp `weight_class` khi dải trục `wght` giao khoảng chọn.
+    pub var_weight: bool,
+    /// Như trên cho `wdth` (quy % về class theo bảng OS/2, xem `WIDTH_PCT`).
+    pub var_width: bool,
+}
+
+/// `wdth` (%) ứng với usWidthClass 1..=9 theo OS/2.
+pub const WIDTH_PCT: [f64; 9] = [50.0, 62.5, 75.0, 87.5, 100.0, 112.5, 125.0, 150.0, 200.0];
+
+/// Khoảng `wdth` (%) mà các class a..=b phủ: ranh giới là trung điểm giữa hai class liền kề.
+pub fn width_pct_span(a: u16, b: u16) -> (f64, f64) {
+    let (a, b) = (a.clamp(1, 9) as usize - 1, b.clamp(1, 9) as usize - 1);
+    let lo = if a == 0 { WIDTH_PCT[0] } else { (WIDTH_PCT[a - 1] + WIDTH_PCT[a]) / 2.0 };
+    let hi = if b == 8 { WIDTH_PCT[8] } else { (WIDTH_PCT[b] + WIDTH_PCT[b + 1]) / 2.0 };
+    (lo, hi)
+}
+
+/// usWeightClass chuẩn hoá: font cũ ghi 1–9 → ×100; 0/NULL → NULL; giá trị lẻ (250) giữ nguyên.
+pub(crate) const WEIGHT_NORM: &str =
+    "(CASE WHEN f.weight_class BETWEEN 1 AND 9 THEN f.weight_class * 100 WHEN f.weight_class > 0 THEN f.weight_class END)";
+
+/// Điều kiện lớp weight: instance mặc định nằm trong khoảng, hoặc (nếu `var`) dải `wght` giao khoảng.
+pub(crate) fn weight_cond(r: [u16; 2], var: bool, p: &mut Vec<Value>) -> String {
+    let (a, b) = (r[0].min(r[1]) as i64, r[0].max(r[1]) as i64);
+    p.push(Value::Integer(a));
+    p.push(Value::Integer(b));
+    let base = format!("{WEIGHT_NORM} BETWEEN ? AND ?");
+    if !var {
+        return format!("({base})");
+    }
+    p.push(Value::Integer(b));
+    p.push(Value::Integer(a));
+    format!("({base} OR (f.wght_min IS NOT NULL AND f.wght_min <= ? AND f.wght_max >= ?))")
+}
+
+pub(crate) fn width_cond(r: [u16; 2], var: bool, p: &mut Vec<Value>) -> String {
+    let (a, b) = (r[0].min(r[1]).max(1) as i64, r[0].max(r[1]).min(9) as i64);
+    p.push(Value::Integer(a));
+    p.push(Value::Integer(b));
+    let base = "f.width_class BETWEEN ? AND ?".to_string();
+    if !var {
+        return format!("({base})");
+    }
+    let (lo, hi) = width_pct_span(a as u16, b as u16);
+    p.push(Value::Real(hi));
+    p.push(Value::Real(lo));
+    format!("({base} OR (f.wdth_min IS NOT NULL AND f.wdth_min <= ? AND f.wdth_max >= ?))")
 }
 
 impl FaceQuery {
@@ -201,6 +252,14 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
         let parts: Vec<String> = q.langs.iter().map(|lf| one(lf, &mut p)).collect();
         w.push(if q.lang_any { format!("({})", parts.join(" OR ")) } else { parts.join(" AND ") });
     }
+    if let Some(r) = q.weight_class {
+        let c = weight_cond(r, q.var_weight, &mut p);
+        w.push(c);
+    }
+    if let Some(r) = q.width_class {
+        let c = width_cond(r, q.var_width, &mut p);
+        w.push(c);
+    }
     (w.join(" AND "), p)
 }
 
@@ -230,7 +289,67 @@ fn user_order(q: &FaceQuery, scoped: bool) -> String {
     }
 }
 
+/// Trục rời rạc của OS/2 có histogram theo nấc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassAxis {
+    Weight,
+    Width,
+}
+
 impl Store {
+    /// Histogram 9 nấc (usWeightClass 100..900 hoặc usWidthClass 1..9; index 0 = nấc đầu) trên tập `q`
+    /// BỎ điều kiện chính trục đó. Tính theo instance mặc định (font Variable đếm một lần ở class của nó).
+    /// Weight lẻ (250) làm tròn về trăm gần nhất; face không có giá trị bị bỏ qua.
+    pub fn class_histogram(
+        &self,
+        q: &FaceQuery,
+        scope: Option<&[(i64, f32)]>,
+        axis: ClassAxis,
+    ) -> Result<[u32; 9], StoreError> {
+        let mut q = q.clone();
+        let col = match axis {
+            ClassAxis::Weight => {
+                q.weight_class = None;
+                WEIGHT_NORM.to_string()
+            }
+            ClassAxis::Width => {
+                q.width_class = None;
+                "f.width_class".to_string()
+            }
+        };
+        let (w, p) = where_clause(&q);
+        let refs: Vec<&dyn ToSql> = p.iter().map(|v| v as &dyn ToSql).collect();
+        let from = if scope.is_some() {
+            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+        } else {
+            "faces f JOIN files fi ON fi.file_id = f.file_id"
+        };
+        let sql = format!("SELECT {col}, count(*) FROM {from} WHERE {w} AND {col} IS NOT NULL GROUP BY {col}");
+        if let Some(sc) = scope {
+            self.load_scope(sc)?;
+        }
+        let out = (|| -> Result<[u32; 9], StoreError> {
+            let mut st = self.conn.prepare(&sql)?;
+            let rows = st.query_map(refs.as_slice(), |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
+            let mut bins = [0u32; 9];
+            for r in rows {
+                let (v, n) = r?;
+                let k = match axis {
+                    ClassAxis::Weight => ((v as f64 / 100.0).round() as i64).clamp(1, 9),
+                    ClassAxis::Width => v,
+                };
+                if (1..=9).contains(&k) {
+                    bins[k as usize - 1] += n as u32;
+                }
+            }
+            Ok(bins)
+        })();
+        if scope.is_some() {
+            self.clear_scope();
+        }
+        out
+    }
+
     /// Nạp `temp.scope` (thay nội dung cũ). Gọi `clear_scope` khi xong.
     pub(crate) fn load_scope(&self, sc: &[(i64, f32)]) -> Result<(), StoreError> {
         self.conn.execute_batch(

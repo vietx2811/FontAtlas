@@ -319,7 +319,38 @@ CREATE TABLE face_lang_state (
 ) WITHOUT ROWID;
 "#;
 
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2];
+
+/// Library v3 (0.3.0): dải trục `wght`/`wdth` của font Variable (từ `fvar`) để lọc giao khoảng bằng SQL.
+/// NULL = không phải Variable hoặc không có trục đó. Backfill từ `analyses.metadata_json` (bản mới nhất).
+pub(crate) const LIBRARY_V3: &str = r#"
+ALTER TABLE faces ADD COLUMN wght_min REAL;
+ALTER TABLE faces ADD COLUMN wght_max REAL;
+ALTER TABLE faces ADD COLUMN wdth_min REAL;
+ALTER TABLE faces ADD COLUMN wdth_max REAL;
+CREATE INDEX faces_wght ON faces(wght_min, wght_max) WHERE wght_min IS NOT NULL;
+UPDATE faces SET wght_min = (SELECT json_extract(j.value,'$.min') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
+        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
+          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wght'
+        ORDER BY a.analyzed_at DESC LIMIT 1), wght_max = (SELECT json_extract(j.value,'$.max') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
+        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
+          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wght'
+        ORDER BY a.analyzed_at DESC LIMIT 1) WHERE is_variable = 1;
+UPDATE faces SET wdth_min = (SELECT json_extract(j.value,'$.min') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
+        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
+          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wdth'
+        ORDER BY a.analyzed_at DESC LIMIT 1), wdth_max = (SELECT json_extract(j.value,'$.max') FROM analyses a, json_each(CASE WHEN json_valid(a.metadata_json) THEN a.metadata_json ELSE '{}' END,'$.axes') j
+        WHERE json_valid(a.metadata_json) AND a.hash = (SELECT hash FROM files WHERE file_id = faces.file_id)
+          AND a.face_index = faces.face_index AND json_extract(j.value,'$.tag') = 'wdth'
+        ORDER BY a.analyzed_at DESC LIMIT 1) WHERE is_variable = 1;
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3];
+/// Chỉ cho test: library.db ở v2 (trước dải trục).
+pub fn create_library_v2_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch(LIBRARY_V2).expect("LIBRARY_V2");
+    c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
+}
 /// Chỉ cho test: library.db ở v1 (trước độ phủ ngôn ngữ).
 pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
