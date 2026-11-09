@@ -231,6 +231,74 @@
     await snap('topbar-actions-2');
     await log('topbar-actions-two', !!pcGroup && actNames.includes('Compare') && actNames.includes('Pair these') && !actNames.includes('Find similar') && /2 chọn/.test(pcGroup.textContent), { actNames, text: pcGroup?.textContent });
 
+    // ACTIVE (2c): công tắc có nhãn, trạng thái + phạm vi, nút trên thẻ, Top Bar, ⌘⇧A, cả family. Engine CoreText THẬT nhưng chỉ font fixture trong thư mục QA;
+    // mọi bước trả về trạng thái "tắt" và cuối cùng kiểm tra không còn font nào bật (phạm vi Persistent chỉ bật thoáng qua rồi đổi lại).
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const waitActive = async (pred, ms = 15000) => { const t0 = Date.now(); let last = null; while (Date.now() - t0 < ms) { last = await actOn(); if (pred(last)) return last; await sleep(200); } return last; };
+      const row = () => document.querySelector('aside.fa-panel [data-testid=active-row]');
+      const sw = () => row()?.querySelector('[data-testid=active-switch]');
+      const status = () => row()?.querySelector('[data-testid=active-status]')?.textContent;
+      await wait(row, 10000);
+      const termA2 = await termCheck('[data-testid=active-row] [data-term]');
+      await log('active-peek-labelled', !!sw() && sw().getAttribute('aria-label') === 'Active' && sw().getAttribute('aria-checked') === 'false' && status() === 'Chưa bật' && termA2.n === 1 && termA2.bad.length === 0 && termA2.art === 1, { aria: sw()?.getAttribute('aria-label'), checked: sw()?.getAttribute('aria-checked'), status: status(), termA2 });
+      sw().click();
+      await wait(() => status() === 'Đang bật · phiên này', 15000);
+      let st = await waitActive(x => x.length === 1);
+      await snap('active-peek-on');
+      await log('active-peek-on-session', status() === 'Đang bật · phiên này' && sw().getAttribute('aria-checked') === 'true' && st.length === 1 && st[0].scope === 'session', { status: status(), state: st.map(x => [x.hashHex.slice(0, 8), x.scope, x.status]) });
+      const scopeBtn = () => row()?.querySelector('[data-testid=active-scope]');
+      scopeBtn()?.click();
+      await wait(() => status() === 'Luôn bật', 15000);
+      st = await waitActive(x => x.length === 1 && x[0].scope === 'persistent');
+      const persistOk = status() === 'Luôn bật' && st.length === 1 && st[0].scope === 'persistent' && sw().getAttribute('aria-checked') === 'true';
+      scopeBtn()?.click();
+      await wait(() => status() === 'Đang bật · phiên này', 15000);
+      st = await waitActive(x => x.length === 1 && x[0].scope === 'session');
+      await log('active-peek-scope', persistOk && status() === 'Đang bật · phiên này' && st.length === 1 && st[0].scope === 'session', { persistOk, status: status(), state: st.map(x => [x.scope, x.status]) });
+      // Thẻ: chấm xanh của font đang bật + nút nguồn trên thẻ thứ hai.
+      const c0 = cells()[0], c1 = cells()[1];
+      const dot = c0.querySelector('[data-testid=active-dot]');
+      const powBtn = c1.querySelector('[data-testid=cell-active]');
+      await log('active-card-controls', !!dot && !!powBtn && powBtn.getAttribute('aria-pressed') === 'false' && c0.querySelector('[data-testid=cell-active]')?.getAttribute('aria-pressed') === 'true', { dot: !!dot, pow: !!powBtn, p1: powBtn?.getAttribute('aria-pressed') });
+      powBtn.click();
+      st = await waitActive(x => x.length === 2);
+      await wait(() => cells()[1]?.querySelector('[data-testid=active-dot]'), 8000);
+      await snap('active-cards-on');
+      await log('active-card-toggle', st.length === 2 && !!cells()[1].querySelector('[data-testid=active-dot]') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { n: st.length, selection: document.querySelector('[data-testid=selection-count]')?.textContent });
+      // Top Bar: cả lựa chọn đang bật → nút Deactivate; bấm → tắt hết; bấm Activate → bật hết; ⌘⇧A → tắt.
+      const tbBtn = () => document.querySelector('header.fa-topbar [data-testid=topbar-activate]');
+      const lbl = () => tbBtn()?.getAttribute('aria-label');
+      const labelOk1 = lbl() === 'Deactivate';
+      tbBtn().click();
+      st = await waitActive(x => x.length === 0); await wait(() => lbl() === 'Activate', 8000);
+      const offOk = st.length === 0 && lbl() === 'Activate';
+      tbBtn().click();
+      st = await waitActive(x => x.length === 2); await wait(() => lbl() === 'Deactivate', 8000);
+      const onOk = st.length === 2 && lbl() === 'Deactivate';
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'A', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+      st = await waitActive(x => x.length === 0);
+      await log('active-topbar-multi', labelOk1 && offOk && onOk && st.length === 0, { labelOk1, offOk, onOk, afterShortcut: st.length });
+      // Cả family: nút cạnh StyleDropdown bật mọi kiểu của family (≥ 2 file), bấm lại tắt hết.
+      const famBtn = () => document.querySelector('aside.fa-panel [data-testid=family-active]');
+      const styleCount = Number((document.querySelector('aside.fa-panel .fa-dd-btn .cnt')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      famBtn()?.click();
+      st = await waitActive(x => x.length >= 1 && (styleCount <= 1 || x.length >= 2) && famBtn()?.getAttribute('aria-pressed') === 'true');
+      const famOn = !!famBtn() && famBtn().getAttribute('aria-pressed') === 'true';
+      await snap('active-family-on');
+      famBtn()?.click();
+      const stOff = await waitActive(x => x.length === 0);
+      await wait(() => famBtn()?.getAttribute('aria-pressed') === 'false', 8000);
+      await log('active-family', famOn && stOff.length === 0 && famBtn()?.getAttribute('aria-pressed') === 'false', { styleCount, onCount: st.length, famOn, offCount: stOff.length });
+      // Dark: ảnh panel + thẻ đang bật.
+      sw().click(); await waitActive(x => x.length === 1);
+      const themeAct = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400);
+      await snap('active-peek-dark');
+      if (themeAct) document.documentElement.dataset.theme = themeAct; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      sw().click(); const fin = await waitActive(x => x.length === 0);
+      await log('active-clean', fin.length === 0, { left: fin.map(x => [x.hashHex.slice(0, 8), x.scope]) });
+    }
+
     // Compare (⇧C / nút) với 2 font: màn Compare thật, số đo thật, Esc quay lại giữ vùng chọn
     const compareBtn = [...(pcGroup?.querySelectorAll('button') ?? [])].find(x => x.getAttribute('aria-label') === 'Compare');
     compareBtn?.click();
