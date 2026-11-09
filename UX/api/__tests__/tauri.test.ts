@@ -31,6 +31,7 @@ describe('query_faces', () => {
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [],
       langs: [], langMode: 'all', badgeLang: null,
+      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
     });
   });
 
@@ -57,6 +58,9 @@ describe('round2 contracts', () => {
     const api = createTauriApi();
     const q = { italic: true, sourceIds: [2], rawAxisRanges: [{ axis: 'slant_deg', range: [-25.5, 15] as [number, number] }], offset: 6, limit: 6 };
     expect(toFaceQueryDto(q).rawAxisRanges).toEqual(q.rawAxisRanges);
+    await api.axisStats(q);
+    await api.axisHistogram(q, 12);
+    expect(last()).toEqual({ cmd: 'axis_histogram', args: { q: toFaceQueryDto(q), bins: 12 } });
     await api.axisStats(q);
     expect(last()).toEqual({ cmd: 'axis_stats', args: { q: toFaceQueryDto(q) } });
     const face = { hashHex: 'ab', faceIndex: 2 };

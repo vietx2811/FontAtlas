@@ -14,6 +14,8 @@ export type FaceQuery = {
   classes?: string[]; subclasses?: string[]; traits?: string[];
   /** 0.3.0 (Hyperglot): lọc ngôn ngữ; `all` = đủ mọi ngôn ngữ (mặc định), `any` = ít nhất một; `badgeLang` = ngôn ngữ trên thẻ (mặc định vie). */
   langs?: LangFilterDto[]; langMode?: 'all' | 'any'; badgeLang?: string;
+  /** 0.3.0 (advanced filters): usWeightClass 100–900 / usWidthClass 1–9, khoảng đóng. `varAxisMatch` (mặc định bật cả hai): font Variable khớp khi dải trục wght/wdth giao khoảng. */
+  weightClass?: [number, number]; widthClass?: [number, number]; varAxisMatch?: { wght: boolean; wdth: boolean };
 };
 
 export type FaceRow = {

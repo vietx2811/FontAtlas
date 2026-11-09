@@ -435,6 +435,19 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 p99: Some(1.196),
             }]),
         ),
+        (
+            "axis_histogram",
+            v(&vec![AxisHistogramDto {
+                axis: "weight_class".into(),
+                unit: "class".into(),
+                count: 5,
+                lo: 100.0,
+                hi: 900.0,
+                bins: vec![1, 0, 0, 3, 0, 0, 1, 0, 0],
+                span_bins: vec![2, 1, 1, 3, 1, 1, 2, 1, 1],
+                empty: false,
+            }]),
+        ),
         ("pair_candidates", v(&vec![candidate()])),
         (
             "saved_pairs",

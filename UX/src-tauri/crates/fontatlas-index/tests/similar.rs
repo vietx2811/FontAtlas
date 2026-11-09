@@ -146,7 +146,7 @@ fn non_latin_not_comparable() {
         synth_full("C", "Regular", 0.16),
     ]);
     let cjk = ix
-        .profiles_for_test()
+        .profiles()
         .iter()
         .find(|p| p.family == "CJK")
         .unwrap()

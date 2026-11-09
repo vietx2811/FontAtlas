@@ -57,7 +57,7 @@ fn snapshot() -> String {
             ] {
                 for project_vi in [false, true] {
                     let qk = ix
-                        .profiles_for_test()
+                        .profiles()
                         .iter()
                         .find(|p| p.key.hash.starts_with(&format!("{q}/")))
                         .map(|p| p.key.clone())
