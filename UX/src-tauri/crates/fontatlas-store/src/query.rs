@@ -1,5 +1,5 @@
 //! Truy vấn lưới thư viện: tìm, lọc, sắp xếp, phân trang phía backend.
-use rusqlite::ToSql;
+use rusqlite::{OptionalExtension, ToSql};
 use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,21 @@ pub enum ViFilter {
     Supported,
 }
 
+/// Lọc theo ngôn ngữ (Hyperglot): `near_ok` = chấp nhận mức near (ngược lại chỉ full).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LangFilter {
+    pub code: String,
+    pub near_ok: bool,
+}
+
+/// Mức độ phủ đã lưu của một face với một ngôn ngữ (chỉ có khi ≥ near).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LangHit {
+    pub level: String,
+    pub have: u32,
+    pub total: u32,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FaceQuery {
@@ -48,6 +63,12 @@ pub struct FaceQuery {
     pub descending: bool,
     pub offset: u32,
     pub limit: u32,
+    /// Ngôn ngữ cần có (xem `lang_any`); chỉ face đã tính độ phủ mới khớp.
+    pub langs: Vec<LangFilter>,
+    /// true = OR giữa các ngôn ngữ, false = AND.
+    pub lang_any: bool,
+    /// Ngôn ngữ để điền `FaceRow::lang_hit` (chỉ báo trên thẻ).
+    pub badge_lang: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -73,6 +94,9 @@ pub struct FaceRow {
     pub missing: bool,
     pub is_favorite: bool,
     pub added_at: i64,
+    /// Độ phủ đã lưu với `FaceQuery::badge_lang` (None: không hỏi, chưa tính, hoặc dưới near).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang_hit: Option<LangHit>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,7 +108,7 @@ pub struct FacePage {
 }
 
 /// Điều kiện WHERE + tham số theo đúng thứ tự `?`.
-fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
+pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     let mut w: Vec<String> = vec!["1=1".into()];
     let mut p: Vec<Value> = Vec::new();
     let in_list = |n: usize| vec!["?"; n].join(",");
@@ -146,6 +170,18 @@ fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     if !q.include_missing {
         w.push("EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)".into());
     }
+    if !q.langs.is_empty() {
+        let one = |lf: &LangFilter, p: &mut Vec<Value>| {
+            p.push(Value::Text(lf.code.clone()));
+            format!(
+                "EXISTS (SELECT 1 FROM face_langs fl WHERE fl.hash = fi.hash AND fl.face_index = f.face_index \
+                 AND fl.lang = ?{})",
+                if lf.near_ok { "" } else { " AND fl.level = 'full'" }
+            )
+        };
+        let parts: Vec<String> = q.langs.iter().map(|lf| one(lf, &mut p)).collect();
+        w.push(if q.lang_any { format!("({})", parts.join(" OR ")) } else { parts.join(" AND ") });
+    }
     (w.join(" AND "), p)
 }
 
@@ -176,6 +212,27 @@ fn user_order(q: &FaceQuery, scoped: bool) -> String {
 }
 
 impl Store {
+    /// Nạp `temp.scope` (thay nội dung cũ). Gọi `clear_scope` khi xong.
+    pub(crate) fn load_scope(&self, sc: &[(i64, f32)]) -> Result<(), StoreError> {
+        self.conn.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS scope(face_id INTEGER PRIMARY KEY, score REAL NOT NULL);
+             DELETE FROM temp.scope;",
+        )?;
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut ins = tx.prepare_cached("INSERT OR REPLACE INTO temp.scope(face_id, score) VALUES (?1, ?2)")?;
+            for &(id, score) in sc {
+                ins.execute(rusqlite::params![id, score as f64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub(crate) fn clear_scope(&self) {
+        let _ = self.conn.execute("DELETE FROM temp.scope", []);
+    }
+
     pub fn query_faces(&self, q: &FaceQuery) -> Result<FacePage, StoreError> {
         self.query_faces_scoped(q, None)
     }
@@ -185,18 +242,7 @@ impl Store {
     pub fn query_faces_scoped(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<FacePage, StoreError> {
         let scoped = scope.is_some();
         if let Some(sc) = scope {
-            self.conn.execute_batch(
-                "CREATE TEMP TABLE IF NOT EXISTS scope(face_id INTEGER PRIMARY KEY, score REAL NOT NULL);
-                 DELETE FROM temp.scope;",
-            )?;
-            let tx = self.conn.unchecked_transaction()?;
-            {
-                let mut ins = tx.prepare_cached("INSERT OR REPLACE INTO temp.scope(face_id, score) VALUES (?1, ?2)")?;
-                for &(id, score) in sc {
-                    ins.execute(rusqlite::params![id, score as f64])?;
-                }
-            }
-            tx.commit()?;
+            self.load_scope(sc)?;
         }
         let page = self.query_faces_inner(q, scoped);
         if scoped {
@@ -262,13 +308,28 @@ impl Store {
                     missing: r.get(15)?,
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
+                    lang_hit: None,
                 },
             ))
         })?;
         let mut items = Vec::new();
+        let mut badge = match q.badge_lang.as_deref() {
+            Some(_) => Some(self.conn.prepare(
+                "SELECT level, have, total FROM face_langs WHERE hash = ?1 AND face_index = ?2 AND lang = ?3",
+            )?),
+            None => None,
+        };
         for row in rows {
             let (_, h, mut fr) = row?;
-            fr.hash_hex = hex_of(&hash_from_blob(h)?);
+            let hash = hash_from_blob(h)?;
+            fr.hash_hex = hex_of(&hash);
+            if let (Some(st), Some(lang)) = (badge.as_mut(), q.badge_lang.as_deref()) {
+                fr.lang_hit = st
+                    .query_row(rusqlite::params![&hash[..], fr.face_index, lang], |r| {
+                        Ok(LangHit { level: r.get(0)?, have: r.get(1)?, total: r.get(2)? })
+                    })
+                    .optional()?;
+            }
             items.push(fr);
         }
         Ok(FacePage { total: total.max(0) as u64, offset: q.offset, items })

@@ -64,12 +64,12 @@ impl Store {
             uc.execute_batch("PRAGMA journal_mode=WAL;")?;
         }
 
-        let conn = match open_library(&lib_path) {
+        let conn = match open_library(&lib_path, &dir.join(BACKUP_DIR)) {
             Ok(c) => c,
             Err(e) if library_is_broken(&e) => {
                 move_aside(&lib_path)?;
                 rep.library_recreated = true;
-                open_library(&lib_path)?
+                open_library(&lib_path, &dir.join(BACKUP_DIR))?
             }
             Err(e) => return Err(e),
         };
@@ -139,7 +139,7 @@ fn check_user_version(user_path: &Path) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn open_library(path: &Path) -> Result<Connection, StoreError> {
+fn open_library(path: &Path, backup_dir: &Path) -> Result<Connection, StoreError> {
     let c = Connection::open(path)?;
     c.busy_timeout(BUSY_TIMEOUT)?;
     let tables: i64 = c.query_row("SELECT count(*) FROM sqlite_schema", [], |r| r.get(0))?;
@@ -148,7 +148,7 @@ fn open_library(path: &Path) -> Result<Connection, StoreError> {
         c.execute_batch("PRAGMA page_size=16384;")?;
     }
     c.execute_batch("PRAGMA journal_mode=WAL;")?;
-    migrate(&c, "library", LIBRARY_MIGRATIONS, None)?;
+    migrate(&c, "library", LIBRARY_MIGRATIONS, Some(backup_dir))?;
     Ok(c)
 }
 
