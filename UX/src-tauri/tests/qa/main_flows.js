@@ -253,7 +253,7 @@
     const addBtn = [...document.querySelectorAll('.cmp-tbl button')].find(b => b.getAttribute('aria-label') === 'Thêm font');
     addBtn?.click();
     const dlg = await wait(() => document.querySelector('.cmp-picker'), 8000);
-    const opt = await wait(() => dlg?.querySelector('[role=option] button'), 15000);
+    const opt = await wait(() => dlg?.querySelector('button[role=option]'), 15000);
     const optName = opt?.textContent;
     await snap('compare-v2-picker');
     opt?.click(); await wait(() => heads().length === 3, 15000);
@@ -279,6 +279,8 @@
     const ed = document.querySelector('.cmp-edit'); ed.focus();
     ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 229, isComposing: true, bubbles: true, cancelable: true })); await sleep(300);
     await log('compare-esc-ime-stays-open', !!document.querySelector('.cmp-tbl') && document.activeElement === ed, { open: !!document.querySelector('.cmp-tbl') });
+    ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(200); // Esc thường trong ô: chỉ blur, màn vẫn mở
+    await log('compare-esc-in-field-blurs', document.activeElement !== ed && !!document.querySelector('.cmp-tbl'), {});
     setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Phở bò Hà Nội'); await sleep(300);
     // H7: hàng Vietnamese có TermTip "Stacked diacritics" + chữ "dấu chồng"; ký tự dấu chồng được đánh dấu
     const viHead = document.querySelector('[data-row="specimen.vi"]');
