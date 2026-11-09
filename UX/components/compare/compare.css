@@ -39,7 +39,6 @@
 .cmp-dl.zero { color: var(--faint); font-weight: 500; }
 .cmp-pbar { position: relative; height: 4px; border-radius: 2px; background: var(--surface-2); margin: 8px 0 14px; }
 .cmp-pbar i { position: absolute; top: -3px; width: 2px; height: 10px; border-radius: 1px; background: var(--accent-ink); }
-.cmp-pbar em { position: absolute; top: 8px; transform: translateX(-50%); font-style: normal; font-size: 10px; color: var(--faint); }
 .cmp-na { display: flex; align-items: center; gap: 2px; width: fit-content; max-width: 100%; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
 .cmp-cls { display: flex; flex-direction: column; gap: 3px; }
 .cmp-cls .c { font-weight: 600; font-size: 13px; }

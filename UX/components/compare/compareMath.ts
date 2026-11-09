@@ -34,3 +34,17 @@ export function fitScale(baseXh: number | null, xh: number | null): number {
 
 export const percentLabel = (p: number | null): string => (p === null ? '' : `P${Math.round(Math.min(100, Math.max(0, p)))}`);
 export const rowUnit = (cells: CompareMetric[]): string | null => cells.find(c => c.value !== null)?.unit ?? cells.find(c => c.unit)?.unit ?? null;
+
+/** Trục của thanh đo: min–max của chính các font đang so sánh, nới ~10% mỗi đầu. Một giá trị, hoặc mọi giá trị bằng nhau → null (không vẽ thanh). */
+export const AXIS_PAD = 0.1;
+export type AxisRange = { lo: number; hi: number };
+export function axisRange(values: ReadonlyArray<number | null | undefined>): AxisRange | null {
+  const v = values.filter((x): x is number => x != null && Number.isFinite(x));
+  if (v.length < 2) return null;
+  const min = Math.min(...v); const max = Math.max(...v);
+  if (max - min <= 1e-9) return null;
+  const pad = (max - min) * AXIS_PAD;
+  return { lo: min - pad, hi: max + pad };
+}
+/** Vị trí 0–100 (%) của giá trị trên trục. */
+export const axisPos = (v: number, r: AxisRange): number => Math.min(100, Math.max(0, ((v - r.lo) / (r.hi - r.lo)) * 100));

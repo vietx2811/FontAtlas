@@ -11,4 +11,5 @@ export const COMPARE_V2 = {
   'compare.missing': 'Thiếu: {chars}', 'compare.edit': 'Sửa chữ mẫu (áp dụng cho mọi cột)',
   'compare.ov.col': 'Chồng font này lên Overlay', 'compare.ov.col.off': 'Bỏ font này khỏi Overlay', 'compare.ov.max': 'Overlay tối đa {n} font',
   'compare.ov.empty': 'Chọn font bằng nút mắt trên tiêu đề cột để chồng chúng lên nhau.',
+  'compare.pbar.tip': 'Thanh so các font đang xem (min–max); percentile là vị trí trong cả thư viện', 'compare.pbar.aria': 'Vị trí giữa các font đang so sánh',
 } as const;

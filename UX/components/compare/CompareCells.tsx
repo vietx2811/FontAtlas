@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { Tooltip } from '../ui/Tooltip';
 import type { Api } from '../../api';
 import { useUiStore } from '../../store/ui';
 import type { CompareFace, CompareMetric } from '../../api/compare';
@@ -10,7 +11,7 @@ import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
 import { NoteMark } from '../ui/noteMark';
 import { missingList, useMissingChars } from './glyphCoverage';
-import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
+import { axisPos, deltaOf, deltaText, xhOk, type AxisRange } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
 export const OVERLAY_TEXT = 'Hxgă';
@@ -145,19 +146,24 @@ function ViArt({ face, fam, size }: { face: CompareFace; fam: string | null; siz
   );
 }
 
-export function MetricCell({ k, m, base, isBase }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean }): React.JSX.Element {
+export function MetricCell({ k, m, base, isBase, range }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean; range: AxisRange | null }): React.JSX.Element {
   if (m.value === null) return <div className="cmp-na"><span>{t('compare.na')}</span>{m.reason && <NoteMark inline kind="info" text={m.reason} />}</div>;
   const d = isBase ? null : deltaOf(k, m, base);
   const dt = d ? deltaText(d) : null;
   const baseMissing = !isBase && base.value === null;
   const p = m.percentile;
+  const pl = p === null ? null : t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) });
   return (
     <div className="cmp-metric">
       <div className="cmp-val"><b>{numberText(m.value, m.unit)}</b><u>{unitText(m.unit)}</u>
         {m.quality === 'estimated' && <NoteMark inline kind="info" text={t('compare.est')} />}
         {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : <span className="cmp-dl zero" title={baseMissing ? t('compare.baseNa') : t('compare.noDelta')}>—</span>}
       </div>
-      {p !== null && <div className="cmp-pbar" role="img" aria-label={t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) })}><i style={{ left: `${Math.min(100, Math.max(0, p))}%` }} /><em style={{ left: `${Math.min(92, Math.max(8, p))}%` }}>{percentLabel(p)}</em></div>}
+      {range && (
+        <Tooltip label={[t('compare.pbar.tip'), pl].filter(Boolean).join(' · ')}>
+          <div className="cmp-pbar" role="img" tabIndex={0} aria-label={pl ?? t('compare.pbar.aria')} data-axis={`${range.lo}:${range.hi}`}><i style={{ left: `${axisPos(m.value, range)}%` }} /></div>
+        </Tooltip>
+      )}
     </div>
   );
 }

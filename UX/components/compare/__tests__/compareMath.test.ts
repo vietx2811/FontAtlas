@@ -71,3 +71,23 @@ describe('percentLabel / rowUnit', () => {
     expect(rowUnit([m(null, { unit: null })])).toBeNull();
   });
 });
+
+import { axisPos, axisRange } from '../compareMath';
+describe('H8b · bar axis = min–max of the compared fonts', () => {
+  it('pads ~10% each side so extremes are not glued to the ends', () => {
+    const r = axisRange([10, 20, null])!;
+    expect(r.lo).toBeCloseTo(9); expect(r.hi).toBeCloseTo(21);
+    expect(axisPos(10, r)).toBeCloseTo(100 / 12, 5);
+    expect(axisPos(20, r)).toBeCloseTo(100 - 100 / 12, 5);
+  });
+  it('close values still spread across the bar (the old library-wide axis made them look identical)', () => {
+    const r = axisRange([0.50, 0.52])!;
+    expect(axisPos(0.52, r) - axisPos(0.50, r)).toBeGreaterThan(70);
+  });
+  it('no axis for a single value or when all values are equal or missing', () => {
+    expect(axisRange([3])).toBeNull();
+    expect(axisRange([3, 3, 3])).toBeNull();
+    expect(axisRange([null, undefined, 4])).toBeNull();
+    expect(axisRange([])).toBeNull();
+  });
+});

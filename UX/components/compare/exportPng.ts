@@ -3,7 +3,7 @@ import { COMPARE_METRICS } from '../../api/compare';
 import { t, type I18nKey } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
-import { deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
+import { axisPos, axisRange, deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
 import { measureInkWith } from '../ui/inkLines';
 import { termName } from '../ui/termNames';
 import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, faceName, overlayStyleOf, viNotes } from './CompareCells';
@@ -259,12 +259,14 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
       const d = deltaWraps(k, i);
       if (d) { if (d.wrap) text(d.text, bx, y + 42, { size: 11, weight: 600, color: c.accent }); else text(d.text, bx + vw + 8, y + 24, { size: 11, weight: 600, color: c.accent }); }
       else if (i === 0) text(t('compare.base'), bx + vw + 8, y + 24, { size: 11, color: c.faint });
-      if (m.percentile !== null) {
-        const by = y + (d?.wrap ? 56 : 38);
+      // Thanh đo theo min–max của chính các font trong bảng (như màn hình); percentile thư viện ghi bằng chữ vì ảnh không có tooltip.
+      const range = axisRange(data.faces.map(x => x.metrics[k].value));
+      const by = y + (d?.wrap ? 56 : 38);
+      if (range) {
         ctx.fillStyle = c.line; ctx.fillRect(bx, by, CW - 40, 4);
-        ctx.fillStyle = c.accent; ctx.fillRect(bx + (CW - 40) * Math.min(1, Math.max(0, m.percentile / 100)) - 1, by - 4, 2, 12);
-        text(percentLabel(m.percentile), bx + CW - 36, by + 6, { size: 10, color: c.faint });
+        ctx.fillStyle = c.accent; ctx.fillRect(bx + (CW - 40) * axisPos(m.value, range) / 100 - 1, by - 4, 2, 12);
       }
+      if (m.percentile !== null) text(percentLabel(m.percentile), range ? bx + CW - 36 : bx, by + 6, { size: 10, color: c.faint });
     });
     y += metricH[ki];
   });

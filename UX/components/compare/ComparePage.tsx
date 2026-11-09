@@ -12,7 +12,7 @@ import { Menu } from '../ui/Menu';
 import { FacePicker } from './FacePicker';
 import { GROUPS, useRowConfig, type GroupKey } from './rowConfig';
 import { META_ROWS, LicenseCell } from './MetaCells';
-import { fitScale } from './compareMath';
+import { axisRange, fitScale } from './compareMath';
 import { detectMissingAll, ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
 import './compare.css';
 
@@ -168,7 +168,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const defs: RowDef[] = [
     { id: 'specimen.line', group: 'specimen', name: t('compare.row.line'), head: <b>{t('compare.row.line')}</b>, cell: f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} /> },
     { id: 'specimen.vi', group: 'specimen', name: t('compare.row.vi'), head: <><b>{t('compare.row.vi')}</b><small><TermTip term="vi_marks"><span data-term="vi_marks">{termName('vi_marks')}</span></TermTip> · {t('compare.row.vi.gloss')}</small></>, cell: f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} /> },
-    ...COMPARE_METRICS.map((k): RowDef => ({ id: `metrics.${k}`, group: 'metrics', name: label(k), head: <><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></>, cell: f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} /> })),
+    ...COMPARE_METRICS.map((k): RowDef => ({ id: `metrics.${k}`, group: 'metrics', name: label(k), head: <><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></>, cell: f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} range={axisRange(shown.map(x => x.metrics[k].value))} /> })),
     { id: 'class.class', group: 'class', name: t('compare.row.class'), head: <><TermTip term="classification"><b data-term="classification">{t('compare.row.class')}</b></TermTip><small>{gl('compare.row.class.gloss')}</small></>, cell: f => <ClassCell face={f} /> },
     { id: 'meta.license', group: 'meta', name: t('compare.row.license'), head: <><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></>, cell: f => <LicenseCell face={f} /> },
     ...META_ROWS.map((r): RowDef => ({ id: `meta.${r.key}`, group: 'meta', name: t(r.label), head: <><b>{t(r.label)}</b><small>{t(r.gloss)}</small></>, cell: f => <r.Cell face={f} /> })),
