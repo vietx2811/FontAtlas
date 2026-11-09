@@ -134,6 +134,8 @@ impl FaceQuery {
             && !self.favorites_only
             && self.collection_id.is_none()
             && self.tag_ids.is_empty()
+            && self.weight_class.is_none()
+            && self.width_class.is_none()
     }
 }
 
