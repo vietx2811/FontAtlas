@@ -1,5 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { Api } from '../../api';
 import { t } from '../../i18n';
+import { useActivationFlow } from '../activation/useActivationFlow';
 import { useNoticeStore } from '../../store/notices';
 import { rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore, type PanelTab } from '../../store/ui';
@@ -39,12 +41,47 @@ export function shortcutBlocked(e: KeyboardEvent): boolean {
   return e.defaultPrevented || e.isComposing || e.repeat || !!document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]');
 }
 
+type SelRow = { hashHex: string; faceIndex: number; missing?: boolean };
+/**
+ * Activate / Deactivate cho cả lựa chọn (từ 2 font; ⌘⇧A chạy cả với 1 font). Tất cả đang bật → nút thành Deactivate.
+ * Dùng lại useActivationFlow (hộp thoại xung đột/đang được dự án giữ) và bỏ qua font mất file.
+ */
+function ActivationActions({ api, rows }: { api: Api; rows: SelRow[] }): React.JSX.Element {
+  const flow = useActivationFlow(api);
+  const active = useUiStore(s => s.active);
+  const usable = useMemo(() => rows.filter(r => !r.missing), [rows]);
+  const allOn = usable.length > 0 && usable.every(r => active.has(r.hashHex));
+  const run = () => { if (usable.length) void flow.toggle(usable.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })), !allOn); };
+  const runRef = useRef(run); runRef.current = run;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== 'a' || shortcutBlocked(e)) return;
+      e.preventDefault(); runRef.current();
+    };
+    document.addEventListener('keydown', on);
+    return () => document.removeEventListener('keydown', on);
+  }, []);
+  const key = allOn ? 'deactivate' : 'activate';
+  return (
+    <>
+      {flow.dialog}
+      {rows.length >= 2 && (
+        <Tooltip label={`${t(`topbar.${key}`)} — ${t(`topbar.${key}.gloss`)}`} shortcut="⌘⇧A">
+          <button type="button" className="fa-act" data-testid="topbar-activate" aria-label={t(`topbar.${key}`)} onClick={run}>
+            <Icon name="power" size={15} /><span className="l">{t(`topbar.${key}`)}</span><kbd>⌘⇧A</kbd>
+          </button>
+        </Tooltip>
+      )}
+    </>
+  );
+}
+
 /**
  * Cụm hành động Pair / Compare trên Top Bar, theo số font đang chọn (brief 08):
  * 0 → không hiện; 1 → Pair · Find similar; 2–4 → Compare · Pair these; >4 → như 2–4 kèm gợi ý thu hẹp.
  * Compare và Pair these chưa có command backend: mở tab gần nhất của font đầu tiên và báo rõ, không giả dữ liệu.
  */
-export function TopBarActions(): React.JSX.Element | null {
+export function TopBarActions({ api }: { api?: Api } = {}): React.JSX.Element | null {
   const selected = useSelectionStore(s => s.rows);
   const rows = useMemo(() => [...selected.values()], [selected]);
   const n = rows.length;
@@ -77,6 +114,7 @@ export function TopBarActions(): React.JSX.Element | null {
         <span className="fa-act-n">{t('topbar.selected', { n })}<button type="button" aria-label={t('topbar.clear')} onClick={() => useSelectionStore.getState().clear()}><Icon name="x" size={12} /></button></span>
         {n === 1 ? <>{btn('pair', 'pair', '⇧P', true, doPair)}{btn('similar', 'similar', null, false, doSimilar)}</>
           : <>{btn('compare', 'compare', '⇧C', true, doCompare)}{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
+        {api && <ActivationActions api={api} rows={rows} />}
       </div>
       {n > COMPARE_MAX && <div className="fa-act-hint" role="status"><span>{t('topbar.narrow', { n })}</span><button type="button" onClick={narrow}>{t('topbar.useFirst')}</button></div>}
     </>

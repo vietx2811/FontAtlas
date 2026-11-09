@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { mockRows } from '../../../api/mock';
+import { createMockApi, mockRows } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { rowKey, useSelectionStore } from '../../../store/selection';
 import { useUiStore } from '../../../store/ui';
@@ -123,5 +123,54 @@ describe('TopBarActions', () => {
     act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[2]), index: 2 }));
     fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
     expect(useSelectionStore.getState().anchor).toEqual({ key: rowKey(rows[2]), index: 2 });
+  });
+
+  describe('Activate / Deactivate (⌘⇧A)', () => {
+    const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
+    const stateOf = async (api: ReturnType<typeof createMockApi>) => (await api.activationState()).map(s => s.hashHex).sort();
+
+    it('2+ fonts: Activate turns the whole selection on, the button becomes Deactivate and turns it off', async () => {
+      const api = createMockApi();
+      render(<TopBarActions api={api} />); pick(3);
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' })); await settle();
+      expect(await stateOf(api)).toEqual(rows.slice(0, 3).map(r => r.hashHex).sort());
+      expect(screen.queryByRole('button', { name: 'Activate' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Deactivate' })); await settle();
+      expect(await stateOf(api)).toEqual([]);
+      expect(screen.getByRole('button', { name: 'Activate' })).toBeTruthy();
+    });
+
+    it('a partly active selection offers Activate (turns the rest on)', async () => {
+      const api = createMockApi();
+      await api.activationActivate([{ hashHex: rows[0].hashHex, faceIndex: rows[0].faceIndex }]);
+      await act(async () => { await useUiStore.getState().refreshActive(api); });
+      render(<TopBarActions api={api} />); pick(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' })); await settle();
+      expect(await stateOf(api)).toEqual(rows.slice(0, 2).map(r => r.hashHex).sort());
+    });
+
+    it('⌘⇧A toggles the selection, also with a single font (no button there)', async () => {
+      const api = createMockApi();
+      render(<TopBarActions api={api} />); pick(1);
+      expect(screen.queryByRole('button', { name: 'Activate' })).toBeNull();
+      fireEvent.keyDown(document.body, { key: 'A', metaKey: true, shiftKey: true }); await settle();
+      expect(await stateOf(api)).toEqual([rows[0].hashHex]);
+      fireEvent.keyDown(document.body, { key: 'A', metaKey: true, shiftKey: true }); await settle();
+      expect(await stateOf(api)).toEqual([]);
+    });
+
+    it('⌘⇧A is ignored while typing in a field, and plain ⌘A / ⇧A do nothing here', async () => {
+      const api = createMockApi();
+      render(<><input aria-label="q" /><TopBarActions api={api} /></>); pick(2);
+      const input = screen.getByLabelText('q');
+      fireEvent.keyDown(input, { key: 'A', metaKey: true, shiftKey: true }); await settle();
+      fireEvent.keyDown(document.body, { key: 'a', metaKey: true }); fireEvent.keyDown(document.body, { key: 'A', shiftKey: true }); await settle();
+      expect(await stateOf(api)).toEqual([]);
+    });
+
+    it('without an api there is no activation button', () => {
+      render(<TopBarActions />); pick(3);
+      expect(screen.queryByTestId('topbar-activate')).toBeNull();
+    });
   });
 });

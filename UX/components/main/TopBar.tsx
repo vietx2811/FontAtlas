@@ -33,7 +33,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
       <SearchField />
       <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
       <FilterPanel api={api} />
-      <TopBarActions />
+      <TopBarActions api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
         <Tooltip label="Hiện dạng lưới"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button></Tooltip>
         <Tooltip label="Hiện dạng danh sách"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'list'} aria-label="Danh sách" onClick={() => setLayout('list')}><Icon name="list" size={16} /></button></Tooltip>
