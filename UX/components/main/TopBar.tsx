@@ -8,6 +8,7 @@ import { SearchField } from './SearchField';
 import { useViewSummary } from './useViewSummary';
 import './topbar.css';
 import { FilterPanel } from './FilterPanel';
+import { AdvancedFilters } from '../filter/AdvancedFilters';
 import { FilterChips, filterChips } from './FilterChips';
 import { TopBarActions } from './TopBarActions';
 import { Tooltip } from '../ui/Tooltip';
@@ -33,6 +34,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
       <SearchField />
       <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
       <FilterPanel api={api} />
+      <AdvancedFilters api={api} />
       <TopBarActions api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
         <Tooltip label="Hiện dạng lưới"><button type="button" className="fa-iconbtn" aria-pressed={layout === 'grid'} aria-label="Lưới" onClick={() => setLayout('grid')}><Icon name="grid" size={16} /></button></Tooltip>

@@ -6,6 +6,7 @@ import { useScanStore } from '../../store/scan';
 import { t } from '../../i18n';
 import { classLabel, subclassLabel } from './classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
+import { weightName, widthName } from '../filter/classNames';
 import { AXIS_META, numberText, unitText } from '../detail/tabs/measurements';
 import { Icon } from '../sidebar/icons';
 import './filters.css';
@@ -25,6 +26,8 @@ export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view =
   for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? `Nguồn ${id}`, remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
   for (const c of f.classes ?? []) out.push({ id: `class:${c}`, label: classLabel(c), remove: x => { const next = (x.classes ?? []).filter(v => v !== c); const { classes: _, ...rest } = x; return next.length ? { ...rest, classes: next } : rest; } });
   for (const c of f.subclasses ?? []) out.push({ id: `subclass:${c}`, label: subclassLabel(c), remove: x => { const next = (x.subclasses ?? []).filter(v => v !== c); const { subclasses: _, ...rest } = x; return next.length ? { ...rest, subclasses: next } : rest; } });
+  if (f.weightClass) out.push({ id: 'weightClass', label: `Weight ${f.weightClass[0] === f.weightClass[1] ? weightName(f.weightClass[0]) : `${weightName(f.weightClass[0])}–${weightName(f.weightClass[1])}`}`, remove: x => { const { weightClass: _w, varAxisMatch: vm, ...rest } = x; return vm && x.widthClass ? { ...rest, varAxisMatch: vm } : rest; } });
+  if (f.widthClass) out.push({ id: 'widthClass', label: `Width ${f.widthClass[0] === f.widthClass[1] ? widthName(f.widthClass[0]) : `${widthName(f.widthClass[0])}–${widthName(f.widthClass[1])}`}`, remove: x => { const { widthClass: _w, varAxisMatch: vm, ...rest } = x; return vm && x.weightClass ? { ...rest, varAxisMatch: vm } : rest; } });
   for (const r of f.rawAxisRanges ?? []) {
     const unit = r.axis === 'slant_deg' || r.axis === 'aperture_deg' ? 'deg' : null;
     out.push({ id: `axis:${r.axis}`, label: `${AXIS_META[r.axis]?.label ?? r.axis} ${numberText(r.range[0], unit)}–${numberText(r.range[1], unit)}${unit ? unitText(unit) : ''}`, remove: x => { const next = (x.rawAxisRanges ?? []).filter(a => a.axis !== r.axis); const { rawAxisRanges: _, ...rest } = x; return next.length ? { ...rest, rawAxisRanges: next } : rest; } });

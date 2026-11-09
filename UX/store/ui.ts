@@ -24,7 +24,7 @@ export type SectionKey = 'col' | 'src' | 'tag';
 /** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
 export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode'>;
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 
 export interface UiState {

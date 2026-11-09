@@ -1,0 +1,13 @@
+.fa-adv { position: fixed; z-index: 40; inset: 52px 0 0 var(--sidebar-w, 220px); display: flex; flex-direction: column; background: var(--bg); border-top: 1px solid var(--border); box-shadow: 0 -8px 24px rgb(0 0 0 / .12); outline: none; overflow: hidden; }
+.fa-adv-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.fa-adv-count { color: var(--muted); font-size: var(--text-xs); }
+.fa-adv-reset { margin-left: auto; font-size: var(--text-xs); padding: 3px 8px; border-radius: 4px; color: var(--muted); }
+.fa-adv-reset:not(:disabled):hover, .fa-adv-close:hover { background: var(--chrome-active); color: var(--fg); }
+.fa-adv-close { width: 24px; height: 24px; border-radius: 50%; font-size: 16px; line-height: 1; }
+.fa-adv-err { margin: 8px 16px; color: var(--danger, #c0392b); }
+.fa-adv-cols { flex: 1; overflow: auto; padding: 12px 16px 24px; columns: 208px; column-gap: 16px; }
+.fa-adv-card { break-inside: avoid; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); display: block; }
+.fa-adv-card h3 { margin: 0 0 6px; font-size: var(--text-xs); font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+.fa-adv-card > label { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--text-sm); }
+.fa-varbtn { font-size: var(--text-2xs); font-family: ui-monospace, monospace; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
+.fa-varbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
