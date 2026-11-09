@@ -44,6 +44,10 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         limit: q.limit,
         langs: crate::services::langs::lang_filters(q).0,
         lang_any: crate::services::langs::lang_filters(q).1,
+        weight_class: q.weight_class,
+        width_class: q.width_class,
+        var_weight: q.var_axis_match.wght,
+        var_width: q.var_axis_match.wdth,
         badge_lang: Some(q.badge_lang.clone().unwrap_or_else(|| crate::services::langs::DEFAULT_BADGE_LANG.to_string())),
     }
 }
@@ -52,6 +56,7 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
 pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
+    validate_class_ranges(q)?;
     if !q.classes.is_empty() || !q.subclasses.is_empty() {
         let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
         match &mut scope {
@@ -217,6 +222,20 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
         out.extend(state.with_store(|s| Ok(s.all_face_ids()?))?.into_iter().filter(|id| !known_ids.contains(id)));
     }
     Ok(out)
+}
+
+pub(crate) fn validate_class_ranges(q: &FaceQueryDto) -> Result<(), CmdError> {
+    if let Some([a, b]) = q.weight_class
+        && (a == 0 || a > b || b > 1000)
+    {
+        return Err(CmdError::invalid_arg("weightClass: khoảng không hợp lệ (1–1000, min ≤ max)"));
+    }
+    if let Some([a, b]) = q.width_class
+        && (a == 0 || a > b || b > 9)
+    {
+        return Err(CmdError::invalid_arg("widthClass: khoảng không hợp lệ (1–9, min ≤ max)"));
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_raw_ranges(ranges: &[RawAxisRangeDto]) -> Result<(), CmdError> {

@@ -290,6 +290,83 @@ pub fn axis_stats(state: &AppState, q: &FaceQueryDto) -> Result<Vec<AxisStatsDto
         .collect())
 }
 
+pub const HISTOGRAM_BINS_DEFAULT: u32 = 24;
+const HISTOGRAM_BINS_MAX: u32 = 64;
+
+/// Histogram cho 16 trục đo + `weight_class` + `width_class`. Mỗi trục đếm trên tập thoả mọi bộ lọc
+/// khác, **trừ chính trục đó** (bộ lọc `rawAxisRanges`/`axisFilters` cùng trục và `weightClass`/`widthClass`).
+/// Miền `lo..hi` lấy p1–p99 của tập chưa áp bộ lọc trục nào, nên không đổi khi người dùng kéo slider.
+/// `bins` = 0 → mặc định 24; tối đa 64. Trục rời rạc luôn 9 bin.
+pub fn axis_histograms(state: &AppState, q: &FaceQueryDto, bins: u32) -> Result<Vec<AxisHistogramDto>, CmdError> {
+    use crate::services::library::{matching_keys, raw_matches, raw_reading, scope_of, to_store_query};
+    crate::services::library::validate_raw_ranges(&q.raw_axis_ranges)?;
+    crate::services::library::validate_class_ranges(q)?;
+    let nb = if bins == 0 { HISTOGRAM_BINS_DEFAULT } else { bins.clamp(2, HISTOGRAM_BINS_MAX) } as usize;
+    let b = bundle(state)?;
+    // Tập nền: mọi bộ lọc không phải trục đo (text, class, ngôn ngữ, license, weight/width class…).
+    let mut base = q.clone();
+    base.axis_filters.clear();
+    base.raw_axis_ranges.clear();
+    base.hard.clear();
+    let allowed = matching_keys(state, &base)?;
+    let id_of = |k: &fontatlas_index::FaceKey| b.meta.get(k).map(|m| m.face_id);
+    let hard = crate::services::describe::hard_of(&q.hard);
+    let scope_ids = |filters: &[AxisFilterDto]| -> Option<std::collections::HashSet<i64>> {
+        b.scope_for(filters, &hard).map(|v| v.into_iter().map(|x| x.0).collect())
+    };
+    let full_scope = scope_ids(&q.axis_filters);
+    let mut out: Vec<AxisHistogramDto> = Vec::new();
+    for a in AxisId::ALL.iter().copied() {
+        let key = a.key();
+        let others: Vec<RawAxisRangeDto> = q.raw_axis_ranges.iter().filter(|r| r.axis != key).cloned().collect();
+        let other_filters: Vec<AxisFilterDto> = q.axis_filters.iter().filter(|f| f.axis != key).cloned().collect();
+        let own_scope;
+        let scope = if other_filters.len() == q.axis_filters.len() {
+            &full_scope
+        } else {
+            own_scope = scope_ids(&other_filters);
+            &own_scope
+        };
+        let mut domain: Vec<f32> = Vec::new();
+        let mut counted: Vec<f32> = Vec::new();
+        for p in b.index.profiles_for_test().iter().filter(|p| allowed.contains(&p.key)) {
+            let Some(v) = raw_reading(p, a) else { continue };
+            domain.push(v);
+            let ok = raw_matches(p, &others) && scope.as_ref().is_none_or(|s| id_of(&p.key).is_some_and(|id| s.contains(&id)));
+            if ok {
+                counted.push(v);
+            }
+        }
+        let st = stats_of(a, domain);
+        let (lo, hi) = (st.p1.or(st.min).unwrap_or(0.0), st.p99.or(st.max).unwrap_or(0.0));
+        let span = (hi - lo).max(f32::EPSILON);
+        let mut hist = vec![0u32; nb];
+        for v in &counted {
+            let i = (((v - lo) / span) * nb as f32).floor().clamp(0.0, (nb - 1) as f32) as usize;
+            hist[i] += 1;
+        }
+        out.push(AxisHistogramDto { axis: key.into(), unit: st.unit, count: counted.len() as u32, lo, hi, bins: hist });
+    }
+    // Trục rời rạc: đếm bằng SQL trên tập (trừ chính nó), áp luôn các bộ lọc trục đo (scope).
+    let scope = scope_of(state, q)?;
+    let sq = to_store_query(q);
+    for (axis, which, lo, hi) in [
+        ("weight_class", fontatlas_store::ClassAxis::Weight, 100.0, 900.0),
+        ("width_class", fontatlas_store::ClassAxis::Width, 1.0, 9.0),
+    ] {
+        let bins = state.with_store(|s| Ok(s.class_histogram(&sq, scope.as_deref(), which)?))?;
+        out.push(AxisHistogramDto {
+            axis: axis.into(),
+            unit: "class".into(),
+            count: bins.iter().sum(),
+            lo,
+            hi,
+            bins: bins.to_vec(),
+        });
+    }
+    Ok(out)
+}
+
 /// Đếm face theo class/subclass trong tập thoả mọi bộ lọc *khác* (bỏ `classes`/`subclasses`
 /// để facet không tự triệt tiêu chính nó).
 pub fn class_facets(state: &AppState, q: &FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError> {

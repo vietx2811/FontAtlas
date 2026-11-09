@@ -174,3 +174,27 @@ describe('mock analysis data (tabs of the detail panel)', () => {
     expect((await api.listSources()).filter(x => (x.lastScan?.notDownloaded ?? 0) > 0)).toHaveLength(1);
   });
 });
+
+describe('advanced filters (weight/width class, histograms)', () => {
+  it('filters by usWeightClass / usWidthClass ranges', async () => {
+    const api = createMockApi();
+    const rows = mockRows();
+    const inW = rows.filter(r => r.weightClass != null && r.weightClass >= 600 && r.weightClass <= 900).length;
+    expect(inW).toBeGreaterThan(0);
+    expect((await api.queryFaces({ weightClass: [600, 900] })).total).toBe(inW);
+    expect((await api.queryFaces({ widthClass: [1, 3] })).total).toBe(rows.filter(r => r.widthClass != null && r.widthClass <= 3).length);
+  });
+
+  it('histograms: 18 axes, class axes have 9 bins and ignore their own filter', async () => {
+    const api = createMockApi();
+    const all = await api.axisHistogram({}, 8);
+    expect(all.map(h => h.axis).slice(-2)).toEqual(['weight_class', 'width_class']);
+    expect(all.length).toBeGreaterThanOrEqual(18);
+    const wc = all.find(h => h.axis === 'weight_class')!;
+    expect(wc.bins).toHaveLength(9);
+    const filtered = await api.axisHistogram({ weightClass: [700, 900] }, 8);
+    expect(filtered.find(h => h.axis === 'weight_class')!.bins).toEqual(wc.bins);
+    expect(filtered.find(h => h.axis === 'width_class')!.count).toBeLessThan(wc.count);
+    expect((await api.axisHistogram({}, 500))[0].bins).toHaveLength(64);
+  });
+});

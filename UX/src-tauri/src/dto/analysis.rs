@@ -75,6 +75,22 @@ pub struct AxisStatsDto {
     pub p99: Option<f32>,
 }
 
+/// Histogram của một trục trên tập đang lọc **trừ chính trục đó** (kéo slider không làm histogram tự co).
+/// `lo..hi` là miền hiển thị (p1–p99 của tập chưa lọc trục; giá trị ngoài miền dồn vào bin đầu/cuối);
+/// trục rời rạc (`weight_class`, `width_class`) có đúng 9 bin, mỗi bin một nấc.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AxisHistogramDto {
+    pub axis: String,
+    pub unit: String,
+    /// Tổng số face đã đếm vào `bins`.
+    pub count: u32,
+    pub lo: f32,
+    pub hi: f32,
+    pub bins: Vec<u32>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export, rename_all = "camelCase")]

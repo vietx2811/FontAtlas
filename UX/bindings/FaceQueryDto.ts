@@ -5,6 +5,7 @@ import type { LangFilterDto } from "./LangFilterDto";
 import type { LangModeDto } from "./LangModeDto";
 import type { RawAxisRangeDto } from "./RawAxisRangeDto";
 import type { SortKeyDto } from "./SortKeyDto";
+import type { VarAxisMatchDto } from "./VarAxisMatchDto";
 import type { ViFilterDto } from "./ViFilterDto";
 
 /**
@@ -44,4 +45,16 @@ langMode: LangModeDto,
 /**
  * Ngôn ngữ cho chỉ báo `langBadge` trên thẻ (mã ISO 639-3, vd `vie`); `null` = `vie`.
  */
-badgeLang: string | null, };
+badgeLang: string | null, 
+/**
+ * usWeightClass, khoảng đóng trong 100..=900 (font cũ ghi 1–9 được coi là ×100).
+ */
+weightClass: [number, number] | null, 
+/**
+ * usWidthClass, khoảng đóng trong 1..=9.
+ */
+widthClass: [number, number] | null, 
+/**
+ * Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
+ */
+varAxisMatch: VarAxisMatchDto, };

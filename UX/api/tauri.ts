@@ -53,6 +53,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
     classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
+    weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -112,6 +113,7 @@ export function createTauriApi(): Api {
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
+    axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
       return fromWire(await call('compare_faces', { faces, opts: { lang: 'vi' } }));

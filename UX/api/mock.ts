@@ -61,7 +61,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent } from './types';
+import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
@@ -133,6 +133,8 @@ export function createMockApi(o: MockOptions = {}): Api {
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
         (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
         (q.includeMissing || !r.missing) &&
+        (!q.weightClass || (r.weightClass != null && r.weightClass >= q.weightClass[0] && r.weightClass <= q.weightClass[1])) &&
+        (!q.widthClass || (r.widthClass != null && r.widthClass >= q.widthClass[0] && r.widthClass <= q.widthClass[1])) &&
         (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
@@ -254,6 +256,31 @@ export function createMockApi(o: MockOptions = {}): Api {
         const quantile = (p: number) => { if (!values.length) return null; const at = (values.length - 1) * p; const i = Math.floor(at); return values[i] + (values[Math.ceil(at)] - values[i]) * (at - i); };
         return { axis, unit: MOCK_UNITS[axis], count: values.length, min: values[0] ?? null, max: values.at(-1) ?? null, p1: quantile(.01), p99: quantile(.99) };
       });
+    },
+    async axisHistogram(q = {}, bins = 0) {
+      const nb = bins === 0 ? 24 : Math.min(64, Math.max(2, bins));
+      const stats = await this.axisStats(q);
+      const out: AxisHistogramDto[] = [];
+      for (const st of stats) {
+        const { items } = await this.queryFaces({ ...q, rawAxisRanges: (q.rawAxisRanges ?? []).filter(r => r.axis !== st.axis), offset: 0, limit: 1000 });
+        const lo = st.p1 ?? 0, hi = st.p99 ?? 0, span = Math.max(hi - lo, Number.EPSILON), hist = new Array<number>(nb).fill(0);
+        let count = 0;
+        for (const r of items) {
+          const a = axesFor(r).find(a => a.key === st.axis);
+          if (a?.rawValue == null || a.quality === 'failed') continue;
+          hist[Math.min(nb - 1, Math.max(0, Math.floor(((a.rawValue - lo) / span) * nb)))]++; count++;
+        }
+        out.push({ axis: st.axis, unit: st.unit, count, lo, hi, bins: hist });
+      }
+      const klass = async (axis: 'weight_class' | 'width_class', key: 'weightClass' | 'widthClass', lo: number, hi: number, step: number) => {
+        const { items } = await this.queryFaces({ ...q, [key]: undefined, offset: 0, limit: 1000 });
+        const hist = new Array<number>(9).fill(0);
+        for (const r of items) { const v = r[key]; if (v != null) { const i = Math.round((v - lo) / step); if (i >= 0 && i < 9) hist[i]++; } }
+        out.push({ axis, unit: 'class', count: hist.reduce((x, y) => x + y, 0), lo, hi, bins: hist });
+      };
+      await klass('weight_class', 'weightClass', 100, 900, 100);
+      await klass('width_class', 'widthClass', 1, 9, 1);
+      return out;
     },
     async similarFamilies(face, opts = {}, q = {}) {
       const row = findRow(face);

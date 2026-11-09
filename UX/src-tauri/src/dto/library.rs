@@ -337,6 +337,27 @@ pub struct FaceQueryDto {
     pub lang_mode: LangModeDto,
     /// Ngôn ngữ cho chỉ báo `langBadge` trên thẻ (mã ISO 639-3, vd `vie`); `null` = `vie`.
     pub badge_lang: Option<String>,
+    /// usWeightClass, khoảng đóng trong 100..=900 (font cũ ghi 1–9 được coi là ×100).
+    pub weight_class: Option<[u16; 2]>,
+    /// usWidthClass, khoảng đóng trong 1..=9.
+    pub width_class: Option<[u16; 2]>,
+    /// Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
+    pub var_axis_match: VarAxisMatchDto,
+}
+
+/// Bật/tắt khớp theo dải trục Variable. `wdth` (%) quy về class theo bảng OS/2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export, rename_all = "camelCase")]
+pub struct VarAxisMatchDto {
+    pub wght: bool,
+    pub wdth: bool,
+}
+
+impl Default for VarAxisMatchDto {
+    fn default() -> Self {
+        VarAxisMatchDto { wght: true, wdth: true }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
