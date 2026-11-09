@@ -313,6 +313,9 @@
     await log('compare-pbar-scale', bars.length > 0 && bars.some(b => Math.abs(b[0] - b[1]) > 5) && !document.querySelector('.cmp-pbar em'), { rows: bars.length, spreads: bars.slice(0, 6) });
     // Ảnh dark cho bảng v2 (overlay + pin + thanh tô từ 0)
     const themeV2 = document.documentElement.dataset.theme; document.documentElement.dataset.theme = "dark"; await sleep(400);
+    const fillGaps = [...document.querySelectorAll('.cmp-tbl .cmp-page')].map(pg => Math.round(pg.parentElement.getBoundingClientRect().bottom - pg.getBoundingClientRect().bottom));
+    const noteBg = (document.querySelector('.cmp-tbl .fa-note') ? getComputedStyle(document.querySelector('.cmp-tbl .fa-note')).backgroundColor : '').match(/\d+/g)?.map(Number) ?? [];
+    await log('compare-dark-fill-and-note-red', fillGaps.length > 0 && fillGaps.every(g => g <= 0) && noteBg.length >= 3 && noteBg[0] > 200 && noteBg[0] > noteBg[1] * 1.5 && noteBg[0] > noteBg[2] * 1.5, { fillGaps, noteBg });
     await snap('compare-v2-dark');
     if (themeV2) document.documentElement.dataset.theme = themeV2; else document.documentElement.removeAttribute("data-theme"); await sleep(200);
     const termC = await termCheck('.cmp-tbl .rh [data-term]');

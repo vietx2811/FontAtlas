@@ -19,3 +19,10 @@ describe('H1 · cột property neo ngang', () => {
     expect(r).toMatch(/overflow: clip/);
   });
 });
+
+describe('J · specimen cells fill the row height', () => {
+  it('the cell wrapping a .cmp-page is a flex column and the page grows to fill it', () => {
+    expect(css).toMatch(/\.cmp-tbl \.row > div:has\(> \.cmp-page\) \{ display: flex; flex-direction: column; \}/);
+    expect(css).toMatch(/\.cmp-tbl \.row > div > \.cmp-page \{ flex: 1 0 auto; \}/);
+  });
+});

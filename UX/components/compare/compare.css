@@ -121,3 +121,7 @@
 
 .cmp-spec .ph { color: var(--faint); }
 .cmp-edit::placeholder { color: transparent; }
+
+/* J: ô specimen phủ hết chiều cao hàng (không lộ dải nền thẻ ở đáy) */
+.cmp-tbl .row > div:has(> .cmp-page) { display: flex; flex-direction: column; }
+.cmp-tbl .row > div > .cmp-page { flex: 1 0 auto; }
