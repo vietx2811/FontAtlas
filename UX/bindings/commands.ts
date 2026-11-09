@@ -4,6 +4,7 @@ import type { ActivationCapsDto } from './ActivationCapsDto';
 import type { ActivationEvent } from './ActivationEvent';
 import type { ActivationReportDto } from './ActivationReportDto';
 import type { ActivationStateDto } from './ActivationStateDto';
+import type { AvailabilityDto } from './AvailabilityDto';
 import type { AxisHistogramDto } from './AxisHistogramDto';
 import type { AxisStatsDto } from './AxisStatsDto';
 import type { BootEvent } from './BootEvent';
@@ -140,6 +141,7 @@ export interface TauriCommandMap {
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_all: { args: { onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_set_keep: { args: { on: boolean }; result: null };
+  activation_availability: { args: { faces: FaceKeyDto[] }; result: AvailabilityDto[] };
   activation_set_scope: { args: { faces: FaceKeyDto[]; scope: ScopeDto }; result: ActivationReportDto };
   activation_subscribe: { args: { onEvent: Channel<ActivationEvent> }; result: null };
   preview_info: { args: Record<string, never>; result: PreviewInfoDto };
