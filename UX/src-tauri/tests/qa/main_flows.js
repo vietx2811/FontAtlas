@@ -290,8 +290,8 @@
     const pngOv = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     await log('compare-overlay-toggle', ovBtn?.getAttribute('aria-pressed') === 'true' && styles1.join() === 'solid,line' && styles2.join() === 'solid' && !document.querySelector('[data-row="specimen.overlay"]') && !!pngOv && pngOv.overlayLayers === 2 && pngOv.rows.includes('overlay'), { styles1, styles2, pngLayers: pngOv?.overlayLayers });
     // H8b: thanh đo theo min–max của các font đang xem: hai marker không dính nhau khi giá trị khác nhau
-    const bars = [...document.querySelectorAll('.cmp-tbl .row')].filter(r => r.querySelectorAll('.cmp-pbar').length === 2).map(r => [...r.querySelectorAll('.cmp-pbar i')].map(i => parseFloat(i.style.left)));
-    await log('compare-pbar-minmax', bars.length > 0 && bars.some(b => Math.abs(b[0] - b[1]) > 60) && !document.querySelector('.cmp-pbar em'), { rows: bars.length, spreads: bars.slice(0, 6) });
+    const bars = [...document.querySelectorAll('.cmp-tbl .row')].filter(r => r.querySelectorAll('.cmp-pbar').length === 2).map(r => [...r.querySelectorAll('.cmp-pbar i')].map(i => parseFloat(i.style.width)));
+    await log('compare-pbar-scale', bars.length > 0 && bars.some(b => Math.abs(b[0] - b[1]) > 5) && !document.querySelector('.cmp-pbar em'), { rows: bars.length, spreads: bars.slice(0, 6) });
     const termC = await termCheck('.cmp-tbl .rh [data-term]');
     await log('compare-term-tooltips', termC.n >= 10 && termC.bad.length === 0 && termC.art >= 8, termC);
     // PNG: vẽ như nút Xuất nhưng không qua hộp thoại (móc QA); phải có overlay, đơn vị, nhãn không bị cắt.

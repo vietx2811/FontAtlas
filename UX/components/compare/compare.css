@@ -38,7 +38,6 @@
 .cmp-dl { font-size: 11px; font-weight: 600; color: var(--accent-ink); }
 .cmp-dl.zero { color: var(--faint); font-weight: 500; }
 .cmp-pbar { position: relative; height: 4px; border-radius: 2px; background: var(--surface-2); margin: 8px 0 14px; }
-.cmp-pbar i { position: absolute; top: -3px; width: 2px; height: 10px; border-radius: 1px; background: var(--accent-ink); }
 .cmp-na { display: flex; align-items: center; gap: 2px; width: fit-content; max-width: 100%; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
 .cmp-cls { display: flex; flex-direction: column; gap: 3px; }
 .cmp-cls .c { font-weight: 600; font-size: 13px; }
@@ -114,3 +113,8 @@
 .cmp-ovl .sw.ov-solid { stroke: var(--specimen-ink); fill: none; }
 .cmp-ovl-legend { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; }
 .cmp-ovl-legend li { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A: thanh tô từ 0 (hoặc từ tâm với số đo có dấu) */
+.cmp-pbar { overflow: visible; }
+.cmp-pbar i.fill { position: absolute; top: 0; height: 4px; border-radius: 2px; background: var(--accent-ink); opacity: .75; min-width: 2px; }
+.cmp-pbar[data-signed]::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--faint); }

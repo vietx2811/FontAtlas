@@ -5,11 +5,11 @@ export const COMPARE_V2 = {
   'compare.add': 'Thêm font', 'compare.add.tip': 'Thêm font vào so sánh', 'compare.add.full': 'Đã đạt tối đa {n} font; bỏ bớt một cột để thêm',
   'compare.picker.label': 'Chọn font để thêm', 'compare.picker.search': 'Tìm font trong thư viện…', 'compare.picker.empty': 'Không có font nào khớp', 'compare.picker.loading': 'Đang tìm…',
   'compare.session': 'Đang so sánh · {n}', 'compare.session.tip': 'Quay lại phiên so sánh ({n} font)',
-  'compare.col.pinned': 'Đã pin',
+ 
   'compare.group.collapse': 'Thu gọn nhóm', 'compare.group.expand': 'Mở nhóm',
   'compare.row.hide': 'Ẩn hàng này', 'compare.row.add': 'Thêm hàng', 'compare.row.add.tip': 'Thêm lại hàng đã ẩn', 'compare.row.menu': 'Hàng đang ẩn',
   'compare.missing': 'Thiếu: {chars}', 'compare.edit': 'Sửa chữ mẫu (áp dụng cho mọi cột)',
   'compare.ov.col': 'Chồng font này lên Overlay', 'compare.ov.col.off': 'Bỏ font này khỏi Overlay', 'compare.ov.max': 'Overlay tối đa {n} font',
   'compare.ov.empty': 'Chọn font bằng nút mắt trên tiêu đề cột để chồng chúng lên nhau.',
-  'compare.pbar.tip': 'Thanh so các font đang xem (min–max); percentile là vị trí trong cả thư viện', 'compare.pbar.aria': 'Vị trí giữa các font đang so sánh',
+  'compare.pbar.tip': 'Thanh tô từ 0 đến giá trị, cùng thang cho các font đang xem; percentile là vị trí trong cả thư viện', 'compare.pbar.aria': 'Độ lớn so với các font đang so sánh',
 } as const;

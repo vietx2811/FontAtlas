@@ -11,7 +11,7 @@ import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
 import { NoteMark } from '../ui/noteMark';
 import { missingList, useMissingChars } from './glyphCoverage';
-import { axisPos, deltaOf, deltaText, xhOk, type AxisRange } from './compareMath';
+import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
 export const OVERLAY_TEXT = 'Hxgă';
@@ -146,7 +146,7 @@ function ViArt({ face, fam, size }: { face: CompareFace; fam: string | null; siz
   );
 }
 
-export function MetricCell({ k, m, base, isBase, range }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean; range: AxisRange | null }): React.JSX.Element {
+export function MetricCell({ k, m, base, isBase, scale }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean; scale: BarScale | null }): React.JSX.Element {
   if (m.value === null) return <div className="cmp-na"><span>{t('compare.na')}</span>{m.reason && <NoteMark inline kind="info" text={m.reason} />}</div>;
   const d = isBase ? null : deltaOf(k, m, base);
   const dt = d ? deltaText(d) : null;
@@ -159,11 +159,11 @@ export function MetricCell({ k, m, base, isBase, range }: { k: string; m: Compar
         {m.quality === 'estimated' && <NoteMark inline kind="info" text={t('compare.est')} />}
         {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : <span className="cmp-dl zero" title={baseMissing ? t('compare.baseNa') : t('compare.noDelta')}>—</span>}
       </div>
-      {range && (
+      {scale && (() => { const f = barFill(m.value, scale); return (
         <Tooltip label={[t('compare.pbar.tip'), pl].filter(Boolean).join(' · ')}>
-          <div className="cmp-pbar" role="img" tabIndex={0} aria-label={pl ?? t('compare.pbar.aria')} data-axis={`${range.lo}:${range.hi}`}><i style={{ left: `${axisPos(m.value, range)}%` }} /></div>
+          <div className="cmp-pbar" role="img" aria-label={pl ?? t('compare.pbar.aria')} data-signed={scale.signed || undefined}><i className="fill" style={{ left: `${f.left}%`, width: `${f.width}%` }} /></div>
         </Tooltip>
-      )}
+      ); })()}
     </div>
   );
 }

@@ -66,7 +66,7 @@ const vi = {
   'compare.sec.specimen': 'Specimen', 'compare.sec.metrics': 'Số đo', 'compare.sec.class': 'Phân loại', 'compare.sec.meta': 'Meta',
   'compare.row.line': 'Dòng mẫu', 'compare.row.overlay': 'Overlay', 'compare.row.vi': 'Vietnamese', 'compare.row.vi.gloss': 'dấu chồng', 'compare.row.class': 'Classification', 'compare.row.license': 'License',
   'compare.est': 'Ước lượng', 'compare.na': 'Không đo được', 'compare.viOk': 'Dấu vừa khung', 'compare.viWarn': 'Dấu tràn khung', 'compare.viWarnEm': 'Dấu tràn khung · {em} em', 'compare.viMissing': 'Thiếu {n} ký tự',
-  'compare.licenseNote': 'Chỉ ghi chú, không chặn', 'compare.footnote': 'Δ so với mốc · thanh = vị trí trong thư viện (percentile)',
+  'compare.licenseNote': 'Chỉ ghi chú, không chặn', 'compare.footnote': 'Δ so với mốc · thanh = độ lớn so với 0 (hoặc ±0 với góc) trong các font đang xem; percentile thư viện ở tooltip',
   'compare.m.x_height_em': 'x-height', 'compare.m.x_height_em.gloss': 'cao chữ thường', 'compare.m.cap_height_em': 'cap height', 'compare.m.cap_height_em.gloss': 'cao chữ hoa',
   'compare.m.contrast': 'contrast ⊥', 'compare.m.contrast.gloss': 'tương phản nét (vuông góc)', 'compare.m.contrast_h': 'contrast H', 'compare.m.contrast_h.gloss': 'tương phản ngang',
   'compare.m.slant_deg': 'slant I/T', 'compare.m.slant_deg.gloss': 'độ nghiêng (I, T)', 'compare.m.stress_deg': 'stress', 'compare.m.stress_deg.gloss': 'trục nhấn',
