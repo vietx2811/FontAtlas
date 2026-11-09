@@ -641,14 +641,14 @@
         const again = await inv('activation_availability', { faces: [] });
         await log('available-recomputed', again.length === 1 && again[0].hashHex === key.hashHex, { n: again.length });
         window.dispatchEvent(new Event('focus'));
-        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^G\b/.test(b.textContent.trim()))?.click();
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^G\d*$/.test(b.textContent.trim()))?.click();
         await sleep(800);
         const cell = await wait(() => cells()[0], 10000); cell?.click();
         const rowA = await wait(() => document.querySelector('aside.fa-panel [data-testid=active-row][data-available=true]'), 10000);
         const swA = rowA?.querySelector('[data-testid=active-switch]');
         const dotA = cells()[0]?.querySelector('[data-testid=active-dot][data-scope=available]');
         await sleep(300); await snap('available-peek');
-        await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA });
+        await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA, ncells: cells().length, cell0: cells()[0]?.textContent?.slice(0, 40), anyRow: !!document.querySelector('aside.fa-panel [data-testid=active-row]'), rowStatus: document.querySelector('aside.fa-panel [data-testid=active-status]')?.textContent, rowAvailAttr: document.querySelector('aside.fa-panel [data-testid=active-row]')?.getAttribute('data-available'), dotAny: cells()[0]?.querySelector('[data-testid=active-dot]')?.getAttribute('data-scope'), side: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].map(b => b.textContent.trim()).slice(-8) });
       }
     }
     await log('done', true, '');
