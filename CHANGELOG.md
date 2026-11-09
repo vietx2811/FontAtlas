@@ -49,8 +49,14 @@ Bản này dành cho macOS Apple Silicon.
 - Dark mode: vùng chữ mẫu nền đen chữ trắng. Giao diện phối các tông đen, xám đậm và xám nhạt.
 - Màn hình trống có hướng dẫn cho từng khu vực. Nguồn cần cấp quyền truy cập thư mục được đánh dấu riêng.
 
+**Cài đặt**
+- DMG kèm script **Cài Font Atlas.command**: double-click là cài và chạy được, chưa cần notarize.
+
 ### Ghi chú cài đặt
-- Bản này chưa được Apple notarize (chỉ ký ad-hoc). Lần đầu mở, chuột phải vào **Font Atlas** rồi chọn **Open**.
+- Bản này chưa được Apple notarize (chỉ ký ad-hoc). Cách cài:
+  1. Mở DMG, double-click **Cài Font Atlas.command**. Script chép app vào Applications, gỡ quarantine, ký ad-hoc lại rồi mở app; thư viện và cài đặt cũ được giữ nguyên.
+  2. Nếu macOS chặn script ở lần đầu, vào System Settings → Privacy & Security, bấm **Open Anyway**, rồi double-click lại. Trên macOS 14 trở về trước, có thể chuột phải vào script rồi chọn **Open**.
+  3. Cài bằng Terminal (thay cho script): kéo app vào Applications, rồi chạy `xattr -dr com.apple.quarantine "/Applications/Font Atlas.app"`.
 - Font Atlas là công cụ: app không chặn việc xem hay phân tích font vì lý do license, nhưng hiển thị loại license để bạn tự chịu trách nhiệm khi dùng.
 
 ## 0.1.0
