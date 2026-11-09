@@ -72,7 +72,8 @@ describe('2/3 · columns change without reloading the table', () => {
     await mount(3, api);
     await waitFor(() => expect(useUiStore.getState().compareSession!.faces).toHaveLength(2));
     expect(useUiStore.getState().compare).toHaveLength(2);
-    expect(screen.getByRole('alert').textContent).toMatch(/hỏng/);
+    expect(useNoticeStore.getState().notices.some(n => /hỏng/.test(n.text))).toBe(true); // lý do báo bằng thông báo
+    expect(screen.queryByRole('alert')).toBeNull(); // dải cảnh báo không treo mãi
     expect(screen.getByRole('button', { name: 'Thêm font' }).getAttribute('aria-disabled')).toBeNull();
   });
   it('the + is disabled from the SESSION size even when a column is missing from view', async () => {
@@ -120,5 +121,63 @@ describe('11 · overlay reseeds', () => {
     act(() => { for (const k of [...useUiStore.getState().compareSession!.overlayIds]) useUiStore.getState().toggleCompareOverlayFace(k); });
     act(() => { useUiStore.getState().setCompareOverlay(false); useUiStore.getState().setCompareOverlay(true); });
     expect(useUiStore.getState().compareSession!.overlayIds).toEqual([key(0), key(1)]);
+  });
+});
+
+describe('review round 2 · failed faces, base removal, overlay reseed', () => {
+  it('re-adding a face that failed before fetches it again', async () => {
+    const api = createMockApi();
+    const real = api.compareFaces.bind(api);
+    const spy = vi.spyOn(api, 'compareFaces').mockImplementationOnce(async fs => { const d = await real(fs.slice(0, 2)); return { ...d, failed: [{ face: fs[2], reason: 'hỏng' }] }; });
+    await mount(3, api);
+    await waitFor(() => expect(useUiStore.getState().compareSession!.faces).toHaveLength(2));
+    spy.mockImplementation(real);
+    act(() => { useUiStore.getState().addCompareFace(fk(2)); });
+    await waitFor(() => expect(heads()).toHaveLength(3));
+  });
+  it('removing the base drops its column at once (before the refetch ends) and a failed refetch does not prune innocent faces', async () => {
+    const api = await mount(3);
+    let release!: () => void;
+    const real = api.compareFaces.bind(api);
+    vi.spyOn(api, 'compareFaces').mockImplementation(fs => new Promise((res, rej) => { release = () => { real(fs).then(res, rej); }; }));
+    const baseName = heads()[0].querySelector('.t span')!.textContent;
+    fireEvent.click(within(heads()[0]).getAllByRole('button').at(-1)!);
+    await waitFor(() => expect(heads()).toHaveLength(2));
+    expect(heads().map(h => h.querySelector('.t span')!.textContent)).not.toContain(baseName === heads()[0].querySelector('.t span')!.textContent ? '__none__' : baseName);
+    expect(useUiStore.getState().compareSession!.faces).toHaveLength(2);
+    act(() => release());
+    await waitFor(() => expect(heads()).toHaveLength(2));
+    expect(useUiStore.getState().compareSession!.faces).toHaveLength(2);
+  });
+  it('a refetch error after removing the base prunes nothing', async () => {
+    const api = await mount(3);
+    vi.spyOn(api, 'compareFaces').mockRejectedValue(new Error('net'));
+    fireEvent.click(within(heads()[0]).getAllByRole('button').at(-1)!);
+    await waitFor(() => expect(useNoticeStore.getState().notices.some(n => /net/.test(n.text))).toBe(true));
+    expect(useUiStore.getState().compareSession!.faces).toHaveLength(2);
+  });
+  it('a failed list that names the base while adding a column never prunes the base', async () => {
+    const api = await mount(2);
+    const real = api.compareFaces.bind(api);
+    vi.spyOn(api, 'compareFaces').mockImplementation(async fs => { const d = await real(fs); return { ...d, failed: [{ face: fs[0], reason: 'lạ' }] }; });
+    act(() => { useUiStore.getState().addCompareFace(fk(5)); });
+    await waitFor(() => expect(heads()).toHaveLength(3));
+    expect(useUiStore.getState().compareSession!.faces.map(f => `${f.hashHex}:${f.faceIndex}`)).toContain(key(0));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+  it('removing columns until the overlay selection is empty reseeds it (Overlay stays useful); the user clearing it by hand does not reseed', async () => {
+    useUiStore.getState().openCompare(Array.from({ length: 4 }, (_, i) => fk(i)));
+    act(() => { useUiStore.getState().setCompareOverlay(true); }); // chọn 0,1
+    act(() => { useUiStore.getState().removeCompareFace(key(0)); useUiStore.getState().removeCompareFace(key(1)); });
+    expect(useUiStore.getState().compareSession!.overlayIds).toEqual([key(2), key(3)]);
+    act(() => { for (const k of [...useUiStore.getState().compareSession!.overlayIds]) useUiStore.getState().toggleCompareOverlayFace(k); });
+    expect(useUiStore.getState().compareSession!.overlayIds).toEqual([]);
+  });
+  it('a metric value of 0 draws no bar fill at all (no 2px sliver)', async () => {
+    const { MetricCell } = await import('../CompareCells');
+    render(<MetricCell k="slant_deg" m={{ key: 'k', value: 0, unit: 'deg', quality: 'measured', reason: null, percentile: null }} base={{ key: 'k', value: -13, unit: 'deg', quality: 'measured', reason: null, percentile: null }} isBase={false} scale={{ signed: true, max: 15 }} />);
+    const fill = document.querySelector<HTMLElement>('.cmp-pbar i')!;
+    expect(parseFloat(fill.style.width)).toBe(0);
+    expect(fill.style.minWidth === '0px' || fill.style.minWidth === '0').toBe(true);
   });
 });

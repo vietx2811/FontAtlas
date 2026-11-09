@@ -162,7 +162,7 @@ export function MetricCell({ k, m, base, isBase, scale }: { k: string; m: Compar
       </div>
       {scale && (() => { const f = barFill(m.value, scale); return (
         <Tooltip label={[t('compare.pbar.tip'), pl].filter(Boolean).join(' · ')}>
-          <div className="cmp-pbar" role="img" aria-label={pl ?? t('compare.pbar.aria')} data-signed={scale.signed || undefined}><i className="fill" style={{ left: `${f.left}%`, width: `${f.width}%` }} /></div>
+          <div className="cmp-pbar" role="img" aria-label={pl ?? t('compare.pbar.aria')} data-signed={scale.signed || undefined}><i className="fill" style={{ left: `${f.left}%`, width: `${f.width}%`, minWidth: f.width > 0 ? 2 : 0 }} /></div>
         </Tooltip>
       ); })()}
     </div>

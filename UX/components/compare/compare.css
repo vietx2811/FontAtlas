@@ -116,7 +116,7 @@
 
 /* A: thanh tô từ 0 (hoặc từ tâm với số đo có dấu) */
 .cmp-pbar { overflow: visible; }
-.cmp-pbar i.fill { position: absolute; top: 0; height: 4px; border-radius: 2px; background: var(--accent-ink); opacity: .75; min-width: 2px; }
+.cmp-pbar i.fill { position: absolute; top: 0; height: 4px; border-radius: 2px; background: var(--accent-ink); opacity: .75; }
 .cmp-pbar[data-signed]::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--faint); }
 
 .cmp-spec .ph { color: var(--faint); }

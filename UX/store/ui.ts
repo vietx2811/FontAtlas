@@ -148,6 +148,9 @@ const fromDto = (d: UiStateDto): Pick<UiState, 'sidebarCollapsed' | 'openSection
   infoExpanded: d.infoExpanded,
 });
 
+/** Overlay đang bật mà việc bỏ cột làm cạn danh sách chọn → chọn lại mốc + font kế tiếp (chỉ khi do bỏ cột; tự bỏ chọn hết thì giữ nguyên). */
+const reseedOverlay = (on: boolean, ids: string[], faces: FaceKeyDto[]): string[] => (on && ids.length === 0 ? faces.slice(0, 2).map(faceKey) : ids);
+
 export type UiStore = UseBoundStore<StoreApi<UiState & UiActions>>;
 
 export function createUiStore(): UiStore {
@@ -195,13 +198,15 @@ export function createUiStore(): UiStore {
       const cs = s.compareSession;
       if (!cs || cs.faces.length <= COMPARE_MIN || !cs.faces.some(x => faceKey(x) === key)) return s;
       const faces = cs.faces.filter(x => faceKey(x) !== key);
-      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => k !== key), overlayIds: cs.overlayIds.filter(k => k !== key) }, compare: s.compare ? faces : s.compare };
+      const overlayIds = reseedOverlay(cs.overlayOn, cs.overlayIds.filter(k => k !== key), faces);
+      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => k !== key), overlayIds }, compare: s.compare ? faces : s.compare };
     }),
     pruneCompareFaces: keys => set(s => {
       const cs = s.compareSession;
       if (!cs || !cs.faces.some(x => keys.includes(faceKey(x)))) return s;
       const faces = cs.faces.filter(x => !keys.includes(faceKey(x)));
-      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => !keys.includes(k)), overlayIds: cs.overlayIds.filter(k => !keys.includes(k)) }, compare: s.compare ? faces : s.compare };
+      const overlayIds = reseedOverlay(cs.overlayOn, cs.overlayIds.filter(k => !keys.includes(k)), faces);
+      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => !keys.includes(k)), overlayIds }, compare: s.compare ? faces : s.compare };
     }),
     toggleComparePin: key => set(s => {
       const cs = s.compareSession;

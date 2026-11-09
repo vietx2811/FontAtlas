@@ -94,27 +94,36 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const dataRef = useRef<CompareDto | null>(null);
   dataRef.current = data;
   const lastAttempt = useRef(attempt);
-  // Đổi tập cột KHÔNG nháy bảng: bỏ cột (mốc không đổi) lọc tại chỗ; thêm cột chỉ nạp face mới; còn lại mới nạp lại toàn bộ (vẫn giữ bảng cũ trong lúc chờ).
+  // Đổi tập cột KHÔNG nháy bảng: bỏ cột lọc tại chỗ NGAY (kể cả mốc), rồi mới nạp lại nếu cần; thêm cột chỉ nạp face mới.
   useEffect(() => {
     let alive = true; setError(null);
     const cur = dataRef.current; const retry = lastAttempt.current !== attempt; lastAttempt.current = attempt;
     const ids = faces.map(keyOf);
-    const have = cur ? cur.faces.map(f => keyOf(f.face)) : [];
-    const known = new Set([...have, ...(cur?.failed.map(x => keyOf(x.face)) ?? [])]);
-    const full = () => { api.compareFaces(faces).then(d => { if (alive) setData(d); }, e => { if (alive) { if (cur) failAdd(ids.filter(k => !known.has(k)), e); else setError(e instanceof Error ? e.message : String(e)); } }); };
-    if (!cur || retry || ids[0] !== have[0]) { if (!cur || retry) setData(null); full(); return () => { alive = false; }; }
-    const extras = ids.filter(k => !known.has(k));
-    if (extras.length === 0) {
-      if (ids.length !== have.length) setData({ ...cur, faces: cur.faces.filter(f => ids.includes(keyOf(f.face))) });
+    if (!cur || retry) {
+      setData(null);
+      api.compareFaces(faces).then(d => { if (alive) setData(d); }, e => { if (alive) setError(e instanceof Error ? e.message : String(e)); });
       return () => { alive = false; };
     }
-    const baseKey = have[0];
-    const extraFaces = faces.filter(f => extras.includes(keyOf(f)));
-    api.compareFaces([faces.find(f => keyOf(f) === baseKey)!, ...extraFaces]).then(d => {
+    const have = cur.faces.map(f => keyOf(f.face));
+    const kept = cur.faces.filter(f => ids.includes(keyOf(f.face)));
+    if (kept.length !== cur.faces.length) setData({ ...cur, faces: kept }); // cột đã bỏ biến mất ngay, không chờ mạng
+    const extras = ids.filter(k => !have.includes(k)); // face từng lỗi (không có cột) mà được thêm lại cũng tính là mới
+    if (extras.length === 0 && ids[0] === have[0]) return () => { alive = false; };
+    const keptKeys = kept.map(f => keyOf(f.face));
+    const baseSame = ids[0] === have[0];
+    // Mốc đổi (đã bị xoá): so lại với mốc mới nên nạp lại cả bảng; ngược lại chỉ nạp mốc + face mới.
+    const req = baseSame ? [faces.find(f => keyOf(f) === have[0])!, ...faces.filter(f => extras.includes(keyOf(f)))] : faces;
+    api.compareFaces(req).then(d => {
       if (!alive) return;
-      const pool = new Map([...cur.faces, ...d.faces.filter(f => extras.includes(keyOf(f.face)))].map(f => [keyOf(f.face), f] as const));
-      setData({ faces: ids.map(k => pool.get(k)).filter((f): f is CompareFace => !!f), failed: [...cur.failed, ...d.failed] });
-    }, e => { if (alive) failAdd(extras, e); });
+      const fresh = baseSame ? d.faces.filter(f => extras.includes(keyOf(f.face))) : d.faces;
+      const pool = new Map([...(baseSame ? kept : []), ...fresh].map(f => [keyOf(f.face), f] as const));
+      const shown = ids.map(k => pool.get(k)).filter((f): f is CompareFace => !!f);
+      const shownKeys = new Set(shown.map(f => keyOf(f.face)));
+      const seen = new Set<string>();
+      // Mốc không bao giờ bị coi là "lỗi" vì một lần thêm cột; trùng khoá chỉ giữ một.
+      const failed = [...(baseSame ? cur.failed : []), ...d.failed].filter(x => { const k = keyOf(x.face); if (shownKeys.has(k) || (baseSame && k === have[0]) || seen.has(k)) return false; seen.add(k); return true; });
+      setData({ faces: shown, failed });
+    }, e => { if (alive) failAdd(extras.filter(k => !keptKeys.includes(k)), e); });
     return () => { alive = false; };
   }, [api, idsKey, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -123,12 +132,16 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     useUiStore.getState().pruneCompareFaces(keys);
     useNoticeStore.getState().push({ kind: 'error', text: t('compare.error', { msg: e instanceof Error ? e.message : String(e) }) });
   };
-  // Face không đọc được thì không có cột để bỏ: gỡ khỏi phiên (lý do vẫn hiện ở dải cảnh báo).
+  // Face không đọc được thì không có cột để bỏ: báo lý do bằng thông báo, gỡ khỏi phiên VÀ khỏi `failed` (dải cảnh báo không treo mãi).
   useEffect(() => {
     if (!data || data.failed.length === 0) return;
     const sess = useUiStore.getState().compareSession; if (!sess) return;
-    const bad = data.failed.map(x => keyOf(x.face)).filter(k => sess.faces.some(f => keyOf(f) === k));
-    if (bad.length) useUiStore.getState().pruneCompareFaces(bad);
+    const bad = data.failed.filter(x => sess.faces.some(f => keyOf(f) === keyOf(x.face)));
+    if (bad.length === 0) return;
+    useNoticeStore.getState().push({ kind: 'error', text: t('compare.skipped', { n: bad.length, reason: bad.map(x => x.reason).join('; ') }) });
+    useUiStore.getState().pruneCompareFaces(bad.map(x => keyOf(x.face)));
+    const gone = new Set(bad.map(x => keyOf(x.face)));
+    setData(d => (d ? { ...d, failed: d.failed.filter(x => !gone.has(keyOf(x.face))) } : d));
   }, [data]);
 
   // Tiêu điểm vào màn khi mở, trả về chỗ cũ khi đóng.
