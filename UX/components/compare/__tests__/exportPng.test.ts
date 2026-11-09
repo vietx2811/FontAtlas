@@ -68,14 +68,18 @@ describe('renderCompare (PNG content)', () => {
     });
     return { ctx, state };
   };
-  const setup = async (dark: boolean, tweak?: (d: Awaited<ReturnType<ReturnType<typeof createMockApi>['compareFaces']>>) => void, overlay?: boolean) => {
+  const setup = async (dark: boolean, tweak?: (d: Awaited<ReturnType<ReturnType<typeof createMockApi>['compareFaces']>>) => void, overlay?: boolean | number, extra: { families?: boolean; missing?: Record<string, string> } = {}) => {
     const { ctx, state } = fakeCtx();
     const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ctx) as never);
     const api = createMockApi();
     const data = await api.compareFaces(mockRows().slice(0, 2).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
     tweak?.(data);
     const { renderCompare } = await import('../exportPng');
-    const r = renderCompare({ data, families: new Map(), sample: 'Phở', fit: false, dark, overlay });
+    const keys = data.faces.map(f => `${f.face.hashHex}:${f.face.faceIndex}`);
+    const ov = overlay === false ? null : typeof overlay === 'number' ? keys.slice(0, overlay) : keys;
+    const families = new Map(extra.families ? keys.map((k, i) => [k, `Fam${i}`] as const) : []);
+    const missing = new Map(Object.entries(extra.missing ?? {}).map(([f, chars]) => [f, new Set([...chars])] as const));
+    const r = renderCompare({ data, families, sample: 'Phở', fit: false, dark, overlay: ov, missing });
     spy.mockRestore();
     return { r, state };
   };
@@ -103,9 +107,27 @@ describe('renderCompare (PNG content)', () => {
     expect(dark.state.fills).toContain('#0A0908');
     expect(light.r!.manifest.specimenBg.toLowerCase()).toBe('#ffffff');
   });
-  it('can omit the overlay row when it is hidden on screen', async () => {
+  it('can omit the overlay row when Overlay is off on screen, or when no font is selected', async () => {
     const { r } = await setup(false, undefined, false);
     expect(r!.manifest.rows).not.toContain('overlay');
+    expect(r!.manifest.overlayLayers).toBe(0);
+    const none = await setup(false, undefined, 0);
+    expect(none.r!.manifest.rows).not.toContain('overlay');
+  });
+  it('draws one Overlay block with exactly the toggled fonts and a legend naming them', async () => {
+    const two = await setup(false, undefined, true);
+    expect(two.r!.manifest.overlayLayers).toBe(2);
+    expect(two.r!.manifest.rows.filter(x => x === 'overlay')).toHaveLength(1);
+    expect(two.r!.manifest.texts.filter(x => x.includes('· mốc'))).toHaveLength(1);
+    const one = await setup(false, undefined, 1);
+    expect(one.r!.manifest.overlayLayers).toBe(1);
+  });
+  it('missing characters are painted grey and listed in plain text (a PNG has no hover)', async () => {
+    const { r, state } = await setup(false, undefined, false, { families: true, missing: { Fam0: 'ởố' } });
+    expect(r!.manifest.texts.some(x => x.startsWith('Thiếu: '))).toBe(true);
+    expect(state.fills).toContain('#78716C'); // --faint (sáng)
+    const clean = await setup(false, undefined, false, { families: true });
+    expect(clean.r!.manifest.texts.some(x => x.startsWith('Thiếu: '))).toBe(false);
   });
 });
 

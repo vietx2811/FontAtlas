@@ -200,7 +200,13 @@ export function createUiStore(): UiStore {
       if (!cs || !cs.faces.some(x => faceKey(x) === key)) return s;
       return { compareSession: { ...cs, pinned: cs.pinned.includes(key) ? cs.pinned.filter(k => k !== key) : [...cs.pinned, key] } };
     }),
-    setCompareOverlay: on => set(s => (s.compareSession ? { compareSession: { ...s.compareSession, overlayOn: on } } : s)),
+    setCompareOverlay: on => set(s => {
+      const cs = s.compareSession;
+      if (!cs) return s;
+      // Bật lần đầu chưa chọn font nào: chọn sẵn mốc + font kế tiếp để có cái xem ngay.
+      const overlayIds = on && cs.overlayIds.length === 0 ? cs.faces.slice(0, 2).map(faceKey) : cs.overlayIds;
+      return { compareSession: { ...cs, overlayOn: on, overlayIds } };
+    }),
     toggleCompareOverlayFace: key => set(s => {
       const cs = s.compareSession;
       if (!cs || !cs.faces.some(x => faceKey(x) === key)) return s;

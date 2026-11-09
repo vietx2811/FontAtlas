@@ -49,26 +49,52 @@ function SpecimenArt({ face, fam, text, size, fit }: { face: CompareFace; fam: s
 }
 
 const PLAIN = { fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal' } as const;
-/** Glyph của mốc (xám) chồng lên glyph của cột (màu), chung baseline. Đường đứt = x-height ĐO TỪ CHỮ MỐC đang vẽ (canvas ink), không theo số analyzer; mốc chưa nạp thì không vẽ đường. */
-export function OverlayCell({ api, base, face, scale }: { api: Api; base: CompareFace; face: CompareFace; scale: number }): React.JSX.Element {
+/** Kiểu vẽ các lớp overlay: mốc luôn đặc; các font khác là nét liền / nét đứt / chấm, tông đen → xám. */
+export const OVERLAY_STYLES = ['line', 'dash', 'dot'] as const;
+export type OverlayStyle = 'solid' | (typeof OVERLAY_STYLES)[number];
+export const overlayStyleOf = (selected: readonly CompareFace[], base: CompareFace): Map<CompareFace, OverlayStyle> => {
+  const m = new Map<CompareFace, OverlayStyle>(); let k = 0;
+  for (const f of selected) m.set(f, f === base ? 'solid' : OVERLAY_STYLES[Math.min(k++, OVERLAY_STYLES.length - 1)]);
+  return m;
+};
+export const faceName = (f: CompareFace): string => `${f.row.family} ${f.row.subfamily ?? ''}`.trim();
+const OV = { W: 520, H: 108, Y: 80, SZ: 72 } as const;
+
+/** Vùng Overlay chung: các font được chọn (≤ 4) chồng lên nhau chung baseline. Mốc vẽ đặc; font khác vẽ nét. Đường đứt = x-height ĐO TỪ CHỮ đang vẽ của font chính (mốc, nếu mốc được chọn). */
+export function OverlayPanel({ api, base, selected, scale }: { api: Api; base: CompareFace; selected: readonly CompareFace[]; scale(f: CompareFace): number }): React.JSX.Element {
+  const styles = overlayStyleOf(selected, base);
+  const primary = selected.includes(base) ? base : selected[0];
   return (
-    <WithFamily api={api} face={base}>{bf => <WithFamily api={api} face={face}>{ff => <OverlayArt base={base} face={face} scale={scale} bf={bf} ff={ff} />}</WithFamily>}</WithFamily>
+    <section className="cmp-ovl" aria-label={t('compare.row.overlay')} data-count={selected.length}>
+      <div className="cmp-ovl-h"><b>{t('compare.row.overlay')}</b><small>{OVERLAY_SPACED}</small></div>
+      {selected.length === 0 ? <p className="cmp-ovl-empty">{t('compare.ov.empty')}</p> : (
+        <svg viewBox={`0 0 ${OV.W} ${OV.H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')}: ${selected.map(faceName).join(', ')}`}>
+          <line x1="0" x2={OV.W} y1={OV.Y} y2={OV.Y} className="bl" />
+          {selected.map(f => <OverlayLayer key={`${f.face.hashHex}:${f.face.faceIndex}`} api={api} face={f} style={styles.get(f)!} scale={scale(f)} primary={f === primary} />)}
+        </svg>
+      )}
+      <ul className="cmp-ovl-legend">
+        {selected.map(f => (
+          <li key={`${f.face.hashHex}:${f.face.faceIndex}`} data-style={styles.get(f)}>
+            <svg width="26" height="10" aria-hidden="true"><line x1="1" x2="25" y1="5" y2="5" className={`ov-${styles.get(f)} sw`} /></svg>
+            <span>{faceName(f)}{f === base ? ` · ${t('compare.base')}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
-function OverlayArt({ base, face, scale, bf, ff }: { base: CompareFace; face: CompareFace; scale: number; bf: string | null; ff: string | null }): React.JSX.Element {
-  const W = 300, H = 96, Y = 66, SZ = 64;
-  const ink = useInk(bf);
-  const baseXh = ink?.x ?? null;
-  const same = face === base;
+function OverlayLayer({ api, face, style, scale, primary }: { api: Api; face: CompareFace; style: OverlayStyle; scale: number; primary: boolean }): React.JSX.Element {
+  return <WithFamily api={api} face={face}>{fam => <OverlayLayerArt fam={fam} style={style} scale={scale} primary={primary} />}</WithFamily>;
+}
+function OverlayLayerArt({ fam, style, scale, primary }: { fam: string | null; style: OverlayStyle; scale: number; primary: boolean }): React.JSX.Element {
+  const ink = useInk(primary ? fam : null);
+  const xh = primary ? ink?.x ?? null : null;
   return (
-    <div className="cmp-page cmp-overlay">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')} ${face.row.family}`} data-xh={baseXh === null ? '' : String(baseXh)}>
-        <line x1="0" x2={W} y1={Y} y2={Y} className="bl" />
-        {baseXh !== null && <line data-testid="overlay-xh" x1="0" x2={W} y1={Y - baseXh * SZ} y2={Y - baseXh * SZ} className="xh" />}
-        {!same && <text x="8" y={Y} fontSize={SZ} fontFamily={css(bf)} style={PLAIN} className="ghost">{OVERLAY_TEXT}</text>}
-        <text x="8" y={Y} fontSize={SZ * scale} fontFamily={css(ff)} style={PLAIN} className={same ? 'solo' : 'over'}>{OVERLAY_TEXT}</text>
-      </svg>
-    </div>
+    <>
+      {xh !== null && <line data-testid="overlay-xh" x1="0" x2={OV.W} y1={OV.Y - xh * OV.SZ} y2={OV.Y - xh * OV.SZ} className="xh" />}
+      <text x="8" y={OV.Y} fontSize={OV.SZ * scale} fontFamily={css(fam)} style={PLAIN} className={`ov-${style}`} data-style={style}>{OVERLAY_TEXT}</text>
+    </>
   );
 }
 

@@ -96,13 +96,6 @@ describe('ComparePage', () => {
     expect(screen.getAllByText('Chỉ ghi chú, không chặn')).toHaveLength(3);
   });
 
-  it('the Overlay toggle hides and shows the overlay row', async () => {
-    await mount();
-    expect(document.querySelectorAll('.cmp-overlay')).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: 'Overlay' }));
-    expect(document.querySelectorAll('.cmp-overlay')).toHaveLength(0);
-  });
-
   it('Esc and the back button close the screen; Esc is left to dialogs', async () => {
     useUiStore.getState().openCompare(faces(3));
     await mount();
@@ -159,7 +152,7 @@ describe('ComparePage', () => {
     await mount(api);
     fireEvent.click(screen.getByRole('button', { name: 'Match x-height' }));
     expect(notes('Không đo được x-height').length).toBeGreaterThan(0);
-    expect(document.querySelectorAll('.cmp-overlay line.xh')).toHaveLength(0);
+    expect(document.querySelectorAll('.cmp-ovl line.xh')).toHaveLength(0);
     expect([...document.querySelectorAll<HTMLElement>('.cmp-line')].every(l => l.style.fontSize === '30px')).toBe(true);
   });
 

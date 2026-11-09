@@ -9,4 +9,6 @@ export const COMPARE_V2 = {
   'compare.group.collapse': 'Thu gọn nhóm', 'compare.group.expand': 'Mở nhóm',
   'compare.row.hide': 'Ẩn hàng này', 'compare.row.add': 'Thêm hàng', 'compare.row.add.tip': 'Thêm lại hàng đã ẩn', 'compare.row.menu': 'Hàng đang ẩn',
   'compare.missing': 'Thiếu: {chars}', 'compare.edit': 'Sửa chữ mẫu (áp dụng cho mọi cột)',
+  'compare.ov.col': 'Chồng font này lên Overlay', 'compare.ov.col.off': 'Bỏ font này khỏi Overlay', 'compare.ov.max': 'Overlay tối đa {n} font',
+  'compare.ov.empty': 'Chọn font bằng nút mắt trên tiêu đề cột để chồng chúng lên nhau.',
 } as const;

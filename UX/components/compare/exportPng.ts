@@ -6,9 +6,10 @@ import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
 import { measureInkWith } from '../ui/inkLines';
 import { termName } from '../ui/termNames';
-import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, viNotes } from './CompareCells';
+import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, faceName, overlayStyleOf, viNotes } from './CompareCells';
+import { coverageProbe, missingList } from './glyphCoverage';
 
-export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; overlay?: boolean };
+export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; /** Khoá face (hashHex:faceIndex) được chồng trong Overlay, theo toggle trên màn hình; null/rỗng = không vẽ vùng Overlay. */ overlay?: readonly string[] | null; /** Họ font → ký tự của mẫu mà font đó không có (xám + ghi chú chữ, vì ảnh không có hover). */ missing?: ReadonlyMap<string, ReadonlySet<string>> };
 const keyOf = (f: { hashHex: string; faceIndex: number }) => `${f.hashHex}:${f.faceIndex}`;
 
 export const exportFileName = (data: CompareDto): string =>
@@ -44,6 +45,13 @@ export async function ensureFonts(families: Iterable<string | null>, sample: str
   return loaded;
 }
 
+/** Họ font đã nạp → ký tự của `text` mà font đó không có (dùng cho xám + ghi chú trong ảnh). */
+export async function detectMissingAll(families: Iterable<string>, text: string): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  await Promise.all([...families].map(async f => { const m = await coverageProbe.detect(f, text); if (m && m.size) out.set(f, m); }));
+  return out;
+}
+
 type Measure = Pick<CanvasRenderingContext2D, 'measureText'>;
 /** Ngắt dòng theo từ (từ dài hơn bề ngang thì ngắt theo ký tự); không bao giờ dùng "…". */
 export function wrapText(ctx: Measure, text: string, maxW: number): string[] {
@@ -69,14 +77,14 @@ export const EXPORT_PALETTE = {
   light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#78716C', faint: '#78716C', line: '#E7E5E4', accent: '#9A6B3C', page: '#FFFFFF', ink: '#1F1D1B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#9A6B3C', rule: '#D6D3D1' },
 } as const;
 
-export type ExportManifest = { rows: string[]; texts: string[]; fit: { specimen: number; vi: number }; size: { w: number; h: number }; dark: boolean; specimenBg: string };
+export type ExportManifest = { rows: string[]; texts: string[]; fit: { specimen: number; vi: number }; size: { w: number; h: number }; dark: boolean; specimenBg: string; overlayLayers: number };
 export type ExportResult = { canvas: HTMLCanvasElement; manifest: ExportManifest };
 
 /** Số đo kèm đơn vị, cùng hàm với màn hình (numberText + unitText). */
 export const metricText = (value: number, unit: string | null): string => [numberText(value, unit), unitText(unit)].filter(Boolean).join(' ');
 
 /** Vẽ bảng so sánh ra canvas (như màn hình: dòng mẫu, overlay, dấu chồng + nhãn, số đo + đơn vị + Δ, phân loại, license). Trả null khi không có canvas 2D (jsdom). */
-export function renderCompare({ data, families, sample, fit, dark, overlay = true, loaded }: ExportInput): ExportResult | null {
+export function renderCompare({ data, families, sample, fit, dark, overlay, loaded, missing }: ExportInput): ExportResult | null {
   const n = data.faces.length;
   const LW = 200, CW = 270, PAD = 20, HEAD_LINE = 18, SPEC = 70, OVL = 96, LH = 15;
   const c = dark ? EXPORT_PALETTE.dark : EXPORT_PALETTE.light;
@@ -98,11 +106,35 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   const headH = Math.max(...nameL.map(l => l.length)) * HEAD_LINE + 14;
   const labelBlock = (b: string, g: string) => ({ b: lines(b, 12, 600, LW - 12), g: g ? lines(g, 11, 400, LW - 12) : [] });
   const labelH = (b: string, g: string) => { const l = labelBlock(b, g); return (l.b.length + l.g.length) * LH + 18; };
-  const viNotesOf = data.faces.map(f => viNotes(f).map(x => ({ ...x, lines: lines(x.text, 11, 600, colW) })));
+  const fam = (i: number) => { const f = families.get(keyOf(data.faces[i].face)) ?? null; return f && (!loaded || loaded.has(f)) ? f : null; };
+  const missOf = (i: number, str: string): Set<string> => { const f = fam(i); const set = f ? missing?.get(f) : undefined; return new Set(set ? [...str].filter(ch => set.has(ch)) : []); };
+  const specText = clipGraphemes(sample, 18);
+  const viNotesOf = data.faces.map((f, i) => {
+    const m = missOf(i, SAMPLE_VI);
+    const all = m.size ? [...viNotes(f), { kind: 'warn' as const, text: t('compare.missing', { chars: missingList(m) }) }] : viNotes(f);
+    return all.map(x => ({ ...x, lines: lines(x.text, 11, 600, colW) }));
+  });
+  const specNotes = (i: number): string[] => [...(fit && i > 0 && !xhOk(data.faces[i].metrics.x_height_em?.value) ? [t('compare.noXh')] : []), ...(missOf(i, specText).size ? [t('compare.missing', { chars: missingList(missOf(i, specText)) })] : [])];
+  const maxSpecNotes = Math.max(0, ...data.faces.map((_, i) => specNotes(i).length));
   // Chiều cao hàng không thấp hơn khối nhãn bên trái sau khi xuống dòng.
   const viGloss = `${termName('vi_marks')} · ${t('compare.row.vi.gloss')}`;
-  const specH = Math.max(SPEC, labelH(t('compare.row.line'), ''));
-  const ovlH = Math.max(OVL, labelH(t('compare.row.overlay'), OVERLAY_SPACED));
+  const specH = Math.max(SPEC + 14 * maxSpecNotes, labelH(t('compare.row.line'), ''));
+  // Vùng Overlay chung (một khối trải hết các cột): các font được chọn chồng lên nhau + chú giải tên.
+  const ovSel = data.faces.filter(f => overlay?.includes(keyOf(f.face)));
+  const ovOn = ovSel.length > 0;
+  const ovStyles = overlayStyleOf(ovSel, base);
+  const legendW = n * CW - 12 - 20;
+  const legend = (() => {
+    const rowsL: Array<Array<{ f: (typeof ovSel)[number]; x: number }>> = [[]]; let x = 0;
+    probe.font = fontOf(11, 400);
+    for (const f of ovSel) {
+      const w = 34 + probe.measureText(`${faceName(f)}${f === base ? ` · ${t('compare.base')}` : ''}`).width + 18;
+      if (x + w > legendW && rowsL.at(-1)!.length) { rowsL.push([]); x = 0; }
+      rowsL.at(-1)!.push({ f, x }); x += w;
+    }
+    return rowsL;
+  })();
+  const ovlH = Math.max(OVL + legend.length * 16, labelH(t('compare.row.overlay'), OVERLAY_SPACED));
   const viH = Math.max(SPEC + Math.max(0, ...viNotesOf.map(a => a.reduce((h, x) => h + x.lines.length * 14 + 4, 0))), labelH(t('compare.row.vi'), viGloss));
   const metricK = (k: string) => `compare.m.${k}` as I18nKey;
   const deltaWraps = (k: (typeof COMPARE_METRICS)[number], i: number): { text: string; wrap: boolean } | null => {
@@ -129,7 +161,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   const licL = data.faces.map(f => lines(`${t('compare.row.license')}: ${f.license ?? '—'} · ${t('compare.licenseNote')}`, 11, 400, colW));
   const clsH = Math.max(labelH(t('compare.row.class'), ''), ...data.faces.map((_, i) => clsL[i].length * 17 + 18 + licL[i].length * 14 + 12));
 
-  const H = PAD * 2 + headH + specH + (overlay ? ovlH : 0) + viH + metricH.reduce((a, b) => a + b, 0) + clsH;
+  const H = PAD * 2 + headH + specH + (ovOn ? ovlH : 0) + viH + metricH.reduce((a, b) => a + b, 0) + clsH;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   const ctx = canvas.getContext('2d');
@@ -155,7 +187,6 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
     data.faces.forEach((_, i) => { ctx.save(); ctx.beginPath(); ctx.rect(x0(i), y, CW - 12, h - 8); ctx.clip(); ctx.fillStyle = c.page; ctx.fillRect(x0(i), y, CW - 12, h - 8); draw(i, x0(i) + 10, y, CW - 32, h - 8); ctx.restore(); });
     y += h;
   };
-  const fam = (i: number) => { const f = families.get(keyOf(data.faces[i].face)) ?? null; return f && (!loaded || loaded.has(f)) ? f : null; };
   const scale = (i: number) => (fit && i > 0 ? fitScale(base.metrics.x_height_em?.value ?? null, data.faces[i].metrics.x_height_em?.value ?? null) : 1);
   const face = (i: number, px: number) => `${Math.round(px * scale(i))}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`;
 
@@ -165,31 +196,51 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
     for (let i = 0; i < n; i++) { ctx.font = face(i, px); const w = ctx.measureText(str).width; if (w > 0) k = Math.min(k, (CW - 36) / w); }
     return k;
   };
-  const specText = clipGraphemes(sample, 18);
   const kSpec = fitK(specText, 28); const kVi = fitK(SAMPLE_VI, 30 * 1.1);
+  // Ký tự thiếu vẽ màu xám (--faint tương ứng); ghi chú chữ nằm dưới mẫu vì ảnh không có hover.
+  const fillMarked = (str: string, x: number, yy: number, miss: Set<string>) => {
+    if (miss.size === 0) { ctx.fillStyle = c.ink; ctx.fillText(str, x, yy); return; }
+    let acc = '';
+    for (const ch of str) { ctx.fillStyle = miss.has(ch) ? c.faint : c.ink; ctx.fillText(ch, x + ctx.measureText(acc).width, yy); acc += ch; }
+  };
   band('specimen', t('compare.row.line'), '', specH, (i, bx, by) => {
-    ctx.font = face(i, 28 * kSpec); ctx.fillStyle = c.ink; ctx.fillText(specText, bx, by + 42);
-    if (fit && i > 0 && !xhOk(data.faces[i].metrics.x_height_em?.value)) text(t('compare.noXh'), bx, by + 62, { size: 10, weight: 600, color: c.warn });
+    ctx.font = face(i, 28 * kSpec); fillMarked(specText, bx, by + 42, missOf(i, specText));
+    specNotes(i).forEach((nt, j) => text(nt, bx, by + 62 + 14 * j, { size: 10, weight: 600, color: c.warn }));
   });
 
-  if (overlay) {
-    const OSZ = 64, OY = 66;
-    band('overlay', t('compare.row.overlay'), OVERLAY_SPACED, ovlH, (i, bx, by, bw) => {
-      // x-height của mốc đo từ chính chữ mốc (canvas), không theo số analyzer; mốc chưa nạp thì bỏ đường.
-      const baseXh = fam(0) ? measureInkWith(ctx, `${OSZ}px "${fam(0)}"`, OSZ)?.x ?? null : null;
-      const same = i === 0;
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = c.over; ctx.beginPath(); ctx.moveTo(bx - 10, by + OY); ctx.lineTo(bx + bw + 10, by + OY); ctx.stroke();
-      if (baseXh !== null) { ctx.strokeStyle = c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx - 10, by + OY - baseXh * OSZ); ctx.lineTo(bx + bw + 10, by + OY - baseXh * OSZ); ctx.stroke(); ctx.setLineDash([]); }
-      if (!same) { ctx.font = `${OSZ}px ${fam(0) ? `"${fam(0)}", ` : ''}${ui}`; ctx.globalAlpha = c.ghost; ctx.fillStyle = c.ink; ctx.fillText(OVERLAY_TEXT, bx - 2, by + OY); ctx.globalAlpha = 1; }
-      ctx.font = `${OSZ * scale(i)}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`; ctx.fillStyle = same ? c.ink : c.over; ctx.globalAlpha = same ? 1 : 0.9; ctx.fillText(OVERLAY_TEXT, bx - 2, by + OY); ctx.globalAlpha = 1;
-      texts.push(OVERLAY_TEXT);
-    });
+  if (ovOn) {
+    const OSZ = 72, OY = 82;
+    rows.push('overlay');
+    rowHead(t('compare.row.overlay'), OVERLAY_SPACED, y);
+    const bx = x0(0) + 10; const bw = n * CW - 12;
+    ctx.save(); ctx.beginPath(); ctx.rect(x0(0), y, bw, ovlH - 8); ctx.clip(); ctx.fillStyle = c.page; ctx.fillRect(x0(0), y, bw, ovlH - 8);
+    const idxOf = (f: (typeof ovSel)[number]) => data.faces.indexOf(f);
+    const primary = ovSel.includes(base) ? base : ovSel[0];
+    const pf = fam(idxOf(primary));
+    const xh = pf ? measureInkWith(ctx, `${OSZ}px "${pf}"`, OSZ)?.x ?? null : null; // x-height đo từ chữ đang vẽ của font chính
+    ctx.lineWidth = 1; ctx.strokeStyle = c.over; ctx.beginPath(); ctx.moveTo(bx - 10, y + OY); ctx.lineTo(Math.min(bx + 520, bx + bw - 20), y + OY); ctx.stroke();
+    if (xh !== null) { ctx.strokeStyle = c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx - 10, y + OY - xh * OSZ); ctx.lineTo(Math.min(bx + 520, bx + bw - 20), y + OY - xh * OSZ); ctx.stroke(); ctx.setLineDash([]); }
+    const strokeOf = (st: string, g = ctx) => { g.lineWidth = st === 'dot' ? 1.5 : 1.3; g.globalAlpha = st === 'dash' ? 0.62 : st === 'dot' ? 0.4 : 1; g.setLineDash(st === 'dash' ? [5, 2.5] : st === 'dot' ? [1.5, 2.5] : []); };
+    for (const f of ovSel) {
+      const i = idxOf(f); const st = ovStyles.get(f)!;
+      ctx.font = `${OSZ * scale(i)}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`;
+      if (st === 'solid') { ctx.fillStyle = c.ink; ctx.fillText(OVERLAY_TEXT, bx - 2, y + OY); }
+      else { ctx.strokeStyle = c.ink; strokeOf(st); ctx.strokeText(OVERLAY_TEXT, bx - 2, y + OY); ctx.globalAlpha = 1; ctx.setLineDash([]); }
+    }
+    texts.push(OVERLAY_TEXT);
+    legend.forEach((row, li) => row.forEach(({ f, x }) => {
+      const ly = y + OVL - 6 + li * 16; const st = ovStyles.get(f)!;
+      ctx.strokeStyle = c.ink; ctx.lineWidth = 2.4; strokeOf(st); ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(bx + x, ly - 4); ctx.lineTo(bx + x + 26, ly - 4); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+      text(`${faceName(f)}${f === base ? ` · ${t('compare.base')}` : ''}`, bx + x + 34, ly, { size: 11, color: c.ink });
+    }));
+    ctx.restore();
+    y += ovlH;
   }
 
   band('vi', t('compare.row.vi'), viGloss, viH, (i, bx, by) => {
     const v = data.faces[i].vi;
-    ctx.font = face(i, 30 * 1.1 * kVi); ctx.fillStyle = c.ink; ctx.globalAlpha = v.supports ? 1 : 0.4; ctx.fillText(SAMPLE_VI, bx, by + 46); ctx.globalAlpha = 1;
+    ctx.font = face(i, 30 * 1.1 * kVi); ctx.globalAlpha = v.supports ? 1 : 0.4; fillMarked(SAMPLE_VI, bx, by + 46, missOf(i, SAMPLE_VI)); ctx.globalAlpha = 1;
     ctx.strokeStyle = v.stackedMarksOverflow ? c.warn : c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx, by + 10); ctx.lineTo(bx + CW - 32, by + 10); ctx.stroke(); ctx.setLineDash([]);
     let ny = by + SPEC - 4;
     for (const note of viNotesOf[i]) { paras(note.lines, bx, ny + 10, 14, { size: 11, weight: 600, color: note.kind === 'ok' ? c.ok : c.warn }); ny += note.lines.length * 14 + 4; }
@@ -229,7 +280,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
     if (conf) { text(conf, x0(i), ly, { size: 11, color: c.mute }); ly += 18; }
     paras(licL[i], x0(i), ly + 4, 14, { size: 11, color: c.mute });
   });
-  return { canvas, manifest: { rows, texts, fit: { specimen: kSpec, vi: kVi }, size: { w: W, h: H }, dark, specimenBg: c.page } };
+  return { canvas, manifest: { rows, texts, fit: { specimen: kSpec, vi: kVi }, size: { w: W, h: H }, dark, specimenBg: c.page, overlayLayers: ovSel.length } };
 }
 
 /** Giữ chữ ký cũ: chỉ lấy canvas. */
@@ -238,7 +289,8 @@ export function renderCompareCanvas(input: ExportInput): HTMLCanvasElement | nul
 /** Vẽ ra Blob PNG (đợi font trước). Ném lỗi nếu không có canvas 2D. */
 export async function renderCompareBlob(input: ExportInput): Promise<{ blob: Blob; name: string }> {
   const loaded = await ensureFonts(input.families.values(), input.sample);
-  const canvas = renderCompareCanvas({ ...input, loaded });
+  const missing = await detectMissingAll(loaded, `${input.sample}${SAMPLE_VI}`);
+  const canvas = renderCompareCanvas({ ...input, loaded, missing });
   if (!canvas) throw new Error('canvas 2D không khả dụng');
   const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
   if (!blob) throw new Error('không tạo được ảnh');
