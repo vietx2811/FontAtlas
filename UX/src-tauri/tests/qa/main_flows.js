@@ -283,8 +283,8 @@
         diag[ch] = {};
         for (const [k, f] of Object.entries(stacks)) { g.clearRect(0, 0, 80, 64); g.font = f; g.fillStyle = '#000'; g.fillText(ch, 4, 48); const d = g.getImageData(0, 0, 80, 64).data; let sum = 0, h = 0; for (let i = 3; i < d.length; i += 4) { sum += d[i]; h = (h * 31 + d[i]) | 0; } g.font = f.replace('40px', '64px'); diag[ch][k] = `${sum}/${h}/${g.measureText(ch).width.toFixed(1)}`; }
       }
-      await log('compare-glyph-diag', true, { famName, diag, fontsCheck: document.fonts.check(`40px "${famName}"`, '龍') });
-    } catch (e) { await log('compare-glyph-diag', true, { err: String(e) }); }
+      await log('compare-glyph-diag', false, { famName, diag, fontsCheck: document.fonts.check(`40px "${famName}"`, '龍') });
+    } catch (e) { await log('compare-glyph-diag', false, { err: String(e) }); }
     // PNG giữ ký tự thiếu: xám + chữ ghi chú (ảnh không có hover)
     const pngMiss = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     await log('compare-png-missing-note', !!pngMiss && pngMiss.texts.some(x => /^Thiếu: /.test(x)), { notes: pngMiss?.texts.filter(x => /Thiếu/.test(x)) });
