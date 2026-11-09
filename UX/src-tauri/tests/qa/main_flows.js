@@ -219,6 +219,8 @@
     const rgbSum = el => { const m = (el ? getComputedStyle(el).backgroundColor : '').match(/\d+/g); return m ? m.slice(0, 3).reduce((a, b) => a + +b, 0) : -1; };
     const lightSpec = rgbSum(document.querySelector('.cmp-page'));
     const pngL = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    // Lưu ảnh PNG thật (mặt chữ thật) vào bảng settings (khoá ui.qapng.*, không trùng ui.qa.%); run.sh ghi ra tệp.
+    if (pngL?.dataUrl) { try { await inv('set_setting', { key: 'ui.qapng.light', value: pngL.dataUrl.split(',')[1] }); } catch (e) {} }
     await log('compare-png-content', !!pngL && pngL.rows.includes('overlay') && pngL.rows.includes('vi') && pngL.texts.some(x => /\d,\d+ (em|°|tỷ lệ|×)/.test(x)) && !pngL.texts.some(x => x.includes('…')) && pngL.dark === false, { rows: pngL?.rows, units: pngL?.texts.filter(x => /\d,\d+ /.test(x)).slice(0, 4), ellipsis: pngL?.texts.filter(x => x.includes('…')), warn: pngL?.texts.filter(x => /Thiếu|Dấu/.test(x)) });
     // DARK: vùng specimen nền tối, đổi theme lúc đang mở là đổi ngay; PNG theo theme.
     const prevTheme = document.documentElement.dataset.theme;
@@ -226,6 +228,7 @@
     const darkSpec = rgbSum(document.querySelector('.cmp-page'));
     const darkInk = getComputedStyle(document.querySelector('.cmp-page')).color;
     const pngD = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    if (pngD?.dataUrl) { try { await inv('set_setting', { key: 'ui.qapng.dark', value: pngD.dataUrl.split(',')[1] }); } catch (e) {} }
     await snap('compare-dark');
     await log('compare-dark-specimen', lightSpec > 700 && darkSpec >= 0 && darkSpec < 60 && /^rgb\(25[0-9]/.test(darkInk) && !!pngD && pngD.dark === true && pngD.specimenBg.toLowerCase() === '#0a0908', { lightSpec, darkSpec, darkInk, pngDark: pngD?.dark, bg: pngD?.specimenBg });
     if (prevTheme) document.documentElement.dataset.theme = prevTheme; else document.documentElement.removeAttribute('data-theme');
