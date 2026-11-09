@@ -154,6 +154,62 @@
     const rangesAll = fpAll ? [...fpAll.querySelectorAll('p, small, span')].map(e => e.textContent).filter(t => /Min .* max/.test(t)).slice(0, 6) : [];
     await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
     document.querySelector('[aria-label="Đóng bộ lọc"]')?.click(); await sleep(300);
+    // ADVANCED + TÓM TẮT + "ĐANG LỌC" (2a)
+    {
+      const key = (el, init) => el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+      const total = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      document.querySelector('.fa-family-chip')?.click(); await sleep(600);
+      const base = total();
+      key(document, { key: 'f', code: 'KeyF', metaKey: true, altKey: true });
+      const sheet = await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000);
+      const rows = await wait(() => { const r = document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]'); return r.length === 18 ? r : null; }, 20000);
+      await sleep(600); await snap('advanced-sheet');
+      const cols = sheet && getComputedStyle(sheet.querySelector('[data-testid=advanced-cols]'));
+      const cards = sheet ? [...sheet.querySelectorAll('.fa-adv-card')] : [];
+      const lefts = new Set(cards.map(c => Math.round(c.getBoundingClientRect().left)));
+      const scrollNeeded = sheet ? sheet.querySelector('[data-testid=advanced-cols]').scrollHeight > sheet.querySelector('[data-testid=advanced-cols]').clientHeight + 1 : null;
+      await log('advanced-opens-18-axes', !!sheet && !!rows && lefts.size >= 2, { rows: rows?.length ?? 0, columnWidth: cols?.columnWidth, columnCount: cols?.columnCount, distinctColumns: lefts.size, scrollNeeded, win: [innerWidth, innerHeight] });
+      const tt = await termCheck('[data-testid=advanced-sheet] .fa-axis-name[data-term]');
+      await log('advanced-term-tooltips', tt.n >= 17 && tt.bad.length === 0 && tt.art > 0, tt);
+      // Weight 600+ bằng bàn phím: lưới đổi số lượng, tóm tắt hiện Weight, nháy đúp thanh = bỏ lọc
+      const lo = document.querySelector('[data-axis=weight_class] [data-testid=rs-lo]');
+      lo?.focus(); for (let i = 0; i < 5; i++) { key(lo, { key: 'ArrowRight' }); await sleep(120); }
+      await sleep(900);
+      const sum = document.querySelector('[data-testid=filter-summary]');
+      const after = total();
+      await log('advanced-weight-filters-grid', !!sum && /Weight/.test(sum.textContent) && after > 0 && after < base, { base, after, summary: sum?.textContent });
+      document.querySelector('[data-axis=weight_class] [data-testid=rs-track]')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await sleep(900);
+      await log('advanced-weight-dblclick-resets', !document.querySelector('[data-testid=filter-summary]') && total() === base, { total: total(), base });
+      key(document, { key: 'Escape' }); await sleep(300);
+      await log('advanced-esc-closes', !document.querySelector('[data-testid=advanced-sheet]'), null);
+      // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
+      document.querySelector('button[aria-controls="font-filters"]')?.click();
+      const fp2 = await wait(() => document.getElementById('font-filters'));
+      [...(fp2?.querySelectorAll('label') ?? [])].find(l => l.textContent.includes('Italic') || l.textContent.includes('In nghiêng'))?.querySelector('input')?.click();
+      await sleep(900);
+      document.querySelector('[aria-label="Đóng bộ lọc"]')?.click(); await sleep(300);
+      const sbox = document.querySelector('.fa-search'); const sinput = sbox?.querySelector('input');
+      const sum2 = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
+      const ratio = sinput && sbox ? sinput.getBoundingClientRect().width / sbox.getBoundingClientRect().width : 0;
+      await log('summary-keeps-input-wide', !!sum2 && ratio >= 0.4, { ratio, summary: sum2?.textContent });
+      sum2?.click();
+      const pop = await wait(() => document.querySelector('[data-testid=active-filters]'), 5000);
+      await sleep(300); await snap('active-filters-popover');
+      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
+      key(document, { key: 'Escape' }); await sleep(300);
+      const withFilter = total();
+      sinput?.focus(); key(sinput, { key: 'Backspace' }); await sleep(150);
+      const selected = !!document.querySelector('.fa-fsum-seg[data-selected=true]');
+      key(sinput, { key: 'Backspace' }); await sleep(900);
+      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
+      await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
+      undoBtn?.click(); await sleep(900);
+      await log('toast-undo-restores', !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, { total: total(), withFilter });
+      // dọn: bỏ lọc để các bước sau chạy trên thư viện đầy đủ
+      key(sinput ?? document, { key: 'Backspace', metaKey: true }); await sleep(600);
+      await log('summary-clear-all', !document.querySelector('[data-testid=filter-summary]'), null);
+    }
     // CÀI ĐẶT → SIDEBAR
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));
