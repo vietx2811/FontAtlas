@@ -255,3 +255,106 @@ pub fn create_combos(state: &AppState, case_id: i64, combos: &[NewComboDto]) -> 
     let ids = state.with_user(|u| Ok(u.create_combos(case_id, &new)?))?;
     ids.into_iter().map(|id| combo_by_id(state, id)).collect()
 }
+
+const MAX_COMPARE_COMBOS: usize = 8;
+
+fn pair_mode(m: Option<PairingLevelDto>) -> Option<crate::dto::analysis::PairModeDto> {
+    use crate::dto::analysis::PairModeDto as P;
+    m.map(|m| match m {
+        PairingLevelDto::Safe => P::Safe,
+        PairingLevelDto::Controlled => P::Controlled,
+        PairingLevelDto::Experimental => P::Experimental,
+    })
+}
+
+/// Compare Combo: mỗi cột là một Combo; giọng ① (vai đầu theo thứ tự display → quote) so với từng vai
+/// dùng font khác. `combo_ids` rỗng = mọi Combo của Case (tối đa 8).
+pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: crate::dto::analysis::LangDto) -> Result<CaseCompareDto, CmdError> {
+    use crate::dto::analysis::{PairOptsDto, PairRoleDto};
+    let case = load(state, case_id)?;
+    let picked: Vec<&ComboDto> = if combo_ids.is_empty() {
+        case.combos.iter().collect()
+    } else {
+        combo_ids
+            .iter()
+            .map(|id| case.combos.iter().find(|c| c.id == *id).ok_or_else(|| CmdError::not_found(format!("Combo #{id} không thuộc Case"))))
+            .collect::<Result<_, _>>()?
+    };
+    if picked.len() > MAX_COMPARE_COMBOS {
+        return Err(CmdError::invalid_arg(format!("so sánh tối đa {MAX_COMPARE_COMBOS} Combo")));
+    }
+    let mut columns = Vec::with_capacity(picked.len());
+    for combo in picked {
+        let mut relations = Vec::new();
+        if let Some(first) = combo.slots.first() {
+            for other in combo.slots.iter().skip(1).filter(|s| s.key != first.key) {
+                let opts = PairOptsDto {
+                    role: PairRoleDto::Body,
+                    mode: pair_mode(case.settings.mode),
+                    project_vi: case.settings.vi,
+                    k: 1,
+                    collection_id: None,
+                    lang,
+                };
+                // font không còn trong thư viện / chưa phân tích: bỏ quan hệ đó, không làm hỏng cả bảng
+                if let Ok(assessment) = crate::services::analysis::assess_pair(state, &first.key, &other.key, &opts) {
+                    relations.push(ComboRelationDto { from: first.role, to: other.role, assessment });
+                }
+            }
+        }
+        let mut seen: Vec<&FaceKeyDto> = Vec::new();
+        for s in &combo.slots {
+            if !seen.contains(&&s.key) {
+                seen.push(&s.key);
+            }
+        }
+        let rows: Vec<&FaceRowDto> = combo.slots.iter().filter_map(|s| s.row.as_ref()).collect();
+        let mut licenses: Vec<String> = rows.iter().map(|r| r.license_class.clone()).collect();
+        licenses.sort();
+        licenses.dedup();
+        columns.push(ComboColumnDto {
+            combo: combo.clone(),
+            relations,
+            font_count: seen.len() as u32,
+            worst_vi_missing: rows.iter().map(|r| r.vi_missing).max(),
+            licenses,
+        });
+    }
+    Ok(CaseCompareDto { case_id, columns })
+}
+
+/// "Pair from peek" (2d): mở Case với font hiện tại làm neo ở vai tương ứng, mang theo mức ghép/tiếng Việt.
+/// Ứng viên đang xem chỉ được thêm vào Case (origin `peek`) và trả lại làm `trial`, KHÔNG ghi vào vai.
+pub fn open_case_from_peek(state: &AppState, p: &PeekOpenDto) -> Result<PeekOpenResultDto, CmdError> {
+    let (anchor_role, other_role) = match p.as_role {
+        PeekRoleDto::Heading => (ComboRoleDto::Display, ComboRoleDto::Body),
+        PeekRoleDto::Body => (ComboRoleDto::Body, ComboRoleDto::Display),
+    };
+    let anchor = FaceKey::try_from(&p.face)?;
+    let cand = p.candidate.as_ref().map(FaceKey::try_from).transpose()?;
+    let settings = json_of(&p.settings)?;
+    let (case_id, combo_id, created) = state.with_user(|u| {
+        let (case_id, created) = match p.case_id {
+            Some(id) => (id, false),
+            None => match u.latest_case()? {
+                Some(id) => (id, false),
+                None => (u.create_case("Case 1", None, Some(&settings))?, true),
+            },
+        };
+        u.case(case_id)?;
+        // mang theo lựa chọn của peek (kể cả khi dùng Case có sẵn: người dùng vừa chọn như vậy)
+        u.update_case(case_id, &CasePatch { settings: Some(settings.clone()), ..Default::default() })?;
+        u.add_to_case(case_id, std::slice::from_ref(&anchor), "peek")?;
+        if let Some(c) = &cand {
+            u.add_to_case(case_id, std::slice::from_ref(c), "peek")?;
+        }
+        let combo_id = match u.combos(case_id)?.into_iter().find(|c| c.is_main).map(|c| c.id) {
+            Some(id) => id,
+            None => u.create_combo(case_id, None, None)?,
+        };
+        u.set_combo_slot(combo_id, anchor_role.as_str(), Some(&anchor), None, None)?;
+        u.touch_case(case_id)?;
+        Ok((case_id, combo_id, created))
+    })?;
+    Ok(PeekOpenResultDto { case: load(state, case_id)?, combo_id, anchor_role, other_role, trial: p.candidate.clone(), created })
+}

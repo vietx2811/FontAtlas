@@ -128,6 +128,8 @@ export function createTauriApi(): Api {
     reorderCombos: (caseId, ids) => none(call('reorder_combos', { caseId, ids })),
     setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
     createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
+    caseCompare: (caseId, comboIds, lang = 'vi') => call('case_compare', { caseId, comboIds, lang }),
+    openCaseFromPeek: peek => call('open_case_from_peek', { peek }),
     axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);

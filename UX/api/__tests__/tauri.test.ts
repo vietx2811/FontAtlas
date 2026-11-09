@@ -65,6 +65,7 @@ describe('case/combo commands', () => {
       [() => api.createCombo(3), 'create_combo', { caseId: 3, name: null, fromCombo: null }],
       [() => api.setComboSlot(5, 'body', null), 'set_combo_slot', { comboId: 5, role: 'body', face: null, note: null, style: null }],
       [() => api.reorderCombos(3, [2, 1]), 'reorder_combos', { caseId: 3, ids: [2, 1] }],
+      [() => api.caseCompare(3, [1, 2]), 'case_compare', { caseId: 3, comboIds: [1, 2], lang: 'vi' }],
       [() => api.updateCase(3, { clearBrief: true }), 'update_case', { id: 3, patch: { name: null, brief: null, clearBrief: true, settings: null, viewState: null } }],
     ];
     for (const [run, cmd, args] of cases) { await run(); expect(last()).toEqual({ cmd, args }); }

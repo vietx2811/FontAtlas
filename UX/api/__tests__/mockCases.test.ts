@@ -67,4 +67,21 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     expect((await api.restoreCase(c.id)).deletedAt).toBeNull();
     await expect(api.createCase('  ')).rejects.toMatchObject({ code: 'invalid_arg' });
   });
+
+  it('caseCompare returns one column per combo; openCaseFromPeek anchors the font and returns the candidate as trial', async () => {
+    const api = createMockApi();
+    const [a, b] = mockRows().slice(0, 2).map(key);
+    const r = await api.openCaseFromPeek({ face: a, as: 'heading', candidate: b, caseId: null, settings: { vi: false, mode: 'safe' } });
+    expect(r).toMatchObject({ created: true, anchorRole: 'display', otherRole: 'body', trial: b });
+    expect(r.case.settings).toEqual({ vi: false, mode: 'safe' });
+    expect(r.case.combos[0].slots.map(s => s.role)).toEqual(['display']);
+    expect(r.case.faces.map(f => f.origin)).toEqual(['peek', 'peek']);
+    const r2 = await api.openCaseFromPeek({ face: b, as: 'body', candidate: null, caseId: null, settings: { vi: true, mode: null } });
+    expect(r2).toMatchObject({ created: false, comboId: r.comboId, anchorRole: 'body', otherRole: 'display', trial: null });
+    const cmp = await api.caseCompare(r.case.id, []);
+    expect(cmp.columns).toHaveLength(1);
+    expect(cmp.columns[0]).toMatchObject({ fontCount: 2, relations: [] });
+    await expect(api.caseCompare(r.case.id, [999])).rejects.toMatchObject({ code: 'not_found' });
+    await expect(api.openCaseFromPeek({ face: a, as: 'body', candidate: null, caseId: 999, settings: { vi: true, mode: null } })).rejects.toMatchObject({ code: 'not_found' });
+  });
 });

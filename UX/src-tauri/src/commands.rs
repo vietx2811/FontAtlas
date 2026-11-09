@@ -121,6 +121,8 @@ macro_rules! command_list {
             async reorder_combos(case_id: i64, ids: Vec<i64>) -> Result<(), CmdError>;
             async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
             async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
+            async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
+            async open_case_from_peek(peek: PeekOpenDto) -> Result<PeekOpenResultDto, CmdError>;
             async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
             async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
             async get_settings() -> Result<SettingsDto, CmdError>;
@@ -341,6 +343,8 @@ cmd!(update_combo(id: i64, patch: ComboPatchDto) -> ComboDto => |s| cases::updat
 cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
 cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
 cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
+cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
+cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));
 cmd!(create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Vec<ComboDto> => |s| cases::create_combos(s, case_id, &combos));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
 cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));

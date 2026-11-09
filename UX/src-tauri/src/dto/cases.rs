@@ -274,18 +274,12 @@ pub struct NewSlotDto {
     pub face: FaceKeyDto,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export, rename_all = "camelCase")]
 pub struct NewComboDto {
     pub name: Option<String>,
     pub slots: Vec<NewSlotDto>,
-}
-
-impl Default for NewComboDto {
-    fn default() -> Self {
-        NewComboDto { name: None, slots: vec![] }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -297,5 +291,86 @@ pub struct AddToCaseDto {
     pub added: u32,
     pub already_in: u32,
     /// true khi lệnh phải tạo Case mới (chưa có Case nào đang mở).
+    pub created: bool,
+}
+
+// ---- Compare Combo ----
+
+/// Quan hệ giữa giọng ① (vai đầu tiên theo thứ tự display → quote) và một vai khác trong Combo.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ComboRelationDto {
+    pub from: ComboRoleDto,
+    pub to: ComboRoleDto,
+    /// Đánh giá cặp (nhãn ●◐◆○, Δ theo trục, cổng, câu giải thích) — `assessment.face` là font của vai `to`.
+    pub assessment: crate::dto::analysis::PairCandidateDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ComboColumnDto {
+    pub combo: ComboDto,
+    /// Rỗng khi Combo có < 2 font khác nhau hoặc font không còn trong thư viện/chưa phân tích.
+    pub relations: Vec<ComboRelationDto>,
+    /// Số font khác nhau.
+    pub font_count: u32,
+    /// Số ký tự tiếng Việt thiếu lớn nhất trong các font (VI "thấp nhất"); `None` khi không có font nào còn trong thư viện.
+    pub worst_vi_missing: Option<u32>,
+    /// Các lớp license khác nhau (ofl, apache, other, unknown).
+    pub licenses: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CaseCompareDto {
+    #[ts(type = "number")]
+    pub case_id: i64,
+    pub columns: Vec<ComboColumnDto>,
+}
+
+// ---- Pair from peek ----
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum PeekRoleDto {
+    /// "Font này là tiêu đề" → vai `display`
+    Heading,
+    /// "Font này là nội dung" → vai `body`
+    Body,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PeekOpenDto {
+    pub face: FaceKeyDto,
+    #[serde(rename = "as")]
+    #[ts(rename = "as")]
+    pub as_role: PeekRoleDto,
+    /// Ứng viên đang xem trong tab ∞ — thành lựa chọn đầu tiên của vai còn lại, chưa đặt.
+    pub candidate: Option<FaceKeyDto>,
+    /// null = Case đang mở gần nhất, chưa có thì tạo mới.
+    #[ts(type = "number | null")]
+    pub case_id: Option<i64>,
+    pub settings: CaseSettingsDto,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PeekOpenResultDto {
+    pub case: CaseDto,
+    #[ts(type = "number")]
+    pub combo_id: i64,
+    pub anchor_role: ComboRoleDto,
+    /// Vai còn lại để Cuộn chọn mở vào (body ↔ display).
+    pub other_role: ComboRoleDto,
+    /// Echo `candidate` để giao diện đặt vào trạng thái "thử" của `other_role`.
+    pub trial: Option<FaceKeyDto>,
+    /// true khi Case vừa được tạo.
     pub created: bool,
 }
