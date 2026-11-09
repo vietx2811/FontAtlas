@@ -99,3 +99,7 @@
 .cmp-edit { position: absolute; left: 12px; right: 12px; top: 8px; height: 1.2em; padding: 0; margin: 0; border: 0; border-radius: 2px; background: transparent; color: transparent; caret-color: var(--specimen-ink); line-height: 1.2; outline: none; font-weight: normal; }
 .cmp-edit:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .cmp-edit::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: transparent; }
+
+/* H7: ký tự mang dấu chồng — nền tông xám nhạt + gạch chân mảnh, không đổi màu chữ */
+.cmp-vi .stk { background: color-mix(in srgb, var(--specimen-ink) 11%, transparent); box-shadow: 0 1px 0 color-mix(in srgb, var(--specimen-ink) 45%, transparent); border-radius: 2px; }
+.cmp-vi .miss { color: var(--faint); }

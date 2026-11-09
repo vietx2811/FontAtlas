@@ -6,7 +6,7 @@ import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
 import { measureInkWith } from '../ui/inkLines';
 import { termName } from '../ui/termNames';
-import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, SAMPLE_VI_GLOSS, viNotes } from './CompareCells';
+import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, viNotes } from './CompareCells';
 
 export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; overlay?: boolean };
 const keyOf = (f: { hashHex: string; faceIndex: number }) => `${f.hashHex}:${f.faceIndex}`;
@@ -100,7 +100,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   const labelH = (b: string, g: string) => { const l = labelBlock(b, g); return (l.b.length + l.g.length) * LH + 18; };
   const viNotesOf = data.faces.map(f => viNotes(f).map(x => ({ ...x, lines: lines(x.text, 11, 600, colW) })));
   // Chiều cao hàng không thấp hơn khối nhãn bên trái sau khi xuống dòng.
-  const viGloss = SAMPLE_VI_GLOSS;
+  const viGloss = `${termName('vi_marks')} · ${t('compare.row.vi.gloss')}`;
   const specH = Math.max(SPEC, labelH(t('compare.row.line'), ''));
   const ovlH = Math.max(OVL, labelH(t('compare.row.overlay'), OVERLAY_SPACED));
   const viH = Math.max(SPEC + Math.max(0, ...viNotesOf.map(a => a.reduce((h, x) => h + x.lines.length * 14 + 4, 0))), labelH(t('compare.row.vi'), viGloss));

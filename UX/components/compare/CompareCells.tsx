@@ -13,7 +13,6 @@ import { missingList, useMissingChars } from './glyphCoverage';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
-export const SAMPLE_VI_GLOSS = 'Ữ Ặ Ệ Ỗ Ở · ươ';
 export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
@@ -94,16 +93,29 @@ export function viNotes(face: CompareFace): ViNote[] {
   return out;
 }
 
+/** Chỉ số (theo ký tự) của các ký tự mang dấu chồng: sau khi tách NFD có từ 2 dấu kết hợp trở lên (Ữ, Ặ, Ệ, ấ, ở…). */
+export function stackedIndexes(text: string): Set<number> {
+  const out = new Set<number>();
+  [...text].forEach((ch, i) => { if ([...ch.normalize('NFD')].filter(c => /\p{Mn}/u.test(c)).length >= 2) out.add(i); });
+  return out;
+}
+
 export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+  return <WithFamily api={api} face={face}>{fam => <ViArt face={face} fam={fam} size={size} />}</WithFamily>;
+}
+function ViArt({ face, fam, size }: { face: CompareFace; fam: string | null; size: number }): React.JSX.Element {
   const { stackedMarksOverflow: over, supports } = face.vi;
   const notes = viNotes(face);
+  const missing = useMissingChars(fam, SAMPLE_VI);
+  const stacked = stackedIndexes(SAMPLE_VI);
+  const parts = [...notes.map(n => (n.title ? `${n.text} — ${n.title}` : n.text)), ...(missing.size ? [t('compare.missing', { chars: missingList(missing) })] : [])];
   return (
-    <WithFamily api={api} face={face}>{fam => (
-      <div className="cmp-page fa-note-host">
-        <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
-        <NoteMark testId="vi-note" kind={notes.some(n => n.kind === 'warn') ? 'warn' : 'info'} text={notes.map(n => n.title ? `${n.text} — ${n.title}` : n.text).join(' · ')} />
+    <div className="cmp-page fa-note-host">
+      <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>
+        {[...SAMPLE_VI].map((ch, i) => <span key={i} className={`${stacked.has(i) ? 'stk' : ''}${missing.has(ch.normalize('NFC')) ? ' miss' : ''}`.trim() || undefined} data-stacked={stacked.has(i) ? 'true' : undefined}>{ch}</span>)}
       </div>
-    )}</WithFamily>
+      <NoteMark testId="vi-note" kind={notes.some(n => n.kind === 'warn') || missing.size > 0 ? 'warn' : 'info'} text={parts.join(' · ')} />
+    </div>
   );
 }
 

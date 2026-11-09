@@ -64,7 +64,7 @@ const vi = {
   'compare.png': 'PNG', 'compare.pdf': 'PDF', 'compare.pdfSoon': 'PDF chưa có', 'compare.pngFail': 'Không xuất được PNG: {msg}',
   'compare.loading': 'Đang đọc số đo…', 'compare.error': 'Không mở được Compare: {msg}', 'compare.retry': 'Thử lại', 'compare.base': 'mốc',
   'compare.sec.specimen': 'Specimen', 'compare.sec.metrics': 'Số đo', 'compare.sec.class': 'Phân loại', 'compare.sec.meta': 'Meta',
-  'compare.row.line': 'Dòng mẫu', 'compare.row.overlay': 'Overlay', 'compare.row.vi': 'Dấu chồng', 'compare.row.class': 'Classification', 'compare.row.license': 'License',
+  'compare.row.line': 'Dòng mẫu', 'compare.row.overlay': 'Overlay', 'compare.row.vi': 'Vietnamese', 'compare.row.vi.gloss': 'dấu chồng', 'compare.row.class': 'Classification', 'compare.row.license': 'License',
   'compare.est': 'Ước lượng', 'compare.na': 'Không đo được', 'compare.viOk': 'Dấu vừa khung', 'compare.viWarn': 'Dấu tràn khung', 'compare.viWarnEm': 'Dấu tràn khung · {em} em', 'compare.viMissing': 'Thiếu {n} ký tự',
   'compare.licenseNote': 'Chỉ ghi chú, không chặn', 'compare.footnote': 'Δ so với mốc · thanh = vị trí trong thư viện (percentile)',
   'compare.m.x_height_em': 'x-height', 'compare.m.x_height_em.gloss': 'cao chữ thường', 'compare.m.cap_height_em': 'cap height', 'compare.m.cap_height_em.gloss': 'cao chữ hoa',

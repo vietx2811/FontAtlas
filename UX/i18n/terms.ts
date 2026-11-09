@@ -23,7 +23,7 @@ export const TERM_GLOSS = {
   'term.a_storeys.gloss': 'Chữ a hai tầng (a) hay một tầng (ɑ).',
   'term.g_storeys.gloss': 'Chữ g hai tầng (có vòng dưới) hay một tầng.',
   'term.overlay.gloss': 'Chồng glyph của mốc (mờ) lên glyph của cột (màu), chung baseline, để thấy chỗ lệch.',
-  'term.vi_marks.gloss': 'Dấu chồng: chữ hoa tiếng Việt mang hai dấu (Ữ, Ặ, Ệ…); dấu cao quá thì tràn khung dòng.',
+  'term.vi_marks.gloss': 'Dấu chồng: chữ tiếng Việt mang hai dấu cùng lúc (ấ, ở, ặ, Ữ…); dấu cao quá thì tràn khung dòng và dễ va vào dòng trên.',
   'term.baseline.gloss': 'Đường nền: dòng chữ đứng trên đó.',
   'term.classification.gloss': 'Phân loại: nhóm kiểu dáng (serif, sans…) suy ra từ số đo và siêu dữ liệu; có thể sửa tay.',
   'term.class.serif.gloss': 'Có chân: nét kết thúc bằng chân nhỏ (Times, Garamond).',
