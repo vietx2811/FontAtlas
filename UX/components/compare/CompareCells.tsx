@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import type { Api } from '../../api';
+import { useUiStore } from '../../store/ui';
 import type { CompareFace, CompareMetric } from '../../api/compare';
 import { hasKey, t } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
@@ -7,6 +9,7 @@ import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
 import { NoteMark } from '../ui/noteMark';
+import { missingList, useMissingChars } from './glyphCoverage';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
@@ -25,13 +28,25 @@ const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fa
 /** Cột thiếu x-height khi bật Match x-height: không đổi cỡ, nói rõ vì sao. */
 export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
 
+/** Chữ mẫu sửa tại chỗ: một ô nhập trong suốt nằm trên lớp hiển thị (kiểu chữ giữ nguyên); sửa ở một cột là đổi ở mọi cột (`useUiStore.sample`). Ký tự font không có hiện xám (`--faint`). */
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
-  return <WithFamily api={api} face={face}>{fam => (
-    <div className="cmp-page fa-note-host">
-      <div className="cmp-line" style={{ fontFamily: css(fam), fontSize: size }}>{text}</div>
+  return <WithFamily api={api} face={face}>{fam => <SpecimenArt face={face} fam={fam} text={text} size={size} fit={fit} />}</WithFamily>;
+}
+function SpecimenArt({ face, fam, text, size, fit }: { face: CompareFace; fam: string | null; text: string; size: number; fit: boolean }): React.JSX.Element {
+  const sample = useUiStore(s => s.sample);
+  const missing = useMissingChars(fam, text);
+  const layer = useRef<HTMLDivElement>(null);
+  const sync = (el: HTMLInputElement) => { if (layer.current) layer.current.style.transform = `translateX(${-el.scrollLeft}px)`; };
+  const style = { fontFamily: css(fam), fontSize: size } as const;
+  return (
+    <div className="cmp-page fa-note-host cmp-spec">
+      <div className="cmp-line cmp-spec-view" aria-hidden="true" style={style}><div ref={layer}>{[...text].map((ch, i) => <span key={i} className={missing.has(ch.normalize('NFC')) ? 'miss' : undefined}>{ch}</span>)}</div></div>
+      <input className="cmp-edit" type="text" value={sample} spellCheck={false} autoComplete="off" style={style} aria-label={`${t('compare.edit')} · ${face.row.family}`}
+        onChange={e => { useUiStore.getState().setSample(e.target.value); sync(e.target); }} onScroll={e => sync(e.currentTarget)} onKeyUp={e => sync(e.currentTarget)} onSelect={e => sync(e.currentTarget)} />
+      {missing.size > 0 && <NoteMark testId="missing-note" text={t('compare.missing', { chars: missingList(missing) })} />}
       {noXh(face, fit) && <NoteMark text={t('compare.noXh')} />}
     </div>
-  )}</WithFamily>;
+  );
 }
 
 const PLAIN = { fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal' } as const;

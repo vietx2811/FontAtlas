@@ -8,4 +8,5 @@ export const COMPARE_V2 = {
   'compare.col.pinned': 'Đã pin',
   'compare.group.collapse': 'Thu gọn nhóm', 'compare.group.expand': 'Mở nhóm',
   'compare.row.hide': 'Ẩn hàng này', 'compare.row.add': 'Thêm hàng', 'compare.row.add.tip': 'Thêm lại hàng đã ẩn', 'compare.row.menu': 'Hàng đang ẩn',
+  'compare.missing': 'Thiếu: {chars}', 'compare.edit': 'Sửa chữ mẫu (áp dụng cho mọi cột)',
 } as const;

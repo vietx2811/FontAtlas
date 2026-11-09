@@ -90,3 +90,12 @@
 .rh .cmp-hide { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 5px; color: var(--faint); opacity: 0; transition: opacity .12s; }
 .rh:hover .cmp-hide, .rh:focus-within .cmp-hide { opacity: 1; }
 .rh .cmp-hide:hover { background: var(--chrome-hover); color: var(--fg); }
+
+/* H6: chữ mẫu sửa tại chỗ — ô nhập trong suốt phủ lên lớp hiển thị */
+.cmp-spec { position: relative; }
+.cmp-spec-view { pointer-events: none; }
+.cmp-spec-view > div { display: inline-block; min-width: 100%; will-change: transform; }
+.cmp-spec .miss { color: var(--faint); }
+.cmp-edit { position: absolute; left: 12px; right: 12px; top: 8px; height: 1.2em; padding: 0; margin: 0; border: 0; border-radius: 2px; background: transparent; color: transparent; caret-color: var(--specimen-ink); line-height: 1.2; outline: none; font-weight: normal; }
+.cmp-edit:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.cmp-edit::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: transparent; }
