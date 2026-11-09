@@ -588,7 +588,12 @@
       await sleep(300);
       const rowsN = dlg ? dlg.querySelectorAll('[data-testid=conflict-list] > li').length : 0;
       const h = dlg?.getBoundingClientRect().height ?? 0;
-      await snap('conflict-dialog');
+      // Hộp thoại phải NẰM TRÊN CÙNG thật (không kẹt dưới stacking context của Top Bar/lưới): điểm giữa và 4 góc trong hộp trỏ vào chính nó.
+      const dr = dlg?.getBoundingClientRect();
+      const probes = dr ? [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]].map(([fx, fy]) => dlg.contains(document.elementFromPoint(dr.left + dr.width * fx, dr.top + dr.height * fy))) : [];
+      const scrimTop = !!dlg && document.elementFromPoint(20, window.innerHeight - 20)?.classList.contains('fa-modal-scrim');
+      await log('conflict-dialog-on-top', probes.length === 5 && probes.every(Boolean) && scrimTop && dlg.parentElement?.parentElement === document.body, { probes, scrimTop, parent: dlg?.parentElement?.parentElement?.tagName });
+      await sleep(400); await snap('conflict-dialog');
       const themeC = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400); await snap('conflict-dialog-dark');
       if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
       const title = dlg?.querySelector('h2')?.textContent ?? '';

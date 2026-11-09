@@ -86,6 +86,12 @@ describe('ConflictDialog', () => {
     expect(css).toMatch(/\.fa-modal\.fa-conf\s*\{[^}]*max-height:\s*70vh/);
     expect(css).toMatch(/\.fa-conf \.fa-conf-list\s*\{[^}]*overflow-y:\s*auto/);
   });
+  it('renders in a portal on <body>, so a parent stacking context (Top Bar, grid) cannot bury it', () => {
+    const { container } = render(<div style={{ position: 'relative', zIndex: 1 }}><ConflictDialog items={items} total={12} onCancel={() => {}} onConfirm={() => {}} /></div>);
+    const dlg = screen.getByRole('dialog');
+    expect(container.contains(dlg)).toBe(false);
+    expect(dlg.parentElement?.parentElement).toBe(document.body);
+  });
   it('a system-owned conflict blocks "Vẫn kích hoạt"', () => {
     render(<ConflictDialog items={[{ family: 'Arial', style: 'Regular', conflicts: [c({ owner: 'system', existingPath: '/Library/Fonts/Arial.ttf' })] }]} total={1} onCancel={() => {}} onConfirm={() => {}} />);
     expect((screen.getByRole('radio', { name: /Vẫn kích hoạt/ }) as HTMLInputElement).disabled).toBe(true);
