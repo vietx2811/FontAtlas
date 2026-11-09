@@ -35,17 +35,22 @@ pub fn tone_term(t: &ToneDto) -> Option<(&'static str, Strength)> {
     Some((id, st))
 }
 
-/// Term của từ điển cho mục đích dùng. `branding` không có term (chỉ ảnh hưởng class); `packaging` có mục
-/// trong từ điển nhưng được đánh dấu không ánh xạ được — trả đúng lý do của từ điển, không đoán.
+/// Term của từ điển cho mục đích dùng (áp cho cả hai vai). `branding` không có term (chỉ ảnh hưởng class).
+/// `packaging` KHÔNG có term riêng (mục `packaging` của từ điển là không ánh xạ được): nó được suy ra theo vai,
+/// xem `PACKAGING_DISPLAY` / `PACKAGING_BODY`, và luôn kèm ghi chú `packaging_inferred`.
 pub fn use_terms(u: BriefUseDto) -> &'static [&'static str] {
     match u {
         BriefUseDto::Editorial => &["editorial"],
         BriefUseDto::UiWeb => &["readable_small", "clean"],
         BriefUseDto::Poster => &["display", "heavy"],
-        BriefUseDto::Branding => &[],
-        BriefUseDto::Packaging => &["packaging"],
+        BriefUseDto::Branding | BriefUseDto::Packaging => &[],
     }
 }
+
+/// Packaging (suy ra từ các term đã có, không phải term riêng): vai display = display + heavy,
+/// vai body/info = readable_small + clean.
+pub const PACKAGING_DISPLAY: [&str; 2] = ["display", "heavy"];
+pub const PACKAGING_BODY: [&str; 2] = ["readable_small", "clean"];
 
 fn note(code: &str, detail: Option<String>) -> BriefNoteDto {
     BriefNoteDto { code: code.into(), detail }
@@ -75,12 +80,13 @@ fn base_query(brief: &BriefDto, d: &crate::dto::analysis::DescribeDto, notes: &m
         q.italic = Some(true);
     }
     if brief.needs.installed_only {
-        let active: Vec<_> = crate::services::activation::state_list(state)?
+        let mut active: Vec<_> = crate::services::activation::state_list(state)?
             .into_iter()
             .filter(|s| s.state == crate::dto::activation::DesiredStateDto::Active)
             .flat_map(|s| s.faces.into_iter().map(move |i| crate::dto::library::FaceKeyDto { hash_hex: s.hash_hex.clone(), face_index: i }))
-            .take(crate::services::library::MAX_FACE_KEYS)
             .collect();
+        active.sort_by(|a, b| (&a.hash_hex, a.face_index).cmp(&(&b.hash_hex, b.face_index))); // xác định: không phụ thuộc thứ tự trả về
+        active.truncate(crate::services::library::MAX_FACE_KEYS);
         if active.is_empty() {
             notes.push(note("installed_none_active", None));
         } else {
@@ -124,17 +130,46 @@ pub fn brief_starter(state: &AppState, brief: &BriefDto, case_id: Option<i64>) -
             }
         }
     }
-    let id_refs: Vec<(&str, Option<Strength>)> = ids.iter().map(|(i, s)| (i.as_str(), *s)).collect();
-    let parsed = state.dictionary.parse_ids(&id_refs);
-    if parsed.matched.is_empty() {
+    let build = |extra: &[&str]| {
+        let mut all = ids.clone();
+        for e in extra {
+            if !all.iter().any(|(i, _)| i == e) {
+                all.push(((*e).to_string(), None));
+            }
+        }
+        let refs: Vec<(&str, Option<Strength>)> = all.iter().map(|(i, s)| (i.as_str(), *s)).collect();
+        crate::services::describe::from_parsed(state.dictionary.parse_ids(&refs))
+    };
+    let describe = build(&[]);
+    if describe.matched.is_empty() && !brief.uses.contains(&BriefUseDto::Packaging) {
         notes.push(note("no_terms", None));
     }
-    let describe = crate::services::describe::from_parsed(parsed);
+    // packaging: ánh xạ suy ra theo vai (không phải term riêng) — nói rõ trong ghi chú
+    let packaging = brief.uses.contains(&BriefUseDto::Packaging);
+    let (d_display, d_body) = if packaging {
+        notes.push(note(
+            "packaging_inferred",
+            Some(format!("display={}; body={}", PACKAGING_DISPLAY.join("+"), PACKAGING_BODY.join("+"))),
+        ));
+        (build(&PACKAGING_DISPLAY), build(&PACKAGING_BODY))
+    } else {
+        (describe.clone(), describe.clone())
+    };
 
     // 2. term + ràng buộc → điều kiện Library
     let query = base_query(brief, &describe, &mut notes, state)?;
-    let display_query = with_weight(query.clone(), DISPLAY_WEIGHT);
-    let body_query = with_weight(query.clone(), BODY_WEIGHT);
+    let role_query = |base: &FaceQueryDto, d: &crate::dto::analysis::DescribeDto, w: [u16; 2]| {
+        let mut q = base.clone();
+        q.axis_filters = d.filters.clone();
+        for h in &d.hard {
+            if !q.hard.contains(h) {
+                q.hard.push(h.clone());
+            }
+        }
+        with_weight(q, w)
+    };
+    let display_query = role_query(&query, &d_display, DISPLAY_WEIGHT);
+    let body_query = role_query(&query, &d_body, BODY_WEIGHT);
 
     // 3. neo (vai display): nới trọng lượng nếu thiếu
     let mut anchors = Vec::new();
@@ -169,16 +204,24 @@ pub fn brief_starter(state: &AppState, brief: &BriefDto, case_id: Option<i64>) -
             PairingLevelDto::Experimental => PairModeDto::Experimental,
         })
         .unwrap_or(PairModeDto::Safe);
+    // font body ưu tiên nằm trong tập thoả điều kiện vai body (packaging: readable_small + clean…)
+    let body_ok: std::collections::HashSet<(String, u32)> = crate::services::library::query_faces(state, &FaceQueryDto { limit: 1000, offset: 0, ..body_query.clone() })
+        .map(|p| p.items.into_iter().map(|r| (r.hash_hex, r.face_index)).collect())
+        .unwrap_or_default();
     let mut combos: Vec<PairComboDto> = Vec::new();
     let mut used_body: Vec<String> = Vec::new();
     for a in &anchors {
         let face = crate::dto::library::FaceKeyDto { hash_hex: a.hash_hex.clone(), face_index: a.face_index };
         let opts = PairOptsDto { role: PairRoleDto::Body, mode: Some(mode), project_vi: brief.needs.vi, k: 20, collection_id: None, lang: LangDto::Vi };
         let Ok(cands) = crate::services::analysis::pair_candidates(state, &face, &opts) else { continue };
+        let in_body = |c: &&crate::dto::analysis::PairCandidateDto| body_ok.contains(&(c.row.hash_hex.clone(), c.row.face_index));
+        let fresh = |c: &&crate::dto::analysis::PairCandidateDto| !used_body.contains(&c.row.family);
         let pick = cands
             .iter()
-            .find(|c| c.row.family != a.family && !used_body.contains(&c.row.family))
-            .or_else(|| cands.iter().find(|c| !used_body.contains(&c.row.family)));
+            .find(|c| in_body(c) && fresh(c) && c.row.family != a.family)
+            .or_else(|| cands.iter().find(|c| in_body(c) && fresh(c)))
+            .or_else(|| cands.iter().find(|c| fresh(c) && c.row.family != a.family))
+            .or_else(|| cands.iter().find(fresh));
         match pick {
             Some(c) => {
                 used_body.push(c.row.family.clone());
@@ -228,5 +271,9 @@ mod tests {
                 assert!(d.has_id(id), "{u:?} → {id}");
             }
         }
+        for id in PACKAGING_DISPLAY.iter().chain(&PACKAGING_BODY) {
+            assert!(d.has_id(id), "packaging → {id}");
+        }
+        assert!(use_terms(BriefUseDto::Packaging).is_empty(), "packaging không có term riêng");
     }
 }

@@ -6,6 +6,8 @@
 export type BriefNoteDto = { 
 /**
  * `no_terms` · `branding_class_only` · `installed_none_active` · `weight_relaxed` · `few_anchors`
- * · `no_body_pair` · `index_unavailable` · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: có thể thiếu kết quả) · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: kết quả có thể thiếu)
+ * · `no_body_pair` · `index_unavailable` · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: có thể thiếu kết quả)
+ * · `packaging_inferred` (packaging là ánh xạ suy ra từ term có sẵn, không phải term riêng; `detail` = "display=display+heavy; body=readable_small+clean")
+ * · `packaging_inferred` (packaging là ánh xạ suy ra: `detail` = "display=display+heavy; body=readable_small+clean") · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: kết quả có thể thiếu)
  */
 code: string, detail: string | null, };

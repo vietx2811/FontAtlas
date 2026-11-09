@@ -279,11 +279,18 @@ fn brief_starter_edge_cases_are_explicit_not_guessed() {
     settle_langs(&st);
     let note_codes = |r: &BriefStarterDto| r.notes.iter().map(|n| n.code.clone()).collect::<Vec<_>>();
 
-    // packaging: có mục trong từ điển nhưng không ánh xạ được → nói rõ lý do của từ điển
+    // packaging: suy ra theo vai từ term có sẵn, và nói rõ đó là suy ra
     let r = brief::brief_starter(&st, &brief(vec![BriefUseDto::Packaging], vec![]), None).unwrap();
-    assert_eq!(r.describe.unmappable.len(), 1);
-    assert_eq!(r.describe.unmappable[0].0, "packaging");
-    assert!(r.describe.filters.is_empty());
+    assert!(r.describe.unmappable.is_empty(), "không còn trả mục packaging không ánh xạ được");
+    let inferred = r.notes.iter().find(|n| n.code == "packaging_inferred").expect("ghi chú suy ra");
+    assert_eq!(inferred.detail.as_deref(), Some("display=display+heavy; body=readable_small+clean"));
+    // điều kiện chung không có term; từng vai có bộ lọc trục của term suy ra
+    assert!(r.query.axis_filters.is_empty());
+    let axes = |q: &FaceQueryDto| q.axis_filters.iter().map(|f| f.axis.clone()).collect::<std::collections::BTreeSet<_>>();
+    assert!(axes(&r.display_query).contains("darkness"), "heavy → darkness");
+    assert!(axes(&r.body_query).contains("x_height_em"), "readable_small → x_height_em");
+    assert!(!axes(&r.body_query).contains("darkness"));
+    assert!(!note_codes(&r).contains(&"no_terms".to_string()));
 
     // branding một mình: chỉ class, không term
     let r = brief::brief_starter(&st, &brief(vec![BriefUseDto::Branding], vec![]), None).unwrap();
@@ -347,4 +354,45 @@ fn brief_starter_warns_when_language_coverage_is_still_computing() {
     assert!(r.notes.iter().any(|n| n.code == "langs_incomplete"));
     let no_vi = BriefDto { needs: BriefNeedsDto { vi: false, ..Default::default() }, ..Default::default() };
     assert!(!brief::brief_starter(&st, &no_vi, None).unwrap().notes.iter().any(|n| n.code == "langs_incomplete"), "không cần tiếng Việt thì không cảnh báo");
+}
+
+#[test]
+fn open_case_from_peek_is_idempotent() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let (roboto, playfair) = (key_of(&st, "roboto"), key_of(&st, "playfair"));
+    let req = PeekOpenDto { face: playfair.clone(), as_role: PeekRoleDto::Heading, candidate: Some(roboto.clone()), case_id: None, settings: CaseSettingsDto::default() };
+    let first = cases::open_case_from_peek(&st, &req).unwrap();
+    let second = cases::open_case_from_peek(&st, &req).unwrap();
+    let third = cases::open_case_from_peek(&st, &PeekOpenDto { case_id: Some(first.case.id), ..req.clone() }).unwrap();
+    assert!(first.created && !second.created && !third.created);
+    for r in [&second, &third] {
+        assert_eq!(r.case.id, first.case.id);
+        assert_eq!(r.combo_id, first.combo_id);
+        assert_eq!(r.case.combos.len(), 1, "bấm nhiều lần không tạo Combo trùng");
+        assert_eq!(r.case.combos[0].slots.len(), 1);
+        assert_eq!(r.case.faces.len(), 2);
+        assert_eq!(r.trial, first.trial);
+    }
+    assert_eq!(cases::list_cases(&st, false).unwrap().len(), 1, "cũng không tạo Case trùng");
+}
+
+#[test]
+fn brief_starter_is_deterministic() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle_langs(&st);
+    let briefs = [
+        BriefDto::default(),
+        brief(vec![BriefUseDto::Editorial], vec![ToneDto { pair: TonePairDto::ClassicModern, value: -0.9 }]),
+        brief(vec![BriefUseDto::Packaging, BriefUseDto::Poster], vec![ToneDto { pair: TonePairDto::QuietBold, value: 0.5 }]),
+        BriefDto { text: Some("warm friendly".into()), needs: BriefNeedsDto { vi: false, ..Default::default() }, ..Default::default() },
+    ];
+    for b in &briefs {
+        let a = serde_json::to_value(brief::brief_starter(&st, b, None).unwrap()).unwrap();
+        for _ in 0..3 {
+            assert_eq!(serde_json::to_value(brief::brief_starter(&st, b, None).unwrap()).unwrap(), a, "cùng brief + cùng thư viện ⇒ cùng kết quả");
+        }
+    }
 }
