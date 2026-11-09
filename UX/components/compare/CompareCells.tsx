@@ -19,7 +19,7 @@ const css = (family: string | null) => (family ? `"${family}", var(--font-ui)` :
 const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fallback);
 
 /** Cột thiếu x-height khi bật Match x-height: không đổi cỡ, nói rõ vì sao. */
-const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
+export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
 
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
   return <WithFamily api={api} face={face}>{fam => (
@@ -58,16 +58,27 @@ function overText(face: CompareFace): string {
   return em !== null ? t('compare.viWarnEm', { em: numberText(em, 'em') }) : t('compare.viWarn');
 }
 
-export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+export type ViNote = { kind: 'warn' | 'ok'; text: string; title?: string };
+/** Nhãn dưới dòng dấu chồng (dùng chung cho màn hình và ảnh PNG): thiếu ký tự / không hỗ trợ / tràn khung / vừa khung. */
+export function viNotes(face: CompareFace): ViNote[] {
   const { stackedMarksOverflow: over, supports, missing } = face.vi;
+  const out: ViNote[] = [];
+  if (!supports) out.push({ kind: 'warn', text: missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone') });
+  if (supports && over) out.push({ kind: 'warn', text: overText(face) });
+  if (supports && !over) out.push({ kind: 'ok', text: t('compare.viOk'), title: face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined });
+  if (!supports && over) out.push({ kind: 'warn', text: t('compare.viWarn') });
+  return out;
+}
+
+export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+  const { stackedMarksOverflow: over, supports } = face.vi;
   return (
     <WithFamily api={api} face={face}>{fam => (
       <div className="cmp-page">
         <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
-        {!supports && <span className="cmp-chip warn">{missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone')}</span>}
-        {supports && over && <span className="cmp-chip warn" role="status">{overText(face)}</span>}
-        {supports && !over && <span className="cmp-ok" title={face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined}>{t('compare.viOk')}</span>}
-        {!supports && over && <span className="cmp-chip warn">{t('compare.viWarn')}</span>}
+        {viNotes(face).map((n, i) => n.kind === 'ok'
+          ? <span key={i} className="cmp-ok" title={n.title}>{n.text}</span>
+          : <span key={i} className="cmp-chip warn" role={supports && over && i === 0 ? 'status' : undefined}>{n.text}</span>)}
       </div>
     )}</WithFamily>
   );

@@ -58,3 +58,62 @@ describe('renderCompareBlob', () => {
     await expect(renderCompareBlob({ data, families: new Map(), sample: 'x', fit: false, dark: false })).rejects.toThrow(/canvas/);
   });
 });
+
+describe('renderCompare (PNG content)', () => {
+  const fakeCtx = () => {
+    const state = { fills: [] as string[] };
+    const ctx = new Proxy({ font: '', fillStyle: '', measureText: (s: string) => ({ width: s.length * 7 }), getImageData: () => ({ data: [0, 0, 0, 255] }) } as Record<string, unknown>, {
+      get: (o, k: string) => (k in o ? o[k] : () => undefined),
+      set: (o, k: string, v) => { o[k] = v; if (k === 'fillStyle') state.fills.push(String(v)); return true; },
+    });
+    return { ctx, state };
+  };
+  const setup = async (dark: boolean, tweak?: (d: Awaited<ReturnType<ReturnType<typeof createMockApi>['compareFaces']>>) => void, overlay?: boolean) => {
+    const { ctx, state } = fakeCtx();
+    const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => ctx) as never);
+    const api = createMockApi();
+    const data = await api.compareFaces(mockRows().slice(0, 2).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+    tweak?.(data);
+    const { renderCompare } = await import('../exportPng');
+    const r = renderCompare({ data, families: new Map(), sample: 'Phở', fit: false, dark, overlay });
+    spy.mockRestore();
+    return { r, state };
+  };
+
+  it('has the overlay row, units on every measure, and never an ellipsis', async () => {
+    const { r } = await setup(false);
+    expect(r!.manifest.rows).toEqual(expect.arrayContaining(['header', 'specimen', 'overlay', 'vi', 'class']));
+    expect(r!.manifest.texts.some(x => /\d,\d{3} em$/.test(x) || /\d,\d ° ?$/.test(x) || /tỷ lệ/.test(x))).toBe(true);
+    expect(r!.manifest.texts.some(x => x.includes('…'))).toBe(false);
+  });
+  it('wraps a long label instead of cutting it', async () => {
+    const { r } = await setup(false);
+    const joined = r!.manifest.texts.join(' ');
+    expect(joined).toContain('vuông');
+    expect(joined).toContain('góc)');
+  });
+  it('keeps the missing-characters note and the "marks fit" note', async () => {
+    const { r } = await setup(false, d => { d.faces[0].vi.supports = false; d.faces[0].vi.missing = 68; d.faces[1].vi.supports = true; d.faces[1].vi.stackedMarksOverflow = false; });
+    expect(r!.manifest.texts).toContain('Thiếu 68 ký tự');
+    expect(r!.manifest.texts).toContain('Dấu vừa khung');
+  });
+  it('uses a dark specimen background in dark theme and white in light', async () => {
+    const dark = await setup(true); const light = await setup(false);
+    expect(dark.r!.manifest.specimenBg.toLowerCase()).toBe('#0a0908');
+    expect(dark.state.fills).toContain('#0A0908');
+    expect(light.r!.manifest.specimenBg.toLowerCase()).toBe('#ffffff');
+  });
+  it('can omit the overlay row when it is hidden on screen', async () => {
+    const { r } = await setup(false, undefined, false);
+    expect(r!.manifest.rows).not.toContain('overlay');
+  });
+});
+
+describe('wrapText', () => {
+  const m = { measureText: (s: string) => ({ width: s.length * 10 }) } as unknown as CanvasRenderingContext2D;
+  it('wraps by word and hard-breaks an over-wide word, no ellipsis', async () => {
+    const { wrapText } = await import('../exportPng');
+    expect(wrapText(m, 'tương phản nét vuông góc', 120)).toEqual(['tương phản', 'nét vuông', 'góc']);
+    expect(wrapText(m, 'abcdefghij', 50)).toEqual(['abcde', 'fghij']);
+  });
+});

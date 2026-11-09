@@ -9,7 +9,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
-import { renderCompareBlob } from './exportPng';
+import { ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
 import './compare.css';
 
 const SPEC_SIZE = 30;
@@ -66,12 +66,26 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     return () => document.removeEventListener('keydown', on);
   }, []);
 
+  const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
+
+  // Móc QA native (chỉ khi chạy kịch bản QA): vẽ PNG như nút Xuất, không mở hộp thoại, trả bản kê nội dung + mẫu điểm ảnh.
+  useEffect(() => {
+    if (!data || !(window as unknown as { __FA_QA_PICKS__?: unknown }).__FA_QA_PICKS__) return;
+    (window as unknown as { __faQaComparePng?: () => Promise<unknown> }).__faQaComparePng = async () => {
+      await ensureFonts(families.current.values(), sample);
+      const r = renderCompare({ data, families: families.current, sample, fit, dark: isDark(), overlay });
+      if (!r) return null;
+      const px = r.canvas.getContext('2d')!.getImageData(2, r.canvas.height - 2, 1, 1).data;
+      return { ...r.manifest, cornerPx: [px[0], px[1], px[2]], dataUrl: r.canvas.toDataURL('image/png') };
+    };
+    return () => { delete (window as unknown as { __faQaComparePng?: unknown }).__faQaComparePng; };
+  }, [data, sample, fit, overlay]);
+
   const exportPng = async () => {
     if (!data || exporting) return;
     setExporting(true);
     try {
-      const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
-      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark });
+      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay });
       const saved = await api.savePng(blob, name);
       if (saved) useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngSaved', { name: saved.split(/[\\/]/).pop() ?? saved }) });
     } catch (e) {

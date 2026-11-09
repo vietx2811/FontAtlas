@@ -125,6 +125,14 @@
     --surface-2: #F3F2F0;
     --surface-3: #EBEBEB;
 
+    /* Vùng mẫu chữ (specimen): theo theme, không còn trắng cố định */
+    --specimen-bg: #FFFFFF;
+    --specimen-ink: #1F1D1B;
+    --specimen-rule: #D6D3D1;
+    --specimen-accent: #9A6B3C;
+    --specimen-ok: #3F7F5F;
+    --specimen-ghost: .28;
+
     /* ========== TYPOGRAPHY SYSTEM ========== */
     /* Font Family */
     --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -188,6 +196,12 @@
     --muted-soft: #292524;
     --surface-1: #1c1917;
     --surface-3: #0c0a09;
+    --specimen-bg: #0A0908;
+    --specimen-ink: #FAFAF9;
+    --specimen-rule: #57534E;
+    --specimen-accent: #F0B777;
+    --specimen-ok: #4ADE80;
+    --specimen-ghost: .42;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -209,6 +223,12 @@
         --muted-soft: #292524;
         --surface-1: #1c1917;
         --surface-3: #0c0a09;
+        --specimen-bg: #0A0908;
+        --specimen-ink: #FAFAF9;
+        --specimen-rule: #57534E;
+        --specimen-accent: #F0B777;
+        --specimen-ok: #4ADE80;
+        --specimen-ghost: .42;
     }
 }
 
