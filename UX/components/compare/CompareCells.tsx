@@ -6,6 +6,7 @@ import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
+import { NoteMark } from '../ui/noteMark';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
@@ -26,9 +27,9 @@ export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metri
 
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
   return <WithFamily api={api} face={face}>{fam => (
-    <div className="cmp-page">
+    <div className="cmp-page fa-note-host">
       <div className="cmp-line" style={{ fontFamily: css(fam), fontSize: size }}>{text}</div>
-      {noXh(face, fit) && <span className="cmp-chip warn">{t('compare.noXh')}</span>}
+      {noXh(face, fit) && <NoteMark text={t('compare.noXh')} />}
     </div>
   )}</WithFamily>;
 }
@@ -80,20 +81,19 @@ export function viNotes(face: CompareFace): ViNote[] {
 
 export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
   const { stackedMarksOverflow: over, supports } = face.vi;
+  const notes = viNotes(face);
   return (
     <WithFamily api={api} face={face}>{fam => (
-      <div className="cmp-page">
+      <div className="cmp-page fa-note-host">
         <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
-        {viNotes(face).map((n, i) => n.kind === 'ok'
-          ? <span key={i} className="cmp-ok" title={n.title}>{n.text}</span>
-          : <span key={i} className="cmp-chip warn" role={supports && over && i === 0 ? 'status' : undefined}>{n.text}</span>)}
+        <NoteMark testId="vi-note" kind={notes.some(n => n.kind === 'warn') ? 'warn' : 'info'} text={notes.map(n => n.title ? `${n.text} — ${n.title}` : n.text).join(' · ')} />
       </div>
     )}</WithFamily>
   );
 }
 
 export function MetricCell({ k, m, base, isBase }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean }): React.JSX.Element {
-  if (m.value === null) return <div className="cmp-na" title={m.reason ?? undefined}><span>{t('compare.na')}</span>{m.reason && <small>{m.reason}</small>}</div>;
+  if (m.value === null) return <div className="cmp-na"><span>{t('compare.na')}</span>{m.reason && <NoteMark inline kind="info" text={m.reason} />}</div>;
   const d = isBase ? null : deltaOf(k, m, base);
   const dt = d ? deltaText(d) : null;
   const baseMissing = !isBase && base.value === null;
@@ -101,7 +101,7 @@ export function MetricCell({ k, m, base, isBase }: { k: string; m: CompareMetric
   return (
     <div className="cmp-metric">
       <div className="cmp-val"><b>{numberText(m.value, m.unit)}</b><u>{unitText(m.unit)}</u>
-        {m.quality === 'estimated' && <span className="cmp-est">{t('compare.est')}</span>}
+        {m.quality === 'estimated' && <NoteMark inline kind="info" text={t('compare.est')} />}
         {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : <span className="cmp-dl zero" title={baseMissing ? t('compare.baseNa') : t('compare.noDelta')}>—</span>}
       </div>
       {p !== null && <div className="cmp-pbar" role="img" aria-label={t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) })}><i style={{ left: `${Math.min(100, Math.max(0, p))}%` }} /><em style={{ left: `${Math.min(92, Math.max(8, p))}%` }}>{percentLabel(p)}</em></div>}
@@ -117,7 +117,7 @@ export function ClassCell({ face }: { face: CompareFace }): React.JSX.Element {
   const conf = Number.isFinite(c.confidence) ? Math.round(c.confidence * 100) : null;
   return (
     <div className="cmp-cls">
-      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
+      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <NoteMark inline kind="info" text={t('class.edited')} />}</span>
       {uncertain && c.candidate && <span className="s">{t('class.maybe', { label: classLabel(c.candidate) })}</span>}
       {!uncertain && c.subclass && <TermTip term={subclassTermKey(c.subclass)}><span className="s" data-term={subclassTermKey(c.subclass)}>{subclassLabel(c.subclass)}</span></TermTip>}
       {traits.length > 0 && <span className="s">{traits.map(traitLabel).join(' · ')}</span>}

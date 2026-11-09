@@ -1,13 +1,14 @@
 import type { CompareFace } from '../../api/compare';
 import { hasKey, t, type I18nKey } from '../../i18n';
+import { NoteMark } from '../ui/noteMark';
 
 const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fallback);
 const range = (r: [number, number] | null | undefined): string | null => (r ? (r[0] === r[1] ? `${r[0]}` : `${r[0]}–${r[1]}`) : null);
 const nf = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
-const Empty = (): React.JSX.Element => <span className="cmp-meta-na" title={t('compare.noExtras')}>—</span>;
+const Empty = (): React.JSX.Element => <span className="cmp-meta-na">—<NoteMark inline kind="info" text={t('compare.noExtras')} /></span>;
 /** Font chưa phân tích lại theo analyzer mới: backend báo `extrasAvailable: false` (thiếu trường = có dữ liệu). */
 const stale = (face: CompareFace): boolean => (face.extras as { extrasAvailable?: boolean } | null)?.extrasAvailable === false;
-const Rescan = (): React.JSX.Element => <span className="cmp-meta-na" title={t('compare.noExtras')}>— <small>{t('compare.rescan')}</small></span>;
+const Rescan = (): React.JSX.Element => <span className="cmp-meta-na">—<NoteMark inline kind="info" text={`${t('compare.noExtras')} · ${t('compare.rescan')}`} /></span>;
 const Chip = ({ children, title }: { children: React.ReactNode; title?: string }) => <span className="cmp-tag" title={title}>{children}</span>;
 
 export const licenseLabel = (kind: string | null | undefined): string => (kind ? tr(`lic.${kind}`, kind) : '—');
