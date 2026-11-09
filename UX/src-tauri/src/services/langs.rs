@@ -256,6 +256,14 @@ pub fn badge_of(code: &str, hit: Option<&fontatlas_store::LangHit>, computed: bo
     Some(mk(LangBadgeStateDto::Unknown, 0, total))
 }
 
+/// Đã tính độ phủ ngôn ngữ cho mọi face chưa? (bộ lọc theo ngôn ngữ chỉ khớp face đã tính)
+pub fn coverage_complete(state: &AppState) -> bool {
+    state
+        .with_store(|s| Ok(s.lang_progress(langdb().version())?))
+        .map(|p| p.done >= p.total)
+        .unwrap_or(true)
+}
+
 pub(crate) fn lang_filters(q: &FaceQueryDto) -> (Vec<fontatlas_store::LangFilter>, bool) {
     (
         q.langs

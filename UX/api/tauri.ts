@@ -129,6 +129,7 @@ export function createTauriApi(): Api {
     setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
     createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
     caseCompare: (caseId, comboIds, lang = 'vi') => call('case_compare', { caseId, comboIds, lang }),
+    briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek }),
     axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {

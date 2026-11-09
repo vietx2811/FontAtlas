@@ -122,6 +122,17 @@ export function createMockApi(o: MockOptions = {}): Api {
   return {
     ...lib,
     ...caseApi,
+    async briefStarter(brief) {
+      const { items } = await this.queryFaces({ sort: 'family', limit: 1000, vi: brief.needs.vi ? 'supported' : undefined });
+      const seen = new Set<string>();
+      const anchors = items.filter(r => !seen.has(r.family) && seen.add(r.family)).slice(0, 3);
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      return {
+        describe: { dictionaryVersion: 'mock', matched: [], filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
+        query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
+        anchors, combos: [], notes: anchors.length < 3 ? [{ code: 'few_anchors', detail: String(anchors.length) }] : [], ai: null,
+      };
+    },
     async queryFaces(q) {
       await delay();
       const t = q.text ? fold(q.text) : '';

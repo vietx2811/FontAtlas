@@ -262,6 +262,52 @@ impl Dictionary {
         self.entries.is_empty()
     }
 
+    /// Có mục id này không.
+    pub fn has_id(&self, id: &str) -> bool {
+        self.entries.iter().any(|e| e.meta.id == id)
+    }
+
+    /// Như `parse` nhưng chọn mục theo id (không qua văn bản): dùng cho Brief starter, nơi ánh xạ chip → term
+    /// là bảng cố định. `strengths` ghi đè độ chặt của MỌI bộ lọc của term đó (vd thanh trượt kéo xa → Required).
+    /// Id lạ → vào `unknown_words`. Thứ tự `ids` quyết định thứ tự `matched`/`filters`; id trùng chỉ tính một lần.
+    pub fn parse_ids(&self, ids: &[(&str, Option<Strength>)]) -> Parsed {
+        let mut out = Parsed { dictionary_version: self.version.clone(), ..Default::default() };
+        let mut all: Vec<AxisFilter> = Vec::new();
+        let mut seen: Vec<&str> = Vec::new();
+        for (id, strength) in ids {
+            if seen.contains(id) {
+                continue;
+            }
+            seen.push(id);
+            let Some(en) = self.entries.iter().find(|e| e.meta.id == *id) else {
+                out.unknown_words.push((*id).to_string());
+                continue;
+            };
+            let mut m = en.meta.clone();
+            m.text = (*id).to_string();
+            out.matched.push(m);
+            all.extend(en.filters.iter().cloned().map(|mut f| {
+                if let Some(st) = strength {
+                    f.strength = *st;
+                }
+                f
+            }));
+            for h in &en.hard {
+                if !out.hard.contains(h) {
+                    out.hard.push(*h);
+                }
+            }
+            if let Some(r) = &en.unmappable {
+                out.unmappable.push((en.meta.id.clone(), r.clone()));
+            }
+            if let Some(r) = &en.partial {
+                out.partial.push((en.meta.id.clone(), r.clone()));
+            }
+        }
+        merge(all, &mut out);
+        out
+    }
+
     pub fn parse(&self, text: &str) -> Parsed {
         let mut out = Parsed { dictionary_version: self.version.clone(), ..Default::default() };
         // từng token gập riêng để giữ tương ứng với chữ gốc

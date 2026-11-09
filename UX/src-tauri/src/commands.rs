@@ -21,7 +21,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, brief, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -122,6 +122,7 @@ macro_rules! command_list {
             async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
             async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
             async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
+            async brief_starter(brief: BriefDto, case_id: Option<i64>) -> Result<BriefStarterDto, CmdError>;
             async open_case_from_peek(peek: PeekOpenDto) -> Result<PeekOpenResultDto, CmdError>;
             async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
             async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
@@ -344,6 +345,7 @@ cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
 cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
 cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
 cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
+cmd!(brief_starter(brief: BriefDto, case_id: Option<i64>) -> BriefStarterDto => |s| brief::brief_starter(s, &brief, case_id));
 cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));
 cmd!(create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Vec<ComboDto> => |s| cases::create_combos(s, case_id, &combos));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));

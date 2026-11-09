@@ -84,4 +84,15 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     await expect(api.caseCompare(r.case.id, [999])).rejects.toMatchObject({ code: 'not_found' });
     await expect(api.openCaseFromPeek({ face: a, as: 'body', candidate: null, caseId: 999, settings: { vi: true, mode: null } })).rejects.toMatchObject({ code: 'not_found' });
   });
+
+  it('briefStarter returns distinct-family anchors and carries the constraint chips into the query', async () => {
+    const api = createMockApi();
+    const r = await api.briefStarter({ uses: ['editorial'], tones: [], needs: { vi: true, installedOnly: false, italic: false, variable: false, openLicense: true }, text: null });
+    expect(r.anchors.length).toBeLessThanOrEqual(3);
+    expect(new Set(r.anchors.map(a => a.family)).size).toBe(r.anchors.length);
+    expect(r.query).toMatchObject({ hard: ['vi_supported'], license: ['ofl', 'apache'], langs: [{ code: 'vie', level: 'near' }] });
+    expect(r.displayQuery.weightClass).toEqual([600, 900]);
+    expect(r.bodyQuery.weightClass).toEqual([400, 500]);
+    expect(r.ai).toBeNull();
+  });
 });

@@ -5,6 +5,7 @@ pub mod analysis;
 pub mod describe;
 pub mod duplicates;
 pub mod boot;
+pub mod brief;
 pub mod cases;
 pub mod compare;
 pub mod embed;

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use crate::dto::library::{FaceKeyDto, FaceRowDto};
+use crate::dto::library::{FaceKeyDto, FaceQueryDto, FaceRowDto};
 
 /// Vai trong một Combo. Giọng ①②③ do giao diện suy ra từ vai.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
@@ -373,4 +373,39 @@ pub struct PeekOpenResultDto {
     pub trial: Option<FaceKeyDto>,
     /// true khi Case vừa được tạo.
     pub created: bool,
+}
+
+// ---- Brief starter ----
+
+/// Ghi chú máy sinh cho giao diện (giao diện dịch theo `code`, `detail` là dữ liệu thô).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct BriefNoteDto {
+    /// `no_terms` · `branding_class_only` · `installed_none_active` · `weight_relaxed` · `few_anchors`
+    /// · `no_body_pair` · `index_unavailable` · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: có thể thiếu kết quả) · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: kết quả có thể thiếu)
+    pub code: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct BriefStarterDto {
+    /// Các term của `descriptor-dictionary.json` mà brief đã ánh xạ tới, kèm bộ lọc trục, xung đột, phần không ánh xạ được.
+    pub describe: crate::dto::analysis::DescribeDto,
+    /// Điều kiện chung (đưa thẳng cho Library: `axisFilters`, `hard`, `langs`, `license`…), sắp theo `match`.
+    pub query: FaceQueryDto,
+    /// `query` + `weightClass` 600–900 (vai display/heading), `varAxisMatch` bật.
+    pub display_query: FaceQueryDto,
+    /// `query` + `weightClass` 400–500 (vai body).
+    pub body_query: FaceQueryDto,
+    /// ≤ 3 font neo cho vai display, khác family.
+    pub anchors: Vec<FaceRowDto>,
+    /// ≤ 3 Combo khởi đầu: mỗi neo ghép với font body hạng 1 (ưu tiên khác family, không lặp body).
+    pub combos: Vec<crate::dto::analysis::PairComboDto>,
+    pub notes: Vec<BriefNoteDto>,
+    /// Chừa cho "Kết nối AI" (session sau).
+    #[ts(type = "unknown")]
+    pub ai: Option<Value>,
 }

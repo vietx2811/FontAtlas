@@ -20,7 +20,7 @@ pub fn hard_of(names: &[String]) -> Vec<HardConstraint> {
         .collect()
 }
 
-fn from_parsed(p: Parsed) -> DescribeDto {
+pub(crate) fn from_parsed(p: Parsed) -> DescribeDto {
     DescribeDto {
         dictionary_version: p.dictionary_version,
         matched: p

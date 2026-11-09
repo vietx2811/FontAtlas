@@ -221,3 +221,130 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     let bad = cases::open_case_from_peek(&st, &PeekOpenDto { face: sans, as_role: PeekRoleDto::Body, candidate: None, case_id: Some(9999), settings: CaseSettingsDto::default() });
     assert_eq!(bad.unwrap_err().code, "not_found");
 }
+
+fn settle_langs(st: &Arc<AppState>) {
+    app_lib::services::langs::ensure_started(st);
+    let t = std::time::Instant::now();
+    while !app_lib::services::langs::coverage_complete(st) || st.langs.is_running() {
+        assert!(t.elapsed() < Duration::from_secs(60), "backfill không xong");
+        std::thread::sleep(Duration::from_millis(30));
+    }
+}
+
+fn brief(uses: Vec<BriefUseDto>, tones: Vec<ToneDto>) -> BriefDto {
+    BriefDto { uses, tones, ..Default::default() }
+}
+
+#[test]
+fn brief_starter_maps_chips_to_filters_anchors_and_combos() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle_langs(&st);
+    let b = brief(vec![BriefUseDto::Editorial], vec![ToneDto { pair: TonePairDto::ClassicModern, value: -0.9 }]);
+    let r = brief::brief_starter(&st, &b, None).unwrap();
+    let ids: Vec<&str> = r.describe.matched.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["classic", "editorial"], "tone trước, rồi mục đích dùng");
+    assert!(!r.describe.filters.is_empty());
+    assert!(r.query.axis_filters.iter().any(|f| f.axis == "serif_foot"));
+    // vi mặc định bật: ràng buộc cứng + ngôn ngữ Việt + bộ lọc hỗ trợ
+    assert!(r.query.hard.contains(&"vi_supported".to_string()));
+    assert_eq!(r.query.langs.len(), 1);
+    assert_eq!(r.query.langs[0].code, "vie");
+    assert_eq!(r.query.vi, Some(ViFilterDto::Supported));
+    // truy vấn theo vai: trọng lượng và khớp trục Variable
+    assert_eq!(r.display_query.weight_class, Some([600, 900]));
+    assert_eq!(r.body_query.weight_class, Some([400, 500]));
+    assert!(r.display_query.var_axis_match.wght && r.query.weight_class.is_none());
+    // neo và Combo
+    assert!(r.anchors.len() <= 3);
+    let fams: std::collections::HashSet<_> = r.anchors.iter().map(|a| a.family.to_lowercase()).collect();
+    assert_eq!(fams.len(), r.anchors.len(), "mỗi neo một family");
+    assert!(r.combos.len() <= r.anchors.len());
+    for (i, c) in r.combos.iter().enumerate() {
+        assert_eq!(c.rank as usize, i + 1);
+        assert!(r.anchors.iter().any(|a| a.hash_hex == c.heading.hash_hex));
+        assert!(!c.assessment.summary.is_empty());
+    }
+    let bodies: std::collections::HashSet<_> = r.combos.iter().map(|c| c.body.family.clone()).collect();
+    assert_eq!(bodies.len(), r.combos.len(), "không lặp font body giữa các Combo");
+    assert!(r.ai.is_none());
+}
+
+#[test]
+fn brief_starter_edge_cases_are_explicit_not_guessed() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle_langs(&st);
+    let note_codes = |r: &BriefStarterDto| r.notes.iter().map(|n| n.code.clone()).collect::<Vec<_>>();
+
+    // packaging: có mục trong từ điển nhưng không ánh xạ được → nói rõ lý do của từ điển
+    let r = brief::brief_starter(&st, &brief(vec![BriefUseDto::Packaging], vec![]), None).unwrap();
+    assert_eq!(r.describe.unmappable.len(), 1);
+    assert_eq!(r.describe.unmappable[0].0, "packaging");
+    assert!(r.describe.filters.is_empty());
+
+    // branding một mình: chỉ class, không term
+    let r = brief::brief_starter(&st, &brief(vec![BriefUseDto::Branding], vec![]), None).unwrap();
+    assert!(note_codes(&r).contains(&"branding_class_only".to_string()));
+    assert!(note_codes(&r).contains(&"no_terms".to_string()));
+
+    // brief trống: vẫn trả neo từ cả thư viện + ghi chú
+    let r = brief::brief_starter(&st, &BriefDto::default(), None).unwrap();
+    assert!(note_codes(&r).contains(&"no_terms".to_string()));
+    assert!(!r.anchors.is_empty(), "thư viện 3 font: có neo");
+
+    // thanh trượt trong vùng chết: bỏ qua
+    let r = brief::brief_starter(&st, &brief(vec![], vec![ToneDto { pair: TonePairDto::WarmCool, value: 0.1 }]), None).unwrap();
+    assert!(r.describe.matched.is_empty());
+
+    // hai đầu đối nghịch (một từ thanh trượt, một từ khoá tự do): xung đột, không tự chọn
+    let b = BriefDto { tones: vec![ToneDto { pair: TonePairDto::WarmCool, value: -1.0 }], text: Some("cool".into()), ..Default::default() };
+    let r = brief::brief_starter(&st, &b, None).unwrap();
+    assert!(!r.describe.conflicts.is_empty());
+    let conflicted: Vec<&str> = r.describe.conflicts.iter().map(|c| c.axis.as_str()).collect();
+    assert!(r.query.axis_filters.iter().all(|f| !conflicted.contains(&f.axis.as_str())));
+
+    // chỉ font đang bật: chưa bật font nào → ghi chú, không áp điều kiện
+    let b = BriefDto { needs: BriefNeedsDto { installed_only: true, ..Default::default() }, ..Default::default() };
+    let r = brief::brief_starter(&st, &b, None).unwrap();
+    assert!(note_codes(&r).contains(&"installed_none_active".to_string()));
+    assert!(r.query.face_keys.is_none());
+
+    // ràng buộc cờ: variable/italic/license mở
+    let b = BriefDto { needs: BriefNeedsDto { vi: false, variable: true, italic: true, open_license: true, ..Default::default() }, ..Default::default() };
+    let r = brief::brief_starter(&st, &b, None).unwrap();
+    assert_eq!((r.query.variable, r.query.italic), (Some(true), Some(true)));
+    assert_eq!(r.query.license, vec!["ofl".to_string(), "apache".to_string()]);
+    assert!(r.query.hard.is_empty() && r.query.langs.is_empty() && r.query.vi.is_none());
+}
+
+#[test]
+fn brief_starter_on_empty_library_returns_notes_not_errors() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = AppState::new(AppDirs::under(&td.path().join("data")), Box::new(NoActivation));
+    boot::run_boot(&st);
+    let b = brief(vec![BriefUseDto::Poster], vec![ToneDto { pair: TonePairDto::QuietBold, value: 0.8 }]);
+    let r = brief::brief_starter(&st, &b, None).unwrap();
+    assert!(r.anchors.is_empty() && r.combos.is_empty());
+    assert!(r.notes.iter().any(|n| n.code == "few_anchors" || n.code == "index_unavailable"));
+}
+
+#[test]
+fn brief_starter_warns_when_language_coverage_is_still_computing() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    st.langs.shutdown(); // dừng luồng nền, rồi đánh dấu mọi face là chưa tính
+    st.with_store(|s| {
+        s.conn().execute_batch("DELETE FROM face_lang_state; DELETE FROM face_langs;").unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let r = brief::brief_starter(&st, &BriefDto::default(), None).unwrap();
+    assert!(r.notes.iter().any(|n| n.code == "langs_incomplete"));
+    let no_vi = BriefDto { needs: BriefNeedsDto { vi: false, ..Default::default() }, ..Default::default() };
+    assert!(!brief::brief_starter(&st, &no_vi, None).unwrap().notes.iter().any(|n| n.code == "langs_incomplete"), "không cần tiếng Việt thì không cảnh báo");
+}

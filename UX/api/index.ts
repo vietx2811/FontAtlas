@@ -4,7 +4,7 @@ import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, BriefDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  AxisStatsDto, AxisHistogramDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
@@ -80,6 +80,8 @@ export interface Api extends LibraryApi {
   createCombos(caseId: number, combos: NewComboDto[]): Promise<ComboDto[]>;
   /** Compare Combo: cột = Combo, kèm quan hệ giữa giọng ① và các vai khác. `comboIds` rỗng = mọi Combo (≤ 8). */
   caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
+  /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */
+  briefStarter(brief: BriefDto, caseId?: number): Promise<BriefStarterDto>;
   /** Pair from peek (2d): font làm neo ở vai `as`; ứng viên chỉ trả lại làm `trial`, chưa đặt vào vai. */
   openCaseFromPeek(peek: PeekOpenDto): Promise<PeekOpenResultDto>;
   /** Histogram 18 trục (16 số đo + weight_class + width_class), mỗi trục đếm trên tập lọc TRỪ chính trục đó. `bins` 0 = 24 (tối đa 64); trục class luôn 9 bin. */

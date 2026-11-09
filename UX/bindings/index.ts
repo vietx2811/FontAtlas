@@ -18,6 +18,8 @@ export type { BootPhase } from './BootPhase';
 export type { BootStatusDto } from './BootStatusDto';
 export type { BriefDto } from './BriefDto';
 export type { BriefNeedsDto } from './BriefNeedsDto';
+export type { BriefNoteDto } from './BriefNoteDto';
+export type { BriefStarterDto } from './BriefStarterDto';
 export type { BriefUseDto } from './BriefUseDto';
 export type { CaseCompareDto } from './CaseCompareDto';
 export type { CaseDto } from './CaseDto';
