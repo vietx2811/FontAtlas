@@ -170,4 +170,32 @@ describe('DetailPanel', () => {
       expect(await api.activationState()).toEqual([]);
     });
   });
+
+  it('family button: turns every style of the family on/off at once; pressed only when all styles are on', async () => {
+    const api = createMockApi();
+    render(<DetailPanel api={api} />);
+    await select(api, 'Public Sans', 'Regular');
+    await settle();
+    const btn = () => screen.getByTestId('family-active');
+    expect(btn().getAttribute('aria-pressed')).toBe('false');
+    await act(async () => { fireEvent.click(btn()); }); await settle();
+    const hashes = new Set((await api.activationState()).map(s => s.hashHex));
+    expect(hashes.size).toBeGreaterThan(5); // cả family, không chỉ kiểu đang xem
+    expect(btn().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('switch', { name: 'Active' }).getAttribute('aria-checked')).toBe('true');
+    await act(async () => { fireEvent.click(btn()); }); await settle();
+    expect(await api.activationState()).toEqual([]);
+    expect(btn().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('family button is only "on" when ALL styles are active (one style on is not enough)', async () => {
+    const api = createMockApi();
+    render(<DetailPanel api={api} />);
+    const r = await select(api, 'Public Sans', 'Regular');
+    await settle();
+    await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); }); await settle();
+    expect((await api.activationState()).length).toBe(1);
+    expect(screen.getByTestId('family-active').getAttribute('aria-pressed')).toBe('false');
+    expect(r).toBeTruthy();
+  });
 });

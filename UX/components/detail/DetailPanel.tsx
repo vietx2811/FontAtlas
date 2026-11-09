@@ -30,6 +30,8 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const { setStyle, setPanelTab, toggleInfo } = useUiStore.getState();
   const { detail, styles, error, retry, face } = useFaceDetail(api);
   const flow = useActivationFlow(api);
+  const active = useUiStore(s => s.active);
+  const familyOn = styles.length > 0 && styles.every(s => active.has(s.face.hashHex));
   const family = useFontFamily(api, detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null);
 
   useEffect(() => { if (panel.current) panel.current.scrollTop = 0; }, [selectedId, tab, style]);
@@ -58,7 +60,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
           <ActiveRow face={detail ? face : null} flow={flow} />
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}</div>
           {detail && face && detail.row.hashHex === face.hashHex && detail.row.faceIndex === face.faceIndex && <ClassChip key={`${face.hashHex}:${face.faceIndex}`} api={api} face={face} info={detail.classificationInfo} onChanged={retry} />}
-          {styles.length > 0 && <StyleDropdown styles={styles} value={label} onChange={setStyle} loader={loaderFor(api)} />}
+          {styles.length > 0 && <StyleDropdown styles={styles} value={label} onChange={setStyle} loader={loaderFor(api)} family={{ on: familyOn, onToggle: () => void flow.toggle(styles.map(s => s.face), !familyOn) }} />}
           <FontInfoCard detail={detail} expanded={infoExpanded} onToggle={toggleInfo} onReveal={() => { if (face) void api.revealInFinder(face); }} />
         </div>
       )}
