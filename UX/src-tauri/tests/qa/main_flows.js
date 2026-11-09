@@ -17,15 +17,26 @@
   // Ảnh PNG xuất ra tệp qua bảng settings (giới hạn 64 KB/khoá → cắt từng đoạn ui.qapng.<theme>.NN); run.sh ghép lại.
   const savePng = async (th, url) => { const errs = []; if (!url) return ['không có dataUrl']; const b = url.split(',')[1]; for (let i = 0, n = 0; i < b.length; i += 60000, n++) { try { await inv('set_setting', { key: 'ui.qapng.' + th + '.' + String(n).padStart(3, '0'), value: b.slice(i, i + 60000) }); } catch (e) { errs.push('đoạn ' + n + ': ' + String(e && e.message || e).slice(0, 120)); } } return errs; };
   // Thuật ngữ typo: rê chuột vào từng nhãn [data-term], tooltip phải có gloss không rỗng (và hình minh hoạ nếu thuật ngữ có hình).
+  // Tất định: không đoán độ trễ. Chờ đúng thẻ của đúng thuật ngữ (data-term-card = data-term) cho tới khi nó xuất hiện (trần 20 s chỉ để không treo
+  // khi máy quá tải; tooltip hiện sau 450 ms nhưng timer bị trì hoãn khi máy bận), rồi chờ tooltip đóng hẳn trước khi sang thuật ngữ kế.
+  // Không nới điều kiện: vẫn yêu cầu gloss không rỗng; thẻ của thuật ngữ KHÁC (tooltip trước chưa đóng) không được tính.
   const termCheck = async sel => {
-    const els = [...document.querySelectorAll(sel)]; const bad = []; let art = 0;
-    for (const el of els) {
-      el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
-      const g = await wait(() => { const x = document.querySelector('[role=tooltip] .fa-term-gloss'); return x && x.textContent.trim() ? x : null; }, 2500);
-      if (!g) bad.push(el.dataset.term); else if (document.querySelector('[role=tooltip] svg.fa-term-art')) art++;
-      el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' })); await sleep(50);
+    const terms = [...new Set([...document.querySelectorAll(sel)].map(e => e.dataset.term))]; const bad = []; let art = 0; const n = terms.length;
+    const card = term => [...document.querySelectorAll('[role=tooltip] [data-term-card]')].find(c => c.dataset.termCard === term);
+    // Phần tử tra lại SỐNG mỗi lần (màn có thể vẽ lại khi dữ liệu về muộn): sự kiện gửi vào nút đã bị gỡ khỏi DOM sẽ không tới React.
+    const live = term => [...document.querySelectorAll(sel)].find(e => e.dataset.term === term);
+    const fire = (el, type) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: 'mouse' }));
+    for (const term of terms) {
+      let el = live(term);
+      if (!el) { bad.push(term + ' (nhãn biến mất)'); continue; }
+      fire(el, 'pointerover');
+      const c = await wait(() => { const x = card(term); return x && x.querySelector('.fa-term-gloss')?.textContent.trim() ? x : null; }, 20000);
+      if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
+      el = live(term) ?? el; fire(el, 'pointerout');
+      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
+      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + ')');
     }
-    return { n: els.length, bad, art };
+    return { n, bad, art };
   };
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
@@ -169,14 +180,17 @@
     // Tooltip: rê chuột vào chấm tiếng Việt của thẻ đầu, rồi vào nút Cài đặt
     const vi0 = cells()[0].querySelector('[data-testid=vi-mark]');
     hover(vi0);
-    const t1 = await wait(tip, 3000);
+    // Tất định: tooltip phải là của ĐÚNG phần tử (aria-describedby trỏ tới nó), và phải đóng hẳn trước khi sang phần tử kế; không dùng sleep cố định.
+    const tipFor = el => () => { const x = tip(); return x && el.getAttribute('aria-describedby')?.split(' ').includes(x.id) ? x : null; };
+    const closed = () => wait(() => !tip(), 5000);
+    const t1 = await wait(tipFor(vi0), 20000);
     const t1Text = t1?.textContent; await sleep(100); await snap('tooltip-badge');
-    unhover(vi0); await sleep(200);
+    unhover(vi0); await closed();
     const gear = document.querySelector('button[aria-label="Cài đặt"]');
     hover(gear);
-    const t2 = await wait(tip, 3000);
+    const t2 = await wait(tipFor(gear), 20000);
     const t2Text = t2?.textContent; await sleep(100); await snap('tooltip-settings');
-    unhover(gear); await sleep(200);
+    unhover(gear); await closed();
     await log('tooltip-hover', !!t1 && !!t2 && /Cài đặt/.test(t2Text) && /⌘,/.test(t2Text) && !tip(), { badge: t1Text, gear: t2Text, leftover: !!tip(), nativeTitles: document.querySelectorAll('[title]').length });
     // Đa chọn: click + ⌘-click. Đo lưới so với panel chi tiết trước/sau khi panel mở và thanh chọn xuất hiện.
     const r1 = n => Math.round(n * 10) / 10;
