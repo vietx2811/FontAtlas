@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest';
+import { groupFilters } from '../groupFilters';
+
+describe('groupFilters', () => {
+  it('is empty without filters', () => { expect(groupFilters({})).toEqual([]); });
+
+  it('orders groups in a fixed order regardless of key order', () => {
+    const g = groupFilters({ rawAxisRanges: [{ axis: 'x_height_ratio', range: [0.4, 0.6] }], license: ['ofl'], italic: true, classes: ['serif'], vi: 'full' });
+    expect(g.map(x => x.id)).toEqual(['class', 'style', 'vi', 'license', 'axes']);
+  });
+
+  it('puts every value of a group in its chips', () => {
+    const g = groupFilters({ classes: ['serif', 'sans'], subclasses: ['didone'] });
+    expect(g).toHaveLength(1);
+    expect(g[0].chips).toHaveLength(3);
+  });
+
+  it('removing a group drops only its keys', () => {
+    const f = { classes: ['serif'], license: ['ofl'], italic: true };
+    const cls = groupFilters(f).find(x => x.id === 'class')!;
+    expect(cls.remove(f)).toEqual({ license: ['ofl'], italic: true });
+  });
+
+  it('removing one chip of a group keeps the rest of that group', () => {
+    const f = { classes: ['serif', 'sans'] };
+    const g = groupFilters(f)[0];
+    expect(g.chips[0].remove(f)).toEqual({ classes: ['sans'] });
+  });
+
+  it('ignores favorites when the view already forces it', () => {
+    expect(groupFilters({ favoritesOnly: true }, [], 'star')).toEqual([]);
+    expect(groupFilters({ favoritesOnly: true }, [], 'all').map(x => x.id)).toEqual(['library']);
+  });
+});
