@@ -4,6 +4,7 @@ import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
+import { t } from '../../i18n';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
@@ -25,6 +26,8 @@ type Props = {
   onStale?(): void;
   /** Cỡ chữ mẫu (css px). Có → ảnh bucket co về cỡ này; không → cỡ gốc của bucket (harness cũ). */
   fontSize?: number; layout?: 'grid' | 'list'; active?: boolean; favorite?: boolean;
+  /** Phạm vi bật (chỉ có nghĩa khi `active`): tooltip chấm xanh nói "phiên này" hay "Luôn bật". */
+  activeScope?: 'session' | 'persistent'; onToggleActive?(row: FaceRow): void;
   onToggleFavorite?(row: FaceRow): void; boxHeight?: number;
   /** Vị trí của ô trong truy vấn hiện tại (để chọn dải bằng index). */
   index?: number;
@@ -35,7 +38,7 @@ type Props = {
 };
 export type PickMods = { meta: boolean; shift: boolean };
 
-function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
@@ -140,7 +143,15 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {active && <Tooltip label="Đang bật"><span className="fa-dot" data-testid="active-dot" /></Tooltip>}
+      {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope ?? 'session'} /></Tooltip>}
+      {onToggleActive && (
+        <Tooltip label={t(active ? 'act.card.on' : 'act.card.off')}>
+          <button type="button" className="fa-pow" aria-label={t('act.label')} aria-pressed={active} data-testid="cell-active"
+            onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 3.5v8M7.2 6.6a7.5 7.5 0 1 0 9.6 0" /></svg>
+          </button>
+        </Tooltip>
+      )}
       <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
         <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>

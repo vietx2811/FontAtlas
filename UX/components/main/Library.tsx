@@ -42,6 +42,9 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => { useUiStore.getState().refreshActive(api).catch(e => console.warn('activation_state failed', e)); }, [api]);
   const isActive = useCallback((r: FaceRow) => active.has(r.hashHex), [active]);
+  const activeScope = useUiStore(s => s.activeScope);
+  const activeScopeOf = useCallback((r: FaceRow) => activeScope.get(r.hashHex), [activeScope]);
+  const toggleActive = useCallback((r: FaceRow) => { void actions?.setActive([r], !useUiStore.getState().active.has(r.hashHex)); }, [actions]);
   const isFavorite = useCallback((r: FaceRow) => favs.get(r.faceId) ?? r.isFavorite, [favs]);
   const toggleFavorite = useCallback((r: FaceRow) => {
     const next = !(useFavoriteStore.getState().overrides.get(r.faceId) ?? r.isFavorite);
@@ -85,7 +88,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
-      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
+      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
     </div>
   );
