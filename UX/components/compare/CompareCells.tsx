@@ -67,7 +67,7 @@ export function OverlayPanel({ api, base, selected, scale }: { api: Api; base: C
   const primary = selected.includes(base) ? base : selected[0];
   return (
     <section className="cmp-ovl" aria-label={t('compare.row.overlay')} data-count={selected.length}>
-      <div className="cmp-ovl-h"><b>{t('compare.row.overlay')}</b><small>{OVERLAY_SPACED}</small></div>
+      <div className="cmp-ovl-h"><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></div>
       {selected.length === 0 ? <p className="cmp-ovl-empty">{t('compare.ov.empty')}</p> : (
         <svg viewBox={`0 0 ${OV.W} ${OV.H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')}: ${selected.map(faceName).join(', ')}`}>
           <line x1="0" x2={OV.W} y1={OV.Y} y2={OV.Y} className="bl" />

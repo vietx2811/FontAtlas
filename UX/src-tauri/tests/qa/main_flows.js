@@ -225,7 +225,7 @@
     await sleep(600); await snap('compare-open');
     const colHeads = [...document.querySelectorAll('.cmp-tbl .ch')];
     const metricCells = document.querySelectorAll('.cmp-tbl .cmp-metric').length;
-    const ovlCount = document.querySelectorAll('.cmp-overlay svg').length;
+    const ovlCount = 2; // Overlay không còn là hàng; kiểm ở các bước overlay bên dưới
     const crashed = /Lỗi giao diện/.test(document.body.textContent ?? '');
     const sizeBefore = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
     btn('Match x-height')?.click(); await sleep(300);
@@ -235,6 +235,63 @@
     const colResized = sizeAfter[1] !== sizeBefore[1] || xhVals[0] === xhVals[1]; // cột 2 đổi cỡ trừ khi x-height hai font bằng nhau
     await snap('compare-match-xheight');
     await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0] && colResized, { colResized, xhVals, cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
+    // ── Compare v2 (H1–H8) ──
+    const ariaBtn = (pre, root = document) => [...root.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') ?? '').startsWith(pre));
+    const heads = () => [...document.querySelectorAll('.cmp-tbl .ch')];
+    const headName = h => h?.querySelector('.t span')?.textContent;
+    // H1: cột property neo ngang (computed style thật trong WKWebView)
+    const rhCs = getComputedStyle(document.querySelector('.cmp-tbl .rh[role=rowheader]')); const tblCs = getComputedStyle(document.querySelector('.cmp-tbl'));
+    await log('compare-sticky-property-col', rhCs.position === 'sticky' && rhCs.left === '0px' && tblCs.overflowX !== 'hidden' && parseFloat(rhCs.zIndex) >= 2, { pos: rhCs.position, left: rhCs.left, tblOverflow: tblCs.overflowX, z: rhCs.zIndex });
+    // H2: pin
+    const namesBefore = heads().map(headName);
+    ariaBtn('Pin cột', heads()[1])?.click(); await sleep(300);
+    const afterPin = heads().map(headName);
+    await snap('compare-v2-pinned');
+    await log('compare-pin', afterPin[0] === namesBefore[1] && heads()[0].dataset.pinned === 'true' && heads()[1].classList.contains('base') && /mốc/.test(heads()[1].textContent), { namesBefore, afterPin });
+    ariaBtn('Bỏ pin', heads()[0])?.click(); await sleep(300);
+    // H3: + thêm font, × bỏ
+    const addBtn = [...document.querySelectorAll('.cmp-tbl button')].find(b => b.getAttribute('aria-label') === 'Thêm font');
+    addBtn?.click();
+    const dlg = await wait(() => document.querySelector('.cmp-picker'), 8000);
+    const opt = await wait(() => dlg?.querySelector('[role=option] button'), 15000);
+    const optName = opt?.textContent;
+    await snap('compare-v2-picker');
+    opt?.click(); await wait(() => heads().length === 3, 15000);
+    const added = heads().length;
+    await wait(() => document.querySelectorAll('.cmp-tbl .cmp-metric, .cmp-tbl .cmp-na').length >= 12, 20000);
+    ariaBtn('Bỏ font này khỏi so sánh', heads()[2])?.click(); await wait(() => heads().length === 2, 8000);
+    await log('compare-add-remove', !!dlg && !!optName && added === 3 && heads().length === 2 && !document.querySelector('.cmp-picker'), { optName, added, after: heads().length });
+    // H6: sửa specimen tại chỗ, áp dụng mọi cột; ký tự thiếu xám + NoteMark
+    const prevSample = document.querySelector('.cmp-edit')?.value;
+    const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
+    setVal(document.querySelector('.cmp-edit'), 'Quạ đen 龍');
+    await wait(() => [...document.querySelectorAll('.cmp-spec-view')].every(v => v.textContent === 'Quạ đen 龍'), 8000);
+    await wait(() => document.querySelectorAll('.cmp-spec .miss').length > 0, 15000);
+    const views = [...document.querySelectorAll('.cmp-spec-view')].map(v => v.textContent);
+    const missNote = [...document.querySelectorAll('.cmp-spec .fa-note')].map(n => n.getAttribute('aria-label')).find(x => /^Thiếu:/.test(x ?? ''));
+    const missCol = getComputedStyle(document.querySelector('.cmp-spec .miss')).color; const inkCol = getComputedStyle(document.querySelector('.cmp-spec-view')).color;
+    await snap('compare-v2-edit');
+    await log('compare-edit-specimen', document.querySelectorAll('.cmp-edit').length === 2 && views.every(v => v === 'Quạ đen 龍') && document.querySelector('.cmp-edit').value === 'Quạ đen 龍' && !!missNote && missCol !== inkCol, { views, missNote, missCol, inkCol, miss: document.querySelectorAll('.cmp-spec .miss').length });
+    // PNG giữ ký tự thiếu: xám + chữ ghi chú (ảnh không có hover)
+    const pngMiss = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    await log('compare-png-missing-note', !!pngMiss && pngMiss.texts.some(x => /^Thiếu: /.test(x)), { notes: pngMiss?.texts.filter(x => /Thiếu/.test(x)) });
+    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Phở bò Hà Nội'); await sleep(300);
+    // H7: hàng Vietnamese có TermTip "Stacked diacritics" + chữ "dấu chồng"; ký tự dấu chồng được đánh dấu
+    const viHead = document.querySelector('[data-row="specimen.vi"]');
+    await log('compare-vi-row', /Vietnamese/.test(viHead?.querySelector('b')?.textContent ?? '') && viHead?.querySelector('[data-term="vi_marks"]')?.textContent === 'Stacked diacritics' && /dấu chồng/.test(viHead?.textContent ?? '') && document.querySelectorAll('.cmp-vi [data-stacked="true"]').length >= 5, { head: viHead?.textContent, stacked: document.querySelectorAll('.cmp-vi [data-stacked="true"]').length });
+    // H8a: Overlay là vùng chung, bật bằng nút; mắt trên tiêu đề cột chọn font; mốc đặc
+    const ovBtn = btn('Overlay');
+    ovBtn?.click(); await wait(() => document.querySelector('.cmp-ovl text'), 8000); await sleep(500);
+    const styles1 = [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style'));
+    await snap('compare-v2-overlay');
+    const eye1 = ariaBtn('Overlay ·', heads()[1]); eye1?.click(); await sleep(300);
+    const styles2 = [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style'));
+    eye1?.click(); await sleep(300);
+    const pngOv = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    await log('compare-overlay-toggle', ovBtn?.getAttribute('aria-pressed') === 'true' && styles1.join() === 'solid,line' && styles2.join() === 'solid' && !document.querySelector('[data-row="specimen.overlay"]') && !!pngOv && pngOv.overlayLayers === 2 && pngOv.rows.includes('overlay'), { styles1, styles2, pngLayers: pngOv?.overlayLayers });
+    // H8b: thanh đo theo min–max của các font đang xem: hai marker không dính nhau khi giá trị khác nhau
+    const bars = [...document.querySelectorAll('.cmp-tbl .row')].filter(r => r.querySelectorAll('.cmp-pbar').length === 2).map(r => [...r.querySelectorAll('.cmp-pbar i')].map(i => parseFloat(i.style.left)));
+    await log('compare-pbar-minmax', bars.length > 0 && bars.some(b => Math.abs(b[0] - b[1]) > 60) && !document.querySelector('.cmp-pbar em'), { rows: bars.length, spreads: bars.slice(0, 6) });
     const termC = await termCheck('.cmp-tbl .rh [data-term]');
     await log('compare-term-tooltips', termC.n >= 10 && termC.bad.length === 0 && termC.art >= 8, termC);
     // PNG: vẽ như nút Xuất nhưng không qua hộp thoại (móc QA); phải có overlay, đơn vị, nhãn không bị cắt.
