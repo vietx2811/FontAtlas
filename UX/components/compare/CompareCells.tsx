@@ -43,7 +43,7 @@ function SpecimenArt({ face, fam, text, size, fit }: { face: CompareFace; fam: s
     <div className="cmp-page fa-note-host cmp-spec">
       <div className="cmp-line cmp-spec-view" aria-hidden="true" style={style}><div ref={layer}>{text === '' ? <span className="ph">{PLACEHOLDER}</span> : graphemes(text).map((ch, i) => <span key={i} className={missing.has(ch) ? 'miss' : undefined}>{ch}</span>)}</div></div>
       <input className="cmp-edit" type="text" value={sample} placeholder={PLACEHOLDER} spellCheck={false} autoComplete="off" style={style} aria-label={`${t('compare.edit')} · ${face.row.family}`}
-        onChange={e => { useUiStore.getState().setSample(e.target.value); sync(e.target); }} onScroll={e => sync(e.currentTarget)} onKeyUp={e => sync(e.currentTarget)} onSelect={e => sync(e.currentTarget)} />
+        onChange={e => { useUiStore.getState().setSample(e.target.value); sync(e.target); }} onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.stopPropagation(); e.currentTarget.blur(); } }} onScroll={e => sync(e.currentTarget)} onKeyUp={e => sync(e.currentTarget)} onSelect={e => sync(e.currentTarget)} />
       {missing.size > 0 && <NoteMark testId="missing-note" text={t('compare.missing', { chars: missingList(missing) })} />}
       {noXh(face, fit) && <NoteMark text={t('compare.noXh')} />}
     </div>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type GroupKey = 'specimen' | 'metrics' | 'class' | 'meta';
 export const GROUPS: readonly GroupKey[] = ['specimen', 'metrics', 'class', 'meta'];
@@ -23,7 +23,10 @@ export function saveRowConfig(c: RowConfig): void {
 
 export function useRowConfig() {
   const [config, setConfig] = useState<RowConfig>(loadRowConfig);
-  const update = useCallback((fn: (c: RowConfig) => RowConfig) => setConfig(prev => { const next = fn(prev); saveRowConfig(next); return next; }), []);
+  const update = useCallback((fn: (c: RowConfig) => RowConfig) => setConfig(fn), []);
+  // Ghi ra localStorage ngoài updater của setState (updater phải thuần; StrictMode gọi nó hai lần).
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } saveRowConfig(config); }, [config]);
   return {
     config,
     toggleGroup: (g: GroupKey) => update(c => ({ ...c, collapsed: c.collapsed.includes(g) ? c.collapsed.filter(x => x !== g) : [...c.collapsed, g] })),

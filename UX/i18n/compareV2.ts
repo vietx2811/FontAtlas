@@ -12,4 +12,5 @@ export const COMPARE_V2 = {
   'compare.ov.col': 'Chồng font này lên Overlay', 'compare.ov.col.off': 'Bỏ font này khỏi Overlay', 'compare.ov.max': 'Overlay tối đa {n} font',
   'compare.ov.empty': 'Chọn font bằng nút mắt trên tiêu đề cột để chồng chúng lên nhau.',
   'compare.pbar.tip': 'Thanh tô từ 0 đến giá trị, cùng thang cho các font đang xem; percentile là vị trí trong cả thư viện', 'compare.pbar.aria': 'Độ lớn so với các font đang so sánh',
+  'compare.add.fail': 'Không thêm được font này vào so sánh',
 } as const;

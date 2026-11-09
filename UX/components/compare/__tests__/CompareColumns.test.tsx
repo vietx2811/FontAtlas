@@ -78,7 +78,7 @@ describe('H3 · add / remove columns', () => {
     const opts = await within(dlg).findAllByRole('option');
     expect(opts.length).toBeGreaterThan(0);
     for (const o of opts) expect(inCompare.has(`${o.querySelector('b')!.textContent} ${o.querySelector('span')!.textContent}`.trim())).toBe(false);
-    fireEvent.click(within(opts[0]).getByRole('button'));
+    fireEvent.click(opts[0]);
     await waitFor(() => expect(heads()).toHaveLength(3));
     expect(screen.queryByRole('dialog', { name: 'Chọn font để thêm' })).toBeNull();
     expect(useUiStore.getState().compareSession!.faces).toHaveLength(3);

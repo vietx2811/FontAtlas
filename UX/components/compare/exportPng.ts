@@ -9,7 +9,7 @@ import { termName } from '../ui/termNames';
 import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, faceName, overlayStyleOf, viNotes } from './CompareCells';
 import { coverageProbe, graphemes, missingList } from './glyphCoverage';
 
-export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; /** Khoá face (hashHex:faceIndex) được chồng trong Overlay, theo toggle trên màn hình; null/rỗng = không vẽ vùng Overlay. */ overlay?: readonly string[] | null; /** Họ font → ký tự của mẫu mà font đó không có (xám + ghi chú chữ, vì ảnh không có hover). */ missing?: ReadonlyMap<string, ReadonlySet<string>> };
+export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; /** Khoá face (hashHex:faceIndex) được chồng trong Overlay, theo toggle trên màn hình; null/rỗng = không vẽ vùng Overlay. */ overlay?: readonly string[] | null; /** Thứ tự cột như màn hình (khoá face, theo pin); mốc vẫn là cột đầu của `data`. */ order?: readonly string[]; /** Hàng ẩn (id như màn hình, vd `metrics.x_height_em`) và nhóm thu gọn (`specimen`/`metrics`/`class`) → không vẽ. */ hiddenRows?: ReadonlySet<string>; collapsed?: ReadonlySet<string>; /** Họ font → ký tự của mẫu mà font đó không có (xám + ghi chú chữ, vì ảnh không có hover). */ missing?: ReadonlyMap<string, ReadonlySet<string>> };
 const keyOf = (f: { hashHex: string; faceIndex: number }) => `${f.hashHex}:${f.faceIndex}`;
 
 export const exportFileName = (data: CompareDto): string =>
@@ -84,14 +84,17 @@ export type ExportResult = { canvas: HTMLCanvasElement; manifest: ExportManifest
 export const metricText = (value: number, unit: string | null): string => [numberText(value, unit), unitText(unit)].filter(Boolean).join(' ');
 
 /** Vẽ bảng so sánh ra canvas (như màn hình: dòng mẫu, overlay, dấu chồng + nhãn, số đo + đơn vị + Δ, phân loại, license). Trả null khi không có canvas 2D (jsdom). */
-export function renderCompare({ data, families, sample, fit, dark, overlay, loaded, missing }: ExportInput): ExportResult | null {
+export function renderCompare({ data: source, families, sample, fit, dark, overlay, loaded, missing, order, hiddenRows, collapsed }: ExportInput): ExportResult | null {
+  const base = source.faces[0];
+  const picked = order ? order.map(k => source.faces.find(f => keyOf(f.face) === k)).filter((f): f is NonNullable<typeof f> => !!f) : source.faces;
+  const data: CompareDto = { ...source, faces: picked.length === source.faces.length ? picked : source.faces };
+  const shows = (id: string, group: string): boolean => !hiddenRows?.has(id) && !collapsed?.has(group);
   const n = data.faces.length;
   const LW = 200, CW = 270, PAD = 20, HEAD_LINE = 18, SPEC = 70, OVL = 96, LH = 15;
   const c = dark ? EXPORT_PALETTE.dark : EXPORT_PALETTE.light;
   const W = PAD * 2 + LW + n * CW;
   const ui = (typeof getComputedStyle === 'function' ? getComputedStyle(document.body).fontFamily : '') || 'sans-serif';
   const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-  const base = data.faces[0];
   const x0 = (i: number) => PAD + LW + i * CW;
   const fontOf = (size: number, weight = 400) => `${weight} ${size}px ${ui}`;
   const colW = CW - 16;
@@ -101,7 +104,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
   if (!probe) return null;
   const lines = (s: string, size: number, weight: number, maxW: number) => { probe.font = fontOf(size, weight); return wrapText(probe, s, maxW); };
 
-  const names = data.faces.map((f, i) => `${i === 0 ? `(${t('compare.base')}) ` : ''}${f.row.family}${f.row.subfamily ? ' ' + f.row.subfamily : ''}`);
+  const names = data.faces.map((f, i) => `${f === base ? `(${t('compare.base')}) ` : ''}${f.row.family}${f.row.subfamily ? ' ' + f.row.subfamily : ''}`);
   const nameL = names.map(s => lines(s, 14, 600, colW));
   const headH = Math.max(...nameL.map(l => l.length)) * HEAD_LINE + 14;
   const labelBlock = (b: string, g: string) => ({ b: lines(b, 12, 600, LW - 12), g: g ? lines(g, 11, 400, LW - 12) : [] });
@@ -114,11 +117,11 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     const all = m.size ? [...viNotes(f), { kind: 'warn' as const, text: t('compare.missing', { chars: missingList(m) }) }] : viNotes(f);
     return all.map(x => ({ ...x, lines: lines(x.text, 11, 600, colW) }));
   });
-  const specNotes = (i: number): string[] => [...(fit && i > 0 && !xhOk(data.faces[i].metrics.x_height_em?.value) ? [t('compare.noXh')] : []), ...(missOf(i, specText).size ? [t('compare.missing', { chars: missingList(missOf(i, specText)) })] : [])];
+  const specNotes = (i: number): string[] => [...(fit && data.faces[i] !== base && !xhOk(data.faces[i].metrics.x_height_em?.value) ? [t('compare.noXh')] : []), ...(missOf(i, specText).size ? [t('compare.missing', { chars: missingList(missOf(i, specText)) })] : [])];
   const maxSpecNotes = Math.max(0, ...data.faces.map((_, i) => specNotes(i).length));
   // Chiều cao hàng không thấp hơn khối nhãn bên trái sau khi xuống dòng.
   const viGloss = `${termName('vi_marks')} · ${t('compare.row.vi.gloss')}`;
-  const specH = Math.max(SPEC + 14 * maxSpecNotes, labelH(t('compare.row.line'), ''));
+  const specH = !shows('specimen.line', 'specimen') ? 0 : Math.max(SPEC + 14 * maxSpecNotes, labelH(t('compare.row.line'), ''));
   // Vùng Overlay chung (một khối trải hết các cột): các font được chọn chồng lên nhau + chú giải tên.
   const ovSel = data.faces.filter(f => overlay?.includes(keyOf(f.face)));
   const ovOn = ovSel.length > 0;
@@ -135,11 +138,11 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     return rowsL;
   })();
   const ovlH = Math.max(OVL + legend.length * 16, labelH(t('compare.row.overlay'), OVERLAY_SPACED));
-  const viH = Math.max(SPEC + Math.max(0, ...viNotesOf.map(a => a.reduce((h, x) => h + x.lines.length * 14 + 4, 0))), labelH(t('compare.row.vi'), viGloss));
+  const viH = !shows('specimen.vi', 'specimen') ? 0 : Math.max(SPEC + Math.max(0, ...viNotesOf.map(a => a.reduce((h, x) => h + x.lines.length * 14 + 4, 0))), labelH(t('compare.row.vi'), viGloss));
   const metricK = (k: string) => `compare.m.${k}` as I18nKey;
   const deltaWraps = (k: (typeof COMPARE_METRICS)[number], i: number): { text: string; wrap: boolean } | null => {
     const m = data.faces[i].metrics[k];
-    if (m.value === null || i === 0) return null;
+    if (m.value === null || data.faces[i] === base) return null;
     const d = deltaOf(k, m, base.metrics[k]);
     if (!d) return null;
     const text = deltaText(d).text;
@@ -150,6 +153,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     return { text, wrap: vw + 8 + probe.measureText(text).width > colW };
   };
   const metricH = COMPARE_METRICS.map(k => {
+    if (!shows(`metrics.${k}`, 'metrics')) return 0;
     const own = labelH(termName(k), t(`${metricK(k)}.gloss` as I18nKey));
     const cells = Math.max(54, ...data.faces.map((f, i) => (deltaWraps(k, i)?.wrap ? 76 : 54) + (f.metrics[k].value === null ? 0 : 0)));
     return Math.max(own, cells);
@@ -159,7 +163,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     return lines(`${classLabel(k.class)}${k.subclass ? ' · ' + subclassLabel(k.subclass) : ''}${k.traits?.length ? ' · ' + k.traits.map(traitLabel).join(', ') : ''}`, 13, 600, colW);
   });
   const licL = data.faces.map(f => lines(`${t('compare.row.license')}: ${f.license ?? '—'} · ${t('compare.licenseNote')}`, 11, 400, colW));
-  const clsH = Math.max(labelH(t('compare.row.class'), ''), ...data.faces.map((_, i) => clsL[i].length * 17 + 18 + licL[i].length * 14 + 12));
+  const clsH = !shows('class.class', 'class') ? 0 : Math.max(labelH(t('compare.row.class'), ''), ...data.faces.map((_, i) => clsL[i].length * 17 + 18 + licL[i].length * 14 + 12));
 
   const H = PAD * 2 + headH + specH + (ovOn ? ovlH : 0) + viH + metricH.reduce((a, b) => a + b, 0) + clsH;
   const canvas = document.createElement('canvas');
@@ -187,7 +191,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     data.faces.forEach((_, i) => { ctx.save(); ctx.beginPath(); ctx.rect(x0(i), y, CW - 12, h - 8); ctx.clip(); ctx.fillStyle = c.page; ctx.fillRect(x0(i), y, CW - 12, h - 8); draw(i, x0(i) + 10, y, CW - 32, h - 8); ctx.restore(); });
     y += h;
   };
-  const scale = (i: number) => (fit && i > 0 ? fitScale(base.metrics.x_height_em?.value ?? null, data.faces[i].metrics.x_height_em?.value ?? null) : 1);
+  const scale = (i: number) => (fit && data.faces[i] !== base ? fitScale(base.metrics.x_height_em?.value ?? null, data.faces[i].metrics.x_height_em?.value ?? null) : 1);
   const face = (i: number, px: number) => `${Math.round(px * scale(i))}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`;
 
   // Chữ không bao giờ bị cắt ở mép cột: một hệ số chung cho cả hàng (giữ tỷ lệ giữa các font trong cùng chế độ Same size / Match x-height).
@@ -203,7 +207,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     let acc = '';
     for (const ch of graphemes(str)) { ctx.fillStyle = miss.has(ch) ? c.faint : c.ink; ctx.fillText(ch, x + ctx.measureText(acc).width, yy); acc += ch; }
   };
-  band('specimen', t('compare.row.line'), '', specH, (i, bx, by) => {
+  if (specH > 0) band('specimen', t('compare.row.line'), '', specH, (i, bx, by) => {
     ctx.font = face(i, 28 * kSpec); fillMarked(specText, bx, by + 42, missOf(i, specText));
     specNotes(i).forEach((nt, j) => text(nt, bx, by + 62 + 14 * j, { size: 10, weight: 600, color: c.warn }));
   });
@@ -238,7 +242,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     y += ovlH;
   }
 
-  band('vi', t('compare.row.vi'), viGloss, viH, (i, bx, by) => {
+  if (viH > 0) band('vi', t('compare.row.vi'), viGloss, viH, (i, bx, by) => {
     const v = data.faces[i].vi;
     ctx.font = face(i, 30 * 1.1 * kVi); ctx.globalAlpha = v.supports ? 1 : 0.4; fillMarked(SAMPLE_VI, bx, by + 46, missOf(i, SAMPLE_VI)); ctx.globalAlpha = 1;
     if (v.stackedMarksOverflow) { ctx.strokeStyle = c.rule; ctx.beginPath(); ctx.moveTo(bx, by + 10); ctx.lineTo(bx + CW - 32, by + 10); ctx.stroke(); } // đường xám nhạt chỉ khi dấu tràn; cảnh báo bằng chữ bên dưới
@@ -247,6 +251,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
   });
 
   COMPARE_METRICS.forEach((k, ki) => {
+    if (metricH[ki] === 0) return;
     rows.push(`metric:${k}`);
     rule(y);
     rowHead(termName(k), t(`${metricK(k)}.gloss` as I18nKey), y);
@@ -258,7 +263,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
       ctx.font = fontOf(15, 600); const vw = ctx.measureText(v).width;
       const d = deltaWraps(k, i);
       if (d) { if (d.wrap) text(d.text, bx, y + 42, { size: 11, weight: 600, color: c.accent }); else text(d.text, bx + vw + 8, y + 24, { size: 11, weight: 600, color: c.accent }); }
-      else if (i === 0) text(t('compare.base'), bx + vw + 8, y + 24, { size: 11, color: c.faint });
+      else if (f === base) text(t('compare.base'), bx + vw + 8, y + 24, { size: 11, color: c.faint });
       // Thanh đo như màn hình: dương 0 → max×1,15, có dấu đối xứng quanh 0; tô từ 0. Percentile ghi bằng chữ vì ảnh không có tooltip.
       const range = barScale(k, data.faces.map(x => x.metrics[k].value));
       const by = y + (d?.wrap ? 56 : 38);
@@ -273,17 +278,19 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
     y += metricH[ki];
   });
 
-  rows.push('class');
-  rule(y);
-  rowHead(t('compare.row.class'), '', y);
-  data.faces.forEach((f, i) => {
-    const k = f.classification;
-    const conf = Number.isFinite(k.confidence) ? `${Math.round(k.confidence * 100)}%` : '';
-    paras(clsL[i], x0(i), y + 22, 17, { size: 13, weight: 600 });
-    let ly = y + 22 + clsL[i].length * 17;
-    if (conf) { text(conf, x0(i), ly, { size: 11, color: c.mute }); ly += 18; }
-    paras(licL[i], x0(i), ly + 4, 14, { size: 11, color: c.mute });
-  });
+  if (clsH > 0) {
+    rows.push('class');
+    rule(y);
+    rowHead(t('compare.row.class'), '', y);
+    data.faces.forEach((f, i) => {
+      const k = f.classification;
+      const conf = Number.isFinite(k.confidence) ? `${Math.round(k.confidence * 100)}%` : '';
+      paras(clsL[i], x0(i), y + 22, 17, { size: 13, weight: 600 });
+      let ly = y + 22 + clsL[i].length * 17;
+      if (conf) { text(conf, x0(i), ly, { size: 11, color: c.mute }); ly += 18; }
+      paras(licL[i], x0(i), ly + 4, 14, { size: 11, color: c.mute });
+    });
+  }
   return { canvas, manifest: { rows, texts, fit: { specimen: kSpec, vi: kVi }, size: { w: W, h: H }, dark, specimenBg: c.page, overlayLayers: ovSel.length } };
 }
 

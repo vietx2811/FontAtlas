@@ -88,6 +88,8 @@ export interface UiActions {
   resumeCompare(): void;
   addCompareFace(f: FaceKeyDto): boolean;
   removeCompareFace(key: string): void;
+  /** Gỡ các face khỏi phiên (không đọc được / thêm thất bại); không áp mức tối thiểu 2. */
+  pruneCompareFaces(keys: string[]): void;
   toggleComparePin(key: string): void;
   setCompareOverlay(on: boolean): void;
   toggleCompareOverlayFace(key: string): void;
@@ -194,6 +196,12 @@ export function createUiStore(): UiStore {
       if (!cs || cs.faces.length <= COMPARE_MIN || !cs.faces.some(x => faceKey(x) === key)) return s;
       const faces = cs.faces.filter(x => faceKey(x) !== key);
       return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => k !== key), overlayIds: cs.overlayIds.filter(k => k !== key) }, compare: s.compare ? faces : s.compare };
+    }),
+    pruneCompareFaces: keys => set(s => {
+      const cs = s.compareSession;
+      if (!cs || !cs.faces.some(x => keys.includes(faceKey(x)))) return s;
+      const faces = cs.faces.filter(x => !keys.includes(faceKey(x)));
+      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => !keys.includes(k)), overlayIds: cs.overlayIds.filter(k => !keys.includes(k)) }, compare: s.compare ? faces : s.compare };
     }),
     toggleComparePin: key => set(s => {
       const cs = s.compareSession;

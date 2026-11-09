@@ -37,7 +37,7 @@ export function FacePicker({ api, anchor, exclude, onPick, onClose }: {
     return () => { alive = false; clearTimeout(id); };
   }, [api, q]);
   useEffect(() => {
-    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) onClose(); };
+    const away = (e: PointerEvent) => { const tg = e.target as HTMLElement; if (!box.current?.contains(tg) && !tg.closest?.('[data-picker-trigger]')) onClose(); };
     document.addEventListener('pointerdown', away, true);
     return () => document.removeEventListener('pointerdown', away, true);
   }, [onClose]);
@@ -49,11 +49,11 @@ export function FacePicker({ api, anchor, exclude, onPick, onClose }: {
         <input ref={input} type="search" value={q} placeholder={t('compare.picker.search')} aria-label={t('compare.picker.search')} onChange={e => setQ(e.target.value)} />
       </label>
       <ul role="listbox" aria-label={t('compare.picker.label')}>
-        {items === null && <li className="cmp-picker-n" role="status">{t('compare.picker.loading')}</li>}
-        {items !== null && shown.length === 0 && <li className="cmp-picker-n">{t('compare.picker.empty')}</li>}
+        {items === null && <li className="cmp-picker-n" role="presentation">{t('compare.picker.loading')}</li>}
+        {items !== null && shown.length === 0 && <li className="cmp-picker-n" role="presentation">{t('compare.picker.empty')}</li>}
         {shown.map(r => (
-          <li key={rowKey(r)} role="option" aria-selected={false}>
-            <button type="button" onClick={() => onPick(r)}><b>{r.family}</b><span>{r.subfamily ?? ''}</span></button>
+          <li key={rowKey(r)} role="presentation">
+            <button type="button" role="option" aria-selected={false} onClick={() => onPick(r)}><b>{r.family}</b><span>{r.subfamily ?? ''}</span></button>
           </li>
         ))}
       </ul>

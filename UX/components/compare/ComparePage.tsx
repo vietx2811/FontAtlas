@@ -79,6 +79,8 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const [fit, setFit] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [picker, setPicker] = useState<DOMRect | null>(null);
+  const addBtn = useRef<HTMLButtonElement>(null);
+  const closePicker = () => { setPicker(null); addBtn.current?.focus(); };
   const session = useUiStore(s => s.compareSession);
   const overlay = session?.overlayOn ?? false;
   const overlayIds = session?.overlayIds ?? [];
@@ -89,11 +91,45 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const close = () => useUiStore.getState().closeCompare();
   const idsKey = faces.map(keyOf).join('|');
 
+  const dataRef = useRef<CompareDto | null>(null);
+  dataRef.current = data;
+  const lastAttempt = useRef(attempt);
+  // Đổi tập cột KHÔNG nháy bảng: bỏ cột (mốc không đổi) lọc tại chỗ; thêm cột chỉ nạp face mới; còn lại mới nạp lại toàn bộ (vẫn giữ bảng cũ trong lúc chờ).
   useEffect(() => {
-    let alive = true; setData(null); setError(null);
-    api.compareFaces(faces).then(d => { if (alive) setData(d); }, e => { if (alive) setError(e instanceof Error ? e.message : String(e)); });
+    let alive = true; setError(null);
+    const cur = dataRef.current; const retry = lastAttempt.current !== attempt; lastAttempt.current = attempt;
+    const ids = faces.map(keyOf);
+    const have = cur ? cur.faces.map(f => keyOf(f.face)) : [];
+    const known = new Set([...have, ...(cur?.failed.map(x => keyOf(x.face)) ?? [])]);
+    const full = () => { api.compareFaces(faces).then(d => { if (alive) setData(d); }, e => { if (alive) { if (cur) failAdd(ids.filter(k => !known.has(k)), e); else setError(e instanceof Error ? e.message : String(e)); } }); };
+    if (!cur || retry || ids[0] !== have[0]) { if (!cur || retry) setData(null); full(); return () => { alive = false; }; }
+    const extras = ids.filter(k => !known.has(k));
+    if (extras.length === 0) {
+      if (ids.length !== have.length) setData({ ...cur, faces: cur.faces.filter(f => ids.includes(keyOf(f.face))) });
+      return () => { alive = false; };
+    }
+    const baseKey = have[0];
+    const extraFaces = faces.filter(f => extras.includes(keyOf(f)));
+    api.compareFaces([faces.find(f => keyOf(f) === baseKey)!, ...extraFaces]).then(d => {
+      if (!alive) return;
+      const pool = new Map([...cur.faces, ...d.faces.filter(f => extras.includes(keyOf(f.face)))].map(f => [keyOf(f.face), f] as const));
+      setData({ faces: ids.map(k => pool.get(k)).filter((f): f is CompareFace => !!f), failed: [...cur.failed, ...d.failed] });
+    }, e => { if (alive) failAdd(extras, e); });
     return () => { alive = false; };
   }, [api, idsKey, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Thêm cột thất bại: báo lỗi và bỏ khỏi phiên (không để cột ma kẹt trong session).
+  const failAdd = (keys: string[], e: unknown) => {
+    useUiStore.getState().pruneCompareFaces(keys);
+    useNoticeStore.getState().push({ kind: 'error', text: t('compare.error', { msg: e instanceof Error ? e.message : String(e) }) });
+  };
+  // Face không đọc được thì không có cột để bỏ: gỡ khỏi phiên (lý do vẫn hiện ở dải cảnh báo).
+  useEffect(() => {
+    if (!data || data.failed.length === 0) return;
+    const sess = useUiStore.getState().compareSession; if (!sess) return;
+    const bad = data.failed.map(x => keyOf(x.face)).filter(k => sess.faces.some(f => keyOf(f) === k));
+    if (bad.length) useUiStore.getState().pruneCompareFaces(bad);
+  }, [data]);
 
   // Tiêu điểm vào màn khi mở, trả về chỗ cũ khi đóng.
   useEffect(() => {
@@ -104,13 +140,23 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]')) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return; // Esc của bộ gõ (Telex…) không đóng màn
+      if ((e.target as HTMLElement | null)?.matches?.('input, textarea, [contenteditable="true"]')) return; // đang gõ: Esc thuộc về ô nhập (nó tự blur)
+      if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]')) return;
       close();
     };
     document.addEventListener('keydown', on);
     return () => document.removeEventListener('keydown', on);
   }, []);
 
+  // PNG đúng như màn hình: thứ tự pin, hàng ẩn, nhóm thu gọn.
+  const screenLayout = () => {
+    const cs = useUiStore.getState().compareSession;
+    const pins = cs?.pinned ?? [];
+    const keys = (data?.faces ?? []).map(f => keyOf(f.face));
+    const order = [...keys].sort((a, b) => (pins.includes(a) ? pins.indexOf(a) : pins.length + keys.indexOf(a)) - (pins.includes(b) ? pins.indexOf(b) : pins.length + keys.indexOf(b)));
+    return { order, hiddenRows: new Set(rc.config.hidden), collapsed: new Set<string>(rc.config.collapsed) };
+  };
   const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
 
   // Móc QA native (chỉ khi chạy kịch bản QA): vẽ PNG như nút Xuất, không mở hộp thoại, trả bản kê nội dung + mẫu điểm ảnh.
@@ -119,19 +165,19 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     (window as unknown as { __faQaComparePng?: () => Promise<unknown> }).__faQaComparePng = async () => {
       const loaded = await ensureFonts(families.current.values(), sample);
       const missing = await detectMissingAll(loaded, `${sample}${SAMPLE_VI}`);
-      const r = renderCompare({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, loaded, missing });
+      const r = renderCompare({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, loaded, missing, ...screenLayout() });
       if (!r) return null;
       const px = r.canvas.getContext('2d')!.getImageData(2, r.canvas.height - 2, 1, 1).data;
       return { ...r.manifest, cornerPx: [px[0], px[1], px[2]], dataUrl: r.canvas.toDataURL('image/png') };
     };
     return () => { delete (window as unknown as { __faQaComparePng?: unknown }).__faQaComparePng; };
-  }, [data, sample, fit, overlay, overlayIds.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, sample, fit, overlay, overlayIds.join('|'), rc.config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportPng = async () => {
     if (!data || exporting) return;
     setExporting(true);
     try {
-      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null });
+      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, ...screenLayout() });
       const saved = await api.savePng(blob, name);
       if (saved) useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngSaved', { name: saved.split(/[\\/]/).pop() ?? saved }) });
     } catch (e) {
@@ -161,7 +207,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const pins = session?.pinned ?? [];
   const order = (f: CompareFace) => { const i = pins.indexOf(keyOf(f.face)); return i < 0 ? pins.length + data.faces.indexOf(f) : i; };
   const shown = [...data.faces].sort((a, b) => order(a) - order(b));
-  const full = shown.length >= COMPARE_MAX;
+  const full = (session?.faces.length ?? shown.length) >= COMPARE_MAX;
   const cols = shown.length + 2;
   const scale = (f: CompareFace) => (fit && f !== base ? fitScale(base.metrics.x_height_em?.value ?? null, f.metrics.x_height_em?.value ?? null) : 1);
   const cells = (fn: (f: CompareFace) => React.ReactNode) => shown.map(f => <div key={keyOf(f.face)} role="cell">{fn(f)}</div>);
@@ -187,7 +233,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
             <div role="columnheader" className="addh">
               <Tooltip label={full ? t('compare.add.full', { n: COMPARE_MAX }) : t('compare.add.tip')}>
                 <button type="button" className="cmp-add" aria-label={t('compare.add')} aria-disabled={full ? 'true' : undefined} aria-haspopup="dialog" aria-expanded={picker !== null}
-                  onClick={e => { if (full) return; setPicker(e.currentTarget.getBoundingClientRect()); }}><Icon name="plus" size={14} /></button>
+                  ref={addBtn} data-picker-trigger onClick={e => { if (full) return; if (picker) closePicker(); else setPicker(e.currentTarget.getBoundingClientRect()); }}><Icon name="plus" size={14} /></button>
               </Tooltip>
             </div>
           </Row>
@@ -218,7 +264,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
         </div>
         {rowMenu && <Menu label={t('compare.row.menu')} anchor={{ rect: rowMenu.rect }} onClose={() => setRowMenu(null)}
           entries={defs.filter(d => d.group === rowMenu.group && rc.config.hidden.includes(d.id)).map(d => ({ id: d.id, label: d.name, onSelect: () => rc.showRow(d.id) }))} />}
-        {picker && <FacePicker api={api} anchor={picker} exclude={new Set(data.faces.map(f => keyOf(f.face)))} onClose={() => setPicker(null)} onPick={r => { useUiStore.getState().addCompareFace({ hashHex: r.hashHex, faceIndex: r.faceIndex }); setPicker(null); }} />}
+        {picker && <FacePicker api={api} anchor={picker} exclude={new Set(data.faces.map(f => keyOf(f.face)))} onClose={closePicker} onPick={r => { const ok = useUiStore.getState().addCompareFace({ hashHex: r.hashHex, faceIndex: r.faceIndex }); if (!ok) useNoticeStore.getState().push({ kind: 'error', text: t('compare.add.fail') }); closePicker(); }} />}
         <p className="cmp-foot">{t('compare.footnote')} · {t('compare.footnote2')}</p>
       </div>
     </div>
