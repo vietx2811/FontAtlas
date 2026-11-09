@@ -7,7 +7,7 @@ import { barFill, barScale, deltaOf, deltaText, fitScale, percentLabel, xhOk } f
 import { measureInkWith } from '../ui/inkLines';
 import { termName } from '../ui/termNames';
 import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, faceName, overlayStyleOf, viNotes } from './CompareCells';
-import { coverageProbe, missingList } from './glyphCoverage';
+import { coverageProbe, graphemes, missingList } from './glyphCoverage';
 
 export type ExportInput = { loaded?: ReadonlySet<string>; data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; /** Khoá face (hashHex:faceIndex) được chồng trong Overlay, theo toggle trên màn hình; null/rỗng = không vẽ vùng Overlay. */ overlay?: readonly string[] | null; /** Họ font → ký tự của mẫu mà font đó không có (xám + ghi chú chữ, vì ảnh không có hover). */ missing?: ReadonlyMap<string, ReadonlySet<string>> };
 const keyOf = (f: { hashHex: string; faceIndex: number }) => `${f.hashHex}:${f.faceIndex}`;
@@ -107,8 +107,8 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
   const labelBlock = (b: string, g: string) => ({ b: lines(b, 12, 600, LW - 12), g: g ? lines(g, 11, 400, LW - 12) : [] });
   const labelH = (b: string, g: string) => { const l = labelBlock(b, g); return (l.b.length + l.g.length) * LH + 18; };
   const fam = (i: number) => { const f = families.get(keyOf(data.faces[i].face)) ?? null; return f && (!loaded || loaded.has(f)) ? f : null; };
-  const missOf = (i: number, str: string): Set<string> => { const f = fam(i); const set = f ? missing?.get(f) : undefined; return new Set(set ? [...str].filter(ch => set.has(ch)) : []); };
-  const specText = clipGraphemes(sample, 18);
+  const missOf = (i: number, str: string): Set<string> => { const f = fam(i); const set = f ? missing?.get(f) : undefined; return new Set(set ? graphemes(str).filter(ch => set.has(ch)) : []); };
+  const specText = clipGraphemes(sample || 'Hxg', 18);
   const viNotesOf = data.faces.map((f, i) => {
     const m = missOf(i, SAMPLE_VI);
     const all = m.size ? [...viNotes(f), { kind: 'warn' as const, text: t('compare.missing', { chars: missingList(m) }) }] : viNotes(f);
@@ -201,7 +201,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
   const fillMarked = (str: string, x: number, yy: number, miss: Set<string>) => {
     if (miss.size === 0) { ctx.fillStyle = c.ink; ctx.fillText(str, x, yy); return; }
     let acc = '';
-    for (const ch of str) { ctx.fillStyle = miss.has(ch) ? c.faint : c.ink; ctx.fillText(ch, x + ctx.measureText(acc).width, yy); acc += ch; }
+    for (const ch of graphemes(str)) { ctx.fillStyle = miss.has(ch) ? c.faint : c.ink; ctx.fillText(ch, x + ctx.measureText(acc).width, yy); acc += ch; }
   };
   band('specimen', t('compare.row.line'), '', specH, (i, bx, by) => {
     ctx.font = face(i, 28 * kSpec); fillMarked(specText, bx, by + 42, missOf(i, specText));
@@ -241,7 +241,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay, load
   band('vi', t('compare.row.vi'), viGloss, viH, (i, bx, by) => {
     const v = data.faces[i].vi;
     ctx.font = face(i, 30 * 1.1 * kVi); ctx.globalAlpha = v.supports ? 1 : 0.4; fillMarked(SAMPLE_VI, bx, by + 46, missOf(i, SAMPLE_VI)); ctx.globalAlpha = 1;
-    ctx.strokeStyle = v.stackedMarksOverflow ? c.warn : c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx, by + 10); ctx.lineTo(bx + CW - 32, by + 10); ctx.stroke(); ctx.setLineDash([]);
+    if (v.stackedMarksOverflow) { ctx.strokeStyle = c.rule; ctx.beginPath(); ctx.moveTo(bx, by + 10); ctx.lineTo(bx + CW - 32, by + 10); ctx.stroke(); } // đường xám nhạt chỉ khi dấu tràn; cảnh báo bằng chữ bên dưới
     let ny = by + SPEC - 4;
     for (const note of viNotesOf[i]) { paras(note.lines, bx, ny + 10, 14, { size: 11, weight: 600, color: note.kind === 'ok' ? c.ok : c.warn }); ny += note.lines.length * 14 + 4; }
   });

@@ -29,9 +29,9 @@
 .ch .m { font-size: 11px; color: var(--muted); }
 .cmp-page { background: var(--specimen-bg); color: var(--specimen-ink); margin: -8px -12px; padding: 8px 12px; min-height: 100%; }
 .cmp-line { white-space: nowrap; line-height: 1.2; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; }
-.cmp-vi { white-space: nowrap; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; line-height: 1; padding: 14px 0 4px; border-top: 1px dashed var(--specimen-rule); border-bottom: 1px dashed var(--specimen-rule); }
+.cmp-vi { white-space: nowrap; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; line-height: 1; padding: 14px 0 4px; }
 .cmp-vi[data-unsupported="true"] { opacity: .4; }
-.cmp-vi[data-overflow="true"] { border-top-color: var(--warn); }
+.cmp-vi[data-overflow="true"] { border-top: 1px solid var(--specimen-rule); }
 .cmp-val { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-variant-numeric: tabular-nums; }
 .cmp-val b { font-size: 15px; }
 .cmp-val u { text-decoration: none; font-size: 11px; color: var(--muted); }
@@ -93,7 +93,7 @@
 .cmp-edit::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: transparent; }
 
 /* H7: ký tự mang dấu chồng — nền tông xám nhạt + gạch chân mảnh, không đổi màu chữ */
-.cmp-vi .stk { background: color-mix(in srgb, var(--specimen-ink) 11%, transparent); box-shadow: 0 1px 0 color-mix(in srgb, var(--specimen-ink) 45%, transparent); border-radius: 2px; }
+.cmp-vi .stk { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; text-decoration-color: color-mix(in srgb, var(--specimen-ink) 38%, transparent); }
 .cmp-vi .miss { color: var(--faint); }
 
 /* H8a: vùng Overlay chung. Mốc đặc; font khác: nét liền / đứt / chấm theo tông đen → xám. */
@@ -118,3 +118,6 @@
 .cmp-pbar { overflow: visible; }
 .cmp-pbar i.fill { position: absolute; top: 0; height: 4px; border-radius: 2px; background: var(--accent-ink); opacity: .75; min-width: 2px; }
 .cmp-pbar[data-signed]::after { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 10px; background: var(--faint); }
+
+.cmp-spec .ph { color: var(--faint); }
+.cmp-edit::placeholder { color: transparent; }

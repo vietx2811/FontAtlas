@@ -1,17 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+type Seg = new (l?: string, o?: object) => { segment(s: string): Iterable<{ segment: string }> };
+/** Tách theo grapheme (chữ + dấu đi cùng nhau, kể cả dạng NFD); không có Segmenter thì theo ký tự sau NFC. */
+export function graphemes(s: string): string[] {
+  const seg = (Intl as { Segmenter?: Seg }).Segmenter;
+  return seg ? [...new seg('vi', { granularity: 'grapheme' }).segment(s)].map(x => x.segment) : [...s.normalize('NFC')];
+}
+
+type Ctx = Pick<CanvasRenderingContext2D, 'measureText'> & { font: string } & Partial<Pick<CanvasRenderingContext2D, 'fillText' | 'clearRect' | 'getImageData' | 'fillStyle'>>;
+const PX = { w: 80, h: 64, size: 40 } as const;
+const inkOf = (ctx: Ctx, font: string, c: string): Uint8ClampedArray => {
+  ctx.clearRect!(0, 0, PX.w, PX.h); ctx.font = font; ctx.fillStyle = '#000'; ctx.fillText!(c, 4, 48);
+  return ctx.getImageData!(0, 0, PX.w, PX.h).data;
+};
+const sameInk = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => { if (a.length !== b.length) return false; for (let i = 3; i < a.length; i += 4) if (a[i] !== b[i]) return false; return true; };
 
 /**
- * Ký tự nào của một font không có glyph: so độ rộng của ký tự khi dự phòng là `monospace` với khi dự phòng là `serif`.
- * Nếu font có glyph thì hai độ rộng bằng nhau (advance của chính glyph); nếu thiếu, trình duyệt vẽ bằng hai font dự phòng khác nhau → rộng khác nhau.
- * Giới hạn: hai font dự phòng bằng nhau về bề rộng ở một ký tự hiếm (thì coi như có glyph) — chỉ làm lỡ một cảnh báo, không báo nhầm.
+ * Grapheme nào font không có glyph. Hai phép thử:
+ * 1) độ rộng khi dự phòng là monospace / serif / cursive khác nhau → trình duyệt đang vẽ bằng font dự phòng;
+ * 2) (canvas thật) hình vẽ của "font, serif" trùng hệt hình của riêng "serif" → font không đóng góp glyph.
+ * Phép 2 bắt các ký tự mà mọi font dự phòng ra cùng một font hệ thống (CJK, emoji), nơi phép 1 bó tay.
  */
-export function missingFrom(ctx: Pick<CanvasRenderingContext2D, 'measureText'> & { font: string }, family: string, chars: readonly string[], size = 64): Set<string> | null {
+export function missingFrom(ctx: Ctx, family: string, chars: readonly string[], size = 64): Set<string> | null {
   try {
     const w = (c: string, fb: string): number => { ctx.font = `${size}px "${family}", ${fb}`; return ctx.measureText(c).width; };
+    const canPx = typeof ctx.getImageData === 'function' && typeof ctx.fillText === 'function' && typeof ctx.clearRect === 'function';
     const out = new Set<string>();
     for (const c of chars) {
-      if (!c.trim() || c.length === 0) continue;
-      if (Math.abs(w(c, 'monospace') - w(c, 'serif')) > 0.01) out.add(c);
+      if (!c.trim()) continue;
+      const a = w(c, 'monospace'); const b = w(c, 'serif'); const d = w(c, 'cursive');
+      if (Math.abs(a - b) > 0.01 || Math.abs(b - d) > 0.01) { out.add(c); continue; }
+      if (canPx && sameInk(inkOf(ctx, `${PX.size}px "${family}", serif`, c), inkOf(ctx, `${PX.size}px "__fa_no_such_font__", serif`, c))) out.add(c);
     }
     return out;
   } catch { return null; }
@@ -31,7 +50,7 @@ export const clearCoverageCache = (): void => cache.clear();
 export async function detectMissing(family: string, text: string): Promise<Set<string> | null> {
   const c = ctx2d();
   if (!c || typeof document === 'undefined' || !document.fonts) return null;
-  const chars = [...new Set([...text.normalize('NFC')])].filter(ch => ch.trim());
+  const chars = [...new Set(graphemes(text))].filter(ch => ch.trim());
   if (chars.length === 0) return new Set();
   try { const faces = await document.fonts.load(`64px "${family}"`, text); if (!faces || faces.length === 0) return null; } catch { return null; }
   const todo = chars.filter(ch => !cache.has(`${family}\u0000${ch}`));
@@ -47,16 +66,22 @@ export async function detectMissing(family: string, text: string): Promise<Set<s
 export const coverageProbe = { detect: detectMissing };
 
 const NONE: ReadonlySet<string> = new Set();
-/** Ký tự của `text` mà font `family` không có. Rỗng khi đang đo hoặc không đo được. */
+export const MISSING_DEBOUNCE_MS = 150;
+/**
+ * Grapheme của `text` mà font `family` không có. Rỗng khi chưa đo lần nào / không đo được.
+ * Gõ liên tục: GIỮ kết quả cũ của cùng family trong lúc đo lại (không nháy chữ xám / NoteMark), đo lại sau ~150 ms.
+ */
 export function useMissingChars(family: string | null, text: string): ReadonlySet<string> {
-  const [state, setState] = useState<{ family: string; text: string; missing: ReadonlySet<string> } | null>(null);
+  const [state, setState] = useState<{ family: string; missing: ReadonlySet<string> } | null>(null);
+  const had = useRef<string | null>(null);
   useEffect(() => {
     if (!family) return;
     let alive = true;
-    void coverageProbe.detect(family, text).then(m => { if (alive) setState({ family, text, missing: m ?? NONE }); });
-    return () => { alive = false; };
+    const run = () => { void coverageProbe.detect(family, text).then(m => { if (alive) { had.current = family; setState({ family, missing: m ?? NONE }); } }); };
+    const h = setTimeout(run, had.current === family ? MISSING_DEBOUNCE_MS : 0);
+    return () => { alive = false; clearTimeout(h); };
   }, [family, text]);
-  return family && state && state.family === family && state.text === text ? state.missing : NONE;
+  return family && state && state.family === family ? state.missing : NONE;
 }
 
 /** Ghi chú chữ cho tooltip/PNG: "ấ ợ …" (tối đa `max` ký tự). */

@@ -10,10 +10,11 @@ import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
 import { NoteMark } from '../ui/noteMark';
-import { missingList, useMissingChars } from './glyphCoverage';
+import { graphemes, missingList, useMissingChars } from './glyphCoverage';
 import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
+export const PLACEHOLDER = 'Hxg';
 export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
@@ -40,8 +41,8 @@ function SpecimenArt({ face, fam, text, size, fit }: { face: CompareFace; fam: s
   const style = { fontFamily: css(fam), fontSize: size } as const;
   return (
     <div className="cmp-page fa-note-host cmp-spec">
-      <div className="cmp-line cmp-spec-view" aria-hidden="true" style={style}><div ref={layer}>{[...text].map((ch, i) => <span key={i} className={missing.has(ch.normalize('NFC')) ? 'miss' : undefined}>{ch}</span>)}</div></div>
-      <input className="cmp-edit" type="text" value={sample} spellCheck={false} autoComplete="off" style={style} aria-label={`${t('compare.edit')} · ${face.row.family}`}
+      <div className="cmp-line cmp-spec-view" aria-hidden="true" style={style}><div ref={layer}>{text === '' ? <span className="ph">{PLACEHOLDER}</span> : graphemes(text).map((ch, i) => <span key={i} className={missing.has(ch) ? 'miss' : undefined}>{ch}</span>)}</div></div>
+      <input className="cmp-edit" type="text" value={sample} placeholder={PLACEHOLDER} spellCheck={false} autoComplete="off" style={style} aria-label={`${t('compare.edit')} · ${face.row.family}`}
         onChange={e => { useUiStore.getState().setSample(e.target.value); sync(e.target); }} onScroll={e => sync(e.currentTarget)} onKeyUp={e => sync(e.currentTarget)} onSelect={e => sync(e.currentTarget)} />
       {missing.size > 0 && <NoteMark testId="missing-note" text={t('compare.missing', { chars: missingList(missing) })} />}
       {noXh(face, fit) && <NoteMark text={t('compare.noXh')} />}
@@ -123,7 +124,7 @@ export function viNotes(face: CompareFace): ViNote[] {
 /** Chỉ số (theo ký tự) của các ký tự mang dấu chồng: sau khi tách NFD có từ 2 dấu kết hợp trở lên (Ữ, Ặ, Ệ, ấ, ở…). */
 export function stackedIndexes(text: string): Set<number> {
   const out = new Set<number>();
-  [...text].forEach((ch, i) => { if ([...ch.normalize('NFD')].filter(c => /\p{Mn}/u.test(c)).length >= 2) out.add(i); });
+  graphemes(text).forEach((ch, i) => { if ([...ch.normalize('NFD')].filter(c => /\p{Mn}/u.test(c)).length >= 2) out.add(i); });
   return out;
 }
 
@@ -139,7 +140,7 @@ function ViArt({ face, fam, size }: { face: CompareFace; fam: string | null; siz
   return (
     <div className="cmp-page fa-note-host">
       <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>
-        {[...SAMPLE_VI].map((ch, i) => <span key={i} className={`${stacked.has(i) ? 'stk' : ''}${missing.has(ch.normalize('NFC')) ? ' miss' : ''}`.trim() || undefined} data-stacked={stacked.has(i) ? 'true' : undefined}>{ch}</span>)}
+        {graphemes(SAMPLE_VI).map((ch, i) => <span key={i} className={`${stacked.has(i) ? 'stk' : ''}${missing.has(ch) ? ' miss' : ''}`.trim() || undefined} data-stacked={stacked.has(i) ? 'true' : undefined}>{ch}</span>)}
       </div>
       <NoteMark testId="vi-note" kind={notes.some(n => n.kind === 'warn') || missing.size > 0 ? 'warn' : 'info'} text={parts.join(' · ')} />
     </div>

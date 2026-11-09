@@ -66,3 +66,45 @@ describe('glyph coverage', () => {
     expect(missingList(new Set(['a', 'b']))).toBe('a b');
   });
 });
+
+describe('review 4/5/8 · coverage on graphemes, stable while typing, empty sample', () => {
+  it('graphemes keep base+mark together, including the decomposed (NFD) form', () => {
+    expect(cov.graphemes('ấ'.normalize('NFD'))).toHaveLength(1);
+    expect(cov.graphemes('Quạ')).toHaveLength(3);
+  });
+  it('a decomposed grapheme the font lacks is grey too (set is keyed by the typed grapheme)', async () => {
+    const nfd = 'ấ'.normalize('NFD');
+    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set(cov.graphemes(text).filter(g => g === nfd)));
+    useUiStore.getState().setSample(`a${nfd}b`);
+    await mount();
+    await waitFor(() => expect(document.querySelectorAll('.cmp-spec .miss').length).toBeGreaterThan(0));
+    expect(document.querySelector('.cmp-spec-view .miss')!.textContent).toBe(nfd);
+  });
+  it('pixel probe: widths agree across fallbacks (CJK/emoji case) but the font draws exactly the fallback glyph → missing', () => {
+    const ctx = {
+      font: '', fillStyle: '', measureText: () => ({ width: 40 }) as TextMetrics, clearRect() {}, fillText() {},
+      getImageData() { return { data: new Uint8ClampedArray(80 * 64 * 4).fill(7) } as ImageData; }, // cùng hình mọi lần vẽ
+    };
+    expect([...missingFrom(ctx as never, 'F', ['龍', ' '])!]).toEqual(['龍']);
+    let n = 0; const ctx2 = { ...ctx, getImageData() { return { data: new Uint8ClampedArray(80 * 64 * 4).fill(n++ % 2 ? 7 : 9) } as ImageData; } };
+    expect([...missingFrom(ctx2 as never, 'F', ['a'])!]).toEqual([]);
+  });
+  it('typing keeps the previous grey/note until the next measurement (no flash), then updates', async () => {
+    const spy = vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set([...text].filter(c => c === 'ố')));
+    useUiStore.getState().setSample('ố');
+    await mount();
+    await waitFor(() => expect(notes('Thiếu: ố').length).toBeGreaterThan(0));
+    const calls = spy.mock.calls.length;
+    fireEvent.change(inputs()[0], { target: { value: 'ốa' } });
+    expect(notes('Thiếu: ố').length).toBeGreaterThan(0); // vẫn còn ngay sau khi gõ
+    await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThan(calls), { timeout: 1500 });
+    expect(notes('Thiếu: ố').length).toBeGreaterThan(0);
+  });
+  it('an empty sample shows a grey placeholder in the same style, not a hidden "Hxg" you cannot edit', async () => {
+    useUiStore.getState().setSample('');
+    await mount();
+    expect(document.querySelector('.cmp-spec-view .ph')!.textContent).toBe('Hxg');
+    expect(inputs()[0].placeholder).toBe('Hxg');
+    expect(inputs()[0].value).toBe('');
+  });
+});

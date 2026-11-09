@@ -56,3 +56,15 @@ describe('H7 · Vietnamese stacked diacritics', () => {
     expect(document.querySelector('.cmp-vi')!.textContent).toBe(SAMPLE_VI);
   });
 });
+
+describe('C · Vietnamese row styling', () => {
+  it('stacked marks use a thin underline (no heavy fill) and the dashed red rule is gone', async () => {
+    const { readFileSync } = await import('node:fs'); const { join } = await import('node:path');
+    const css = readFileSync(join(process.cwd(), 'components/compare/compare.css'), 'utf8');
+    const stk = css.split('\n').find(l => l.startsWith('.cmp-vi .stk {'))!;
+    expect(stk).toMatch(/text-decoration: underline/); expect(stk).not.toMatch(/background/);
+    const vi = css.split('\n').find(l => l.startsWith('.cmp-vi {'))!;
+    expect(vi).not.toMatch(/dashed/);
+    expect(css).not.toMatch(/\.cmp-vi\[data-overflow="true"\] \{[^}]*--warn/);
+  });
+});
