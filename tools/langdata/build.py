@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-CONVERTER_VERSION = 1
+CONVERTER_VERSION = 2
 KEEP_VALIDITY = {"verified", "preliminary"}
 INHERIT = re.compile(r"<([^<>]+)>")
 SCRIPT_PREFIX = {  # tên script Hyperglot -> tiền tố tên Unicode của chữ cái
@@ -98,6 +98,17 @@ def nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
 
 
+def nfd_marks(toks):
+    return {c for t in toks for c in unicodedata.normalize("NFD", t) if unicodedata.combining(c)}
+
+
+def required_marks(marks, base, aux):
+    """Mark cần cho `base`: có trong NFD của base, hoặc là mark rời không thuộc riêng auxiliary.
+    Mark chỉ sinh ra từ ký tự auxiliary (vd é của tiếng Anh) không bắt buộc cho hỗ trợ ngôn ngữ."""
+    in_base, in_aux = nfd_marks(base), nfd_marks(aux)
+    return [m for m in marks if m in in_base or all(c not in in_aux for c in m)]
+
+
 def tokens(s: str):
     return [t.replace("◌", "") for t in s.split() if t.replace("◌", "")]
 
@@ -124,6 +135,8 @@ def main():
                 dropped_script += 1
                 continue
             marks = tokens(r.get(o, "marks", script))
+            aux = tokens(r.get(o, "auxiliary", script))
+            marks = required_marks(marks, base, aux)
             n = seen.get(code, 0)
             seen[code] = n + 1
             ident = code if n == 0 else f"{code}-{script}"

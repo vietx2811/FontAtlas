@@ -153,6 +153,25 @@ impl Store {
             .is_some())
     }
 
+    /// Khoá + đường dẫn (vị trí chưa missing) của một face theo `face_id`.
+    pub fn face_file(&self, face_id: i64) -> Result<Option<(FaceKey, PathBuf)>, StoreError> {
+        let r = self
+            .conn
+            .query_row(
+                "SELECT fi.hash, f.face_index,
+                        (SELECT l.path FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0
+                          ORDER BY l.location_id LIMIT 1)
+                 FROM faces f JOIN files fi ON fi.file_id = f.file_id WHERE f.face_id = ?1",
+                [face_id],
+                |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?, r.get::<_, Option<String>>(2)?)),
+            )
+            .optional()?;
+        match r {
+            Some((h, face_index, Some(p))) => Ok(Some((FaceKey { hash: hash_from_blob(h)?, face_index }, PathBuf::from(p)))),
+            _ => Ok(None),
+        }
+    }
+
     /// Xoá độ phủ của face không còn trong thư viện. Trả số hàng đã xoá.
     pub fn prune_langs(&self) -> Result<usize, StoreError> {
         let a = self.conn.execute(

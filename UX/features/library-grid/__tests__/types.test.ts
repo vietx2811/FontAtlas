@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 // Fixture do store sinh từ serde thật (test face_row_json_matches_contract_fixture của Plan 2).
-import row from '../../../src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json';
+import storeRow from '../../../src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json';
 import { ContractError, cssSize, parseFacePage, parseFaceRow } from '../types';
+
+// App thêm `langBadge` (Hyperglot) lên 19 khoá của store.
+const row = { ...storeRow, langBadge: null };
 
 describe('hợp đồng FaceRow với store', () => {
   it('accepts the Rust-generated fixture', () => {

@@ -70,6 +70,7 @@ pub struct AppState {
     pub deps: Deps,
     pub model: ModelRuntime,
     pub embed: EmbedSupervisor,
+    pub langs: crate::services::langs::LangSupervisor,
     pub preview: OnceLock<Arc<crate::services::preview::Service>>,
 }
 
@@ -93,6 +94,7 @@ impl AppState {
             deps,
             model: ModelRuntime::default(),
             embed: EmbedSupervisor::default(),
+            langs: Default::default(),
             preview: OnceLock::new(),
         })
     }

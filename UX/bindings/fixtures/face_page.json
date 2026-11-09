@@ -11,6 +11,13 @@
       "isFavorite": true,
       "isItalic": false,
       "isVariable": false,
+      "langBadge": {
+        "bcp47": "vie",
+        "code": "vie",
+        "have": 186,
+        "state": "full",
+        "total": 186
+      },
       "licenseClass": "ofl",
       "missing": false,
       "path": "/Users/u/Fonts/OpenSans-Regular.ttf",
@@ -32,6 +39,13 @@
       "isFavorite": false,
       "isItalic": false,
       "isVariable": false,
+      "langBadge": {
+        "bcp47": "vie",
+        "code": "vie",
+        "have": 186,
+        "state": "full",
+        "total": 186
+      },
       "licenseClass": "ofl",
       "missing": false,
       "path": "/Users/u/Fonts/Roboto-Regular.ttf",

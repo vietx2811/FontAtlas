@@ -42,10 +42,14 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         descending: q.descending,
         offset: q.offset,
         limit: q.limit,
+        langs: crate::services::langs::lang_filters(q).0,
+        lang_any: crate::services::langs::lang_filters(q).1,
+        badge_lang: Some(q.badge_lang.clone().unwrap_or_else(|| crate::services::langs::DEFAULT_BADGE_LANG.to_string())),
     }
 }
 
-pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
+/// Phạm vi face (điểm) từ các bộ lọc không nằm trong SQL: trục, class, trait, raw range, faceKeys.
+pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
     if !q.classes.is_empty() || !q.subclasses.is_empty() {
@@ -99,8 +103,28 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
         }
         scope = Some(by_keys);
     }
+    Ok(scope)
+}
+
+pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
+    let scope = scope_of(state, q)?;
     let sq = to_store_query(q);
-    state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?.into()))
+    let badge = sq.badge_lang.clone().unwrap_or_default();
+    let page = state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?))?;
+    Ok(FacePageDto {
+        total: page.total,
+        offset: page.offset,
+        items: page
+            .items
+            .into_iter()
+            .map(|r| {
+                let b = crate::services::langs::badge_of(&badge, r.lang_hit.as_ref(), r.vi_missing);
+                let mut d = FaceRowDto::from(r);
+                d.lang_badge = b;
+                d
+            })
+            .collect(),
+    })
 }
 
 type EffMap = std::sync::Arc<std::collections::HashMap<i64, (String, Option<String>)>>;

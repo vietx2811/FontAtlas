@@ -72,7 +72,7 @@ export function makeRow(i: number, over: Partial<FaceRow> = {}): FaceRow {
     family: `Family ${String(i).padStart(5, '0')}`, subfamily: null, fullName: null,
     weightClass: null, widthClass: null, isItalic: false, isVariable: false,
     viStatus: 'full', supportsVi: true, viMissing: 0, licenseClass: 'ofl',
-    path: `/fonts/${i}.ttf`, fileSize: 200_000, missing: false, isFavorite: false, addedAt: 0,
+    path: `/fonts/${i}.ttf`, fileSize: 200_000, missing: false, isFavorite: false, addedAt: 0, langBadge: null,
     ...over,
   };
 }

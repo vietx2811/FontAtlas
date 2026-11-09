@@ -52,6 +52,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
     classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
+    langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({

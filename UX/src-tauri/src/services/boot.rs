@@ -89,6 +89,7 @@ fn after_ready(state: &Arc<AppState>) {
     }
     mark_analyzer_seen_if_current(state);
     let _ = crate::services::embed::ensure_started(state);
+    crate::services::langs::ensure_started(state);
 }
 
 /// Ghi `analyzer_version_seen` khi mọi face đã có bản phân tích theo phiên bản hiện tại.

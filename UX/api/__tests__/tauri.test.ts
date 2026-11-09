@@ -30,6 +30,7 @@ describe('query_faces', () => {
     expect(toFaceQueryDto({})).toEqual({
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [],
+      langs: [], langMode: 'all', badgeLang: null,
     });
   });
 

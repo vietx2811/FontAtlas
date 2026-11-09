@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde::Deserialize;
+use unicode_normalization::UnicodeNormalization;
 
 const RAW: &str = include_str!("../data/langdata.json");
 /// Ngưỡng `Near` trên độ phủ `base`.
@@ -47,6 +48,8 @@ pub struct LangEntry {
     pub marks: Vec<String>,
     /// `core[i]` = `base[i]` là chữ cái riêng của ngôn ngữ.
     core: Vec<bool>,
+    /// `mark_users[j]` = chỉ số các grapheme `base` có dấu `marks[j]` trong dạng NFD.
+    mark_users: Vec<Vec<usize>>,
 }
 
 pub struct LangDb {
@@ -111,7 +114,16 @@ impl LangEntry {
     /// `missing`: tập grapheme font KHÔNG có (từ `fontatlas_preview::missing_graphemes` trên `all_graphemes`).
     pub fn evaluate(&self, missing: &HashSet<String>) -> LangCoverage {
         let miss_base: Vec<&String> = self.base.iter().filter(|g| missing.contains(*g)).collect();
-        let miss_marks: Vec<String> = self.marks.iter().filter(|g| missing.contains(*g)).cloned().collect();
+        // Dấu rời không có trong cmap vẫn đạt nếu mọi grapheme base dùng dấu đó đều hiển thị được (dựng sẵn/ghép).
+        let miss_marks: Vec<String> = self
+            .marks
+            .iter()
+            .zip(&self.mark_users)
+            .filter(|(m, users)| {
+                missing.contains(*m) && (users.is_empty() || users.iter().any(|&i| missing.contains(&self.base[i])))
+            })
+            .map(|(m, _)| m.clone())
+            .collect();
         let core_ok = self
             .base
             .iter()
@@ -167,6 +179,20 @@ fn build() -> LangDb {
                 }
             })
             .collect();
+        let mark_users = marks
+            .iter()
+            .map(|m| {
+                let mc: Vec<char> = m.chars().collect();
+                base.iter()
+                    .enumerate()
+                    .filter(|(_, g)| {
+                        let d: Vec<char> = g.nfd().collect();
+                        mc.iter().all(|c| d.contains(c))
+                    })
+                    .map(|(i, _)| i)
+                    .collect()
+            })
+            .collect();
         for g in base.iter().chain(&marks) {
             if seen.insert(g.clone()) {
                 all.push(g.clone());
@@ -181,6 +207,7 @@ fn build() -> LangDb {
             base,
             marks,
             core,
+            mark_users,
         });
     }
     let index = entries.iter().enumerate().map(|(i, e)| (e.id.clone(), i)).collect();
@@ -252,8 +279,12 @@ mod tests {
         assert!(!c.core_ok);
         assert_eq!(c.level(), None);
         assert_eq!(c.missing, vec!["ặ".to_string()]);
-        // thiếu một mark → không near
+        // thiếu dấu rời nhưng mọi chữ dùng dấu đó vẫn có (dựng sẵn) → vẫn đạt
         let c = vie.evaluate(&miss(&["\u{0309}"]));
+        assert!(c.missing_marks.is_empty());
+        assert_eq!(c.level(), Some(LangLevel::Full));
+        // thiếu dấu rời VÀ một chữ dùng dấu đó → thiếu mark, không near
+        let c = vie.evaluate(&miss(&["\u{0309}", "ả"]));
         assert_eq!(c.missing_marks, vec!["\u{0309}".to_string()]);
         assert_eq!(c.level(), None);
         // tiếng Anh: thiếu 1 chữ ASCII (không phải chữ cái riêng) ⇒ ≥ 90% và near

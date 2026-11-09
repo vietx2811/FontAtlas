@@ -9,6 +9,7 @@ pub mod compare;
 pub mod embed;
 pub mod export;
 pub mod keys;
+pub mod langs;
 pub mod lifecycle;
 pub mod library;
 pub mod model;

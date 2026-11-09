@@ -1622,6 +1622,7 @@ dependencies = [
  "serde_json",
  "skrifa",
  "thiserror 2.0.17",
+ "unicode-normalization",
  "wuff",
 ]
 

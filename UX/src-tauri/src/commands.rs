@@ -12,6 +12,7 @@ use tauri::ipc::Channel;
 use crate::dto::activation::*;
 use crate::dto::analysis::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
 use crate::dto::preview::*;
@@ -19,7 +20,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, compare, describe, duplicates, embed, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -95,6 +96,8 @@ macro_rules! command_list {
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
+            async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
+            async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
             async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
             async pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
@@ -292,6 +295,8 @@ cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandida
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
 }));
+cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));
+cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
 cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));
 cmd!(duplicate_summary(q: FaceQueryDto) -> DuplicateSummaryDto => |s| duplicates::duplicate_summary(s, &q));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));

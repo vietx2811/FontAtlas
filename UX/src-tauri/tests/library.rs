@@ -43,7 +43,9 @@ fn face_row_json_matches_store_fixture() {
     let d = tempfile::tempdir().unwrap();
     let (st, _) = scanned(d.path(), &["roboto.ttf"]);
     let page = all(&st);
-    let got = serde_json::to_value(&page.items[0]).unwrap();
+    let mut got = serde_json::to_value(&page.items[0]).unwrap();
+    // `langBadge` do app thêm (Hyperglot); 19 khoá còn lại phải đúng bằng FaceRow của store
+    assert!(got.as_object_mut().unwrap().remove("langBadge").is_some());
     let want: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-store/tests/fixtures/face_row.json")).unwrap(),
     )

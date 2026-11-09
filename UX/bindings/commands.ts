@@ -24,7 +24,9 @@ import type { FacePageDto } from './FacePageDto';
 import type { FaceQueryDto } from './FaceQueryDto';
 import type { FamilyStyleDto } from './FamilyStyleDto';
 import type { FontManagerDto } from './FontManagerDto';
+import type { LangCoverageDto } from './LangCoverageDto';
 import type { LangDto } from './LangDto';
+import type { LangListDto } from './LangListDto';
 import type { LegacyStateDto } from './LegacyStateDto';
 import type { ModelEvent } from './ModelEvent';
 import type { ModelStatusDto } from './ModelStatusDto';
@@ -104,6 +106,8 @@ export interface TauriCommandMap {
   duplicate_groups: { args: { q: FaceQueryDto }; result: DuplicateGroupDto[] };
   duplicate_summary: { args: { q: FaceQueryDto }; result: DuplicateSummaryDto };
   reveal_location: { args: { path: string }; result: null };
+  language_list: { args: { q: FaceQueryDto }; result: LangListDto };
+  lang_coverage: { args: { faceId: number; code: string }; result: LangCoverageDto };
   compare_faces: { args: { faces: FaceKeyDto[]; opts: CompareOptsDto }; result: CompareDto };
   pair_these: { args: { faces: FaceKeyDto[]; opts: PairTheseOptsDto }; result: PairComboDto[] };
   save_pair: { args: { pair: NewPairDto }; result: number };

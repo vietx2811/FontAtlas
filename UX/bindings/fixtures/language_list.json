@@ -1,0 +1,19 @@
+{
+  "complete": false,
+  "dbVersion": "hg-12d0c093-2",
+  "items": [
+    {
+      "autonym": "Tiếng Việt",
+      "bcp47": "vie",
+      "code": "vie",
+      "full": 31,
+      "nameEn": "Vietnamese",
+      "near": 36,
+      "script": "Latin"
+    }
+  ],
+  "ready": {
+    "done": 120,
+    "total": 480
+  }
+}
