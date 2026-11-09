@@ -296,6 +296,53 @@ DROP TABLE classification_overrides;
 ALTER TABLE classification_overrides_v5 RENAME TO classification_overrides;
 "#;
 
+/// v6 (Font Desk 0.3.0): Case và Combo. Face khoá theo (hash, face_index) như collection/pairs; font không còn trong
+/// thư viện vẫn nằm trong Case (DTO báo `missing`). Xoá Case là xoá mềm (`deleted_at`), dọn sau 30 ngày.
+pub(crate) const USER_V6: &str = r#"
+CREATE TABLE cases (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  brief      TEXT,                          -- JSON BriefDto (NULL = không có)
+  settings   TEXT NOT NULL DEFAULT '{}',    -- JSON {vi, mode}
+  view_state TEXT NOT NULL DEFAULT '{}',    -- JSON: cột/ghim/sắp/nhóm đóng của Pairing và Compare
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  opened_at  INTEGER NOT NULL,
+  deleted_at INTEGER
+);
+CREATE INDEX cases_opened ON cases(opened_at) WHERE deleted_at IS NULL;
+CREATE TABLE case_faces (
+  case_id    INTEGER NOT NULL REFERENCES cases ON DELETE CASCADE,
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  origin     TEXT NOT NULL CHECK (origin IN ('added','pinned','brief','peek')),
+  note       TEXT,
+  added_at   INTEGER NOT NULL,
+  PRIMARY KEY (case_id, hash, face_index)
+) WITHOUT ROWID;
+CREATE TABLE combos (
+  id         INTEGER PRIMARY KEY,
+  case_id    INTEGER NOT NULL REFERENCES cases ON DELETE CASCADE,
+  idx        INTEGER NOT NULL,
+  name       TEXT NOT NULL,
+  is_main    INTEGER NOT NULL DEFAULT 0,
+  note       TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (case_id, idx)
+);
+CREATE TABLE combo_slots (
+  combo_id   INTEGER NOT NULL REFERENCES combos ON DELETE CASCADE,
+  role       TEXT NOT NULL CHECK (role IN ('display','heading','subheading','body','caption','accent','quote')),
+  ord        INTEGER NOT NULL DEFAULT 0,
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  note       TEXT,
+  style      TEXT NOT NULL DEFAULT '{}',    -- JSON: weight, italic, case, size_step, tracking, leading
+  PRIMARY KEY (combo_id, role)
+) WITHOUT ROWID;
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
 /// Library v2 (0.3.0): độ phủ ngôn ngữ (Hyperglot) theo face. Khoá theo (hash, face_index) như `analyses`.
 /// `face_langs` chỉ giữ ngôn ngữ đạt ≥ near; `face_lang_state` đánh dấu face đã tính với `db_version` nào
@@ -379,7 +426,7 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]
@@ -404,6 +451,15 @@ pub fn create_user_v4_for_test(path: &Path) {
         c.execute_batch(m).expect("USER_Vn");
     }
     c.execute_batch("PRAGMA user_version = 4;").expect("user_version");
+}
+/// Chỉ cho test: tạo user.db ở v5 để kiểm migration lên v6.
+#[doc(hidden)]
+pub fn create_user_v5_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v5");
+    for m in [USER_V1, USER_V2, USER_V3, USER_V4, USER_V5] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
 }
 /// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
 #[doc(hidden)]
