@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Api } from '../../api';
 import { t } from '../../i18n';
 import { useActivationFlow } from '../activation/useActivationFlow';
+import { NarrowTag } from './NarrowTag';
 import { useNoticeStore } from '../../store/notices';
 import { rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore, type PanelTab } from '../../store/ui';
@@ -113,10 +114,9 @@ export function TopBarActions({ api }: { api?: Api } = {}): React.JSX.Element | 
       <div className="fa-acts" role="group" aria-label={t('topbar.group')}>
         <span className="fa-act-n">{t('topbar.selected', { n })}<button type="button" aria-label={t('topbar.clear')} onClick={() => useSelectionStore.getState().clear()}><Icon name="x" size={12} /></button></span>
         {n === 1 ? <>{btn('pair', 'pair', '⇧P', true, doPair)}{btn('similar', 'similar', null, false, doSimilar)}</>
-          : <>{btn('compare', 'compare', '⇧C', true, doCompare)}{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
+          : <><span className="fa-act-wrap">{btn('compare', 'compare', '⇧C', true, doCompare)}{n > COMPARE_MAX && <NarrowTag n={n} max={COMPARE_MAX} onNarrow={narrow} />}</span>{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
         {api && <ActivationActions api={api} rows={rows} />}
       </div>
-      {n > COMPARE_MAX && <div className="fa-act-hint" role="status"><span>{t('topbar.narrow', { n })}</span><button type="button" onClick={narrow}>{t('topbar.useFirst')}</button></div>}
     </>
   );
 }

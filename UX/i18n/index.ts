@@ -25,7 +25,7 @@ const vi = {
   'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
   'topbar.group': 'Pair / Compare', 'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar',
   'topbar.pair.gloss': 'ghép cặp', 'topbar.pairThese.gloss': 'ghép các font đã chọn', 'topbar.compare.gloss': 'so sánh cạnh nhau', 'topbar.similar.gloss': 'tìm font giống',
-  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font — nên ≤ 4 để so rõ.', 'topbar.useFirst': 'Chỉ lấy 4 đầu',
+  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font đang chọn — nên ≤ {max} để so cho rõ.', 'topbar.narrow.short': 'nên ≤ {max}', 'topbar.narrow.title': 'Chọn quá nhiều để so sánh', 'topbar.useFirst': 'Chỉ lấy {max} đầu',
   'compare.sec.specimen.gloss': 'mẫu chữ', 'compare.sec.metrics.gloss': 'phép đo', 'compare.sec.meta.gloss': 'thông tin', 'compare.row.class.gloss': 'phân loại', 'compare.row.license.gloss': 'giấy phép',
   'compare.percentile': 'Percentile {p}', 'compare.baseNa': 'Mốc không đo được, không có Δ', 'compare.noXh': 'Không đo được x-height', 'compare.viNone': 'Không hỗ trợ tiếng Việt',
   'compare.skipped': 'Không đọc được {n} font: {reason}', 'compare.pngSaved': 'Đã lưu {name}', 'compare.pngCancelled': '', 'compare.footnote2': '±0: lệch < 1% (hoặc < 0,5°)',

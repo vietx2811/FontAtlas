@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockApi, mockRows } from '../../../api/mock';
@@ -46,13 +48,38 @@ describe('TopBarActions', () => {
     expect(useNoticeStore.getState().notices).toHaveLength(0);
   });
 
-  it('more than 4: Compare stays enabled and a narrowing hint can cut the selection to 4', () => {
-    render(<TopBarActions />); pick(6);
+  it('more than 4: Compare stays enabled; a floating tag (not a layout row) offers cutting the selection to 4', () => {
+    const { container } = render(<TopBarActions />); pick(6);
     expect((screen.getByRole('button', { name: 'Compare' }) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText('6 font — nên ≤ 4 để so rõ.')).toBeTruthy();
+    const tag = screen.getByTestId('narrow-tag');
+    expect(tag.textContent).toBe('!6 · nên ≤ 4');
+    expect(tag.closest('.fa-act-wrap')?.querySelector('button[aria-label="Compare"]')).toBeTruthy(); // gắn ngay nút Compare
+    expect(container.querySelector('.fa-act-hint, [role=status]')).toBeNull(); // không còn dòng inline
+    expect(screen.queryByTestId('narrow-pop')).toBeNull();
+    fireEvent.focus(tag);
+    expect(screen.getByTestId('narrow-pop').textContent).toContain('6 font đang chọn — nên ≤ 4 để so cho rõ.');
     fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
     expect(useSelectionStore.getState().rows.size).toBe(4);
-    expect(screen.queryByText(/nên ≤ 4/)).toBeNull();
+    expect(screen.queryByTestId('narrow-tag')).toBeNull();
+  });
+
+  it('the narrowing popover opens on hover, survives moving onto it, and closes on Esc', async () => {
+    render(<TopBarActions />); pick(5);
+    const tag = screen.getByTestId('narrow-tag');
+    fireEvent.pointerEnter(tag.parentElement!);
+    expect(screen.getByTestId('narrow-pop')).toBeTruthy();
+    fireEvent.pointerLeave(tag.parentElement!);
+    fireEvent.pointerEnter(tag.parentElement!); // vào lại trong 120 ms: không đóng
+    await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+    expect(screen.getByTestId('narrow-pop')).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByTestId('narrow-pop')).toBeNull();
+  });
+
+  it('the tag floats: CSS positions it absolutely so it takes no layout row', () => {
+    const css = readFileSync(join(process.cwd(), 'components/main/topbarActions.css'), 'utf8');
+    expect(css).toMatch(/\.fa-narrow\s*\{[^}]*position:\s*absolute/);
+    expect(css).not.toMatch(/fa-act-hint/);
   });
 
   it('the count chip clears the selection', () => {
@@ -121,6 +148,7 @@ describe('TopBarActions', () => {
   it('narrowing keeps the anchor when it is still inside the first four', () => {
     render(<TopBarActions />);
     act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[2]), index: 2 }));
+    fireEvent.focus(screen.getByTestId('narrow-tag'));
     fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
     expect(useSelectionStore.getState().anchor).toEqual({ key: rowKey(rows[2]), index: 2 });
   });
