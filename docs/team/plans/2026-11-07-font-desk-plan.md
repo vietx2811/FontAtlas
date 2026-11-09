@@ -132,3 +132,15 @@ Theo memory team-throttle: tối đa 2 worker chạy song song, worker và revie
 
 - Ngưỡng subclass: chấp nhận mức hiện tại (khoảng 69% trên Regular, khoảng 61% trên mọi face). Class giữ ≥ 90%, CONF_MIN 0.88; phần thiếu tin cậy vẫn rơi vào Uncertain.
 - Ưu tiên tiếp theo: phát hành app (0.2.0). Brief starter và Case để sau.
+
+## 2026-11-09 (chiều) — Compare v2 và phát hành
+- Chủ app: đợi Compare v2 xong rồi mới phát hành. Bản phát hành vẫn mang số 0.2.0, vì DMG 0.2.0 trước đó chưa đưa cho ai.
+- Compare v2 gồm:
+  - cột property neo khi cuộn ngang; pin cột; nút "+" thêm font và × bỏ font (trần 8 cột);
+  - mục "Đang so sánh · N" ở sidebar;
+  - nhóm property thu gọn bằng −/+; ẩn và thêm lại từng hàng;
+  - sửa chữ mẫu ngay trong ô, áp dụng cho mọi cột;
+  - glyph thiếu tô xám, kiểm tra bằng cmap thật qua lệnh `missing_chars`;
+  - hàng Vietnamese đánh dấu dấu chồng;
+  - Overlay bật/tắt theo từng cột; thanh đo tô từ 0.
+- Motif NoteMark áp dụng toàn app: dấu "!" đỏ ở góc, chi tiết hiện trong tooltip. PNG vẫn ghi chữ.

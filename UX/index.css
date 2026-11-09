@@ -99,7 +99,7 @@
     --accent-ink: #9A6B3C;
     --on: #3FA66B;
     --warn: #C2410C;
-    --note: #C2410C; --note-ink: #FFFFFF; /* NoteMark: đỏ ở cả hai theme */
+    --note: #DC2626; --note-ink: #FFFFFF; /* NoteMark: đỏ ở cả hai theme */
     --chrome-hover: rgba(41, 37, 36, .06);
     --chrome-active: rgba(41, 37, 36, .09);
     /* Primary - Match logo dark gray */

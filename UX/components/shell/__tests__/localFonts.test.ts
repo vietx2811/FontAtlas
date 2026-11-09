@@ -111,7 +111,7 @@ describe('NoteMark is red in both themes', () => {
   });
   it('light keeps a red token with a white glyph', () => {
     const root = css.match(/:root\s*{([^}]*)}/)![1];
-    expect(root).toMatch(/--note: #C2410C/);
-    expect(ratio('#C2410C', '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+    expect(root).toMatch(/--note: #DC2626/);
+    expect(ratio('#DC2626', '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
   });
 });
