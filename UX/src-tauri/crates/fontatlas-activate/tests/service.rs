@@ -300,9 +300,12 @@ fn conflict_same_file_compares_bytes_not_paths() {
     let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &identical));
     let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
     match &rep.results[0].outcome {
-        FileOutcome::NeedsConfirmation { conflicts } => assert!(conflicts[0].same_file, "bản sao nguyên văn phải là same_file"),
+        FileOutcome::AlreadyAvailable { path, .. } => assert_eq!(path, identical.to_str().unwrap(), "bản sao nguyên văn → đã có sẵn"),
         o => panic!("{o:?}"),
     }
+    assert_eq!((rep.changed, rep.needs_confirmation), (0, 0));
+    assert!(svc.engine().registrations().is_empty(), "không đăng ký engine");
+    assert!(row(&env, &k.hash).is_none(), "không ghi dòng kích hoạt");
 
     // Khác một byte cuối (cùng kích thước): không còn là cùng file.
     let mut bytes = std::fs::read(&identical).unwrap();
@@ -810,4 +813,142 @@ fn activate_rejects_non_utf8_canonical_path() {
     let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
     assert!(matches!(&rep.results[0].outcome, FileOutcome::Failed { code, .. } if code == "path_not_utf8"), "{:?}", rep.results[0].outcome);
     assert!(svc.engine().registrations().is_empty());
+}
+
+// ---------- "Có sẵn trên máy", scope hiệu lực, set_scope báo lỗi ----------
+
+fn installed_copy(env: &Env, name: &str) -> std::path::PathBuf {
+    let d = env.dir.path().join("FontBase");
+    std::fs::create_dir_all(&d).unwrap();
+    let p = d.join("copy.ttf");
+    std::fs::copy(env.fonts.join(name), &p).unwrap();
+    p
+}
+
+#[test]
+fn already_available_is_recomputed_and_forgotten_when_the_other_side_removes_it() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    let copy = installed_copy(&env, LIBRE);
+    let with = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &copy));
+    // Kể cả preflight (dry run) cũng báo có sẵn; chưa ghi nhớ gì.
+    assert!(matches!(with.preflight(&env.store, &[k]).unwrap().results[0].outcome, FileOutcome::AlreadyAvailable { .. }));
+    activate(&with, &env, &[k], ConflictPolicy::Ask);
+    // Mở app lại (service mới, cùng DB) mà không truyền hash: vẫn tính ra nhờ tập đã nhớ.
+    let av = with.availability(&env.store, &[]).unwrap();
+    assert_eq!(av.len(), 1);
+    assert_eq!(av[0].path, copy.to_str().unwrap());
+    // Bên kia gỡ font → quay về "chưa bật" và quên luôn.
+    let without = service(&env);
+    assert!(without.availability(&env.store, &[k.hash]).unwrap().is_empty());
+    assert!(without.availability(&env.store, &[]).unwrap().is_empty());
+}
+
+#[test]
+fn available_collection_member_counts_as_satisfied_without_a_row() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    let copy = installed_copy(&env, LIBRE);
+    let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &copy));
+    let c = collection(&env, "A", &[k]);
+    let rep = svc.activate_collection(&env.store, c, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    assert!(matches!(rep.results[0].outcome, FileOutcome::AlreadyAvailable { .. }));
+    assert_eq!((rep.changed, rep.needs_confirmation, rep.failed), (0, 0, 0));
+    assert!(row(&env, &k.hash).is_none());
+    // Cả khi người dùng chọn "vẫn bật" cho cả lô, file cùng nội dung vẫn không bị đăng ký đôi.
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Proceed);
+    assert!(matches!(rep.results[0].outcome, FileOutcome::AlreadyAvailable { .. }));
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn our_own_active_face_is_not_reported_as_available() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    let svc = service(&env);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    assert!(svc.availability(&env.store, &[k.hash]).unwrap().is_empty());
+}
+
+#[test]
+fn collection_activation_does_not_downgrade_a_persistent_face() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    svc.activate_faces(&env.store, &[k], Some(Scope::Persistent), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    let c = collection(&env, "A", &[k]);
+    // Bật collection (scope mặc định = session, KHÔNG tường minh) → vẫn "Giữ bật".
+    let rep = svc.activate_collection(&env.store, c, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::AlreadyActive);
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!(r.scope, Scope::Persistent);
+    assert!(r.reasons.contains(&ActivationReason::Collection(c)));
+    assert_eq!(svc.engine().registrations().len(), 1);
+    assert_eq!(svc.engine().registrations()[0].1, Scope::Persistent);
+    // Người dùng chọn tường minh "chỉ phiên này" khi face đang được giữ persistent: scope tối đa thắng.
+    let rep = svc.activate_faces(&env.store, &[k], Some(Scope::Session), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::AlreadyActive);
+    assert_eq!(row(&env, &k.hash).unwrap().scope, Scope::Persistent);
+}
+
+#[test]
+fn explicit_persistent_upgrades_a_session_face_but_implicit_default_does_not_touch_it() {
+    let env = env_with(&[LIBRE]);
+    env.store.lock().unwrap().set_setting(SETTING_ACTIVATION_KEEP, "0").unwrap();
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    env.store.lock().unwrap().set_setting(SETTING_ACTIVATION_KEEP, "1").unwrap();
+    // Mặc định đổi sang persistent nhưng lần bật này không tường minh: face giữ nguyên scope session.
+    assert_eq!(activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome, FileOutcome::AlreadyActive);
+    assert_eq!(row(&env, &k.hash).unwrap().scope, Scope::Session);
+    // Tường minh "Giữ bật" thì nâng lên.
+    let rep = svc.activate_faces(&env.store, &[k], Some(Scope::Persistent), ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Activated);
+    assert_eq!(row(&env, &k.hash).unwrap().scope, Scope::Persistent);
+    assert_eq!(svc.engine().registrations(), vec![(canon(&env.fonts.join(LIBRE)), Scope::Persistent)]);
+}
+
+#[test]
+fn set_scope_reports_rows_it_cannot_change_instead_of_skipping_silently() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    // Dòng đang ở trạng thái Error (vd lần gỡ trước thất bại).
+    let mut r = row(&env, &k.hash).unwrap();
+    r.status = ActivationStatus::Error;
+    env.store.lock().unwrap().put_activation(&r).unwrap();
+    let rep = svc.set_scope(&env.store, Some(&[k.hash]), Scope::Persistent).unwrap();
+    assert_eq!(rep.failed, 1);
+    match &rep.results[0].outcome {
+        FileOutcome::Failed { code, .. } => assert_eq!(code, "scope_unsettled"),
+        o => panic!("{o:?}"),
+    }
+    assert_eq!(row(&env, &k.hash).unwrap().scope, Scope::Session, "không đổi gì");
+}
+
+#[test]
+fn set_scope_engine_failure_on_unregister_is_reported() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    svc.engine().fail_next_unregister(EngineError::Rejected { code: 9, message: "x".into() });
+    let rep = svc.set_scope(&env.store, Some(&[k.hash]), Scope::Persistent).unwrap();
+    assert_eq!(rep.failed, 1);
+    assert_eq!(row(&env, &k.hash).unwrap().status, ActivationStatus::Error);
+}
+
+#[test]
+fn set_scope_keeps_collection_reasons() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    let c = collection(&env, "A", &[k]);
+    svc.activate_collection(&env.store, c, None, ConflictPolicy::Ask, &mut no_progress()).unwrap();
+    svc.set_scope(&env.store, Some(&[k.hash]), Scope::Persistent).unwrap();
+    let r = row(&env, &k.hash).unwrap();
+    assert_eq!(r.scope, Scope::Persistent);
+    assert_eq!(r.reasons, vec![ActivationReason::Collection(c)]);
 }

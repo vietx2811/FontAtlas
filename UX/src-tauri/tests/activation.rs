@@ -244,6 +244,35 @@ fn set_scope_changes_only_the_requested_faces_without_deactivating() {
 }
 
 #[test]
+fn identical_font_installed_elsewhere_is_available_not_activated() {
+    let d = tempfile::tempdir().unwrap();
+    let other = d.path().join("FontBase");
+    std::fs::create_dir_all(&other).unwrap();
+    let copy = other.join("roboto.ttf");
+    std::fs::copy(fixture("roboto.ttf"), &copy).unwrap();
+    let eng = Arc::new(FakeEngine::new().with_system_font("Roboto-Regular", &copy));
+    let (st, faces, _) = library3(d.path(), &eng);
+    let rep = activation::activate(&st, &faces, None, false, &mut noop).unwrap();
+    let avail: Vec<_> = rep.results.iter().filter(|r| matches!(r.outcome, FileOutcomeDto::AlreadyAvailable { .. })).collect();
+    assert_eq!(avail.len(), 1, "chỉ Roboto có bản giống hệt ở nơi khác");
+    let roboto = FaceKeyDto { hash_hex: avail[0].hash_hex.clone(), face_index: 0 };
+    match &avail[0].outcome {
+        FileOutcomeDto::AlreadyAvailable { owner, path } => {
+            assert_eq!(*owner, OwnerDto::FontBase);
+            assert_eq!(path, copy.to_str().unwrap());
+        }
+        o => panic!("{o:?}"),
+    }
+    assert_eq!(rep.changed, 2);
+    assert_eq!(eng.registrations().len(), 2, "hai font còn lại được bật bình thường");
+    assert_eq!(activation::state_list(&st).unwrap().len(), 2, "sidebar Đang bật chỉ đếm font do Font Atlas bật");
+    let av = activation::availability(&st, &[]).unwrap();
+    assert_eq!(av.len(), 1, "tập đã nhớ được tính lại không cần truyền hash");
+    assert_eq!(av[0].hash_hex, roboto.hash_hex);
+    assert_eq!(av[0].faces, vec![0]);
+}
+
+#[test]
 fn gdi_engine_returns_unsupported() {
     let d = tempfile::tempdir().unwrap();
     let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(ActivationService::new(WindowsGdiEngine)));

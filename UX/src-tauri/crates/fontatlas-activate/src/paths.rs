@@ -21,15 +21,24 @@ pub fn canonical_path(p: &Path) -> std::io::Result<PathBuf> {
 #[cfg(target_os = "macos")]
 const SF_DATALESS: u32 = 0x4000_0000;
 
-/// Hai file có cùng nội dung không? So kích thước trước (rẻ), chỉ khi bằng nhau mới đọc và so từng khối.
-/// Lỗi đọc (không có file, không quyền) → false: coi là khác, để người dùng quyết định.
+/// Hai file có cùng nội dung không? Chỉ đọc khi CẢ HAI `Ready` (file iCloud chưa tải mà bị mở sẽ bị tải về ngầm).
+/// So kích thước trước (rẻ) từ handle đã mở (không TOCTOU, symlink được theo), chỉ khi bằng nhau mới so từng khối.
+/// Lỗi đọc / không `Ready` → false: coi là khác, để người dùng quyết định.
 pub fn same_content(a: &Path, b: &Path) -> bool {
+    same_content_by(a, b, probe_file)
+}
+
+/// Như `same_content` với bộ thăm dò tuỳ ý (để test file "dataless" không cần iCloud thật).
+pub(crate) fn same_content_by(a: &Path, b: &Path, probe: impl Fn(&Path) -> FileProbe) -> bool {
     use std::io::Read;
-    let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
-    if ma.len() != mb.len() {
+    if probe(a) != FileProbe::Ready || probe(b) != FileProbe::Ready {
         return false;
     }
     let (Ok(mut fa), Ok(mut fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
+    let (Ok(ma), Ok(mb)) = (fa.metadata(), fb.metadata()) else { return false };
+    if ma.len() != mb.len() {
+        return false;
+    }
     let (mut x, mut y) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
     let mut remaining = ma.len();
     while remaining > 0 {
@@ -141,5 +150,61 @@ mod tests {
         let link = d.path().join("link.ttf");
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert_eq!(canonical_path(&link).unwrap(), std::fs::canonicalize(&target).unwrap());
+    }
+
+    fn two(bytes: &[u8]) -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let (a, b) = (d.path().join("a.ttf"), d.path().join("b.ttf"));
+        std::fs::write(&a, bytes).unwrap();
+        std::fs::write(&b, bytes).unwrap();
+        (d, a, b)
+    }
+
+    #[test]
+    fn same_content_dataless_provider_is_never_opened() {
+        // Cùng nội dung nhưng bộ thăm dò báo "chưa tải" → false, và không mở file (không kích hoạt tải iCloud).
+        let (_d, a, b) = two(b"font");
+        assert!(same_content(&a, &b));
+        let bp = b.clone();
+        assert!(!same_content_by(&a, &b, |p| if p == bp { FileProbe::NotDownloaded } else { FileProbe::Ready }));
+        let ap = a.clone();
+        assert!(!same_content_by(&a, &b, |p| if p == ap { FileProbe::NotDownloaded } else { FileProbe::Ready }));
+    }
+
+    #[test]
+    fn same_content_icloud_placeholder_is_false() {
+        let (d, a, _b) = two(b"font");
+        let missing = d.path().join("c.ttf");
+        std::fs::write(d.path().join(".c.ttf.icloud"), b"").unwrap();
+        assert!(!same_content(&a, &missing));
+        assert!(!same_content(&a, &d.path().join("khong-co.ttf")));
+    }
+
+    #[test]
+    fn same_content_large_file_compares_every_block() {
+        let mut big = vec![7u8; 3 * 1024 * 1024 + 5];
+        let (_d, a, b) = two(&big);
+        assert!(same_content(&a, &b));
+        let last = big.len() - 1;
+        big[last] = 8; // khác đúng byte cuối, nằm ở khối cuối (không chia hết 64 KiB)
+        std::fs::write(&b, &big).unwrap();
+        assert!(!same_content(&a, &b));
+        big[last] = 7;
+        big[100_000] = 9; // khác ở giữa
+        std::fs::write(&b, &big).unwrap();
+        assert!(!same_content(&a, &b));
+        std::fs::write(&b, &big[..big.len() - 1]).unwrap(); // khác kích thước
+        assert!(!same_content(&a, &b));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn same_content_follows_symlinks_and_dangling_is_false() {
+        let (d, a, b) = two(b"font");
+        let link = d.path().join("link.ttf");
+        std::os::unix::fs::symlink(&b, &link).unwrap();
+        assert!(same_content(&a, &link));
+        std::fs::remove_file(&b).unwrap();
+        assert!(!same_content(&a, &link), "symlink treo");
     }
 }

@@ -176,6 +176,9 @@ pub enum FileOutcomeDto {
     Ready,
     Activated,
     AlreadyActive,
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    AlreadyAvailable { owner: OwnerDto, path: String },
     Deactivated,
     AlreadyInactive,
     Busy,
@@ -207,6 +210,7 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::Ready => Self::Ready,
             F::Activated => Self::Activated,
             F::AlreadyActive => Self::AlreadyActive,
+            F::AlreadyAvailable { owner, path } => Self::AlreadyAvailable { owner: (*owner).into(), path: path.clone() },
             F::Deactivated => Self::Deactivated,
             F::AlreadyInactive => Self::AlreadyInactive,
             F::Busy => Self::Busy,
@@ -223,6 +227,17 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::Failed { code, message } => Self::Failed { code: code.clone(), message: message.clone() },
         }
     }
+}
+
+/// Font đã dùng được nhờ file giống hệt của bên khác ("Có sẵn trên máy"); Font Atlas không bật gì cho nó.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AvailabilityDto {
+    pub hash_hex: String,
+    pub faces: Vec<u32>,
+    pub owner: OwnerDto,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

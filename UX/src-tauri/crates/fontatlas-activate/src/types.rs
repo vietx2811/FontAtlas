@@ -106,6 +106,9 @@ pub enum FileOutcome {
     Ready,
     Activated,
     AlreadyActive,
+    /// Font đã dùng được nhờ một file GIỐNG HỆT do bên khác cung cấp (`owner`, `path`). Font Atlas không đăng ký
+    /// gì và không ghi dòng kích hoạt; bên kia gỡ thì font quay về "chưa bật".
+    AlreadyAvailable { owner: Owner, path: String },
     Deactivated,
     AlreadyInactive,
     /// Một thao tác khác đang chạy trên cùng file.

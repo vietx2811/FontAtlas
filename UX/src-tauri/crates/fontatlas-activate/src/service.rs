@@ -4,6 +4,7 @@
 //! - Khoá thao tác theo hash (`in_flight`): hash đang bận → `Busy`.
 //! - Ghi dòng "ý định" (`status=unknown`) trước khi gọi engine, để crash giữa chừng không để lại
 //!   đăng ký mồ côi (`reconcile` xử lý dòng `unknown`).
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -12,6 +13,8 @@ use fontatlas_store::{
     ActivationReason, ActivationRow, ActivationStatus, DesiredState, FaceKey, FileTarget, Store,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
+
+use serde::Serialize;
 
 use crate::engine::{ActivationEngine, Scope};
 use crate::paths::{FileProbe, canonical_path, classify_owner, probe_file, same_content};
@@ -123,6 +126,27 @@ struct Batch {
     home: PathBuf,
     /// PS name → file đã kích hoạt trước trong cùng lô (phát hiện trùng trong lô).
     seen: HashMap<String, PathBuf>,
+    /// (file của ta, file của nhà cung cấp) → cùng nội dung? TTC nhiều PS name trỏ cùng một provider: so byte một lần.
+    same: RefCell<HashMap<(PathBuf, PathBuf), bool>>,
+}
+
+/// Font đã dùng được trên máy nhờ một file GIỐNG HỆT do bên khác cung cấp (hệ thống, FontBase, RightFont…).
+/// Font Atlas không đăng ký gì cho nó; trạng thái này tính lại, không lưu thành dòng kích hoạt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Availability {
+    pub hash_hex: String,
+    pub owner: Owner,
+    pub path: String,
+}
+
+/// Các hash đã từng được thấy là "có sẵn" — tính lại khi mở app / đối soát để font quay về "chưa bật" khi bên kia gỡ.
+const SETTING_AVAILABLE_HASHES: &str = "activation_available_hashes";
+
+/// Mọi conflict đều là cùng file → font đã dùng được; trả owner + đường dẫn của bên cung cấp đầu tiên.
+fn available_from(conflicts: &[Conflict]) -> Option<(Owner, String)> {
+    let first = conflicts.first()?;
+    conflicts.iter().all(|c| c.same_file).then(|| (first.owner, first.existing_path.clone()))
 }
 
 /// Gom face theo hash, giữ thứ tự xuất hiện đầu tiên.
@@ -187,7 +211,7 @@ impl<E: ActivationEngine> ActivationService<E> {
     /// Kiểm tra xung đột, không đăng ký, không ghi DB. Không xung đột → `Ready`.
     pub fn preflight(&self, store: &Mutex<Store>, keys: &[FaceKey]) -> Result<ActivationReport, ActivationError> {
         let scope = Self::default_scope(store)?;
-        self.run(store, keys, ActivationReason::Manual, scope, ConflictPolicy::Ask, true, &mut |_| {})
+        self.run(store, keys, ActivationReason::Manual, scope, false, ConflictPolicy::Ask, true, &mut |_| {})
     }
 
     pub fn activate_faces(
@@ -222,11 +246,12 @@ impl<E: ActivationEngine> ActivationService<E> {
         policy: ConflictPolicy,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
+        let explicit = scope.is_some();
         let scope = match scope {
             Some(s) => s,
             None => Self::default_scope(store)?,
         };
-        self.run(store, keys, reason, scope, policy, false, progress)
+        self.run(store, keys, reason, scope, explicit, policy, false, progress)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -236,31 +261,37 @@ impl<E: ActivationEngine> ActivationService<E> {
         keys: &[FaceKey],
         reason: ActivationReason,
         scope: Scope,
+        explicit: bool,
         policy: ConflictPolicy,
         dry_run: bool,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
         let groups = group(keys);
+        let mut batch = self.new_batch(store)?;
+        let mut rep = ActivationReport::default();
+        let total = groups.len();
+        for (i, (hash, req)) in groups.into_iter().enumerate() {
+            let r = self.one_file(store, &mut batch, hash, req, reason, scope, explicit, policy, dry_run)?;
+            rep.push(r);
+            progress(Progress { done: i + 1, total, hash_hex: hex(&hash) });
+        }
+        Ok(rep)
+    }
+
+    fn new_batch(&self, store: &Mutex<Store>) -> Result<Batch, ActivationError> {
         let ours: HashSet<PathBuf> = relock(store)
             .activation_rows()?
             .into_iter()
             .filter(|r| r.status == ActivationStatus::Registered)
             .filter_map(|r| r.active_path.map(PathBuf::from))
             .collect();
-        let mut batch = Batch {
+        Ok(Batch {
             avail: self.engine.available_postscript_names().map_err(engine_err)?,
             ours,
             home: std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default(),
             seen: HashMap::new(),
-        };
-        let mut rep = ActivationReport::default();
-        let total = groups.len();
-        for (i, (hash, req)) in groups.into_iter().enumerate() {
-            let r = self.one_file(store, &mut batch, hash, req, reason, scope, policy, dry_run)?;
-            rep.push(r);
-            progress(Progress { done: i + 1, total, hash_hex: hex(&hash) });
-        }
-        Ok(rep)
+            same: RefCell::new(HashMap::new()),
+        })
     }
 
     /// PS name của file: từ library.db; face thiếu tên thì đọc thẳng từ file.
@@ -287,7 +318,11 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut push = |ps: &str, p: &Path, owner: Owner| {
             let existing = path_str(p);
             if !out.iter().any(|c| c.postscript_name == ps && c.existing_path == existing) {
-                let same_file = same_content(path, p);
+                let same_file = *batch
+                    .same
+                    .borrow_mut()
+                    .entry((path.to_path_buf(), p.to_path_buf()))
+                    .or_insert_with(|| same_content(path, p));
                 out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner, same_file });
             }
         };
@@ -317,6 +352,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         requested_faces: Vec<u32>,
         reason: ActivationReason,
         scope: Scope,
+        explicit: bool,
         policy: ConflictPolicy,
         dry_run: bool,
     ) -> Result<FileResult, ActivationError> {
@@ -371,12 +407,14 @@ impl<E: ActivationEngine> ActivationService<E> {
         res.path = Some(pstr.clone());
         let names = self.names_of(&target, &path);
 
-        // 3. Đã bật đúng chỗ, đúng scope → chỉ thêm lý do.
+        // 3. Đã bật đúng chỗ → chỉ thêm lý do. Scope hiệu lực = cao nhất trong các lý do: một lần bật KHÔNG tường minh
+        //    (vd bật collection chứa face này) không hạ "Giữ bật" xuống "phiên này"; một lần tường minh chỉ nâng, không hạ
+        //    (hạ là việc của `set_scope`).
         let same = old.as_ref().is_some_and(|o| {
             o.state == DesiredState::Active
                 && o.status == ActivationStatus::Registered
                 && o.active_path.as_deref() == Some(pstr.as_str())
-                && o.scope == scope
+                && (!explicit || o.scope == scope || o.scope == Scope::Persistent)
         });
         if same {
             if !dry_run {
@@ -392,6 +430,14 @@ impl<E: ActivationEngine> ActivationService<E> {
         // 4–5. Preflight trước, gỡ sau.
         let old_path = old.as_ref().and_then(|o| o.active_path.as_ref()).map(PathBuf::from);
         let conflicts = self.conflicts(batch, &names, &path, old_path.as_deref())?;
+        // Mọi bản trùng đều là cùng file (cùng từng byte) → đã dùng được: không đăng ký, không ghi dòng kích hoạt.
+        if let Some((owner, existing)) = available_from(&conflicts) {
+            if !dry_run {
+                self.remember_available(store, &hash, true)?;
+            }
+            res.outcome = FileOutcome::AlreadyAvailable { owner, path: existing };
+            return Ok(res);
+        }
         if dry_run {
             res.outcome =
                 if conflicts.is_empty() { FileOutcome::Ready } else { FileOutcome::NeedsConfirmation { conflicts } };
@@ -458,6 +504,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                     batch.seen.entry(n.clone()).or_insert_with(|| path.clone());
                 }
                 batch.ours.insert(path.clone());
+                self.remember_available(store, &hash, false)?;
                 res.outcome = FileOutcome::Activated;
             }
             Err(e) => {
@@ -477,4 +524,77 @@ impl<E: ActivationEngine> ActivationService<E> {
         }
         Ok(res)
     }
+
+    fn remember_available(&self, store: &Mutex<Store>, hash: &[u8; 32], on: bool) -> Result<(), ActivationError> {
+        let mut st = relock(store);
+        let mut set = read_remembered(&st)?;
+        let h = hex(hash);
+        let changed = if on { set.insert(h) } else { set.remove(&h) };
+        if changed {
+            write_remembered(&mut st, &set)?;
+        }
+        Ok(())
+    }
+
+    /// Font nào trong `hashes` (cộng các hash đã nhớ từ trước) đang dùng được nhờ file giống hệt của bên khác?
+    /// Tính lại từ đầu từ hệ điều hành mỗi lần gọi, rồi cập nhật tập "đã nhớ" (bên kia gỡ font → bỏ khỏi tập).
+    /// Font Atlas đang tự bật thì không tính (đã có dòng kích hoạt).
+    pub fn availability(&self, store: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError> {
+        let mut want: Vec<[u8; 32]> = hashes.to_vec();
+        for h in read_remembered(&relock(store))? {
+            if let Some(b) = unhex(&h) {
+                want.push(b);
+            }
+        }
+        want.sort_unstable();
+        want.dedup();
+        let batch = self.new_batch(store)?;
+        let mut out = vec![];
+        for hash in want {
+            let (target, old) = {
+                let s = relock(store);
+                (s.file_target(&hash)?, s.activation_row(&hash)?)
+            };
+            if old.as_ref().is_some_and(|o| o.state == DesiredState::Active && o.status == ActivationStatus::Registered) {
+                continue;
+            }
+            let Some(target) = target else { continue };
+            let Located::Ready(path) = locate(&target) else { continue };
+            let names = self.names_of(&target, &path);
+            let conflicts = self.conflicts(&batch, &names, &path, None)?;
+            if let Some((owner, existing)) = available_from(&conflicts) {
+                out.push(Availability { hash_hex: hex(&hash), owner, path: existing });
+            }
+        }
+        let mut st = relock(store);
+        let now: std::collections::BTreeSet<String> = out.iter().map(|a| a.hash_hex.clone()).collect();
+        if now != read_remembered(&st)? {
+            write_remembered(&mut st, &now)?;
+        }
+        Ok(out)
+    }
+}
+
+fn read_remembered(st: &Store) -> Result<std::collections::BTreeSet<String>, ActivationError> {
+    Ok(st
+        .setting(SETTING_AVAILABLE_HASHES)?
+        .map(|v| v.split(',').filter(|x| !x.is_empty()).map(str::to_owned).collect())
+        .unwrap_or_default())
+}
+
+fn write_remembered(st: &mut Store, set: &std::collections::BTreeSet<String>) -> Result<(), ActivationError> {
+    let v: Vec<&str> = set.iter().map(String::as_str).collect();
+    st.set_setting(SETTING_AVAILABLE_HASHES, &v.join(","))?;
+    Ok(())
+}
+
+fn unhex(h: &str) -> Option<[u8; 32]> {
+    if h.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(h.get(2 * i..2 * i + 2)?, 16).ok()?;
+    }
+    Some(out)
 }
