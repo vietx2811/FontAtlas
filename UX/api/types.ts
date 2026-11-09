@@ -1,4 +1,4 @@
-export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisStatsDto, AxisHistogramDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto } from '../bindings';
+export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisStatsDto, AxisHistogramDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto } from '../bindings';
 // Kiểu IPC: lấy từ UX/bindings (ts-rs, sinh từ Rust). File này chỉ đặt lại tên cho gọn và thêm kiểu phía giao diện.
 import type {
   PreviewCacheInfoDto, ProblemDto,

@@ -62,6 +62,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+import { createMockCases } from './mockCases';
 import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
@@ -117,8 +118,39 @@ export function createMockApi(o: MockOptions = {}): Api {
   const delay = async () => { if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs)); };
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
 
+  const caseApi = createMockCases(k => byKey.get(keyOf(k)));
   return {
     ...lib,
+    ...caseApi,
+    async briefStarter(brief) {
+      // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
+      const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };
+      const USE: Record<string, string[]> = { editorial: ['editorial'], ui_web: ['readable_small', 'clean'], poster: ['display', 'heavy'], branding: [], packaging: [] };
+      const ids: string[] = [];
+      for (const t of brief.tones) if (Math.abs(t.value) >= 0.25) ids.push(TONE[t.pair][t.value < 0 ? 0 : 1]);
+      for (const u of brief.uses) for (const id of USE[u]) if (!ids.includes(id)) ids.push(id);
+      const notes: Array<{ code: string; detail: string | null }> = [];
+      if (brief.uses.length === 1 && brief.uses[0] === 'branding') notes.push({ code: 'branding_class_only', detail: null });
+      if (brief.uses.includes('packaging')) notes.push({ code: 'packaging_inferred', detail: 'display=display+heavy; body=readable_small+clean' });
+      if (!ids.length && !brief.uses.includes('packaging')) notes.push({ code: 'no_terms', detail: null });
+      const { items } = await this.queryFaces({ sort: 'family', limit: Infinity, vi: brief.needs.vi ? 'supported' : undefined, license: brief.needs.openLicense ? ['ofl', 'apache'] : undefined });
+      const seen = new Set<string>();
+      const anchors = items.filter(r => !seen.has(r.family) && seen.add(r.family)).slice(0, 3);
+      if (anchors.length < 3) notes.push({ code: 'few_anchors', detail: String(anchors.length) });
+      const usedBody = new Set<string>();
+      const combos = anchors.flatMap((a, i) => {
+        const body = items.find(r => r.family !== a.family && (r.weightClass ?? 400) <= 500 && !usedBody.has(r.family));
+        if (!body) { notes.push({ code: 'no_body_pair', detail: a.family }); return []; }
+        usedBody.add(body.family);
+        return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
+      });
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      return {
+        describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
+        query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
+        anchors, combos, notes, ai: null,
+      };
+    },
     async queryFaces(q) {
       await delay();
       const t = q.text ? fold(q.text) : '';

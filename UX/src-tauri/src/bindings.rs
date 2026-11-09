@@ -66,6 +66,7 @@ pub fn ts_type(rust: &str, uses: &mut BTreeSet<String>) -> String {
     match t.as_str() {
         "String" | "&str" => "string".into(),
         "bool" => "boolean".into(),
+        "serde_json::Value" | "Value" => "unknown".into(),
         "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" | "isize" | "f32" | "f64" => "number".into(),
         name => {
             uses.insert(name.to_string());

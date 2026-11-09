@@ -154,3 +154,26 @@ fn class_filter_equals_roundtrip() {
     // preferred lệch lớp → trừ điểm, không loại
     assert!(evaluate(&p.filters, &p.hard, &f).unwrap() < 0.0);
 }
+
+#[test]
+fn parse_ids_selects_terms_without_text_and_overrides_strength() {
+    use fontatlas_describe::{Dictionary, Strength};
+    let d = Dictionary::bundled();
+    let p = d.parse_ids(&[("warm", Some(Strength::Required)), ("editorial", None), ("warm", None), ("khong_co", None)]);
+    assert_eq!(p.matched.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["warm", "editorial"], "id trùng chỉ một lần, theo thứ tự");
+    assert_eq!(p.unknown_words, vec!["khong_co"]);
+    assert!(p.filters.iter().filter(|f| f.term_id == "warm").all(|f| f.strength == Strength::Required));
+    assert!(!p.filters.is_empty());
+    // khớp với parse theo văn bản khi không ghi đè độ chặt
+    let by_text = d.parse("warm");
+    let by_id = d.parse_ids(&[("warm", None)]);
+    assert_eq!(by_text.filters, by_id.filters);
+    assert!(d.has_id("warm") && !d.has_id("khong_co"));
+    // mục không ánh xạ được trả lý do của từ điển
+    let pk = d.parse_ids(&[("packaging", None)]);
+    assert_eq!(pk.unmappable.len(), 1);
+    assert!(pk.filters.is_empty());
+    // hai term đối nghịch cùng trục → mâu thuẫn, không tự chọn
+    let c = d.parse_ids(&[("warm", None), ("cool", None)]);
+    assert!(!c.conflicts.is_empty());
+}

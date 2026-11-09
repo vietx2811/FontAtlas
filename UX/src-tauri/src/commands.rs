@@ -11,6 +11,7 @@ use tauri::ipc::Channel;
 
 use crate::dto::activation::*;
 use crate::dto::analysis::*;
+use crate::dto::cases::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use crate::dto::langs::*;
 use crate::dto::library::*;
@@ -20,7 +21,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, brief, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -105,6 +106,24 @@ macro_rules! command_list {
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
             async describe(text: String) -> Result<DescribeDto, CmdError>;
+            async create_case(name: Option<String>, brief: Option<BriefDto>, settings: Option<CaseSettingsDto>) -> Result<CaseDto, CmdError>;
+            async list_cases(include_deleted: bool) -> Result<Vec<CaseSummaryDto>, CmdError>;
+            async open_case(id: i64) -> Result<CaseDto, CmdError>;
+            async get_case(id: i64) -> Result<CaseDto, CmdError>;
+            async update_case(id: i64, patch: CasePatchDto) -> Result<CaseDto, CmdError>;
+            async delete_case(id: i64) -> Result<(), CmdError>;
+            async restore_case(id: i64) -> Result<CaseDto, CmdError>;
+            async add_to_case(case_id: Option<i64>, faces: Vec<FaceKeyDto>, origin: Option<CaseOriginDto>) -> Result<AddToCaseDto, CmdError>;
+            async remove_from_case(case_id: i64, faces: Vec<FaceKeyDto>) -> Result<u32, CmdError>;
+            async create_combo(case_id: i64, name: Option<String>, from_combo: Option<i64>) -> Result<ComboDto, CmdError>;
+            async update_combo(id: i64, patch: ComboPatchDto) -> Result<ComboDto, CmdError>;
+            async delete_combo(id: i64) -> Result<(), CmdError>;
+            async reorder_combos(case_id: i64, ids: Vec<i64>) -> Result<(), CmdError>;
+            async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
+            async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
+            async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
+            async brief_starter(brief: BriefDto, case_id: Option<i64>) -> Result<BriefStarterDto, CmdError>;
+            async open_case_from_peek(peek: PeekOpenDto) -> Result<PeekOpenResultDto, CmdError>;
             async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
             async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
             async get_settings() -> Result<SettingsDto, CmdError>;
@@ -311,6 +330,24 @@ cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
 cmd!(set_classification_override(over: ClassificationOverrideDto) -> () => |s| analysis::set_classification_override(s, &over));
 cmd!(clear_classification_override(face: FaceKeyDto) -> () => |s| analysis::clear_classification_override(s, &face));
 cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
+cmd!(create_case(name: Option<String>, brief: Option<BriefDto>, settings: Option<CaseSettingsDto>) -> CaseDto => |s| cases::create_case(s, name.as_deref(), brief.as_ref(), settings.as_ref()));
+cmd!(list_cases(include_deleted: bool) -> Vec<CaseSummaryDto> => |s| cases::list_cases(s, include_deleted));
+cmd!(open_case(id: i64) -> CaseDto => |s| cases::open_case(s, id));
+cmd!(get_case(id: i64) -> CaseDto => |s| cases::get_case(s, id));
+cmd!(update_case(id: i64, patch: CasePatchDto) -> CaseDto => |s| cases::update_case(s, id, &patch));
+cmd!(delete_case(id: i64) -> () => |s| cases::delete_case(s, id));
+cmd!(restore_case(id: i64) -> CaseDto => |s| cases::restore_case(s, id));
+cmd!(add_to_case(case_id: Option<i64>, faces: Vec<FaceKeyDto>, origin: Option<CaseOriginDto>) -> AddToCaseDto => |s| cases::add_to_case(s, case_id, &faces, origin));
+cmd!(remove_from_case(case_id: i64, faces: Vec<FaceKeyDto>) -> u32 => |s| cases::remove_from_case(s, case_id, &faces));
+cmd!(create_combo(case_id: i64, name: Option<String>, from_combo: Option<i64>) -> ComboDto => |s| cases::create_combo(s, case_id, name.as_deref(), from_combo));
+cmd!(update_combo(id: i64, patch: ComboPatchDto) -> ComboDto => |s| cases::update_combo(s, id, &patch));
+cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
+cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
+cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
+cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
+cmd!(brief_starter(brief: BriefDto, case_id: Option<i64>) -> BriefStarterDto => |s| brief::brief_starter(s, &brief, case_id));
+cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));
+cmd!(create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Vec<ComboDto> => |s| cases::create_combos(s, case_id, &combos));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
 cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));
 cmd!(model_status() -> ModelStatusDto => |s| Ok(model::model_status(s)));
