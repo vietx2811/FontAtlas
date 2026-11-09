@@ -52,7 +52,7 @@ describe('font UI đóng gói cục bộ (Plan 6b T2, G9)', () => {
 
 describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
   const light = { '--sheet': '#FAFAFA', '--card': '#FFFFFF', '--fg': '#2A2A2A', '--muted': '#78716C', '--border': '#E7E5E4', '--surface-2': '#F3F2F0', '--accent': '#D4A574', '--accent-ink': '#9A6B3C', '--accent-soft': '#F5E6D3', '--on': '#3FA66B', '--warn': '#C2410C' };
-  const dark = { '--sheet': '#0C0A09', '--card': '#151311', '--panel': '#1C1917', '--float': '#292522', '--fg': '#FAFAF9', '--muted': '#A8A29E', '--faint': '#7C756F', '--surface-2': '#24211E', '--accent': '#E0B07E', '--accent-ink': '#E0B07E', '--on': '#4ADE80', '--warn': '#FB923C' };
+  const dark = { '--sheet': '#0C0A09', '--card': '#151311', '--panel': '#1C1917', '--float': '#292522', '--fg': '#FAFAF9', '--muted': '#A8A29E', '--faint': '#8A837D', '--surface-2': '#24211E', '--accent': '#E0B07E', '--accent-ink': '#E0B07E', '--on': '#4ADE80', '--warn': '#FB923C' };
   const block = (sel: RegExp) => { const m = css.match(sel); expect(m, String(sel)).toBeTruthy(); return m![1]; };
 
   it('light values on :root', () => {
@@ -80,5 +80,16 @@ describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
     const b = block(/\n:root\s*{([^}]*)}/);
     expect(b).toMatch(/--foreground:\s*var\(--fg\);/);
     expect(b).toMatch(/--background:\s*var\(--sheet\);/);
+  });
+});
+
+describe('dark --faint keeps 4.5:1 on canvas and panel', () => {
+  const lum = (hex: string) => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  it('against --sheet and --panel', () => {
+    const forced = css.match(/:root\[data-theme="dark"\][^{]*{([^}]*)}/)![1];
+    const get = (k: string) => forced.match(new RegExp(`${k}:\\s*(#[0-9a-f]{6})`, 'i'))![1];
+    expect(ratio(get('--faint'), get('--sheet'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(get('--faint'), get('--panel'))).toBeGreaterThanOrEqual(4.5);
   });
 });

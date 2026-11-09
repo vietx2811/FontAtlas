@@ -42,7 +42,8 @@ export async function measureLoadedInk(family: string): Promise<Ink | null> {
   const c = ctx2d();
   if (!c || typeof document === 'undefined' || !document.fonts) return null;
   const font = inkFont(family);
-  try { await document.fonts.load(font, 'Hx'); if (!document.fonts.check(font, 'Hx')) return null; } catch { return null; }
+  // `check()` trả true cả khi chưa có FontFace nào khớp; chỉ tin kết quả của `load()` (rỗng = family chưa đăng ký → canvas sẽ vẽ bằng font dự phòng).
+  try { const faces = await document.fonts.load(font, 'Hx'); if (!faces || faces.length === 0) return null; } catch { return null; }
   return measureInkWith(c, font);
 }
 
@@ -51,15 +52,15 @@ export const inkProbe = { measure: measureLoadedInk };
 
 /** Đo mực của một family đã nạp. `undefined` = đang đo; null = không đo được. */
 export function useInk(family: string | null): Ink | null | undefined {
-  const [ink, setInk] = useState<Ink | null | undefined>(undefined);
+  // Lưu kèm family: lượt render đầu sau khi đổi family không bao giờ dùng số đo của font cũ.
+  const [state, setState] = useState<{ family: string; ink: Ink | null } | null>(null);
   useEffect(() => {
-    setInk(undefined);
     if (!family) return;
     let alive = true;
-    void inkProbe.measure(family).then(v => { if (alive) setInk(v); });
+    void inkProbe.measure(family).then(v => { if (alive) setState({ family, ink: v }); });
     return () => { alive = false; };
   }, [family]);
-  return ink;
+  return family && state && state.family === family ? state.ink : undefined;
 }
 
 /**

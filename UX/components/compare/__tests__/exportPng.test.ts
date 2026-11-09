@@ -42,12 +42,12 @@ describe('ensureFonts', () => {
     const load = vi.fn().mockResolvedValue([]);
     Object.defineProperty(document, 'fonts', { value: { load }, configurable: true });
     await ensureFonts(['A', null, 'B', 'A'], 'Phở');
-    expect(load).toHaveBeenCalledTimes(4); // 2 họ × (mẫu + dấu chồng)
+    expect(load).toHaveBeenCalledTimes(6); // 2 họ × (mẫu + dấu chồng + overlay 64px)
     expect(load.mock.calls.every(c => /"(A|B)"/.test(c[0]))).toBe(true);
     Object.defineProperty(document, 'fonts', { value: undefined, configurable: true });
   });
   it('does nothing without the Font Loading API', async () => {
-    await expect(ensureFonts(['A'], 'x')).resolves.toBeUndefined();
+    expect([...await ensureFonts(['A'], 'x')]).toEqual([]);
   });
 });
 
@@ -138,5 +138,20 @@ describe('renderCompare: specimen text never overflows the column', () => {
     expect(big.specimen).toBeLessThan(1);
     expect(big.vi).toBeLessThan(1);
     expect(big.specimen * 13 * 30).toBeLessThanOrEqual(234 + 1e-6); // chữ sau khi thu vừa bề rộng khả dụng (CW-36)
+  });
+});
+
+
+describe('ensureFonts resilience', () => {
+  it('one rejecting font does not fail the export: others still load, the bad one is just not "loaded"', async () => {
+    const load = vi.fn((font: string) => (font.includes('"Bad"') ? Promise.reject(new Error('boom')) : Promise.resolve([{}])));
+    Object.defineProperty(document, 'fonts', { value: { load }, configurable: true });
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+    const out = await ensureFonts(['Good', 'Bad'], 'Phở');
+    expect([...out]).toEqual(['Good']);
+    expect(clear).toHaveBeenCalled(); // bộ đếm 4 giây được dọn
+    expect(load.mock.calls.some(c => c[0] === '64px "Good"')).toBe(true); // overlay 64px được nạp
+    clear.mockRestore();
+    Object.defineProperty(document, 'fonts', { value: undefined, configurable: true });
   });
 });

@@ -9,6 +9,7 @@ import { useInk } from '../ui/inkLines';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
+export const SAMPLE_VI_GLOSS = 'Ữ Ặ Ệ Ỗ Ở · ươ';
 export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 

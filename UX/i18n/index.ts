@@ -3,6 +3,8 @@ import { TERM_GLOSS } from './terms';
 
 const vi = {
   ...TERM_GLOSS,
+  'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
+  'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
   'settings.title': 'Cài đặt',
   'filter.vi': 'Tiếng Việt', 'filter.vi.full': 'Đủ dấu', 'filter.vi.supported': 'Có dấu cơ bản', 'filter.vi.clear': 'Bỏ',

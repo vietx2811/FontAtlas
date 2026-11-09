@@ -43,15 +43,15 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const missing = !numeric && !category;
   const noRaw = a.key === 'serif_foot' && !numeric && !failed;
   return (
-    <Tooltip label={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
+    <Tooltip label={[a.method, a.rawValue === null ? null : t('anat.rawValue', { v: a.rawValue })].filter(Boolean).join(' · ')}>
     <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
       <TermTip term={a.key}><span className="fa-axis-name" data-term={termKey(a.key)}>{meta.label}</span></TermTip>
-      <span className="fa-axis-value">{failed ? 'Không đo được' : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? 'Chưa đo'}</span>
+      <span className="fa-axis-value">{failed ? t('anat.failed') : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? t('anat.unmeasured')}</span>
       {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
-        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do' : <>
-          {missing ? 'Chưa có dữ liệu' : noRaw ? 'Chưa có số đo' : estimated ? 'Ước lượng' : category && numeric ? category : ''}
-          {!missing && a.percentile !== null && <Tooltip label="Vị trí so với tập tham chiếu; không phải độ tin cậy"><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
+        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? t('anat.reasonUnknown') : <>
+          {missing ? t('anat.noData') : noRaw ? t('anat.noRaw') : estimated ? t('anat.estimated') : category && numeric ? category : ''}
+          {!missing && a.percentile !== null && <Tooltip label={t('anat.percentileTip')}><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
         </>}
       </span>}
     </li>
@@ -83,7 +83,7 @@ export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: 
   const lines = g.status === 'ok' || g.status === 'mismatch' ? guideLinesFrom(g, SIZE, BASE) : [];
   return (
     <>
-      <svg className="fa-hxg" role="img" aria-label="Glyph Hxg với đường chữ hoa, chiều cao x và đường nền" viewBox="0 0 300 150" width="100%" data-guides={g.status}>
+      <svg className="fa-hxg" role="img" aria-label={t('anat.hxgAria')} viewBox="0 0 300 150" width="100%" data-guides={g.status}>
         {lines.map(l => (
           <g key={l.id}>
             <line data-testid="guide-line" data-line={l.id} x1="6" x2="294" y1={l.y} y2={l.y} stroke="var(--accent)" strokeWidth="0.8" strokeDasharray={l.id === 'baseline' ? undefined : '3 3'} />
