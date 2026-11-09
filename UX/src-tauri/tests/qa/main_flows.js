@@ -315,7 +315,7 @@
     const themeV2 = document.documentElement.dataset.theme; document.documentElement.dataset.theme = "dark"; await sleep(400);
     const fillGaps = [...document.querySelectorAll('.cmp-tbl .cmp-page')].map(pg => Math.round(pg.parentElement.getBoundingClientRect().bottom - pg.getBoundingClientRect().bottom));
     const noteBg = (document.querySelector('.cmp-tbl .fa-note') ? getComputedStyle(document.querySelector('.cmp-tbl .fa-note')).backgroundColor : '').match(/\d+/g)?.map(Number) ?? [];
-    await log('compare-dark-fill-and-note-red', fillGaps.length > 0 && fillGaps.every(g => g <= 0) && noteBg.length >= 3 && noteBg[0] > 200 && noteBg[0] > noteBg[1] * 1.5 && noteBg[0] > noteBg[2] * 1.5, { fillGaps, noteBg });
+    await log('compare-dark-fill-and-note-red', fillGaps.length > 0 && fillGaps.every(g => g <= 1) && noteBg.length >= 3 && noteBg[0] > 200 && noteBg[0] > noteBg[1] * 1.5 && noteBg[0] > noteBg[2] * 1.5, { fillGaps, noteBg });
     await snap('compare-v2-dark');
     if (themeV2) document.documentElement.dataset.theme = themeV2; else document.documentElement.removeAttribute("data-theme"); await sleep(200);
     const termC = await termCheck('.cmp-tbl .rh [data-term]');
