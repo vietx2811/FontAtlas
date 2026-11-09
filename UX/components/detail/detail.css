@@ -127,3 +127,5 @@
 .fa-class-menu button[data-current="true"] { font-weight: 600; }
 .fa-class-menu small { color: var(--muted); font-size: 11px; }
 .fa-class-menu .auto { border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); margin-top: 4px; color: var(--accent-ink); }
+
+.fa-hxg-note { margin: 6px 2px 0; font-size: 11px; color: var(--faint); }

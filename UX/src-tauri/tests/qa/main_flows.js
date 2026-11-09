@@ -81,6 +81,15 @@
     const numeric = texts.filter(t => /\d+,\d+\s*(em|°|×)|\d+\s*°/.test(t));
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
+    // Đường kẻ Hxg phải trùng chữ: đo cap của 'H' bằng canvas với đúng font đang vẽ, so với đường cap trong SVG (±1 đơn vị viewBox).
+    const hxgSvg = await wait(() => { const v = document.querySelector('svg.fa-hxg'); return v && /^(ok|mismatch)$/.test(v.dataset.guides ?? '') ? v : null; }, 20000);
+    const hxgText = document.querySelector('[data-testid=hxg-text]');
+    const capLine = hxgSvg?.querySelector('[data-testid=guide-line][data-line=cap]');
+    let inkCap = null;
+    if (hxgText) { const c2 = document.createElement('canvas').getContext('2d'); c2.font = '100px ' + hxgText.style.fontFamily; inkCap = c2.measureText('H').actualBoundingBoxAscent; }
+    const capY = capLine ? +capLine.getAttribute('y1') : null;
+    await snap('anatomy-hxg');
+    await log('anatomy-hxg-guides-match', !!hxgSvg && capY !== null && inkCap !== null && Math.abs((112 - inkCap) - capY) <= 1 && getComputedStyle(hxgText).fontSynthesis !== undefined, { capY, expected: inkCap === null ? null : 112 - inkCap, status: hxgSvg?.dataset.guides, family: hxgText?.style.fontFamily });
     const termA = await termCheck('[data-testid=axis-row] [data-term]');
     await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
     // TƯƠNG TỰ

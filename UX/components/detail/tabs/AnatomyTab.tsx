@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { AxisReadingDto, FaceDetailDto } from '../../../api';
+import { t } from '../../../i18n';
+import { useGuides } from '../../ui/inkLines';
 import { AxisIcon } from './axisIcons';
 import { TermTip, termKey } from '../../ui/terms';
 
@@ -57,20 +59,41 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   );
 }
 
-export function AnatomyTab({ detail, css }: { detail: FaceDetailDto; css: CSSProperties }): React.JSX.Element {
+const axisEm = (axes: AxisReadingDto[], key: string): number | null => { const a = axes.find(x => x.key === key); return a && a.quality !== 'failed' && typeof a.rawValue === 'number' && Number.isFinite(a.rawValue) ? a.rawValue : null; };
+
+/** Đường kẻ theo mực thật của chữ đang vẽ (không theo số analyzer); chỉ vẽ đường nào đo được. Baseline luôn là nền của chữ. */
+export function guideLinesFrom(g: { cap: number | null; x: number | null }, size: number, baseline: number): GuideLine[] {
+  const out: GuideLine[] = [];
+  if (g.cap !== null) out.push({ id: 'cap', y: baseline - g.cap * size });
+  if (g.x !== null) out.push({ id: 'x', y: baseline - g.x * size });
+  out.push({ id: 'baseline', y: baseline });
+  return out;
+}
+const f3 = (v: number | null) => (v === null ? '—' : numberText(v, 'em'));
+
+/** Hxg vẽ bằng ĐÚNG face đã đo (family của face đó, không weight/italic của style chọn, không tổng hợp đậm/nghiêng). */
+export const hxgStyle = (family: string | null): CSSProperties => ({
+  fontFamily: family ? `"${family}"` : undefined, fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal', opacity: family ? 1 : 0.3,
+});
+
+export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: string | null }): React.JSX.Element {
   const SIZE = 100; const BASE = 112;
-  const lines = glyphLines(detail.axes, SIZE, BASE);
+  const analyzer = { cap: axisEm(detail.axes, 'cap_height_em'), x: axisEm(detail.axes, 'x_height_em') };
+  const g = useGuides(family, analyzer, detail.row.faceIndex);
+  const lines = g.status === 'ok' || g.status === 'mismatch' ? guideLinesFrom(g, SIZE, BASE) : [];
   return (
     <>
-      <svg className="fa-hxg" role="img" aria-label="Glyph Hxg với đường chữ hoa, chiều cao x và đường nền" viewBox="0 0 300 150" width="100%">
+      <svg className="fa-hxg" role="img" aria-label="Glyph Hxg với đường chữ hoa, chiều cao x và đường nền" viewBox="0 0 300 150" width="100%" data-guides={g.status}>
         {lines.map(l => (
           <g key={l.id}>
             <line data-testid="guide-line" data-line={l.id} x1="6" x2="294" y1={l.y} y2={l.y} stroke="var(--accent)" strokeWidth="0.8" strokeDasharray={l.id === 'baseline' ? undefined : '3 3'} />
             <text x="294" y={l.y - 3} textAnchor="end" fontSize="8" fill="var(--muted)" fontFamily="var(--font-ui)">{LINE_LABEL[l.id]}</text>
           </g>
         ))}
-        <text x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={css}>Hxg</text>
+        <text data-testid="hxg-text" x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={hxgStyle(family)}>Hxg</text>
       </svg>
+      {g.status === 'unavailable' && <p className="fa-hxg-note" role="status" data-testid="guides-note">{t('anat.guides.unavailable')}</p>}
+      {g.status === 'mismatch' && <Tooltip label={t('anat.guides.mismatchTip', { capA: f3(g.analyzer.cap), xA: f3(g.analyzer.x), capI: f3(g.ink.cap), xI: f3(g.ink.x) })}><p className="fa-hxg-note" data-testid="guides-note" tabIndex={0}>{t('anat.guides.mismatch')}</p></Tooltip>}
       <ul className="fa-axes">{detail.axes.map(a => <AxisRow key={a.key} a={a} />)}</ul>
     </>
   );

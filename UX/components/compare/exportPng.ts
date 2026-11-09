@@ -4,6 +4,7 @@ import { t, type I18nKey } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
+import { measureInkWith } from '../ui/inkLines';
 import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, viNotes } from './CompareCells';
 
 export type ExportInput = { data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; overlay?: boolean };
@@ -153,11 +154,12 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   if (overlay) {
     const OSZ = 64, OY = 66;
     band('overlay', t('compare.row.overlay'), OVERLAY_SPACED, OVL, (i, bx, by, bw) => {
-      const baseXh = base.metrics.x_height_em?.value;
+      // x-height của mốc đo từ chính chữ mốc (canvas), không theo số analyzer; mốc chưa nạp thì bỏ đường.
+      const baseXh = fam(0) ? measureInkWith(ctx, `${OSZ}px "${fam(0)}"`, OSZ)?.x ?? null : null;
       const same = i === 0;
       ctx.lineWidth = 1;
       ctx.strokeStyle = c.over; ctx.beginPath(); ctx.moveTo(bx - 10, by + OY); ctx.lineTo(bx + bw + 10, by + OY); ctx.stroke();
-      if (xhOk(baseXh)) { ctx.strokeStyle = c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx - 10, by + OY - baseXh! * OSZ); ctx.lineTo(bx + bw + 10, by + OY - baseXh! * OSZ); ctx.stroke(); ctx.setLineDash([]); }
+      if (baseXh !== null) { ctx.strokeStyle = c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx - 10, by + OY - baseXh * OSZ); ctx.lineTo(bx + bw + 10, by + OY - baseXh * OSZ); ctx.stroke(); ctx.setLineDash([]); }
       if (!same) { ctx.font = `${OSZ}px ${fam(0) ? `"${fam(0)}", ` : ''}${ui}`; ctx.globalAlpha = c.ghost; ctx.fillStyle = c.ink; ctx.fillText(OVERLAY_TEXT, bx - 2, by + OY); ctx.globalAlpha = 1; }
       ctx.font = `${OSZ * scale(i)}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`; ctx.fillStyle = same ? c.ink : c.over; ctx.globalAlpha = same ? 1 : 0.9; ctx.fillText(OVERLAY_TEXT, bx - 2, by + OY); ctx.globalAlpha = 1;
       texts.push(OVERLAY_TEXT);
