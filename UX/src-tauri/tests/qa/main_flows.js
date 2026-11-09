@@ -266,12 +266,13 @@
     const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
     setVal(document.querySelector('.cmp-edit'), 'Quạ đen 龍');
     await wait(() => [...document.querySelectorAll('.cmp-spec-view')].every(v => v.textContent === 'Quạ đen 龍'), 8000);
-    await wait(() => document.querySelectorAll('.cmp-spec .miss').length > 0, 15000);
+    const specNotes = () => [...document.querySelectorAll('.cmp-spec .fa-note')].filter(n => /^Thiếu:/.test(n.getAttribute('aria-label') ?? ''));
+    await wait(() => specNotes().length >= document.querySelectorAll('.cmp-edit').length && document.querySelectorAll('.cmp-spec-view').length === [...document.querySelectorAll('.cmp-spec-view')].filter(v => v.querySelector('.miss')).length, 20000); // mọi cột đều thiếu 龍 (font Latin)
     const views = [...document.querySelectorAll('.cmp-spec-view')].map(v => v.textContent);
     const missNote = [...document.querySelectorAll('.cmp-spec .fa-note')].map(n => n.getAttribute('aria-label')).find(x => /^Thiếu:/.test(x ?? ''));
     const missCol = getComputedStyle(document.querySelector('.cmp-spec .miss')).color; const inkCol = getComputedStyle(document.querySelector('.cmp-spec-view')).color;
     await snap('compare-v2-edit');
-    await log('compare-edit-specimen', document.querySelectorAll('.cmp-edit').length === 2 && views.every(v => v === 'Quạ đen 龍') && document.querySelector('.cmp-edit').value === 'Quạ đen 龍' && !!missNote && missCol !== inkCol, { views, missNote, missCol, inkCol, miss: document.querySelectorAll('.cmp-spec .miss').length });
+    await log('compare-edit-specimen', document.querySelectorAll('.cmp-edit').length === 2 && views.every(v => v === 'Quạ đen 龍') && document.querySelector('.cmp-edit').value === 'Quạ đen 龍' && !!missNote && missCol !== inkCol && specNotes().length === 2 && [...document.querySelectorAll('.cmp-spec-view')].every(v => v.querySelector('.miss')?.textContent === '龍' || [...v.querySelectorAll('.miss')].some(m => m.textContent === '龍')), { views, missNote, missCol, inkCol, miss: document.querySelectorAll('.cmp-spec .miss').length });
     // PNG giữ ký tự thiếu: xám + chữ ghi chú (ảnh không có hover)
     const pngMiss = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     await log('compare-png-missing-note', !!pngMiss && pngMiss.texts.some(x => /^Thiếu: /.test(x)), { notes: pngMiss?.texts.filter(x => /Thiếu/.test(x)) });
