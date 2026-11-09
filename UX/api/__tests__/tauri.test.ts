@@ -53,6 +53,24 @@ describe('query_faces', () => {
   });
 });
 
+describe('case/combo commands', () => {
+  it('maps every Api method to its command with camelCase args and explicit nulls', async () => {
+    const api = createTauriApi();
+    const f = { hashHex: 'ab', faceIndex: 0 };
+    const cases: Array<[() => Promise<unknown>, string, unknown]> = [
+      [() => api.createCase(), 'create_case', { name: null, brief: null, settings: null }],
+      [() => api.listCases(), 'list_cases', { includeDeleted: false }],
+      [() => api.addToCase(null, [f]), 'add_to_case', { caseId: null, faces: [f], origin: null }],
+      [() => api.addToCase(3, [f], 'peek'), 'add_to_case', { caseId: 3, faces: [f], origin: 'peek' }],
+      [() => api.createCombo(3), 'create_combo', { caseId: 3, name: null, fromCombo: null }],
+      [() => api.setComboSlot(5, 'body', null), 'set_combo_slot', { comboId: 5, role: 'body', face: null, note: null, style: null }],
+      [() => api.reorderCombos(3, [2, 1]), 'reorder_combos', { caseId: 3, ids: [2, 1] }],
+      [() => api.updateCase(3, { clearBrief: true }), 'update_case', { id: 3, patch: { name: null, brief: null, clearBrief: true, settings: null, viewState: null } }],
+    ];
+    for (const [run, cmd, args] of cases) { await run(); expect(last()).toEqual({ cmd, args }); }
+  });
+});
+
 describe('round2 contracts', () => {
   it('sends physical raw filters to query_faces, axis_stats and family pagination to similar_families', async () => {
     const api = createTauriApi();

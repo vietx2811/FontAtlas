@@ -62,6 +62,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+import { createMockCases } from './mockCases';
 import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
@@ -117,8 +118,10 @@ export function createMockApi(o: MockOptions = {}): Api {
   const delay = async () => { if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs)); };
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
 
+  const caseApi = createMockCases(k => byKey.get(keyOf(k)));
   return {
     ...lib,
+    ...caseApi,
     async queryFaces(q) {
       await delay();
       const t = q.text ? fold(q.text) : '';
