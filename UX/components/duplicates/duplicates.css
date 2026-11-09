@@ -1,5 +1,5 @@
 .dup { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
-.dup-h { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex: none; flex-wrap: wrap; }
+.dup-h { background: var(--panel); display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex: none; flex-wrap: wrap; }
 .dup-h h1 { margin: 0; font-size: 14px; font-weight: 600; }
 .dup-sp { flex: 1; }
 .dup-note { font-size: 11px; color: var(--muted); }

@@ -52,7 +52,7 @@ describe('font UI đóng gói cục bộ (Plan 6b T2, G9)', () => {
 
 describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
   const light = { '--sheet': '#FAFAFA', '--card': '#FFFFFF', '--fg': '#2A2A2A', '--muted': '#78716C', '--border': '#E7E5E4', '--surface-2': '#F3F2F0', '--accent': '#D4A574', '--accent-ink': '#9A6B3C', '--accent-soft': '#F5E6D3', '--on': '#3FA66B', '--warn': '#C2410C' };
-  const dark = { '--sheet': '#1C1917', '--card': '#23201E', '--fg': '#FAFAF9', '--muted': '#A8A29E', '--border': '#2E2A27', '--surface-2': '#2A2623', '--accent': '#E0B07E', '--accent-ink': '#E0B07E', '--on': '#4ADE80', '--warn': '#FB923C' };
+  const dark = { '--sheet': '#0C0A09', '--card': '#151311', '--panel': '#1C1917', '--float': '#292522', '--fg': '#FAFAF9', '--muted': '#A8A29E', '--faint': '#7C756F', '--surface-2': '#24211E', '--accent': '#E0B07E', '--accent-ink': '#E0B07E', '--on': '#4ADE80', '--warn': '#FB923C' };
   const block = (sel: RegExp) => { const m = css.match(sel); expect(m, String(sel)).toBeTruthy(); return m![1]; };
 
   it('light values on :root', () => {
@@ -64,6 +64,16 @@ describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
     const forced = block(/:root\[data-theme="dark"\][^{]*{([^}]*)}/);
     for (const [k, v] of Object.entries(dark)) expect(forced, k).toMatch(new RegExp(`${k}:\\s*${v};`, 'i'));
     expect(css).toMatch(/@media \(prefers-color-scheme: dark\)\s*{\s*:root:not\(\[data-theme="light"\]\)\s*{/);
+  });
+
+  it('dark tiers are ordered canvas < card < panel < float and the border is a hairline', () => {
+    const forced = block(/:root\[data-theme="dark"\][^{]*{([^}]*)}/);
+    const lum = (k: string) => { const h = forced.match(new RegExp(`${k}:\\s*#([0-9a-f]{6})`, 'i'))![1]; return parseInt(h.slice(0, 2), 16) + parseInt(h.slice(2, 4), 16) + parseInt(h.slice(4), 16); };
+    expect(lum('--sheet')).toBeLessThan(lum('--card'));
+    expect(lum('--card')).toBeLessThan(lum('--panel'));
+    expect(lum('--panel')).toBeLessThan(lum('--float'));
+    expect(forced).toMatch(/--border:\s*rgba\(250, 250, 249, \.0[5-9]\)/);
+    expect(forced).toMatch(/--specimen-bg:\s*#0A0908/i);
   });
 
   it('keeps the old names working as aliases', () => {

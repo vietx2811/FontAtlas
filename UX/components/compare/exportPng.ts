@@ -55,8 +55,8 @@ export function wrapText(ctx: Measure, text: string, maxW: number): string[] {
 
 /** Bảng màu ảnh theo theme. Specimen: nền/chữ khớp --specimen-* trong index.css (sáng: trắng/đen ấm; tối: gần đen/trắng). */
 export const EXPORT_PALETTE = {
-  dark: { bg: '#141210', fg: '#F5F5F4', mute: '#A8A29E', line: '#2E2A27', accent: '#E0B07E', page: '#0A0908', ink: '#FAFAF9', warn: '#FB923C', ok: '#4ADE80', ghost: 0.42, over: '#F0B777', rule: '#57534E' },
-  light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#78716C', line: '#E7E5E4', accent: '#9A6B3C', page: '#FFFFFF', ink: '#1F1D1B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#9A6B3C', rule: '#D6D3D1' },
+  dark: { bg: '#0C0A09', fg: '#F5F5F4', mute: '#A8A29E', faint: '#7C756F', line: '#2A2623', accent: '#E0B07E', page: '#0A0908', ink: '#FAFAF9', warn: '#FB923C', ok: '#4ADE80', ghost: 0.42, over: '#F0B777', rule: '#57534E' },
+  light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#78716C', faint: '#78716C', line: '#E7E5E4', accent: '#9A6B3C', page: '#FFFFFF', ink: '#1F1D1B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#9A6B3C', rule: '#D6D3D1' },
 } as const;
 
 export type ExportManifest = { rows: string[]; texts: string[]; size: { w: number; h: number }; dark: boolean; specimenBg: string };
@@ -184,12 +184,12 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
       ctx.font = fontOf(15, 600); const vw = ctx.measureText(v).width;
       const d = deltaWraps(k, i);
       if (d) { if (d.wrap) text(d.text, bx, y + 42, { size: 11, weight: 600, color: c.accent }); else text(d.text, bx + vw + 8, y + 24, { size: 11, weight: 600, color: c.accent }); }
-      else if (i === 0) text(t('compare.base'), bx + vw + 8, y + 24, { size: 11, color: c.mute });
+      else if (i === 0) text(t('compare.base'), bx + vw + 8, y + 24, { size: 11, color: c.faint });
       if (m.percentile !== null) {
         const by = y + (d?.wrap ? 56 : 38);
         ctx.fillStyle = c.line; ctx.fillRect(bx, by, CW - 40, 4);
         ctx.fillStyle = c.accent; ctx.fillRect(bx + (CW - 40) * Math.min(1, Math.max(0, m.percentile / 100)) - 1, by - 4, 2, 12);
-        text(percentLabel(m.percentile), bx + CW - 36, by + 6, { size: 10, color: c.mute });
+        text(percentLabel(m.percentile), bx + CW - 36, by + 6, { size: 10, color: c.faint });
       }
     });
     y += metricH[ki];
