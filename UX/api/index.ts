@@ -3,7 +3,7 @@
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
-  ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
   AxisStatsDto, AxisHistogramDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
@@ -112,6 +112,8 @@ export interface Api extends LibraryApi {
   activationSetKeep(on: boolean): Promise<void>;
   /** Đổi phạm vi của các font ĐANG bật (không tắt giữa chừng). */
   activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<ActivationReportDto>;
+  /** Font nào đang "Có sẵn trên máy" (file giống hệt do bên khác cung cấp). Tính lại mỗi lần; `faces` kiểm thêm ngoài tập đã nhớ. */
+  activationAvailability(faces?: FaceKeyDto[]): Promise<AvailabilityDto[]>;
   activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
 }
 

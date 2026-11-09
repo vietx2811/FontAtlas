@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
+import { useActivationQueue } from '../../../store/activationFlow';
 import { useUiStore } from '../../../store/ui';
+import { ActivationDialogHost } from '../ActivationDialogHost';
 import { ActiveRow } from '../ActiveRow';
 import { useActivationFlow } from '../useActivationFlow';
 
@@ -12,7 +14,7 @@ type MockApi = ReturnType<typeof createMockApi>;
 
 function Harness({ api, face }: { api: MockApi; face: { hashHex: string; faceIndex: number } | null }) {
   const flow = useActivationFlow(api);
-  return <>{flow.dialog}<ActiveRow face={face} flow={flow} /></>;
+  return <><ActivationDialogHost api={api} /><ActiveRow face={face} flow={flow} /></>;
 }
 async function setup() {
   const api = createMockApi();
@@ -25,7 +27,7 @@ async function setup() {
 const sw = () => screen.getByRole('switch', { name: 'Active' });
 
 describe('ActiveRow', () => {
-  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  beforeEach(() => { useActivationQueue.getState().clear(); useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
 
   it('shows a LABELLED switch whose label is a TermTip term; off by default, no scope button', async () => {
     await setup();

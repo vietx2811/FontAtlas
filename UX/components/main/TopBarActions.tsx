@@ -44,14 +44,16 @@ export function shortcutBlocked(e: KeyboardEvent): boolean {
 
 type SelRow = { hashHex: string; faceIndex: number; missing?: boolean };
 /**
- * Activate / Deactivate cho cả lựa chọn (từ 2 font; ⌘⇧A chạy cả với 1 font). Tất cả đang bật → nút thành Deactivate.
- * Dùng lại useActivationFlow (hộp thoại xung đột/đang được dự án giữ) và bỏ qua font mất file.
+ * Phím tắt ⌘⇧A bật/tắt kích hoạt cho cả lựa chọn (cả khi chọn 1 font). Không có nút riêng trên Top Bar: thanh chọn đã có nút
+ * "Kích hoạt / Tắt kích hoạt" có nhãn, hai nút cùng việc chỉ làm rối. Font mất file bị bỏ qua; font đã dùng được nhờ bản giống hệt của
+ * bên khác coi như đã bật. Hộp thoại (xung đột / đang được dự án giữ) nằm ở hàng đợi chung, không mất khi bỏ chọn.
  */
-function ActivationActions({ api, rows }: { api: Api; rows: SelRow[] }): React.JSX.Element {
+function ActivationShortcut({ api, rows }: { api: Api; rows: SelRow[] }): null {
   const flow = useActivationFlow(api);
   const active = useUiStore(s => s.active);
+  const available = useUiStore(s => s.available);
   const usable = useMemo(() => rows.filter(r => !r.missing), [rows]);
-  const allOn = usable.length > 0 && usable.every(r => active.has(r.hashHex));
+  const allOn = usable.length > 0 && usable.every(r => active.has(r.hashHex) || available.has(r.hashHex));
   const run = () => { if (usable.length) void flow.toggle(usable.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })), !allOn); };
   const runRef = useRef(run); runRef.current = run;
   useEffect(() => {
@@ -62,19 +64,7 @@ function ActivationActions({ api, rows }: { api: Api; rows: SelRow[] }): React.J
     document.addEventListener('keydown', on);
     return () => document.removeEventListener('keydown', on);
   }, []);
-  const key = allOn ? 'deactivate' : 'activate';
-  return (
-    <>
-      {flow.dialog}
-      {rows.length >= 2 && (
-        <Tooltip label={`${t(`topbar.${key}`)} — ${t(`topbar.${key}.gloss`)}`} shortcut="⌘⇧A">
-          <button type="button" className="fa-act" data-testid="topbar-activate" aria-label={t(`topbar.${key}`)} onClick={run}>
-            <Icon name="power" size={15} /><span className="l">{t(`topbar.${key}`)}</span><kbd>⌘⇧A</kbd>
-          </button>
-        </Tooltip>
-      )}
-    </>
-  );
+  return null;
 }
 
 /**
@@ -115,7 +105,7 @@ export function TopBarActions({ api }: { api?: Api } = {}): React.JSX.Element | 
         <span className="fa-act-n">{t('topbar.selected', { n })}<button type="button" aria-label={t('topbar.clear')} onClick={() => useSelectionStore.getState().clear()}><Icon name="x" size={12} /></button></span>
         {n === 1 ? <>{btn('pair', 'pair', '⇧P', true, doPair)}{btn('similar', 'similar', null, false, doSimilar)}</>
           : <><span className="fa-act-wrap">{btn('compare', 'compare', '⇧C', true, doCompare)}{n > COMPARE_MAX && <NarrowTag n={n} max={COMPARE_MAX} onNarrow={narrow} />}</span>{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
-        {api && <ActivationActions api={api} rows={rows} />}
+        {api && <ActivationShortcut api={api} rows={rows} />}
       </div>
     </>
   );

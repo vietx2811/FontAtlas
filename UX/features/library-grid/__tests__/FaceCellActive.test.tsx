@@ -4,6 +4,7 @@ import { createMockLibraryApi, makeRow } from '../api';
 import { LibraryGrid } from '../LibraryGrid';
 import { PreviewBlobs, type BlobDeps } from '../previewBlobs';
 import { tipOf } from '../../../test/tip';
+import { useUiStore } from '../../../store/ui';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const blobs = () => {
@@ -47,5 +48,16 @@ describe('FaceCell activation', () => {
     const [a] = await mount({ isActive: () => true });
     expect(await tipOf(within(a).getByTestId('active-dot'))).toBe('Đang bật · phiên này');
     expect(within(a).queryByTestId('cell-active')).toBeNull();
+  });
+
+  it('an available-elsewhere font gets a hollow green dot with a tooltip saying who, and no power button', async () => {
+    useUiStore.setState({ available: new Map([[makeRow(0).hashHex, { owner: 'font_base' as const, path: '/Users/u/Library/Fonts/FontBase/x.ttf' }]]) });
+    const [a, b] = await mount({ onToggleActive: vi.fn(), activeScopeOf: r => (r.faceId === 1 ? 'available' : undefined) });
+    const dot = within(a).getByTestId('active-dot');
+    expect(dot.getAttribute('data-scope')).toBe('available');
+    expect(await tipOf(dot)).toMatch(/^Có sẵn trên máy/);
+    expect(within(a).queryByTestId('cell-active')).toBeNull();
+    expect(within(b).queryByTestId('active-dot')).toBeNull();
+    expect(within(b).getByTestId('cell-active')).toBeTruthy();
   });
 });

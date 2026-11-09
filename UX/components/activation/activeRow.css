@@ -5,3 +5,6 @@
 .fa-act-state[data-on="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--on); margin-right: 6px; vertical-align: 1px; }
 .fa-act-scope { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 11px; border: 1px solid var(--border); color: var(--muted); font-size: 11px; }
 .fa-act-scope:hover { color: var(--fg); background: var(--surface-2); }
+.fa-act-state[data-available="true"] { color: var(--muted); }
+.fa-act-state[data-available="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--on); margin-right: 6px; vertical-align: 1px; }
+.fa-act-row[data-available="true"] .fa-switch { opacity: .45; cursor: not-allowed; }

@@ -167,6 +167,7 @@ export function createTauriApi(): Api {
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),
     activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
+    activationAvailability: (faces = []) => call('activation_availability', { faces }),
     activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),
   };
 }

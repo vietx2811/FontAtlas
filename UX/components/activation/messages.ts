@@ -1,4 +1,5 @@
 import type { AutoDeactivatedDto, FileOutcomeDto, ReconcileReportDto } from '../../api';
+import { t } from '../../i18n';
 
 export type Msg = { kind: 'info' | 'error'; text: string };
 
@@ -6,20 +7,17 @@ export type Msg = { kind: 'info' | 'error'; text: string };
 export function describeOutcome(o: FileOutcomeDto): Msg | null {
   switch (o.kind) {
     case 'failed':
-      if (o.code === 'file_changed') return { kind: 'error', text: 'File font đã thay đổi trên đĩa sau lần quét gần nhất. Hãy quét lại nguồn rồi thử lại.' };
-      return { kind: 'error', text: `Không kích hoạt được (${o.code}): ${o.message}` };
-    case 'missing_file': return { kind: 'error', text: 'Không tìm thấy file (ổ ngoài đã rút hoặc file đã chuyển).' };
-    case 'not_downloaded': return { kind: 'error', text: 'File đang ở iCloud, chưa tải về máy.' };
-    case 'busy': return { kind: 'info', text: 'Font đang được xử lý, hãy thử lại sau giây lát.' };
+      if (o.code === 'file_changed') return { kind: 'error', text: t('act.msg.changed') };
+      if (o.code === 'scope_unsettled') return { kind: 'error', text: t('act.msg.scope_unsettled') };
+      return { kind: 'error', text: t('act.msg.failed', { code: o.code, message: o.message }) };
+    case 'missing_file': return { kind: 'error', text: t('act.msg.missing') };
+    case 'not_downloaded': return { kind: 'error', text: t('act.msg.icloud') };
+    case 'busy': return { kind: 'info', text: t('act.msg.busy') };
     default: return null;
   }
 }
 
-const CAUSE: Record<string, string> = {
-  collection_deleted: 'vì dự án đã bị xoá',
-  left_collection: 'vì đã rời khỏi dự án',
-  no_reason: 'vì không còn lý do kích hoạt',
-};
+const CAUSES = ['collection_deleted', 'left_collection', 'no_reason'] as const;
 const group = (items: AutoDeactivatedDto[]) => {
   const m = new Map<string, number>();
   for (const i of items) m.set(i.cause, (m.get(i.cause) ?? 0) + 1);
@@ -29,14 +27,15 @@ const group = (items: AutoDeactivatedDto[]) => {
 /** Thông báo sau `reconcile` (lúc mở app hoặc khi dự án đổi). Không có gì xảy ra thì trả mảng rỗng. */
 export function reconcileNotices(r: ReconcileReportDto): Msg[] {
   const out: Msg[] = [];
-  for (const [cause, n] of group(r.autoDeactivated)) out.push({ kind: 'info', text: `Đã tự tắt ${n} font ${CAUSE[cause] ?? `(${cause})`}.` });
-  if (r.autoDeactivateFailed.length) {
-    out.push({ kind: 'error', text: `Không gỡ được kích hoạt ${r.autoDeactivateFailed.length} font (hệ điều hành từ chối); font vẫn đang bật.` });
+  for (const [cause, n] of group(r.autoDeactivated)) {
+    const known = (CAUSES as readonly string[]).includes(cause);
+    out.push({ kind: 'info', text: known ? t('act.rec.auto', { n, cause: t(`act.rec.${cause as (typeof CAUSES)[number]}`) }) : t('act.rec.autoUnknown', { n, cause }) });
   }
+  if (r.autoDeactivateFailed.length) out.push({ kind: 'error', text: t('act.rec.autoFailed', { n: r.autoDeactivateFailed.length }) });
   const parts = [
-    r.reregistered > 0 && `Đã kích hoạt lại ${r.reregistered} font.`,
-    r.missing > 0 && `${r.missing} font không tìm thấy file.`,
-    r.notDownloaded > 0 && `${r.notDownloaded} font còn ở iCloud, chưa tải về máy.`,
+    r.reregistered > 0 && t('act.rec.rereg', { n: r.reregistered }),
+    r.missing > 0 && t('act.rec.missing', { n: r.missing }),
+    r.notDownloaded > 0 && t('act.rec.icloud', { n: r.notDownloaded }),
   ].filter(Boolean) as string[];
   if (parts.length) out.push({ kind: 'info', text: parts.join(' ') });
   return out;

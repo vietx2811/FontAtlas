@@ -4,6 +4,7 @@ import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, FaceKeyDto, FileOutcomeDto, FileResultDto, ReasonDto,
 } from './types';
 import type { ActivateOptions, DeactivateOptions } from './index';
+import type { AvailabilityDto } from './types';
 
 /** Họ "Roboto" giả lập trùng tên với font hệ thống (cần xác nhận); "Lobster" giả lập file đã đổi trên đĩa. */
 export const CONFLICT_FAMILY = 'Roboto';
@@ -35,6 +36,8 @@ export function createActivationSim(d: Deps) {
     if (!e.reasons.some(x => same(x, r))) e.reasons.push(r);
     state.set(h, e);
   };
+  /** Font đã dùng được nhờ file giống hệt của bên khác: Font Atlas không ghi dòng kích hoạt cho chúng. */
+  const available = new Map<string, AvailabilityDto>();
   const conflictOf = (row: FaceRow | undefined) => {
     const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY ? 'right_font' as const : row?.family === SAME_FILE_FAMILY ? 'user_installed' as const : null;
     const dir = (o: 'system' | 'right_font' | 'user_installed') => (o === 'system' ? '/Library/Fonts' : o === 'right_font' ? '~/Library/RightFont' : '/Users/u/Library/Fonts/FontBase');
@@ -45,9 +48,17 @@ export function createActivationSim(d: Deps) {
     const row = d.rowOf(f);
     if (row?.family === CHANGED_FAMILY) return { kind: 'failed', code: 'file_changed', message: 'file changed on disk since scan' };
     const conflicts = conflictOf(row);
+    if (conflicts.length && conflicts.every(c => c.sameFile)) {
+      available.set(f.hashHex, { hashHex: f.hashHex, faces: [f.faceIndex], owner: 'font_base', path: conflicts[0].existingPath });
+      return { kind: 'already_available', owner: 'font_base', path: conflicts[0].existingPath };
+    }
     if (conflicts.length && !o.proceed) return { kind: 'needs_confirmation', conflicts };
     const had = state.get(f.hashHex)?.reasons.length;
+    available.delete(f.hashHex);
     add(f.hashHex, reason, o.scope ?? 'session');
+    // Scope hiệu lực: tường minh "Giữ bật" nâng lên; không tường minh (vd bật dự án) hoặc "phiên này" không bao giờ hạ.
+    const cur = state.get(f.hashHex);
+    if (cur && o.scope === 'persistent') cur.scope = 'persistent';
     return had ? { kind: 'already_active' } : { kind: 'activated' };
   };
   const finish = (rs: FileResultDto[], onProgress?: ActivateOptions['onProgress']) => {
@@ -121,6 +132,11 @@ export function createActivationSim(d: Deps) {
       const changed = hashes(faces).filter(f => { const e = state.get(f.hashHex); if (!e || e.scope === scope) return false; e.scope = scope; return true; });
       return finish(changed.map(f => result(f, { kind: 'activated' })));
     },
+    async activationAvailability(): Promise<AvailabilityDto[]> {
+      return [...available.values()].filter(a => !state.has(a.hashHex));
+    },
+    /** Dành cho test: bên kia (FontBase…) gỡ font → quay về "chưa bật" ở lần tính lại kế tiếp. */
+    dropAvailable(hashHex?: string) { if (hashHex) available.delete(hashHex); else available.clear(); },
     async activationSubscribe(l: (e: ActivationEvent) => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     /** Gọi khi dự án mất mặt: `removed` = (face, dự án) bị gỡ. */
     collectionChanged(removed: Array<[FaceKeyDto, number]>, cause: 'collection_deleted' | 'left_collection') {

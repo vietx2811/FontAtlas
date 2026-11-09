@@ -18,7 +18,7 @@ export type LibraryGridProps = {
   /** Hàng đệm ở đáy (px) cho ô nổi che thẻ cuối. */
   bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
-  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | undefined; onToggleActive?(row: FaceRow): void;
+  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | 'available' | undefined; onToggleActive?(row: FaceRow): void;
   /** Tập khoá `${hashHex}:${faceIndex}` đang được chọn (đa chọn). Có → thay cho selectedFaceId/selectedKey khi tô thẻ. */
   /** Bộ nạp dùng chung toàn app kèm ScrollVelocity của nó (lưới đưa tốc độ cuộn vào). Thiếu → lưới tự tạo bộ nạp riêng. */
   velocity?: ScrollVelocity;
@@ -39,7 +39,7 @@ type RowProps = {
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
   fontSize?: number; layout: 'grid' | 'list'; boxHeight: number; rows: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
-  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | undefined; onToggleActive?(row: FaceRow): void;
+  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | 'available' | undefined; onToggleActive?(row: FaceRow): void;
   selectedKeys?: ReadonlySet<string>; onPick?: LibraryGridProps['onPick']; onContextMenu?: LibraryGridProps['onContextMenu'];
 };
 

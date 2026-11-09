@@ -239,13 +239,17 @@
       const row = () => document.querySelector('aside.fa-panel [data-testid=active-row]');
       const sw = () => row()?.querySelector('[data-testid=active-switch]');
       const status = () => row()?.querySelector('[data-testid=active-status]')?.textContent;
+      // Số trên mục "Đang bật" của thanh bên phải đi theo mỗi lần bật/tắt (trước đây đứng yên ở 0).
+      const navCount = () => [...document.querySelectorAll('button')].find(b => /^Đang bật/.test(b.textContent ?? ''))?.textContent?.replace(/\D/g, '');
       await wait(row, 10000);
       const termA2 = await termCheck('[data-testid=active-row] [data-term]');
       await log('active-peek-labelled', !!sw() && sw().getAttribute('aria-label') === 'Active' && sw().getAttribute('aria-checked') === 'false' && status() === 'Chưa bật' && termA2.n === 1 && termA2.bad.length === 0 && termA2.art === 1, { aria: sw()?.getAttribute('aria-label'), checked: sw()?.getAttribute('aria-checked'), status: status(), termA2 });
       sw().click();
       await wait(() => status() === 'Đang bật · phiên này', 15000);
       let st = await waitActive(x => x.length === 1);
+      await wait(() => navCount() === '1', 8000);
       await snap('active-peek-on');
+      await log('active-sidebar-count', navCount() === '1', { nav: navCount() });
       await log('active-peek-on-session', status() === 'Đang bật · phiên này' && sw().getAttribute('aria-checked') === 'true' && st.length === 1 && st[0].scope === 'session', { status: status(), state: st.map(x => [x.hashHex.slice(0, 8), x.scope, x.status]) });
       const scopeBtn = () => row()?.querySelector('[data-testid=active-scope]');
       scopeBtn()?.click();
@@ -267,19 +271,23 @@
       await wait(() => cOff.querySelector('[data-testid=active-dot]'), 8000);
       await snap('active-cards-on');
       await log('active-card-toggle', st.length === 2 && !!cOff.querySelector('[data-testid=active-dot]') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { n: st.length, selection: document.querySelector('[data-testid=selection-count]')?.textContent });
-      // Top Bar: cả lựa chọn đang bật → nút Deactivate; bấm → tắt hết; bấm Activate → bật hết; ⌘⇧A → tắt.
-      const tbBtn = () => document.querySelector('header.fa-topbar [data-testid=topbar-activate]');
-      const lbl = () => tbBtn()?.getAttribute('aria-label');
-      const labelOk1 = lbl() === 'Deactivate';
-      tbBtn().click();
-      st = await waitActive(x => x.length === 0); await wait(() => lbl() === 'Activate', 8000);
-      const offOk = st.length === 0 && lbl() === 'Activate';
-      tbBtn().click();
-      st = await waitActive(x => x.length === 2); await wait(() => lbl() === 'Deactivate', 8000);
-      const onOk = st.length === 2 && lbl() === 'Deactivate';
+      // Thanh chọn: cả lựa chọn đang bật → nút "Tắt kích hoạt"; bấm → tắt hết; "Kích hoạt" → bật hết; ⌘⇧A → tắt.
+      // Top Bar KHÔNG còn nút nguồn (hai nút cùng việc chỉ làm rối); ⌘⇧A vẫn chạy.
+      const sbBtn = () => document.querySelector('[data-testid=selbar-activate]');
+      const lbl = () => sbBtn()?.textContent;
+      const noTopBtn = !document.querySelector('header.fa-topbar [data-testid=topbar-activate]');
+      const labelOk1 = lbl() === 'Tắt kích hoạt';
+      sbBtn().click();
+      st = await waitActive(x => x.length === 0); await wait(() => lbl() === 'Kích hoạt', 8000);
+      const offOk = st.length === 0 && lbl() === 'Kích hoạt' && navCount() === '0';
+      sbBtn().click();
+      st = await waitActive(x => x.length === 2); await wait(() => lbl() === 'Tắt kích hoạt', 8000);
+      await wait(() => navCount() === '2', 8000);
+      const onOk = st.length === 2 && lbl() === 'Tắt kích hoạt' && navCount() === '2';
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'A', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
       st = await waitActive(x => x.length === 0);
-      await log('active-topbar-multi', labelOk1 && offOk && onOk && st.length === 0, { labelOk1, offOk, onOk, afterShortcut: st.length });
+      await wait(() => navCount() === '0', 8000);
+      await log('active-topbar-multi', noTopBtn && labelOk1 && offOk && onOk && st.length === 0 && navCount() === '0', { noTopBtn, labelOk1, offOk, onOk, afterShortcut: st.length, nav: navCount() });
       // Cả family: nút cạnh StyleDropdown bật mọi kiểu của family (≥ 2 file), bấm lại tắt hết.
       const famBtn = () => document.querySelector('aside.fa-panel [data-testid=family-active]');
       const styleCount = Number((document.querySelector('aside.fa-panel .fa-dd-btn .cnt')?.textContent ?? '').replace(/\D/g, '')) || 0;
@@ -583,7 +591,7 @@
       tag?.blur?.(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       // Chọn tất cả rồi Activate.
       await wait(() => !document.querySelector('[data-testid=narrow-pop]'), 3000);
-      document.querySelector('header.fa-topbar [data-testid=topbar-activate]')?.click();
+      const selBtn = document.querySelector('[data-testid=selbar-activate]'); selBtn?.focus(); selBtn?.click();
       const dlg = await wait(() => document.querySelector('[role=dialog].fa-conf'), 30000);
       await sleep(300);
       const rowsN = dlg ? dlg.querySelectorAll('[data-testid=conflict-list] > li').length : 0;
@@ -598,11 +606,15 @@
       if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
       const title = dlg?.querySelector('h2')?.textContent ?? '';
       await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
+      const radios = [...(dlg?.querySelectorAll('input[type=radio]') ?? [])];
+      const rs = radios.map(r => { const cs = getComputedStyle(r), af = getComputedStyle(r, '::after'); return { appearance: cs.appearance, w: cs.width, bw: cs.borderTopWidth, br: cs.borderTopLeftRadius, dot: af.width, checked: r.checked }; });
+      await log('conflict-radio-ring-and-dot', rs.length === 2 && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1.5 && x.dot === '8px'), { rs });
       const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
       const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
       await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
       const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
       await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
+      await log('conflict-dialog-returns-focus', document.activeElement === selBtn || document.activeElement?.closest('[data-testid=selbar-activate]') === selBtn, { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
       await sleep(800);
       let st2 = await actOn();
       await log('conflict-skip-activates-rest', st2.length >= 12 && st2.length <= total - 6, { active: st2.length, total });
@@ -610,6 +622,34 @@
       try { await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) }); } catch (e) { await log('conflict-clean-error', false, String(e && e.message || e)); }
       await sleep(800); st2 = await actOn();
       await log('conflict-clean', st2.length === 0, { left: st2.length });
+    }
+
+    // "CÓ SẴN TRÊN MÁY": một bản font hệ thống chép vào nguồn G (giống hệt từng byte) → Font Atlas không bật gì, chỉ báo ai cung cấp.
+    // (Chỉ là phép thử trong thư mục QA tạm; không ảnh nào của bước này được đưa vào tài liệu.)
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const dqa = { text: 'Academy', vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 10, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
+      await inv('add_source', { path: '__QA_DIR__/G' });
+      let gf = null; const t0 = Date.now();
+      while (!gf && Date.now() - t0 < 60000) { const p = await inv('query_faces', { q: dqa }); gf = (p.items || [])[0] || null; if (!gf) await sleep(500); }
+      if (!gf) { await log('available-outcome', true, 'máy không có font hệ thống mẫu: bỏ qua'); }
+      else {
+        const key = { hashHex: gf.hashHex ?? gf.hash_hex, faceIndex: gf.faceIndex ?? gf.face_index ?? 0 };
+        const rep = await inv('activation_activate', { faces: [key], scope: null, proceed: false, onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) });
+        const o = rep.results[0].outcome; const stA = await actOn();
+        await log('available-outcome', o.kind === 'already_available' && o.owner === 'system' && stA.length === 0 && rep.changed === 0, { outcome: o.kind, owner: o.owner, active: stA.length });
+        const again = await inv('activation_availability', { faces: [] });
+        await log('available-recomputed', again.length === 1 && again[0].hashHex === key.hashHex, { n: again.length });
+        window.dispatchEvent(new Event('focus'));
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^G\b/.test(b.textContent.trim()))?.click();
+        await sleep(800);
+        const cell = await wait(() => cells()[0], 10000); cell?.click();
+        const rowA = await wait(() => document.querySelector('aside.fa-panel [data-testid=active-row][data-available=true]'), 10000);
+        const swA = rowA?.querySelector('[data-testid=active-switch]');
+        const dotA = cells()[0]?.querySelector('[data-testid=active-dot][data-scope=available]');
+        await sleep(300); await snap('available-peek');
+        await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA });
+      }
     }
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }

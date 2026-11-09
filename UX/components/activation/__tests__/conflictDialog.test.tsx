@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ConflictDto } from '../../../api';
 import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
+import { useActivationQueue } from '../../../store/activationFlow';
 import { useUiStore } from '../../../store/ui';
+import { ActivationDialogHost } from '../ActivationDialogHost';
 import { ConflictDialog } from '../ActivationDialogs';
 import { groupByFamily, groupNote, isSameFile, ownerNote, toItems } from '../conflictModel';
 import { useActivationFlow } from '../useActivationFlow';
@@ -86,6 +88,14 @@ describe('ConflictDialog', () => {
     expect(css).toMatch(/\.fa-modal\.fa-conf\s*\{[^}]*max-height:\s*70vh/);
     expect(css).toMatch(/\.fa-conf \.fa-conf-list\s*\{[^}]*overflow-y:\s*auto/);
   });
+  it('radios are a ring with a solid inner dot drawn from tokens (the native control showed a tiny dot in light and dark)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('components/activation/conflictDialog.css', 'utf8');
+    expect(css).toMatch(/\.fa-radio input\[type="radio"\]\s*\{[^}]*appearance:\s*none[^}]*border:\s*1\.5px solid var\(--muted\)[^}]*border-radius:\s*50%/);
+    expect(css).toMatch(/input\[type="radio"\]::after\s*\{[^}]*width:\s*8px[^}]*background:\s*var\(--accent-ink\)/);
+    expect(css).toMatch(/input\[type="radio"\]:checked\s*\{[^}]*border-color:\s*var\(--accent-ink\)/);
+    expect(css).toMatch(/input\[type="radio"\]:checked::after\s*\{[^}]*scale\(1\)/);
+  });
   it('renders in a portal on <body>, so a parent stacking context (Top Bar, grid) cannot bury it', () => {
     const { container } = render(<div style={{ position: 'relative', zIndex: 1 }}><ConflictDialog items={items} total={12} onCancel={() => {}} onConfirm={() => {}} /></div>);
     const dlg = screen.getByRole('dialog');
@@ -99,10 +109,10 @@ describe('ConflictDialog', () => {
 });
 
 describe('activation flow with same-file duplicates', () => {
-  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  beforeEach(() => { useActivationQueue.getState().clear(); useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
   function Harness({ api, faces }: { api: ReturnType<typeof createMockApi>; faces: { hashHex: string; faceIndex: number }[] }) {
     const flow = useActivationFlow(api);
-    return <>{flow.dialog}<button type="button" onClick={() => void flow.toggle(faces, true)}>go</button></>;
+    return <><ActivationDialogHost api={api} /><button type="button" onClick={() => void flow.toggle(faces, true)}>go</button></>;
   }
   const keysOf = async (api: ReturnType<typeof createMockApi>, family: string) => (await api.queryFaces({ text: family, limit: 100 })).items.filter(r => r.family === family).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex }));
 

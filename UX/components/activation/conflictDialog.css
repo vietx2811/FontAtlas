@@ -9,3 +9,12 @@
 .fa-conf-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fa-conf-styles { list-style: none; margin: 0 0 4px 15px; padding: 0 0 0 10px; border-left: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .fa-conf-row .chev { transition: none; } }
+/* Radio có vòng ngoài và chấm đặc theo token (ô native chỉ hiện một chấm nhỏ ở cả sáng lẫn tối). */
+.fa-radio input[type="radio"] { appearance: none; -webkit-appearance: none; flex: none; width: 16px; height: 16px; margin: 1px 0 0; box-sizing: border-box; display: grid; place-items: center; border: 1.5px solid var(--muted); border-radius: 50%; background: transparent; cursor: pointer; }
+.fa-radio input[type="radio"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-ink); transform: scale(0); transition: transform .1s; }
+.fa-radio input[type="radio"]:checked { border-color: var(--accent-ink); }
+.fa-radio input[type="radio"]:checked::after { transform: scale(1); }
+.fa-radio input[type="radio"]:hover:not(:disabled) { border-color: var(--fg); }
+.fa-radio input[type="radio"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-radio input[type="radio"]:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .fa-radio input[type="radio"]::after { transition: none; } }

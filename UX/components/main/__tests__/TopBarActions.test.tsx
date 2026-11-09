@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi, mockRows } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { rowKey, useSelectionStore } from '../../../store/selection';
@@ -157,23 +157,25 @@ describe('TopBarActions', () => {
     const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
     const stateOf = async (api: ReturnType<typeof createMockApi>) => (await api.activationState()).map(s => s.hashHex).sort();
 
-    it('2+ fonts: Activate turns the whole selection on, the button becomes Deactivate and turns it off', async () => {
+    const keys = () => { fireEvent.keyDown(document.body, { key: 'A', metaKey: true, shiftKey: true }); };
+
+    it('2+ fonts: no activation button on the Top Bar (the selection bar owns it); ⌘⇧A turns the whole selection on, then off', async () => {
       const api = createMockApi();
       render(<TopBarActions api={api} />); pick(3);
-      fireEvent.click(screen.getByRole('button', { name: 'Activate' })); await settle();
+      expect(screen.queryByRole('button', { name: /^(Activate|Deactivate)$/ })).toBeNull();
+      expect(screen.queryByTestId('topbar-activate')).toBeNull();
+      keys(); await settle();
       expect(await stateOf(api)).toEqual(rows.slice(0, 3).map(r => r.hashHex).sort());
-      expect(screen.queryByRole('button', { name: 'Activate' })).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Deactivate' })); await settle();
+      keys(); await settle();
       expect(await stateOf(api)).toEqual([]);
-      expect(screen.getByRole('button', { name: 'Activate' })).toBeTruthy();
     });
 
-    it('a partly active selection offers Activate (turns the rest on)', async () => {
+    it('a partly active selection: ⌘⇧A turns the rest on', async () => {
       const api = createMockApi();
       await api.activationActivate([{ hashHex: rows[0].hashHex, faceIndex: rows[0].faceIndex }]);
       await act(async () => { await useUiStore.getState().refreshActive(api); });
       render(<TopBarActions api={api} />); pick(2);
-      fireEvent.click(screen.getByRole('button', { name: 'Activate' })); await settle();
+      keys(); await settle();
       expect(await stateOf(api)).toEqual(rows.slice(0, 2).map(r => r.hashHex).sort());
     });
 
@@ -181,7 +183,7 @@ describe('TopBarActions', () => {
       const api = createMockApi();
       render(<TopBarActions api={api} />); pick(1);
       expect(screen.queryByRole('button', { name: 'Activate' })).toBeNull();
-      fireEvent.keyDown(document.body, { key: 'A', metaKey: true, shiftKey: true }); await settle();
+      keys(); await settle();
       expect(await stateOf(api)).toEqual([rows[0].hashHex]);
       fireEvent.keyDown(document.body, { key: 'A', metaKey: true, shiftKey: true }); await settle();
       expect(await stateOf(api)).toEqual([]);
@@ -200,5 +202,45 @@ describe('TopBarActions', () => {
       render(<TopBarActions />); pick(3);
       expect(screen.queryByTestId('topbar-activate')).toBeNull();
     });
+  });
+});
+
+describe('NarrowTag focus and description', () => {
+  it('describes itself with real text and closes at once when focus leaves (no timer race)', () => {
+    render(<TopBarActions />); 
+    act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[0]), index: 0 }));
+    const tag = screen.getByTestId('narrow-tag');
+    const desc = document.getElementById(tag.getAttribute('aria-describedby')!)!;
+    expect(desc.textContent).toMatch(/6/);
+    expect(desc.textContent!.length).toBeGreaterThan(10);
+    fireEvent.focus(tag);
+    expect(screen.getByTestId('narrow-pop')).toBeTruthy();
+    fireEvent.blur(tag, { relatedTarget: document.body });
+    expect(screen.queryByTestId('narrow-pop')).toBeNull();
+  });
+
+  it('after "Chỉ lấy 4 đầu" focus moves to the Compare button instead of falling to <body>', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<TopBarActions />);
+      act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[0]), index: 0 }));
+      fireEvent.focus(screen.getByTestId('narrow-tag'));
+      fireEvent.click(screen.getByRole('button', { name: 'Chỉ lấy 4 đầu' }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+      expect(screen.queryByTestId('narrow-tag')).toBeNull();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Compare' }));
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('Esc is left to an open dialog; with none open it closes the popover', () => {
+    render(<TopBarActions />);
+    act(() => useSelectionStore.getState().replace(rows.slice(0, 6), { key: rowKey(rows[0]), index: 0 }));
+    fireEvent.focus(screen.getByTestId('narrow-tag'));
+    const dlg = document.createElement('div'); dlg.setAttribute('role', 'dialog'); dlg.setAttribute('aria-modal', 'true'); document.body.appendChild(dlg);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByTestId('narrow-pop')).toBeTruthy();
+    dlg.remove();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByTestId('narrow-pop')).toBeNull();
   });
 });

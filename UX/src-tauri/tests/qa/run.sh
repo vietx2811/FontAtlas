@@ -7,12 +7,14 @@ UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
 test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
 QA="$(mktemp -d)"; F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
-mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/data"
+mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/data"
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
 cp "$F"/{playfair_display,libre_baskerville,libre_baskerville_italic_vf,fira_sans_regular}.ttf "$QA/B/"
 cp "$F"/{bebas_neue,oswald_vf,dancing_script_vf,miltonian,source_code_pro}.ttf "$QA/C/"
 # E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript, khác nội dung) để có xung đột kích hoạt thật.
 for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do cp "$F/$n.ttf" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
+# G (cuối QA): bản chép một font hệ thống (giống hệt từng byte) → trạng thái "Có sẵn trên máy". Không có thì QA bỏ qua bước.
+SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
 sed "s#__QA_DIR__#$QA#g" "$HERE/main_flows.js" > "$QA/qa.js"
 # Lỗi cú pháp trong kịch bản làm QA "treo" 15 phút mà không ghi bước nào: kiểm trước khi mở app.

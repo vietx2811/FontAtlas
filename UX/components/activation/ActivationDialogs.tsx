@@ -51,11 +51,11 @@ export function ConflictDialog({ items, total, onCancel, onConfirm }: ConflictPr
 type HeldProps = { collectionCount: number; onCancel(): void; onConfirm(): void };
 export function HeldDialog({ collectionCount, onCancel, onConfirm }: HeldProps): React.JSX.Element {
   return (
-    <Modal title={`Font này đang được giữ bởi ${collectionCount} dự án`} onClose={onCancel}>
-      <p>Tắt luôn sẽ gỡ nó khỏi cả các dự án đang kích hoạt. Font vẫn nằm trong dự án, chỉ không còn được bật.</p>
+    <Modal title={t('act.held.title', { n: collectionCount })} onClose={onCancel}>
+      <p>{t('act.held.body')}</p>
       <div className="fa-modal-actions">
-        <button type="button" onClick={onCancel}>Huỷ</button>
-        <button type="button" className="primary" onClick={onConfirm}>Tắt luôn</button>
+        <button type="button" onClick={onCancel}>{t('act.held.cancel')}</button>
+        <button type="button" className="primary" onClick={onConfirm}>{t('act.held.go')}</button>
       </div>
     </Modal>
   );

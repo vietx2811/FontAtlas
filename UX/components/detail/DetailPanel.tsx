@@ -31,7 +31,8 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const { detail, styles, error, retry, face } = useFaceDetail(api);
   const flow = useActivationFlow(api);
   const active = useUiStore(s => s.active);
-  const familyOn = styles.length > 0 && styles.every(s => active.has(s.face.hashHex));
+  const available = useUiStore(s => s.available);
+  const familyOn = styles.length > 0 && styles.every(s => active.has(s.face.hashHex) || available.has(s.face.hashHex));
   const family = useFontFamily(api, detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null);
 
   useEffect(() => { if (panel.current) panel.current.scrollTop = 0; }, [selectedId, tab, style]);
@@ -46,7 +47,6 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
 
   return (
     <aside ref={panel} className="fa-panel" aria-label="Chi tiết font">
-      {flow.dialog}
       {error ? (
         <div role="alert" className="fa-panel-error">Không đọc được font này: {error} <button type="button" onClick={retry}>Thử lại</button></div>
       ) : (

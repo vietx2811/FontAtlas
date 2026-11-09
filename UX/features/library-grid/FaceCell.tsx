@@ -5,6 +5,8 @@ import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { t } from '../../i18n';
+import { ownerNote } from '../../components/activation/conflictModel';
+import { useUiStore } from '../../store/ui';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
@@ -27,7 +29,8 @@ type Props = {
   /** Cỡ chữ mẫu (css px). Có → ảnh bucket co về cỡ này; không → cỡ gốc của bucket (harness cũ). */
   fontSize?: number; layout?: 'grid' | 'list'; active?: boolean; favorite?: boolean;
   /** Phạm vi bật (chỉ có nghĩa khi `active`): tooltip chấm xanh nói "phiên này" hay "Luôn bật". */
-  activeScope?: 'session' | 'persistent'; onToggleActive?(row: FaceRow): void;
+  /** `available`: không phải do Font Atlas bật — một bản giống hệt đã dùng được trên máy (chấm rỗng, không có nút nguồn). */
+  activeScope?: 'session' | 'persistent' | 'available'; onToggleActive?(row: FaceRow): void;
   onToggleFavorite?(row: FaceRow): void; boxHeight?: number;
   /** Vị trí của ô trong truy vấn hiện tại (để chọn dải bằng index). */
   index?: number;
@@ -39,6 +42,7 @@ type Props = {
 export type PickMods = { meta: boolean; shift: boolean };
 
 function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+  const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
@@ -143,8 +147,9 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope ?? 'session'} /></Tooltip>}
-      {onToggleActive && (
+      {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope === 'persistent' ? 'persistent' : 'session'} /></Tooltip>}
+      {!active && avail && <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-dot" data-testid="active-dot" data-scope="available" /></Tooltip>}
+      {onToggleActive && !avail && (
         <Tooltip label={t(active ? 'act.card.on' : 'act.card.off')}>
           <button type="button" className="fa-pow" aria-label={t('act.label')} aria-pressed={active} data-testid="cell-active"
             onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
