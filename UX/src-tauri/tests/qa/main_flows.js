@@ -273,6 +273,18 @@
     const missCol = getComputedStyle(document.querySelector('.cmp-spec .miss')).color; const inkCol = getComputedStyle(document.querySelector('.cmp-spec-view')).color;
     await snap('compare-v2-edit');
     await log('compare-edit-specimen', document.querySelectorAll('.cmp-edit').length === 2 && views.every(v => v === 'Quạ đen 龍') && document.querySelector('.cmp-edit').value === 'Quạ đen 龍' && !!missNote && missCol !== inkCol && specNotes().length === 2 && [...document.querySelectorAll('.cmp-spec-view')].every(v => v.querySelector('.miss')?.textContent === '龍' || [...v.querySelectorAll('.miss')].some(m => m.textContent === '龍')), { views, missNote, missCol, inkCol, miss: document.querySelectorAll('.cmp-spec .miss').length });
+    // Chẩn đoán phát hiện glyph thiếu trong WKWebView thật (ghi số liệu để chỉnh phép thử)
+    try {
+      const famName = (getComputedStyle(document.querySelector('.cmp-spec-view')).fontFamily.match(/"([^"]+)"/) ?? [])[1];
+      const cv = document.createElement('canvas'); cv.width = 80; cv.height = 64; const g = cv.getContext('2d');
+      const stacks = { famSerif: `40px "${famName}", serif`, famSans: `40px "${famName}", sans-serif`, famMono: `40px "${famName}", monospace`, famOnly: `40px "${famName}"`, noneSerif: '40px "__none__", serif', noneSans: '40px "__none__", sans-serif', noneOnly: '40px "__none__"' };
+      const diag = {};
+      for (const ch of ['龍', 'ạ', 'Q']) {
+        diag[ch] = {};
+        for (const [k, f] of Object.entries(stacks)) { g.clearRect(0, 0, 80, 64); g.font = f; g.fillStyle = '#000'; g.fillText(ch, 4, 48); const d = g.getImageData(0, 0, 80, 64).data; let sum = 0, h = 0; for (let i = 3; i < d.length; i += 4) { sum += d[i]; h = (h * 31 + d[i]) | 0; } g.font = f.replace('40px', '64px'); diag[ch][k] = `${sum}/${h}/${g.measureText(ch).width.toFixed(1)}`; }
+      }
+      await log('compare-glyph-diag', true, { famName, diag, fontsCheck: document.fonts.check(`40px "${famName}"`, '龍') });
+    } catch (e) { await log('compare-glyph-diag', true, { err: String(e) }); }
     // PNG giữ ký tự thiếu: xám + chữ ghi chú (ảnh không có hover)
     const pngMiss = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     await log('compare-png-missing-note', !!pngMiss && pngMiss.texts.some(x => /^Thiếu: /.test(x)), { notes: pngMiss?.texts.filter(x => /Thiếu/.test(x)) });
