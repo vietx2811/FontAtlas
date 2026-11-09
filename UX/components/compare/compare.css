@@ -20,7 +20,7 @@
 .cmp-tbl .rh { position: sticky; left: 0; z-index: 3; background: var(--card); border-right: 1px solid var(--border); box-shadow: 1px 0 0 var(--border); color: var(--muted); font-size: 12px; }
 .rh b { display: block; color: var(--fg); font-weight: 600; font-size: 12px; }
 .rh small { font-size: 11px; }
-.cmp-tbl .row > .gh { grid-column: 1 / -1; padding: 6px 12px; background: var(--surface-2); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.cmp-tbl .row > .gh { grid-column: 1 / -1; padding: 4px 12px; background: var(--surface-2); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .cmp-tbl .ch { background: var(--card); display: flex; flex-direction: column; gap: 2px; }
 .cmp-tbl .ch.base { background: repeating-linear-gradient(135deg, transparent 0 7px, var(--chrome-hover) 7px 8px), var(--card); }
 .ch .t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; min-width: 0; }
@@ -80,3 +80,13 @@
 .cmp-add:hover { background: var(--chrome-hover); color: var(--fg); }
 .cmp-add[aria-disabled="true"] { opacity: .4; cursor: default; }
 .cmp-tbl .row > .addc { padding: 0; background: var(--surface-2); opacity: .5; }
+
+/* H5: nhóm +/− và ẩn hàng */
+.gh .ghin { position: sticky; left: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.gh small { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.gh[data-collapsed="true"] { opacity: .85; }
+.cmp-tbl .row > .gadd { grid-column: 1 / -1; padding: 2px 12px; }
+.gadd .cmp-ib { position: sticky; left: 12px; border: 1px dashed var(--border); }
+.rh .cmp-hide { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 5px; color: var(--faint); opacity: 0; transition: opacity .12s; }
+.rh:hover .cmp-hide, .rh:focus-within .cmp-hide { opacity: 1; }
+.rh .cmp-hide:hover { background: var(--chrome-hover); color: var(--fg); }

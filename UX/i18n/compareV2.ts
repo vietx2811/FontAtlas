@@ -6,4 +6,6 @@ export const COMPARE_V2 = {
   'compare.picker.label': 'Chọn font để thêm', 'compare.picker.search': 'Tìm font trong thư viện…', 'compare.picker.empty': 'Không có font nào khớp', 'compare.picker.loading': 'Đang tìm…',
   'compare.session': 'Đang so sánh · {n}', 'compare.session.tip': 'Quay lại phiên so sánh ({n} font)',
   'compare.col.pinned': 'Đã pin',
+  'compare.group.collapse': 'Thu gọn nhóm', 'compare.group.expand': 'Mở nhóm',
+  'compare.row.hide': 'Ẩn hàng này', 'compare.row.add': 'Thêm hàng', 'compare.row.add.tip': 'Thêm lại hàng đã ẩn', 'compare.row.menu': 'Hàng đang ẩn',
 } as const;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { COMPARE_METRICS, type CompareDto, type CompareFace } from '../../api/compare';
 import { hasKey, t, type I18nKey } from '../../i18n';
@@ -8,12 +8,15 @@ import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import { TermTip, termKey, termName } from '../ui/terms';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SAMPLE_VI_GLOSS, SpecimenCell, ViCell, WithFamily } from './CompareCells';
+import { Menu } from '../ui/Menu';
 import { FacePicker } from './FacePicker';
+import { GROUPS, useRowConfig, type GroupKey } from './rowConfig';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
 import { ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
 import './compare.css';
 
+type RowDef = { id: string; group: GroupKey; name: string; head: React.ReactNode; cell(f: CompareFace): React.ReactNode };
 const SPEC_SIZE = 30;
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const label = (k: string, gloss = false): string => { if (!gloss) return termName(k); const key = `compare.m.${k}.gloss`; return hasKey(key) ? t(key) : ''; };
@@ -29,8 +32,17 @@ function Record({ id, fam, into }: { id: string; fam: string | null; into: Map<s
 }
 /** Mỗi hàng dữ liệu có thêm một ô đệm ở cuối cho cột "+" hẹp (hàng nhóm trải hết bề ngang nên không cần). */
 const Row = ({ children, group }: { children: React.ReactNode; group?: boolean }) => <div className="row" role="row">{children}{!group && <div role="cell" className="addc" />}</div>;
-const Group = ({ k, cols }: { k: 'specimen' | 'metrics' | 'class' | 'meta'; cols: number }) => (
-  <Row group><div role="columnheader" aria-colspan={cols} className="gh">{t(`compare.sec.${k}` as I18nKey)}{gl(`compare.sec.${k}.gloss`) && <small> · {gl(`compare.sec.${k}.gloss`)}</small>}</div></Row>
+const GroupHead = ({ k, cols, collapsed, onToggle }: { k: GroupKey; cols: number; collapsed: boolean; onToggle(): void }) => (
+  <Row group>
+    <div role="columnheader" aria-colspan={cols} className="gh" data-group={k} data-collapsed={collapsed}>
+      <span className="ghin">
+        <Tooltip label={collapsed ? t('compare.group.expand') : t('compare.group.collapse')}>
+          <button type="button" className="cmp-ib" aria-expanded={!collapsed} aria-label={`${collapsed ? t('compare.group.expand') : t('compare.group.collapse')} · ${t(`compare.sec.${k}` as I18nKey)}`} onClick={onToggle}><Icon name={collapsed ? 'plus' : 'minus'} size={12} /></button>
+        </Tooltip>
+        {t(`compare.sec.${k}` as I18nKey)}{gl(`compare.sec.${k}.gloss`) && <small> · {gl(`compare.sec.${k}.gloss`)}</small>}
+      </span>
+    </div>
+  </Row>
 );
 
 function ColHead({ face, base, pinned, canRemove }: { face: CompareFace; base: boolean; pinned: boolean; canRemove: boolean }): React.JSX.Element {
@@ -64,6 +76,8 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const [exporting, setExporting] = useState(false);
   const [picker, setPicker] = useState<DOMRect | null>(null);
   const session = useUiStore(s => s.compareSession);
+  const rc = useRowConfig();
+  const [rowMenu, setRowMenu] = useState<{ group: GroupKey; rect: DOMRect } | null>(null);
   const families = useRef(new Map<string, string | null>());
   const title = useRef<HTMLHeadingElement>(null);
   const close = () => useUiStore.getState().closeCompare();
@@ -144,6 +158,15 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const cols = shown.length + 2;
   const scale = (f: CompareFace) => (fit && f !== base ? fitScale(base.metrics.x_height_em?.value ?? null, f.metrics.x_height_em?.value ?? null) : 1);
   const cells = (fn: (f: CompareFace) => React.ReactNode) => shown.map(f => <div key={keyOf(f.face)} role="cell">{fn(f)}</div>);
+  const defs: RowDef[] = [
+    { id: 'specimen.line', group: 'specimen', name: t('compare.row.line'), head: <b>{t('compare.row.line')}</b>, cell: f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} /> },
+    ...(overlay ? [{ id: 'specimen.overlay', group: 'specimen' as const, name: t('compare.row.overlay'), head: <><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></>, cell: (f: CompareFace) => <OverlayCell api={api} base={base} face={f} scale={scale(f)} /> }] : []),
+    { id: 'specimen.vi', group: 'specimen', name: t('compare.row.vi'), head: <><TermTip term="vi_marks"><b data-term="vi_marks">{t('compare.row.vi')}</b></TermTip><small>{SAMPLE_VI_GLOSS}</small></>, cell: f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} /> },
+    ...COMPARE_METRICS.map((k): RowDef => ({ id: `metrics.${k}`, group: 'metrics', name: label(k), head: <><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></>, cell: f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} /> })),
+    { id: 'class.class', group: 'class', name: t('compare.row.class'), head: <><TermTip term="classification"><b data-term="classification">{t('compare.row.class')}</b></TermTip><small>{gl('compare.row.class.gloss')}</small></>, cell: f => <ClassCell face={f} /> },
+    { id: 'meta.license', group: 'meta', name: t('compare.row.license'), head: <><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></>, cell: f => <LicenseCell face={f} /> },
+    ...META_ROWS.map((r): RowDef => ({ id: `meta.${r.key}`, group: 'meta', name: t(r.label), head: <><b>{t(r.label)}</b><small>{t(r.gloss)}</small></>, cell: f => <r.Cell face={f} /> })),
+  ];
   return (
     <div className="cmp">
       {header}
@@ -162,21 +185,32 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
             </div>
           </Row>
 
-          <Group k="specimen" cols={cols} />
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.line')}</b></div>{cells(f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} />)}</Row>
-          {overlay && <Row><div className="rh" role="rowheader"><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
-          <Row><div className="rh" role="rowheader"><TermTip term="vi_marks"><b data-term="vi_marks">{t('compare.row.vi')}</b></TermTip><small>{SAMPLE_VI_GLOSS}</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
-
-          <Group k="metrics" cols={cols} />
-          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
-
-          <Group k="class" cols={cols} />
-          <Row><div className="rh" role="rowheader"><TermTip term="classification"><b data-term="classification">{t('compare.row.class')}</b></TermTip><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
-
-          <Group k="meta" cols={cols} />
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <LicenseCell face={f} />)}</Row>
-          {META_ROWS.map(r => <Row key={r.key}><div className="rh" role="rowheader"><b>{t(r.label)}</b><small>{t(r.gloss)}</small></div>{cells(f => <r.Cell face={f} />)}</Row>)}
+          {GROUPS.map(g => {
+            const inGroup = defs.filter(d => d.group === g);
+            const hiddenRows = inGroup.filter(d => rc.config.hidden.includes(d.id));
+            const collapsed = rc.config.collapsed.includes(g);
+            return (
+              <Fragment key={g}>
+                <GroupHead k={g} cols={cols} collapsed={collapsed} onToggle={() => rc.toggleGroup(g)} />
+                {!collapsed && inGroup.filter(d => !rc.config.hidden.includes(d.id)).map(d => (
+                  <Row key={d.id}>
+                    <div className="rh" role="rowheader" data-row={d.id}>{d.head}
+                      <Tooltip label={t('compare.row.hide')}><button type="button" className="cmp-hide" aria-label={`${t('compare.row.hide')} · ${d.name}`} onClick={() => rc.hideRow(d.id)}><Icon name="x" size={12} /></button></Tooltip>
+                    </div>
+                    {cells(d.cell)}
+                  </Row>
+                ))}
+                {!collapsed && hiddenRows.length > 0 && (
+                  <Row group><div role="cell" aria-colspan={cols} className="gadd">
+                    <Tooltip label={t('compare.row.add.tip')}><button type="button" className="cmp-ib" aria-label={`${t('compare.row.add')} · ${t(`compare.sec.${g}` as I18nKey)}`} aria-haspopup="menu" onClick={e => setRowMenu({ group: g, rect: e.currentTarget.getBoundingClientRect() })}><Icon name="plus" size={13} /></button></Tooltip>
+                  </div></Row>
+                )}
+              </Fragment>
+            );
+          })}
         </div>
+        {rowMenu && <Menu label={t('compare.row.menu')} anchor={{ rect: rowMenu.rect }} onClose={() => setRowMenu(null)}
+          entries={defs.filter(d => d.group === rowMenu.group && rc.config.hidden.includes(d.id)).map(d => ({ id: d.id, label: d.name, onSelect: () => rc.showRow(d.id) }))} />}
         {picker && <FacePicker api={api} anchor={picker} exclude={new Set(data.faces.map(f => keyOf(f.face)))} onClose={() => setPicker(null)} onPick={r => { useUiStore.getState().addCompareFace({ hashHex: r.hashHex, faceIndex: r.faceIndex }); setPicker(null); }} />}
         <p className="cmp-foot">{t('compare.footnote')} · {t('compare.footnote2')}</p>
       </div>
