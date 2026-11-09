@@ -8,6 +8,7 @@ use fontatlas_preview::{
 };
 use fontatlas_store::{FaceKey, Store};
 
+use crate::dto::library::FaceKeyDto;
 use crate::dto::preview::{PreviewCacheInfoDto, PreviewInfoDto, PreviewItemDto};
 use crate::error::CmdError;
 use crate::state::AppState;
@@ -116,4 +117,18 @@ pub fn cache_info(state: &AppState) -> Result<PreviewCacheInfoDto, CmdError> {
 
 pub fn clear_cache(state: &AppState) -> Result<(), CmdError> {
     Ok(service(state)?.clear_cache()?)
+}
+
+const MAX_COVERAGE_CHARS: usize = 512;
+
+/// Grapheme (đã tách ở giao diện) mà font của face không có glyph, theo cmap thật. Rỗng nghĩa là font có đủ.
+pub fn missing_chars(state: &AppState, face: &FaceKeyDto, chars: &[String]) -> Result<Vec<String>, CmdError> {
+    if chars.len() > MAX_COVERAGE_CHARS {
+        return Err(CmdError::invalid_arg(format!("tối đa {MAX_COVERAGE_CHARS} ký tự mỗi lần")));
+    }
+    let path = service(state)?.locator().locate(&face.hash_hex, face.face_index).ok_or_else(|| CmdError::new("not_found", "không tìm thấy file font"))?;
+    let file = fontatlas_core::FontFile::open(&path).map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
+    let faces = file.faces().map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
+    let f = faces.iter().find(|f| f.index() == face.face_index).ok_or_else(|| CmdError::new("not_found", "không có face này trong file"))?;
+    Ok(fontatlas_preview::missing_graphemes(f.font(), chars))
 }

@@ -149,6 +149,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     return () => document.removeEventListener('keydown', on);
   }, []);
 
+  const missingForPng = (text: string) => detectMissingAll(api, (data?.faces ?? []).map(f => ({ face: f.face, family: families.current.get(keyOf(f.face)) ?? null })), text);
   // PNG đúng như màn hình: thứ tự pin, hàng ẩn, nhóm thu gọn.
   const screenLayout = () => {
     const cs = useUiStore.getState().compareSession;
@@ -164,7 +165,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     if (!data || !(window as unknown as { __FA_QA_PICKS__?: unknown }).__FA_QA_PICKS__) return;
     (window as unknown as { __faQaComparePng?: () => Promise<unknown> }).__faQaComparePng = async () => {
       const loaded = await ensureFonts(families.current.values(), sample);
-      const missing = await detectMissingAll(loaded, `${sample}${SAMPLE_VI}`);
+      const missing = await missingForPng(`${sample || 'Hxg'}${SAMPLE_VI}`);
       const r = renderCompare({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, loaded, missing, ...screenLayout() });
       if (!r) return null;
       const px = r.canvas.getContext('2d')!.getImageData(2, r.canvas.height - 2, 1, 1).data;
@@ -177,7 +178,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     if (!data || exporting) return;
     setExporting(true);
     try {
-      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, ...screenLayout() });
+      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay: overlay ? overlayIds : null, missing: await missingForPng(`${sample || 'Hxg'}${SAMPLE_VI}`), ...screenLayout() });
       const saved = await api.savePng(blob, name);
       if (saved) useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngSaved', { name: saved.split(/[\\/]/).pop() ?? saved }) });
     } catch (e) {

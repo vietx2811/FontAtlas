@@ -5,7 +5,7 @@ import { useUiStore } from '../../../store/ui';
 import { notes } from '../../ui/__tests__/noteHelpers';
 import { ComparePage } from '../ComparePage';
 import * as cov from '../glyphCoverage';
-import { missingFrom, missingList } from '../glyphCoverage';
+import { missingList } from '../glyphCoverage';
 
 vi.mock('../../detail/useFontFamily', () => ({ useFontFamily: () => 'F' }));
 const initial = useUiStore.getState();
@@ -36,7 +36,7 @@ describe('H6 · specimen edited in place', () => {
     expect(inputs()[0].style.fontFamily).toBe(view.style.fontFamily);
   });
   it('characters the font lacks are grey and the cell gets a note listing them', async () => {
-    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set([...text].filter(c => 'ấợ'.includes(c))));
+    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_a, _f, text) => new Set([...text].filter(c => 'ấợ'.includes(c))));
     useUiStore.getState().setSample('Phấn ợ x');
     await mount();
     await waitFor(() => expect(document.querySelectorAll('.cmp-spec .miss').length).toBeGreaterThan(0));
@@ -53,13 +53,22 @@ describe('H6 · specimen edited in place', () => {
   });
 });
 
-describe('glyph coverage', () => {
-  it('a char is missing when monospace and serif fallbacks measure differently, present when they agree', () => {
-    const ctx = { font: '', measureText(c: string) { const fb = /monospace/.test(this.font) ? 1 : 2; return { width: c === 'ấ' ? 10 * fb : 10 } as TextMetrics; } };
-    expect([...missingFrom(ctx, 'F', ['a', 'ấ', ' '])!]).toEqual(['ấ']);
+describe('glyph coverage (real cmap via the backend)', () => {
+  it('asks the backend once per new grapheme and caches per (face, grapheme); whitespace is never sent', async () => {
+    const api = createMockApi(); const spy = vi.spyOn(api, 'missingChars');
+    const r = await cov.detectMissing(api, faces[0], 'a 龍 a');
+    expect([...r!]).toEqual(['龍']);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][1].sort()).toEqual(['a', '龍']);
+    await cov.detectMissing(api, faces[0], 'a龍b');
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy.mock.calls[1][1]).toEqual(['b']);
+    await cov.detectMissing(api, faces[0], 'a龍');
+    expect(spy).toHaveBeenCalledTimes(2);
   });
-  it('a throwing canvas yields null, not an exception', () => {
-    expect(missingFrom({ font: '', measureText() { throw new Error('x'); } }, 'F', ['a'])).toBeNull();
+  it('a backend error means "unknown" (null), never "everything is missing"', async () => {
+    const api = createMockApi(); vi.spyOn(api, 'missingChars').mockRejectedValue(new Error('x'));
+    expect(await cov.detectMissing(api, faces[1], 'abc')).toBeNull();
   });
   it('missingList caps the list', () => {
     expect(missingList(new Set(['a', 'b', 'c']), 2)).toBe('a b …');
@@ -74,24 +83,14 @@ describe('review 4/5/8 · coverage on graphemes, stable while typing, empty samp
   });
   it('a decomposed grapheme the font lacks is grey too (set is keyed by the typed grapheme)', async () => {
     const nfd = 'ấ'.normalize('NFD');
-    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set(cov.graphemes(text).filter(g => g === nfd)));
+    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_a, _f, text) => new Set(cov.graphemes(text).filter(g => g === nfd)));
     useUiStore.getState().setSample(`a${nfd}b`);
     await mount();
     await waitFor(() => expect(document.querySelectorAll('.cmp-spec .miss').length).toBeGreaterThan(0));
     expect(document.querySelector('.cmp-spec-view .miss')!.textContent).toBe(nfd);
   });
-  it('pixel probe: the font alone draws exactly a system fallback glyph (CJK in a web font that lacks it) → missing; its own distinct shape → present', () => {
-    let n = 0;
-    const mk = (same: boolean) => ({
-      font: '', fillStyle: '', measureText: () => ({ width: 40 }) as TextMetrics, clearRect() {}, fillText() {},
-      getImageData() { return { data: new Uint8ClampedArray(80 * 64 * 4).fill(same ? 9 : 1 + (n++ % 200)) } as ImageData; },
-    });
-    expect([...missingFrom(mk(true) as never, 'F', ['龍', ' '])!]).toEqual(['龍']);
-    n = 0;
-    expect([...missingFrom(mk(false) as never, 'F', ['a'])!]).toEqual([]);
-  });
   it('typing keeps the previous grey/note until the next measurement (no flash), then updates', async () => {
-    const spy = vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set([...text].filter(c => c === 'ố')));
+    const spy = vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_a, _f, text) => new Set([...text].filter(c => c === 'ố')));
     useUiStore.getState().setSample('ố');
     await mount();
     await waitFor(() => expect(notes('Thiếu: ố').length).toBeGreaterThan(0));

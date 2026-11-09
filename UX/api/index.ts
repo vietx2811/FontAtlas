@@ -49,6 +49,8 @@ export interface Api extends LibraryApi {
   revealInFinder(face: FaceKeyDto): Promise<void>;
   /** Mở Finder đúng một đường dẫn đã lưu trong thư viện (nhóm cùng tệp có nhiều đường dẫn cho một face). */
   revealLocation(path: string): Promise<void>;
+  /** Grapheme (đã tách ở giao diện) mà font của face không có glyph, theo cmap thật. */
+  missingChars(face: FaceKeyDto, chars: string[]): Promise<string[]>;
   getUiState(): Promise<UiStateDto>;
   setUiState(state: UiStateDto): Promise<void>;
   // Phân tích

@@ -6,6 +6,7 @@
 //! - Font variable được vẽ ở instance mặc định.
 //! - Font bitmap/màu (sbix, CBDT) không có outline → `no_outlines`.
 mod cache;
+pub mod coverage;
 mod error;
 mod http;
 mod service;
@@ -16,6 +17,7 @@ pub use cache::{Budgets, CacheKey, Pool, PreviewCache, cache_key, pool_for};
 pub use error::PreviewError;
 pub use http::{CorsPolicy, FONT_SCHEME, PREVIEW_SCHEME, PreviewHttp, handle_font_uri, handle_preview_uri, parse_font_uri, parse_preview_uri};
 pub use service::{FaceLocator, PreviewRequest, PreviewService};
+pub use coverage::missing_graphemes;
 pub use render::{Rendered, cmap_sample, render_face};
 pub use text::{TextSource, canvas_size, check_px, normalize_text, pick_text};
 

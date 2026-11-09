@@ -31,11 +31,11 @@ export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metri
 
 /** Chữ mẫu sửa tại chỗ: một ô nhập trong suốt nằm trên lớp hiển thị (kiểu chữ giữ nguyên); sửa ở một cột là đổi ở mọi cột (`useUiStore.sample`). Ký tự font không có hiện xám (`--faint`). */
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
-  return <WithFamily api={api} face={face}>{fam => <SpecimenArt face={face} fam={fam} text={text} size={size} fit={fit} />}</WithFamily>;
+  return <WithFamily api={api} face={face}>{fam => <SpecimenArt api={api} face={face} fam={fam} text={text} size={size} fit={fit} />}</WithFamily>;
 }
-function SpecimenArt({ face, fam, text, size, fit }: { face: CompareFace; fam: string | null; text: string; size: number; fit: boolean }): React.JSX.Element {
+function SpecimenArt({ api, face, fam, text, size, fit }: { api: Api; face: CompareFace; fam: string | null; text: string; size: number; fit: boolean }): React.JSX.Element {
   const sample = useUiStore(s => s.sample);
-  const missing = useMissingChars(fam, text);
+  const missing = useMissingChars(api, face.face, text);
   const layer = useRef<HTMLDivElement>(null);
   const sync = (el: HTMLInputElement) => { if (layer.current) layer.current.style.transform = `translateX(${-el.scrollLeft}px)`; };
   const style = { fontFamily: css(fam), fontSize: size } as const;
@@ -129,12 +129,12 @@ export function stackedIndexes(text: string): Set<number> {
 }
 
 export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
-  return <WithFamily api={api} face={face}>{fam => <ViArt face={face} fam={fam} size={size} />}</WithFamily>;
+  return <WithFamily api={api} face={face}>{fam => <ViArt api={api} face={face} fam={fam} size={size} />}</WithFamily>;
 }
-function ViArt({ face, fam, size }: { face: CompareFace; fam: string | null; size: number }): React.JSX.Element {
+function ViArt({ api, face, fam, size }: { api: Api; face: CompareFace; fam: string | null; size: number }): React.JSX.Element {
   const { stackedMarksOverflow: over, supports } = face.vi;
   const notes = viNotes(face);
-  const missing = useMissingChars(fam, SAMPLE_VI);
+  const missing = useMissingChars(api, face.face, SAMPLE_VI);
   const stacked = stackedIndexes(SAMPLE_VI);
   const parts = [...notes.map(n => (n.title ? `${n.text} — ${n.title}` : n.text)), ...(missing.size ? [t('compare.missing', { chars: missingList(missing) })] : [])];
   return (

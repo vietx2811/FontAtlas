@@ -44,7 +44,7 @@ describe('H7 · Vietnamese stacked diacritics', () => {
     expect([...cell.querySelectorAll('[data-stacked="true"]')].map(e => e.textContent).join('')).toBe('ỮẶỆỖỞ');
   });
   it('a missing glyph in the Vietnamese sample is grey and reported through the note mark', async () => {
-    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_f, text) => new Set([...text].filter(c => c === 'Ỗ')));
+    vi.spyOn(cov.coverageProbe, 'detect').mockImplementation(async (_a, _f, text) => new Set([...text].filter(c => c === 'Ỗ')));
     await mount();
     await waitFor(() => expect(document.querySelectorAll('.cmp-vi .miss').length).toBeGreaterThan(0));
     expect(document.querySelector('.cmp-vi .miss')!.textContent).toBe('Ỗ');

@@ -129,6 +129,7 @@ macro_rules! command_list {
             sync preview_info() -> Result<PreviewInfoDto, CmdError>;
             async preview_bump_generation() -> Result<u64, CmdError>;
             async preview_prewarm(items: Vec<PreviewItemDto>) -> Result<(), CmdError>;
+            async missing_chars(face: FaceKeyDto, chars: Vec<String>) -> Result<Vec<String>, CmdError>;
             async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
             async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
@@ -411,6 +412,7 @@ pub async fn activation_subscribe(
 
 cmd!(preview_bump_generation() -> u64 => |s| preview::bump_generation(s));
 cmd!(preview_prewarm(items: Vec<PreviewItemDto>) -> () => |s| preview::prewarm(s, &items));
+cmd!(missing_chars(face: FaceKeyDto, chars: Vec<String>) -> Vec<String> => |s| preview::missing_chars(s, &face, &chars));
 cmd!(preview_cache_info() -> PreviewCacheInfoDto => |s| preview::cache_info(s));
 cmd!(clear_preview_cache() -> () => |s| preview::clear_cache(s));
 

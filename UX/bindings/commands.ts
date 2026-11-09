@@ -138,6 +138,7 @@ export interface TauriCommandMap {
   preview_info: { args: Record<string, never>; result: PreviewInfoDto };
   preview_bump_generation: { args: Record<string, never>; result: number };
   preview_prewarm: { args: { items: PreviewItemDto[] }; result: null };
+  missing_chars: { args: { face: FaceKeyDto; chars: string[] }; result: string[] };
   preview_cache_info: { args: Record<string, never>; result: PreviewCacheInfoDto };
   clear_preview_cache: { args: Record<string, never>; result: null };
   activation_caps: { args: Record<string, never>; result: ActivationCapsDto };

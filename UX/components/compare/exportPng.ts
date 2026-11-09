@@ -1,3 +1,4 @@
+import type { Api, FaceKeyDto } from '../../api';
 import type { CompareDto } from '../../api/compare';
 import { COMPARE_METRICS } from '../../api/compare';
 import { t, type I18nKey } from '../../i18n';
@@ -45,10 +46,10 @@ export async function ensureFonts(families: Iterable<string | null>, sample: str
   return loaded;
 }
 
-/** Họ font đã nạp → ký tự của `text` mà font đó không có (dùng cho xám + ghi chú trong ảnh). */
-export async function detectMissingAll(families: Iterable<string>, text: string): Promise<Map<string, Set<string>>> {
+/** Họ font → grapheme của `text` mà font đó không có (cmap thật qua backend); dùng cho chữ xám + ghi chú trong ảnh. */
+export async function detectMissingAll(api: Api, faces: ReadonlyArray<{ face: FaceKeyDto; family: string | null }>, text: string): Promise<Map<string, Set<string>>> {
   const out = new Map<string, Set<string>>();
-  await Promise.all([...families].map(async f => { const m = await coverageProbe.detect(f, text); if (m && m.size) out.set(f, m); }));
+  await Promise.all(faces.map(async ({ face, family }) => { if (!family) return; const m = await coverageProbe.detect(api, face, text); if (m && m.size) out.set(family, m); }));
   return out;
 }
 
@@ -300,8 +301,7 @@ export function renderCompareCanvas(input: ExportInput): HTMLCanvasElement | nul
 /** Vẽ ra Blob PNG (đợi font trước). Ném lỗi nếu không có canvas 2D. */
 export async function renderCompareBlob(input: ExportInput): Promise<{ blob: Blob; name: string }> {
   const loaded = await ensureFonts(input.families.values(), input.sample);
-  const missing = await detectMissingAll(loaded, `${input.sample}${SAMPLE_VI}`);
-  const canvas = renderCompareCanvas({ ...input, loaded, missing });
+  const canvas = renderCompareCanvas({ ...input, loaded });
   if (!canvas) throw new Error('canvas 2D không khả dụng');
   const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
   if (!blob) throw new Error('không tạo được ảnh');
