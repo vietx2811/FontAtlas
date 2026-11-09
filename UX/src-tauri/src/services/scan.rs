@@ -286,6 +286,7 @@ fn after_idle(state: &Arc<AppState>) {
     boot::mark_analyzer_seen_if_current(state);
     crate::services::activation::reconcile_now(state, false);
     let _ = crate::services::embed::ensure_started(state);
+    state.langs.bump();
     crate::services::langs::ensure_started(state);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
 }

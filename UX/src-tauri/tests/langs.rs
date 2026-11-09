@@ -149,9 +149,106 @@ fn stale_db_version_is_recomputed() {
         Ok(())
     })
     .unwrap();
+    st.langs.bump(); // sửa DB trực tiếp: báo cache danh sách ngôn ngữ
     let l = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
     assert!(!l.complete);
     assert_eq!(l.ready.done, 0);
     assert_eq!(langs::run_backfill(&st), 5);
     assert!(langs::language_list(&st, &FaceQueryDto::default()).unwrap().complete);
+}
+
+fn make_stale(st: &Arc<AppState>) {
+    st.with_store(|s| {
+        s.conn().execute("UPDATE face_lang_state SET db_version = 'hg-old-0'", []).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    st.langs.bump();
+}
+
+fn wait_idle(st: &Arc<AppState>) {
+    let t = Instant::now();
+    while st.langs.is_running() {
+        assert!(t.elapsed() < Duration::from_secs(60), "luồng nền không nghỉ");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn skipped_faces_do_not_make_the_worker_spin_and_shutdown_joins() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle(&st);
+    make_stale(&st);
+    // một file mất (hoặc iCloud chưa tải): face đó phải ở lại pending, không đánh dấu
+    std::fs::remove_file(td.path().join("Fonts/roboto.ttf")).unwrap();
+    langs::ensure_started(&st);
+    std::thread::sleep(Duration::from_millis(100));
+    wait_idle(&st);
+    let after_first = st.langs.passes();
+    assert!(after_first >= 1);
+    let l = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!((l.ready.done, l.ready.total), (4, 5), "roboto vẫn pending");
+    // không quay vòng: không có lượt mới sau nửa giây (lần thử lại chỉ sau 60 s)
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(st.langs.passes(), after_first, "luồng không được chạy lại liên tục");
+    assert!(!st.langs.is_running());
+    // gọi lại ensure_started nhiều lần không sinh thêm luồng, chỉ thêm một lượt mỗi lần đánh thức
+    for _ in 0..3 {
+        langs::ensure_started(&st);
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    wait_idle(&st);
+    assert!(st.langs.passes() <= after_first + 3);
+    // shutdown join được nhanh dù đang chờ thử lại
+    let t = Instant::now();
+    st.langs.shutdown();
+    assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+    langs::ensure_started(&st); // sau shutdown không mở lại
+    assert!(!st.langs.is_running());
+}
+
+#[test]
+fn write_failure_mid_pass_does_not_hang_or_mark_the_face() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle(&st);
+    make_stale(&st);
+    // ghi dấu "đã tính" cho đúng một font bị từ chối (như BUSY khi quét đang giữ khoá ghi)
+    st.with_store(|s| {
+        s.conn()
+            .execute_batch(
+                "CREATE TRIGGER deny_one BEFORE INSERT ON face_lang_state
+                 WHEN NEW.hash = (SELECT hash FROM files WHERE file_id = (SELECT min(file_id) FROM files))
+                 BEGIN SELECT RAISE(ABORT, 'busy'); END;",
+            )
+            .unwrap();
+        Ok(())
+    })
+    .unwrap();
+    // `put_face_langs` dùng UPSERT trên face_lang_state có sẵn hàng → trigger INSERT vẫn kích hoạt với ON CONFLICT? xoá hàng cũ để chắc
+    st.with_store(|s| {
+        s.conn().execute("DELETE FROM face_lang_state", []).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    langs::ensure_started(&st);
+    std::thread::sleep(Duration::from_millis(100));
+    wait_idle(&st);
+    let l = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
+    assert_eq!((l.ready.done, l.ready.total), (4, 5));
+    let n = st.langs.passes();
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(st.langs.passes(), n, "không quay vòng khi ghi lỗi");
+    // hết lỗi → lần đánh thức sau tính nốt
+    st.with_store(|s| {
+        s.conn().execute_batch("DROP TRIGGER deny_one").unwrap();
+        Ok(())
+    })
+    .unwrap();
+    langs::ensure_started(&st);
+    std::thread::sleep(Duration::from_millis(100));
+    wait_idle(&st);
+    let l = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
+    assert!(l.complete, "{:?}", l.ready);
 }

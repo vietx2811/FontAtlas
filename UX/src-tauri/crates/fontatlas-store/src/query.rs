@@ -71,6 +71,21 @@ pub struct FaceQuery {
     pub badge_lang: Option<String>,
 }
 
+impl FaceQuery {
+    /// Không có điều kiện lọc nào (bỏ qua sort/phân trang/`badge_lang`/`langs`): tập = cả thư viện.
+    pub fn is_unfiltered(&self) -> bool {
+        self.text.as_deref().and_then(text_match).is_none()
+            && self.vi.is_none()
+            && self.license.is_empty()
+            && self.variable.is_none()
+            && self.italic.is_none()
+            && self.source_ids.is_empty()
+            && !self.favorites_only
+            && self.collection_id.is_none()
+            && self.tag_ids.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FaceRow {

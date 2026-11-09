@@ -92,19 +92,25 @@ impl Store {
         Ok(())
     }
 
-    /// Đã tính / tổng số face còn file trên đĩa.
+    /// Đã tính / tổng số face còn file trên đĩa. Hai phép đếm nhẹ (không JOIN): `done` lấy từ bảng dấu
+    /// (hàng mồ côi được `prune_langs` dọn) và kẹp ≤ `total`.
     pub fn lang_progress(&self, db_version: &str) -> Result<LangProgress, StoreError> {
         let total: i64 = self.conn.query_row(&format!("SELECT count(*) FROM faces f WHERE {LIVE}"), [], |r| r.get(0))?;
-        let done: i64 = self.conn.query_row(
-            &format!(
-                "SELECT count(*) FROM faces f JOIN files fi ON fi.file_id = f.file_id
-                 JOIN face_lang_state s ON s.hash = fi.hash AND s.face_index = f.face_index AND s.db_version = ?1
-                 WHERE {LIVE}"
-            ),
-            [db_version],
-            |r| r.get(0),
-        )?;
-        Ok(LangProgress { done: done.max(0) as u64, total: total.max(0) as u64 })
+        let done: i64 =
+            self.conn.query_row("SELECT count(*) FROM face_lang_state WHERE db_version = ?1", [db_version], |r| r.get(0))?;
+        Ok(LangProgress { done: done.clamp(0, total.max(0)) as u64, total: total.max(0) as u64 })
+    }
+
+    /// Facet khi KHÔNG có bộ lọc nào: một lượt quét chỉ mục `face_langs(lang, level)`, không JOIN `faces`.
+    /// Đếm cả face đã mất file (khác `lang_counts`, vốn chỉ đếm face còn trên đĩa).
+    pub fn lang_counts_unfiltered(&self) -> Result<Vec<LangCount>, StoreError> {
+        let mut st = self
+            .conn
+            .prepare("SELECT lang, SUM(level = 'full'), COUNT(*) FROM face_langs GROUP BY lang ORDER BY lang")?;
+        let rows = st.query_map([], |r| {
+            Ok(LangCount { lang: r.get(0)?, full: r.get::<_, i64>(1)? as u32, near: r.get::<_, i64>(2)? as u32 })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Facet: đếm face theo ngôn ngữ trên tập `q` (bỏ điều kiện `langs`), chỉ tính face đã có độ phủ.

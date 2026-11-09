@@ -163,3 +163,50 @@ fn counts_respect_scope() {
     // scope không rò sang truy vấn sau
     assert_eq!(s.query_faces(&FaceQuery::default()).unwrap().total, 5);
 }
+
+/// 20k face tổng hợp (mỗi face ~15 ngôn ngữ ≥ near): đo các truy vấn nền của ô chọn ngôn ngữ.
+#[test]
+fn lang_queries_are_fast_on_20k_faces() {
+    let d = tmp();
+    let s = open_store(d.path());
+    let c = s.conn();
+    c.execute_batch(
+        "BEGIN;
+         WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < 20000)
+           INSERT INTO files(file_id, hash, size, container, num_faces, first_seen_at)
+           SELECT i, randomblob(32), 1, 'sfnt', 1, 1 FROM n;
+         INSERT INTO file_locations(file_id, source_id, path, size, mtime_ns, last_seen_at, missing, scan_gen)
+           SELECT file_id, 1, '/x/' || file_id, 1, 1, 1, 0, 1 FROM files;
+         INSERT INTO faces(file_id, face_index, family_name, outline_format, license_class, vi_status, family_key, search_text,
+                           weight_class, is_variable)
+           SELECT file_id, 0, 'F' || file_id, 'glyf', CASE file_id % 3 WHEN 0 THEN 'ofl' ELSE 'other' END, 'full',
+                  'f' || (file_id % 5000), 'f' || file_id, 400, 0 FROM files;
+         WITH RECURSIVE k(j) AS (SELECT 1 UNION ALL SELECT j+1 FROM k WHERE j < 15)
+           INSERT INTO face_langs(hash, face_index, lang, have, total, level)
+           SELECT f.hash, 0, 'l' || k.j, 60, 60, CASE (f.file_id + k.j) % 2 WHEN 0 THEN 'full' ELSE 'near' END
+           FROM files f, k;
+         INSERT INTO face_lang_state(hash, face_index, db_version) SELECT hash, 0, 'v' FROM files;
+         COMMIT;",
+    )
+    .unwrap();
+    let t = std::time::Instant::now();
+    let all = s.lang_counts_unfiltered().unwrap();
+    let t_unf = t.elapsed();
+    assert_eq!(all.len(), 15);
+    assert_eq!(all[0].near, 20000);
+    let q = FaceQuery { license: vec!["ofl".into()], ..Default::default() };
+    let t = std::time::Instant::now();
+    let f = s.lang_counts(&q, None).unwrap();
+    let t_f = t.elapsed();
+    assert_eq!(f[0].near, 6666);
+    let t = std::time::Instant::now();
+    let p = s.lang_progress("v").unwrap();
+    let t_p = t.elapsed();
+    assert_eq!((p.done, p.total), (20000, 20000));
+    let t = std::time::Instant::now();
+    let pend = s.lang_pending("other", usize::MAX >> 1).unwrap();
+    let t_pend = t.elapsed();
+    assert_eq!(pend.len(), 20000);
+    eprintln!("20k faces: unfiltered {t_unf:?}, filtered {t_f:?}, progress {t_p:?}, pending(all) {t_pend:?}");
+    assert!(t_unf.as_millis() < 500 && t_p.as_millis() < 500 && t_pend.as_millis() < 3000);
+}
