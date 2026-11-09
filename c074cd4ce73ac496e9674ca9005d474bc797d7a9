@@ -1,3 +1,3 @@
-fail tree=12f0ece6a903ab0ffbbec9d77f27e188c5f8391f qa=1
-2026-11-09T16:44:34Z vxmacmini 625s
-npm-ci:ok:0 vite-build:ok:6 tsc:ok:3 vitest:ok:7 cargo-test:ok:335 bindings-drift:ok:1 clippy:ok:49 tauri-debug-build:ok:47 native-qa:fail:177
+pass tree=12f0ece6a903ab0ffbbec9d77f27e188c5f8391f qa=1
+2026-11-09T17:04:42Z vxmacmini 559s
+npm-ci:ok:0 vite-build:ok:7 tsc:ok:2 vitest:ok:8 cargo-test:ok:350 bindings-drift:ok:0 clippy:ok:50 tauri-debug-build:ok:53 native-qa:ok:89
