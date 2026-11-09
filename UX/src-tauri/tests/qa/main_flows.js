@@ -594,7 +594,8 @@
       const title = dlg?.querySelector('h2')?.textContent ?? '';
       await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
       const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
-      await log('conflict-dialog-expand', !!exp && dlg.querySelector('.fa-conf-styles') !== null, {});
+      const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
+      await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
       const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
       await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
       await sleep(800);
