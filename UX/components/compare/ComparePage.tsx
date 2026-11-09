@@ -6,6 +6,7 @@ import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
+import { TermTip, termKey } from '../ui/terms';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
@@ -132,14 +133,14 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
 
           <Group k="specimen" cols={cols} />
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.line')}</b></div>{cells(f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} />)}</Row>
-          {overlay && <Row><div className="rh" role="rowheader"><b>{t('compare.row.overlay')}</b><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.vi')}</b><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
+          {overlay && <Row><div className="rh" role="rowheader"><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
+          <Row><div className="rh" role="rowheader"><TermTip term="vi_marks"><b data-term="vi_marks">{t('compare.row.vi')}</b></TermTip><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
 
           <Group k="metrics" cols={cols} />
-          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><b>{label(k)}</b><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
+          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
 
           <Group k="class" cols={cols} />
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.class')}</b><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
+          <Row><div className="rh" role="rowheader"><TermTip term="classification"><b data-term="classification">{t('compare.row.class')}</b></TermTip><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
 
           <Group k="meta" cols={cols} />
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <LicenseCell face={f} />)}</Row>

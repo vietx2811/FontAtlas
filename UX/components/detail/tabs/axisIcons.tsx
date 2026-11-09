@@ -1,5 +1,5 @@
 // Mỗi trục một icon riêng (24×24, nét 1.6). Không dùng ●◐◆○: bộ ký hiệu đó dành cho quan hệ ghép cặp.
-const P: Record<string, React.ReactNode> = {
+export const AXIS_PATHS: Record<string, React.ReactNode> = {
   x_height_em: <><path d="M4 20h16" /><path d="M4 12h16" strokeDasharray="2 2" /><path d="M12 12v8M9 15l3-3 3 3" /></>,
   cap_height_em: <><path d="M4 20h16M4 5h16" strokeDasharray="2 2" /><path d="M9 20V6l3 6 3-6v14" /></>,
   ascender_em: <><path d="M4 20h16M4 4h16" strokeDasharray="2 2" /><path d="M10 20V4M10 12c4 0 6 2 6 4s-2 4-6 4" /></>,
@@ -27,7 +27,7 @@ const P: Record<string, React.ReactNode> = {
 export function AxisIcon({ name }: { name: string }): React.JSX.Element {
   return (
     <svg data-icon={name} viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      {P[name] ?? <path d="M5 12h14" />}
+      {AXIS_PATHS[name] ?? <path d="M5 12h14" />}
     </svg>
   );
 }

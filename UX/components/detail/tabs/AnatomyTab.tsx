@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { AxisReadingDto, FaceDetailDto } from '../../../api';
 import { AxisIcon } from './axisIcons';
+import { TermTip, termKey } from '../../ui/terms';
 
 import { AXIS_META, numberText, unitText } from './measurements';
 import { Tooltip } from '../../ui/Tooltip';
@@ -43,7 +44,7 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
     <Tooltip label={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
     <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
-      <span className="fa-axis-name">{meta.label}</span>
+      <TermTip term={a.key}><span className="fa-axis-name" data-term={termKey(a.key)}>{meta.label}</span></TermTip>
       <span className="fa-axis-value">{failed ? 'Không đo được' : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? 'Chưa đo'}</span>
       {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
         {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do' : <>

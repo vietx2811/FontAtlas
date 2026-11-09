@@ -9,6 +9,7 @@ import { useFontFamily } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
 import { blockLabel, clashLabel, gateLabel, warningLabel } from './pairCodes';
 import { Tooltip } from '../ui/Tooltip';
+import { TermOrTip, termKey } from '../ui/terms';
 import { ZeroState } from '../zero/ZeroState';
 import './pair.css';
 
@@ -41,7 +42,7 @@ function Combo({ api, c, sample }: { api: Api; c: PairComboDto; sample: string }
       <ul className="pr-labels">
         {a.labels.map(l => {
           const axis = AXIS_META[l.axis]?.label ?? l.axis;
-          return <Tooltip key={l.axis} label={l.relation}><li data-testid="pair-label" aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li></Tooltip>;
+          return <TermOrTip key={l.axis} term={termKey(l.axis)} extra={l.relation}><li data-testid="pair-label" aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li></TermOrTip>;
         })}
       </ul>
       <p className="pr-summary" data-testid="pair-summary">{a.summary}</p>

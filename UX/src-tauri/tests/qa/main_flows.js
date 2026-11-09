@@ -14,6 +14,17 @@
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
   const snap = async name => { settleAnims(); await sleep(80); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); };
   const btnHas = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.includes(text) && !b.disabled);
+  // Thuật ngữ typo: rê chuột vào từng nhãn [data-term], tooltip phải có gloss không rỗng (và hình minh hoạ nếu thuật ngữ có hình).
+  const termCheck = async sel => {
+    const els = [...document.querySelectorAll(sel)]; const bad = []; let art = 0;
+    for (const el of els) {
+      el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
+      const g = await wait(() => { const x = document.querySelector('[role=tooltip] .fa-term-gloss'); return x && x.textContent.trim() ? x : null; }, 2500);
+      if (!g) bad.push(el.dataset.term); else if (document.querySelector('[role=tooltip] svg.fa-term-art')) art++;
+      el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' })); await sleep(50);
+    }
+    return { n: els.length, bad, art };
+  };
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
     const picks = []; window.__FA_QA_PICKS__ = picks;
@@ -70,6 +81,8 @@
     const numeric = texts.filter(t => /\d+,\d+\s*(em|°|×)|\d+\s*°/.test(t));
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
+    const termA = await termCheck('[data-testid=axis-row] [data-term]');
+    await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
     // TƯƠNG TỰ
     document.querySelector('[role=tab][aria-label="Tương tự"]')?.click();
     const acts = await wait(() => { const a = [...document.querySelectorAll('.fa-sim-actions')]; return a.length ? a : null; }, 60000);
@@ -200,6 +213,8 @@
     const colResized = sizeAfter[1] !== sizeBefore[1] || xhVals[0] === xhVals[1]; // cột 2 đổi cỡ trừ khi x-height hai font bằng nhau
     await snap('compare-match-xheight');
     await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0] && colResized, { colResized, xhVals, cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
+    const termC = await termCheck('.cmp-tbl .rh [data-term]');
+    await log('compare-term-tooltips', termC.n >= 10 && termC.bad.length === 0 && termC.art >= 8, termC);
     // PNG: vẽ như nút Xuất nhưng không qua hộp thoại (móc QA); phải có overlay, đơn vị, nhãn không bị cắt.
     const rgbSum = el => { const m = (el ? getComputedStyle(el).backgroundColor : '').match(/\d+/g); return m ? m.slice(0, 3).reduce((a, b) => a + +b, 0) : -1; };
     const lightSpec = rgbSum(document.querySelector('.cmp-page'));

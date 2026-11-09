@@ -3,6 +3,7 @@ import type { Api, ClassificationDto, FaceKeyDto } from '../../api';
 import { t, type I18nKey } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
+import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -69,10 +70,10 @@ export function ClassChip({ api, face, info, onChanged }: Props): React.JSX.Elem
     <div className="fa-class" ref={root} data-testid="class-wrap">
       <Tooltip label={tip}>
         <button ref={chip} type="button" className="fa-class-chip" data-testid="class-chip" data-uncertain={uncertain} aria-haspopup="menu" aria-expanded={open} aria-label={`${spoken} — ${t('class.menu')}`} onClick={() => setOpen(v => !v)}>
-          <span className="c" title={classGloss(info.class)}>{classLabel(info.class)}</span>
+          <TermTip term={classTermKey(info.class)}><span className="c" data-term={classTermKey(info.class)}>{classLabel(info.class)}</span></TermTip>
           {uncertain && info.candidate && <span className="m">{t('class.maybe', { label: classLabel(info.candidate) })}</span>}
           {traits.map(x => <span key={x} className="m">· {traitLabel(x)}</span>)}
-          {!uncertain && info.subclass && <span className="m">· {subclassLabel(info.subclass)}</span>}
+          {!uncertain && info.subclass && <TermTip term={subclassTermKey(info.subclass)}><span className="m" data-term={subclassTermKey(info.subclass)}>· {subclassLabel(info.subclass)}</span></TermTip>}
         </button>
       </Tooltip>
       {overridden && <Tooltip label={t('class.machine', { label: info.autoClass ? classLabel(info.autoClass) : '—' })}><span className="fa-class-edited" tabIndex={0}>{t('class.edited')}</span></Tooltip>}

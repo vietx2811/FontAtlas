@@ -4,6 +4,7 @@ import { hasKey, t } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
+import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
@@ -109,9 +110,9 @@ export function ClassCell({ face }: { face: CompareFace }): React.JSX.Element {
   const conf = Number.isFinite(c.confidence) ? Math.round(c.confidence * 100) : null;
   return (
     <div className="cmp-cls">
-      <span className="c" data-uncertain={uncertain}>{classLabel(c.class)}{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
+      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
       {uncertain && c.candidate && <span className="s">{t('class.maybe', { label: classLabel(c.candidate) })}</span>}
-      {!uncertain && c.subclass && <span className="s">{subclassLabel(c.subclass)}</span>}
+      {!uncertain && c.subclass && <TermTip term={subclassTermKey(c.subclass)}><span className="s" data-term={subclassTermKey(c.subclass)}>{subclassLabel(c.subclass)}</span></TermTip>}
       {traits.length > 0 && <span className="s">{traits.map(traitLabel).join(' · ')}</span>}
       {usage.length > 0 && <span className="s">{usage.map(u => tr(`class.usage.${u}`, u)).join(' · ')}</span>}
       {conf !== null && <div className="cmp-conf" role="img" aria-label={`${conf}%`}><i style={{ width: `${conf}%` }} /></div>}

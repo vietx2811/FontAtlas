@@ -9,6 +9,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { useSources } from './FilterChips';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
 import { t } from '../../i18n';
+import { TermTip, classTermKey, subclassTermKey, termKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel } from './classLabels';
 import type { ClassFacetDto } from '../../api';
 
@@ -77,11 +78,11 @@ export function FilterPanel({ api }: { api: Api }): React.JSX.Element {
         </fieldset>
         {classRows.length > 0 && <fieldset role="group" aria-label={t('filter.class')}><legend>{t('filter.class')}</legend>
           {classRows.map(f => <div key={f.class} className="fa-class-opt">
-            <label title={classGloss(f.class)}><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => {
+            <TermTip term={classTermKey(f.class)}><label><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => {
               toggle('classes', f.class, e.target.checked);
               if (!e.target.checked) { const cur = useUiStore.getState().filters; const keep = (cur.subclasses ?? []).filter(x => !f.subclasses.some(sc => sc.subclass === x)); const { subclasses: _, ...rest } = cur; state.setFilters(keep.length ? { ...rest, subclasses: keep } : rest); }
-            }} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
-            {filters.classes?.includes(f.class) && f.subclasses.length > 0 && <div className="fa-sub-opts">{f.subclasses.map(sc => <label key={sc.subclass}><input type="checkbox" checked={filters.subclasses?.includes(sc.subclass) ?? false} onChange={e => toggle('subclasses', sc.subclass, e.target.checked)} />{subclassLabel(sc.subclass)} <span className="fa-count">{sc.count}</span></label>)}</div>}
+            }} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label></TermTip>
+            {filters.classes?.includes(f.class) && f.subclasses.length > 0 && <div className="fa-sub-opts">{f.subclasses.map(sc => <TermTip key={sc.subclass} term={subclassTermKey(sc.subclass)}><label><input type="checkbox" checked={filters.subclasses?.includes(sc.subclass) ?? false} onChange={e => toggle('subclasses', sc.subclass, e.target.checked)} />{subclassLabel(sc.subclass)} <span className="fa-count">{sc.count}</span></label></TermTip>)}</div>}
           </div>)}
         </fieldset>}
         <fieldset><legend>{t('filter.license')}</legend>
@@ -142,7 +143,7 @@ function AxisRange({ stats: s, selected, onChange }: { stats: AxisStatsDto; sele
     pendingRef.current = null; setPending(null); onChange(next);
   };
   return <fieldset className="fa-axis-filter">
-    <legend><label><input type="checkbox" checked={!!selected} disabled={empty && !selected} onChange={e => onChange(e.target.checked ? [range[0], range[1]] : null)} />{label}</label></legend>
+    <legend><TermTip term={termKey(s.axis)}><label><input type="checkbox" checked={!!selected} disabled={empty && !selected} onChange={e => onChange(e.target.checked ? [range[0], range[1]] : null)} />{label}</label></TermTip></legend>
     <div className="fa-axis-domain"><span>{unitText(s.unit)} · {s.count} font</span>{!empty && !constant && <Tooltip label={outlier ? 'Khoảng đang chọn có ngoại lệ ngoài P1–P99' : full ? 'Quay lại khoảng phổ biến P1–P99, bỏ qua các giá trị ngoại lệ' : 'Hiện cả giá trị nhỏ nhất đến lớn nhất, kể cả ngoại lệ hiếm'}><button type="button" aria-pressed={full || outlier} aria-disabled={outlier || undefined} onClick={() => { if (outlier) return; if (!full) { setFull(true); if (selected) onChange([min, max]); } else setFull(false); }}>{outlier ? 'Đang dùng min–max' : full ? 'Khoảng P1–P99' : 'Toàn khoảng'}</button></Tooltip>}</div>
     {empty && <p>Chưa có số đo trong phạm vi này</p>}
     {(!empty || selected) && <>
