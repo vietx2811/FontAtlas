@@ -11,3 +11,12 @@ export const FILTER_I18N_2 = {
   'adv.measured': 'measured', 'adv.osClass': 'OS/2 class', 'adv.varMatch': 'Font Variable cũng khớp khi dải trục {axis} giao khoảng này',
   'adv.noData': 'Chưa có số đo', 'adv.count': '{n} điều kiện',
 } as const;
+
+export const FILTER_I18N_3 = {
+  'adv.lang': 'Ngôn ngữ', 'lang.search': 'Tìm ngôn ngữ', 'lang.incomplete': 'Đang tính độ phủ ngôn ngữ ({done}/{total} font): số đếm chỉ là phần đã tính.',
+  'lang.mode': 'Cách ghép ngôn ngữ', 'lang.mode.all': 'Đủ tất cả', 'lang.mode.any': 'Một trong các ngôn ngữ', 'lang.counts': '{full} font đủ 100% · {near} font gần đủ (≥ 90%) trở lên',
+  'lang.levels': '● đủ 100% · ◐ gần đủ (≥ 90%, đủ dấu và chữ riêng)', 'lang.full': 'đủ', 'lang.near': 'gần đủ',
+  'fgroup.lang': 'Ngôn ngữ',
+  'badge.full': '{lang}: đủ ký tự', 'badge.near': '{lang}: gần đủ ({have}/{total})', 'badge.partial': '{lang}: thiếu {miss} ký tự ({have}/{total})', 'badge.low': '{lang}: thiếu nhiều ({have}/{total})', 'badge.unknown': '{lang}: chưa tính độ phủ',
+  'credit.hyperglot': 'Dữ liệu ngôn ngữ: Hyperglot © Rosetta, Apache-2.0',
+} as const;

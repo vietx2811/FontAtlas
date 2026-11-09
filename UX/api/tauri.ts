@@ -112,6 +112,8 @@ export function createTauriApi(): Api {
     getFace: (face, lang) => call('get_face', { face, lang }),
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
+    languageList: (q = {}) => call('language_list', { q: toFaceQueryDto({ ...q, langs: [] }) }),
+    langCoverage: (faceId, code) => call('lang_coverage', { faceId, code }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
     createCase: (name, brief, settings) => call('create_case', { name: name ?? null, brief: brief ?? null, settings: settings ?? null }),
     listCases: (includeDeleted = false) => call('list_cases', { includeDeleted }),

@@ -25,6 +25,8 @@
 .fa-vi { font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; }
 .fa-vi.ok { color: var(--on); }
 .fa-vi.miss { color: var(--warn); }
+.fa-vi.unk { color: var(--muted); }
+.fa-vi-code { font-size: var(--text-2xs); text-transform: uppercase; margin-right: 3px; opacity: .8; }
 .fa-dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
 .fa-pow { position: absolute; top: 6px; right: 46px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
 .fa-cell:hover .fa-pow, .fa-pow[aria-pressed="true"], .fa-pow:focus-visible { opacity: 1; }

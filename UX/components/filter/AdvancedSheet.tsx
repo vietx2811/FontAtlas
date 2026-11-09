@@ -10,6 +10,7 @@ import { TermTip, classTermKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classLabel } from '../main/classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
 import { AxisRow } from './AxisRow';
+import { LangPicker } from './LangPicker';
 import { Histogram } from './Histogram';
 import { AXIS_GROUPS } from './axisGroups';
 import { WEIGHT_TICKS, WIDTH_TICKS, weightName, widthName } from './classNames';
@@ -124,6 +125,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
           {VI_OPTIONS.map(([v, k]) => <label key={v}><input type="radio" name="fa-adv-vi" checked={filters.vi === v} onChange={() => patch({ vi: v })} />{t(k)}</label>)}
           {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => patch({ vi: undefined })}>{t('filter.vi.clear')}</button>}
         </section>
+        <section className="fa-adv-card" aria-label={t('adv.lang')}><h3>{t('adv.lang')}</h3><LangPicker api={api} query={query} refreshKey={version} /></section>
         <section className="fa-adv-card" aria-label={t('adv.library')}><h3>{t('adv.library')}</h3>
           <label><input type="checkbox" disabled={forced.favorites} checked={!!filters.favoritesOnly || forced.favorites} onChange={e => patch({ favoritesOnly: e.target.checked ? true : undefined })} />{t('filter.favorites')}</label>
           {sources.map(s => <label key={s.id}><input type="checkbox" disabled={forced.source} checked={filters.sourceIds?.includes(s.id) ?? false} onChange={e => toggle('sourceIds', s.id, e.target.checked)} />{s.name}</label>)}

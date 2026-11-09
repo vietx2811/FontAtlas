@@ -63,6 +63,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 }
 
 import { createMockCases } from './mockCases';
+import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
@@ -171,12 +172,13 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
+        (!q.langs?.length || matchesLangs(r, q.langs, q.langMode)) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
       if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
       else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
       const offset = q.offset ?? 0;
       const limit = q.limit === Infinity ? Infinity : Math.min(q.limit || 100, 1000); // Infinity chỉ dùng nội bộ cho thống kê
-      return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r })) };
+      return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r, langBadge: badgeOf(r, q.badgeLang ?? 'vie') })) };
     },
     previewUrl: (row, { text, px }) => {
       const r = byKey.get(keyOf(row));
@@ -282,6 +284,8 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
     async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
+    async languageList(q = {}) { return listFor((await this.queryFaces({ ...q, langs: [], offset: 0, limit: Infinity })).items); },
+    async langCoverage(faceId, code) { const r = rows.find(x => x.faceId === faceId); if (!r) throw new CmdError('not_found', 'face not found'); return coverageFor(r, code); },
     async axisStats(q = {}) {
       const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], weightClass: undefined, widthClass: undefined, offset: 0, limit: Infinity });
       return MEASURED_AXES.map(axis => {

@@ -3,11 +3,11 @@ import type { LibraryFilters } from '../../store/ui';
 import { t, type I18nKey } from '../../i18n';
 import { filterChips, type Chip } from '../main/FilterChips';
 
-export type GroupId = 'class' | 'style' | 'vi' | 'library' | 'license' | 'axes';
+export type GroupId = 'class' | 'style' | 'vi' | 'lang' | 'library' | 'license' | 'axes';
 export type Group = { id: GroupId; label: string; chips: Chip[]; remove(f: LibraryFilters): LibraryFilters };
 
 const ORDER: ReadonlyArray<[GroupId, I18nKey]> = [
-  ['class', 'fgroup.class'], ['style', 'fgroup.style'], ['vi', 'fgroup.vi'], ['library', 'fgroup.library'], ['license', 'fgroup.license'], ['axes', 'fgroup.axes'],
+  ['class', 'fgroup.class'], ['style', 'fgroup.style'], ['vi', 'fgroup.vi'], ['lang', 'fgroup.lang'], ['library', 'fgroup.library'], ['license', 'fgroup.license'], ['axes', 'fgroup.axes'],
 ];
 
 const groupOf = (chipId: string): GroupId => {
@@ -15,6 +15,7 @@ const groupOf = (chipId: string): GroupId => {
   if (head === 'class' || head === 'subclass') return 'class';
   if (head === 'variable' || head === 'italic') return 'style';
   if (head === 'vi') return 'vi';
+  if (head === 'lang') return 'lang';
   if (head === 'favorites' || head === 'source') return 'library';
   if (head === 'license') return 'license';
   return 'axes';
