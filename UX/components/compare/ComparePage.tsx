@@ -6,15 +6,16 @@ import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
-import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
+import { TermTip, termKey, termName } from '../ui/terms';
+import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SAMPLE_VI_GLOSS, SpecimenCell, ViCell, WithFamily } from './CompareCells';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
-import { renderCompareBlob } from './exportPng';
+import { ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
 import './compare.css';
 
 const SPEC_SIZE = 30;
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
-const label = (k: string, gloss = false): string => { const key = `compare.m.${k}${gloss ? '.gloss' : ''}`; return hasKey(key) ? t(key) : gloss ? '' : k; };
+const label = (k: string, gloss = false): string => { if (!gloss) return termName(k); const key = `compare.m.${k}.gloss`; return hasKey(key) ? t(key) : ''; };
 const gl = (key: string): string => (hasKey(key) ? t(key as I18nKey) : '');
 
 /** Ghi họ font đã nạp của một cột (cho xuất PNG) sau khi vẽ, không ghi trong lúc render. */
@@ -66,12 +67,26 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     return () => document.removeEventListener('keydown', on);
   }, []);
 
+  const isDark = () => document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
+
+  // Móc QA native (chỉ khi chạy kịch bản QA): vẽ PNG như nút Xuất, không mở hộp thoại, trả bản kê nội dung + mẫu điểm ảnh.
+  useEffect(() => {
+    if (!data || !(window as unknown as { __FA_QA_PICKS__?: unknown }).__FA_QA_PICKS__) return;
+    (window as unknown as { __faQaComparePng?: () => Promise<unknown> }).__faQaComparePng = async () => {
+      const loaded = await ensureFonts(families.current.values(), sample);
+      const r = renderCompare({ data, families: families.current, sample, fit, dark: isDark(), overlay, loaded });
+      if (!r) return null;
+      const px = r.canvas.getContext('2d')!.getImageData(2, r.canvas.height - 2, 1, 1).data;
+      return { ...r.manifest, cornerPx: [px[0], px[1], px[2]], dataUrl: r.canvas.toDataURL('image/png') };
+    };
+    return () => { delete (window as unknown as { __faQaComparePng?: unknown }).__faQaComparePng; };
+  }, [data, sample, fit, overlay]);
+
   const exportPng = async () => {
     if (!data || exporting) return;
     setExporting(true);
     try {
-      const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
-      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark });
+      const { blob, name } = await renderCompareBlob({ data, families: families.current, sample, fit, dark: isDark(), overlay });
       const saved = await api.savePng(blob, name);
       if (saved) useNoticeStore.getState().push({ kind: 'info', text: t('compare.pngSaved', { name: saved.split(/[\\/]/).pop() ?? saved }) });
     } catch (e) {
@@ -118,14 +133,14 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
 
           <Group k="specimen" cols={cols} />
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.line')}</b></div>{cells(f => <SpecimenCell api={api} face={f} text={sample || 'Hxg'} size={SPEC_SIZE * scale(f)} fit={fit && f !== base} />)}</Row>
-          {overlay && <Row><div className="rh" role="rowheader"><b>{t('compare.row.overlay')}</b><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.vi')}</b><small>Ữ Ặ Ệ Ỗ Ở · ươ</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
+          {overlay && <Row><div className="rh" role="rowheader"><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></div>{cells(f => <OverlayCell api={api} base={base} face={f} scale={scale(f)} />)}</Row>}
+          <Row><div className="rh" role="rowheader"><TermTip term="vi_marks"><b data-term="vi_marks">{t('compare.row.vi')}</b></TermTip><small>{SAMPLE_VI_GLOSS}</small></div>{cells(f => <ViCell api={api} face={f} size={Math.round(SPEC_SIZE * 1.1 * scale(f))} />)}</Row>
 
           <Group k="metrics" cols={cols} />
-          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><b>{label(k)}</b><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
+          {COMPARE_METRICS.map(k => <Row key={k}><div className="rh" role="rowheader"><TermTip term={k}><b data-term={termKey(k)}>{label(k)}</b></TermTip><small>{label(k, true)}</small></div>{cells(f => <MetricCell k={k} m={f.metrics[k]} base={base.metrics[k]} isBase={f === base} />)}</Row>)}
 
           <Group k="class" cols={cols} />
-          <Row><div className="rh" role="rowheader"><b>{t('compare.row.class')}</b><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
+          <Row><div className="rh" role="rowheader"><TermTip term="classification"><b data-term="classification">{t('compare.row.class')}</b></TermTip><small>{gl('compare.row.class.gloss')}</small></div>{cells(f => <ClassCell face={f} />)}</Row>
 
           <Group k="meta" cols={cols} />
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <LicenseCell face={f} />)}</Row>

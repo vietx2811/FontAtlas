@@ -14,6 +14,19 @@
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
   const snap = async name => { settleAnims(); await sleep(80); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); };
   const btnHas = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.includes(text) && !b.disabled);
+  // Ảnh PNG xuất ra tệp qua bảng settings (giới hạn 64 KB/khoá → cắt từng đoạn ui.qapng.<theme>.NN); run.sh ghép lại.
+  const savePng = async (th, url) => { const errs = []; if (!url) return ['không có dataUrl']; const b = url.split(',')[1]; for (let i = 0, n = 0; i < b.length; i += 60000, n++) { try { await inv('set_setting', { key: 'ui.qapng.' + th + '.' + String(n).padStart(3, '0'), value: b.slice(i, i + 60000) }); } catch (e) { errs.push('đoạn ' + n + ': ' + String(e && e.message || e).slice(0, 120)); } } return errs; };
+  // Thuật ngữ typo: rê chuột vào từng nhãn [data-term], tooltip phải có gloss không rỗng (và hình minh hoạ nếu thuật ngữ có hình).
+  const termCheck = async sel => {
+    const els = [...document.querySelectorAll(sel)]; const bad = []; let art = 0;
+    for (const el of els) {
+      el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
+      const g = await wait(() => { const x = document.querySelector('[role=tooltip] .fa-term-gloss'); return x && x.textContent.trim() ? x : null; }, 2500);
+      if (!g) bad.push(el.dataset.term); else if (document.querySelector('[role=tooltip] svg.fa-term-art')) art++;
+      el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' })); await sleep(50);
+    }
+    return { n: els.length, bad, art };
+  };
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
     const picks = []; window.__FA_QA_PICKS__ = picks;
@@ -70,6 +83,28 @@
     const numeric = texts.filter(t => /\d+,\d+\s*(em|°|×)|\d+\s*°/.test(t));
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
+    // Đường kẻ Hxg phải trùng chữ: đo cap của 'H' bằng canvas với đúng font đang vẽ, so với đường cap trong SVG (±1 đơn vị viewBox).
+    const hxgCheck = async (step, shot, notFamily = null) => {
+      const hxgSvg = await wait(() => { const v = document.querySelector('svg.fa-hxg'); const f = document.querySelector('[data-testid=hxg-text]')?.style.fontFamily; return v && /^(ok|mismatch)$/.test(v.dataset.guides ?? '') && (!notFamily || (f && f !== notFamily)) ? v : null; }, 20000);
+      const hxgText = document.querySelector('[data-testid=hxg-text]');
+      const capLine = hxgSvg?.querySelector('[data-testid=guide-line][data-line=cap]');
+      let inkCap = null;
+      if (hxgText) { const c2 = document.createElement('canvas').getContext('2d'); c2.font = '100px ' + hxgText.style.fontFamily; inkCap = c2.measureText('H').actualBoundingBoxAscent; }
+      const capY = capLine ? +capLine.getAttribute('y1') : null;
+      await snap(shot);
+      await log(step, !!hxgSvg && capY !== null && inkCap !== null && Math.abs((112 - inkCap) - capY) <= 1, { capY, expected: inkCap === null ? null : 112 - inkCap, status: hxgSvg?.dataset.guides, family: hxgText?.style.fontFamily, name: document.querySelector('.fa-p-name')?.textContent });
+    };
+    await hxgCheck('anatomy-hxg-guides-match', 'anatomy-hxg');
+    {
+      const orig = document.querySelector('[role=gridcell][aria-selected=true]');
+      const serifCell = [...document.querySelectorAll('[role=gridcell][data-face-id]')].find(c => /Playfair|Baskerville/.test(c.textContent ?? ''));
+      if (serifCell && orig) { const prevFam = document.querySelector('[data-testid=hxg-text]')?.style.fontFamily; serifCell.click(); await hxgCheck('anatomy-hxg-guides-match-serif', 'anatomy-hxg-serif', prevFam); orig.click(); await wait(() => document.querySelector('[data-testid=hxg-text]')?.style.fontFamily === prevFam, 8000); }
+      else await log('anatomy-hxg-guides-match-serif', false, { error: 'không tìm thấy ô serif hoặc ô đang chọn (SKIPPED, không tính là pass)', hasSerif: !!serifCell, hasOrig: !!orig });
+    }
+    const termA = await termCheck('[data-testid=axis-row] [data-term]');
+    await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
+    const axisNames = [...document.querySelectorAll('[data-testid=axis-row] .fa-axis-name')].map(e => ({ text: e.textContent.trim(), term: e.dataset.term }));
+    await log('anatomy-labels-english', axisNames.length >= 10 && axisNames.every(n => n.term && !/[À-ỹ]/.test(n.text)), { total: axisNames.length, bad: axisNames.filter(n => !n.term || /[À-ỹ]/.test(n.text)), sample: axisNames.slice(0, 8).map(n => n.text) });
     // TƯƠNG TỰ
     document.querySelector('[role=tab][aria-label="Tương tự"]')?.click();
     const acts = await wait(() => { const a = [...document.querySelectorAll('.fa-sim-actions')]; return a.length ? a : null; }, 60000);
@@ -200,6 +235,37 @@
     const colResized = sizeAfter[1] !== sizeBefore[1] || xhVals[0] === xhVals[1]; // cột 2 đổi cỡ trừ khi x-height hai font bằng nhau
     await snap('compare-match-xheight');
     await log('compare-open', !!tbl && colHeads.length === 2 && colHeads[0].classList.contains('base') && metricCells >= 4 && ovlCount === 2 && !crashed && sizeBefore[0] === sizeAfter[0] && colResized, { colResized, xhVals, cols: colHeads.length, metricCells, ovlCount, crashed, sizeBefore, sizeAfter, text: tbl?.textContent.slice(0, 200) });
+    const termC = await termCheck('.cmp-tbl .rh [data-term]');
+    await log('compare-term-tooltips', termC.n >= 10 && termC.bad.length === 0 && termC.art >= 8, termC);
+    // PNG: vẽ như nút Xuất nhưng không qua hộp thoại (móc QA); phải có overlay, đơn vị, nhãn không bị cắt.
+    const rgbSum = el => { const m = (el ? getComputedStyle(el).backgroundColor : '').match(/\d+/g); return m ? m.slice(0, 3).reduce((a, b) => a + +b, 0) : -1; };
+    const lightSpec = rgbSum(document.querySelector('.cmp-page'));
+    const pngL = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    // Lưu ảnh PNG thật (mặt chữ thật) vào bảng settings (khoá ui.qapng.*, không trùng ui.qa.%); run.sh ghi ra tệp.
+    const saveErrL = await savePng('light', pngL?.dataUrl);
+    await log('compare-png-content', !!pngL && pngL.rows.includes('overlay') && pngL.rows.includes('vi') && pngL.texts.some(x => /\d,\d+ (em|°|tỷ lệ|×)/.test(x)) && !pngL.texts.some(x => x.includes('…')) && pngL.dark === false, { rows: pngL?.rows, units: pngL?.texts.filter(x => /\d,\d+ /.test(x)).slice(0, 4), ellipsis: pngL?.texts.filter(x => x.includes('…')), warn: pngL?.texts.filter(x => /Thiếu|Dấu/.test(x)) });
+    // DARK: vùng specimen nền tối, đổi theme lúc đang mở là đổi ngay; PNG theo theme.
+    const prevTheme = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = 'dark'; await sleep(200);
+    const darkSpec = rgbSum(document.querySelector('.cmp-page'));
+    const darkInk = getComputedStyle(document.querySelector('.cmp-page')).color;
+    const pngD = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
+    const saveErrD = await savePng('dark', pngD?.dataUrl);
+    await log('compare-png-saved', saveErrL.length === 0 && saveErrD.length === 0, { light: saveErrL, dark: saveErrD });
+    await snap('compare-dark');
+    await log('compare-dark-specimen', lightSpec > 700 && darkSpec >= 0 && darkSpec < 60 && /^rgb\(25[0-9]/.test(darkInk) && !!pngD && pngD.dark === true && pngD.specimenBg.toLowerCase() === '#0a0908', { lightSpec, darkSpec, darkInk, pngDark: pngD?.dark, bg: pngD?.specimenBg });
+    // Sidebar dark: mục đang chọn phải đọc được (tương phản chữ/nền ≥ 4.5:1) và nền là màu đặc, không phải khối sáng.
+    const lumOf = rgb => { const [r, g, bl] = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+    const parseC = c => { const m = (c ?? '').match(/[\d.]+/g); return m ? m.map(Number) : null; };
+    const navSel = document.querySelector('.fa-side .fa-nav[aria-current="true"]');
+    const navBg = parseC(navSel && getComputedStyle(navSel).backgroundColor); const navFg = parseC(navSel && getComputedStyle(navSel).color);
+    let navRatio = null;
+    if (navBg && navFg) { const [l1, l2] = [lumOf(navBg), lumOf(navFg)].sort((p, q) => q - p); navRatio = (l1 + 0.05) / (l2 + 0.05); }
+    const themeBtnF = document.querySelector('.fa-side [aria-label="Giao diện sáng/tối"]');
+    const tb = getComputedStyle(themeBtnF ?? document.body); const tbBg = parseC(tb.backgroundColor); const tbFg = parseC(tb.color);
+    const tbRatio = tbBg && tbFg ? (() => { const [l1, l2] = [lumOf(tbBg), lumOf(tbFg)].sort((p, q) => q - p); return (l1 + 0.05) / (l2 + 0.05); })() : null;
+    await log('sidebar-selected-contrast-dark', !!navSel && navBg && navBg.length >= 3 && (navBg[3] === undefined || navBg[3] === 1) && navRatio >= 4.5 && lumOf(navBg) < 0.12 && tbRatio !== null && tbRatio >= 3, { navBg, navFg, navRatio, tbBg, tbFg, tbRatio });
+    if (prevTheme) document.documentElement.dataset.theme = prevTheme; else document.documentElement.removeAttribute('data-theme');
     (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('.cmp-tbl') && document.querySelector('[data-testid=selection-count]'), 8000);
     await log('compare-close-keeps-selection', !document.querySelector('.cmp-tbl') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });

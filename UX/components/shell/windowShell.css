@@ -41,3 +41,5 @@ html, body, #root { background: transparent; height: 100%; }
 
 /* Trình duyệt mock không có vật liệu windowEffects phía sau sidebar. */
 .fa-shell[data-native="false"] { background: var(--sheet); }
+/* Native: sidebar là kính vibrancy (xám hệ thống); mock dùng xám đậm tương ứng. */
+.fa-shell[data-native="false"] .fa-shell-sidebar { background: var(--panel); }

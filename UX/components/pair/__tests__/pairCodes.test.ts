@@ -36,8 +36,8 @@ describe('gate', () => {
 
 describe('clashes', () => {
   it('axis:<axis> uses the Vietnamese axis name; global and skeleton have their own sentences', () => {
-    expect(clashLabel('axis:contrast')).toBe('Tương phản nét');
-    expect(clashLabel('axis:x_height')).toBe('Chiều cao x');
+    expect(clashLabel('axis:contrast')).toBe('contrast ⊥');
+    expect(clashLabel('axis:x_height')).toBe('x-height');
     expect(clashLabel('global')).toBe('Quá giống nhau');
     expect(clashLabel('skeleton')).toBe('Cùng nét, khác khung');
   });

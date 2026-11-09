@@ -52,7 +52,7 @@ describe('filter facets', () => {
     useUiStore.getState().setFilters({ rawAxisRanges: [{ axis: 'slant_deg', range: [-12, 0] }] });
     const chips = filterChips(useUiStore.getState().filters);
     expect(chips[0].id).toBe('axis:slant_deg');
-    expect(chips[0].label).toMatch(/Độ nghiêng.*[-−]12.*0/);
+    expect(chips[0].label).toMatch(/slant I\/T.*[-−]12.*0/);
   });
 
   it('license keys are the backend ones (ofl | apache | other | unknown)', () => {

@@ -72,7 +72,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
       <div className="fa-p-body" role="tabpanel" data-style={label ?? ''} data-tab={tab}>
         {tab === 'spec' && <SpecimenTab sample={sample} css={bodyCss} />}
         {tab === 'vi' && detail && <ViTab detail={detail} css={bodyCss} />}
-        {tab === 'anat' && detail && <AnatomyTab detail={detail} css={bodyCss} />}
+        {tab === 'anat' && detail && <AnatomyTab detail={detail} family={family} />}
         {tab === 'sim' && detail && <SimilarTab api={api} detail={detail} />}
         {tab === 'pair' && detail && <PairTab api={api} detail={detail} css={bodyCss} />}
       </div>

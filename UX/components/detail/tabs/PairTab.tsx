@@ -7,6 +7,7 @@ import { ZeroState } from '../../zero/ZeroState';
 import { faceMenuProps, useFaceActions } from '../../faces/FaceActions';
 import { FaceTitle } from '../../ui/FaceTitle';
 import { Tooltip } from '../../ui/Tooltip';
+import { TermOrTip, termKey } from '../../ui/terms';
 import { AXIS_META } from './AnatomyTab';
 import { PARAGRAPH } from './SpecimenTab';
 
@@ -87,7 +88,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
           <ul className="fa-pair-labels">
             {cand.labels.map(l => {
               const axis = AXIS_META[l.axis]?.label ?? l.axis;
-              return <Tooltip key={l.axis} label={l.relation}><li data-testid="pair-label" aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li></Tooltip>;
+              return <TermOrTip key={l.axis} term={termKey(l.axis)} extra={l.relation}><li data-testid="pair-label" aria-label={`${axis}: ${l.relation}`}>{l.symbol} {axis}</li></TermOrTip>;
             })}
           </ul>
           {cand.weightHint && <p className="fa-pair-hint">{cand.weightHint}</p>}

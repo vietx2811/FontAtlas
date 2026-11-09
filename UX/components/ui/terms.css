@@ -1,0 +1,11 @@
+/* Thẻ giải thích thuật ngữ trong Tooltip: màu theo currentColor (tooltip đã đổi nền theo theme). */
+.fa-term { display: flex; flex-direction: column; gap: 4px; max-width: 232px; }
+.fa-term b { font-size: 12px; font-weight: 600; }
+.fa-term-gloss { font-weight: 400; opacity: .85; }
+.fa-term-extra { font-weight: 500; color: var(--tip-accent, #E0B07E); }
+.fa-term-art { display: block; margin: 2px 0 4px; color: inherit; }
+.fa-term-art.small { opacity: .85; }
+.fa-term-art .fill { fill: currentColor; stroke: none; opacity: .9; }
+.fa-term-art .hole { fill: var(--tip-bg, #3A3532); stroke: none; }
+.fa-term-art .acc { stroke: var(--tip-accent, #E0B07E); }
+.fa-tip { --tip-accent: #E0B07E; }

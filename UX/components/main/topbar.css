@@ -1,4 +1,4 @@
-.fa-topbar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px 0 16px; flex: none; }
+.fa-topbar { background: var(--panel); display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px 0 16px; flex: none; }
 .fa-topbar h1 { margin: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fa-ttl { display: flex; align-items: baseline; gap: 8px; min-width: 0; width: 160px; flex: none; overflow: hidden; }
 .fa-cnt { color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }

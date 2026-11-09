@@ -4,9 +4,12 @@ import { hasKey, t } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
+import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
+import { useInk } from '../ui/inkLines';
 import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
+export const SAMPLE_VI_GLOSS = 'Ữ Ặ Ệ Ỗ Ở · ươ';
 export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
@@ -19,7 +22,7 @@ const css = (family: string | null) => (family ? `"${family}", var(--font-ui)` :
 const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fallback);
 
 /** Cột thiếu x-height khi bật Match x-height: không đổi cỡ, nói rõ vì sao. */
-const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
+export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
 
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
   return <WithFamily api={api} face={face}>{fam => (
@@ -30,22 +33,27 @@ export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: C
   )}</WithFamily>;
 }
 
-/** Glyph của mốc (xám) chồng lên glyph của cột (màu nhấn), chung baseline; đường đứt = x-height của mốc (chỉ vẽ khi mốc có số đo thật). */
+const PLAIN = { fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal' } as const;
+/** Glyph của mốc (xám) chồng lên glyph của cột (màu), chung baseline. Đường đứt = x-height ĐO TỪ CHỮ MỐC đang vẽ (canvas ink), không theo số analyzer; mốc chưa nạp thì không vẽ đường. */
 export function OverlayCell({ api, base, face, scale }: { api: Api; base: CompareFace; face: CompareFace; scale: number }): React.JSX.Element {
+  return (
+    <WithFamily api={api} face={base}>{bf => <WithFamily api={api} face={face}>{ff => <OverlayArt base={base} face={face} scale={scale} bf={bf} ff={ff} />}</WithFamily>}</WithFamily>
+  );
+}
+function OverlayArt({ base, face, scale, bf, ff }: { base: CompareFace; face: CompareFace; scale: number; bf: string | null; ff: string | null }): React.JSX.Element {
   const W = 300, H = 96, Y = 66, SZ = 64;
-  const baseXh = base.metrics.x_height_em?.value;
+  const ink = useInk(bf);
+  const baseXh = ink?.x ?? null;
   const same = face === base;
   return (
-    <WithFamily api={api} face={base}>{bf => <WithFamily api={api} face={face}>{ff => (
-      <div className="cmp-page cmp-overlay">
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')} ${face.row.family}`}>
-          <line x1="0" x2={W} y1={Y} y2={Y} className="bl" />
-          {xhOk(baseXh) && <line x1="0" x2={W} y1={Y - baseXh * SZ} y2={Y - baseXh * SZ} className="xh" />}
-          {!same && <text x="8" y={Y} fontSize={SZ} fontFamily={css(bf)} className="ghost">{OVERLAY_TEXT}</text>}
-          <text x="8" y={Y} fontSize={SZ * scale} fontFamily={css(ff)} className={same ? 'solo' : 'over'}>{OVERLAY_TEXT}</text>
-        </svg>
-      </div>
-    )}</WithFamily>}</WithFamily>
+    <div className="cmp-page cmp-overlay">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')} ${face.row.family}`} data-xh={baseXh === null ? '' : String(baseXh)}>
+        <line x1="0" x2={W} y1={Y} y2={Y} className="bl" />
+        {baseXh !== null && <line data-testid="overlay-xh" x1="0" x2={W} y1={Y - baseXh * SZ} y2={Y - baseXh * SZ} className="xh" />}
+        {!same && <text x="8" y={Y} fontSize={SZ} fontFamily={css(bf)} style={PLAIN} className="ghost">{OVERLAY_TEXT}</text>}
+        <text x="8" y={Y} fontSize={SZ * scale} fontFamily={css(ff)} style={PLAIN} className={same ? 'solo' : 'over'}>{OVERLAY_TEXT}</text>
+      </svg>
+    </div>
   );
 }
 
@@ -58,16 +66,27 @@ function overText(face: CompareFace): string {
   return em !== null ? t('compare.viWarnEm', { em: numberText(em, 'em') }) : t('compare.viWarn');
 }
 
-export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+export type ViNote = { kind: 'warn' | 'ok'; text: string; title?: string };
+/** Nhãn dưới dòng dấu chồng (dùng chung cho màn hình và ảnh PNG): thiếu ký tự / không hỗ trợ / tràn khung / vừa khung. */
+export function viNotes(face: CompareFace): ViNote[] {
   const { stackedMarksOverflow: over, supports, missing } = face.vi;
+  const out: ViNote[] = [];
+  if (!supports) out.push({ kind: 'warn', text: missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone') });
+  if (supports && over) out.push({ kind: 'warn', text: overText(face) });
+  if (supports && !over) out.push({ kind: 'ok', text: t('compare.viOk'), title: face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined });
+  if (!supports && over) out.push({ kind: 'warn', text: t('compare.viWarn') });
+  return out;
+}
+
+export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+  const { stackedMarksOverflow: over, supports } = face.vi;
   return (
     <WithFamily api={api} face={face}>{fam => (
       <div className="cmp-page">
         <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
-        {!supports && <span className="cmp-chip warn">{missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone')}</span>}
-        {supports && over && <span className="cmp-chip warn" role="status">{overText(face)}</span>}
-        {supports && !over && <span className="cmp-ok" title={face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined}>{t('compare.viOk')}</span>}
-        {!supports && over && <span className="cmp-chip warn">{t('compare.viWarn')}</span>}
+        {viNotes(face).map((n, i) => n.kind === 'ok'
+          ? <span key={i} className="cmp-ok" title={n.title}>{n.text}</span>
+          : <span key={i} className="cmp-chip warn" role={supports && over && i === 0 ? 'status' : undefined}>{n.text}</span>)}
       </div>
     )}</WithFamily>
   );
@@ -98,9 +117,9 @@ export function ClassCell({ face }: { face: CompareFace }): React.JSX.Element {
   const conf = Number.isFinite(c.confidence) ? Math.round(c.confidence * 100) : null;
   return (
     <div className="cmp-cls">
-      <span className="c" data-uncertain={uncertain}>{classLabel(c.class)}{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
+      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
       {uncertain && c.candidate && <span className="s">{t('class.maybe', { label: classLabel(c.candidate) })}</span>}
-      {!uncertain && c.subclass && <span className="s">{subclassLabel(c.subclass)}</span>}
+      {!uncertain && c.subclass && <TermTip term={subclassTermKey(c.subclass)}><span className="s" data-term={subclassTermKey(c.subclass)}>{subclassLabel(c.subclass)}</span></TermTip>}
       {traits.length > 0 && <span className="s">{traits.map(traitLabel).join(' · ')}</span>}
       {usage.length > 0 && <span className="s">{usage.map(u => tr(`class.usage.${u}`, u)).join(' · ')}</span>}
       {conf !== null && <div className="cmp-conf" role="img" aria-label={`${conf}%`}><i style={{ width: `${conf}%` }} /></div>}

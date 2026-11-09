@@ -1,5 +1,5 @@
 .pr { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--sheet); color: var(--fg); }
-.pr-h { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex: none; }
+.pr-h { background: var(--panel); display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 16px; flex: none; }
 .pr-h h1 { margin: 0; font-size: 14px; font-weight: 600; }
 .pr-h h1:focus { outline: none; }
 .pr-h h1:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
@@ -17,7 +17,7 @@
 .pr-combo > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .pr-gate { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); color: var(--muted); }
 .pr-gate[data-gate="experimental"] { background: var(--accent-soft); color: var(--accent-ink); }
-.pr-page { background: var(--specimen-bg, #fff); color: var(--specimen-ink, #1f1d1b); border-radius: var(--radius-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.pr-page { background: var(--specimen-bg); color: var(--specimen-ink); border-radius: var(--radius-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
 .pr-heading { line-height: 1.2; overflow-wrap: anywhere; }
 .pr-body { margin: 0; line-height: 1.55; }
 .pr-names { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: 12px; }
@@ -33,4 +33,4 @@
 .pr-warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 .pr-note { background: var(--surface-2); color: var(--muted); }
 .pr-hint { margin: 0; font-size: 12px; color: var(--accent-ink); }
-.pr-legend { margin: 14px 2px 0; font-size: 11px; color: var(--muted); }
+.pr-legend { margin: 14px 2px 0; font-size: 11px; color: var(--faint); }

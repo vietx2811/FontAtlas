@@ -1,6 +1,9 @@
 import type { CSSProperties } from 'react';
 import type { AxisReadingDto, FaceDetailDto } from '../../../api';
+import { t } from '../../../i18n';
+import { useGuides } from '../../ui/inkLines';
 import { AxisIcon } from './axisIcons';
+import { TermTip, termKey } from '../../ui/terms';
 
 import { AXIS_META, numberText, unitText } from './measurements';
 import { Tooltip } from '../../ui/Tooltip';
@@ -40,15 +43,15 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const missing = !numeric && !category;
   const noRaw = a.key === 'serif_foot' && !numeric && !failed;
   return (
-    <Tooltip label={[a.method, a.rawValue === null ? null : `Giá trị gốc: ${a.rawValue}`].filter(Boolean).join(' · ')}>
+    <Tooltip label={[a.method, a.rawValue === null ? null : t('anat.rawValue', { v: a.rawValue })].filter(Boolean).join(' · ')}>
     <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
-      <span className="fa-axis-name">{meta.label}</span>
-      <span className="fa-axis-value">{failed ? 'Không đo được' : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? 'Chưa đo'}</span>
+      <TermTip term={a.key}><span className="fa-axis-name" data-term={termKey(a.key)}>{meta.label}</span></TermTip>
+      <span className="fa-axis-value">{failed ? t('anat.failed') : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? t('anat.unmeasured')}</span>
       {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
-        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? 'không rõ lý do' : <>
-          {missing ? 'Chưa có dữ liệu' : noRaw ? 'Chưa có số đo' : estimated ? 'Ước lượng' : category && numeric ? category : ''}
-          {!missing && a.percentile !== null && <Tooltip label="Vị trí so với tập tham chiếu; không phải độ tin cậy"><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
+        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? t('anat.reasonUnknown') : <>
+          {missing ? t('anat.noData') : noRaw ? t('anat.noRaw') : estimated ? t('anat.estimated') : category && numeric ? category : ''}
+          {!missing && a.percentile !== null && <Tooltip label={t('anat.percentileTip')}><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
         </>}
       </span>}
     </li>
@@ -56,20 +59,41 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   );
 }
 
-export function AnatomyTab({ detail, css }: { detail: FaceDetailDto; css: CSSProperties }): React.JSX.Element {
+const axisEm = (axes: AxisReadingDto[], key: string): number | null => { const a = axes.find(x => x.key === key); return a && a.quality !== 'failed' && typeof a.rawValue === 'number' && Number.isFinite(a.rawValue) ? a.rawValue : null; };
+
+/** Đường kẻ theo mực thật của chữ đang vẽ (không theo số analyzer); chỉ vẽ đường nào đo được. Baseline luôn là nền của chữ. */
+export function guideLinesFrom(g: { cap: number | null; x: number | null }, size: number, baseline: number): GuideLine[] {
+  const out: GuideLine[] = [];
+  if (g.cap !== null) out.push({ id: 'cap', y: baseline - g.cap * size });
+  if (g.x !== null) out.push({ id: 'x', y: baseline - g.x * size });
+  out.push({ id: 'baseline', y: baseline });
+  return out;
+}
+const f3 = (v: number | null) => (v === null ? '—' : numberText(v, 'em'));
+
+/** Hxg vẽ bằng ĐÚNG face đã đo (family của face đó, không weight/italic của style chọn, không tổng hợp đậm/nghiêng). */
+export const hxgStyle = (family: string | null): CSSProperties => ({
+  fontFamily: family ? `"${family}"` : undefined, fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal', opacity: family ? 1 : 0.3,
+});
+
+export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: string | null }): React.JSX.Element {
   const SIZE = 100; const BASE = 112;
-  const lines = glyphLines(detail.axes, SIZE, BASE);
+  const analyzer = { cap: axisEm(detail.axes, 'cap_height_em'), x: axisEm(detail.axes, 'x_height_em') };
+  const g = useGuides(family, analyzer, detail.row.faceIndex);
+  const lines = g.status === 'ok' || g.status === 'mismatch' ? guideLinesFrom(g, SIZE, BASE) : [];
   return (
     <>
-      <svg className="fa-hxg" role="img" aria-label="Glyph Hxg với đường chữ hoa, chiều cao x và đường nền" viewBox="0 0 300 150" width="100%">
+      <svg className="fa-hxg" role="img" aria-label={t('anat.hxgAria')} viewBox="0 0 300 150" width="100%" data-guides={g.status}>
         {lines.map(l => (
           <g key={l.id}>
             <line data-testid="guide-line" data-line={l.id} x1="6" x2="294" y1={l.y} y2={l.y} stroke="var(--accent)" strokeWidth="0.8" strokeDasharray={l.id === 'baseline' ? undefined : '3 3'} />
             <text x="294" y={l.y - 3} textAnchor="end" fontSize="8" fill="var(--muted)" fontFamily="var(--font-ui)">{LINE_LABEL[l.id]}</text>
           </g>
         ))}
-        <text x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={css}>Hxg</text>
+        <text data-testid="hxg-text" x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={hxgStyle(family)}>Hxg</text>
       </svg>
+      {g.status === 'unavailable' && <p className="fa-hxg-note" role="status" data-testid="guides-note">{t('anat.guides.unavailable')}</p>}
+      {g.status === 'mismatch' && <Tooltip label={t('anat.guides.mismatchTip', { capA: f3(g.analyzer.cap), xA: f3(g.analyzer.x), capI: f3(g.ink.cap), xI: f3(g.ink.x) })}><p className="fa-hxg-note" data-testid="guides-note" tabIndex={0}>{t('anat.guides.mismatch')}</p></Tooltip>}
       <ul className="fa-axes">{detail.axes.map(a => <AxisRow key={a.key} a={a} />)}</ul>
     </>
   );

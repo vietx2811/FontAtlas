@@ -124,6 +124,21 @@
     --surface-1: #ffffff;
     --surface-2: #F3F2F0;
     --surface-3: #EBEBEB;
+    /* Tầng nền: panel (sidebar/panel/header) và float (menu, popover, modal); sáng = như cũ */
+    --panel: var(--sheet);
+    --float: var(--card);
+    --faint: var(--muted);
+    /* Sidebar chồng lên vibrancy: dùng màu đặc (không rgba) để không phụ thuộc cách WebView trộn alpha */
+    --nav-hover: #EBE9E7;
+    --nav-active: #E1DEDB;
+
+    /* Vùng mẫu chữ (specimen): theo theme, không còn trắng cố định */
+    --specimen-bg: #FFFFFF;
+    --specimen-ink: #1F1D1B;
+    --specimen-rule: #D6D3D1;
+    --specimen-accent: #9A6B3C;
+    --specimen-ok: #3F7F5F;
+    --specimen-ghost: .28;
 
     /* ========== TYPOGRAPHY SYSTEM ========== */
     /* Font Family */
@@ -172,43 +187,67 @@
 /* Tối: theo hệ thống; nút sáng/tối ghi đè bằng data-theme trên :root (Plan 6b §4). */
 :root[data-theme="dark"], .dark {
     color-scheme: dark;
-    --sheet: #1C1917;
-    --card: #23201E;
+    /* Dark theo tầng: canvas gần đen < card < panel (xám đậm) < float (nổi, hover/chọn). Viền chỉ là sợi tóc. */
+    --sheet: #0C0A09;
+    --card: #151311;
+    --panel: #1C1917;
+    --float: #292522;
     --fg: #FAFAF9;
     --muted: #A8A29E;
-    --border: #2E2A27;
-    --surface-2: #2A2623;
+    --faint: #8A837D;
+    --nav-hover: #24201E;
+    --nav-active: #302B28;
+    --border: rgba(250, 250, 249, .08);
+    --surface-2: #24211E;
     --accent: #E0B07E;
     --accent-ink: #E0B07E;
     --accent-soft: rgba(224, 176, 126, .14);
     --on: #4ADE80;
     --warn: #FB923C;
-    --chrome-hover: rgba(250, 250, 249, .06);
-    --chrome-active: rgba(250, 250, 249, .10);
+    --chrome-hover: rgba(250, 250, 249, .05);
+    --chrome-active: rgba(250, 250, 249, .09);
     --muted-soft: #292524;
     --surface-1: #1c1917;
     --surface-3: #0c0a09;
+    --specimen-bg: #0A0908;
+    --specimen-ink: #FAFAF9;
+    --specimen-rule: #57534E;
+    --specimen-accent: #F0B777;
+    --specimen-ok: #4ADE80;
+    --specimen-ghost: .42;
 }
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --sheet: #1C1917;
-        --card: #23201E;
+        /* Dark theo tầng: canvas gần đen < card < panel (xám đậm) < float (nổi, hover/chọn). Viền chỉ là sợi tóc. */
+        --sheet: #0C0A09;
+        --card: #151311;
+        --panel: #1C1917;
+        --float: #292522;
         --fg: #FAFAF9;
         --muted: #A8A29E;
-        --border: #2E2A27;
-        --surface-2: #2A2623;
+        --faint: #8A837D;
+        --nav-hover: #24201E;
+        --nav-active: #302B28;
+        --border: rgba(250, 250, 249, .08);
+        --surface-2: #24211E;
         --accent: #E0B07E;
         --accent-ink: #E0B07E;
         --accent-soft: rgba(224, 176, 126, .14);
         --on: #4ADE80;
         --warn: #FB923C;
-        --chrome-hover: rgba(250, 250, 249, .06);
-        --chrome-active: rgba(250, 250, 249, .10);
+        --chrome-hover: rgba(250, 250, 249, .05);
+        --chrome-active: rgba(250, 250, 249, .09);
         --muted-soft: #292524;
         --surface-1: #1c1917;
         --surface-3: #0c0a09;
+        --specimen-bg: #0A0908;
+        --specimen-ink: #FAFAF9;
+        --specimen-rule: #57534E;
+        --specimen-accent: #F0B777;
+        --specimen-ok: #4ADE80;
+        --specimen-ghost: .42;
     }
 }
 
