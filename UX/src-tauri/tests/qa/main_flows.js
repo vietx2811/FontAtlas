@@ -231,6 +231,83 @@
     await snap('topbar-actions-2');
     await log('topbar-actions-two', !!pcGroup && actNames.includes('Compare') && actNames.includes('Pair these') && !actNames.includes('Find similar') && /2 chọn/.test(pcGroup.textContent), { actNames, text: pcGroup?.textContent });
 
+    // ACTIVE (2c): công tắc có nhãn, trạng thái + phạm vi, nút trên thẻ, Top Bar, ⌘⇧A, cả family. Engine CoreText THẬT nhưng chỉ font fixture trong thư mục QA;
+    // mọi bước trả về trạng thái "tắt" và cuối cùng kiểm tra không còn font nào bật (phạm vi Persistent chỉ bật thoáng qua rồi đổi lại).
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const waitActive = async (pred, ms = 15000) => { const t0 = Date.now(); let last = null; while (Date.now() - t0 < ms) { last = await actOn(); if (pred(last)) return last; await sleep(200); } return last; };
+      const row = () => document.querySelector('aside.fa-panel [data-testid=active-row]');
+      const sw = () => row()?.querySelector('[data-testid=active-switch]');
+      const status = () => row()?.querySelector('[data-testid=active-status]')?.textContent;
+      // Số trên mục "Đang bật" của thanh bên phải đi theo mỗi lần bật/tắt (trước đây đứng yên ở 0).
+      const navCount = () => [...document.querySelectorAll('button')].find(b => /^Đang bật/.test(b.textContent ?? ''))?.textContent?.replace(/\D/g, '');
+      await wait(row, 10000);
+      const termA2 = await termCheck('[data-testid=active-row] [data-term]');
+      await log('active-peek-labelled', !!sw() && sw().getAttribute('aria-label') === 'Active' && sw().getAttribute('aria-checked') === 'false' && status() === 'Chưa bật' && termA2.n === 1 && termA2.bad.length === 0 && termA2.art === 1, { aria: sw()?.getAttribute('aria-label'), checked: sw()?.getAttribute('aria-checked'), status: status(), termA2 });
+      sw().click();
+      await wait(() => status() === 'Đang bật · phiên này', 15000);
+      let st = await waitActive(x => x.length === 1);
+      await wait(() => navCount() === '1', 8000);
+      await snap('active-peek-on');
+      await log('active-sidebar-count', navCount() === '1', { nav: navCount() });
+      await log('active-peek-on-session', status() === 'Đang bật · phiên này' && sw().getAttribute('aria-checked') === 'true' && st.length === 1 && st[0].scope === 'session', { status: status(), state: st.map(x => [x.hashHex.slice(0, 8), x.scope, x.status]) });
+      const scopeBtn = () => row()?.querySelector('[data-testid=active-scope]');
+      scopeBtn()?.click();
+      await wait(() => status() === 'Luôn bật', 15000);
+      st = await waitActive(x => x.length === 1 && x[0].scope === 'persistent');
+      const persistOk = status() === 'Luôn bật' && st.length === 1 && st[0].scope === 'persistent' && sw().getAttribute('aria-checked') === 'true';
+      scopeBtn()?.click();
+      await wait(() => status() === 'Đang bật · phiên này', 15000);
+      st = await waitActive(x => x.length === 1 && x[0].scope === 'session');
+      await log('active-peek-scope', persistOk && status() === 'Đang bật · phiên này' && st.length === 1 && st[0].scope === 'session', { persistOk, status: status(), state: st.map(x => [x.scope, x.status]) });
+      // Thẻ: font đang mở trong panel là font vừa bật (cmd-click có thể đưa panel sang thẻ thứ hai): tìm theo trạng thái, không theo chỉ số.
+      const pressed = c => c.querySelector('[data-testid=cell-active]')?.getAttribute('aria-pressed') === 'true';
+      const [cOn, cOff] = [cells()[0], cells()[1]].sort((x, y) => Number(pressed(y)) - Number(pressed(x)));
+      const dot = cOn.querySelector('[data-testid=active-dot]');
+      const powBtn = cOff.querySelector('[data-testid=cell-active]');
+      await log('active-card-controls', pressed(cOn) && !pressed(cOff) && !!dot && !cOff.querySelector('[data-testid=active-dot]') && !!powBtn, { onHasDot: !!dot, offPressed: pressed(cOff), onPressed: pressed(cOn) });
+      powBtn.click();
+      st = await waitActive(x => x.length === 2);
+      await wait(() => cOff.querySelector('[data-testid=active-dot]'), 8000);
+      await snap('active-cards-on');
+      await log('active-card-toggle', st.length === 2 && !!cOff.querySelector('[data-testid=active-dot]') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { n: st.length, selection: document.querySelector('[data-testid=selection-count]')?.textContent });
+      // Thanh chọn: cả lựa chọn đang bật → nút "Tắt kích hoạt"; bấm → tắt hết; "Kích hoạt" → bật hết; ⌘⇧A → tắt.
+      // Top Bar KHÔNG còn nút nguồn (hai nút cùng việc chỉ làm rối); ⌘⇧A vẫn chạy.
+      const sbBtn = () => document.querySelector('[data-testid=selbar-activate]');
+      const lbl = () => sbBtn()?.textContent;
+      const noTopBtn = !document.querySelector('header.fa-topbar [data-testid=topbar-activate]');
+      const labelOk1 = lbl() === 'Tắt kích hoạt';
+      sbBtn().click();
+      st = await waitActive(x => x.length === 0); await wait(() => lbl() === 'Kích hoạt', 8000);
+      const offOk = st.length === 0 && lbl() === 'Kích hoạt' && navCount() === '0';
+      sbBtn().click();
+      st = await waitActive(x => x.length === 2); await wait(() => lbl() === 'Tắt kích hoạt', 8000);
+      await wait(() => navCount() === '2', 8000);
+      const onOk = st.length === 2 && lbl() === 'Tắt kích hoạt' && navCount() === '2';
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'A', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+      st = await waitActive(x => x.length === 0);
+      await wait(() => navCount() === '0', 8000);
+      await log('active-topbar-multi', noTopBtn && labelOk1 && offOk && onOk && st.length === 0 && navCount() === '0', { noTopBtn, labelOk1, offOk, onOk, afterShortcut: st.length, nav: navCount() });
+      // Cả family: nút cạnh StyleDropdown bật mọi kiểu của family (≥ 2 file), bấm lại tắt hết.
+      const famBtn = () => document.querySelector('aside.fa-panel [data-testid=family-active]');
+      const styleCount = Number((document.querySelector('aside.fa-panel .fa-dd-btn .cnt')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      famBtn()?.click();
+      st = await waitActive(x => x.length >= 1 && (styleCount <= 1 || x.length >= 2) && famBtn()?.getAttribute('aria-pressed') === 'true');
+      const famOn = !!famBtn() && famBtn().getAttribute('aria-pressed') === 'true';
+      await snap('active-family-on');
+      famBtn()?.click();
+      const stOff = await waitActive(x => x.length === 0);
+      await wait(() => famBtn()?.getAttribute('aria-pressed') === 'false', 8000);
+      await log('active-family', famOn && stOff.length === 0 && famBtn()?.getAttribute('aria-pressed') === 'false', { styleCount, onCount: st.length, famOn, offCount: stOff.length });
+      // Dark: ảnh panel + thẻ đang bật.
+      sw().click(); await waitActive(x => x.length === 1);
+      const themeAct = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400);
+      await snap('active-peek-dark');
+      if (themeAct) document.documentElement.dataset.theme = themeAct; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      sw().click(); const fin = await waitActive(x => x.length === 0);
+      await log('active-clean', fin.length === 0, { left: fin.map(x => [x.hashHex.slice(0, 8), x.scope]) });
+    }
+
     // Compare (⇧C / nút) với 2 font: màn Compare thật, số đo thật, Esc quay lại giữ vùng chọn
     const compareBtn = [...(pcGroup?.querySelectorAll('button') ?? [])].find(x => x.getAttribute('aria-label') === 'Compare');
     compareBtn?.click();
@@ -482,6 +559,97 @@
       await log('duplicates-view', dgroups === dsum.total && dmembers >= 2 && risky.length === 0 && !!panel && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { dgroups, dmembers, risky, panel: panel?.textContent });
     } else {
       await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
+    }
+    // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
+    // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const countNow2 = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+      await sleep(600);
+      const base = countNow2();
+      await inv('add_source', { path: '__QA_DIR__/E' });
+      await wait(() => countNow2() >= base + 12, 120000);
+      await sleep(800);
+      const total = countNow2();
+      document.querySelector('[data-testid=library-grid-scroller]')?.focus?.();
+      const gridTop = () => document.querySelector('[role=grid]')?.getBoundingClientRect().top;
+      // chọn 3 font (cmd-click) để đo vị trí lưới; sau đó chọn tất cả: tag nổi hiện mà lưới KHÔNG đổi chỗ.
+      const c3 = cells(); c3[0].click(); c3[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); c3[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+      await wait(() => /^3 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), 8000);
+      const top3 = gridTop(); const noTag3 = !document.querySelector('[data-testid=narrow-tag]');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true, cancelable: true }));
+      await wait(() => Number((document.querySelector('[data-testid=selection-count]')?.textContent ?? '').replace(/\D/g, '')) >= total, 15000);
+      await sleep(300);
+      const topAll = gridTop(); const tag = document.querySelector('[data-testid=narrow-tag]');
+      const tagBox = tag?.getBoundingClientRect(); const wrapBox = tag?.closest('.fa-act-wrap')?.getBoundingClientRect(); const gb = document.querySelector('[role=grid]')?.getBoundingClientRect();
+      await snap('narrow-tag');
+      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
+      tag?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); tag?.focus();
+      const pop = await wait(() => document.querySelector('[data-testid=narrow-pop]'), 4000);
+      await log('narrow-pop-has-action', !!pop && !!btn('Chỉ lấy 4 đầu', pop) && Math.abs(gridTop() - top3) <= 1, { pop: pop?.textContent });
+      tag?.blur?.(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      // Chọn tất cả rồi Activate.
+      await wait(() => !document.querySelector('[data-testid=narrow-pop]'), 3000);
+      const selBtn = document.querySelector('[data-testid=selbar-activate]'); selBtn?.focus(); selBtn?.click();
+      const dlg = await wait(() => document.querySelector('[role=dialog].fa-conf'), 30000);
+      await sleep(300);
+      const rowsN = dlg ? dlg.querySelectorAll('[data-testid=conflict-list] > li').length : 0;
+      const h = dlg?.getBoundingClientRect().height ?? 0;
+      // Hộp thoại phải NẰM TRÊN CÙNG thật (không kẹt dưới stacking context của Top Bar/lưới): điểm giữa và 4 góc trong hộp trỏ vào chính nó.
+      const dr = dlg?.getBoundingClientRect();
+      const probes = dr ? [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]].map(([fx, fy]) => dlg.contains(document.elementFromPoint(dr.left + dr.width * fx, dr.top + dr.height * fy))) : [];
+      const scrimTop = !!dlg && document.elementFromPoint(20, window.innerHeight - 20)?.classList.contains('fa-modal-scrim');
+      await log('conflict-dialog-on-top', probes.length === 5 && probes.every(Boolean) && scrimTop && dlg.parentElement?.parentElement === document.body, { probes, scrimTop, parent: dlg?.parentElement?.parentElement?.tagName });
+      await sleep(400); await snap('conflict-dialog');
+      const themeC = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400); await snap('conflict-dialog-dark');
+      if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      const title = dlg?.querySelector('h2')?.textContent ?? '';
+      await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
+      const radios = [...(dlg?.querySelectorAll('input[type=radio]') ?? [])];
+      const rs = radios.map(r => { const cs = getComputedStyle(r), af = getComputedStyle(r, '::after'); return { appearance: cs.appearance, w: cs.width, bw: cs.borderTopWidth, br: cs.borderTopLeftRadius, dot: af.width, checked: r.checked }; });
+      await log('conflict-radio-ring-and-dot', rs.length === 2 && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1.5 && x.dot === '8px'), { rs });
+      const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
+      const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
+      await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
+      const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
+      await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
+      await log('conflict-dialog-returns-focus', document.activeElement === selBtn || document.activeElement?.closest('[data-testid=selbar-activate]') === selBtn, { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
+      await sleep(800);
+      let st2 = await actOn();
+      await log('conflict-skip-activates-rest', st2.length >= 12 && st2.length <= total - 6, { active: st2.length, total });
+      // Dọn: tắt mọi font đã bật (command thật, không động tới thứ gì ngoài các font QA vừa bật).
+      try { await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) }); } catch (e) { await log('conflict-clean-error', false, String(e && e.message || e)); }
+      await sleep(800); st2 = await actOn();
+      await log('conflict-clean', st2.length === 0, { left: st2.length });
+    }
+
+    // "CÓ SẴN TRÊN MÁY": một bản font hệ thống chép vào nguồn G (giống hệt từng byte) → Font Atlas không bật gì, chỉ báo ai cung cấp.
+    // (Chỉ là phép thử trong thư mục QA tạm; không ảnh nào của bước này được đưa vào tài liệu.)
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const dqa = { text: 'Academy', vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 10, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
+      await inv('add_source', { path: '__QA_DIR__/G' });
+      let gf = null; const t0 = Date.now();
+      while (!gf && Date.now() - t0 < 60000) { const p = await inv('query_faces', { q: dqa }); gf = (p.items || [])[0] || null; if (!gf) await sleep(500); }
+      if (!gf) { await log('available-outcome', true, 'máy không có font hệ thống mẫu: bỏ qua'); }
+      else {
+        const key = { hashHex: gf.hashHex ?? gf.hash_hex, faceIndex: gf.faceIndex ?? gf.face_index ?? 0 };
+        const rep = await inv('activation_activate', { faces: [key], scope: null, proceed: false, onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) });
+        const o = rep.results[0].outcome; const stA = await actOn();
+        await log('available-outcome', o.kind === 'already_available' && o.owner === 'system' && stA.length === 0 && rep.changed === 0, { outcome: o.kind, owner: o.owner, active: stA.length });
+        const again = await inv('activation_availability', { faces: [] });
+        await log('available-recomputed', again.length === 1 && again[0].hashHex === key.hashHex, { n: again.length });
+        window.dispatchEvent(new Event('focus'));
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^G\d*$/.test(b.textContent.trim()))?.click();
+        await sleep(800);
+        const cell = await wait(() => cells()[0], 10000); cell?.click();
+        const rowA = await wait(() => document.querySelector('aside.fa-panel [data-testid=active-row][data-available=true]'), 10000);
+        const swA = rowA?.querySelector('[data-testid=active-switch]');
+        const dotA = cells()[0]?.querySelector('[data-testid=active-dot][data-scope=available]');
+        await sleep(300); await snap('available-peek');
+        await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA, ncells: cells().length, cell0: cells()[0]?.textContent?.slice(0, 40), anyRow: !!document.querySelector('aside.fa-panel [data-testid=active-row]'), rowStatus: document.querySelector('aside.fa-panel [data-testid=active-status]')?.textContent, rowAvailAttr: document.querySelector('aside.fa-panel [data-testid=active-row]')?.getAttribute('data-available'), dotAny: cells()[0]?.querySelector('[data-testid=active-dot]')?.getAttribute('data-scope'), side: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].map(b => b.textContent.trim()).slice(-8) });
+      }
     }
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }

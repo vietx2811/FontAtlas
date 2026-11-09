@@ -14,6 +14,7 @@ import { SettingsShortcut } from './components/settings/SettingsShortcut';
 import { BootGate } from './components/boot/BootGate';
 import { NoticeStack } from './components/NoticeStack';
 import { FaceActionsProvider } from './components/faces/FaceActions';
+import { ActivationDialogHost } from './components/activation/ActivationDialogHost';
 import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -85,6 +86,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
                 <SettingsOverlay api={api} onRerunOnboarding={() => location.reload()} />
             </div>
         </WindowShell>
+        <ActivationDialogHost api={api} />
         </FaceActionsProvider>
     );
 };

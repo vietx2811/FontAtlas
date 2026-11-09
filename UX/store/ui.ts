@@ -1,6 +1,7 @@
 // UI state của app (Plan 6b §3). Lọc không chạy ở client: view/tag/query/viOnly → GridQuery → query_faces.
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, FaceKeyDto, UiStateDto } from '../api';
+import type { OwnerDto } from '../bindings';
 import { DEFAULT_UI_STATE } from '../api';
 import type { GridQuery, FaceQuery } from '../features/library-grid/types';
 
@@ -44,6 +45,10 @@ export interface UiState {
   infoExpanded: boolean;
   /** Các file đang bật: hashHex → các faceIndex của file (activation_state); nạp bằng refreshActive. */
   active: ReadonlyMap<string, readonly number[]>;
+  /** Phạm vi bật của từng file đang bật (hashHex → session | persistent). */
+  activeScope: ReadonlyMap<string, 'session' | 'persistent'>;
+  /** "Có sẵn trên máy": file giống hệt do bên khác cung cấp (hashHex → ai và ở đâu). Font Atlas không bật gì cho chúng; không tính vào "Đang bật". */
+  available: ReadonlyMap<string, { owner: OwnerDto; path: string }>;
   /** Tăng mỗi lần có nơi nào đó (trạng thái trống) muốn mở hộp chọn thư mục; Sidebar lắng nghe. */
   addFolderRequest: number;
   /** Màn Cài đặt (S7) đang mở. */
@@ -97,6 +102,8 @@ export interface UiActions {
   closePairThese(): void;
   toggleSettings(): void;
   refreshActive(api: Api): Promise<void>;
+  /** Tính lại "Có sẵn trên máy" từ hệ điều hành (mở app, đối soát, quay lại cửa sổ, sau mỗi lần bật/tắt). */
+  refreshAvailable(api: Api): Promise<void>;
   bumpLibrary(reloadGrid?: boolean): void;
 }
 
@@ -158,7 +165,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null }),
@@ -236,7 +243,13 @@ export function createUiStore(): UiStore {
 
     async refreshActive(api) {
       const st = await api.activationState();
-      set({ active: new Map(st.filter(x => x.state === 'active').map(x => [x.hashHex, x.faces] as const)) });
+      const on = st.filter(x => x.state === 'active');
+      set({ active: new Map(on.map(x => [x.hashHex, x.faces] as const)), activeScope: new Map(on.map(x => [x.hashHex, x.scope] as const)) });
+    },
+
+    async refreshAvailable(api) {
+      const list = await api.activationAvailability();
+      set({ available: new Map(list.map(a => [a.hashHex, { owner: a.owner, path: a.path }] as const)) });
     },
 
     async hydrate(api) {

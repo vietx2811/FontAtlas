@@ -1,10 +1,12 @@
 /** Từ điển chuỗi giao diện (vi). Mọi chuỗi mới đi qua khoá; thuật ngữ font giữ tiếng Anh, chú giải để ở khoá `*.gloss`. */
 import { TERM_GLOSS } from './terms';
 import { COMPARE_V2 } from './compareV2';
+import { ACTIVATION_I18N } from './activation';
 
 const vi = {
   ...TERM_GLOSS,
   ...COMPARE_V2,
+  ...ACTIVATION_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
@@ -23,7 +25,7 @@ const vi = {
   'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
   'topbar.group': 'Pair / Compare', 'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar',
   'topbar.pair.gloss': 'ghép cặp', 'topbar.pairThese.gloss': 'ghép các font đã chọn', 'topbar.compare.gloss': 'so sánh cạnh nhau', 'topbar.similar.gloss': 'tìm font giống',
-  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font — nên ≤ 4 để so rõ.', 'topbar.useFirst': 'Chỉ lấy 4 đầu',
+  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font đang chọn — nên ≤ {max} để so cho rõ.', 'topbar.narrow.short': 'nên ≤ {max}', 'topbar.narrow.title': 'Chọn quá nhiều để so sánh', 'topbar.useFirst': 'Chỉ lấy {max} đầu',
   'compare.sec.specimen.gloss': 'mẫu chữ', 'compare.sec.metrics.gloss': 'phép đo', 'compare.sec.meta.gloss': 'thông tin', 'compare.row.class.gloss': 'phân loại', 'compare.row.license.gloss': 'giấy phép',
   'compare.percentile': 'Percentile {p}', 'compare.baseNa': 'Mốc không đo được, không có Δ', 'compare.noXh': 'Không đo được x-height', 'compare.viNone': 'Không hỗ trợ tiếng Việt',
   'compare.skipped': 'Không đọc được {n} font: {reason}', 'compare.pngSaved': 'Đã lưu {name}', 'compare.pngCancelled': '', 'compare.footnote2': '±0: lệch < 1% (hoặc < 0,5°)',

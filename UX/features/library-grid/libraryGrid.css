@@ -26,6 +26,11 @@
 .fa-vi.ok { color: var(--on); }
 .fa-vi.miss { color: var(--warn); }
 .fa-dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
+.fa-pow { position: absolute; top: 6px; right: 46px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
+.fa-cell:hover .fa-pow, .fa-pow[aria-pressed="true"], .fa-pow:focus-visible { opacity: 1; }
+.fa-pow:hover { color: var(--fg); background: var(--surface-2); }
+.fa-pow[aria-pressed="true"] { color: var(--on); }
+.fa-cell[data-layout="list"] .fa-pow { top: 50%; margin-top: -11px; }
 .fa-star { position: absolute; top: 6px; right: 22px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
 .fa-cell:hover .fa-star, .fa-star[aria-pressed="true"], .fa-star:focus-visible { opacity: 1; }
 .fa-star[aria-pressed="true"] { color: var(--accent); }
@@ -35,5 +40,6 @@
 .fa-cell[data-layout="list"][aria-selected="true"] { background: var(--accent-soft); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-meta { width: 220px; flex: none; }
 .fa-cell[data-layout="list"] .fa-spec { flex: 1; align-items: flex-start; }
+.fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--on); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-dot { top: 50%; margin-top: -3px; }
 .fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }

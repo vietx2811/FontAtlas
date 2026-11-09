@@ -8,9 +8,18 @@
 .fa-act:hover { background: var(--chrome-active); }
 .fa-act.pri { background: var(--accent); color: #2a1d10; }
 .fa-act kbd { font: inherit; font-size: 10px; opacity: .6; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
-.fa-act:focus-visible, .fa-act-n button:focus-visible, .fa-act-hint button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.fa-act-hint { flex-basis: 100%; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--warn); }
-.fa-act-hint button { color: var(--accent-ink); text-decoration: underline; }
+.fa-act:focus-visible, .fa-act-n button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Tag nổi gắn nút Compare (không chiếm hàng): định vị tuyệt đối dưới nút, nổi lên trên lưới. */
+.fa-act-wrap { position: relative; display: inline-flex; }
+.fa-narrow { position: absolute; top: calc(100% + 3px); left: 0; z-index: 30; }
+.fa-narrow-tag { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px 0 3px; border-radius: 10px; background: var(--card); border: 1px solid var(--border-2); color: var(--fg); font-size: 11px; font-weight: 600; white-space: nowrap; cursor: help; box-shadow: var(--shadow-1, 0 1px 3px rgba(0,0,0,.18)); }
+.fa-narrow-tag b { width: 14px; height: 14px; border-radius: 50%; display: inline-grid; place-items: center; font: 700 10px/1 var(--font-ui); background: var(--note, var(--warn)); color: var(--note-ink, #fff); }
+.fa-narrow-tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-narrow-pop { position: absolute; top: calc(100% + 4px); left: 0; width: 230px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--card); border: 1px solid var(--border-2); box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 12px; }
+.fa-narrow-pop p { margin: 0 0 8px; line-height: 1.45; color: var(--fg); }
+.fa-narrow-pop button { height: 26px; padding: 0 10px; border-radius: 6px; background: var(--surface-2); font-size: 12px; font-weight: 600; }
+.fa-narrow-pop button:hover { background: var(--chrome-active); }
+.fa-narrow-pop button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 1100px) { .fa-act kbd, .fa-act .l { display: none; } .fa-act { padding: 0 8px; } }
 /* Panel chi tiết mở thì Top Bar hẹp: nút chỉ còn icon (tooltip giữ nhãn + phím tắt), tiêu đề co lại. */
 .fa-topbar { container-type: inline-size; }

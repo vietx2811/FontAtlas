@@ -33,6 +33,7 @@ const ILLU: Record<string, ReactNode> = {
   serif_foot: <><path d="M6 44H90" opacity=".9" strokeWidth="1.6" /><path d="M48 8V38M36 44H60M40 38H56" strokeWidth="3.2" /><path d="M36 50H60" className="acc" /></>,
   overlay: <>{guide(44, false)}<path d="M30 44V10M52 44V10M30 27H52" opacity=".35" strokeWidth="3" /><path d="M36 44V10M58 44V10M36 28H58" className="acc" strokeWidth="3" /></>,
   vi_marks: <>{guide(44, false)}{guide(28)}<path d="M30 36a9 8 0 1 0 18 0a9 8 0 1 0-18 0M48 28V44" /><path d="M31 22L39 14L47 22M45 10L51 5" className="acc" /></>,
+  activate: <><rect x="8" y="10" width="30" height="36" rx="3" strokeDasharray="3 3" opacity=".55" strokeWidth="1.2" /><path d="M16 36V20h8M16 28h6" /><path d="M44 28H62M56 22L62 28L56 34" className="acc" /><rect x="66" y="10" width="24" height="36" rx="3" /><path d="M71 18H85M71 24H85M71 30H80" opacity=".6" strokeWidth="1.2" /></>,
   baseline: <>{guide(44, false)}<path d="M30 44V16M30 26c4-4 14-4 14 5v13" /></>,
 };
 /** Thuật ngữ đã có hình riêng, hoặc dùng lại icon trục (24×24) phóng to. */

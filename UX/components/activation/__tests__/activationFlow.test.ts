@@ -13,6 +13,10 @@ describe('describeOutcome', () => {
   it('other failures show the short code', () => {
     expect(t({ kind: 'failed', code: 'os_denied', message: 'boom' })!.text).toMatch(/os_denied/);
   });
+  it('an unsettled row that set_scope could not change is explained, not skipped silently; "already available" says nothing here (the flow toasts once)', () => {
+    expect(t({ kind: 'failed', code: 'scope_unsettled', message: 'x' })!.text).toMatch(/tắt rồi bật lại/);
+    expect(t({ kind: 'already_available', owner: 'font_base', path: '/x.ttf' })).toBeNull();
+  });
   it('missing file and iCloud have their own wording', () => {
     expect(t({ kind: 'missing_file' })!.text).toMatch(/Không tìm thấy file/);
     expect(t({ kind: 'not_downloaded' })!.text).toMatch(/iCloud/);

@@ -22,6 +22,7 @@ export const TERM_GLOSS = {
   'term.terminal.gloss': 'Đầu nét: cách kết thúc nét của chữ c, a, r (cắt phẳng, tròn, giọt nước…).',
   'term.a_storeys.gloss': 'Chữ a hai tầng (a) hay một tầng (ɑ).',
   'term.g_storeys.gloss': 'Chữ g hai tầng (có vòng dưới) hay một tầng.',
+  'term.activate.gloss': 'Cài tạm font cho các app khác dùng (Photoshop, Figma, Word…); tắt thì gỡ khỏi hệ thống.',
   'term.overlay.gloss': 'Chồng glyph của mốc (mờ) lên glyph của cột (màu), chung baseline, để thấy chỗ lệch.',
   'term.vi_marks.gloss': 'Dấu chồng: chữ tiếng Việt mang hai dấu cùng lúc (ấ, ở, ặ, Ữ…); dấu cao quá thì tràn khung dòng và dễ va vào dòng trên.',
   'term.baseline.gloss': 'Đường nền: dòng chữ đứng trên đó.',

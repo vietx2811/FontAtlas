@@ -1,5 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { Api } from '../../api';
 import { t } from '../../i18n';
+import { useActivationFlow } from '../activation/useActivationFlow';
+import { NarrowTag } from './NarrowTag';
 import { useNoticeStore } from '../../store/notices';
 import { rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore, type PanelTab } from '../../store/ui';
@@ -39,12 +42,37 @@ export function shortcutBlocked(e: KeyboardEvent): boolean {
   return e.defaultPrevented || e.isComposing || e.repeat || !!document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [aria-modal="true"]');
 }
 
+type SelRow = { hashHex: string; faceIndex: number; missing?: boolean };
+/**
+ * Phím tắt ⌘⇧A bật/tắt kích hoạt cho cả lựa chọn (cả khi chọn 1 font). Không có nút riêng trên Top Bar: thanh chọn đã có nút
+ * "Kích hoạt / Tắt kích hoạt" có nhãn, hai nút cùng việc chỉ làm rối. Font mất file bị bỏ qua; font đã dùng được nhờ bản giống hệt của
+ * bên khác coi như đã bật. Hộp thoại (xung đột / đang được dự án giữ) nằm ở hàng đợi chung, không mất khi bỏ chọn.
+ */
+function ActivationShortcut({ api, rows }: { api: Api; rows: SelRow[] }): null {
+  const flow = useActivationFlow(api);
+  const active = useUiStore(s => s.active);
+  const available = useUiStore(s => s.available);
+  const usable = useMemo(() => rows.filter(r => !r.missing), [rows]);
+  const allOn = usable.length > 0 && usable.every(r => active.has(r.hashHex) || available.has(r.hashHex));
+  const run = () => { if (usable.length) void flow.toggle(usable.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })), !allOn); };
+  const runRef = useRef(run); runRef.current = run;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== 'a' || shortcutBlocked(e)) return;
+      e.preventDefault(); runRef.current();
+    };
+    document.addEventListener('keydown', on);
+    return () => document.removeEventListener('keydown', on);
+  }, []);
+  return null;
+}
+
 /**
  * Cụm hành động Pair / Compare trên Top Bar, theo số font đang chọn (brief 08):
  * 0 → không hiện; 1 → Pair · Find similar; 2–4 → Compare · Pair these; >4 → như 2–4 kèm gợi ý thu hẹp.
  * Compare và Pair these chưa có command backend: mở tab gần nhất của font đầu tiên và báo rõ, không giả dữ liệu.
  */
-export function TopBarActions(): React.JSX.Element | null {
+export function TopBarActions({ api }: { api?: Api } = {}): React.JSX.Element | null {
   const selected = useSelectionStore(s => s.rows);
   const rows = useMemo(() => [...selected.values()], [selected]);
   const n = rows.length;
@@ -76,9 +104,9 @@ export function TopBarActions(): React.JSX.Element | null {
       <div className="fa-acts" role="group" aria-label={t('topbar.group')}>
         <span className="fa-act-n">{t('topbar.selected', { n })}<button type="button" aria-label={t('topbar.clear')} onClick={() => useSelectionStore.getState().clear()}><Icon name="x" size={12} /></button></span>
         {n === 1 ? <>{btn('pair', 'pair', '⇧P', true, doPair)}{btn('similar', 'similar', null, false, doSimilar)}</>
-          : <>{btn('compare', 'compare', '⇧C', true, doCompare)}{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
+          : <><span className="fa-act-wrap">{btn('compare', 'compare', '⇧C', true, doCompare)}{n > COMPARE_MAX && <NarrowTag n={n} max={COMPARE_MAX} onNarrow={narrow} />}</span>{btn('pair', 'pairThese', '⇧P', false, doPair)}</>}
+        {api && <ActivationShortcut api={api} rows={rows} />}
       </div>
-      {n > COMPARE_MAX && <div className="fa-act-hint" role="status"><span>{t('topbar.narrow', { n })}</span><button type="button" onClick={narrow}>{t('topbar.useFirst')}</button></div>}
     </>
   );
 }

@@ -19,7 +19,7 @@ pub use fake::FakeEngine;
 pub use mac::MacCoreTextEngine;
 pub use paths::{FileProbe, canonical_path, classify_owner, probe_file};
 pub use reconcile::{AutoDeactivated, ReconcileReport};
-pub use service::ActivationService;
+pub use service::{ActivationService, Availability};
 pub use types::{
     ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, DeactivatePolicy, ENGINE_VERSION, EngineError, FileOutcome, FileResult,
     Owner, Progress, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED,

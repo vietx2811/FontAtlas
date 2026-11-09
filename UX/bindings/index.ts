@@ -6,6 +6,7 @@ export type { ActivationReportDto } from './ActivationReportDto';
 export type { ActivationStateDto } from './ActivationStateDto';
 export type { ActivationStatusDto } from './ActivationStatusDto';
 export type { AutoDeactivatedDto } from './AutoDeactivatedDto';
+export type { AvailabilityDto } from './AvailabilityDto';
 export type { AxisCoordDto } from './AxisCoordDto';
 export type { AxisFilterDto } from './AxisFilterDto';
 export type { AxisHistogramDto } from './AxisHistogramDto';

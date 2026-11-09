@@ -177,7 +177,6 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
   return (
     <Ctx.Provider value={value}>
       {children}
-      {flow.dialog}
       {menu && entries && (
         <Menu key={`${menu.kind}:${menu.rows.map(rowKey).join('|')}`} anchor={menu.anchor} focusFirst={menu.opts.keyboard} returnFocus={menu.opts.returnFocus}
           label={menu.kind === 'projects' ? 'Thêm vào dự án' : 'Menu font'} onClose={() => setMenu(null)} entries={entries} />

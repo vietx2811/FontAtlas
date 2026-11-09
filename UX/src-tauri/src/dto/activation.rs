@@ -165,6 +165,8 @@ pub struct ConflictDto {
     pub postscript_name: String,
     pub existing_path: String,
     pub owner: OwnerDto,
+    /// Font đang cài giống hệt file trong thư viện (từng byte): đã dùng được, không cần hỏi.
+    pub same_file: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -174,6 +176,9 @@ pub enum FileOutcomeDto {
     Ready,
     Activated,
     AlreadyActive,
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    AlreadyAvailable { owner: OwnerDto, path: String },
     Deactivated,
     AlreadyInactive,
     Busy,
@@ -205,13 +210,14 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::Ready => Self::Ready,
             F::Activated => Self::Activated,
             F::AlreadyActive => Self::AlreadyActive,
+            F::AlreadyAvailable { owner, path } => Self::AlreadyAvailable { owner: (*owner).into(), path: path.clone() },
             F::Deactivated => Self::Deactivated,
             F::AlreadyInactive => Self::AlreadyInactive,
             F::Busy => Self::Busy,
             F::NeedsConfirmation { conflicts } => Self::NeedsConfirmation {
                 conflicts: conflicts
                     .iter()
-                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into() })
+                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file })
                     .collect(),
             },
             F::HeldByCollections { collection_ids } => Self::HeldByCollections { collection_ids: collection_ids.clone() },
@@ -221,6 +227,17 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::Failed { code, message } => Self::Failed { code: code.clone(), message: message.clone() },
         }
     }
+}
+
+/// Font đã dùng được nhờ file giống hệt của bên khác ("Có sẵn trên máy"); Font Atlas không bật gì cho nó.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AvailabilityDto {
+    pub hash_hex: String,
+    pub faces: Vec<u32>,
+    pub owner: OwnerDto,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

@@ -160,6 +160,9 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     await api.activationDeactivateCollection(7); expect(last().args).toMatchObject({ collectionId: 7 });
     await api.activationDeactivateAll(); expect(last().cmd).toBe('activation_deactivate_all');
     await api.activationSetKeep(true); expect(last()).toEqual({ cmd: 'activation_set_keep', args: { on: true } });
+    await api.activationSetScope([{ hashHex: 'aa', faceIndex: 0 }], 'persistent'); expect(last()).toEqual({ cmd: 'activation_set_scope', args: { faces: [{ hashHex: 'aa', faceIndex: 0 }], scope: 'persistent' } });
+    await api.activationAvailability(); expect(last()).toEqual({ cmd: 'activation_availability', args: { faces: [] } });
+    await api.activationAvailability([{ hashHex: 'aa', faceIndex: 1 }]); expect(last().args).toEqual({ faces: [{ hashHex: 'aa', faceIndex: 1 }] });
   });
 });
 

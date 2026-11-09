@@ -94,6 +94,9 @@ pub struct Conflict {
     pub postscript_name: String,
     pub existing_path: String,
     pub owner: Owner,
+    /// Nội dung file đang cài GIỐNG HỆT file trong thư viện (cùng kích thước, từng byte): font đã dùng được rồi,
+    /// không cần hỏi. Chỉ khác phiên bản/khác file mới là xung đột thật.
+    pub same_file: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -103,6 +106,9 @@ pub enum FileOutcome {
     Ready,
     Activated,
     AlreadyActive,
+    /// Font đã dùng được nhờ một file GIỐNG HỆT do bên khác cung cấp (`owner`, `path`). Font Atlas không đăng ký
+    /// gì và không ghi dòng kích hoạt; bên kia gỡ thì font quay về "chưa bật".
+    AlreadyAvailable { owner: Owner, path: String },
     Deactivated,
     AlreadyInactive,
     /// Một thao tác khác đang chạy trên cùng file.
