@@ -180,14 +180,17 @@
     // Tooltip: rê chuột vào chấm tiếng Việt của thẻ đầu, rồi vào nút Cài đặt
     const vi0 = cells()[0].querySelector('[data-testid=vi-mark]');
     hover(vi0);
-    const t1 = await wait(tip, 3000);
+    // Tất định: tooltip phải là của ĐÚNG phần tử (aria-describedby trỏ tới nó), và phải đóng hẳn trước khi sang phần tử kế; không dùng sleep cố định.
+    const tipFor = el => () => { const x = tip(); return x && el.getAttribute('aria-describedby')?.split(' ').includes(x.id) ? x : null; };
+    const closed = () => wait(() => !tip(), 5000);
+    const t1 = await wait(tipFor(vi0), 20000);
     const t1Text = t1?.textContent; await sleep(100); await snap('tooltip-badge');
-    unhover(vi0); await sleep(200);
+    unhover(vi0); await closed();
     const gear = document.querySelector('button[aria-label="Cài đặt"]');
     hover(gear);
-    const t2 = await wait(tip, 3000);
+    const t2 = await wait(tipFor(gear), 20000);
     const t2Text = t2?.textContent; await sleep(100); await snap('tooltip-settings');
-    unhover(gear); await sleep(200);
+    unhover(gear); await closed();
     await log('tooltip-hover', !!t1 && !!t2 && /Cài đặt/.test(t2Text) && /⌘,/.test(t2Text) && !tip(), { badge: t1Text, gear: t2Text, leftover: !!tip(), nativeTitles: document.querySelectorAll('[title]').length });
     // Đa chọn: click + ⌘-click. Đo lưới so với panel chi tiết trước/sau khi panel mở và thanh chọn xuất hiện.
     const r1 = n => Math.round(n * 10) / 10;
