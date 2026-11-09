@@ -65,7 +65,7 @@ describe('DetailPanel', () => {
     render(<DetailPanel api={api} />);
     const r = await select(api, 'Inter', 'Regular');
     await settle();
-    const sw = screen.getByRole('switch', { name: 'Kích hoạt font' });
+    const sw = screen.getByRole('switch', { name: 'Active' });
     expect(sw.getAttribute('aria-checked')).toBe('false');
     await act(async () => { fireEvent.click(sw); });
     await settle();
@@ -107,7 +107,7 @@ describe('DetailPanel', () => {
       render(<DetailPanel api={api} />);
       await select(api, 'Roboto', 'Regular');
       await settle();
-      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); });
       await settle();
       const dlg = screen.getByRole('dialog', { name: /trùng tên với font đang có trên máy/ });
       expect(dlg.textContent).toMatch(/Roboto-Regular/);
@@ -116,7 +116,7 @@ describe('DetailPanel', () => {
       expect(dlg.textContent).toMatch(/font hệ thống luôn được ưu tiên/);
       fireEvent.click(within(dlg).getByRole('button', { name: 'Huỷ' }));
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole('switch', { name: 'Active' }).getAttribute('aria-checked')).toBe('false');
     });
 
     it('a clash with another manager lets you proceed anyway', async () => {
@@ -124,7 +124,7 @@ describe('DetailPanel', () => {
       render(<DetailPanel api={api} />);
       await select(api, 'Oswald', 'Regular');
       await settle();
-      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); });
       await settle();
       const dlg = screen.getByRole('dialog');
       expect(dlg.textContent).toMatch(/RightFont/);
@@ -133,7 +133,7 @@ describe('DetailPanel', () => {
       await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tiếp tục' })); });
       await settle();
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getByRole('switch', { name: 'Active' }).getAttribute('aria-checked')).toBe('true');
     });
 
     it('a file changed on disk shows an error notice and nothing turns on', async () => {
@@ -141,13 +141,13 @@ describe('DetailPanel', () => {
       render(<DetailPanel api={api} />);
       await select(api, 'Lobster', 'Regular');
       await settle();
-      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Kích hoạt font' })); });
+      await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); });
       await settle();
       const n = useNoticeStore.getState().notices;
       expect(n).toHaveLength(1);
       expect(n[0]).toMatchObject({ kind: 'error' });
       expect(n[0].text).toMatch(/đã thay đổi trên đĩa/);
-      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole('switch', { name: 'Active' }).getAttribute('aria-checked')).toBe('false');
     });
 
     it('turning off a font held by a project asks first, then forces', async () => {
@@ -159,14 +159,14 @@ describe('DetailPanel', () => {
       render(<DetailPanel api={api} />);
       await act(async () => { await useUiStore.getState().refreshActive(api); });
       await settle();
-      const sw = screen.getByRole('switch', { name: 'Kích hoạt font' });
+      const sw = screen.getByRole('switch', { name: 'Active' });
       expect(sw.getAttribute('aria-checked')).toBe('true');
       await act(async () => { fireEvent.click(sw); });
       await settle();
       const dlg = screen.getByRole('dialog', { name: /đang được giữ bởi 1 dự án/ });
       await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tắt luôn' })); });
       await settle();
-      expect(screen.getByRole('switch', { name: 'Kích hoạt font' }).getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole('switch', { name: 'Active' }).getAttribute('aria-checked')).toBe('false');
       expect(await api.activationState()).toEqual([]);
     });
   });

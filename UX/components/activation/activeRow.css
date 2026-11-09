@@ -1,0 +1,7 @@
+.fa-act-row { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: var(--text-xs); }
+.fa-act-lbl { font-weight: 600; color: var(--fg); border-bottom: 1px dotted var(--border-2); cursor: help; }
+.fa-act-state { color: var(--faint); }
+.fa-act-state[data-on="true"] { color: var(--fg); }
+.fa-act-state[data-on="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--on); margin-right: 6px; vertical-align: 1px; }
+.fa-act-scope { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 11px; border: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.fa-act-scope:hover { color: var(--fg); background: var(--surface-2); }

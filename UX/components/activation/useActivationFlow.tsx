@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Api, ConflictDto, FaceKeyDto, FileOutcomeDto } from '../../api';
+import { t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { ConflictDialog, HeldDialog } from './ActivationDialogs';
@@ -8,7 +9,7 @@ import { describeOutcome } from './messages';
 type Pending = { type: 'conflict'; total: number; conflictFaces: FaceKeyDto[]; conflicts: ConflictDto[] } | { type: 'held'; faces: FaceKeyDto[]; collections: number };
 
 /** Bật/tắt kích hoạt cho một nhóm face kèm các hộp thoại D3 và "đang được giữ bởi dự án". */
-export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; dialog: React.ReactNode } {
+export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void>; dialog: React.ReactNode } {
   const [pending, setPending] = useState<Pending | null>(null);
   const push = useNoticeStore.getState().push;
   const refresh = useCallback(() => useUiStore.getState().refreshActive(api), [api]);
@@ -41,6 +42,13 @@ export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: b
     await refresh();
   }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Đổi phạm vi của font ĐANG bật (không tắt giữa chừng). */
+  const setScope = useCallback(async (faces: FaceKeyDto[], scope: 'session' | 'persistent') => {
+    try { say((await api.activationSetScope(faces, scope)).results.map(r => r.outcome).filter(o => o.kind === 'failed' || o.kind === 'busy')); }
+    catch (e) { push({ kind: 'error', text: t('act.scope.fail', { msg: (e as Error).message }) }); }
+    await refresh();
+  }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const run = async (fn: () => Promise<unknown>) => {
     setPending(null);
     try { await fn(); } catch (e) { push({ kind: 'error', text: `Không đổi được kích hoạt: ${(e as Error).message}` }); }
@@ -57,5 +65,5 @@ export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: b
     dialog = <HeldDialog collectionCount={p.collections} onCancel={() => setPending(null)}
       onConfirm={() => void run(async () => say((await api.activationDeactivate(p.faces, { force: true })).results.map(r => r.outcome)))} />;
   }
-  return { toggle, dialog };
+  return { toggle, setScope, dialog };
 }
