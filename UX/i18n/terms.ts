@@ -4,6 +4,8 @@ export const TERM_GLOSS = {
   'term.cap_height.gloss': 'Chiều cao chữ hoa (như H) tính từ baseline lên.',
   'term.ascender.gloss': 'Phần nét nhô lên trên x-height, như đầu chữ b, d, h, l.',
   'term.descender.gloss': 'Phần nét thò xuống dưới baseline, như đuôi chữ g, p, q, y.',
+  'term.weight_class.gloss': 'Độ đậm do nhà thiết kế khai báo (OS/2 usWeightClass): 100 Thin … 400 Regular … 700 Bold … 900 Black.',
+  'term.width_class.gloss': 'Độ rộng do nhà thiết kế khai báo (OS/2 usWidthClass): 1 hẹp nhất … 5 thường … 9 rộng nhất.',
   'term.stem.gloss': 'Độ dày thân nét đứng (như chữ l, I): quyết định font trông đậm hay nhạt.',
   'term.contrast.gloss': 'Chênh lệch giữa nét dày và nét mỏng, đo vuông góc với trục nét trên chữ o.',
   'term.contrast_h.gloss': 'Chênh lệch nét đứng dày và nét ngang mỏng, đo trên chữ H.',
