@@ -242,6 +242,8 @@ fn whitening_with_wrong_dims_rejected_at_start() {
 }
 
 /// Encoder giữ khoá ghi của library.db lâu hơn busy_timeout (5 s) → `finish` lỗi.
+/// Đếm 6,5 s từ lúc encode xong (ngay trước `finish`), không từ lúc lấy khoá: máy bận làm encode
+/// chậm thì khoá không được nhả sớm trước `finish` (từng gây test chập chờn).
 struct LockingEncoder {
     inner: Box<dyn Encode>,
     db: std::path::PathBuf,
@@ -253,15 +255,19 @@ impl Encode for LockingEncoder {
     fn encode(&mut self, t: &[Vec<f32>], c: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
         let db = self.db.clone();
         let (tx, rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
         std::thread::spawn(move || {
             let conn = rusqlite::Connection::open(db).unwrap();
             conn.execute_batch("BEGIN EXCLUSIVE").unwrap();
             tx.send(()).unwrap();
+            let _ = go_rx.recv();
             std::thread::sleep(Duration::from_millis(6500));
             conn.execute_batch("COMMIT").unwrap();
         });
         rx.recv().unwrap();
-        self.inner.encode(t, c)
+        let out = self.inner.encode(t, c);
+        let _ = go_tx.send(());
+        out
     }
 }
 
