@@ -11,12 +11,17 @@ export const RECENT_KEY = 'ui.recent_views'; // 6a: ^ui\.[a-z0-9_.-]{1,60}$ (kh�
 const FACE_KEYS_MAX = 2000;
 export const SAMPLE_MIN = 18;
 export const SAMPLE_MAX = 72;
+export const COMPARE_MAX = 8;
+export const COMPARE_MIN = 2;
+export const OVERLAY_MAX = 4;
 export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
 
 export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
 export type SectionKey = 'col' | 'src' | 'tag';
+/** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
+export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
 export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses'>;
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
@@ -45,6 +50,8 @@ export interface UiState {
   settingsOpen: boolean;
   /** Face đang so sánh (2–8); null = đang ở thư viện. */
   compare: FaceKeyDto[] | null;
+  /** Phiên so sánh gần nhất; còn sau khi rời Compare (sidebar "Đang so sánh") cho tới khi mở phiên mới. */
+  compareSession: CompareSession | null;
   /** Font đang ghép bằng "Pair these" (2–4); null = không mở. Loại trừ với `compare`. */
   pairThese: FaceKeyDto[] | null;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
@@ -77,6 +84,15 @@ export interface UiActions {
   setSettingsOpen(on: boolean): void;
   openCompare(faces: FaceKeyDto[]): void;
   closeCompare(): void;
+  /** Quay lại phiên so sánh đang giữ (sidebar). */
+  resumeCompare(): void;
+  addCompareFace(f: FaceKeyDto): boolean;
+  removeCompareFace(key: string): void;
+  /** Gỡ các face khỏi phiên (không đọc được / thêm thất bại); không áp mức tối thiểu 2. */
+  pruneCompareFaces(keys: string[]): void;
+  toggleComparePin(key: string): void;
+  setCompareOverlay(on: boolean): void;
+  toggleCompareOverlayFace(key: string): void;
   openPairThese(faces: FaceKeyDto[]): void;
   closePairThese(): void;
   toggleSettings(): void;
@@ -132,6 +148,9 @@ const fromDto = (d: UiStateDto): Pick<UiState, 'sidebarCollapsed' | 'openSection
   infoExpanded: d.infoExpanded,
 });
 
+/** Overlay đang bật mà việc bỏ cột làm cạn danh sách chọn → chọn lại mốc + font kế tiếp (chỉ khi do bỏ cột; tự bỏ chọn hết thì giữ nguyên). */
+const reseedOverlay = (on: boolean, ids: string[], faces: FaceKeyDto[]): string[] => (on && ids.length === 0 ? faces.slice(0, 2).map(faceKey) : ids);
+
 export type UiStore = UseBoundStore<StoreApi<UiState & UiActions>>;
 
 export function createUiStore(): UiStore {
@@ -139,7 +158,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null }),
@@ -161,8 +180,53 @@ export function createUiStore(): UiStore {
     toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     toggleSection: k => set(s => ({ openSections: { ...s.openSections, [k]: !s.openSections[k] } })),
     setSettingsOpen: on => set({ settingsOpen: on }),
-    openCompare: faces => { if (faces.length >= 2) set({ compare: faces.slice(0, 8), pairThese: null, settingsOpen: false }); },
+    openCompare: faces => {
+      if (faces.length < COMPARE_MIN) return;
+      const f = faces.slice(0, COMPARE_MAX);
+      set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, settingsOpen: false });
+    },
     closeCompare: () => set({ compare: null }),
+    resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, settingsOpen: false } : s)),
+    addCompareFace: f => {
+      const s = get(); const cs = s.compareSession;
+      if (!cs || cs.faces.length >= COMPARE_MAX || cs.faces.some(x => faceKey(x) === faceKey(f))) return false;
+      const faces = [...cs.faces, f];
+      set({ compareSession: { ...cs, faces }, compare: s.compare ? faces : s.compare });
+      return true;
+    },
+    removeCompareFace: key => set(s => {
+      const cs = s.compareSession;
+      if (!cs || cs.faces.length <= COMPARE_MIN || !cs.faces.some(x => faceKey(x) === key)) return s;
+      const faces = cs.faces.filter(x => faceKey(x) !== key);
+      const overlayIds = reseedOverlay(cs.overlayOn, cs.overlayIds.filter(k => k !== key), faces);
+      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => k !== key), overlayIds }, compare: s.compare ? faces : s.compare };
+    }),
+    pruneCompareFaces: keys => set(s => {
+      const cs = s.compareSession;
+      if (!cs || !cs.faces.some(x => keys.includes(faceKey(x)))) return s;
+      const faces = cs.faces.filter(x => !keys.includes(faceKey(x)));
+      const overlayIds = reseedOverlay(cs.overlayOn, cs.overlayIds.filter(k => !keys.includes(k)), faces);
+      return { compareSession: { ...cs, faces, pinned: cs.pinned.filter(k => !keys.includes(k)), overlayIds }, compare: s.compare ? faces : s.compare };
+    }),
+    toggleComparePin: key => set(s => {
+      const cs = s.compareSession;
+      if (!cs || !cs.faces.some(x => faceKey(x) === key)) return s;
+      return { compareSession: { ...cs, pinned: cs.pinned.includes(key) ? cs.pinned.filter(k => k !== key) : [...cs.pinned, key] } };
+    }),
+    setCompareOverlay: on => set(s => {
+      const cs = s.compareSession;
+      if (!cs) return s;
+      // Bật lần đầu chưa chọn font nào: chọn sẵn mốc + font kế tiếp để có cái xem ngay.
+      const overlayIds = on && cs.overlayIds.length === 0 ? cs.faces.slice(0, 2).map(faceKey) : cs.overlayIds;
+      return { compareSession: { ...cs, overlayOn: on, overlayIds } };
+    }),
+    toggleCompareOverlayFace: key => set(s => {
+      const cs = s.compareSession;
+      if (!cs || !cs.faces.some(x => faceKey(x) === key)) return s;
+      if (cs.overlayIds.includes(key)) return { compareSession: { ...cs, overlayIds: cs.overlayIds.filter(k => k !== key) } };
+      if (cs.overlayIds.length >= OVERLAY_MAX) return s;
+      return { compareSession: { ...cs, overlayIds: [...cs.overlayIds, key] } };
+    }),
     openPairThese: faces => { if (faces.length >= 2) set({ pairThese: faces.slice(0, 4), compare: null, settingsOpen: false }); },
     closePairThese: () => set({ pairThese: null }),
     toggleSettings: () => set(s => ({ settingsOpen: !s.settingsOpen })),

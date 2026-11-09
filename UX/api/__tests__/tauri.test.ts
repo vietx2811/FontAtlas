@@ -238,6 +238,14 @@ describe('duplicates', () => {
   });
 });
 
+describe('missing_chars', () => {
+  it('sends the face and the already-segmented graphemes', async () => {
+    reply = () => ['龍'];
+    await expect(createTauriApi().missingChars({ hashHex: 'ab', faceIndex: 0 }, ['a', '龍'])).resolves.toEqual(['龍']);
+    expect(last()).toEqual({ cmd: 'missing_chars', args: { face: { hashHex: 'ab', faceIndex: 0 }, chars: ['a', '龍'] } });
+  });
+});
+
 describe('reveal_location', () => {
   it('sends the exact path', async () => {
     reply = () => null;

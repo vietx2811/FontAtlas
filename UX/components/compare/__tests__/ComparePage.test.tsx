@@ -5,6 +5,7 @@ import { buildCompare, type CompareDto, type CompareMetric } from '../../../api/
 import { useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
 import { ComparePage } from '../ComparePage';
+import { notes } from '../../ui/__tests__/noteHelpers';
 import { EmbeddingCell, KerningCell, OtCell, StyleCell, YearsCell } from '../MetaCells';
 
 const initial = useUiStore.getState();
@@ -68,9 +69,9 @@ describe('ComparePage', () => {
     expect(within(row).getByText('Δ +273%')).toBeTruthy();
     expect(within(row).getByRole('img', { name: 'Percentile 97' })).toBeTruthy();
     const stress = screen.getByText('stress').closest('.row') as HTMLElement;
-    expect(within(stress).getAllByText('Ước lượng').length).toBeGreaterThan(0);
+    expect(notes('Ước lượng', stress).length).toBeGreaterThan(0);
     expect(within(stress).getByText('Không đo được')).toBeTruthy();
-    expect(within(stress).getByText('không có nét đứng')).toBeTruthy();
+    expect(notes('không có nét đứng', stress)).toHaveLength(1);
   });
 
   it('warns when stacked marks overflow and reports missing Vietnamese characters', async () => {
@@ -79,8 +80,8 @@ describe('ComparePage', () => {
       d.faces[2].vi = { ...d.faces[2].vi, stackedMarksOverflow: false, supports: false, missing: 4 };
     });
     await mount(api);
-    expect(screen.getByText(/Dấu tràn khung · 1,120 em/)).toBeTruthy();
-    expect(screen.getByText('Thiếu 4 ký tự')).toBeTruthy();
+    expect(notes(/Dấu tràn khung · 1,120 em/)).toHaveLength(1);
+    expect(notes('Thiếu 4 ký tự')).toHaveLength(1);
   });
 
   it('Classification row: Uncertain shows the candidate, override shows Đã sửa, traits and usage are listed; license is a note only', async () => {
@@ -90,16 +91,9 @@ describe('ComparePage', () => {
     });
     await mount(api);
     expect(screen.getByText('có lẽ là Script')).toBeTruthy();
-    expect(screen.getByText('Đã sửa')).toBeTruthy();
+    expect(notes('Đã sửa')).toHaveLength(1);
     expect(screen.getByText('Rounded')).toBeTruthy();
     expect(screen.getAllByText('Chỉ ghi chú, không chặn')).toHaveLength(3);
-  });
-
-  it('the Overlay toggle hides and shows the overlay row', async () => {
-    await mount();
-    expect(document.querySelectorAll('.cmp-overlay')).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: 'Overlay' }));
-    expect(document.querySelectorAll('.cmp-overlay')).toHaveLength(0);
   });
 
   it('Esc and the back button close the screen; Esc is left to dialogs', async () => {
@@ -148,17 +142,17 @@ describe('ComparePage', () => {
   it('a font without Vietnamese is never shown as fitting; its sample is dimmed', async () => {
     const api = await crafted(d => { d.faces.forEach(f => { f.vi = { ...f.vi, supports: true, missing: 0, stackedMarksOverflow: false }; }); d.faces[1].vi = { ...d.faces[1].vi, supports: false }; });
     await mount(api);
-    expect(screen.getByText('Không hỗ trợ tiếng Việt')).toBeTruthy();
+    expect(notes('Không hỗ trợ tiếng Việt')).toHaveLength(1);
     expect(document.querySelectorAll('.cmp-vi[data-unsupported="true"]')).toHaveLength(1);
-    expect(screen.getAllByText('Dấu vừa khung')).toHaveLength(2);
+    expect(notes('Dấu vừa khung')).toHaveLength(2);
   });
 
   it('Match x-height: a column without x-height keeps its size and says why; a missing base draws no x-height line', async () => {
     const api = await crafted(d => { d.faces[1].metrics.x_height_em = m(null, { quality: 'failed' }); d.faces[0].metrics.x_height_em = m(null, { quality: 'failed' }); });
     await mount(api);
     fireEvent.click(screen.getByRole('button', { name: 'Match x-height' }));
-    expect(screen.getAllByText('Không đo được x-height').length).toBeGreaterThan(0);
-    expect(document.querySelectorAll('.cmp-overlay line.xh')).toHaveLength(0);
+    expect(notes('Không đo được x-height').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('.cmp-ovl line.xh')).toHaveLength(0);
     expect([...document.querySelectorAll<HTMLElement>('.cmp-line')].every(l => l.style.fontSize === '30px')).toBe(true);
   });
 
@@ -204,7 +198,7 @@ describe('ComparePage', () => {
   it('Vietnamese overflow is shown as a percentage of em when the backend gives it', async () => {
     const api = await crafted(d => { d.faces[1].vi = { ...d.faces[1].vi, supports: true, stackedMarksOverflow: true, stackedMarksTopEm: 1.12, overAscenderPctEm: 4.5, overCapPctEm: 41.2 }; });
     await mount(api);
-    expect(screen.getByText('Dấu tràn khung · 4,5% em')).toBeTruthy();
+    expect(notes('Dấu tràn khung · 4,5% em')).toHaveLength(1);
   });
 
   it('Meta rows list vendor, years, style, family, OpenType groups, kerning and embedding with English terms and glosses', async () => {
@@ -218,7 +212,7 @@ describe('ComparePage', () => {
   it('Meta cells say "—" with an explanation when the analysis has no extras (old data)', async () => {
     const api = await crafted(d => { d.faces[1].extras = null; d.faces[1].family = null; d.faces[1].licenseNote = null; });
     await mount(api);
-    expect(screen.getAllByTitle('Chưa có dữ liệu — quét lại để cập nhật').length).toBeGreaterThanOrEqual(6);
+    expect(notes('Chưa có dữ liệu — quét lại để cập nhật').length).toBeGreaterThanOrEqual(6);
   });
 });
 
@@ -251,7 +245,7 @@ describe('stale analysis and missing deltas', () => {
     const f = { extras: { extrasAvailable: false, kerning: { source: 'none', pairs: 0, classPairs: 0 }, vendorId: null, years: {}, otGroups: [], style: null, embedding: null }, family: null, licenseNote: null } as never;
     render(<><KerningCell face={f} /><OtCell face={f} /></>);
     expect(screen.queryByText('Không có kerning')).toBeNull();
-    expect(screen.getAllByText('Cần quét lại')).toHaveLength(2);
+    expect(notes('Cần quét lại')).toHaveLength(2);
   });
 
   it('a null Δ (angle unit or near-zero base) shows "—" with an explanation, never a made-up number', async () => {

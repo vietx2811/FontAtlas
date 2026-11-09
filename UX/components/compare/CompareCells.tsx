@@ -1,4 +1,7 @@
+import { useRef } from 'react';
+import { Tooltip } from '../ui/Tooltip';
 import type { Api } from '../../api';
+import { useUiStore } from '../../store/ui';
 import type { CompareFace, CompareMetric } from '../../api/compare';
 import { hasKey, t } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
@@ -6,10 +9,12 @@ import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { useInk } from '../ui/inkLines';
-import { deltaOf, deltaText, percentLabel, xhOk } from './compareMath';
+import { NoteMark } from '../ui/noteMark';
+import { graphemes, missingList, useMissingChars } from './glyphCoverage';
+import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
-export const SAMPLE_VI_GLOSS = 'Ữ Ặ Ệ Ỗ Ở · ươ';
+export const PLACEHOLDER = 'Hxg';
 export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
@@ -24,36 +29,74 @@ const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fa
 /** Cột thiếu x-height khi bật Match x-height: không đổi cỡ, nói rõ vì sao. */
 export const noXh = (face: CompareFace, fit: boolean) => fit && !xhOk(face.metrics.x_height_em?.value);
 
+/** Chữ mẫu sửa tại chỗ: một ô nhập trong suốt nằm trên lớp hiển thị (kiểu chữ giữ nguyên); sửa ở một cột là đổi ở mọi cột (`useUiStore.sample`). Ký tự font không có hiện xám (`--faint`). */
 export function SpecimenCell({ api, face, text, size, fit }: { api: Api; face: CompareFace; text: string; size: number; fit: boolean }): React.JSX.Element {
-  return <WithFamily api={api} face={face}>{fam => (
-    <div className="cmp-page">
-      <div className="cmp-line" style={{ fontFamily: css(fam), fontSize: size }}>{text}</div>
-      {noXh(face, fit) && <span className="cmp-chip warn">{t('compare.noXh')}</span>}
+  return <WithFamily api={api} face={face}>{fam => <SpecimenArt api={api} face={face} fam={fam} text={text} size={size} fit={fit} />}</WithFamily>;
+}
+function SpecimenArt({ api, face, fam, text, size, fit }: { api: Api; face: CompareFace; fam: string | null; text: string; size: number; fit: boolean }): React.JSX.Element {
+  const sample = useUiStore(s => s.sample);
+  const missing = useMissingChars(api, face.face, text);
+  const layer = useRef<HTMLDivElement>(null);
+  const sync = (el: HTMLInputElement) => { if (layer.current) layer.current.style.transform = `translateX(${-el.scrollLeft}px)`; };
+  const style = { fontFamily: css(fam), fontSize: size } as const;
+  return (
+    <div className="cmp-page fa-note-host cmp-spec">
+      <div className="cmp-line cmp-spec-view" aria-hidden="true" style={style}><div ref={layer}>{text === '' ? <span className="ph">{PLACEHOLDER}</span> : graphemes(text).map((ch, i) => <span key={i} className={missing.has(ch) ? 'miss' : undefined}>{ch}</span>)}</div></div>
+      <input className="cmp-edit" type="text" value={sample} placeholder={PLACEHOLDER} spellCheck={false} autoComplete="off" style={style} aria-label={`${t('compare.edit')} · ${face.row.family}`}
+        onChange={e => { useUiStore.getState().setSample(e.target.value); sync(e.target); }} onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.stopPropagation(); e.currentTarget.blur(); } }} onScroll={e => sync(e.currentTarget)} onKeyUp={e => sync(e.currentTarget)} onSelect={e => sync(e.currentTarget)} />
+      {missing.size > 0 && <NoteMark testId="missing-note" text={t('compare.missing', { chars: missingList(missing) })} />}
+      {noXh(face, fit) && <NoteMark text={t('compare.noXh')} />}
     </div>
-  )}</WithFamily>;
+  );
 }
 
 const PLAIN = { fontWeight: 'normal', fontStyle: 'normal', fontSynthesis: 'none', fontVariationSettings: 'normal' } as const;
-/** Glyph của mốc (xám) chồng lên glyph của cột (màu), chung baseline. Đường đứt = x-height ĐO TỪ CHỮ MỐC đang vẽ (canvas ink), không theo số analyzer; mốc chưa nạp thì không vẽ đường. */
-export function OverlayCell({ api, base, face, scale }: { api: Api; base: CompareFace; face: CompareFace; scale: number }): React.JSX.Element {
+/** Kiểu vẽ các lớp overlay: mốc luôn đặc; các font khác là nét liền / nét đứt / chấm, tông đen → xám. */
+export const OVERLAY_STYLES = ['line', 'dash', 'dot'] as const;
+export type OverlayStyle = 'solid' | (typeof OVERLAY_STYLES)[number];
+export const overlayStyleOf = (selected: readonly CompareFace[], base: CompareFace): Map<CompareFace, OverlayStyle> => {
+  const m = new Map<CompareFace, OverlayStyle>(); let k = 0;
+  for (const f of selected) m.set(f, f === base ? 'solid' : OVERLAY_STYLES[Math.min(k++, OVERLAY_STYLES.length - 1)]);
+  return m;
+};
+export const faceName = (f: CompareFace): string => `${f.row.family} ${f.row.subfamily ?? ''}`.trim();
+const OV = { W: 520, H: 108, Y: 80, SZ: 72 } as const;
+
+/** Vùng Overlay chung: các font được chọn (≤ 4) chồng lên nhau chung baseline. Mốc vẽ đặc; font khác vẽ nét. Đường đứt = x-height ĐO TỪ CHỮ đang vẽ của font chính (mốc, nếu mốc được chọn). */
+export function OverlayPanel({ api, base, selected, scale }: { api: Api; base: CompareFace; selected: readonly CompareFace[]; scale(f: CompareFace): number }): React.JSX.Element {
+  const styles = overlayStyleOf(selected, base);
+  const primary = selected.includes(base) ? base : selected[0];
   return (
-    <WithFamily api={api} face={base}>{bf => <WithFamily api={api} face={face}>{ff => <OverlayArt base={base} face={face} scale={scale} bf={bf} ff={ff} />}</WithFamily>}</WithFamily>
+    <section className="cmp-ovl" aria-label={t('compare.row.overlay')} data-count={selected.length}>
+      <div className="cmp-ovl-h"><TermTip term="overlay"><b data-term="overlay">{t('compare.row.overlay')}</b></TermTip><small>{OVERLAY_SPACED}</small></div>
+      {selected.length === 0 ? <p className="cmp-ovl-empty">{t('compare.ov.empty')}</p> : (
+        <svg viewBox={`0 0 ${OV.W} ${OV.H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')}: ${selected.map(faceName).join(', ')}`}>
+          <line x1="0" x2={OV.W} y1={OV.Y} y2={OV.Y} className="bl" />
+          {selected.map(f => <OverlayLayer key={`${f.face.hashHex}:${f.face.faceIndex}`} api={api} face={f} style={styles.get(f)!} scale={scale(f)} primary={f === primary} />)}
+        </svg>
+      )}
+      <ul className="cmp-ovl-legend">
+        {selected.map(f => (
+          <li key={`${f.face.hashHex}:${f.face.faceIndex}`} data-style={styles.get(f)}>
+            <svg width="26" height="10" aria-hidden="true"><line x1="1" x2="25" y1="5" y2="5" className={`ov-${styles.get(f)} sw`} /></svg>
+            <span>{faceName(f)}{f === base ? ` · ${t('compare.base')}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
-function OverlayArt({ base, face, scale, bf, ff }: { base: CompareFace; face: CompareFace; scale: number; bf: string | null; ff: string | null }): React.JSX.Element {
-  const W = 300, H = 96, Y = 66, SZ = 64;
-  const ink = useInk(bf);
-  const baseXh = ink?.x ?? null;
-  const same = face === base;
+function OverlayLayer({ api, face, style, scale, primary }: { api: Api; face: CompareFace; style: OverlayStyle; scale: number; primary: boolean }): React.JSX.Element {
+  return <WithFamily api={api} face={face}>{fam => <OverlayLayerArt fam={fam} style={style} scale={scale} primary={primary} />}</WithFamily>;
+}
+function OverlayLayerArt({ fam, style, scale, primary }: { fam: string | null; style: OverlayStyle; scale: number; primary: boolean }): React.JSX.Element {
+  const ink = useInk(primary ? fam : null);
+  const xh = primary ? ink?.x ?? null : null;
   return (
-    <div className="cmp-page cmp-overlay">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMinYMid meet" role="img" aria-label={`${t('compare.row.overlay')} ${face.row.family}`} data-xh={baseXh === null ? '' : String(baseXh)}>
-        <line x1="0" x2={W} y1={Y} y2={Y} className="bl" />
-        {baseXh !== null && <line data-testid="overlay-xh" x1="0" x2={W} y1={Y - baseXh * SZ} y2={Y - baseXh * SZ} className="xh" />}
-        {!same && <text x="8" y={Y} fontSize={SZ} fontFamily={css(bf)} style={PLAIN} className="ghost">{OVERLAY_TEXT}</text>}
-        <text x="8" y={Y} fontSize={SZ * scale} fontFamily={css(ff)} style={PLAIN} className={same ? 'solo' : 'over'}>{OVERLAY_TEXT}</text>
-      </svg>
-    </div>
+    <>
+      {xh !== null && <line data-testid="overlay-xh" x1="0" x2={OV.W} y1={OV.Y - xh * OV.SZ} y2={OV.Y - xh * OV.SZ} className="xh" />}
+      <text x="8" y={OV.Y} fontSize={OV.SZ * scale} fontFamily={css(fam)} style={PLAIN} className={`ov-${style}`} data-style={style}>{OVERLAY_TEXT}</text>
+    </>
   );
 }
 
@@ -78,33 +121,50 @@ export function viNotes(face: CompareFace): ViNote[] {
   return out;
 }
 
+/** Chỉ số (theo ký tự) của các ký tự mang dấu chồng: sau khi tách NFD có từ 2 dấu kết hợp trở lên (Ữ, Ặ, Ệ, ấ, ở…). */
+export function stackedIndexes(text: string): Set<number> {
+  const out = new Set<number>();
+  graphemes(text).forEach((ch, i) => { if ([...ch.normalize('NFD')].filter(c => /\p{Mn}/u.test(c)).length >= 2) out.add(i); });
+  return out;
+}
+
 export function ViCell({ api, face, size }: { api: Api; face: CompareFace; size: number }): React.JSX.Element {
+  return <WithFamily api={api} face={face}>{fam => <ViArt api={api} face={face} fam={fam} size={size} />}</WithFamily>;
+}
+function ViArt({ api, face, fam, size }: { api: Api; face: CompareFace; fam: string | null; size: number }): React.JSX.Element {
   const { stackedMarksOverflow: over, supports } = face.vi;
+  const notes = viNotes(face);
+  const missing = useMissingChars(api, face.face, SAMPLE_VI);
+  const stacked = stackedIndexes(SAMPLE_VI);
+  const parts = [...notes.map(n => (n.title ? `${n.text} — ${n.title}` : n.text)), ...(missing.size ? [t('compare.missing', { chars: missingList(missing) })] : [])];
   return (
-    <WithFamily api={api} face={face}>{fam => (
-      <div className="cmp-page">
-        <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>{SAMPLE_VI}</div>
-        {viNotes(face).map((n, i) => n.kind === 'ok'
-          ? <span key={i} className="cmp-ok" title={n.title}>{n.text}</span>
-          : <span key={i} className="cmp-chip warn" role={supports && over && i === 0 ? 'status' : undefined}>{n.text}</span>)}
+    <div className="cmp-page fa-note-host">
+      <div className="cmp-vi" data-overflow={over} data-unsupported={!supports} style={{ fontFamily: css(fam), fontSize: size }}>
+        {graphemes(SAMPLE_VI).map((ch, i) => <span key={i} className={`${stacked.has(i) ? 'stk' : ''}${missing.has(ch) ? ' miss' : ''}`.trim() || undefined} data-stacked={stacked.has(i) ? 'true' : undefined}>{ch}</span>)}
       </div>
-    )}</WithFamily>
+      <NoteMark testId="vi-note" kind={notes.some(n => n.kind === 'warn') || missing.size > 0 ? 'warn' : 'info'} text={parts.join(' · ')} />
+    </div>
   );
 }
 
-export function MetricCell({ k, m, base, isBase }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean }): React.JSX.Element {
-  if (m.value === null) return <div className="cmp-na" title={m.reason ?? undefined}><span>{t('compare.na')}</span>{m.reason && <small>{m.reason}</small>}</div>;
+export function MetricCell({ k, m, base, isBase, scale }: { k: string; m: CompareMetric; base: CompareMetric; isBase: boolean; scale: BarScale | null }): React.JSX.Element {
+  if (m.value === null) return <div className="cmp-na"><span>{t('compare.na')}</span>{m.reason && <NoteMark inline kind="info" text={m.reason} />}</div>;
   const d = isBase ? null : deltaOf(k, m, base);
   const dt = d ? deltaText(d) : null;
   const baseMissing = !isBase && base.value === null;
   const p = m.percentile;
+  const pl = p === null ? null : t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) });
   return (
     <div className="cmp-metric">
       <div className="cmp-val"><b>{numberText(m.value, m.unit)}</b><u>{unitText(m.unit)}</u>
-        {m.quality === 'estimated' && <span className="cmp-est">{t('compare.est')}</span>}
+        {m.quality === 'estimated' && <NoteMark inline kind="info" text={t('compare.est')} />}
         {isBase ? <span className="cmp-dl zero">{t('compare.base')}</span> : dt ? <span className={`cmp-dl ${dt.tone}`}>{dt.text}</span> : <span className="cmp-dl zero" title={baseMissing ? t('compare.baseNa') : t('compare.noDelta')}>—</span>}
       </div>
-      {p !== null && <div className="cmp-pbar" role="img" aria-label={t('compare.percentile', { p: Math.round(Math.min(100, Math.max(0, p))) })}><i style={{ left: `${Math.min(100, Math.max(0, p))}%` }} /><em style={{ left: `${Math.min(92, Math.max(8, p))}%` }}>{percentLabel(p)}</em></div>}
+      {scale && (() => { const f = barFill(m.value, scale); return (
+        <Tooltip label={[t('compare.pbar.tip'), pl].filter(Boolean).join(' · ')}>
+          <div className="cmp-pbar" role="img" aria-label={pl ?? t('compare.pbar.aria')} data-signed={scale.signed || undefined}><i className="fill" style={{ left: `${f.left}%`, width: `${f.width}%`, minWidth: f.width > 0 ? 2 : 0 }} /></div>
+        </Tooltip>
+      ); })()}
     </div>
   );
 }
@@ -117,7 +177,7 @@ export function ClassCell({ face }: { face: CompareFace }): React.JSX.Element {
   const conf = Number.isFinite(c.confidence) ? Math.round(c.confidence * 100) : null;
   return (
     <div className="cmp-cls">
-      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <span className="cmp-est">{t('class.edited')}</span>}</span>
+      <span className="c" data-uncertain={uncertain}><TermTip term={classTermKey(c.class)}><span data-term={classTermKey(c.class)}>{classLabel(c.class)}</span></TermTip>{c.source === 'override' && <NoteMark inline kind="info" text={t('class.edited')} />}</span>
       {uncertain && c.candidate && <span className="s">{t('class.maybe', { label: classLabel(c.candidate) })}</span>}
       {!uncertain && c.subclass && <TermTip term={subclassTermKey(c.subclass)}><span className="s" data-term={subclassTermKey(c.subclass)}>{subclassLabel(c.subclass)}</span></TermTip>}
       {traits.length > 0 && <span className="s">{traits.map(traitLabel).join(' · ')}</span>}

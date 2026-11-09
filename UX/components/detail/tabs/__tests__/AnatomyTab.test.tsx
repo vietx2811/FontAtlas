@@ -12,6 +12,9 @@ async function detail(): Promise<FaceDetailDto> {
 }
 const ax = (key: string, value: number | null, quality: AxisReadingDto['quality'] = 'measured'): AxisReadingDto => ({ key, value, rawValue: value, unit: key.endsWith("_em") ? "em" : "ratio", quality, reason: null, method: null, percentile: null });
 
+/** Chữ của hàng + nhãn các NoteMark trong hàng (chi tiết phụ nằm trong tooltip). */
+const full = (el: Element): string => `${el.textContent} ${[...el.querySelectorAll('.fa-note')].map(n => n.getAttribute('aria-label')).join(' ')}`;
+
 describe('guideLinesFrom', () => {
   it('places baseline, x-height and cap lines from the measured ink', () => {
     const l = guideLinesFrom({ cap: 0.7, x: 0.5 }, 100, 110);
@@ -62,14 +65,14 @@ describe('AnatomyTab', () => {
     d.axes[0].unit = 'deg'; d.axes[2].reason = 'no_latin_lowercase';
     render(<AnatomyTab detail={d} family="X" />);
     const rows = screen.getAllByTestId('axis-row');
-    expect(rows[0].textContent).toContain('-12');
-    expect(rows[0].textContent).toContain('°');
-    expect(rows[1].textContent).toContain('0,523');
-    expect(rows[1].textContent).toContain('em');
-    expect(rows[1].textContent).toContain('Ước lượng');
-    expect(rows[1].textContent).toContain('P94');
-    expect(rows[2].textContent).toContain('Không đo được');
-    expect(rows[2].textContent).toContain('chữ thường Latin');
+    expect(full(rows[0])).toContain('-12');
+    expect(full(rows[0])).toContain('°');
+    expect(full(rows[1])).toContain('0,523');
+    expect(full(rows[1])).toContain('em');
+    expect(full(rows[1])).toContain('Ước lượng');
+    expect(full(rows[1])).toContain('P94');
+    expect(full(rows[2])).toContain('Không đo được');
+    expect(full(rows[2])).toContain('chữ thường Latin');
   });
 
   it('keeps raw serif values, units from caps fallback, zero and missing distinct', async () => {
@@ -77,17 +80,17 @@ describe('AnatomyTab', () => {
     d.axes = [{...ax('serif_foot', 1.8), value: 'serif'}, {...ax('stem', .2), unit: 'cap_height_ratio'}, ax('slant_deg', 0), ax('unknown', null)];
     render(<AnatomyTab detail={d} family="X" />);
     const rows = screen.getAllByTestId('axis-row');
-    expect(rows[0].textContent).toContain('1,8');
-    expect(rows[0].textContent).toContain('có chân');
-    expect(rows[1].textContent).toContain('× cap-height');
+    expect(full(rows[0])).toContain('1,8');
+    expect(full(rows[0])).toContain('có chân');
+    expect(full(rows[1])).toContain('× cap-height');
     expect(rows[2].querySelector('.fa-axis-value')!.textContent).toContain('0');
-    expect(rows[3].textContent).toContain('Chưa đo');
+    expect(full(rows[3])).toContain('Chưa đo');
   });
 
   it('categorical axes read as words (a một/hai tầng), without a track', async () => {
     render(<AnatomyTab detail={await detail()} family="X" />);
     const a = screen.getAllByTestId('axis-row').find(r => r.getAttribute('data-axis') === 'a_storeys')!;
-    expect(a.textContent).toMatch(/một tầng|hai tầng/);
+    expect(full(a)).toMatch(/một tầng|hai tầng/);
     expect(a.querySelector('[data-track]')).toBeNull();
   });
 
@@ -96,10 +99,10 @@ describe('AnatomyTab', () => {
     d.axes = [{...ax('contrast', 1), percentile: 0}, {...ax('width', 2, 'estimated'), percentile: 1}, {...ax('spacing', .2), percentile: null}];
     render(<AnatomyTab detail={d} family="X" />);
     const rows = screen.getAllByTestId('axis-row');
-    expect(rows[0].textContent).toContain('P0');
-    expect(rows[1].textContent).toContain('P100');
-    expect(rows[1].textContent).toContain('Ước lượng');
-    expect(rows[2].textContent).not.toMatch(/P[0-9]/);
+    expect(full(rows[0])).toContain('P0');
+    expect(full(rows[1])).toContain('P100');
+    expect(full(rows[1])).toContain('Ước lượng');
+    expect(full(rows[2])).not.toMatch(/P[0-9]/);
   });
 
   it('never uses the pairing symbols ●◐◆○ or any score', async () => {
@@ -127,7 +130,7 @@ describe('AnatomyTab guides vs the displayed glyphs', () => {
     vi.spyOn(ink.inkProbe, 'measure').mockResolvedValue({ cap: c - 0.05, x });
     render(<AnatomyTab detail={await detail()} family="X" />);
     const note = await screen.findByTestId('guides-note');
-    expect(note.textContent).toBe('Số đo analyzer khác hình hiển thị');
+    expect(note.getAttribute('aria-label')).toContain('Số đo analyzer khác hình hiển thị');
     const lines = screen.getAllByTestId('guide-line');
     const cap = lines.find(l => l.getAttribute('data-line') === 'cap')!;
     expect(Number(cap.getAttribute('y1'))).toBeCloseTo(112 - (c - 0.05) * 100, 5); // theo chữ, không theo analyzer
@@ -136,7 +139,7 @@ describe('AnatomyTab guides vs the displayed glyphs', () => {
     const d = await detail(); d.row.faceIndex = 1;
     render(<AnatomyTab detail={d} family={null} />);
     expect(screen.queryAllByTestId('guide-line')).toHaveLength(0);
-    expect((await screen.findByTestId('guides-note')).textContent).toBe('Chưa nạp được font để minh hoạ đường kẻ');
+    expect((await screen.findByTestId('guides-note')).getAttribute('aria-label')).toBe('Chưa nạp được font để minh hoạ đường kẻ');
   });
   it('measuring fails (loaded family but no ink): no lines and the unavailable note', async () => {
     vi.spyOn(ink.inkProbe, 'measure').mockResolvedValue(null);

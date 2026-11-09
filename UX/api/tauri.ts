@@ -126,6 +126,7 @@ export function createTauriApi(): Api {
       return call('save_png', { suggestedName, pngBase64: btoa(bin) });
     },
     revealLocation: path => none(call('reveal_location', { path })),
+    missingChars: (face, chars) => call('missing_chars', { face, chars }),
     duplicateSummary: (q = {}) => call('duplicate_summary', { q: toFaceQueryDto(q) }),
     duplicateGroups: (q = {}) => call('duplicate_groups', { q: toFaceQueryDto(q) }),
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),

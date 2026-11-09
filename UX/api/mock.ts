@@ -187,6 +187,8 @@ export function createMockApi(o: MockOptions = {}): Api {
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
     async revealLocation(path) { if (!rows.some(r => r.path === path) && !path.includes('/')) throw new CmdError('not_found', 'path'); },
+    // Mock: Latin + Latin mở rộng (U+0000–024F) và Việt (U+1E00–1EFF) có; còn lại (CJK…) thiếu.
+    async missingChars(face, chars) { findRow(face); return chars.filter(g => g.trim() && [...g.normalize('NFC')].some(c => { const n = c.codePointAt(0)!; return !(n <= 0x24f || (n >= 0x300 && n <= 0x36f) || (n >= 0x1e00 && n <= 0x1eff)); })); },
     getUiState: () => ok(ui),
     async setUiState(s) { ui = { ...s }; },
 

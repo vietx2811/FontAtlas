@@ -71,3 +71,30 @@ describe('percentLabel / rowUnit', () => {
     expect(rowUnit([m(null, { unit: null })])).toBeNull();
   });
 });
+
+import { barFill, barScale } from '../compareMath';
+describe('A · bar scale', () => {
+  it('positive metrics run 0 → max×1.15 and the bar is filled from 0', () => {
+    const sc = barScale('x_height_em', [0.5, 0.52])!;
+    expect(sc.signed).toBe(false); expect(sc.max).toBeCloseTo(0.52 * 1.15);
+    expect(barFill(0.5, sc).left).toBe(0);
+    expect(barFill(0.52, sc).width).toBeCloseTo(100 / 1.15, 5);
+    expect(barFill(0.26, sc).width).toBeCloseTo(barFill(0.52, sc).width / 2, 5);
+  });
+  it('two close fonts no longer pin to 10% / 90%: both are long bars of similar length', () => {
+    const sc = barScale('x_height_em', [0.50, 0.52])!;
+    expect(barFill(0.50, sc).width).toBeGreaterThan(80);
+  });
+  it('signed metrics are symmetric around 0 and fill outward from the centre', () => {
+    const sc = barScale('slant_deg', [0, -13])!;
+    expect(sc.signed).toBe(true); expect(sc.max).toBeCloseTo(13 * 1.15);
+    expect(barFill(-13, sc)).toEqual({ left: 50 - 50 / 1.15, width: 50 / 1.15 });
+    expect(barFill(6.5, sc).left).toBe(50);
+    expect(barFill(0, sc).width).toBe(0);
+  });
+  it('a single value is still drawn (meaningful against 0); all zero / no values → no bar', () => {
+    expect(barScale('x_height_em', [0.5])).not.toBeNull();
+    expect(barScale('x_height_em', [0, 0])).toBeNull();
+    expect(barScale('x_height_em', [null, undefined])).toBeNull();
+  });
+});

@@ -22,6 +22,10 @@ const PATHS = {
   anchor: 'M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 7v14M6 13a6 6 0 0 0 12 0M9 11h6',
   back: 'M15 18l-6-6 6-6',
   copy: 'M9 9h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM5 15V6a2 2 0 0 1 2-2h8',
+  pin: 'M9 4h6l-1 5 3 3v1.5H7V12l3-3zM12 13.5V20',
+  eye: 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  minus: 'M5 12h14',
+  chevron: 'M9 6l6 6-6 6',
   moon: 'M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z',
 } as const;
 export type IconName = keyof typeof PATHS;

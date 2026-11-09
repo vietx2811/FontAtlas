@@ -93,3 +93,25 @@ describe('dark --faint keeps 4.5:1 on canvas and panel', () => {
     expect(ratio(get('--faint'), get('--panel'))).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('NoteMark is red in both themes', () => {
+  const lum = (hex: string) => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const red = (h: string) => { const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); return r > 180 && r > g * 1.6 && r > b * 1.6; };
+  it('dark: its own red token (not the orange --warn) with ≥ 3:1 on the canvas and a readable glyph on it', () => {
+    const forced = css.match(/:root\[data-theme="dark"\][^{]*{([^}]*)}/)![1];
+    const get = (k: string) => forced.match(new RegExp(`${k}:\\s*(#[0-9a-f]{6})`, 'i'))![1];
+    expect(red(get('--note'))).toBe(true);
+    expect(get('--note')).not.toBe(get('--warn'));
+    expect(ratio(get('--note'), get('--sheet'))).toBeGreaterThanOrEqual(3);
+    expect(ratio(get('--note-ink'), get('--note'))).toBeGreaterThanOrEqual(4.5);
+  });
+  it('the OS-dark block carries the same token', () => {
+    expect(css.match(/--note: #F87171/g)!.length).toBe(2);
+  });
+  it('light keeps a red token with a white glyph', () => {
+    const root = css.match(/:root\s*{([^}]*)}/)![1];
+    expect(root).toMatch(/--note: #DC2626/);
+    expect(ratio('#DC2626', '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+  });
+});

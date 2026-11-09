@@ -271,4 +271,19 @@ describe('Sidebar', () => {
     await settle();
     expect(screen.getByRole('button', { name: /Trùng lặp/ })).toBeTruthy();
   });
+
+  it('H4: shows "Đang so sánh · N" only while a compare session exists, keeps it after leaving the page, and resumes it', async () => {
+    await mount();
+    expect(screen.queryByRole('button', { name: /Đang so sánh/ })).toBeNull();
+    const f = (n: number) => ({ hashHex: String(n), faceIndex: 0 });
+    act(() => { useUiStore.getState().openCompare([f(1), f(2), f(3)]); });
+    const item = screen.getByRole('button', { name: /Đang so sánh · 3/ });
+    expect(item.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /Yêu thích/ })); // rời Compare
+    expect(useUiStore.getState().compare).toBeNull();
+    const again = screen.getByRole('button', { name: /Đang so sánh · 3/ });
+    expect(again.getAttribute('aria-current')).toBeNull();
+    fireEvent.click(again);
+    expect(useUiStore.getState().compare).toHaveLength(3);
+  });
 });

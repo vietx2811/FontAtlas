@@ -47,6 +47,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const cloud = useScanStore(s => s.cloud);
   const cloudNow = Object.values(cloud).reduce((a, b) => a + b, 0);
   const addRequest = useUiStore(s => s.addFolderRequest);
+  const cmpSession = useUiStore(s => s.compareSession);
+  const cmpOpen = useUiStore(s => s.compare !== null);
   const libraryRev = useUiStore(s => s.libraryRev);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
@@ -147,6 +149,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} />
         <NavItem icon="power" label="Đang bật" count={counts.active} current={cur('active')} onClick={() => setView('active')} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
+        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} />}
 
         {notice && (
           <div className="fa-notice" role="status">

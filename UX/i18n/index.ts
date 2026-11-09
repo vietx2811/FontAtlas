@@ -1,8 +1,10 @@
 /** Từ điển chuỗi giao diện (vi). Mọi chuỗi mới đi qua khoá; thuật ngữ font giữ tiếng Anh, chú giải để ở khoá `*.gloss`. */
 import { TERM_GLOSS } from './terms';
+import { COMPARE_V2 } from './compareV2';
 
 const vi = {
   ...TERM_GLOSS,
+  ...COMPARE_V2,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
@@ -62,9 +64,9 @@ const vi = {
   'compare.png': 'PNG', 'compare.pdf': 'PDF', 'compare.pdfSoon': 'PDF chưa có', 'compare.pngFail': 'Không xuất được PNG: {msg}',
   'compare.loading': 'Đang đọc số đo…', 'compare.error': 'Không mở được Compare: {msg}', 'compare.retry': 'Thử lại', 'compare.base': 'mốc',
   'compare.sec.specimen': 'Specimen', 'compare.sec.metrics': 'Số đo', 'compare.sec.class': 'Phân loại', 'compare.sec.meta': 'Meta',
-  'compare.row.line': 'Dòng mẫu', 'compare.row.overlay': 'Overlay', 'compare.row.vi': 'Dấu chồng', 'compare.row.class': 'Classification', 'compare.row.license': 'License',
+  'compare.row.line': 'Dòng mẫu', 'compare.row.overlay': 'Overlay', 'compare.row.vi': 'Vietnamese', 'compare.row.vi.gloss': 'dấu chồng', 'compare.row.class': 'Classification', 'compare.row.license': 'License',
   'compare.est': 'Ước lượng', 'compare.na': 'Không đo được', 'compare.viOk': 'Dấu vừa khung', 'compare.viWarn': 'Dấu tràn khung', 'compare.viWarnEm': 'Dấu tràn khung · {em} em', 'compare.viMissing': 'Thiếu {n} ký tự',
-  'compare.licenseNote': 'Chỉ ghi chú, không chặn', 'compare.footnote': 'Δ so với mốc · thanh = vị trí trong thư viện (percentile)',
+  'compare.licenseNote': 'Chỉ ghi chú, không chặn', 'compare.footnote': 'Δ so với mốc · thanh = độ lớn so với 0 (hoặc ±0 với góc) trong các font đang xem; percentile thư viện ở tooltip',
   'compare.m.x_height_em': 'x-height', 'compare.m.x_height_em.gloss': 'cao chữ thường', 'compare.m.cap_height_em': 'cap height', 'compare.m.cap_height_em.gloss': 'cao chữ hoa',
   'compare.m.contrast': 'contrast ⊥', 'compare.m.contrast.gloss': 'tương phản nét (vuông góc)', 'compare.m.contrast_h': 'contrast H', 'compare.m.contrast_h.gloss': 'tương phản ngang',
   'compare.m.slant_deg': 'slant I/T', 'compare.m.slant_deg.gloss': 'độ nghiêng (I, T)', 'compare.m.stress_deg': 'stress', 'compare.m.stress_deg.gloss': 'trục nhấn',

@@ -7,6 +7,7 @@ import { TermTip, termKey } from '../../ui/terms';
 
 import { AXIS_META, numberText, unitText } from './measurements';
 import { Tooltip } from '../../ui/Tooltip';
+import { NoteMark } from '../../ui/noteMark';
 export { AXIS_META } from './measurements';
 
 const CATEGORY_TEXT: Record<string, Record<string, string>> = {
@@ -42,18 +43,16 @@ function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const estimated = a.quality === 'estimated';
   const missing = !numeric && !category;
   const noRaw = a.key === 'serif_foot' && !numeric && !failed;
+  const pct = !failed && !missing && a.percentile !== null ? `P${Math.round(a.percentile * 100)} · ${percentileWord(a.percentile)}` : null;
+  const noteText = failed ? REASONS[a.reason ?? ''] ?? a.reason ?? t('anat.reasonUnknown')
+    : [missing ? t('anat.noData') : noRaw ? t('anat.noRaw') : estimated ? t('anat.estimated') : category && numeric ? category : null, pct && `${pct} (${t('anat.percentileTip')})`].filter(Boolean).join(' · ');
   return (
     <Tooltip label={[a.method, a.rawValue === null ? null : t('anat.rawValue', { v: a.rawValue })].filter(Boolean).join(' · ')}>
     <li className="fa-axis" data-testid="axis-row" data-axis={a.key} data-quality={a.quality}>
       <span className="fa-axis-ico"><AxisIcon name={a.key} /></span>
       <TermTip term={a.key}><span className="fa-axis-name" data-term={termKey(a.key)}>{meta.label}</span></TermTip>
       <span className="fa-axis-value">{failed ? t('anat.failed') : numeric ? <>{numberText(a.rawValue!, a.unit)} <small>{unitText(a.unit)}</small></> : category ?? t('anat.unmeasured')}</span>
-      {(failed || missing || noRaw || estimated || category && numeric || a.percentile !== null) && <span className="fa-axis-note">
-        {failed ? REASONS[a.reason ?? ''] ?? a.reason ?? t('anat.reasonUnknown') : <>
-          {missing ? t('anat.noData') : noRaw ? t('anat.noRaw') : estimated ? t('anat.estimated') : category && numeric ? category : ''}
-          {!missing && a.percentile !== null && <Tooltip label={t('anat.percentileTip')}><span>{estimated ? ' · ' : ''}P{Math.round(a.percentile * 100)} · {percentileWord(a.percentile)}</span></Tooltip>}
-        </>}
-      </span>}
+      {noteText && <NoteMark inline kind={failed ? 'warn' : 'info'} text={noteText} />}
     </li>
     </Tooltip>
   );
@@ -83,6 +82,7 @@ export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: 
   const lines = g.status === 'ok' || g.status === 'mismatch' ? guideLinesFrom(g, SIZE, BASE) : [];
   return (
     <>
+      <div className="fa-note-host fa-hxg-host">
       <svg className="fa-hxg" role="img" aria-label={t('anat.hxgAria')} viewBox="0 0 300 150" width="100%" data-guides={g.status}>
         {lines.map(l => (
           <g key={l.id}>
@@ -92,8 +92,9 @@ export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: 
         ))}
         <text data-testid="hxg-text" x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={hxgStyle(family)}>Hxg</text>
       </svg>
-      {g.status === 'unavailable' && <p className="fa-hxg-note" role="status" data-testid="guides-note">{t('anat.guides.unavailable')}</p>}
-      {g.status === 'mismatch' && <Tooltip label={t('anat.guides.mismatchTip', { capA: f3(g.analyzer.cap), xA: f3(g.analyzer.x), capI: f3(g.ink.cap), xI: f3(g.ink.x) })}><p className="fa-hxg-note" data-testid="guides-note" tabIndex={0}>{t('anat.guides.mismatch')}</p></Tooltip>}
+      {g.status === 'unavailable' && <NoteMark testId="guides-note" text={t('anat.guides.unavailable')} kind="info" />}
+      {g.status === 'mismatch' && <NoteMark testId="guides-note" text={`${t('anat.guides.mismatch')} — ${t('anat.guides.mismatchTip', { capA: f3(g.analyzer.cap), xA: f3(g.analyzer.x), capI: f3(g.ink.cap), xI: f3(g.ink.x) })}`} />}
+      </div>
       <ul className="fa-axes">{detail.axes.map(a => <AxisRow key={a.key} a={a} />)}</ul>
     </>
   );

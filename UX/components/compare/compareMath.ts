@@ -34,3 +34,20 @@ export function fitScale(baseXh: number | null, xh: number | null): number {
 
 export const percentLabel = (p: number | null): string => (p === null ? '' : `P${Math.round(Math.min(100, Math.max(0, p)))}`);
 export const rowUnit = (cells: CompareMetric[]): string | null => cells.find(c => c.value !== null)?.unit ?? cells.find(c => c.unit)?.unit ?? null;
+
+/** Thang của thanh đo: số đo dương chạy 0 → max×1,15; số đo có dấu (góc) đối xứng quanh 0 trong ±max|v|×1,15. Thanh TÔ từ 0 đến giá trị nên đọc được độ lớn tương đối. */
+export const BAR_HEADROOM = 1.15;
+export type BarScale = { signed: boolean; max: number };
+export function barScale(key: string, values: ReadonlyArray<number | null | undefined>): BarScale | null {
+  const v = values.filter((x): x is number => x != null && Number.isFinite(x));
+  if (v.length === 0) return null;
+  const peak = Math.max(...v.map(Math.abs));
+  if (peak <= 0) return null;
+  return { signed: DEGREE_METRICS.has(key) || v.some(x => x < 0), max: peak * BAR_HEADROOM };
+}
+/** Đoạn tô của thanh theo % chiều rộng: { left, width } (width ≥ 0). */
+export function barFill(v: number, s: BarScale): { left: number; width: number } {
+  const f = Math.min(1, Math.abs(v) / s.max);
+  if (!s.signed) return { left: 0, width: f * 100 };
+  return { left: v < 0 ? 50 - f * 50 : 50, width: f * 50 };
+}

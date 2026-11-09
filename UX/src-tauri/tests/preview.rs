@@ -103,3 +103,17 @@ fn prewarm_then_clear_preview_cache_empties() {
     preview::prewarm(&st, &items).unwrap();
     assert_eq!(preview::cache_info(&st).unwrap().entries, 0);
 }
+
+#[test]
+fn missing_chars_uses_the_real_cmap() {
+    use app_lib::dto::library::FaceKeyDto;
+    let d = tempfile::tempdir().unwrap();
+    let (st, h) = with_roboto(d.path());
+    let face = FaceKeyDto { hash_hex: h, face_index: 0 };
+    let chars: Vec<String> = ["H", "a", "ấ", "龍", " "].iter().map(|s| s.to_string()).collect();
+    assert_eq!(preview::missing_chars(&st, &face, &chars).unwrap(), vec!["龍".to_string()]);
+    let ghost = FaceKeyDto { hash_hex: "0".repeat(64), face_index: 0 };
+    assert_eq!(preview::missing_chars(&st, &ghost, &chars).unwrap_err().code, "not_found");
+    let many: Vec<String> = (0..600).map(|_| "a".to_string()).collect();
+    assert_eq!(preview::missing_chars(&st, &face, &many).unwrap_err().code, "invalid_arg");
+}
