@@ -17,13 +17,20 @@
   // Ảnh PNG xuất ra tệp qua bảng settings (giới hạn 64 KB/khoá → cắt từng đoạn ui.qapng.<theme>.NN); run.sh ghép lại.
   const savePng = async (th, url) => { const errs = []; if (!url) return ['không có dataUrl']; const b = url.split(',')[1]; for (let i = 0, n = 0; i < b.length; i += 60000, n++) { try { await inv('set_setting', { key: 'ui.qapng.' + th + '.' + String(n).padStart(3, '0'), value: b.slice(i, i + 60000) }); } catch (e) { errs.push('đoạn ' + n + ': ' + String(e && e.message || e).slice(0, 120)); } } return errs; };
   // Thuật ngữ typo: rê chuột vào từng nhãn [data-term], tooltip phải có gloss không rỗng (và hình minh hoạ nếu thuật ngữ có hình).
+  // Tất định: không đoán độ trễ. Chờ đúng thẻ của đúng thuật ngữ (data-term-card = data-term) cho tới khi nó xuất hiện (trần 20 s chỉ để không treo
+  // khi máy quá tải; tooltip hiện sau 450 ms nhưng timer bị trì hoãn khi máy bận), rồi chờ tooltip đóng hẳn trước khi sang thuật ngữ kế.
+  // Không nới điều kiện: vẫn yêu cầu gloss không rỗng; thẻ của thuật ngữ KHÁC (tooltip trước chưa đóng) không được tính.
   const termCheck = async sel => {
     const els = [...document.querySelectorAll(sel)]; const bad = []; let art = 0;
+    const card = term => [...document.querySelectorAll('[role=tooltip] [data-term-card]')].find(c => c.dataset.termCard === term);
     for (const el of els) {
+      const term = el.dataset.term;
       el.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
-      const g = await wait(() => { const x = document.querySelector('[role=tooltip] .fa-term-gloss'); return x && x.textContent.trim() ? x : null; }, 2500);
-      if (!g) bad.push(el.dataset.term); else if (document.querySelector('[role=tooltip] svg.fa-term-art')) art++;
-      el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' })); await sleep(50);
+      const c = await wait(() => { const x = card(term); return x && x.querySelector('.fa-term-gloss')?.textContent.trim() ? x : null; }, 20000);
+      if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
+      el.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, pointerType: 'mouse' }));
+      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
+      if (!closed) bad.push(term + ' (tooltip không đóng)');
     }
     return { n: els.length, bad, art };
   };
