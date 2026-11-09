@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
-import type { Api, ConflictDto, FaceKeyDto, FileOutcomeDto } from '../../api';
+import type { Api, ConflictDto, FaceKeyDto, FileOutcomeDto, FileResultDto } from '../../api';
 import { t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { ConflictDialog, HeldDialog } from './ActivationDialogs';
+import { isSameFile, toItems, type ConflictItem } from './conflictModel';
 import { describeOutcome } from './messages';
 
-type Pending = { type: 'conflict'; total: number; conflictFaces: FaceKeyDto[]; conflicts: ConflictDto[] } | { type: 'held'; faces: FaceKeyDto[]; collections: number };
+type Pending = { type: 'conflict'; total: number; conflictFaces: FaceKeyDto[]; items: ConflictItem[] } | { type: 'held'; faces: FaceKeyDto[]; collections: number };
 
 /** Bật/tắt kích hoạt cho một nhóm face kèm các hộp thoại D3 và "đang được giữ bởi dự án". */
 export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void>; dialog: React.ReactNode } {
@@ -21,13 +22,17 @@ export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: b
       if (on) {
         const rep = await api.activationActivate(faces);
         const asked = rep.results.filter(r => r.outcome.kind === 'needs_confirmation');
-        // Font không trùng đã được bật ngay; chỉ những font cần xác nhận mới chờ trong hộp thoại.
-        if (asked.length) {
-          setPending({
-            type: 'conflict', total: new Set(faces.map(f => f.hashHex)).size,
-            conflictFaces: asked.map(r => ({ hashHex: r.hashHex, faceIndex: r.requestedFaces[0] ?? 0 })),
-            conflicts: asked.flatMap(r => (r.outcome.kind === 'needs_confirmation' ? r.outcome.conflicts : [])),
-          });
+        // Font không trùng đã được bật ngay. Font mà bản đang cài là CHÍNH file này (sameFile) đã dùng được: không hỏi, chỉ báo một dòng.
+        // Chỉ những font khác phiên bản/khác file mới chờ trong hộp thoại (gộp theo family).
+        const conflictsOf = (r: FileResultDto): ConflictDto[] => (r.outcome.kind === 'needs_confirmation' ? r.outcome.conflicts : []);
+        const same = asked.filter(r => isSameFile(conflictsOf(r)));
+        const real = asked.filter(r => !same.includes(r));
+        if (same.length) push({ kind: 'info', text: t('act.conflict.same', { n: same.reduce((s, r) => s + Math.max(1, r.requestedFaces.length), 0) }) });
+        if (real.length) {
+          const keys = real.map(r => ({ hashHex: r.hashHex, faceIndex: r.requestedFaces[0] ?? 0 }));
+          let rows: Awaited<ReturnType<Api['queryFaces']>>['items'] = [];
+          try { rows = (await api.queryFaces({ faceKeys: keys, limit: keys.length })).items; } catch { /* không có tên: dùng tên PostScript */ }
+          setPending({ type: 'conflict', total: new Set(faces.map(f => f.hashHex)).size - same.length, conflictFaces: keys, items: toItems(rows, keys, real.map(conflictsOf)) });
         }
         say(rep.results.map(r => r.outcome));
       } else {
@@ -58,7 +63,7 @@ export function useActivationFlow(api: Api): { toggle(faces: FaceKeyDto[], on: b
   let dialog: React.ReactNode = null;
   if (pending?.type === 'conflict') {
     const p = pending;
-    dialog = <ConflictDialog conflicts={p.conflicts} total={p.total} onCancel={() => setPending(null)}
+    dialog = <ConflictDialog items={p.items} total={p.total} onCancel={() => setPending(null)}
       onConfirm={include => void run(async () => { if (include) say((await api.activationActivate(p.conflictFaces, { proceed: true })).results.map(r => r.outcome)); })} />;
   } else if (pending?.type === 'held') {
     const p = pending;

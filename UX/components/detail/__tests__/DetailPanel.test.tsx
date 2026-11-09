@@ -109,9 +109,9 @@ describe('DetailPanel', () => {
       await settle();
       await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); });
       await settle();
-      const dlg = screen.getByRole('dialog', { name: /trùng tên với font đang có trên máy/ });
-      expect(dlg.textContent).toMatch(/Roboto-Regular/);
-      expect(dlg.textContent).toMatch(/hệ thống macOS/);
+      const dlg = screen.getByRole('dialog', { name: /đã có trên máy/ });
+      expect(dlg.textContent).toMatch(/Roboto · 1 kiểu/);
+      expect(within(dlg).getByRole('img', { name: /của hệ thống · \/Library\/Fonts\/Roboto\.ttf/ })).toBeTruthy(); // owner + đường dẫn chỉ ở tooltip
       expect((within(dlg).getByRole('radio', { name: /Vẫn kích hoạt/ }) as HTMLInputElement).disabled).toBe(true);
       expect(dlg.textContent).toMatch(/font hệ thống luôn được ưu tiên/);
       fireEvent.click(within(dlg).getByRole('button', { name: 'Huỷ' }));
@@ -127,7 +127,8 @@ describe('DetailPanel', () => {
       await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Active' })); });
       await settle();
       const dlg = screen.getByRole('dialog');
-      expect(dlg.textContent).toMatch(/RightFont/);
+      expect(within(dlg).getByRole('img', { name: /do RightFont cài/ })).toBeTruthy();
+      expect(dlg.textContent).not.toMatch(/RightFont/); // không in inline
       expect((within(dlg).getByRole('radio', { name: /Bỏ qua/ }) as HTMLInputElement).checked).toBe(true); // mặc định
       fireEvent.click(within(dlg).getByRole('radio', { name: /Vẫn kích hoạt/ }));
       await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tiếp tục' })); });

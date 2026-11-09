@@ -10,6 +10,8 @@ export const CONFLICT_FAMILY = 'Roboto';
 /** Họ "Oswald" trùng với font của RightFont (được phép kích hoạt tiếp). */
 export const OTHER_MANAGER_FAMILY = 'Oswald';
 export const CHANGED_FAMILY = 'Lobster';
+/** Đã cài sẵn ở ~/Library/Fonts/FontBase/ bằng ĐÚNG file này (sameFile): không phải hỏi. */
+export const SAME_FILE_FAMILY = 'Pacifico';
 
 type Entry = { reasons: ReasonDto[]; scope: 'session' | 'persistent' };
 type Deps = { rowOf(k: FaceKeyDto): FaceRow | undefined; collectionFaces(id: number): FaceKeyDto[] };
@@ -34,8 +36,9 @@ export function createActivationSim(d: Deps) {
     state.set(h, e);
   };
   const conflictOf = (row: FaceRow | undefined) => {
-    const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY ? 'right_font' as const : null;
-    return row && owner ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: owner === 'system' ? `/Library/Fonts/${row.family}.ttf` : `~/Library/RightFont/${row.family}.ttf`, owner }] : [];
+    const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY ? 'right_font' as const : row?.family === SAME_FILE_FAMILY ? 'user_installed' as const : null;
+    const dir = (o: 'system' | 'right_font' | 'user_installed') => (o === 'system' ? '/Library/Fonts' : o === 'right_font' ? '~/Library/RightFont' : '/Users/u/Library/Fonts/FontBase');
+    return row && owner ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: `${dir(owner)}/${row.family}.ttf`, owner, sameFile: row.family === SAME_FILE_FAMILY }] : [];
   };
 
   const activateOne = (f: FaceKeyDto, reason: ReasonDto, o: ActivateOptions): FileOutcomeDto => {

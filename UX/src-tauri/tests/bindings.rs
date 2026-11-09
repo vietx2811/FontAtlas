@@ -718,6 +718,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         postscript_name: "LibreBaskerville-Regular".into(),
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf".into(),
         owner: fa::Owner::RightFont,
+        same_file: false,
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

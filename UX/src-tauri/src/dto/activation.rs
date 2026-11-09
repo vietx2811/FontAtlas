@@ -165,6 +165,8 @@ pub struct ConflictDto {
     pub postscript_name: String,
     pub existing_path: String,
     pub owner: OwnerDto,
+    /// Font đang cài giống hệt file trong thư viện (từng byte): đã dùng được, không cần hỏi.
+    pub same_file: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -211,7 +213,7 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::NeedsConfirmation { conflicts } => Self::NeedsConfirmation {
                 conflicts: conflicts
                     .iter()
-                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into() })
+                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file })
                     .collect(),
             },
             F::HeldByCollections { collection_ids } => Self::HeldByCollections { collection_ids: collection_ids.clone() },

@@ -287,6 +287,51 @@ fn preflight_flags_rightfont_duplicate() {
     assert!(row(&env, &k.hash).is_none());
 }
 
+/// Font đã cài ở nơi khác (vd FontBase) có nội dung GIỐNG HỆT file trong thư viện → `same_file`; khác một byte → không.
+#[test]
+fn conflict_same_file_compares_bytes_not_paths() {
+    let env = env_with(&[LIBRE]);
+    let installed = env.dir.path().join("FontBase");
+    std::fs::create_dir_all(&installed).unwrap();
+    let identical = installed.join("copy.ttf");
+    std::fs::copy(env.fonts.join(LIBRE), &identical).unwrap();
+    let k = key_of(&env, LIBRE);
+
+    let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &identical));
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    match &rep.results[0].outcome {
+        FileOutcome::NeedsConfirmation { conflicts } => assert!(conflicts[0].same_file, "bản sao nguyên văn phải là same_file"),
+        o => panic!("{o:?}"),
+    }
+
+    // Khác một byte cuối (cùng kích thước): không còn là cùng file.
+    let mut bytes = std::fs::read(&identical).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 0xFF;
+    let changed = installed.join("changed.ttf");
+    std::fs::write(&changed, &bytes).unwrap();
+    let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &changed));
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    match &rep.results[0].outcome {
+        FileOutcome::NeedsConfirmation { conflicts } => assert!(!conflicts[0].same_file, "khác nội dung phải hỏi"),
+        o => panic!("{o:?}"),
+    }
+
+    // Khác kích thước (thêm đuôi): khác. File không đọc được (đường dẫn giả): khác.
+    bytes.push(0);
+    std::fs::write(&changed, &bytes).unwrap();
+    let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, &changed));
+    match &activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome {
+        FileOutcome::NeedsConfirmation { conflicts } => assert!(!conflicts[0].same_file),
+        o => panic!("{o:?}"),
+    }
+    let svc = service_with(&env, FakeEngine::new().with_system_font(LIBRE_PS, std::path::Path::new(RIGHTFONT_PATH)));
+    match &activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome {
+        FileOutcome::NeedsConfirmation { conflicts } => assert!(!conflicts[0].same_file),
+        o => panic!("{o:?}"),
+    }
+}
+
 #[test]
 fn proceed_registers_despite_conflict() {
     let env = env_with(&[LIBRE]);

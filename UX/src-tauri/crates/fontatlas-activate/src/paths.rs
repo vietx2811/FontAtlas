@@ -21,6 +21,27 @@ pub fn canonical_path(p: &Path) -> std::io::Result<PathBuf> {
 #[cfg(target_os = "macos")]
 const SF_DATALESS: u32 = 0x4000_0000;
 
+/// Hai file có cùng nội dung không? So kích thước trước (rẻ), chỉ khi bằng nhau mới đọc và so từng khối.
+/// Lỗi đọc (không có file, không quyền) → false: coi là khác, để người dùng quyết định.
+pub fn same_content(a: &Path, b: &Path) -> bool {
+    use std::io::Read;
+    let (Ok(ma), Ok(mb)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
+    if ma.len() != mb.len() {
+        return false;
+    }
+    let (Ok(mut fa), Ok(mut fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
+    let (mut x, mut y) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    let mut remaining = ma.len();
+    while remaining > 0 {
+        let n = remaining.min(x.len() as u64) as usize;
+        if fa.read_exact(&mut x[..n]).is_err() || fb.read_exact(&mut y[..n]).is_err() || x[..n] != y[..n] {
+            return false;
+        }
+        remaining -= n as u64;
+    }
+    true
+}
+
 pub fn probe_file(p: &Path) -> FileProbe {
     match std::fs::metadata(p) {
         Ok(_m) => {

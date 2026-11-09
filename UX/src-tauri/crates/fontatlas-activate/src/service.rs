@@ -14,7 +14,7 @@ use fontatlas_store::{
 };
 
 use crate::engine::{ActivationEngine, Scope};
-use crate::paths::{FileProbe, canonical_path, classify_owner, probe_file};
+use crate::paths::{FileProbe, canonical_path, classify_owner, probe_file, same_content};
 use crate::types::{
     ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome,
     FileResult, Owner, Progress, SETTING_ACTIVATION_KEEP,
@@ -287,7 +287,8 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut push = |ps: &str, p: &Path, owner: Owner| {
             let existing = path_str(p);
             if !out.iter().any(|c| c.postscript_name == ps && c.existing_path == existing) {
-                out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner });
+                let same_file = same_content(path, p);
+                out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner, same_file });
             }
         };
         for name in names {
