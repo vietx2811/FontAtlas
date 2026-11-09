@@ -44,3 +44,40 @@ Mỗi bước `local_ci` PASS trước khi báo. Không đụng library.db.
 2. Xoá Case mềm 30 ngày (theo spec 04) hay xoá thật?
 3. `faces_detail(keys[])` (batch cho Compare) làm trong 1c hay để sau khi 05 đo thực tế?
 4. `packaging` không có term trong từ điển: để unmappable, hay muốn thêm term vào từ điển (cần nguồn)?
+
+## Hợp đồng cho UI (Font Desk) — trạng thái: đã làm, `feat/case-combo`
+
+Mọi kiểu nằm ở `UX/bindings/*.ts` (sinh tự động), Api ở `UX/api/index.ts` (`createTauriApi` + `createMockApi` cùng hành vi; mock Case ở `api/mockCases.ts`). Tên đối số camelCase; enum snake_case. Mã lỗi: `not_found`, `invalid_arg` (vai lạ, quá giới hạn, tên rỗng).
+
+### Case
+| Api | Trả | Ghi chú |
+|---|---|---|
+| `createCase(name?, brief?, settings?)` | `CaseDto` | Tên mặc định `Case N`. `settings` mặc định `{vi:true, mode:null}` |
+| `listCases(includeDeleted?)` | `CaseSummaryDto[]` | Mới mở trước. **Không** có tác dụng phụ (dọn thùng rác chạy lúc khởi động) |
+| `openCase(id)` / `getCase(id)` | `CaseDto` | `openCase` đánh dấu "vừa mở" (Case mặc định của `addToCase(null, …)`) |
+| `updateCase(id, Partial<CasePatchDto>)` | `CaseDto` | `clearBrief:true` để xoá brief; `viewState` là JSON tự do (cột, ghim, sắp xếp, nhóm đóng của Pairing/Compare) — backend chỉ lưu |
+| `deleteCase(id)` / `restoreCase(id)` | — / `CaseDto` | Xoá mềm; dọn hẳn sau 30 ngày. UI: toast kèm Hoàn tác = `restoreCase` |
+| `addToCase(caseId \| null, faces, origin?)` | `AddToCaseDto{caseId, added, alreadyIn, created}` | `null` = Case vừa mở, chưa có thì tạo (`created:true`). Nút Add to Case ở Top Bar |
+| `removeFromCase(caseId, faces)` | số font đã bỏ | Gỡ luôn vai đang dùng font đó trong mọi Combo của Case |
+
+`CaseDto{id, name, brief, settings, viewState, createdAt, updatedAt, openedAt, deletedAt, faces: CaseFaceDto[], combos: ComboDto[]}`. `CaseFaceDto{key, origin: added|pinned|brief|peek, note, addedAt, row: FaceRowDto|null}` — `row:null` = font không còn trong thư viện (giữ khoá, hiện "thiếu"). Giới hạn 500 font/Case.
+
+### Combo
+`ComboDto{id, caseId, idx (1-based, liên tục), name, isMain, note, slots: ComboSlotDto[]}`; `ComboSlotDto{role, key, row, note, style}`; vai: `display|heading|subheading|body|caption|accent|quote`, slots trả theo thứ tự vai đó. Giới hạn 50 Combo/Case; Combo đầu tiên là chính, luôn còn đúng một Combo chính.
+- `createCombo(caseId, name?, fromCombo?)` (nhân bản nếu có `fromCombo`), `updateCombo(id, Partial<ComboPatchDto>)` (`isMain:true` loại trừ các Combo khác; `clearNote`), `deleteCombo(id)` (đánh số lại, chọn lại Combo chính), `reorderCombos(caseId, ids)` (phải đủ mọi Combo).
+- `setComboSlot(comboId, role, face | null, note?, style?)` → `ComboDto`; đặt font tự thêm vào Case; đổi font giữ ghi chú/kiểu cũ nếu không truyền; `face:null` bỏ khỏi vai.
+- `createCombos(caseId, NewComboDto[])` — một transaction (dùng cho "Pair these" và Brief starter); lỗi thì không tạo gì.
+
+### Compare Combo
+`caseCompare(caseId, comboIds, lang?='vi')` → `CaseCompareDto{caseId, columns: ComboColumnDto[]}`; `comboIds` rỗng = mọi Combo (≤ 8). `ComboColumnDto{combo, relations: ComboRelationDto[], fontCount, worstViMissing|null, licenses[]}`; `ComboRelationDto{from, to, assessment: PairCandidateDto}` = giọng ① (vai đầu theo thứ tự display→quote) so với từng vai dùng font khác (nhãn ●◐◆○, cổng, câu giải thích, tóm tắt). Combo <2 font khác nhau → `relations:[]`. Mức ghép và tiếng Việt lấy từ `settings` của Case. Compare Font vẫn dùng `compareFaces`.
+
+### Pair from peek (2d)
+`openCaseFromPeek({face, as: 'heading'|'body', candidate?, caseId?, settings})` → `{case, comboId, anchorRole, otherRole, trial, created}`. `heading`→vai `display`, `body`→vai `body`. `caseId:null` = Case vừa mở hoặc tạo mới. **Idempotent** (bấm nhiều lần không nhân Case/Combo/font) và **nguyên tử** (lỗi thì không để lại gì). `candidate` không ghi vào vai: UI đặt `trial` vào trạng thái "thử" ở đầu Cuộn chọn của `otherRole`. `settings` được ghi vào Case (mang theo mức ghép và lựa chọn tiếng Việt).
+
+### Brief starter
+`briefStarter(brief, caseId?)` thuần đọc, **xác định**. `BriefDto{uses[], tones[{pair, value −1..1}], needs{vi, installedOnly, italic, variable, openLicense}, text}` (`uses`: editorial|branding|poster|ui_web|packaging; `pair`: classic_modern|warm_cool|quiet_bold, âm = đầu trái). Kết quả: `describe` (term khớp, bộ lọc trục, xung đột, không ánh xạ được), `query` (đưa thẳng cho Library), `displayQuery` (weightClass 600–900) / `bodyQuery` (400–500), `anchors ≤ 3`, `combos ≤ 3` (`PairComboDto`), `notes[{code, detail}]`, `ai:null` (chỗ "Kết nối AI"). Mã `notes` cần dịch: `no_terms`, `branding_class_only`, `installed_none_active`, `weight_relaxed`, `few_anchors`, `no_body_pair`, `index_unavailable`, `langs_incomplete` (độ phủ ngôn ngữ còn tính nền, kết quả có thể thiếu), `packaging_inferred` (packaging là ánh xạ suy ra theo vai, `detail` = "display=display+heavy; body=readable_small+clean"). Để tạo Combo từ starter: `createCombos(caseId, combos.map(c => ({name: null, slots: [{role:'display', face: heading}, {role:'body', face: body}]})))`.
+
+### Việc UI cần nhớ
+- Mọi chuỗi qua i18n; mã `notes` → khoá dịch. Thuật ngữ font giữ tiếng Anh.
+- Sau `restoreCase`/`deleteCase` gọi lại `listCases`.
+- Thay đổi Combo/slot trả `ComboDto` mới; Case-level (`faces`, `updatedAt`) cần `getCase` nếu hiển thị.

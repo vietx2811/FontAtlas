@@ -87,6 +87,39 @@ pub struct NewCombo {
     pub slots: Vec<(String, FaceKey)>,
 }
 
+/// Khối nguyên tử lồng được (SAVEPOINT): lỗi hoặc thả mà chưa `commit` thì hoàn tác. Dùng thay cho transaction
+/// để các thao tác gộp lại (`peek_open`) vẫn là MỘT đơn vị dù mỗi bước đã tự bọc.
+pub(crate) struct Atomic<'a> {
+    conn: &'a rusqlite::Connection,
+    done: bool,
+}
+
+impl<'a> Atomic<'a> {
+    pub(crate) fn begin(conn: &'a rusqlite::Connection) -> rusqlite::Result<Atomic<'a>> {
+        conn.execute_batch("SAVEPOINT atomic_block")?;
+        Ok(Atomic { conn, done: false })
+    }
+    pub(crate) fn commit(mut self) -> rusqlite::Result<()> {
+        self.done = true;
+        self.conn.execute_batch("RELEASE atomic_block")
+    }
+}
+
+impl std::ops::Deref for Atomic<'_> {
+    type Target = rusqlite::Connection;
+    fn deref(&self) -> &rusqlite::Connection {
+        self.conn
+    }
+}
+
+impl Drop for Atomic<'_> {
+    fn drop(&mut self) {
+        if !self.done {
+            let _ = self.conn.execute_batch("ROLLBACK TO atomic_block; RELEASE atomic_block");
+        }
+    }
+}
+
 fn check_role(role: &str) -> Result<(), StoreError> {
     if ROLES.contains(&role) { Ok(()) } else { Err(StoreError::Invalid(format!("vai không hợp lệ: {role}"))) }
 }
@@ -265,7 +298,7 @@ impl Store {
             return Err(StoreError::Invalid(format!("origin không hợp lệ: {origin}")));
         }
         self.case(case_id)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         let now = now_ms();
         let (mut added, mut already) = (0, 0);
         let mut count: i64 = tx.query_row("SELECT count(*) FROM u.case_faces WHERE case_id = ?1", [case_id], |r| r.get(0))?;
@@ -292,7 +325,7 @@ impl Store {
     /// Bỏ font khỏi Case (kèm mọi vai đang dùng font đó trong Combo của Case). Trả số font đã bỏ.
     pub fn remove_from_case(&mut self, case_id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
         self.case(case_id)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         let mut n = 0;
         for k in keys {
             tx.execute(
@@ -308,6 +341,54 @@ impl Store {
         tx.execute("UPDATE u.cases SET updated_at = ?2 WHERE id = ?1", params![case_id, now_ms()])?;
         tx.commit()?;
         Ok(n)
+    }
+
+    /// "Pair from peek" trong MỘT khối nguyên tử: lấy/tạo Case, ghi `settings`, thêm font neo (và ứng viên) với
+    /// origin `peek`, đảm bảo có Combo chính, đặt neo vào `anchor_role`. Idempotent. Lỗi ở bất kỳ bước nào thì
+    /// không để lại gì (kể cả Case vừa tạo). Trả (case_id, combo_id, vừa tạo Case).
+    pub fn peek_open(
+        &mut self,
+        case_id: Option<i64>,
+        settings: &str,
+        anchor: &FaceKey,
+        candidate: Option<&FaceKey>,
+        anchor_role: &str,
+    ) -> Result<(i64, i64, bool), StoreError> {
+        check_json("settings", settings)?;
+        check_role(anchor_role)?;
+        self.conn.execute_batch("SAVEPOINT peek_open")?;
+        let run = |s: &mut Store| -> Result<(i64, i64, bool), StoreError> {
+            let (case_id, created) = match case_id {
+                Some(id) => (id, false),
+                None => match s.latest_case()? {
+                    Some(id) => (id, false),
+                    None => (s.create_case("Case 1", None, Some(settings))?, true),
+                },
+            };
+            s.case(case_id)?;
+            s.update_case(case_id, &CasePatch { settings: Some(settings.to_string()), ..Default::default() })?;
+            s.add_to_case(case_id, std::slice::from_ref(anchor), "peek")?;
+            if let Some(c) = candidate {
+                s.add_to_case(case_id, std::slice::from_ref(c), "peek")?;
+            }
+            let combo_id = match s.combos(case_id)?.into_iter().find(|c| c.is_main).map(|c| c.id) {
+                Some(id) => id,
+                None => s.create_combo(case_id, None, None)?,
+            };
+            s.set_combo_slot(combo_id, anchor_role, Some(anchor), None, None)?;
+            s.touch_case(case_id)?;
+            Ok((case_id, combo_id, created))
+        };
+        match run(self) {
+            Ok(v) => {
+                self.conn.execute_batch("RELEASE peek_open")?;
+                Ok(v)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK TO peek_open; RELEASE peek_open");
+                Err(e)
+            }
+        }
     }
 
     // ---- Combo ----
@@ -352,7 +433,7 @@ impl Store {
 
     /// Tạo Combo ở cuối; Combo đầu tiên của Case là chính. `from` = nhân bản vai/font của Combo khác (cùng Case).
     pub fn create_combo(&mut self, case_id: i64, name: Option<&str>, from: Option<i64>) -> Result<i64, StoreError> {
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         let id = self.create_combo_tx(&tx, case_id, name, from, &[])?;
         tx.commit()?;
         Ok(id)
@@ -360,7 +441,7 @@ impl Store {
 
     fn create_combo_tx(
         &self,
-        tx: &rusqlite::Transaction,
+        tx: &Atomic,
         case_id: i64,
         name: Option<&str>,
         from: Option<i64>,
@@ -425,7 +506,7 @@ impl Store {
     /// Nhiều Combo một transaction: lỗi ở Combo nào thì không Combo nào được tạo.
     pub fn create_combos(&mut self, case_id: i64, combos: &[NewCombo]) -> Result<Vec<i64>, StoreError> {
         self.case(case_id)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         let mut ids = Vec::new();
         for c in combos {
             ids.push(self.create_combo_tx(&tx, case_id, c.name.as_deref(), None, &c.slots)?);
@@ -444,7 +525,7 @@ impl Store {
             Some(n) => n.clone(),
             None => cur.note.clone(),
         };
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         if p.is_main == Some(true) {
             tx.execute("UPDATE u.combos SET is_main = 0 WHERE case_id = ?1", [cur.case_id])?;
         }
@@ -461,7 +542,7 @@ impl Store {
 
     pub fn delete_combo(&mut self, id: i64) -> Result<(), StoreError> {
         let cur = self.combo(id)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         tx.execute("DELETE FROM u.combos WHERE id = ?1", [id])?;
         // đánh số lại liên tục 1..n và giữ một Combo chính
         let ids: Vec<i64> = {
@@ -487,7 +568,7 @@ impl Store {
         if have != want {
             return Err(StoreError::Invalid("danh sách Combo không khớp Case".into()));
         }
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         renumber(&tx, ids)?;
         tx.commit()?;
         Ok(())
@@ -500,7 +581,7 @@ impl Store {
             check_json("style", s)?;
         }
         let combo = self.combo(combo_id)?;
-        let tx = self.conn.unchecked_transaction()?;
+        let tx = Atomic::begin(&self.conn)?;
         let now = now_ms();
         match face {
             Some(k) => {
@@ -537,7 +618,7 @@ impl Store {
 }
 
 /// Đánh số lại `idx` = 1..n theo thứ tự `ids` (đi qua giá trị âm để không vi phạm UNIQUE).
-fn renumber(tx: &rusqlite::Transaction, ids: &[i64]) -> Result<(), StoreError> {
+fn renumber(tx: &Atomic, ids: &[i64]) -> Result<(), StoreError> {
     for id in ids {
         tx.execute("UPDATE u.combos SET idx = -id WHERE id = ?1", [id])?;
     }

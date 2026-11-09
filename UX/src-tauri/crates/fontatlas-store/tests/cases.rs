@@ -192,3 +192,32 @@ fn deleting_case_row_cascades_and_deleted_case_rejects_writes() {
     assert_eq!(count(&s, "SELECT count(*) FROM u.combo_slots"), 0);
     assert_eq!(count(&s, "SELECT count(*) FROM u.case_faces"), 0);
 }
+
+#[test]
+fn peek_open_is_atomic_and_idempotent() {
+    let (_d, mut s) = open();
+    let (a, c) = (key(1), key(2));
+    let (case, combo, created) = s.peek_open(None, r#"{"vi":true}"#, &a, Some(&c), "display").unwrap();
+    assert!(created);
+    let again = s.peek_open(None, r#"{"vi":true}"#, &a, Some(&c), "display").unwrap();
+    assert_eq!(again, (case, combo, false), "lần hai: cùng Case/Combo");
+    assert_eq!(s.combos(case).unwrap().len(), 1);
+    assert_eq!(s.combos(case).unwrap()[0].slots.len(), 1);
+    assert_eq!(s.case_faces(case).unwrap().len(), 2);
+
+    // lỗi ở bước cuối (đặt vai) trên thư viện chưa có Case nào: không để lại Case, Combo hay font
+    let (_d2, mut s2) = open();
+    s2.conn()
+        .execute_batch("CREATE TRIGGER u.deny_slot BEFORE INSERT ON combo_slots BEGIN SELECT RAISE(ABORT, 'boom'); END;")
+        .unwrap();
+    assert!(s2.peek_open(None, "{}", &a, Some(&c), "body").is_err());
+    for t in ["cases", "case_faces", "combos", "combo_slots"] {
+        assert_eq!(count(&s2, &format!("SELECT count(*) FROM u.{t}")), 0, "{t} phải trống sau khi hoàn tác");
+    }
+    // vai không hợp lệ bị từ chối trước khi chạm gì
+    assert!(s2.peek_open(None, "{}", &a, None, "lạ").is_err());
+    assert_eq!(count(&s2, "SELECT count(*) FROM u.cases"), 0);
+    // và store vẫn dùng được bình thường sau lỗi (savepoint đã giải phóng)
+    s2.conn().execute_batch("DROP TRIGGER u.deny_slot").unwrap();
+    assert!(s2.peek_open(None, "{}", &a, None, "body").is_ok());
+}

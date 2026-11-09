@@ -127,7 +127,6 @@ pub fn create_case(state: &AppState, name: Option<&str>, brief: Option<&BriefDto
 
 pub fn list_cases(state: &AppState, include_deleted: bool) -> Result<Vec<CaseSummaryDto>, CmdError> {
     state.with_user(|u| {
-        u.purge_cases(now_ms())?;
         Ok(u.cases(include_deleted)?
             .into_iter()
             .map(|c| CaseSummaryDto {
@@ -145,6 +144,11 @@ pub fn list_cases(state: &AppState, include_deleted: bool) -> Result<Vec<CaseSum
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
+/// Dọn hẳn Case đã nằm trong thùng rác quá 30 ngày. Gọi lúc khởi động (không để lệnh đọc có tác dụng phụ).
+pub fn purge_trash(state: &AppState) -> usize {
+    state.with_user(|u| Ok(u.purge_cases(now_ms())?)).unwrap_or(0)
 }
 
 /// Mở Case: đánh dấu vừa mở rồi trả đủ nội dung.
@@ -333,28 +337,8 @@ pub fn open_case_from_peek(state: &AppState, p: &PeekOpenDto) -> Result<PeekOpen
     let anchor = FaceKey::try_from(&p.face)?;
     let cand = p.candidate.as_ref().map(FaceKey::try_from).transpose()?;
     let settings = json_of(&p.settings)?;
-    let (case_id, combo_id, created) = state.with_user(|u| {
-        let (case_id, created) = match p.case_id {
-            Some(id) => (id, false),
-            None => match u.latest_case()? {
-                Some(id) => (id, false),
-                None => (u.create_case("Case 1", None, Some(&settings))?, true),
-            },
-        };
-        u.case(case_id)?;
-        // mang theo lựa chọn của peek (kể cả khi dùng Case có sẵn: người dùng vừa chọn như vậy)
-        u.update_case(case_id, &CasePatch { settings: Some(settings.clone()), ..Default::default() })?;
-        u.add_to_case(case_id, std::slice::from_ref(&anchor), "peek")?;
-        if let Some(c) = &cand {
-            u.add_to_case(case_id, std::slice::from_ref(c), "peek")?;
-        }
-        let combo_id = match u.combos(case_id)?.into_iter().find(|c| c.is_main).map(|c| c.id) {
-            Some(id) => id,
-            None => u.create_combo(case_id, None, None)?,
-        };
-        u.set_combo_slot(combo_id, anchor_role.as_str(), Some(&anchor), None, None)?;
-        u.touch_case(case_id)?;
-        Ok((case_id, combo_id, created))
-    })?;
+    // một khối nguyên tử: lỗi giữa chừng thì không để lại Case/Combo/font nào
+    let (case_id, combo_id, created) =
+        state.with_user(|u| Ok(u.peek_open(p.case_id, &settings, &anchor, cand.as_ref(), anchor_role.as_str())?))?;
     Ok(PeekOpenResultDto { case: load(state, case_id)?, combo_id, anchor_role, other_role, trial: p.candidate.clone(), created })
 }

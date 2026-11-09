@@ -396,3 +396,27 @@ fn brief_starter_is_deterministic() {
         }
     }
 }
+
+#[test]
+fn trash_is_purged_at_boot_not_by_list_cases() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let old = cases::create_case(&st, Some("Cũ"), None, None).unwrap();
+    let fresh = cases::create_case(&st, Some("Mới xoá"), None, None).unwrap();
+    cases::delete_case(&st, old.id).unwrap();
+    cases::delete_case(&st, fresh.id).unwrap();
+    // đẩy mốc xoá của Case "Cũ" về 31 ngày trước
+    st.with_user(|u| {
+        u.conn().execute("UPDATE u.cases SET deleted_at = deleted_at - ?1 WHERE id = ?2", rusqlite::params![31_i64 * 24 * 3600 * 1000, old.id]).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    // lệnh đọc không có tác dụng phụ
+    assert_eq!(cases::list_cases(&st, true).unwrap().len(), 2);
+    assert_eq!(cases::list_cases(&st, true).unwrap().len(), 2);
+    // purge chạy ở khởi động
+    assert_eq!(cases::purge_trash(&st), 1);
+    let left = cases::list_cases(&st, true).unwrap();
+    assert_eq!(left.iter().map(|c| c.id).collect::<Vec<_>>(), vec![fresh.id]);
+    assert!(cases::restore_case(&st, fresh.id).is_ok(), "Case xoá gần đây vẫn khôi phục được");
+}
