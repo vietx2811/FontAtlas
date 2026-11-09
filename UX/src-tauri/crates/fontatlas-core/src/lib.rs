@@ -5,6 +5,7 @@ mod error;
 pub mod classify;
 pub mod extras;
 pub mod geom;
+pub mod langdata;
 mod load;
 mod metadata;
 mod metric;

@@ -125,6 +125,7 @@ pub struct ScanStatusDto {
 use fontatlas_store::{Collection, FaceKey, FacePage, FaceRow, ProblemFile, SortKey, Tag};
 use serde::Deserialize;
 
+use crate::dto::langs::{LangBadgeDto, LangFilterDto, LangModeDto};
 use crate::error::CmdError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -183,10 +184,14 @@ pub struct FaceRowDto {
     pub is_favorite: bool,
     #[ts(type = "number")]
     pub added_at: i64,
+    /// Chỉ báo ngôn ngữ trên thẻ, theo `FaceQueryDto.badgeLang` (mặc định `vie`). `null` khi mã ngôn ngữ lạ.
+    /// `viMissing` giữ nguyên cho tương thích; giao diện dùng `langBadge` thay chỉ báo `−N`.
+    pub lang_badge: Option<LangBadgeDto>,
 }
 
 impl From<FaceRow> for FaceRowDto {
     fn from(r: FaceRow) -> Self {
+        let lang_badge = crate::services::langs::badge_of(crate::services::langs::DEFAULT_BADGE_LANG, r.lang_hit.as_ref(), r.lang_computed, r.vi_missing);
         FaceRowDto {
             face_id: r.face_id,
             hash_hex: r.hash_hex,
@@ -207,6 +212,7 @@ impl From<FaceRow> for FaceRowDto {
             missing: r.missing,
             is_favorite: r.is_favorite,
             added_at: r.added_at,
+            lang_badge,
         }
     }
 }
@@ -325,6 +331,12 @@ pub struct FaceQueryDto {
     pub subclasses: Vec<String>,
     /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
     pub traits: Vec<String>,
+    /// Lọc theo ngôn ngữ (Hyperglot). Rỗng = không lọc. Chỉ face đã tính độ phủ mới khớp.
+    pub langs: Vec<LangFilterDto>,
+    /// `all` (mặc định): phải đủ mọi ngôn ngữ trong `langs`; `any`: đủ ít nhất một.
+    pub lang_mode: LangModeDto,
+    /// Ngôn ngữ cho chỉ báo `langBadge` trên thẻ (mã ISO 639-3, vd `vie`); `null` = `vie`.
+    pub badge_lang: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

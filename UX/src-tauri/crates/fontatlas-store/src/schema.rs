@@ -297,7 +297,35 @@ ALTER TABLE classification_overrides_v5 RENAME TO classification_overrides;
 "#;
 
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
+/// Library v2 (0.3.0): độ phủ ngôn ngữ (Hyperglot) theo face. Khoá theo (hash, face_index) như `analyses`.
+/// `face_langs` chỉ giữ ngôn ngữ đạt ≥ near; `face_lang_state` đánh dấu face đã tính với `db_version` nào
+/// (không có hàng ở `face_langs` + có dấu = "đã tính, không đạt"; không có dấu = chưa tính).
+pub(crate) const LIBRARY_V2: &str = r#"
+CREATE TABLE face_langs (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  lang       TEXT NOT NULL,
+  have       INTEGER NOT NULL,
+  total      INTEGER NOT NULL,
+  level      TEXT NOT NULL CHECK (level IN ('full','near')),
+  PRIMARY KEY (hash, face_index, lang)
+) WITHOUT ROWID;
+CREATE INDEX face_langs_lang ON face_langs(lang, level);
+CREATE TABLE face_lang_state (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  db_version TEXT NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2];
+/// Chỉ cho test: library.db ở v1 (trước độ phủ ngôn ngữ).
+pub fn create_library_v1_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
+}
+
 pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.

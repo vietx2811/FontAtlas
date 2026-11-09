@@ -7,8 +7,10 @@ pub fn on_exit(state: &AppState) {
     state.scans.request_shutdown();
     crate::services::model::cancel_download(state);
     state.embed.request_stop();
+    state.langs.request_stop();
     state.scans.shutdown();
     crate::services::model::wait_download(state, std::time::Duration::from_secs(5));
     state.embed.shutdown();
+    state.langs.shutdown();
     crate::services::activation::on_exit(state);
 }

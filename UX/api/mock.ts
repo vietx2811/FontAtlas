@@ -31,7 +31,7 @@ export function mockRows(): FaceRow[] {
       weightClass: w, widthClass: 5, isItalic: italic, isVariable: false, viStatus: viMissing ? 'partial' : 'full',
       supportsVi: viMissing === 0, viMissing, licenseClass: 'ofl',
       path: `/Users/me/Fonts/src${src}/${family.replace(/ /g, '')}-${sub.replace(/ /g, '')}.ttf`,
-      fileSize: 180_000 + n * 1000, missing: false, isFavorite: false, addedAt: n,
+      fileSize: 180_000 + n * 1000, missing: false, isFavorite: false, addedAt: n, langBadge: null,
     });
   };
   for (const [family, src, kind, miss] of FAMILIES) {

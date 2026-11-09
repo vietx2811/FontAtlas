@@ -64,12 +64,12 @@ impl Store {
             uc.execute_batch("PRAGMA journal_mode=WAL;")?;
         }
 
-        let conn = match open_library(&lib_path) {
+        let conn = match open_library(&lib_path, &dir.join(BACKUP_DIR)) {
             Ok(c) => c,
             Err(e) if library_is_broken(&e) => {
                 move_aside(&lib_path)?;
                 rep.library_recreated = true;
-                open_library(&lib_path)?
+                open_library(&lib_path, &dir.join(BACKUP_DIR))?
             }
             Err(e) => return Err(e),
         };
@@ -139,7 +139,7 @@ fn check_user_version(user_path: &Path) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn open_library(path: &Path) -> Result<Connection, StoreError> {
+fn open_library(path: &Path, backup_dir: &Path) -> Result<Connection, StoreError> {
     let c = Connection::open(path)?;
     c.busy_timeout(BUSY_TIMEOUT)?;
     let tables: i64 = c.query_row("SELECT count(*) FROM sqlite_schema", [], |r| r.get(0))?;
@@ -148,18 +148,32 @@ fn open_library(path: &Path) -> Result<Connection, StoreError> {
         c.execute_batch("PRAGMA page_size=16384;")?;
     }
     c.execute_batch("PRAGMA journal_mode=WAL;")?;
-    migrate(&c, "library", LIBRARY_MIGRATIONS, None)?;
+    migrate(&c, "library", LIBRARY_MIGRATIONS, Some(backup_dir))?;
     Ok(c)
+}
+
+fn is_transient(code: ErrorCode) -> bool {
+    matches!(
+        code,
+        ErrorCode::DatabaseBusy
+            | ErrorCode::DatabaseLocked
+            | ErrorCode::DiskFull
+            | ErrorCode::SystemIoFailure
+            | ErrorCode::ReadOnly
+            | ErrorCode::CannotOpen
+            | ErrorCode::OutOfMemory
+            | ErrorCode::OperationInterrupted
+            | ErrorCode::PermissionDenied
+    )
 }
 
 /// library.db là dữ liệu dẫn xuất: mới hơn app, migration lỗi hay file hỏng đều dựng lại.
 fn library_is_broken(e: &StoreError) -> bool {
     match e {
         StoreError::NewerSchema { .. } => true,
-        // bận/khoá (process khác đang giữ DB) không phải hỏng: trả lỗi, không dựng lại
-        StoreError::Migration { source: rusqlite::Error::SqliteFailure(f, _), .. } => {
-            !matches!(f.code, ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-        }
+        // lỗi tạm thời (bận/khoá, đầy đĩa, I/O, chỉ đọc, không mở được, hết bộ nhớ) KHÔNG phải DB hỏng:
+        // trả lỗi và giữ nguyên file, nếu không người dùng thấy thư viện rỗng chỉ vì ổ đĩa đầy một lúc.
+        StoreError::Migration { source: rusqlite::Error::SqliteFailure(f, _), .. } => !is_transient(f.code),
         StoreError::Migration { .. } => true,
         StoreError::Sqlite(rusqlite::Error::SqliteFailure(f, _)) => {
             matches!(f.code, ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt)
@@ -183,6 +197,46 @@ fn move_aside(lib_path: &Path) -> Result<(), StoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transient_migration_errors_keep_the_db() {
+        for code in [
+            ErrorCode::DiskFull,
+            ErrorCode::SystemIoFailure,
+            ErrorCode::ReadOnly,
+            ErrorCode::CannotOpen,
+            ErrorCode::OutOfMemory,
+            ErrorCode::PermissionDenied,
+        ] {
+            let source = rusqlite::Error::SqliteFailure(rusqlite::ffi::Error { code, extended_code: 13 }, None);
+            let e = StoreError::Migration { db: "library", from: 2, to: 3, source };
+            assert!(!library_is_broken(&e), "{code:?} không được làm dựng lại library");
+        }
+        let notadb = StoreError::Migration {
+            db: "library",
+            from: 2,
+            to: 3,
+            source: rusqlite::Error::SqliteFailure(rusqlite::ffi::Error { code: ErrorCode::NotADatabase, extended_code: 26 }, None),
+        };
+        assert!(library_is_broken(&notadb));
+    }
+
+    /// SQLITE_FULL thật: giới hạn số trang rồi chạy migration cần thêm trang.
+    #[test]
+    fn real_disk_full_during_migration_is_transient_and_rolls_back() {
+        let d = tempfile::tempdir().unwrap();
+        let c = Connection::open(d.path().join("library.db")).unwrap();
+        crate::schema::create_library_v1_for_test(&c);
+        let pages: i64 = c.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+        c.execute_batch(&format!("PRAGMA max_page_count = {pages};")).unwrap();
+        let big = "CREATE TABLE zz(a); WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < 200000) \
+                   INSERT INTO zz SELECT hex(randomblob(64)) FROM n;";
+        let err = crate::schema::migrate(&c, "library", &[crate::schema::LIBRARY_MIGRATIONS[0], big], None).unwrap_err();
+        assert!(matches!(&err, StoreError::Migration { source: rusqlite::Error::SqliteFailure(f, _), .. } if f.code == ErrorCode::DiskFull), "{err:?}");
+        assert!(!library_is_broken(&err));
+        let v: u32 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 1, "bước lỗi rollback, version giữ nguyên");
+    }
 
     #[test]
     fn busy_or_locked_migration_is_not_broken() {

@@ -35,3 +35,22 @@ pub fn missing_graphemes(font: &FontRef<'_>, graphemes: &[String]) -> Vec<String
         .cloned()
         .collect()
 }
+
+/// Tập grapheme (trong `graphemes`) mà font không có glyph — một lần cho nhiều ngôn ngữ.
+pub fn missing_set(font: &FontRef<'_>, graphemes: &[String]) -> std::collections::HashSet<String> {
+    missing_graphemes(font, graphemes).into_iter().collect()
+}
+
+/// Ngôn ngữ (Hyperglot) mà font đạt ít nhất mức near, theo cmap thật: một lần tính cho mọi ngôn ngữ.
+pub fn supported_langs(font: &FontRef<'_>) -> Vec<(String, fontatlas_core::langdata::LangCoverage, fontatlas_core::langdata::LangLevel)> {
+    let db = fontatlas_core::langdata::langdb();
+    let missing = missing_set(font, &db.all_graphemes);
+    db.entries
+        .iter()
+        .filter_map(|e| {
+            let c = e.evaluate(&missing);
+            let l = c.level()?;
+            Some((e.id.clone(), c, l))
+        })
+        .collect()
+}
