@@ -3,11 +3,12 @@ import type { Api, FaceKeyDto } from '../../api';
 import { COMPARE_METRICS, type CompareDto, type CompareFace } from '../../api/compare';
 import { hasKey, t, type I18nKey } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
-import { useUiStore } from '../../store/ui';
+import { COMPARE_MAX, COMPARE_MIN, useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
 import { TermTip, termKey, termName } from '../ui/terms';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SAMPLE_VI_GLOSS, SpecimenCell, ViCell, WithFamily } from './CompareCells';
+import { FacePicker } from './FacePicker';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
 import { ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
@@ -26,10 +27,31 @@ function Record({ id, fam, into }: { id: string; fam: string | null; into: Map<s
   useEffect(() => { into.set(id, fam); }, [id, fam, into]);
   return null;
 }
-const Row = ({ children }: { children: React.ReactNode }) => <div className="row" role="row">{children}</div>;
+/** Mỗi hàng dữ liệu có thêm một ô đệm ở cuối cho cột "+" hẹp (hàng nhóm trải hết bề ngang nên không cần). */
+const Row = ({ children, group }: { children: React.ReactNode; group?: boolean }) => <div className="row" role="row">{children}{!group && <div role="cell" className="addc" />}</div>;
 const Group = ({ k, cols }: { k: 'specimen' | 'metrics' | 'class' | 'meta'; cols: number }) => (
-  <Row><div role="columnheader" aria-colspan={cols} className="gh">{t(`compare.sec.${k}` as I18nKey)}{gl(`compare.sec.${k}.gloss`) && <small> · {gl(`compare.sec.${k}.gloss`)}</small>}</div></Row>
+  <Row group><div role="columnheader" aria-colspan={cols} className="gh">{t(`compare.sec.${k}` as I18nKey)}{gl(`compare.sec.${k}.gloss`) && <small> · {gl(`compare.sec.${k}.gloss`)}</small>}</div></Row>
 );
+
+function ColHead({ face, base, pinned, canRemove }: { face: CompareFace; base: boolean; pinned: boolean; canRemove: boolean }): React.JSX.Element {
+  const id = keyOf(face.face);
+  const name = `${face.row.family} ${face.row.subfamily ?? ''}`.trim();
+  return (
+    <div role="columnheader" className={`ch${base ? ' base' : ''}${pinned ? ' pinned' : ''}`} title={name} data-pinned={pinned}>
+      <div className="t">{base && <Icon name="anchor" size={13} />}<span>{face.row.family}</span>
+        <span className="act">
+          <Tooltip label={pinned ? t('compare.unpin.tip') : t('compare.pin.tip')}>
+            <button type="button" className="cmp-ib" aria-pressed={pinned} aria-label={`${pinned ? t('compare.unpin') : t('compare.pin')} · ${name}`} onClick={() => useUiStore.getState().toggleComparePin(id)}><Icon name="pin" size={13} /></button>
+          </Tooltip>
+          <Tooltip label={canRemove ? t('compare.remove') : t('compare.remove.min', { n: COMPARE_MIN })}>
+            <button type="button" className="cmp-ib" aria-label={`${t('compare.remove')} · ${name}`} aria-disabled={canRemove ? undefined : 'true'} onClick={() => { if (canRemove) useUiStore.getState().removeCompareFace(id); }}><Icon name="x" size={13} /></button>
+          </Tooltip>
+        </span>
+      </div>
+      <div className="m">{[base ? t('compare.base') : null, face.row.subfamily].filter(Boolean).join(' · ')}</div>
+    </div>
+  );
+}
 
 /** Màn Compare: 2–8 cột, cột đầu là mốc; toàn bộ số đo là số thật từ phân tích (không có thì ghi "Không đo được"). */
 export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): React.JSX.Element {
@@ -40,6 +62,8 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   const [fit, setFit] = useState(false);
   const [overlay, setOverlay] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [picker, setPicker] = useState<DOMRect | null>(null);
+  const session = useUiStore(s => s.compareSession);
   const families = useRef(new Map<string, string | null>());
   const title = useRef<HTMLHeadingElement>(null);
   const close = () => useUiStore.getState().closeCompare();
@@ -113,22 +137,29 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   if (!data) return <div className="cmp">{header}<div role="status" className="cmp-state">{t('compare.loading')}</div></div>;
 
   const base = data.faces[0];
-  const cols = data.faces.length + 1;
+  const pins = session?.pinned ?? [];
+  const order = (f: CompareFace) => { const i = pins.indexOf(keyOf(f.face)); return i < 0 ? pins.length + data.faces.indexOf(f) : i; };
+  const shown = [...data.faces].sort((a, b) => order(a) - order(b));
+  const full = shown.length >= COMPARE_MAX;
+  const cols = shown.length + 2;
   const scale = (f: CompareFace) => (fit && f !== base ? fitScale(base.metrics.x_height_em?.value ?? null, f.metrics.x_height_em?.value ?? null) : 1);
-  const cells = (fn: (f: CompareFace) => React.ReactNode) => data.faces.map(f => <div key={keyOf(f.face)} role="cell">{fn(f)}</div>);
+  const cells = (fn: (f: CompareFace) => React.ReactNode) => shown.map(f => <div key={keyOf(f.face)} role="cell">{fn(f)}</div>);
   return (
     <div className="cmp">
       {header}
       {data.failed.length > 0 && <div role="alert" className="cmp-state warn">{t('compare.skipped', { n: data.failed.length, reason: data.failed.map(x => x.reason).join('; ') })}</div>}
       <div className="cmp-body">
-        <div className="cmp-tbl" role="table" aria-label={t('compare.title')} style={{ ['--n' as string]: data.faces.length }}>
+        <div className="cmp-tbl" role="table" aria-label={t('compare.title')} style={{ ['--n' as string]: shown.length }}>
           {data.faces.map(f => <FamilyTap key={keyOf(f.face)} api={api} face={f} into={families.current} />)}
-          <Row>
+          <Row group>
             <div className="rh" role="columnheader" />
-            {data.faces.map(f => <div key={keyOf(f.face)} role="columnheader" className={`ch${f === base ? ' base' : ''}`} title={`${f.row.family} ${f.row.subfamily ?? ''}`.trim()}>
-              <div className="t">{f === base && <Icon name="anchor" size={13} />}<span>{f.row.family}</span></div>
-              <div className="m">{[f === base ? t('compare.base') : null, f.row.subfamily].filter(Boolean).join(' · ')}</div>
-            </div>)}
+            {shown.map(f => <ColHead key={keyOf(f.face)} face={f} base={f === base} pinned={pins.includes(keyOf(f.face))} canRemove={shown.length > COMPARE_MIN} />)}
+            <div role="columnheader" className="addh">
+              <Tooltip label={full ? t('compare.add.full', { n: COMPARE_MAX }) : t('compare.add.tip')}>
+                <button type="button" className="cmp-add" aria-label={t('compare.add')} aria-disabled={full ? 'true' : undefined} aria-haspopup="dialog" aria-expanded={picker !== null}
+                  onClick={e => { if (full) return; setPicker(e.currentTarget.getBoundingClientRect()); }}><Icon name="plus" size={14} /></button>
+              </Tooltip>
+            </div>
           </Row>
 
           <Group k="specimen" cols={cols} />
@@ -146,6 +177,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
           <Row><div className="rh" role="rowheader"><b>{t('compare.row.license')}</b><small>{gl('compare.row.license.gloss')}</small></div>{cells(f => <LicenseCell face={f} />)}</Row>
           {META_ROWS.map(r => <Row key={r.key}><div className="rh" role="rowheader"><b>{t(r.label)}</b><small>{t(r.gloss)}</small></div>{cells(f => <r.Cell face={f} />)}</Row>)}
         </div>
+        {picker && <FacePicker api={api} anchor={picker} exclude={new Set(data.faces.map(f => keyOf(f.face)))} onClose={() => setPicker(null)} onPick={r => { useUiStore.getState().addCompareFace({ hashHex: r.hashHex, faceIndex: r.faceIndex }); setPicker(null); }} />}
         <p className="cmp-foot">{t('compare.footnote')} · {t('compare.footnote2')}</p>
       </div>
     </div>

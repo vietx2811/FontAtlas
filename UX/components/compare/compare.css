@@ -14,7 +14,7 @@
 .cmp-state.warn { padding: 6px 16px; font-size: 12px; }
 .cmp-state button { color: var(--accent-ink); text-decoration: underline; }
 .cmp-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 20px; }
-.cmp-tbl { --hw: 136px; display: grid; grid-template-columns: var(--hw) repeat(var(--n), minmax(150px, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: clip; min-width: min-content; }
+.cmp-tbl { --hw: 136px; display: grid; grid-template-columns: var(--hw) repeat(var(--n), minmax(150px, 1fr)) 48px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: clip; min-width: min-content; }
 .cmp-tbl .row { display: contents; }
 .cmp-tbl .row > div { padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
 .cmp-tbl .rh { position: sticky; left: 0; z-index: 3; background: var(--card); border-right: 1px solid var(--border); box-shadow: 1px 0 0 var(--border); color: var(--muted); font-size: 12px; }
@@ -66,3 +66,17 @@
 .cmp-mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
 .cmp-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .cmp-tag { display: inline-flex; height: 20px; align-items: center; padding: 0 7px; border-radius: 10px; background: var(--surface-2); font-size: 11px; font-weight: 500; }
+
+/* H2/H3: pin, bỏ cột, cột "+" */
+.ch .t .act { margin-left: auto; display: inline-flex; gap: 2px; flex: none; opacity: 0; transition: opacity .12s; }
+.ch:hover .act, .ch:focus-within .act, .ch.pinned .act { opacity: 1; }
+.cmp-ib { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); }
+.cmp-ib:hover { background: var(--chrome-hover); color: var(--fg); }
+.cmp-ib[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
+.cmp-ib[aria-disabled="true"] { opacity: .4; cursor: default; }
+.cmp-tbl .ch.pinned { box-shadow: inset 0 2px 0 var(--accent); }
+.cmp-tbl .addh { background: var(--card); display: flex; align-items: center; justify-content: center; padding: 8px 4px; }
+.cmp-add { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px dashed var(--border); color: var(--muted); }
+.cmp-add:hover { background: var(--chrome-hover); color: var(--fg); }
+.cmp-add[aria-disabled="true"] { opacity: .4; cursor: default; }
+.cmp-tbl .row > .addc { padding: 0; background: var(--surface-2); opacity: .5; }
