@@ -18,8 +18,8 @@ const sameInk = (a: ArrayLike<number>, b: ArrayLike<number>): boolean => { if (a
 /**
  * Grapheme nào font không có glyph. Hai phép thử:
  * 1) độ rộng khi dự phòng là monospace / serif / cursive khác nhau → trình duyệt đang vẽ bằng font dự phòng;
- * 2) (canvas thật) hình vẽ của "font, serif" khác hình của "font, sans-serif": nếu font có glyph thì cả hai là cùng một glyph của font; khác nhau nghĩa là đang vẽ bằng hai font dự phòng khác nhau.
- * Phép 2 bắt CJK và các ký tự có cùng bề rộng ở mọi fallback, nơi phép 1 bó tay (chỉ sót khi hai fallback ra cùng một font, như emoji).
+ * 2) (canvas thật) hình vẽ của riêng "font" trùng hệt hình của một font dự phòng chuẩn (serif / sans-serif / monospace / mặc định) → glyph đó là glyph hệ thống, không phải của font.
+ * Đo trong WKWebView: ký tự CJK thiếu trong web font vẽ ra giống hệt `sans-serif` hệ thống bất kể danh sách font dự phòng, và độ rộng cả ba fallback đều bằng nhau, nên phép 1 bó tay.
  */
 export function missingFrom(ctx: Ctx, family: string, chars: readonly string[], size = 64): Set<string> | null {
   try {
@@ -30,7 +30,10 @@ export function missingFrom(ctx: Ctx, family: string, chars: readonly string[], 
       if (!c.trim()) continue;
       const a = w(c, 'monospace'); const b = w(c, 'serif'); const d = w(c, 'cursive');
       if (Math.abs(a - b) > 0.01 || Math.abs(b - d) > 0.01) { out.add(c); continue; }
-      if (canPx && !sameInk(inkOf(ctx, `${PX.size}px "${family}", serif`, c), inkOf(ctx, `${PX.size}px "${family}", sans-serif`, c))) out.add(c);
+      if (canPx) {
+        const own = inkOf(ctx, `${PX.size}px "${family}"`, c);
+        if (['serif', 'sans-serif', 'monospace', ''].some(fb => sameInk(own, inkOf(ctx, `${PX.size}px "__fa_no_such_font__"${fb ? `, ${fb}` : ''}`, c)))) out.add(c);
+      }
     }
     return out;
   } catch { return null; }

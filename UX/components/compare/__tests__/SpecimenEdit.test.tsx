@@ -80,11 +80,11 @@ describe('review 4/5/8 · coverage on graphemes, stable while typing, empty samp
     await waitFor(() => expect(document.querySelectorAll('.cmp-spec .miss').length).toBeGreaterThan(0));
     expect(document.querySelector('.cmp-spec-view .miss')!.textContent).toBe(nfd);
   });
-  it('pixel probe: equal widths everywhere (CJK) but serif and sans-serif fallbacks draw different shapes → missing; identical shapes → the font draws it → present', () => {
+  it('pixel probe: the font alone draws exactly a system fallback glyph (CJK in a web font that lacks it) → missing; its own distinct shape → present', () => {
     let n = 0;
-    const mk = (differ: boolean) => ({
+    const mk = (same: boolean) => ({
       font: '', fillStyle: '', measureText: () => ({ width: 40 }) as TextMetrics, clearRect() {}, fillText() {},
-      getImageData() { return { data: new Uint8ClampedArray(80 * 64 * 4).fill(differ && n++ % 2 ? 7 : 9) } as ImageData; },
+      getImageData() { return { data: new Uint8ClampedArray(80 * 64 * 4).fill(same ? 9 : 1 + (n++ % 200)) } as ImageData; },
     });
     expect([...missingFrom(mk(true) as never, 'F', ['龍', ' '])!]).toEqual(['龍']);
     n = 0;
