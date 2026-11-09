@@ -5,6 +5,7 @@ import { numberText, unitText } from '../detail/tabs/measurements';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { deltaOf, deltaText, fitScale, percentLabel, xhOk } from './compareMath';
 import { measureInkWith } from '../ui/inkLines';
+import { termName } from '../ui/termNames';
 import { OVERLAY_SPACED, OVERLAY_TEXT, SAMPLE_VI, viNotes } from './CompareCells';
 
 export type ExportInput = { data: CompareDto; families: ReadonlyMap<string, string | null>; sample: string; fit: boolean; dark: boolean; overlay?: boolean };
@@ -60,7 +61,7 @@ export const EXPORT_PALETTE = {
   light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#78716C', faint: '#78716C', line: '#E7E5E4', accent: '#9A6B3C', page: '#FFFFFF', ink: '#1F1D1B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#9A6B3C', rule: '#D6D3D1' },
 } as const;
 
-export type ExportManifest = { rows: string[]; texts: string[]; size: { w: number; h: number }; dark: boolean; specimenBg: string };
+export type ExportManifest = { rows: string[]; texts: string[]; fit: { specimen: number; vi: number }; size: { w: number; h: number }; dark: boolean; specimenBg: string };
 export type ExportResult = { canvas: HTMLCanvasElement; manifest: ExportManifest };
 
 /** Số đo kèm đơn vị, cùng hàm với màn hình (numberText + unitText). */
@@ -105,7 +106,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
     return { text, wrap: vw + 8 + probe.measureText(text).width > colW };
   };
   const metricH = COMPARE_METRICS.map(k => {
-    const own = labelH(t(metricK(k)), t(`${metricK(k)}.gloss` as I18nKey));
+    const own = labelH(termName(k), t(`${metricK(k)}.gloss` as I18nKey));
     const cells = Math.max(54, ...data.faces.map((f, i) => (deltaWraps(k, i)?.wrap ? 76 : 54) + (f.metrics[k].value === null ? 0 : 0)));
     return Math.max(own, cells);
   });
@@ -146,8 +147,16 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   const scale = (i: number) => (fit && i > 0 ? fitScale(base.metrics.x_height_em?.value ?? null, data.faces[i].metrics.x_height_em?.value ?? null) : 1);
   const face = (i: number, px: number) => `${Math.round(px * scale(i))}px ${fam(i) ? `"${fam(i)}", ` : ''}${ui}`;
 
+  // Chữ không bao giờ bị cắt ở mép cột: một hệ số chung cho cả hàng (giữ tỷ lệ giữa các font trong cùng chế độ Same size / Match x-height).
+  const fitK = (str: string, px: number): number => {
+    let k = 1;
+    for (let i = 0; i < n; i++) { ctx.font = face(i, px); const w = ctx.measureText(str).width; if (w > 0) k = Math.min(k, (CW - 36) / w); }
+    return k;
+  };
+  const specText = clipGraphemes(sample, 18);
+  const kSpec = fitK(specText, 28); const kVi = fitK(SAMPLE_VI, 30 * 1.1);
   band('specimen', t('compare.row.line'), '', SPEC, (i, bx, by) => {
-    ctx.font = face(i, 28); ctx.fillStyle = c.ink; ctx.fillText(clipGraphemes(sample, 18), bx, by + 42);
+    ctx.font = face(i, 28 * kSpec); ctx.fillStyle = c.ink; ctx.fillText(specText, bx, by + 42);
     if (fit && i > 0 && !xhOk(data.faces[i].metrics.x_height_em?.value)) text(t('compare.noXh'), bx, by + 62, { size: 10, weight: 600, color: c.warn });
   });
 
@@ -168,7 +177,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
 
   band('vi', t('compare.row.vi'), 'Ữ Ặ Ệ Ỗ Ở · ươ', viH, (i, bx, by) => {
     const v = data.faces[i].vi;
-    ctx.font = face(i, 30 * 1.1); ctx.fillStyle = c.ink; ctx.globalAlpha = v.supports ? 1 : 0.4; ctx.fillText(SAMPLE_VI, bx, by + 46); ctx.globalAlpha = 1;
+    ctx.font = face(i, 30 * 1.1 * kVi); ctx.fillStyle = c.ink; ctx.globalAlpha = v.supports ? 1 : 0.4; ctx.fillText(SAMPLE_VI, bx, by + 46); ctx.globalAlpha = 1;
     ctx.strokeStyle = v.stackedMarksOverflow ? c.warn : c.rule; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(bx, by + 10); ctx.lineTo(bx + CW - 32, by + 10); ctx.stroke(); ctx.setLineDash([]);
     let ny = by + SPEC - 4;
     for (const note of viNotesOf[i]) { paras(note.lines, bx, ny + 10, 14, { size: 11, weight: 600, color: note.kind === 'ok' ? c.ok : c.warn }); ny += note.lines.length * 14 + 4; }
@@ -177,7 +186,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
   COMPARE_METRICS.forEach((k, ki) => {
     rows.push(`metric:${k}`);
     rule(y);
-    rowHead(t(metricK(k)), t(`${metricK(k)}.gloss` as I18nKey), y);
+    rowHead(termName(k), t(`${metricK(k)}.gloss` as I18nKey), y);
     data.faces.forEach((f, i) => {
       const m = f.metrics[k]; const bx = x0(i);
       if (m.value === null) { text(t('compare.na'), bx, y + 28, { color: c.mute }); return; }
@@ -208,7 +217,7 @@ export function renderCompare({ data, families, sample, fit, dark, overlay = tru
     if (conf) { text(conf, x0(i), ly, { size: 11, color: c.mute }); ly += 18; }
     paras(licL[i], x0(i), ly + 4, 14, { size: 11, color: c.mute });
   });
-  return { canvas, manifest: { rows, texts, size: { w: W, h: H }, dark, specimenBg: c.page } };
+  return { canvas, manifest: { rows, texts, fit: { specimen: kSpec, vi: kVi }, size: { w: W, h: H }, dark, specimenBg: c.page } };
 }
 
 /** Giữ chữ ký cũ: chỉ lấy canvas. */

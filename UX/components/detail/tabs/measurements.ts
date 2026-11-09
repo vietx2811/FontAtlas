@@ -1,15 +1,8 @@
+import { termName } from '../../ui/termNames';
 // Nhãn UI cho các phép đo canonical. Đơn vị thực tế của từng reading do Rust trả.
-export const AXIS_META: Record<string, { label: string }> = {
-  // PairLabelDto dùng tên nhóm riêng; giữ nhãn Việt khi anatomy chuyển sang keys canonical.
-  x_height: { label: 'Chiều cao x' }, weight: { label: 'Độ đậm nét' }, serif: { label: 'Chân serif' }, stress: { label: 'Trục nhấn' }, slant: { label: 'Độ nghiêng' },
-  x_height_em: { label: 'Chiều cao x' }, x_height_cap: { label: 'x / chữ hoa' },
-  cap_height_em: { label: 'Chiều cao chữ hoa' }, ascender_em: { label: 'Nét lên' }, descender_em: { label: 'Nét xuống' },
-  stem: { label: 'Độ dày thân nét' }, darkness: { label: 'Mật độ mực' }, contrast: { label: 'Tương phản nét' }, contrast_h: { label: 'Tương phản nét (H)' },
-  stress_deg: { label: 'Trục nhấn' }, slant_deg: { label: 'Độ nghiêng' }, aperture: { label: 'Độ mở c' }, aperture_e: { label: 'Độ mở e' },
-  width: { label: 'Độ rộng o' }, mean_advance: { label: 'Bước chữ trung bình' }, width_cv: { label: 'Biến thiên bước chữ' },
-  spacing: { label: 'Khoảng cách chữ' }, serif_foot: { label: 'Chân serif' }, counter: { label: 'Lòng chữ o' },
-  terminal: { label: 'Đầu nét c' }, a_storeys: { label: 'Chữ a' }, g_storeys: { label: 'Chữ g' },
-};
+/** Nhãn trục = tên EN dùng chung với Compare (components/ui/termNames.ts); phần tiếng Việt nằm ở gloss trong TermTip. */
+const AXIS_KEYS = ['x_height', 'weight', 'serif', 'stress', 'slant', 'x_height_em', 'x_height_cap', 'cap_height_em', 'ascender_em', 'descender_em', 'stem', 'darkness', 'contrast', 'contrast_h', 'stress_deg', 'slant_deg', 'aperture', 'aperture_e', 'width', 'mean_advance', 'width_cv', 'spacing', 'serif_foot', 'counter', 'terminal', 'a_storeys', 'g_storeys'];
+export const AXIS_META: Record<string, { label: string }> = Object.fromEntries(AXIS_KEYS.map(k => [k, { label: termName(k) }]));
 export const UNIT_LABEL: Record<string, string> = {
   em: 'em', deg: '°', cap_height_ratio: '× cap-height', x_height_ratio: '× x-height', area_ratio: 'tỷ lệ diện tích', ratio: 'tỷ lệ',
 };

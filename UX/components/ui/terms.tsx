@@ -9,25 +9,8 @@ import './terms.css';
  * Mọi màn (Compare, Giải phẫu, Pair, bộ lọc, chip phân loại…) chỉ gọi <TermTip term="…">, không viết chữ giải thích riêng.
  * Hình vẽ bằng currentColor nên đúng ở cả light và dark; thuật ngữ chưa có hình vẫn hiện gloss.
  */
-export const TERM_NAMES: Record<string, string> = {
-  x_height: 'x-height', cap_height: 'Cap height', ascender: 'Ascender', descender: 'Descender', stem: 'Stem', contrast: 'Contrast ⊥', contrast_h: 'Contrast H',
-  stress: 'Stress', slant: 'Slant', aperture: 'Aperture', aperture_e: 'Aperture (e)', serif_foot: 'Serif foot', width: 'Width', counter: 'Counter', spacing: 'Spacing',
-  darkness: 'Darkness', x_height_cap: 'x-height / cap', mean_advance: 'Mean advance', width_cv: 'Width variation', terminal: 'Terminal', a_storeys: 'Single/double-storey a',
-  g_storeys: 'Single/double-storey g', overlay: 'Overlay', vi_marks: 'Stacked marks', baseline: 'Baseline', classification: 'Classification',
-  'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain',
-  'sub.old_style': 'Old style', 'sub.transitional': 'Transitional', 'sub.didone': 'Didone', 'sub.slab': 'Slab', 'sub.geometric': 'Geometric', 'sub.humanist': 'Humanist', 'sub.grotesque': 'Grotesque', 'sub.neo_grotesque': 'Neo-grotesque',
-};
-
-/** Khoá số đo/trục từ backend → khoá thuật ngữ. */
-const ALIAS: Record<string, string> = {
-  x_height_em: 'x_height', cap_height_em: 'cap_height', ascender_em: 'ascender', descender_em: 'descender', stress_deg: 'stress', slant_deg: 'slant',
-  slant_i_t: 'slant', weight: 'stem', serif: 'serif_foot',
-};
-export const termKey = (k: string): string => ALIAS[k] ?? k;
-const classTerm = (c: string) => `class.${c}`;
-export const classTermKey = classTerm;
-export const subclassTermKey = (s: string): string => `sub.${s.toLowerCase().replace(/[\s-]+/g, '_')}`;
-
+import { TERM_NAMES, classTermKey, subclassTermKey, termKey, termName } from './termNames';
+export { TERM_NAMES, classTermKey, subclassTermKey, termKey, termName };
 export const termGloss = (key: string): string | undefined => { const k = `term.${termKey(key)}.gloss`; return hasKey(k) ? t(k as I18nKey) : undefined; };
 export const hasTerm = (key: string): boolean => termGloss(key) !== undefined;
 

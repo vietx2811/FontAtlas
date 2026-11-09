@@ -6,7 +6,7 @@ import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
-import { TermTip, termKey } from '../ui/terms';
+import { TermTip, termKey, termName } from '../ui/terms';
 import { ClassCell, MetricCell, OVERLAY_SPACED, OverlayCell, SpecimenCell, ViCell, WithFamily } from './CompareCells';
 import { META_ROWS, LicenseCell } from './MetaCells';
 import { fitScale } from './compareMath';
@@ -15,7 +15,7 @@ import './compare.css';
 
 const SPEC_SIZE = 30;
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
-const label = (k: string, gloss = false): string => { const key = `compare.m.${k}${gloss ? '.gloss' : ''}`; return hasKey(key) ? t(key) : gloss ? '' : k; };
+const label = (k: string, gloss = false): string => { if (!gloss) return termName(k); const key = `compare.m.${k}.gloss`; return hasKey(key) ? t(key) : ''; };
 const gl = (key: string): string => (hasKey(key) ? t(key as I18nKey) : '');
 
 /** Ghi họ font đã nạp của một cột (cho xuất PNG) sau khi vẽ, không ghi trong lúc render. */

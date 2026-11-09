@@ -117,3 +117,26 @@ describe('wrapText', () => {
     expect(wrapText(m, 'abcdefghij', 50)).toEqual(['abcde', 'fghij']);
   });
 });
+
+describe('renderCompare: specimen text never overflows the column', () => {
+  it('shrinks the whole row by one factor when the text is wider than the column, and leaves it at 1 otherwise', async () => {
+    const mk = (perChar: number) => new Proxy({ font: '', fillStyle: '', measureText: (s: string) => ({ width: s.length * perChar, actualBoundingBoxAscent: 50 }) } as Record<string, unknown>, {
+      get: (o, k: string) => (k in o ? o[k] : () => undefined), set: (o, k: string, v) => { o[k] = v; return true; },
+    });
+    const api = createMockApi();
+    const data = await api.compareFaces(mockRows().slice(0, 2).map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+    const { renderCompare } = await import('../exportPng');
+    const run = (perChar: number) => {
+      const c = mk(perChar);
+      const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => c) as never);
+      const r = renderCompare({ data, families: new Map(), sample: 'Phở bò Hà Nội', fit: false, dark: false });
+      spy.mockRestore();
+      return r!.manifest.fit;
+    };
+    expect(run(5)).toEqual({ specimen: 1, vi: 1 });
+    const big = run(30);
+    expect(big.specimen).toBeLessThan(1);
+    expect(big.vi).toBeLessThan(1);
+    expect(big.specimen * 13 * 30).toBeLessThanOrEqual(234 + 1e-6); // chữ sau khi thu vừa bề rộng khả dụng (CW-36)
+  });
+});

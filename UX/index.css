@@ -128,6 +128,9 @@
     --panel: var(--sheet);
     --float: var(--card);
     --faint: var(--muted);
+    /* Sidebar chồng lên vibrancy: dùng màu đặc (không rgba) để không phụ thuộc cách WebView trộn alpha */
+    --nav-hover: #EBE9E7;
+    --nav-active: #E1DEDB;
 
     /* Vùng mẫu chữ (specimen): theo theme, không còn trắng cố định */
     --specimen-bg: #FFFFFF;
@@ -192,6 +195,8 @@
     --fg: #FAFAF9;
     --muted: #A8A29E;
     --faint: #7C756F;
+    --nav-hover: #24201E;
+    --nav-active: #302B28;
     --border: rgba(250, 250, 249, .08);
     --surface-2: #24211E;
     --accent: #E0B07E;
@@ -223,6 +228,8 @@
         --fg: #FAFAF9;
         --muted: #A8A29E;
         --faint: #7C756F;
+        --nav-hover: #24201E;
+        --nav-active: #302B28;
         --border: rgba(250, 250, 249, .08);
         --surface-2: #24211E;
         --accent: #E0B07E;

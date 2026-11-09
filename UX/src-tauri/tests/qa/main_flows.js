@@ -103,6 +103,8 @@
     }
     const termA = await termCheck('[data-testid=axis-row] [data-term]');
     await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
+    const axisNames = [...document.querySelectorAll('[data-testid=axis-row] .fa-axis-name')].map(e => ({ text: e.textContent.trim(), term: e.dataset.term }));
+    await log('anatomy-labels-english', axisNames.length >= 10 && axisNames.every(n => n.term && !/[À-ỹ]/.test(n.text)), { total: axisNames.length, bad: axisNames.filter(n => !n.term || /[À-ỹ]/.test(n.text)), sample: axisNames.slice(0, 8).map(n => n.text) });
     // TƯƠNG TỰ
     document.querySelector('[role=tab][aria-label="Tương tự"]')?.click();
     const acts = await wait(() => { const a = [...document.querySelectorAll('.fa-sim-actions')]; return a.length ? a : null; }, 60000);
@@ -251,6 +253,17 @@
     await savePng('dark', pngD?.dataUrl);
     await snap('compare-dark');
     await log('compare-dark-specimen', lightSpec > 700 && darkSpec >= 0 && darkSpec < 60 && /^rgb\(25[0-9]/.test(darkInk) && !!pngD && pngD.dark === true && pngD.specimenBg.toLowerCase() === '#0a0908', { lightSpec, darkSpec, darkInk, pngDark: pngD?.dark, bg: pngD?.specimenBg });
+    // Sidebar dark: mục đang chọn phải đọc được (tương phản chữ/nền ≥ 4.5:1) và nền là màu đặc, không phải khối sáng.
+    const lumOf = rgb => { const [r, g, bl] = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+    const parseC = c => { const m = (c ?? '').match(/[\d.]+/g); return m ? m.map(Number) : null; };
+    const navSel = document.querySelector('.fa-side .fa-nav[aria-current="true"]');
+    const navBg = parseC(navSel && getComputedStyle(navSel).backgroundColor); const navFg = parseC(navSel && getComputedStyle(navSel).color);
+    let navRatio = null;
+    if (navBg && navFg) { const [l1, l2] = [lumOf(navBg), lumOf(navFg)].sort((p, q) => q - p); navRatio = (l1 + 0.05) / (l2 + 0.05); }
+    const themeBtnF = document.querySelector('.fa-side [aria-label="Giao diện sáng/tối"]');
+    const tb = getComputedStyle(themeBtnF ?? document.body); const tbBg = parseC(tb.backgroundColor); const tbFg = parseC(tb.color);
+    const tbRatio = tbBg && tbFg ? (() => { const [l1, l2] = [lumOf(tbBg), lumOf(tbFg)].sort((p, q) => q - p); return (l1 + 0.05) / (l2 + 0.05); })() : null;
+    await log('sidebar-selected-contrast-dark', !!navSel && navBg && navBg.length >= 3 && (navBg[3] === undefined || navBg[3] === 1) && navRatio >= 4.5 && lumOf(navBg) < 0.12 && tbRatio !== null && tbRatio >= 3, { navBg, navFg, navRatio, tbBg, tbFg, tbRatio });
     if (prevTheme) document.documentElement.dataset.theme = prevTheme; else document.documentElement.removeAttribute('data-theme');
     (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('.cmp-tbl') && document.querySelector('[data-testid=selection-count]'), 8000);

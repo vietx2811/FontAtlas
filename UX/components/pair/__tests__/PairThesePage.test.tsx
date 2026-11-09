@@ -45,7 +45,7 @@ describe('PairThesePage', () => {
     expect(within(c).getByText('Tương phản nét cao')).toBeTruthy();
     expect(within(c).getByText('Thiếu Regular hoặc Bold')).toBeTruthy();
     expect(within(c).getByText('Nội dung thiếu 7 ký tự tiếng Việt')).toBeTruthy();
-    expect(within(c).getByText('Va chạm: Tương phản nét, Cùng nét, khác khung')).toBeTruthy();
+    expect(within(c).getByText('Va chạm: contrast ⊥, Cùng nét, khác khung')).toBeTruthy();
     expect(c.textContent).not.toMatch(/[a-z]+_[a-z]+|axis:/); // không mã thô
     expect(within(c).getByText('Tăng độ đậm nội dung một nấc')).toBeTruthy();
   });
