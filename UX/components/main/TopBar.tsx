@@ -28,7 +28,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
   const hasChips = filterChips(filters, [], view).length > 0;
   const hasFilters = hasChips;
   return (
-    <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection || hasChips || selectedRows.length > 4 ? ' has-row' : ''}`}>
+    <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection || hasChips ? ' has-row' : ''}`}>
       <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
       <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>

@@ -256,16 +256,17 @@
       await wait(() => status() === 'Đang bật · phiên này', 15000);
       st = await waitActive(x => x.length === 1 && x[0].scope === 'session');
       await log('active-peek-scope', persistOk && status() === 'Đang bật · phiên này' && st.length === 1 && st[0].scope === 'session', { persistOk, status: status(), state: st.map(x => [x.scope, x.status]) });
-      // Thẻ: chấm xanh của font đang bật + nút nguồn trên thẻ thứ hai.
-      const c0 = cells()[0], c1 = cells()[1];
-      const dot = c0.querySelector('[data-testid=active-dot]');
-      const powBtn = c1.querySelector('[data-testid=cell-active]');
-      await log('active-card-controls', !!dot && !!powBtn && powBtn.getAttribute('aria-pressed') === 'false' && c0.querySelector('[data-testid=cell-active]')?.getAttribute('aria-pressed') === 'true', { dot: !!dot, pow: !!powBtn, p1: powBtn?.getAttribute('aria-pressed') });
+      // Thẻ: font đang mở trong panel là font vừa bật (cmd-click có thể đưa panel sang thẻ thứ hai): tìm theo trạng thái, không theo chỉ số.
+      const pressed = c => c.querySelector('[data-testid=cell-active]')?.getAttribute('aria-pressed') === 'true';
+      const [cOn, cOff] = [cells()[0], cells()[1]].sort((x, y) => Number(pressed(y)) - Number(pressed(x)));
+      const dot = cOn.querySelector('[data-testid=active-dot]');
+      const powBtn = cOff.querySelector('[data-testid=cell-active]');
+      await log('active-card-controls', pressed(cOn) && !pressed(cOff) && !!dot && !cOff.querySelector('[data-testid=active-dot]') && !!powBtn, { onHasDot: !!dot, offPressed: pressed(cOff), onPressed: pressed(cOn) });
       powBtn.click();
       st = await waitActive(x => x.length === 2);
-      await wait(() => cells()[1]?.querySelector('[data-testid=active-dot]'), 8000);
+      await wait(() => cOff.querySelector('[data-testid=active-dot]'), 8000);
       await snap('active-cards-on');
-      await log('active-card-toggle', st.length === 2 && !!cells()[1].querySelector('[data-testid=active-dot]') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { n: st.length, selection: document.querySelector('[data-testid=selection-count]')?.textContent });
+      await log('active-card-toggle', st.length === 2 && !!cOff.querySelector('[data-testid=active-dot]') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { n: st.length, selection: document.querySelector('[data-testid=selection-count]')?.textContent });
       // Top Bar: cả lựa chọn đang bật → nút Deactivate; bấm → tắt hết; bấm Activate → bật hết; ⌘⇧A → tắt.
       const tbBtn = () => document.querySelector('header.fa-topbar [data-testid=topbar-activate]');
       const lbl = () => tbBtn()?.getAttribute('aria-label');
@@ -550,6 +551,59 @@
       await log('duplicates-view', dgroups === dsum.total && dmembers >= 2 && risky.length === 0 && !!panel && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { dgroups, dmembers, risky, panel: panel?.textContent });
     } else {
       await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
+    }
+    // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
+    // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).
+    {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const countNow2 = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+      await sleep(600);
+      const base = countNow2();
+      await inv('add_source', { path: '__QA_DIR__/E' });
+      await wait(() => countNow2() >= base + 12, 120000);
+      await sleep(800);
+      const total = countNow2();
+      document.querySelector('[data-testid=library-grid-scroller]')?.focus?.();
+      const gridTop = () => document.querySelector('[role=grid]')?.getBoundingClientRect().top;
+      // chọn 3 font (cmd-click) để đo vị trí lưới; sau đó chọn tất cả: tag nổi hiện mà lưới KHÔNG đổi chỗ.
+      const c3 = cells(); c3[0].click(); c3[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); c3[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+      await wait(() => /^3 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), 8000);
+      const top3 = gridTop(); const noTag3 = !document.querySelector('[data-testid=narrow-tag]');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true, cancelable: true }));
+      await wait(() => Number((document.querySelector('[data-testid=selection-count]')?.textContent ?? '').replace(/\D/g, '')) >= total, 15000);
+      await sleep(300);
+      const topAll = gridTop(); const tag = document.querySelector('[data-testid=narrow-tag]');
+      const tagBox = tag?.getBoundingClientRect(); const wrapBox = tag?.closest('.fa-act-wrap')?.getBoundingClientRect(); const gb = document.querySelector('[role=grid]')?.getBoundingClientRect();
+      await snap('narrow-tag');
+      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
+      tag?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); tag?.focus();
+      const pop = await wait(() => document.querySelector('[data-testid=narrow-pop]'), 4000);
+      await log('narrow-pop-has-action', !!pop && !!btn('Chỉ lấy 4 đầu', pop) && Math.abs(gridTop() - top3) <= 1, { pop: pop?.textContent });
+      tag?.blur?.(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      // Chọn tất cả rồi Activate.
+      await wait(() => !document.querySelector('[data-testid=narrow-pop]'), 3000);
+      document.querySelector('header.fa-topbar [data-testid=topbar-activate]')?.click();
+      const dlg = await wait(() => document.querySelector('[role=dialog].fa-conf'), 30000);
+      await sleep(300);
+      const rowsN = dlg ? dlg.querySelectorAll('[data-testid=conflict-list] > li').length : 0;
+      const h = dlg?.getBoundingClientRect().height ?? 0;
+      await snap('conflict-dialog');
+      const themeC = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400); await snap('conflict-dialog-dark');
+      if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      const title = dlg?.querySelector('h2')?.textContent ?? '';
+      await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
+      const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
+      await log('conflict-dialog-expand', !!exp && dlg.querySelector('.fa-conf-styles') !== null, {});
+      const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
+      await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
+      await sleep(800);
+      let st2 = await actOn();
+      await log('conflict-skip-activates-rest', st2.length >= 12 && st2.length <= total - 6, { active: st2.length, total });
+      // Dọn: tắt mọi font đã bật (command thật, không động tới thứ gì ngoài các font QA vừa bật).
+      try { await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) }); } catch (e) { await log('conflict-clean-error', false, String(e && e.message || e)); }
+      await sleep(800); st2 = await actOn();
+      await log('conflict-clean', st2.length === 0, { left: st2.length });
     }
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
