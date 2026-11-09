@@ -140,6 +140,7 @@ export interface TauriCommandMap {
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_all: { args: { onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_set_keep: { args: { on: boolean }; result: null };
+  activation_set_scope: { args: { faces: FaceKeyDto[]; scope: ScopeDto }; result: ActivationReportDto };
   activation_subscribe: { args: { onEvent: Channel<ActivationEvent> }; result: null };
   preview_info: { args: Record<string, never>; result: PreviewInfoDto };
   preview_bump_generation: { args: Record<string, never>; result: number };

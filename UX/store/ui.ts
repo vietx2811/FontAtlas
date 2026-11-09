@@ -44,6 +44,8 @@ export interface UiState {
   infoExpanded: boolean;
   /** Các file đang bật: hashHex → các faceIndex của file (activation_state); nạp bằng refreshActive. */
   active: ReadonlyMap<string, readonly number[]>;
+  /** Phạm vi bật của từng file đang bật (hashHex → session | persistent). */
+  activeScope: ReadonlyMap<string, 'session' | 'persistent'>;
   /** Tăng mỗi lần có nơi nào đó (trạng thái trống) muốn mở hộp chọn thư mục; Sidebar lắng nghe. */
   addFolderRequest: number;
   /** Màn Cài đặt (S7) đang mở. */
@@ -158,7 +160,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null }),
@@ -236,7 +238,8 @@ export function createUiStore(): UiStore {
 
     async refreshActive(api) {
       const st = await api.activationState();
-      set({ active: new Map(st.filter(x => x.state === 'active').map(x => [x.hashHex, x.faces] as const)) });
+      const on = st.filter(x => x.state === 'active');
+      set({ active: new Map(on.map(x => [x.hashHex, x.faces] as const)), activeScope: new Map(on.map(x => [x.hashHex, x.scope] as const)) });
     },
 
     async hydrate(api) {

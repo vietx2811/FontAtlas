@@ -110,6 +110,8 @@ export interface Api extends LibraryApi {
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;
+  /** Đổi phạm vi của các font ĐANG bật (không tắt giữa chừng). */
+  activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<ActivationReportDto>;
   activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
 }
 

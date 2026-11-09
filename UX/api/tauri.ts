@@ -166,6 +166,7 @@ export function createTauriApi(): Api {
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),
+    activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
     activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),
   };
 }

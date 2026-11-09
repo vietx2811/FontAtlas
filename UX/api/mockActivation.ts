@@ -114,6 +114,10 @@ export function createActivationSim(d: Deps) {
       return finish(all.map(f => result(f, { kind: 'deactivated' })), o.onProgress);
     },
     async activationSetKeep() {},
+    async activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent') {
+      const changed = hashes(faces).filter(f => { const e = state.get(f.hashHex); if (!e || e.scope === scope) return false; e.scope = scope; return true; });
+      return finish(changed.map(f => result(f, { kind: 'activated' })));
+    },
     async activationSubscribe(l: (e: ActivationEvent) => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     /** Gọi khi dự án mất mặt: `removed` = (face, dự án) bị gỡ. */
     collectionChanged(removed: Array<[FaceKeyDto, number]>, cause: 'collection_deleted' | 'left_collection') {

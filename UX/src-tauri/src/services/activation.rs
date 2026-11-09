@@ -279,6 +279,17 @@ pub fn deactivate_all(state: &AppState, progress: &mut dyn FnMut(ProgressDto)) -
     Ok(finish(state, r))
 }
 
+/// Đổi phạm vi (session ↔ persistent) của các font ĐANG bật, không tắt giữa chừng (đăng ký scope mới trước, rồi gỡ scope cũ).
+pub fn set_scope(state: &AppState, faces: &[FaceKeyDto], scope: ScopeDto) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let mut hashes: Vec<[u8; 32]> = keys.iter().map(|k| k.hash).collect();
+    hashes.sort_unstable();
+    hashes.dedup();
+    let r = state.activation.set_scope(state.store()?, Some(&hashes), scope.into())?;
+    Ok(finish(state, r))
+}
+
 /// Bật/tắt giữ font kích hoạt sau khi thoát: ghi setting, đổi scope các font đang bật, đánh dấu đã onboarding.
 pub fn set_keep(state: &AppState, on: bool) -> Result<(), CmdError> {
     state.with_user(|u| {

@@ -218,6 +218,32 @@ fn set_keep_switches_scope_and_marks_onboarded() {
 }
 
 #[test]
+fn set_scope_changes_only_the_requested_faces_without_deactivating() {
+    let d = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let (st, faces, _) = library3(d.path(), &eng);
+    activation::activate(&st, &faces[..2], None, false, &mut noop).unwrap();
+    let scopes = |st: &AppState| {
+        let mut v: Vec<_> = activation::state_list(st).unwrap().into_iter().map(|s| (s.hash_hex, s.scope, s.state)).collect();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    };
+    assert!(scopes(&st).iter().all(|(_, sc, _)| *sc == ScopeDto::Session));
+    let rep = activation::set_scope(&st, &faces[..1], ScopeDto::Persistent).unwrap();
+    assert_eq!(rep.changed, 1);
+    let after = scopes(&st);
+    let (persist, session): (Vec<_>, Vec<_>) = after.iter().partition(|(_, sc, _)| *sc == ScopeDto::Persistent);
+    assert_eq!((persist.len(), session.len()), (1, 1), "chỉ font được chọn đổi phạm vi");
+    assert!(persist[0].0 == faces[0].hash_hex);
+    // không có lúc nào font bị tắt: cả hai vẫn active, engine vẫn giữ đủ 2 đăng ký (1 persistent + 1 session)
+    assert!(after.iter().all(|(_, _, s)| matches!(s, DesiredStateDto::Active)));
+    assert_eq!(eng.registrations().len(), 2);
+    // font chưa bật: không làm gì
+    let none = activation::set_scope(&st, &faces[2..3], ScopeDto::Persistent).unwrap();
+    assert_eq!(none.changed, 0);
+}
+
+#[test]
 fn gdi_engine_returns_unsupported() {
     let d = tempfile::tempdir().unwrap();
     let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(ActivationService::new(WindowsGdiEngine)));
