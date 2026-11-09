@@ -26,7 +26,7 @@ for _ in $(seq 1 450); do
 done
 for t in "$QA"/data/snap-*.tiff; do [ -f "$t" ] && sips -s format png "$t" --out "${t%.tiff}.png" >/dev/null && rm "$t"; done
 echo "ảnh: $QA/data/snap-*.png"
-for th in light dark; do b64="$(q "select value from settings where key='ui.qapng.$th'")"; [ -n "$b64" ] && printf '%s' "$b64" | base64 -D > "$QA/data/png-$th.png" && echo "ảnh PNG xuất ($th): $QA/data/png-$th.png"; done
+for th in light dark; do b64="$(q "select value from settings where key like 'ui.qapng.$th.%' order by key" | tr -d '\n')"; [ -n "$b64" ] && printf '%s' "$b64" | base64 -D > "$QA/data/png-$th.png" && echo "ảnh PNG xuất ($th): $QA/data/png-$th.png"; done
 q "select value from settings where key like 'ui.qa.%' order by key" | python3 -c '
 import sys, json
 fail = 0

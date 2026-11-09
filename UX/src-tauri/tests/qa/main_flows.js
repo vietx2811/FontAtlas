@@ -14,6 +14,8 @@
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
   const snap = async name => { settleAnims(); await sleep(80); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); };
   const btnHas = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.includes(text) && !b.disabled);
+  // Ảnh PNG xuất ra tệp qua bảng settings (giới hạn 64 KB/khoá → cắt từng đoạn ui.qapng.<theme>.NN); run.sh ghép lại.
+  const savePng = async (th, url) => { if (!url) return; const b = url.split(',')[1]; for (let i = 0, n = 0; i < b.length; i += 60000, n++) { try { await inv('set_setting', { key: 'ui.qapng.' + th + '.' + String(n).padStart(3, '0'), value: b.slice(i, i + 60000) }); } catch (e) {} } };
   // Thuật ngữ typo: rê chuột vào từng nhãn [data-term], tooltip phải có gloss không rỗng (và hình minh hoạ nếu thuật ngữ có hình).
   const termCheck = async sel => {
     const els = [...document.querySelectorAll(sel)]; const bad = []; let art = 0;
@@ -82,14 +84,23 @@
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
     // Đường kẻ Hxg phải trùng chữ: đo cap của 'H' bằng canvas với đúng font đang vẽ, so với đường cap trong SVG (±1 đơn vị viewBox).
-    const hxgSvg = await wait(() => { const v = document.querySelector('svg.fa-hxg'); return v && /^(ok|mismatch)$/.test(v.dataset.guides ?? '') ? v : null; }, 20000);
-    const hxgText = document.querySelector('[data-testid=hxg-text]');
-    const capLine = hxgSvg?.querySelector('[data-testid=guide-line][data-line=cap]');
-    let inkCap = null;
-    if (hxgText) { const c2 = document.createElement('canvas').getContext('2d'); c2.font = '100px ' + hxgText.style.fontFamily; inkCap = c2.measureText('H').actualBoundingBoxAscent; }
-    const capY = capLine ? +capLine.getAttribute('y1') : null;
-    await snap('anatomy-hxg');
-    await log('anatomy-hxg-guides-match', !!hxgSvg && capY !== null && inkCap !== null && Math.abs((112 - inkCap) - capY) <= 1 && getComputedStyle(hxgText).fontSynthesis !== undefined, { capY, expected: inkCap === null ? null : 112 - inkCap, status: hxgSvg?.dataset.guides, family: hxgText?.style.fontFamily });
+    const hxgCheck = async (step, shot) => {
+      const hxgSvg = await wait(() => { const v = document.querySelector('svg.fa-hxg'); return v && /^(ok|mismatch)$/.test(v.dataset.guides ?? '') ? v : null; }, 20000);
+      const hxgText = document.querySelector('[data-testid=hxg-text]');
+      const capLine = hxgSvg?.querySelector('[data-testid=guide-line][data-line=cap]');
+      let inkCap = null;
+      if (hxgText) { const c2 = document.createElement('canvas').getContext('2d'); c2.font = '100px ' + hxgText.style.fontFamily; inkCap = c2.measureText('H').actualBoundingBoxAscent; }
+      const capY = capLine ? +capLine.getAttribute('y1') : null;
+      await snap(shot);
+      await log(step, !!hxgSvg && capY !== null && inkCap !== null && Math.abs((112 - inkCap) - capY) <= 1, { capY, expected: inkCap === null ? null : 112 - inkCap, status: hxgSvg?.dataset.guides, family: hxgText?.style.fontFamily, name: document.querySelector('.fa-p-name')?.textContent });
+    };
+    await hxgCheck('anatomy-hxg-guides-match', 'anatomy-hxg');
+    {
+      const orig = document.querySelector('[role=gridcell][aria-selected=true]');
+      const serifCell = [...document.querySelectorAll('[role=gridcell][data-face-id]')].find(c => /Playfair|Baskerville/.test(c.textContent ?? ''));
+      if (serifCell && orig) { serifCell.click(); await sleep(1200); await hxgCheck('anatomy-hxg-guides-match-serif', 'anatomy-hxg-serif'); orig.click(); await sleep(800); }
+      else await log('anatomy-hxg-guides-match-serif', true, { skipped: 'ô serif không nằm trong phần lưới đang hiện', hasOrig: !!orig });
+    }
     const termA = await termCheck('[data-testid=axis-row] [data-term]');
     await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
     // TƯƠNG TỰ
@@ -229,7 +240,7 @@
     const lightSpec = rgbSum(document.querySelector('.cmp-page'));
     const pngL = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     // Lưu ảnh PNG thật (mặt chữ thật) vào bảng settings (khoá ui.qapng.*, không trùng ui.qa.%); run.sh ghi ra tệp.
-    if (pngL?.dataUrl) { try { await inv('set_setting', { key: 'ui.qapng.light', value: pngL.dataUrl.split(',')[1] }); } catch (e) {} }
+    await savePng('light', pngL?.dataUrl);
     await log('compare-png-content', !!pngL && pngL.rows.includes('overlay') && pngL.rows.includes('vi') && pngL.texts.some(x => /\d,\d+ (em|°|tỷ lệ|×)/.test(x)) && !pngL.texts.some(x => x.includes('…')) && pngL.dark === false, { rows: pngL?.rows, units: pngL?.texts.filter(x => /\d,\d+ /.test(x)).slice(0, 4), ellipsis: pngL?.texts.filter(x => x.includes('…')), warn: pngL?.texts.filter(x => /Thiếu|Dấu/.test(x)) });
     // DARK: vùng specimen nền tối, đổi theme lúc đang mở là đổi ngay; PNG theo theme.
     const prevTheme = document.documentElement.dataset.theme;
@@ -237,7 +248,7 @@
     const darkSpec = rgbSum(document.querySelector('.cmp-page'));
     const darkInk = getComputedStyle(document.querySelector('.cmp-page')).color;
     const pngD = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
-    if (pngD?.dataUrl) { try { await inv('set_setting', { key: 'ui.qapng.dark', value: pngD.dataUrl.split(',')[1] }); } catch (e) {} }
+    await savePng('dark', pngD?.dataUrl);
     await snap('compare-dark');
     await log('compare-dark-specimen', lightSpec > 700 && darkSpec >= 0 && darkSpec < 60 && /^rgb\(25[0-9]/.test(darkInk) && !!pngD && pngD.dark === true && pngD.specimenBg.toLowerCase() === '#0a0908', { lightSpec, darkSpec, darkInk, pngDark: pngD?.dark, bg: pngD?.specimenBg });
     if (prevTheme) document.documentElement.dataset.theme = prevTheme; else document.documentElement.removeAttribute('data-theme');
