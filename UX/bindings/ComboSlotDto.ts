@@ -3,7 +3,11 @@ import type { ComboRoleDto } from "./ComboRoleDto";
 import type { FaceKeyDto } from "./FaceKeyDto";
 import type { FaceRowDto } from "./FaceRowDto";
 
-export type ComboSlotDto = { role: ComboRoleDto, key: FaceKeyDto, row: FaceRowDto | null, note: string | null, 
+export type ComboSlotDto = { role: ComboRoleDto, key: FaceKeyDto, row: FaceRowDto | null, 
+/**
+ * Như `CaseFaceDto.missing`. Hash của file đổi (sửa file) cũng thành `missing`; chưa tự nối lại sang hash mới.
+ */
+missing: boolean, note: string | null, 
 /**
  * weight, italic, case, size_step, tracking, leading… do giao diện định nghĩa.
  */

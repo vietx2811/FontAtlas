@@ -2,6 +2,7 @@
 import type { CaseDto } from "./CaseDto";
 import type { ComboRoleDto } from "./ComboRoleDto";
 import type { FaceKeyDto } from "./FaceKeyDto";
+import type { PeekOccupiedDto } from "./PeekOccupiedDto";
 
 export type PeekOpenResultDto = { case: CaseDto, comboId: number, anchorRole: ComboRoleDto, 
 /**
@@ -15,4 +16,8 @@ trial: FaceKeyDto | null,
 /**
  * true khi Case vừa được tạo.
  */
-created: boolean, };
+created: boolean, 
+/**
+ * Vai neo đã có font KHÁC và `replace = false`: không ghi gì vào vai; giao diện hỏi rồi gửi lại với `replace = true`.
+ */
+occupied: PeekOccupiedDto | null, };

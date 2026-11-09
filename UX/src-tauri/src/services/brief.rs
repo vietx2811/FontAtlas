@@ -86,7 +86,10 @@ fn base_query(brief: &BriefDto, d: &crate::dto::analysis::DescribeDto, notes: &m
             .flat_map(|s| s.faces.into_iter().map(move |i| crate::dto::library::FaceKeyDto { hash_hex: s.hash_hex.clone(), face_index: i }))
             .collect();
         active.sort_by(|a, b| (&a.hash_hex, a.face_index).cmp(&(&b.hash_hex, b.face_index))); // xác định: không phụ thuộc thứ tự trả về
-        active.truncate(crate::services::library::MAX_FACE_KEYS);
+        if active.len() > crate::services::library::MAX_FACE_KEYS {
+            notes.push(note("installed_truncated", Some(format!("{}/{}", crate::services::library::MAX_FACE_KEYS, active.len()))));
+            active.truncate(crate::services::library::MAX_FACE_KEYS);
+        }
         if active.is_empty() {
             notes.push(note("installed_none_active", None));
         } else {
@@ -195,9 +198,9 @@ pub fn brief_starter(state: &AppState, brief: &BriefDto, case_id: Option<i64>) -
     }
 
     // 4. Combo: neo + font body hạng 1 (khác family, không lặp body)
-    let mode = case_id
-        .and_then(|id| crate::services::cases::get_case(state, id).ok())
-        .and_then(|c| c.settings.mode)
+    // Case không đọc được (không tồn tại, đã xoá…) là lỗi của người gọi: trả lỗi, không lặng lẽ rơi về Safe
+    let case_mode = case_id.map(|id| crate::services::cases::get_case(state, id)).transpose()?.and_then(|c| c.settings.mode);
+    let mode = case_mode
         .map(|m| match m {
             PairingLevelDto::Safe => PairModeDto::Safe,
             PairingLevelDto::Controlled => PairModeDto::Controlled,
@@ -205,9 +208,16 @@ pub fn brief_starter(state: &AppState, brief: &BriefDto, case_id: Option<i64>) -
         })
         .unwrap_or(PairModeDto::Safe);
     // font body ưu tiên nằm trong tập thoả điều kiện vai body (packaging: readable_small + clean…)
-    let body_ok: std::collections::HashSet<(String, u32)> = crate::services::library::query_faces(state, &FaceQueryDto { limit: 1000, offset: 0, ..body_query.clone() })
-        .map(|p| p.items.into_iter().map(|r| (r.hash_hex, r.face_index)).collect())
-        .unwrap_or_default();
+    let body_ok: std::collections::HashSet<(String, u32)> =
+        match crate::services::library::query_faces(state, &FaceQueryDto { limit: 1000, offset: 0, ..body_query.clone() }) {
+            Ok(p) => {
+                if p.total > 1000 {
+                    notes.push(note("body_set_truncated", Some(format!("1000/{}", p.total))));
+                }
+                p.items.into_iter().map(|r| (r.hash_hex, r.face_index)).collect()
+            }
+            Err(_) => Default::default(),
+        };
     let mut combos: Vec<PairComboDto> = Vec::new();
     let mut used_body: Vec<String> = Vec::new();
     for a in &anchors {

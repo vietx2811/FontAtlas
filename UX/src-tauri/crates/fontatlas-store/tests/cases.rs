@@ -194,30 +194,100 @@ fn deleting_case_row_cascades_and_deleted_case_rejects_writes() {
 }
 
 #[test]
-fn peek_open_is_atomic_and_idempotent() {
+fn peek_open_is_atomic_idempotent_and_never_overwrites_silently() {
     let (_d, mut s) = open();
-    let (a, c) = (key(1), key(2));
-    let (case, combo, created) = s.peek_open(None, r#"{"vi":true}"#, &a, Some(&c), "display").unwrap();
-    assert!(created);
-    let again = s.peek_open(None, r#"{"vi":true}"#, &a, Some(&c), "display").unwrap();
-    assert_eq!(again, (case, combo, false), "lần hai: cùng Case/Combo");
-    assert_eq!(s.combos(case).unwrap().len(), 1);
-    assert_eq!(s.combos(case).unwrap()[0].slots.len(), 1);
-    assert_eq!(s.case_faces(case).unwrap().len(), 2);
+    let (a, c, other) = (key(1), key(2), key(3));
+    let first = s.peek_open(None, r#"{"vi":true}"#, &a, Some(&c), "display", false).unwrap();
+    assert!(first.created && first.occupied.is_none());
+    let again = s.peek_open(None, r#"{"vi":false}"#, &a, Some(&c), "display", false).unwrap();
+    assert_eq!((again.case_id, again.combo_id, again.created), (first.case_id, first.combo_id, false), "lần hai: cùng Case/Combo");
+    assert_eq!(s.combos(first.case_id).unwrap().len(), 1);
+    assert_eq!(s.combos(first.case_id).unwrap()[0].slots.len(), 1);
+    assert_eq!(s.case_faces(first.case_id).unwrap().len(), 2);
+    assert_eq!(s.case(first.case_id).unwrap().settings, r#"{"vi":true}"#, "Case có sẵn giữ cài đặt, không bị peek ghi đè");
 
-    // lỗi ở bước cuối (đặt vai) trên thư viện chưa có Case nào: không để lại Case, Combo hay font
+    // vai đã có font khác: không ghi, trả occupied; replace = true mới thay
+    let held = s.peek_open(None, "{}", &other, None, "display", false).unwrap();
+    assert_eq!(held.occupied, Some(a));
+    let slot = |s: &Store| s.combo(first.combo_id).unwrap().slots.into_iter().find(|x| x.role == "display").unwrap().key;
+    assert_eq!(slot(&s), a, "chưa đồng ý thì giữ nguyên");
+    assert!(s.case_faces(first.case_id).unwrap().iter().any(|f| f.key == other), "nhưng font vẫn vào Case để khỏi mất");
+    let replaced = s.peek_open(None, "{}", &other, None, "display", true).unwrap();
+    assert!(replaced.occupied.is_none());
+    assert_eq!(slot(&s), other);
+    // cùng font đang giữ vai thì không coi là bị chiếm
+    assert!(s.peek_open(None, "{}", &other, None, "display", false).unwrap().occupied.is_none());
+
+    // lỗi giữa chừng (Case đã đủ 500 font): không đổi gì, cài đặt giữ nguyên
+    let big = s.create_case("Đầy", None, Some(r#"{"vi":true}"#)).unwrap();
+    let fill: Vec<FaceKey> = (1000..1000 + MAX_CASE_FACES as u16).map(key).collect();
+    s.add_to_case(big, &fill, "added").unwrap();
+    let before = (s.case_faces(big).unwrap().len(), s.combos(big).unwrap().len());
+    assert!(s.peek_open(Some(big), r#"{"vi":false}"#, &key(9999), None, "body", false).is_err());
+    assert_eq!((s.case_faces(big).unwrap().len(), s.combos(big).unwrap().len()), before, "hoàn tác hết, kể cả Combo chính vừa tạo");
+    assert_eq!(s.case(big).unwrap().settings, r#"{"vi":true}"#);
+
+    // lỗi ở bước cuối trên thư viện chưa có Case nào: không để lại Case nào
     let (_d2, mut s2) = open();
     s2.conn()
         .execute_batch("CREATE TRIGGER u.deny_slot BEFORE INSERT ON combo_slots BEGIN SELECT RAISE(ABORT, 'boom'); END;")
         .unwrap();
-    assert!(s2.peek_open(None, "{}", &a, Some(&c), "body").is_err());
+    assert!(s2.peek_open(None, "{}", &a, Some(&c), "body", false).is_err());
     for t in ["cases", "case_faces", "combos", "combo_slots"] {
         assert_eq!(count(&s2, &format!("SELECT count(*) FROM u.{t}")), 0, "{t} phải trống sau khi hoàn tác");
     }
-    // vai không hợp lệ bị từ chối trước khi chạm gì
-    assert!(s2.peek_open(None, "{}", &a, None, "lạ").is_err());
+    assert!(s2.peek_open(None, "{}", &a, None, "lạ", false).is_err());
     assert_eq!(count(&s2, "SELECT count(*) FROM u.cases"), 0);
-    // và store vẫn dùng được bình thường sau lỗi (savepoint đã giải phóng)
     s2.conn().execute_batch("DROP TRIGGER u.deny_slot").unwrap();
-    assert!(s2.peek_open(None, "{}", &a, None, "body").is_ok());
+    assert!(s2.peek_open(None, "{}", &a, None, "body", false).is_ok(), "savepoint đã giải phóng, store dùng lại được");
+}
+
+#[test]
+fn add_to_latest_case_is_atomic_and_reuses_the_open_case() {
+    let (_d, mut s) = open();
+    let (id1, added, already, created) = s.add_to_latest_case(&[key(1), key(2)], "added").unwrap();
+    assert!(created && (added, already) == (2, 0));
+    let (id2, added, already, created) = s.add_to_latest_case(&[key(2), key(3)], "added").unwrap();
+    assert_eq!((id2, added, already, created), (id1, 1, 1, false));
+    // quá giới hạn: không tạo Case mới nào ở thư viện trống
+    let (_d2, mut s2) = open();
+    let many: Vec<FaceKey> = (0..MAX_CASE_FACES as u16 + 1).map(key).collect();
+    assert!(s2.add_to_latest_case(&many, "added").is_err());
+    assert_eq!(count(&s2, "SELECT count(*) FROM u.cases"), 0, "Case vừa tạo bị hoàn tác cùng lỗi");
+}
+
+#[test]
+fn trashed_case_rejects_combo_writes_and_purge_ignores_a_rewound_clock() {
+    let (_d, mut s) = open();
+    let c = s.create_case("C", None, None).unwrap();
+    let m = s.create_combo(c, None, None).unwrap();
+    s.set_combo_slot(m, "body", Some(&key(1)), None, None).unwrap();
+    s.delete_case(c).unwrap();
+    assert!(s.set_combo_slot(m, "heading", Some(&key(2)), None, None).is_err());
+    assert!(s.update_combo(m, &ComboPatch { name: Some("x".into()), ..Default::default() }).is_err());
+    assert!(s.delete_combo(m).is_err());
+    assert!(s.create_combo(c, None, Some(m)).is_err());
+    assert_eq!(s.combo(m).unwrap().slots.len(), 1, "không đổi gì");
+    s.restore_case(c).unwrap();
+    assert!(s.set_combo_slot(m, "heading", Some(&key(2)), None, None).is_ok(), "khôi phục thì ghi lại được");
+
+    // đồng hồ lùi: purge không xoá gì dù `now - 30 ngày` tụt dưới mốc xoá cũ
+    s.delete_case(c).unwrap();
+    s.conn().execute("UPDATE u.cases SET deleted_at = 1000, created_at = 1000, updated_at = 1000, opened_at = 1000", []).unwrap();
+    assert_eq!(s.purge_cases(500).unwrap(), 0, "now < mốc đã ghi ⇒ bỏ qua");
+    assert_eq!(s.cases(true).unwrap().len(), 1);
+    // chỉ Case có deleted_at mới bị xoá
+    let live = s.create_case("Sống", None, None).unwrap();
+    s.conn().execute("UPDATE u.cases SET created_at = 1, updated_at = 1, opened_at = 1 WHERE id = ?1", [live]).unwrap();
+    assert_eq!(s.purge_cases(1000 + 31 * 24 * 3600 * 1000).unwrap(), 1);
+    assert_eq!(s.cases(true).unwrap().iter().map(|x| x.id).collect::<Vec<_>>(), vec![live]);
+}
+
+#[test]
+fn create_combos_rejects_duplicate_roles() {
+    let (_d, mut s) = open();
+    let c = s.create_case("C", None, None).unwrap();
+    let dup = NewCombo { name: None, slots: vec![("body".into(), key(1)), ("body".into(), key(2))] };
+    assert!(s.create_combos(c, &[dup]).is_err());
+    assert!(s.combos(c).unwrap().is_empty());
 }

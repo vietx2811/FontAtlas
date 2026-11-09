@@ -8,5 +8,11 @@ import type { PairCandidateDto } from "./PairCandidateDto";
 export type ComboRelationDto = { from: ComboRoleDto, to: ComboRoleDto, 
 /**
  * Đánh giá cặp (nhãn ●◐◆○, Δ theo trục, cổng, câu giải thích) — `assessment.face` là font của vai `to`.
+ * `None` khi không đánh giá được; xem `reason`.
  */
-assessment: PairCandidateDto, };
+assessment: PairCandidateDto | null, 
+/**
+ * Vì sao `assessment` là `None`: `missing_font` (một trong hai font không còn trong thư viện) ·
+ * `not_analyzed` (chưa có hồ sơ phân tích) · `unavailable` (lỗi khác; `reasonDetail` là thông báo).
+ */
+reason: string | null, reasonDetail: string | null, };

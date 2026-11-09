@@ -163,7 +163,8 @@ fn case_compare_columns_relations_and_limits() {
     assert_eq!(a.relations.len(), 2, "giọng ① (heading) so với body và caption");
     assert!(a.relations.iter().all(|r| r.from == ComboRoleDto::Heading));
     assert_eq!(a.relations.iter().map(|r| r.to).collect::<Vec<_>>(), vec![ComboRoleDto::Body, ComboRoleDto::Caption]);
-    assert!(a.relations.iter().all(|r| !r.assessment.labels.is_empty() && !r.assessment.summary.is_empty()));
+    assert!(a.relations.iter().all(|r| r.reason.is_none() && r.assessment.as_ref().is_some_and(|x| !x.labels.is_empty() && !x.summary.is_empty())));
+    assert_eq!(a.missing_count, 0);
     assert!(a.worst_vi_missing.is_some());
     assert!(!a.licenses.is_empty());
     assert_eq!(cmp.columns[1].font_count, 1);
@@ -190,7 +191,7 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     let settings = CaseSettingsDto { vi: false, mode: Some(PairingLevelDto::Experimental) };
     let r = cases::open_case_from_peek(
         &st,
-        &PeekOpenDto { face: playfair.clone(), as_role: PeekRoleDto::Heading, candidate: Some(roboto.clone()), case_id: None, settings: settings.clone() },
+        &PeekOpenDto { face: playfair.clone(), as_role: PeekRoleDto::Heading, candidate: Some(roboto.clone()), case_id: None, settings: settings.clone(), replace: false },
     )
     .unwrap();
     assert!(r.created);
@@ -207,7 +208,7 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     // lần hai: dùng Case đang mở, font là nội dung → vai body trong cùng Combo chính; không nhân đôi Case/Combo
     let r2 = cases::open_case_from_peek(
         &st,
-        &PeekOpenDto { face: sans.clone(), as_role: PeekRoleDto::Body, candidate: None, case_id: None, settings: CaseSettingsDto::default() },
+        &PeekOpenDto { face: sans.clone(), as_role: PeekRoleDto::Body, candidate: None, case_id: None, settings: CaseSettingsDto::default(), replace: false },
     )
     .unwrap();
     assert!(!r2.created);
@@ -216,9 +217,9 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     assert_eq!(r2.combo_id, r.combo_id);
     assert_eq!(r2.case.combos[0].slots.len(), 2);
     assert_eq!((r2.anchor_role, r2.other_role, r2.trial), (ComboRoleDto::Body, ComboRoleDto::Display, None));
-    assert!(r2.case.settings.vi);
+    assert_eq!(r2.case.settings, settings, "Case có sẵn giữ cài đặt, peek không ghi đè");
     // case_id không tồn tại
-    let bad = cases::open_case_from_peek(&st, &PeekOpenDto { face: sans, as_role: PeekRoleDto::Body, candidate: None, case_id: Some(9999), settings: CaseSettingsDto::default() });
+    let bad = cases::open_case_from_peek(&st, &PeekOpenDto { face: sans, as_role: PeekRoleDto::Body, candidate: None, case_id: Some(9999), settings: CaseSettingsDto::default(), replace: false });
     assert_eq!(bad.unwrap_err().code, "not_found");
 }
 
@@ -361,7 +362,7 @@ fn open_case_from_peek_is_idempotent() {
     let td = tempfile::tempdir().unwrap();
     let st = state(td.path());
     let (roboto, playfair) = (key_of(&st, "roboto"), key_of(&st, "playfair"));
-    let req = PeekOpenDto { face: playfair.clone(), as_role: PeekRoleDto::Heading, candidate: Some(roboto.clone()), case_id: None, settings: CaseSettingsDto::default() };
+    let req = PeekOpenDto { face: playfair.clone(), as_role: PeekRoleDto::Heading, candidate: Some(roboto.clone()), case_id: None, settings: CaseSettingsDto::default(), replace: false };
     let first = cases::open_case_from_peek(&st, &req).unwrap();
     let second = cases::open_case_from_peek(&st, &req).unwrap();
     let third = cases::open_case_from_peek(&st, &PeekOpenDto { case_id: Some(first.case.id), ..req.clone() }).unwrap();
@@ -419,4 +420,98 @@ fn trash_is_purged_at_boot_not_by_list_cases() {
     let left = cases::list_cases(&st, true).unwrap();
     assert_eq!(left.iter().map(|c| c.id).collect::<Vec<_>>(), vec![fresh.id]);
     assert!(cases::restore_case(&st, fresh.id).is_ok(), "Case xoá gần đây vẫn khôi phục được");
+}
+
+#[test]
+fn case_compare_reports_missing_fonts_instead_of_swallowing_them() {
+    use app_lib::dto::analysis::LangDto;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let (roboto, sans, playfair) = (key_of(&st, "roboto"), key_of(&st, "open sans"), key_of(&st, "playfair"));
+    let ghost = FaceKeyDto { hash_hex: "cd".repeat(32), face_index: 0 };
+    let c = cases::create_case(&st, Some("Thiếu"), None, None).unwrap();
+    cases::create_combos(
+        &st,
+        c.id,
+        &[
+            NewComboDto { name: Some("Giữa thiếu".into()), slots: vec![
+                NewSlotDto { role: ComboRoleDto::Heading, face: playfair.clone() },
+                NewSlotDto { role: ComboRoleDto::Body, face: ghost.clone() },
+                NewSlotDto { role: ComboRoleDto::Caption, face: sans.clone() },
+            ] },
+            NewComboDto { name: Some("Neo thiếu".into()), slots: vec![
+                NewSlotDto { role: ComboRoleDto::Display, face: ghost.clone() },
+                NewSlotDto { role: ComboRoleDto::Body, face: roboto.clone() },
+                NewSlotDto { role: ComboRoleDto::Caption, face: sans.clone() },
+            ] },
+        ],
+    )
+    .unwrap();
+    let cmp = cases::case_compare(&st, c.id, &[], LangDto::Vi).unwrap();
+    let a = &cmp.columns[0];
+    assert_eq!(a.missing_count, 1, "một vai thiếu font — không được báo sạch");
+    assert_eq!(a.relations.len(), 2);
+    let body = a.relations.iter().find(|r| r.to == ComboRoleDto::Body).unwrap();
+    assert!(body.assessment.is_none() && body.reason.as_deref() == Some("missing_font"));
+    assert!(a.relations.iter().find(|r| r.to == ComboRoleDto::Caption).unwrap().assessment.is_some());
+    assert!(a.combo.slots.iter().any(|s| s.missing) && a.combo.slots.iter().filter(|s| s.missing).count() == 1);
+    // neo thiếu: lấy vai kế tiếp còn font làm neo, vẫn trả quan hệ còn lại
+    let b = &cmp.columns[1];
+    assert_eq!(b.missing_count, 1);
+    let anchor_role = b.relations.iter().map(|r| r.from).next().unwrap();
+    assert_eq!(anchor_role, ComboRoleDto::Body, "neo = vai đầu còn font");
+    assert!(b.relations.iter().any(|r| r.to == ComboRoleDto::Caption && r.assessment.is_some()));
+    assert!(b.relations.iter().any(|r| r.to == ComboRoleDto::Display && r.reason.as_deref() == Some("missing_font")));
+    // CaseFaceDto cũng báo missing
+    let full = cases::get_case(&st, c.id).unwrap();
+    assert!(full.faces.iter().find(|f| f.key == ghost).unwrap().missing);
+    assert!(!full.faces.iter().find(|f| f.key == sans).unwrap().missing);
+}
+
+#[test]
+fn peek_does_not_overwrite_an_occupied_role_without_replace() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let (roboto, playfair) = (key_of(&st, "roboto"), key_of(&st, "playfair"));
+    let req = |face: &FaceKeyDto, replace: bool| PeekOpenDto { face: face.clone(), as_role: PeekRoleDto::Heading, candidate: None, case_id: None, settings: CaseSettingsDto::default(), replace };
+    let r1 = cases::open_case_from_peek(&st, &req(&playfair, false)).unwrap();
+    assert!(r1.occupied.is_none());
+    let r2 = cases::open_case_from_peek(&st, &req(&roboto, false)).unwrap();
+    let occ = r2.occupied.clone().expect("vai display đã có Playfair");
+    assert_eq!((occ.role, &occ.key), (ComboRoleDto::Display, &playfair));
+    assert!(occ.row.is_some());
+    let slot = |r: &PeekOpenResultDto| r.case.combos[0].slots.iter().find(|s| s.role == ComboRoleDto::Display).unwrap().key.clone();
+    assert_eq!(slot(&r2), playfair, "chưa đồng ý ⇒ không đổi");
+    let r3 = cases::open_case_from_peek(&st, &req(&roboto, true)).unwrap();
+    assert!(r3.occupied.is_none());
+    assert_eq!(slot(&r3), roboto);
+}
+
+#[test]
+fn concurrent_add_to_case_without_id_creates_one_case() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let keys: Vec<FaceKeyDto> = vec![key_of(&st, "roboto"), key_of(&st, "playfair"), key_of(&st, "open sans")];
+    let handles: Vec<_> = (0..8)
+        .map(|i| {
+            let (st, k) = (Arc::clone(&st), keys[i % 3].clone());
+            std::thread::spawn(move || cases::add_to_case(&st, None, &[k], None).unwrap())
+        })
+        .collect();
+    let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(cases::list_cases(&st, true).unwrap().len(), 1, "hai lệnh song song không tạo hai Case");
+    assert_eq!(results.iter().filter(|r| r.created).count(), 1);
+    assert!(results.iter().all(|r| r.case_id == results[0].case_id));
+    assert_eq!(cases::get_case(&st, results[0].case_id).unwrap().faces.len(), 3);
+}
+
+#[test]
+fn brief_starter_with_unreadable_case_is_an_error_not_a_silent_fallback() {
+    use app_lib::services::brief;
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    assert_eq!(brief::brief_starter(&st, &BriefDto::default(), Some(9999)).unwrap_err().code, "not_found");
+    let c = cases::create_case(&st, None, None, None).unwrap();
+    cases::delete_case(&st, c.id).unwrap();
+    assert_eq!(brief::brief_starter(&st, &BriefDto::default(), Some(c.id)).unwrap_err().code, "not_found");
 }

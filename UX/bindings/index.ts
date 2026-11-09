@@ -109,6 +109,7 @@ export type { PairOptsDto } from './PairOptsDto';
 export type { PairRoleDto } from './PairRoleDto';
 export type { PairTheseOptsDto } from './PairTheseOptsDto';
 export type { PairingLevelDto } from './PairingLevelDto';
+export type { PeekOccupiedDto } from './PeekOccupiedDto';
 export type { PeekOpenDto } from './PeekOpenDto';
 export type { PeekOpenResultDto } from './PeekOpenResultDto';
 export type { PeekRoleDto } from './PeekRoleDto';

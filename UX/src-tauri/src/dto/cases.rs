@@ -187,6 +187,8 @@ pub struct CaseFaceDto {
     pub added_at: i64,
     /// `None` khi font không còn trong thư viện (file bị xoá khỏi mọi nguồn).
     pub row: Option<FaceRowDto>,
+    /// `row` vắng hoặc file đang thiếu trên đĩa — giao diện hiện NoteMark "font đã đổi hoặc bị xoá".
+    pub missing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -196,6 +198,8 @@ pub struct ComboSlotDto {
     pub role: ComboRoleDto,
     pub key: FaceKeyDto,
     pub row: Option<FaceRowDto>,
+    /// Như `CaseFaceDto.missing`. Hash của file đổi (sửa file) cũng thành `missing`; chưa tự nối lại sang hash mới.
+    pub missing: bool,
     pub note: Option<String>,
     /// weight, italic, case, size_step, tracking, leading… do giao diện định nghĩa.
     #[ts(type = "unknown")]
@@ -304,7 +308,12 @@ pub struct ComboRelationDto {
     pub from: ComboRoleDto,
     pub to: ComboRoleDto,
     /// Đánh giá cặp (nhãn ●◐◆○, Δ theo trục, cổng, câu giải thích) — `assessment.face` là font của vai `to`.
-    pub assessment: crate::dto::analysis::PairCandidateDto,
+    /// `None` khi không đánh giá được; xem `reason`.
+    pub assessment: Option<crate::dto::analysis::PairCandidateDto>,
+    /// Vì sao `assessment` là `None`: `missing_font` (một trong hai font không còn trong thư viện) ·
+    /// `not_analyzed` (chưa có hồ sơ phân tích) · `unavailable` (lỗi khác; `reasonDetail` là thông báo).
+    pub reason: Option<String>,
+    pub reason_detail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -316,9 +325,12 @@ pub struct ComboColumnDto {
     pub relations: Vec<ComboRelationDto>,
     /// Số font khác nhau.
     pub font_count: u32,
-    /// Số ký tự tiếng Việt thiếu lớn nhất trong các font (VI "thấp nhất"); `None` khi không có font nào còn trong thư viện.
+    /// Số vai có font không còn trong thư viện (hoặc file thiếu). > 0 ⇒ `worstViMissing` và `licenses` KHÔNG đủ:
+    /// giao diện không được coi là "sạch".
+    pub missing_count: u32,
+    /// Số ký tự tiếng Việt thiếu lớn nhất trong các font còn trong thư viện; `None` khi không font nào còn.
     pub worst_vi_missing: Option<u32>,
-    /// Các lớp license khác nhau (ofl, apache, other, unknown).
+    /// Các lớp license khác nhau của font còn trong thư viện (ofl, apache, other, unknown).
     pub licenses: Vec<String>,
 }
 
@@ -356,7 +368,11 @@ pub struct PeekOpenDto {
     /// null = Case đang mở gần nhất, chưa có thì tạo mới.
     #[ts(type = "number | null")]
     pub case_id: Option<i64>,
+    /// Chỉ dùng khi Case được TẠO ở lệnh này; Case có sẵn giữ nguyên cài đặt của nó.
     pub settings: CaseSettingsDto,
+    /// true = người dùng đã đồng ý thay font đang giữ vai neo (xem `occupied` của kết quả).
+    #[serde(default)]
+    pub replace: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -373,6 +389,17 @@ pub struct PeekOpenResultDto {
     pub trial: Option<FaceKeyDto>,
     /// true khi Case vừa được tạo.
     pub created: bool,
+    /// Vai neo đã có font KHÁC và `replace = false`: không ghi gì vào vai; giao diện hỏi rồi gửi lại với `replace = true`.
+    pub occupied: Option<PeekOccupiedDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PeekOccupiedDto {
+    pub role: ComboRoleDto,
+    pub key: FaceKeyDto,
+    pub row: Option<FaceRowDto>,
 }
 
 // ---- Brief starter ----
@@ -383,7 +410,7 @@ pub struct PeekOpenResultDto {
 #[ts(export, rename_all = "camelCase")]
 pub struct BriefNoteDto {
     /// `no_terms` · `branding_class_only` · `installed_none_active` · `weight_relaxed` · `few_anchors`
-    /// · `no_body_pair` · `index_unavailable` · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: có thể thiếu kết quả)
+    /// · `no_body_pair` · `index_unavailable` · `installed_truncated` · `body_set_truncated` · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: có thể thiếu kết quả)
     /// · `packaging_inferred` (packaging là ánh xạ suy ra từ term có sẵn, không phải term riêng; `detail` = "display=display+heavy; body=readable_small+clean")
     /// · `packaging_inferred` (packaging là ánh xạ suy ra: `detail` = "display=display+heavy; body=readable_small+clean") · `langs_incomplete` (độ phủ ngôn ngữ còn đang tính nền: kết quả có thể thiếu)
     pub code: String,

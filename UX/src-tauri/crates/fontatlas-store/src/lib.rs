@@ -22,7 +22,7 @@ pub use activation::{
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
 pub use analysis::{DupRow, StoredAnalysis};
-pub use cases::{CaseFaceRow, CasePatch, CaseRow, CaseSummary, ComboPatch, ComboRow, MAX_CASE_FACES, MAX_COMBOS, NewCombo, ROLES, SlotRow, TRASH_DAYS};
+pub use cases::{CaseFaceRow, CasePatch, CaseRow, CaseSummary, ComboPatch, ComboRow, MAX_CASE_FACES, MAX_COMBOS, NewCombo, PeekOutcome, ROLES, SlotRow, TRASH_DAYS};
 pub use embed::{EmbedJob, EmbedReader, EnqueueStats, JobResult, SETTING_EMBED_ENABLED, SETTING_LICENSE_NOTICE_ACK};
 pub use error::StoreError;
 pub use fold::vi_fold;

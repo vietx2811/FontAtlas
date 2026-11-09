@@ -7,4 +7,8 @@ export type CaseFaceDto = { key: FaceKeyDto, origin: CaseOriginDto, note: string
 /**
  * `None` khi font không còn trong thư viện (file bị xoá khỏi mọi nguồn).
  */
-row: FaceRowDto | null, };
+row: FaceRowDto | null, 
+/**
+ * `row` vắng hoặc file đang thiếu trên đĩa — giao diện hiện NoteMark "font đã đổi hoặc bị xoá".
+ */
+missing: boolean, };

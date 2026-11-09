@@ -66,6 +66,16 @@ pub struct ComboRow {
 }
 
 /// `Option<Option<_>>`: `None` = giữ nguyên, `Some(None)` = xoá.
+/// Kết quả `peek_open`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeekOutcome {
+    pub case_id: i64,
+    pub combo_id: i64,
+    pub created: bool,
+    /// Font đang giữ vai neo (khác neo) và không bị ghi đè vì `replace = false`.
+    pub occupied: Option<FaceKey>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CasePatch {
     pub name: Option<String>,
@@ -270,7 +280,16 @@ impl Store {
     }
 
     /// Xoá hẳn Case đã nằm trong thùng rác quá `TRASH_DAYS` ngày (tính theo `now`).
+    /// Bỏ qua (trả 0) nếu đồng hồ có vẻ đã lùi: `now` nhỏ hơn mốc thời gian mới nhất đã ghi trong bảng.
     pub fn purge_cases(&mut self, now: i64) -> Result<usize, StoreError> {
+        let latest: Option<i64> = self.conn.query_row(
+            "SELECT max(max(created_at), max(updated_at), max(opened_at), coalesce(max(deleted_at), 0)) FROM u.cases",
+            [],
+            |r| r.get(0),
+        )?;
+        if latest.is_some_and(|l| now < l) {
+            return Ok(0);
+        }
         let cutoff = now - TRASH_DAYS * 24 * 3600 * 1000;
         Ok(self.conn.execute("DELETE FROM u.cases WHERE deleted_at IS NOT NULL AND deleted_at < ?1", [cutoff])?)
     }
@@ -343,9 +362,12 @@ impl Store {
         Ok(n)
     }
 
-    /// "Pair from peek" trong MỘT khối nguyên tử: lấy/tạo Case, ghi `settings`, thêm font neo (và ứng viên) với
-    /// origin `peek`, đảm bảo có Combo chính, đặt neo vào `anchor_role`. Idempotent. Lỗi ở bất kỳ bước nào thì
-    /// không để lại gì (kể cả Case vừa tạo). Trả (case_id, combo_id, vừa tạo Case).
+    /// "Pair from peek" trong MỘT khối nguyên tử: lấy/tạo Case, thêm font neo (và ứng viên) với origin `peek`,
+    /// đảm bảo có Combo chính, đặt neo vào `anchor_role`. Không ghi đè ngầm:
+    /// - `settings` chỉ được ghi khi Case được TẠO ở đây; Case có sẵn giữ nguyên cài đặt của nó;
+    /// - vai đã có font KHÁC thì không ghi (`occupied`), trừ khi `replace`.
+    ///
+    /// Idempotent. Lỗi ở bất kỳ bước nào thì không để lại gì (kể cả Case vừa tạo, cài đặt cũ giữ nguyên).
     pub fn peek_open(
         &mut self,
         case_id: Option<i64>,
@@ -353,11 +375,12 @@ impl Store {
         anchor: &FaceKey,
         candidate: Option<&FaceKey>,
         anchor_role: &str,
-    ) -> Result<(i64, i64, bool), StoreError> {
+        replace: bool,
+    ) -> Result<PeekOutcome, StoreError> {
         check_json("settings", settings)?;
         check_role(anchor_role)?;
         self.conn.execute_batch("SAVEPOINT peek_open")?;
-        let run = |s: &mut Store| -> Result<(i64, i64, bool), StoreError> {
+        let run = |s: &mut Store| -> Result<PeekOutcome, StoreError> {
             let (case_id, created) = match case_id {
                 Some(id) => (id, false),
                 None => match s.latest_case()? {
@@ -366,7 +389,6 @@ impl Store {
                 },
             };
             s.case(case_id)?;
-            s.update_case(case_id, &CasePatch { settings: Some(settings.to_string()), ..Default::default() })?;
             s.add_to_case(case_id, std::slice::from_ref(anchor), "peek")?;
             if let Some(c) = candidate {
                 s.add_to_case(case_id, std::slice::from_ref(c), "peek")?;
@@ -375,9 +397,16 @@ impl Store {
                 Some(id) => id,
                 None => s.create_combo(case_id, None, None)?,
             };
-            s.set_combo_slot(combo_id, anchor_role, Some(anchor), None, None)?;
+            let held = s.combo(combo_id)?.slots.into_iter().find(|x| x.role == anchor_role).map(|x| x.key);
+            let occupied = match held {
+                Some(k) if k != *anchor && !replace => Some(k),
+                _ => {
+                    s.set_combo_slot(combo_id, anchor_role, Some(anchor), None, None)?;
+                    None
+                }
+            };
             s.touch_case(case_id)?;
-            Ok((case_id, combo_id, created))
+            Ok(PeekOutcome { case_id, combo_id, created, occupied })
         };
         match run(self) {
             Ok(v) => {
@@ -386,6 +415,31 @@ impl Store {
             }
             Err(e) => {
                 let _ = self.conn.execute_batch("ROLLBACK TO peek_open; RELEASE peek_open");
+                Err(e)
+            }
+        }
+    }
+
+    /// `add_to_case(None)` nguyên tử: Case mở gần nhất (tạo mới nếu chưa có) + thêm font + đánh dấu vừa mở, một khối.
+    /// Trả (case_id, mới thêm, đã có, vừa tạo Case).
+    pub fn add_to_latest_case(&mut self, keys: &[FaceKey], origin: &str) -> Result<(i64, usize, usize, bool), StoreError> {
+        self.conn.execute_batch("SAVEPOINT add_latest")?;
+        let run = |s: &mut Store| -> Result<(i64, usize, usize, bool), StoreError> {
+            let (id, created) = match s.latest_case()? {
+                Some(id) => (id, false),
+                None => (s.create_case("Case 1", None, None)?, true),
+            };
+            let (added, already) = s.add_to_case(id, keys, origin)?;
+            s.touch_case(id)?;
+            Ok((id, added, already, created))
+        };
+        match run(self) {
+            Ok(v) => {
+                self.conn.execute_batch("RELEASE add_latest")?;
+                Ok(v)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK TO add_latest; RELEASE add_latest");
                 Err(e)
             }
         }
@@ -450,7 +504,7 @@ impl Store {
         self.case(case_id)?;
         let src = match from {
             Some(f) => {
-                let c = self.combo(f)?;
+                let c = self.live_combo(f)?;
                 if c.case_id != case_id {
                     return Err(StoreError::Invalid("Combo nguồn thuộc Case khác".into()));
                 }
@@ -491,7 +545,12 @@ impl Store {
                 put(sl.ord, &sl.role, &sl.key, sl.note.as_deref(), &sl.style)?;
             }
         }
+        let mut seen_roles: Vec<&str> = Vec::new();
         for (role, k) in slots {
+            if seen_roles.contains(&role.as_str()) {
+                return Err(StoreError::Invalid(format!("vai trùng trong một Combo: {role}")));
+            }
+            seen_roles.push(role);
             let ord = ROLES.iter().position(|r| r == role).unwrap_or(0) as i64;
             put(ord, role, k, None, "{}")?;
         }
@@ -515,8 +574,15 @@ impl Store {
         Ok(ids)
     }
 
+    /// Combo của Case chưa xoá (Case trong thùng rác không nhận ghi).
+    fn live_combo(&self, id: i64) -> Result<ComboRow, StoreError> {
+        let c = self.combo(id)?;
+        self.case(c.case_id)?;
+        Ok(c)
+    }
+
     pub fn update_combo(&mut self, id: i64, p: &ComboPatch) -> Result<ComboRow, StoreError> {
-        let cur = self.combo(id)?;
+        let cur = self.live_combo(id)?;
         let name = match &p.name {
             Some(n) => clean_name(n, "Combo")?,
             None => cur.name.clone(),
@@ -541,7 +607,7 @@ impl Store {
     }
 
     pub fn delete_combo(&mut self, id: i64) -> Result<(), StoreError> {
-        let cur = self.combo(id)?;
+        let cur = self.live_combo(id)?;
         let tx = Atomic::begin(&self.conn)?;
         tx.execute("DELETE FROM u.combos WHERE id = ?1", [id])?;
         // đánh số lại liên tục 1..n và giữ một Combo chính
@@ -580,7 +646,7 @@ impl Store {
         if let Some(s) = style {
             check_json("style", s)?;
         }
-        let combo = self.combo(combo_id)?;
+        let combo = self.live_combo(combo_id)?;
         let tx = Atomic::begin(&self.conn)?;
         let now = now_ms();
         match face {

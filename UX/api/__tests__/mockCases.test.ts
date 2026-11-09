@@ -73,14 +73,18 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     const [a, b] = mockRows().slice(0, 2).map(key);
     const r = await api.openCaseFromPeek({ face: a, as: 'heading', candidate: b, caseId: null, settings: { vi: false, mode: 'safe' } });
     expect(r).toMatchObject({ created: true, anchorRole: 'display', otherRole: 'body', trial: b });
-    expect(r.case.settings).toEqual({ vi: false, mode: 'safe' });
+    expect(r.case.settings).toEqual({ vi: false, mode: 'safe' }); // Case tạo ở lệnh này ⇒ nhận cài đặt của peek
+    expect(r.occupied).toBeNull();
     expect(r.case.combos[0].slots.map(s => s.role)).toEqual(['display']);
     expect(r.case.faces.map(f => f.origin)).toEqual(['peek', 'peek']);
     const r2 = await api.openCaseFromPeek({ face: b, as: 'body', candidate: null, caseId: null, settings: { vi: true, mode: null } });
     expect(r2).toMatchObject({ created: false, comboId: r.comboId, anchorRole: 'body', otherRole: 'display', trial: null });
     const cmp = await api.caseCompare(r.case.id, []);
     expect(cmp.columns).toHaveLength(1);
-    expect(cmp.columns[0]).toMatchObject({ fontCount: 2, relations: [] });
+    expect(cmp.columns[0]).toMatchObject({ fontCount: 2, missingCount: 0 });
+    expect(cmp.columns[0].relations).toHaveLength(1);
+    expect(cmp.columns[0].relations[0]).toMatchObject({ from: 'display', to: 'body', reason: null });
+    expect(cmp.columns[0].relations[0].assessment?.labels.length).toBeGreaterThan(0);
     await expect(api.caseCompare(r.case.id, [999])).rejects.toMatchObject({ code: 'not_found' });
     await expect(api.openCaseFromPeek({ face: a, as: 'body', candidate: null, caseId: 999, settings: { vi: true, mode: null } })).rejects.toMatchObject({ code: 'not_found' });
   });
@@ -94,5 +98,46 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     expect(r.displayQuery.weightClass).toEqual([600, 900]);
     expect(r.bodyQuery.weightClass).toEqual([400, 500]);
     expect(r.ai).toBeNull();
+  });
+
+  it('peek never overwrites silently: occupied until replace, settings only on create', async () => {
+    const api = createMockApi();
+    const [a, b] = mockRows().slice(0, 2).map(key);
+    const first = await api.openCaseFromPeek({ face: a, as: 'heading', candidate: null, caseId: null, settings: { vi: false, mode: null } });
+    const held = await api.openCaseFromPeek({ face: b, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' } });
+    expect(held.occupied).toMatchObject({ role: 'display', key: a });
+    expect(held.case.combos[0].slots[0].key).toEqual(a);
+    expect(held.case.settings).toEqual(first.case.settings); // Case có sẵn giữ cài đặt
+    const swapped = await api.openCaseFromPeek({ face: b, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: null }, replace: true });
+    expect(swapped.occupied).toBeNull();
+    expect(swapped.case.combos[0].slots[0].key).toEqual(b);
+  });
+
+  it('caseCompare reports missing fonts; names are capped at 120; duplicate roles and trashed cases are rejected', async () => {
+    const api = createMockApi();
+    const [a, b] = mockRows().slice(0, 2).map(key);
+    const ghost = { hashHex: 'ff'.repeat(32), faceIndex: 0 };
+    const c = await api.createCase('X');
+    const [m] = await api.createCombos(c.id, [{ name: null, slots: [{ role: 'heading', face: a }, { role: 'body', face: ghost }, { role: 'caption', face: b }] }]);
+    const col = (await api.caseCompare(c.id, [m.id])).columns[0];
+    expect(col.missingCount).toBe(1);
+    expect(col.relations.find(r => r.to === 'body')).toMatchObject({ assessment: null, reason: 'missing_font' });
+    expect(col.relations.find(r => r.to === 'caption')?.assessment).not.toBeNull();
+    await expect(api.createCase('x'.repeat(121))).rejects.toMatchObject({ code: 'invalid_arg' });
+    await expect(api.createCombos(c.id, [{ name: null, slots: [{ role: 'body', face: a }, { role: 'body', face: b }] }])).rejects.toMatchObject({ code: 'invalid_arg' });
+    await api.deleteCase(c.id);
+    await expect(api.setComboSlot(m.id, 'accent', a)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('briefStarter uses tones and uses (dead zone 0.25) and reports the inferred packaging mapping', async () => {
+    const api = createMockApi();
+    const needs = { vi: true, installedOnly: false, italic: false, variable: false, openLicense: false };
+    const r = await api.briefStarter({ uses: ['packaging', 'editorial'], tones: [{ pair: 'warm_cool', value: -0.9 }, { pair: 'quiet_bold', value: 0.1 }], needs, text: null });
+    expect(r.describe.matched.map(m => m.id)).toEqual(['warm', 'editorial']);
+    expect(r.notes.map(n => n.code)).toContain('packaging_inferred');
+    expect(r.combos.length).toBeLessThanOrEqual(3);
+    expect(r.combos.every(c => c.heading.family !== c.body.family)).toBe(true);
+    const empty = await api.briefStarter({ uses: [], tones: [], needs, text: null });
+    expect(empty.notes.map(n => n.code)).toContain('no_terms');
   });
 });

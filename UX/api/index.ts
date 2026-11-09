@@ -82,8 +82,8 @@ export interface Api extends LibraryApi {
   caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
   /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */
   briefStarter(brief: BriefDto, caseId?: number): Promise<BriefStarterDto>;
-  /** Pair from peek (2d): font làm neo ở vai `as`; ứng viên chỉ trả lại làm `trial`, chưa đặt vào vai. */
-  openCaseFromPeek(peek: PeekOpenDto): Promise<PeekOpenResultDto>;
+  /** Pair from peek (2d): font làm neo ở vai `as`; ứng viên chỉ trả lại làm `trial`, chưa đặt vào vai. Vai đã có font khác ⇒ không ghi, trả `occupied`; gửi lại với `replace:true` sau khi người dùng đồng ý. `settings` chỉ dùng khi Case được tạo ở lệnh này. */
+  openCaseFromPeek(peek: Omit<PeekOpenDto, 'replace'> & { replace?: boolean }): Promise<PeekOpenResultDto>;
   /** Histogram 18 trục (16 số đo + weight_class + width_class), mỗi trục đếm trên tập lọc TRỪ chính trục đó. `bins` 0 = 24 (tối đa 64); trục class luôn 9 bin. */
   axisHistogram(q?: FaceQuery, bins?: number): Promise<AxisHistogramDto[]>;
   /** Facet phân loại cho Library (đếm bỏ qua chính classes/subclasses; gồm bucket `unclassified`). */

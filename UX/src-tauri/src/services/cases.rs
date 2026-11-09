@@ -55,6 +55,7 @@ fn combo_dto(c: ComboRow, rows: &HashMap<FaceKey, FaceRowDto>) -> ComboDto {
             .filter_map(|s| {
                 Some(ComboSlotDto {
                     role: ComboRoleDto::parse(&s.role)?,
+                    missing: rows.get(&s.key).is_none_or(|r| r.missing),
                     row: rows.get(&s.key).cloned(),
                     key: FaceKeyDto::from(&s.key),
                     note: s.note,
@@ -93,6 +94,7 @@ fn build(state: &AppState, c: CaseRow, faces: Vec<CaseFaceRow>, combos: Vec<Comb
         faces: faces
             .into_iter()
             .map(|f| CaseFaceDto {
+                missing: rows.get(&f.key).is_none_or(|r| r.missing),
                 row: rows.get(&f.key).cloned(),
                 key: FaceKeyDto::from(&f.key),
                 origin: origin_of(&f.origin),
@@ -181,19 +183,19 @@ pub fn restore_case(state: &AppState, id: i64) -> Result<CaseDto, CmdError> {
     load(state, id)
 }
 
-/// `case_id = None`: Case đang mở gần nhất, chưa có thì tạo mới.
+/// `case_id = None`: Case đang mở gần nhất, chưa có thì tạo — lấy, tạo, thêm, đánh dấu mở trong MỘT khối nguyên tử
+/// (hai lệnh song song không tạo hai Case).
 pub fn add_to_case(state: &AppState, case_id: Option<i64>, faces: &[FaceKeyDto], origin: Option<CaseOriginDto>) -> Result<AddToCaseDto, CmdError> {
     let keys = keys_of(faces)?;
     let origin = origin.unwrap_or(CaseOriginDto::Added);
-    let (id, created) = match case_id {
-        Some(id) => (id, false),
-        None => match state.with_user(|u| Ok(u.latest_case()?))? {
-            Some(id) => (id, false),
-            None => (create_case(state, None, None, None)?.id, true),
-        },
-    };
-    let (added, already) = state.with_user(|u| Ok(u.add_to_case(id, &keys, origin.as_str())?))?;
-    state.with_user(|u| Ok(u.touch_case(id)?))?;
+    let (id, added, already, created) = state.with_user(|u| match case_id {
+        Some(id) => {
+            let (a, al) = u.add_to_case(id, &keys, origin.as_str())?;
+            u.touch_case(id)?;
+            Ok((id, a, al, false))
+        }
+        None => Ok(u.add_to_latest_case(&keys, origin.as_str())?),
+    })?;
     Ok(AddToCaseDto { case_id: id, added: added as u32, already_in: already as u32, created })
 }
 
@@ -272,7 +274,9 @@ fn pair_mode(m: Option<PairingLevelDto>) -> Option<crate::dto::analysis::PairMod
 }
 
 /// Compare Combo: mỗi cột là một Combo; giọng ① (vai đầu theo thứ tự display → quote) so với từng vai
-/// dùng font khác. `combo_ids` rỗng = mọi Combo của Case (tối đa 8).
+/// dùng font khác. `combo_ids` rỗng = mọi Combo của Case (tối đa 8). Quan hệ không đánh giá được trả
+/// `assessment: None` kèm `reason` (không nuốt lỗi). Neo thiếu font thì lấy vai kế tiếp còn font làm neo,
+/// vai thiếu font vẫn có một dòng quan hệ `missing_font`.
 pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: crate::dto::analysis::LangDto) -> Result<CaseCompareDto, CmdError> {
     use crate::dto::analysis::{PairOptsDto, PairRoleDto};
     let case = load(state, case_id)?;
@@ -290,8 +294,15 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
     let mut columns = Vec::with_capacity(picked.len());
     for combo in picked {
         let mut relations = Vec::new();
-        if let Some(first) = combo.slots.first() {
-            for other in combo.slots.iter().skip(1).filter(|s| s.key != first.key) {
+        let none = |from, to, reason: &str, detail: Option<String>| ComboRelationDto { from, to, assessment: None, reason: Some(reason.into()), reason_detail: detail };
+        // neo = vai đầu còn font; các vai khác dùng font khác neo được so với neo
+        let anchor = combo.slots.iter().find(|s| !s.missing);
+        if let Some(first) = anchor {
+            for other in combo.slots.iter().filter(|s| s.key != first.key && s.role != first.role) {
+                if other.missing {
+                    relations.push(none(first.role, other.role, "missing_font", None));
+                    continue;
+                }
                 let opts = PairOptsDto {
                     role: PairRoleDto::Body,
                     mode: pair_mode(case.settings.mode),
@@ -300,10 +311,11 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
                     collection_id: None,
                     lang,
                 };
-                // font không còn trong thư viện / chưa phân tích: bỏ quan hệ đó, không làm hỏng cả bảng
-                if let Ok(assessment) = crate::services::analysis::assess_pair(state, &first.key, &other.key, &opts) {
-                    relations.push(ComboRelationDto { from: first.role, to: other.role, assessment });
-                }
+                relations.push(match crate::services::analysis::assess_pair(state, &first.key, &other.key, &opts) {
+                    Ok(a) => ComboRelationDto { from: first.role, to: other.role, assessment: Some(a), reason: None, reason_detail: None },
+                    Err(e) if e.code == "not_found" => none(first.role, other.role, "not_analyzed", None),
+                    Err(e) => none(first.role, other.role, "unavailable", Some(e.message)),
+                });
             }
         }
         let mut seen: Vec<&FaceKeyDto> = Vec::new();
@@ -312,15 +324,16 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
                 seen.push(&s.key);
             }
         }
-        let rows: Vec<&FaceRowDto> = combo.slots.iter().filter_map(|s| s.row.as_ref()).collect();
-        let mut licenses: Vec<String> = rows.iter().map(|r| r.license_class.clone()).collect();
+        let present: Vec<&FaceRowDto> = combo.slots.iter().filter(|s| !s.missing).filter_map(|s| s.row.as_ref()).collect();
+        let mut licenses: Vec<String> = present.iter().map(|r| r.license_class.clone()).collect();
         licenses.sort();
         licenses.dedup();
         columns.push(ComboColumnDto {
             combo: combo.clone(),
             relations,
             font_count: seen.len() as u32,
-            worst_vi_missing: rows.iter().map(|r| r.vi_missing).max(),
+            missing_count: combo.slots.iter().filter(|s| s.missing).count() as u32,
+            worst_vi_missing: present.iter().map(|r| r.vi_missing).max(),
             licenses,
         });
     }
@@ -337,8 +350,11 @@ pub fn open_case_from_peek(state: &AppState, p: &PeekOpenDto) -> Result<PeekOpen
     let anchor = FaceKey::try_from(&p.face)?;
     let cand = p.candidate.as_ref().map(FaceKey::try_from).transpose()?;
     let settings = json_of(&p.settings)?;
-    // một khối nguyên tử: lỗi giữa chừng thì không để lại Case/Combo/font nào
-    let (case_id, combo_id, created) =
-        state.with_user(|u| Ok(u.peek_open(p.case_id, &settings, &anchor, cand.as_ref(), anchor_role.as_str())?))?;
-    Ok(PeekOpenResultDto { case: load(state, case_id)?, combo_id, anchor_role, other_role, trial: p.candidate.clone(), created })
+    // một khối nguyên tử trong store: lỗi giữa chừng thì không để lại Case/Combo/font nào
+    let out = state.with_user(|u| Ok(u.peek_open(p.case_id, &settings, &anchor, cand.as_ref(), anchor_role.as_str(), p.replace)?))?;
+    let occupied = match out.occupied {
+        Some(k) => Some(PeekOccupiedDto { role: anchor_role, row: rows_of(state, &[k])?.remove(&k), key: FaceKeyDto::from(&k) }),
+        None => None,
+    };
+    Ok(PeekOpenResultDto { case: load(state, out.case_id)?, combo_id: out.combo_id, anchor_role, other_role, trial: p.candidate.clone(), created: out.created, occupied })
 }

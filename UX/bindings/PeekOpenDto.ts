@@ -11,4 +11,12 @@ candidate: FaceKeyDto | null,
 /**
  * null = Case đang mở gần nhất, chưa có thì tạo mới.
  */
-caseId: number | null, settings: CaseSettingsDto, };
+caseId: number | null, 
+/**
+ * Chỉ dùng khi Case được TẠO ở lệnh này; Case có sẵn giữ nguyên cài đặt của nó.
+ */
+settings: CaseSettingsDto, 
+/**
+ * true = người dùng đã đồng ý thay font đang giữ vai neo (xem `occupied` của kết quả).
+ */
+replace: boolean, };

@@ -12,10 +12,15 @@ relations: Array<ComboRelationDto>,
  */
 fontCount: number, 
 /**
- * Số ký tự tiếng Việt thiếu lớn nhất trong các font (VI "thấp nhất"); `None` khi không có font nào còn trong thư viện.
+ * Số vai có font không còn trong thư viện (hoặc file thiếu). > 0 ⇒ `worstViMissing` và `licenses` KHÔNG đủ:
+ * giao diện không được coi là "sạch".
+ */
+missingCount: number, 
+/**
+ * Số ký tự tiếng Việt thiếu lớn nhất trong các font còn trong thư viện; `None` khi không font nào còn.
  */
 worstViMissing: number | null, 
 /**
- * Các lớp license khác nhau (ofl, apache, other, unknown).
+ * Các lớp license khác nhau của font còn trong thư viện (ofl, apache, other, unknown).
  */
 licenses: Array<string>, };
