@@ -379,7 +379,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
         (
             "language_list",
             v(&LangListDto {
-                db_version: "hg-12d0c093-2".into(),
+                db_version: "hg-12d0c093-3".into(),
                 complete: false,
                 ready: LangReadyDto { done: 120, total: 480 },
                 items: vec![LangItemDto {

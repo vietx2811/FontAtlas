@@ -252,3 +252,53 @@ fn write_failure_mid_pass_does_not_hang_or_mark_the_face() {
     let l = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
     assert!(l.complete, "{:?}", l.ready);
 }
+
+#[test]
+fn badge_separates_unknown_from_below_near_and_prefers_stored_level() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    // chưa tính (chờ luồng nền xong rồi xoá dấu)
+    settle(&st);
+    // (xoá dấu): ngôn ngữ khác = unknown, vie vẫn có số từ vi_missing
+    st.with_store(|s| {
+        s.conn().execute_batch("DELETE FROM face_lang_state; DELETE FROM face_langs;").unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let thai = FaceQueryDto { badge_lang: Some("tha".into()), text: Some("roboto".into()), ..Default::default() };
+    let b = library::query_faces(&st, &thai).unwrap().items.remove(0).lang_badge.unwrap();
+    assert_eq!(b.state, LangBadgeStateDto::Unknown);
+    let vie = FaceQueryDto { text: Some("roboto".into()), ..Default::default() };
+    let b = library::query_faces(&st, &vie).unwrap().items.remove(0).lang_badge.unwrap();
+    assert_ne!(b.state, LangBadgeStateDto::Unknown, "vie dùng vi_missing khi chưa tính");
+    // đã tính: Thái dưới near ⇒ Partial (không còn Unknown)
+    assert!(langs::run_backfill(&st) >= 5);
+    let b = library::query_faces(&st, &thai).unwrap().items.remove(0).lang_badge.unwrap();
+    assert_eq!(b.state, LangBadgeStateDto::Partial);
+    // vie: mức đã lưu thắng
+    let roboto = library::query_faces(&st, &vie).unwrap().items.remove(0);
+    let stored = langs::lang_coverage(&st, roboto.face_id, "vie").unwrap();
+    let b = roboto.lang_badge.unwrap();
+    match stored.level {
+        LangCoverageLevelDto::Full => assert_eq!(b.state, LangBadgeStateDto::Full),
+        LangCoverageLevelDto::Near => assert_eq!(b.state, LangBadgeStateDto::Near),
+        _ => {}
+    }
+}
+
+#[test]
+fn language_list_is_cached_until_bumped() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    settle(&st);
+    let a = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
+    st.with_store(|s| {
+        s.conn().execute_batch("DELETE FROM face_langs WHERE lang = 'eng'").unwrap();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(langs::language_list(&st, &FaceQueryDto::default()).unwrap(), a, "trúng cache");
+    st.langs.bump();
+    let b = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
+    assert!(b.items.iter().all(|i| i.code != "eng"), "bump làm mất hiệu lực cache");
+}

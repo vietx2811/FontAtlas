@@ -5,7 +5,7 @@
 //! - **Full**: có 100% `base` và 100% `marks`.
 //! - **Near**: có ≥ 90% `base`, đủ toàn bộ `marks` và đủ các "chữ cái riêng" của L.
 //!   Chữ cái riêng: grapheme `base` ngoài Basic Latin (script Latin), hoặc xuất hiện ở < 50% số ngôn ngữ cùng
-//!   script (script khác). Áp dụng cho mọi ngôn ngữ.
+//!   script (script khác); script chỉ có 1–2 ngôn ngữ thì mọi grapheme `base` đều là chữ riêng. Áp dụng cho mọi ngôn ngữ.
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
@@ -174,6 +174,8 @@ fn build() -> LangDb {
             .map(|g| {
                 if l.script == "Latin" {
                     !g.is_ascii()
+                } else if *n_langs <= 2 {
+                    true // script chỉ có 1–2 ngôn ngữ: thống kê tần suất vô nghĩa, mọi chữ đều là chữ riêng
                 } else {
                     (counts[g.as_str()] as f32) < 0.5 * *n_langs as f32
                 }
@@ -312,5 +314,76 @@ mod tests {
         assert!(LangLevel::Full > LangLevel::Near);
         assert_eq!(LangLevel::parse("near"), Some(LangLevel::Near));
         assert_eq!(LangLevel::parse("x"), None);
+    }
+}
+
+#[cfg(test)]
+mod script_data_tests {
+    use super::*;
+    use unicode_script::{Script, UnicodeScript};
+
+    /// Mọi chữ cái trong `base` thuộc đúng script khai báo (hoặc Common/Inherited). Kiểm bằng thuộc tính
+    /// Unicode Script, không phải bảng tiền tố tên.
+    /// Tên script của Hyperglot → các script Unicode được phép (Nhật dùng thêm kana).
+    fn allowed(name: &str) -> Vec<Script> {
+        use Script::*;
+        match name {
+            "Geʽez" => vec![Ethiopic],
+            "Chinese" | "Hanja" => vec![Han],
+            "Kanji" => vec![Han, Hiragana, Katakana],
+            "Burmese" => vec![Myanmar],
+            "Cree" | "Inuktitut Syllabics" | "Ojibwe Syllabics" => vec![Canadian_Aboriginal],
+            "Modern Yi" => vec![Yi],
+            "Tham" => vec![Tai_Tham],
+            "Tai Viet" => vec![Tai_Viet],
+            "Kayah Li" => vec![Kayah_Li],
+            "Ancient South Arabian" => vec![Old_South_Arabian],
+            "Sumero-Akkadian Cuneiforms" => vec![Cuneiform],
+            "Egyptian Hieroglyphs" => vec![Egyptian_Hieroglyphs],
+            "Linear A" => vec![Linear_A],
+            "Linear B" => vec![Linear_B],
+            other => Script::from_full_name(other).into_iter().collect(),
+        }
+    }
+
+    #[test]
+    fn data_is_nfc_unique_and_tiny_scripts_are_all_core() {
+        let db = langdb();
+        let mut ids = HashSet::new();
+        let mut per_script: HashMap<&str, usize> = HashMap::new();
+        for e in db.entries.iter() {
+            assert!(ids.insert(e.id.as_str()), "id trùng {}", e.id);
+            *per_script.entry(e.script.as_str()).or_default() += 1;
+            for g in e.base.iter().chain(&e.marks) {
+                assert_eq!(&g.nfc().collect::<String>(), g, "{} không ở dạng NFC", e.id);
+            }
+        }
+        let mut checked = 0;
+        for e in db.entries.iter().filter(|e| per_script[e.script.as_str()] <= 2) {
+            assert!(e.core.iter().all(|&c| c), "{}: script nhỏ phải coi mọi chữ là chữ riêng", e.id);
+            checked += 1;
+        }
+        assert!(checked > 0);
+    }
+
+    #[test]
+    fn base_letters_belong_to_declared_script() {
+        let mut bad = Vec::new();
+        for e in langdb().entries.iter() {
+            let want = allowed(&e.script);
+            if want.is_empty() {
+                bad.push(format!("{}: script lạ {}", e.id, e.script));
+                continue;
+            }
+            for g in &e.base {
+                for c in g.chars().filter(|c| c.is_alphabetic()) {
+                    let s = c.script();
+                    if !want.contains(&s) && !matches!(s, Script::Common | Script::Inherited) {
+                        bad.push(format!("{} ({}): {g} U+{:04X} là {s:?}", e.id, e.script, c as u32));
+                    }
+                }
+            }
+        }
+        assert!(bad.is_empty(), "{} vi phạm, vd:\n{}", bad.len(), bad.iter().take(30).cloned().collect::<Vec<_>>().join("\n"));
     }
 }

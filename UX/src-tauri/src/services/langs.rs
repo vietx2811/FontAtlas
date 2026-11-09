@@ -224,8 +224,12 @@ fn level_dto(l: LangLevel) -> LangLevelDto {
     }
 }
 
-/// Chỉ báo trên thẻ cho một hàng.
-pub fn badge_of(code: &str, hit: Option<&fontatlas_store::LangHit>, vi_missing: u32) -> Option<LangBadgeDto> {
+/// Chỉ báo trên thẻ cho một hàng. Một nguồn duy nhất: mức đã lưu (`hit`) luôn thắng.
+/// - có `hit` → Full/Near (kèm have/total thật);
+/// - `computed` nhưng không có `hit` → dưới near: `vie` có số thiếu chính xác từ `vi_missing` (Low/Partial),
+///   ngôn ngữ khác là Partial với have = 0 (không lưu số đếm dưới near; tooltip gọi `lang_coverage`);
+/// - chưa tính: `vie` tạm dùng `vi_missing`, ngôn ngữ khác là Unknown.
+pub fn badge_of(code: &str, hit: Option<&fontatlas_store::LangHit>, computed: bool, vi_missing: u32) -> Option<LangBadgeDto> {
     let e = langdb().get(code)?;
     let total = e.base.len() as u32;
     let mk = |state, have, total| LangBadgeDto { code: e.id.clone(), bcp47: e.bcp47.clone(), state, have, total };
@@ -234,7 +238,7 @@ pub fn badge_of(code: &str, hit: Option<&fontatlas_store::LangHit>, vi_missing: 
         return Some(mk(st, h.have, h.total));
     }
     if e.id == "vie" {
-        // giữ logic cũ: tổng 186 ký tự, số thiếu từ phân tích Việt
+        // tổng 186 ký tự; số thiếu từ phân tích Việt (đúng cả khi chưa tính độ phủ, và cho mức dưới near)
         let have = total.saturating_sub(vi_missing);
         let ratio = have as f32 / total.max(1) as f32;
         let st = if vi_missing == 0 {
@@ -245,6 +249,9 @@ pub fn badge_of(code: &str, hit: Option<&fontatlas_store::LangHit>, vi_missing: 
             LangBadgeStateDto::Partial
         };
         return Some(mk(st, have, total));
+    }
+    if computed {
+        return Some(mk(LangBadgeStateDto::Partial, 0, total));
     }
     Some(mk(LangBadgeStateDto::Unknown, 0, total))
 }

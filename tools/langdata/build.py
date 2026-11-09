@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-CONVERTER_VERSION = 2
+CONVERTER_VERSION = 3
 KEEP_VALIDITY = {"verified", "preliminary"}
 INHERIT = re.compile(r"<([^<>]+)>")
 SCRIPT_PREFIX = {  # tên script Hyperglot -> tiền tố tên Unicode của chữ cái
@@ -110,7 +110,13 @@ def required_marks(marks, base, aux):
 
 
 def tokens(s: str):
-    return [t.replace("◌", "") for t in s.split() if t.replace("◌", "")]
+    """Tách grapheme, bỏ ◌, chuẩn hoá NFC (Hyperglot có vài ngôn ngữ ghi NFD)."""
+    out = []
+    for t in s.split():
+        t = nfc(t.replace("◌", ""))
+        if t:
+            out.append(t)
+    return out
 
 
 def main():
@@ -140,6 +146,7 @@ def main():
             n = seen.get(code, 0)
             seen[code] = n + 1
             ident = code if n == 0 else f"{code}-{script}"
+            assert ident not in {i["id"] for i in items}, f"id trùng: {ident}"
             items.append({
                 "id": ident,
                 "bcp47": code,

@@ -191,7 +191,7 @@ pub struct FaceRowDto {
 
 impl From<FaceRow> for FaceRowDto {
     fn from(r: FaceRow) -> Self {
-        let lang_badge = crate::services::langs::badge_of(crate::services::langs::DEFAULT_BADGE_LANG, r.lang_hit.as_ref(), r.vi_missing);
+        let lang_badge = crate::services::langs::badge_of(crate::services::langs::DEFAULT_BADGE_LANG, r.lang_hit.as_ref(), r.lang_computed, r.vi_missing);
         FaceRowDto {
             face_id: r.face_id,
             hash_hex: r.hash_hex,

@@ -118,7 +118,7 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
             .items
             .into_iter()
             .map(|r| {
-                let b = crate::services::langs::badge_of(&badge, r.lang_hit.as_ref(), r.vi_missing);
+                let b = crate::services::langs::badge_of(&badge, r.lang_hit.as_ref(), r.lang_computed, r.vi_missing);
                 let mut d = FaceRowDto::from(r);
                 d.lang_badge = b;
                 d

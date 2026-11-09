@@ -112,6 +112,10 @@ pub struct FaceRow {
     /// Độ phủ đã lưu với `FaceQuery::badge_lang` (None: không hỏi, chưa tính, hoặc dưới near).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang_hit: Option<LangHit>,
+    /// Face đã được tính độ phủ (với bất kỳ `db_version`); chỉ đặt khi có `badge_lang`.
+    /// `lang_computed && lang_hit.is_none()` = đã tính, dưới near.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub lang_computed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -324,6 +328,7 @@ impl Store {
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
                     lang_hit: None,
+                    lang_computed: false,
                 },
             ))
         })?;
@@ -332,6 +337,10 @@ impl Store {
             Some(_) => Some(self.conn.prepare(
                 "SELECT level, have, total FROM face_langs WHERE hash = ?1 AND face_index = ?2 AND lang = ?3",
             )?),
+            None => None,
+        };
+        let mut computed = match q.badge_lang {
+            Some(_) => Some(self.conn.prepare_cached("SELECT 1 FROM face_lang_state WHERE hash = ?1 AND face_index = ?2")?),
             None => None,
         };
         for row in rows {
@@ -344,6 +353,9 @@ impl Store {
                         Ok(LangHit { level: r.get(0)?, have: r.get(1)?, total: r.get(2)? })
                     })
                     .optional()?;
+            }
+            if let Some(st) = computed.as_mut() {
+                fr.lang_computed = fr.lang_hit.is_some() || st.exists(rusqlite::params![&hash[..], fr.face_index])?;
             }
             items.push(fr);
         }
