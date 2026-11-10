@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole } from '../../../api';
+import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole, PeekOpenResultDto } from '../../../api';
+import { t } from '../../../i18n';
+import { useNoticeStore } from '../../../store/notices';
+import { Modal } from '../../Modal';
+import '../../desk/desk.css';
 import { useUiStore } from '../../../store/ui';
 import { useFontFamily } from '../useFontFamily';
 import { ZeroState } from '../../zero/ZeroState';
@@ -25,6 +29,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   const [cands, setCands] = useState<PairCandidateDto[]>([]);
   const [idx, setIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [occupied, setOccupied] = useState<PeekOpenResultDto | null>(null);
   const hash = detail.row.hashHex; const index = detail.row.faceIndex;
 
   useEffect(() => {
@@ -38,6 +43,16 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   }, [api, hash, index, role, mode, projectVi]);
 
   const cand = cands[Math.min(idx, cands.length - 1)];
+  // 2d: mở Pairing Desk với font này làm neo ở vai `role`; ứng viên đang xem thành "thử" (chưa đặt). Vai neo đã có font khác → hỏi rồi gửi lại với replace.
+  const openInDesk = async (replace: boolean) => {
+    try {
+      const res = await api.openCaseFromPeek({ face: { hashHex: hash, faceIndex: index }, as: role === 'body' ? 'body' : 'heading', candidate: cand?.face ?? null, caseId: null, settings: { vi: projectVi, mode }, replace });
+      if (res.occupied) { setOccupied(res); return; }
+      setOccupied(null);
+      useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: res.otherRole, trial: res.trial });
+    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('peek.openFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+  };
+  const anchorRoleName = role === 'heading' ? 'Display' : 'Body';
   const candFamily = useFontFamily(api, cand ? { hashHex: cand.row.hashHex, faceIndex: cand.row.faceIndex, fileSize: cand.row.fileSize } : null);
   const candCss: CSSProperties = { fontFamily: candFamily ? `"${candFamily}", var(--font-ui)` : undefined, fontWeight: cand?.row.weightClass ?? undefined, fontStyle: cand?.row.isItalic ? 'italic' : undefined };
   const [headCss, bodyCss] = role === 'heading' ? [css, candCss] : [candCss, css];
@@ -60,6 +75,16 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
         </label>
       </div>
 
+      <button type="button" className="fa-desk-open" data-testid="open-desk" title={t('peek.openDeskTip', { role: anchorRoleName })} onClick={() => void openInDesk(false)}>{t('peek.openDesk')}</button>
+      {occupied?.occupied && (
+        <Modal title={t('peek.occupied.title', { role: anchorRoleName })} onClose={() => setOccupied(null)}>
+          <p>{t('peek.occupied.body', { role: anchorRoleName, old: `${occupied.occupied.row?.family ?? '—'}`, new: detail.row.family })}</p>
+          <div className="fa-modal-actions">
+            <button type="button" data-testid="occupied-keep" onClick={() => { const r = occupied; setOccupied(null); useUiStore.getState().openDesk({ caseId: r.case.id, comboId: r.comboId, role: r.otherRole, trial: r.trial }); }}>{t('peek.occupied.keep', { old: occupied.occupied.row?.family ?? '—' })}</button>
+            <button type="button" className="primary" data-testid="occupied-replace" onClick={() => void openInDesk(true)}>{t('peek.occupied.replace')}</button>
+          </div>
+        </Modal>
+      )}
       {error && <p role="alert" className="fa-soon">Không tải được ứng viên: {error}</p>}
 
       {!cand && !error && (() => {

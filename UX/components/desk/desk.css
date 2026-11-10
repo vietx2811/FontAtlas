@@ -1,0 +1,36 @@
+.fa-desk { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--panel); outline: none; }
+.fa-desk-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.fa-desk-head h1 { margin: 0; font-size: var(--text-md, 15px); }
+.fa-desk-case { color: var(--muted); font-size: var(--text-sm); }
+.fa-desk-back { padding: 3px 8px; border-radius: 4px; color: var(--muted); }
+.fa-desk-back:hover { background: var(--chrome-active); color: var(--fg); }
+.fa-desk-err { margin: 8px 16px; color: var(--danger, #c0392b); }
+.fa-desk-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px 300px minmax(0, 1fr); }
+.fa-desk-roles, .fa-desk-picker { border-right: 1px solid var(--border); overflow: auto; padding: 12px; min-height: 0; }
+.fa-desk h2 { margin: 0 0 8px; font-size: var(--text-xs); font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+.fa-desk h2 small { font-weight: 500; margin-left: 4px; }
+.fa-desk ul { list-style: none; margin: 0; padding: 0; }
+.fa-desk-role { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 6px 8px; border-radius: var(--radius-md); text-align: left; position: relative; }
+.fa-desk-role:hover { background: var(--chrome-active); }
+.fa-desk-role[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.fa-desk-role-name { font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); cursor: help; }
+.fa-desk-role-font { font-size: 16px; }
+.fa-desk-role-empty { color: var(--muted); font-size: var(--text-sm); }
+.fa-desk-hint { color: var(--muted); font-size: var(--text-sm); }
+.fa-desk-cands li { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: var(--radius-md); cursor: pointer; }
+.fa-desk-cands li[aria-selected="true"] { background: var(--accent-soft); }
+.fa-desk-cands li[data-trial="peek"] { box-shadow: inset 2px 0 0 var(--accent); }
+.fa-desk-cand-name { font-size: 17px; }
+.fa-desk-cand-sum { color: var(--muted); font-size: var(--text-2xs); }
+.fa-desk-keys { margin: 8px 0 0; color: var(--muted); font-size: var(--text-2xs); }
+.fa-desk-page { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.fa-desk-sheet { flex: 1; overflow: auto; padding: 32px 40px; background: var(--card); margin: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.fa-desk-h { margin-bottom: 16px; }
+.fa-desk-p { margin: 0; max-width: 62ch; }
+.fa-desk-strip { display: flex; align-items: center; gap: 16px; padding: 8px 16px 12px; font-size: var(--text-sm); }
+.fa-desk-trying b { color: var(--accent-ink); }
+.fa-desk-using { color: var(--muted); }
+.fa-desk-place { margin-left: auto; padding: 4px 12px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.fa-desk-place:disabled { opacity: .45; }
+.fa-desk-open { align-self: flex-start; margin: 4px 0 8px; padding: 4px 10px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
+.fa-desk-open:hover { filter: brightness(.97); }

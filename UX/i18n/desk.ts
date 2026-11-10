@@ -1,0 +1,16 @@
+/** Chuỗi Pairing Desk (2b). Tên vai là thuật ngữ EN; giải thích (gloss) theo locale. */
+export const DESK_I18N = {
+  'desk.title': 'Pairing Desk', 'desk.back': 'Thư viện', 'desk.backTip': 'Về Thư viện', 'desk.case': 'Case',
+  'desk.roles': 'Vai · font', 'desk.roleEmpty': 'Chưa có font', 'desk.missing': 'Font đã đổi hoặc bị xoá khỏi thư viện',
+  'desk.picker': 'Cuộn chọn', 'desk.pickerHint': '↑↓ thử · Enter đặt · Esc về Thư viện', 'desk.source.pair': 'Ghép',
+  'desk.trying': 'Đang thử', 'desk.inUse': 'Đang dùng', 'desk.place': 'Đặt vào vai', 'desk.placed': 'Đã đặt {font} vào vai {role}',
+  'desk.noAnchor': 'Chưa có font ở vai đối diện để ghép. Đặt một font vào vai {role} trước.', 'desk.noCands': 'Không có ứng viên ở mức ghép này',
+  'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
+  'desk.pageHeading': 'Phở bò Hà Nội', 'desk.sampleLabel': 'Trang mẫu',
+  'role.display': 'Display', 'role.heading': 'Heading', 'role.subheading': 'Subheading', 'role.body': 'Body', 'role.caption': 'Caption', 'role.accent': 'Accent', 'role.quote': 'Quote',
+  'role.display.gloss': 'tiêu đề lớn, gây chú ý', 'role.heading.gloss': 'tiêu đề mục', 'role.subheading.gloss': 'tiêu đề phụ', 'role.body.gloss': 'đoạn văn dài',
+  'role.caption.gloss': 'chú thích nhỏ', 'role.accent.gloss': 'chữ nhấn, nhãn', 'role.quote.gloss': 'trích dẫn',
+  'peek.openDesk': 'Mở trong Pairing Desk', 'peek.openDeskTip': 'Tạo (hoặc dùng) Case và đặt font này làm {role}; ứng viên đang xem thành lựa chọn thử',
+  'peek.occupied.title': 'Thay font ở vai {role}?', 'peek.occupied.body': 'Vai {role} của Combo hiện tại đang dùng {old}. Thay bằng {new}?', 'peek.occupied.replace': 'Thay', 'peek.occupied.keep': 'Giữ {old}',
+  'peek.openFail': 'Không mở được Pairing Desk: {msg}',
+} as const;
