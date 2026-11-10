@@ -39,7 +39,10 @@ pub enum LangBadgeStateDto {
     Partial,
     /// < 25% base.
     Low,
-    /// Chưa tính, hoặc dưới mức near ở ngôn ngữ không phải `vie`.
+    /// Đã tính nhưng dưới mức near; không lưu số đếm (chỉ `vie` có số thiếu). `have`/`total` KHÔNG có nghĩa:
+    /// UI không in "x/y", tooltip gọi `lang_coverage` để biết thiếu gì.
+    Below,
+    /// Chưa tính độ phủ.
     Unknown,
 }
 

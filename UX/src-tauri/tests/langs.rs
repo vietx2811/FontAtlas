@@ -271,10 +271,10 @@ fn badge_separates_unknown_from_below_near_and_prefers_stored_level() {
     let vie = FaceQueryDto { text: Some("roboto".into()), ..Default::default() };
     let b = library::query_faces(&st, &vie).unwrap().items.remove(0).lang_badge.unwrap();
     assert_ne!(b.state, LangBadgeStateDto::Unknown, "vie dùng vi_missing khi chưa tính");
-    // đã tính: Thái dưới near ⇒ Partial (không còn Unknown)
+    // đã tính: Thái dưới near ⇒ Below (không còn Unknown, và không bịa số "0/N")
     assert!(langs::run_backfill(&st) >= 5);
     let b = library::query_faces(&st, &thai).unwrap().items.remove(0).lang_badge.unwrap();
-    assert_eq!(b.state, LangBadgeStateDto::Partial);
+    assert_eq!(b.state, LangBadgeStateDto::Below);
     // vie: mức đã lưu thắng
     let roboto = library::query_faces(&st, &vie).unwrap().items.remove(0);
     let stored = langs::lang_coverage(&st, roboto.face_id, "vie").unwrap();
@@ -301,4 +301,63 @@ fn language_list_is_cached_until_bumped() {
     st.langs.bump();
     let b = langs::language_list(&st, &FaceQueryDto::default()).unwrap();
     assert!(b.items.iter().all(|i| i.code != "eng"), "bump làm mất hiệu lực cache");
+}
+
+#[test]
+fn badge_below_near_never_claims_counts_and_vie_is_never_full_without_a_hit() {
+    use fontatlas_core::langdata::langdb;
+    use fontatlas_store::LangHit;
+    // đã tính, không hit, mọi ngôn ngữ: Below (không Partial/Low với have = 0), không bao giờ Full/Near
+    for e in &langdb().entries {
+        let b = langs::badge_of(&e.id, None, true, 0).unwrap();
+        assert_eq!(b.state, LangBadgeStateDto::Below, "{}", e.id);
+        assert!(b.total > 0, "{}: ngôn ngữ không có ký tự base", e.id);
+        // chưa tính: Unknown (vie tạm Full vì phân tích Việt không thiếu)
+        let u = langs::badge_of(&e.id, None, false, 0).unwrap();
+        let want = if e.id == "vie" { LangBadgeStateDto::Full } else { LangBadgeStateDto::Unknown };
+        assert_eq!(u.state, want, "{}", e.id);
+        // mức đã lưu luôn thắng
+        for (lv, st) in [("full", LangBadgeStateDto::Full), ("near", LangBadgeStateDto::Near)] {
+            let hit = LangHit { level: lv.into(), have: e.base.len() as u32, total: e.base.len() as u32 };
+            assert_eq!(langs::badge_of(&e.id, Some(&hit), true, 7).unwrap().state, st, "{}", e.id);
+        }
+    }
+    // vie đã tính nhưng không hit: dù vi_missing = 0 cũng không được Full
+    assert_eq!(langs::badge_of("vie", None, true, 0).unwrap().state, LangBadgeStateDto::Below);
+    // vie có số thiếu chính xác: ngưỡng 25% trên 186 ký tự
+    let total = langdb().get("vie").unwrap().base.len() as u32;
+    let st = |miss: u32| langs::badge_of("vie", None, true, miss).unwrap();
+    assert_eq!(st(1).state, LangBadgeStateDto::Partial);
+    assert_eq!(st(1).have, total - 1);
+    // have = ceil(25%·total) ⇒ Partial; ngay dưới ⇒ Low
+    let edge = (total * 25).div_ceil(100);
+    assert_eq!(st(total - edge).state, LangBadgeStateDto::Partial);
+    assert_eq!(st(total - edge + 1).state, LangBadgeStateDto::Low);
+    assert_eq!(st(total).state, LangBadgeStateDto::Low);
+}
+
+#[test]
+fn level_thresholds_match_integer_arithmetic_for_any_total() {
+    use fontatlas_core::langdata::{LangCoverage, LangLevel};
+    for total in 1u32..=400 {
+        for have in 0..=total {
+            let c = LangCoverage { base_have: have, base_total: total, marks_have: 2, marks_total: 2, core_ok: true, missing: vec![], missing_marks: vec![] };
+            let want = if have == total {
+                Some(LangLevel::Full)
+            } else if have * 10 >= total * 9 {
+                Some(LangLevel::Near)
+            } else {
+                None
+            };
+            assert_eq!(c.level(), want, "{have}/{total}");
+            if want.is_none() {
+                assert_eq!(fontatlas_core::langdata::is_low(have, total), have * 4 < total, "{have}/{total}");
+            }
+        }
+    }
+    // dấu thiếu hoặc lõi thiếu ⇒ không đạt near dù ≥ 90%
+    let miss_mark = LangCoverage { base_have: 99, base_total: 100, marks_have: 1, marks_total: 2, core_ok: true, missing: vec![], missing_marks: vec![] };
+    assert_eq!(miss_mark.level(), None);
+    let miss_core = LangCoverage { base_have: 99, base_total: 100, marks_have: 2, marks_total: 2, core_ok: false, missing: vec![], missing_marks: vec![] };
+    assert_eq!(miss_core.level(), None);
 }

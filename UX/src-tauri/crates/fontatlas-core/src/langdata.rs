@@ -13,8 +13,20 @@ use serde::Deserialize;
 use unicode_normalization::UnicodeNormalization;
 
 const RAW: &str = include_str!("../data/langdata.json");
-/// Ngưỡng `Near` trên độ phủ `base`.
-pub const NEAR_RATIO: f32 = 0.90;
+/// Ngưỡng `Near` trên độ phủ `base` (90%), tính bằng số nguyên để không lệch làm tròn.
+pub const NEAR_PERCENT: u32 = 90;
+/// Dưới ngưỡng này (25% base) là `Low`; từ đó tới dưới near là `Partial`.
+pub const LOW_PERCENT: u32 = 25;
+
+/// `have/total` có đạt tỷ lệ `percent`% không (số nguyên; `total = 0` coi như đạt).
+pub fn at_least_percent(have: u32, total: u32, percent: u32) -> bool {
+    u64::from(have) * 100 >= u64::from(total) * u64::from(percent)
+}
+
+/// Dưới near thì Partial (25% trở lên) hay Low (dưới 25%). Một nguồn cho thẻ và tooltip.
+pub fn is_low(have: u32, total: u32) -> bool {
+    !at_least_percent(have, total, LOW_PERCENT)
+}
 
 #[derive(Debug, Deserialize)]
 struct Raw {
@@ -101,8 +113,7 @@ impl LangCoverage {
         if self.base_have == self.base_total && self.marks_have == self.marks_total {
             return Some(LangLevel::Full);
         }
-        let ratio = self.base_have as f32 / self.base_total.max(1) as f32;
-        if ratio >= NEAR_RATIO && self.marks_have == self.marks_total && self.core_ok {
+        if at_least_percent(self.base_have, self.base_total, NEAR_PERCENT) && self.marks_have == self.marks_total && self.core_ok {
             Some(LangLevel::Near)
         } else {
             None
