@@ -227,3 +227,14 @@ describe('ComboStepper (slice 3)', () => {
     expect(screen.getByRole('menuitem', { name: /Xoá Combo/ }).getAttribute('aria-disabled')).toBe('true');
   });
 });
+
+describe('candidates exclude the anchor itself', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  it('the anchor font is never offered as its own pair', async () => {
+    const api = createMockApi();
+    const r = (await rows(api)).find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null }} />); await settle();
+    expect(screen.queryAllByTestId('desk-cand').some(c => /Playfair Display/.test(c.textContent ?? ''))).toBe(false);
+  });
+});

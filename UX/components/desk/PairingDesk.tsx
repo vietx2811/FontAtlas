@@ -51,7 +51,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     let alive = true; setCandError(null);
     const base: Promise<Trial[]> = anchor
       ? api.pairCandidates(anchor.key, { role: anchorPairRole(role), mode: data.settings.mode ?? 'safe', projectVi: data.settings.vi, k: 20, collectionId: null, lang: 'vi' })
-        .then((c: PairCandidateDto[]) => c.map(x => ({ face: x.face, row: x.row, summary: x.summary })))
+        .then((c: PairCandidateDto[]) => c.filter(x => !same(x.face, anchor.key)).map(x => ({ face: x.face, row: x.row, summary: x.summary })))
       : Promise.resolve([]);
     const peek: Promise<Trial | null> = desk.trial && desk.role === role
       ? api.queryFaces({ faceKeys: [desk.trial], limit: 1 }).then(r => (r.items[0] ? { face: desk.trial!, row: r.items[0], summary: '', fromPeek: true } : null), () => null)

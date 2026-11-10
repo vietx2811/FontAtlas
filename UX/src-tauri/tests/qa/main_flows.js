@@ -766,9 +766,10 @@
         await wait(() => nFilled() >= 2, 6000);
         const filled = nFilled();
         await log('desk-enter-places', filled >= 2, { filled });
+        const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
         pressOn(desk, 'ArrowDown'); await sleep(900);
         const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
-        await log('desk-strip-delta', deltas.length === 8 && deltas.some(x => /^[+−]|±0/.test(x)), { deltas });
+        await log('desk-strip-delta', deltas.length === 8 && (nCand < 2 || deltas.some(x => /^[+−]|±0/.test(x))), { nCand, deltas });
         pressOn(desk, 'i'); await sleep(150);
         const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i'); await sleep(150);
         await log('desk-strip-collapses', collapsed && !!document.querySelector('[data-testid=strip-metrics]'), { collapsed });
