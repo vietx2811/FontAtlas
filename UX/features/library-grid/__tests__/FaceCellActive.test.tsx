@@ -41,7 +41,7 @@ describe('FaceCell activation', () => {
     const dot = within(a).getByTestId('active-dot');
     expect(dot.getAttribute('data-scope')).toBe('persistent');
     expect(await tipOf(within(a).getByTestId('cell-active'))).toBe('Bật/Tắt font · Luôn bật');
-    expect(await tipOf(within(b).getByTestId('cell-active'))).toBe('Bật/Tắt font');
+    expect(await tipOf(within(b).getByTestId('cell-active'))).toBe('Bật/Tắt font · Chưa bật');
     expect(within(b).getByTestId('cell-active').querySelector('.fa-dot')?.getAttribute('data-scope')).toBe('off');
   });
 

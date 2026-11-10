@@ -49,5 +49,5 @@ button.fa-state:focus-visible { outline: 2px solid var(--accent); outline-offset
 .fa-cell[data-layout="list"][aria-selected="true"] { background: var(--accent-soft); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-meta { width: 220px; flex: none; }
 .fa-cell[data-layout="list"] .fa-spec { flex: 1; align-items: flex-start; }
-.fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--on); box-shadow: none; }
+.fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--muted); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }

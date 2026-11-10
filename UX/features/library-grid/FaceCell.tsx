@@ -141,7 +141,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
   ) : avail ? (
     <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-state"><span className="fa-dot" data-testid="active-dot" data-scope="available" /></span></Tooltip>
   ) : onToggleActive ? (
-    <Tooltip label={t('act.toggle')}>
+    <Tooltip label={`${t('act.toggle')} · ${t('act.dot.off')}`}>
       <button type="button" className="fa-state" data-testid="cell-active" aria-label={t('act.toggle')} aria-pressed={false}
         onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
         <span className="fa-dot" data-scope="off" />

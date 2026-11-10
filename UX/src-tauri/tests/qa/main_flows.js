@@ -137,7 +137,7 @@
     // LỌC
     const fbtn = document.querySelector('[data-testid=advanced-open]');
     // Phễu Advanced nằm trong ô tìm kiếm: nút icon (không chữ), có aria-label; không còn nút "Advanced" riêng trên Top Bar.
-    await log('advanced-funnel-in-search', !!fbtn && !!fbtn.closest('.fa-search') && fbtn.textContent.trim() === '' && !!fbtn.getAttribute('aria-label') && !btn('Advanced', document.querySelector('.fa-topbar')), { inSearch: !!fbtn?.closest('.fa-search'), text: fbtn?.textContent, label: fbtn?.getAttribute('aria-label') });
+    await log('advanced-funnel-in-search', !!fbtn && !!fbtn.closest('.fa-search') && (fbtn.textContent.trim() === '' || !!fbtn.querySelector('.fa-funnel-n')) && !!fbtn.getAttribute('aria-label') && !btn('Advanced', document.querySelector('.fa-topbar')), { inSearch: !!fbtn?.closest('.fa-search'), text: fbtn?.textContent, label: fbtn?.getAttribute('aria-label') });
     const fp = await openAdv();
     await wait(() => document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]').length === 18, 20000);
     const inputs = fp ? [...fp.querySelectorAll('.fa-axrow-nums input')].slice(0, 4).map(i => i.value) : [];

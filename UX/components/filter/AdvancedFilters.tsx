@@ -22,8 +22,8 @@ export function AdvancedFunnel(): React.JSX.Element {
   const count = useAdvancedCount();
   const label = t('adv.open');
   return (
-    <Tooltip label={<>{t('adv.funnel.tip')}</>} shortcut="⌥⌘F">
-      <button type="button" className="fa-funnel" data-testid="advanced-open" aria-label={count > 0 ? t('adv.funnel.aria', { n: count }) : label} aria-expanded={open} aria-pressed={open} data-filtered={count > 0}
+    <Tooltip label={count > 0 ? t('adv.funnel.tipN', { n: count }) : t('adv.funnel.tip')} shortcut="⌥⌘F">
+      <button type="button" className="fa-funnel" data-testid="advanced-open" aria-label={count > 0 ? t('adv.funnel.aria', { n: count }) : label} aria-expanded={open} data-filtered={count > 0}
         onClick={e => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>
         <Icon name="funnel" size={15} />
         {count > 0 && <span className="fa-funnel-n" data-testid="advanced-count">{count}</span>}

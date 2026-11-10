@@ -140,6 +140,7 @@ describe('Advanced funnel inside the search field', () => {
     fireEvent.click(funnel); await settle();
     expect(screen.getByTestId('advanced-sheet')).not.toBeNull();
     expect(funnel.getAttribute('aria-expanded')).toBe('true');
+    expect(funnel.hasAttribute('aria-pressed')).toBe(false);
   });
   it('shows the number of active filters on the funnel', async () => {
     const { SearchField } = await import('../../main/SearchField');
