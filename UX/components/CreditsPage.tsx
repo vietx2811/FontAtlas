@@ -5,6 +5,7 @@
  * About page with creator info and attributions
  */
 
+import { t } from '../i18n';
 import React from 'react';
 import { X, Github, Twitter, Globe, Heart, Sparkles, Code, Cpu, Database, ExternalLink } from 'lucide-react';
 
@@ -198,6 +199,7 @@ export const CreditsPage: React.FC<CreditsPageProps> = ({ onClose }) => {
                     <p className="flex items-center justify-center gap-1.5 text-xs text-stone-500">
                         Made with <Heart size={12} className="text-red-500 fill-red-500" /> for typography lovers
                     </p>
+                    <p className="text-[10px] text-stone-400 mt-0.5" data-testid="credit-hyperglot">{t('credit.hyperglot')}</p>
                     <p className="text-[10px] text-stone-400 mt-0.5">
                         © 2025 Viet X. All rights reserved.
                     </p>

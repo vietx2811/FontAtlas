@@ -23,6 +23,8 @@ const ILLU: Record<string, ReactNode> = {
   cap_height: <>{guide(44, false)}{guide(10)}<path d="M26 44V10M46 44V10M26 27H46" />{dim(68, 10, 44)}</>,
   ascender: <>{guide(44, false)}{guide(26)}{guide(8)}<path d="M28 44V8M28 28c4-5 16-5 16 5v11" />{dim(68, 8, 26)}</>,
   descender: <>{guide(20, false)}{guide(46)}<path d="M30 12V46M30 24c14-7 20 13 0 15" />{dim(68, 20, 46)}</>,
+  weight_class: <><path d="M6 44H90" opacity=".9" strokeWidth="1.6" /><path d="M22 10V44" strokeWidth="2" /><path d="M48 10V44" strokeWidth="6" /><path d="M74 10V44" strokeWidth="11" /></>,
+  width_class: <><path d="M6 44H90" opacity=".9" strokeWidth="1.6" /><ellipse cx="22" cy="27" rx="9" ry="17" /><ellipse cx="58" cy="27" rx="17" ry="17" /><path d="M38 50H78" className="acc" /></>,
   stem: <><path d="M6 44H90" opacity=".9" strokeWidth="1.6" /><rect x="40" y="8" width="12" height="36" rx="1" className="fill" /><path d="M40 51H52M40 48v6M52 48v6" className="acc" /></>,
   contrast: <><ellipse cx="48" cy="26" rx="22" ry="19" className="fill" /><ellipse cx="48" cy="26" rx="12" ry="14" className="hole" /><path d="M26 26H36M48 7V12" className="acc" /></>,
   contrast_h: <><path d="M30 8V44M62 8V44" strokeWidth="6" /><path d="M30 26H62" strokeWidth="1.5" /><path d="M24 50H36M56 50H68" className="acc" /></>,

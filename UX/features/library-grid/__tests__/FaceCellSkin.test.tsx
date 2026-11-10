@@ -32,16 +32,16 @@ describe('FaceCell skin (prototype)', () => {
     expect(screen.getByRole('grid').getAttribute('aria-colcount')).toBe(String(cols));
   });
 
-  it('shows ● for complete Vietnamese and −N (with a warning) when characters are missing, whatever the sample', async () => {
+  it('shows a full ring for complete Vietnamese and a partial ring with a warning flag (no number) when characters are missing, whatever the sample', async () => {
     await mount(undefined, { sampleText: 'abc' });
     const [a, b] = cells();
     const ok = within(a).getByTestId('vi-mark');
-    expect(ok.textContent).toBe('●');
+    expect(ok.dataset.state).toBe('full'); expect(ok.textContent).toBe('VI');
     expect(ok).not.toHaveAttribute('title'); // chú thích do Tooltip chung hiện, không còn title gốc
-    expect(await tipOf(ok)).toBe('Đủ dấu tiếng Việt');
+    expect(await tipOf(ok)).toBe('Tiếng Việt · đủ ký tự');
     const miss = within(b).getByTestId('vi-mark');
-    expect(miss.textContent).toBe('−12');
-    expect(await tipOf(miss)).toBe('Thiếu 12 ký tự tiếng Việt');
+    expect(miss.textContent).not.toMatch(/\d/);
+    expect(await tipOf(miss)).toBe('Tiếng Việt · thiếu 12/134 ký tự');
     expect(miss.getAttribute('data-warn')).toBe('true');
   });
 

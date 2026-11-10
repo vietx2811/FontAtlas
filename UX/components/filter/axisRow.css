@@ -1,0 +1,16 @@
+.fa-axrow { padding: 6px 0 8px; border-bottom: 1px solid var(--border); }
+.fa-axrow-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
+.fa-axrow .fa-axis-name { font-weight: 600; cursor: help; }
+.fa-axrow[data-active="true"] .fa-axis-name { color: var(--accent-ink); }
+.fa-axrow-src { color: var(--muted); font-size: var(--text-2xs); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.fa-axrow-count { color: var(--muted); font-size: var(--text-2xs); margin-left: auto; font-variant-numeric: tabular-nums; }
+.fa-axrow-extra { display: inline-flex; margin-left: auto; }
+.fa-axrow-count + .fa-axrow-extra { margin-left: 4px; }
+.fa-axrow-nums { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.fa-axrow-nums input { flex: 1 1 0; min-width: 0; max-width: 92px; height: 24px; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2); color: var(--fg); font: inherit; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.fa-axrow-nums input[aria-invalid="true"] { border-color: var(--danger, #c0392b); }
+.fa-axrow-words { color: var(--muted); font-size: var(--text-xs); margin-left: auto; }
+.fa-axrow-empty { color: var(--muted); margin: 4px 0; }
+.fa-hist { display: block; }
+.fa-hist-bin { fill: var(--muted); opacity: .55; }
+.fa-hist-span { fill: var(--muted); opacity: .22; }

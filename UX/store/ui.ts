@@ -24,7 +24,7 @@ export type SectionKey = 'col' | 'src' | 'tag';
 /** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
 export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode'>;
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 
 export interface UiState {
@@ -122,6 +122,8 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viO
   if (s.tag !== null) q.tagIds = [Number(s.tag)];
   if (s.query.trim()) q.text = s.query.trim();
   if (s.viOnly && !q.vi) q.vi = 'full';
+  // Chỉ báo ngôn ngữ trên thẻ theo ngôn ngữ đang lọc (đầu tiên); không lọc thì mặc định của backend (vie).
+  if (q.langs?.length && !q.badgeLang) q.badgeLang = q.langs[0].code;
   return q;
 }
 

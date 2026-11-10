@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { toGridQuery, useUiStore } from '../../../store/ui';
-import { FilterPanel } from '../FilterPanel';
-import { FilterChips, filterChips } from '../FilterChips';
+import { AdvancedSheet } from '../../filter/AdvancedSheet';
+import { filterChips } from '../FilterChips';
+import { useSourcesStore } from '../../../store/sources';
 import { LICENSE_OPTIONS } from '../filterOptions';
 
 const initial = useUiStore.getState();
@@ -11,9 +12,9 @@ beforeEach(() => useUiStore.setState(initial, true));
 
 const mount = async () => {
   const api = createMockApi();
-  render(<><FilterPanel api={api} /><FilterChips api={api} /></>);
-  fireEvent.click(screen.getByRole('button', { name: /^Lọc/ }));
-  await screen.findByRole('dialog', { name: 'Bộ lọc font' });
+  await useSourcesStore.getState().load(api, `t${Math.random()}`);
+  render(<AdvancedSheet api={api} onClose={() => {}} />);
+  await screen.findByRole('dialog', { name: 'Advanced filters' });
   return api;
 };
 
@@ -35,17 +36,11 @@ describe('filter facets', () => {
   it('chips mirror active filters and each removes only itself', async () => {
     useUiStore.getState().setFilters({ vi: 'full', license: ['ofl'], variable: true });
     expect(filterChips(useUiStore.getState().filters).map(c => c.id)).toEqual(['vi', 'license:ofl', 'variable']);
-    render(<FilterChips api={createMockApi()} />);
-    const chips = screen.getByRole('list', { name: 'Bộ lọc đang bật' });
-    fireEvent.click(within(chips).getByRole('button', { name: 'Bỏ lọc OFL' }));
+    const drop = (id: string) => { const f = useUiStore.getState().filters; useUiStore.getState().setFilters(filterChips(f).find(c => c.id === id)!.remove(f)); };
+    drop('license:ofl');
     expect(useUiStore.getState().filters).toEqual({ vi: 'full', variable: true });
-    fireEvent.click(within(chips).getByRole('button', { name: 'Bỏ lọc Variable' }));
+    drop('variable');
     expect(useUiStore.getState().filters).toEqual({ vi: 'full' });
-  });
-
-  it('shows no chip row when nothing is filtered', () => {
-    render(<FilterChips api={createMockApi()} />);
-    expect(screen.queryByRole('list', { name: 'Bộ lọc đang bật' })).toBeNull();
   });
 
   it('axis ranges appear as chips with real values', () => {
@@ -105,7 +100,7 @@ describe('filter facets', () => {
   it('Phân loại group lists classFacets with counts, no Display class, subclasses after picking a class', async () => {
     await mount();
     const grp = await screen.findByRole('group', { name: 'Phân loại' });
-    expect(within(grp).getByRole('checkbox', { name: /^Serif/ })).toBeTruthy();
+    expect(await within(grp).findByRole('checkbox', { name: /^Serif/ })).toBeTruthy();
     expect(within(grp).queryByRole('checkbox', { name: /Display/ })).toBeNull();
     expect(within(grp).queryByRole('checkbox', { name: /Didone/ })).toBeNull();
     fireEvent.click(within(grp).getByRole('checkbox', { name: /^Serif/ }));
@@ -117,10 +112,10 @@ describe('filter facets', () => {
 
   it('class and subclass chips each remove only themselves', () => {
     useUiStore.getState().setFilters({ classes: ['serif'], subclasses: ['didone'] });
-    render(<FilterChips api={createMockApi()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Bỏ lọc Didone' }));
+    const drop = (id: string) => { const f = useUiStore.getState().filters; useUiStore.getState().setFilters(filterChips(f).find(c => c.id === id)!.remove(f)); };
+    drop('subclass:didone');
     expect(useUiStore.getState().filters).toEqual({ classes: ['serif'] });
-    fireEvent.click(screen.getByRole('button', { name: 'Bỏ lọc Serif' }));
+    drop('class:serif');
     expect(useUiStore.getState().filters).toEqual({});
   });
 
@@ -146,8 +141,7 @@ describe('filter facets', () => {
     useUiStore.getState().setFilters({ classes: ['blackletter'] });
     const api = createMockApi();
     vi.spyOn(api, 'classFacets').mockRejectedValue(new Error('down'));
-    render(<FilterPanel api={api} />);
-    fireEvent.click(screen.getByRole('button', { name: /^Lọc/ }));
+    render(<AdvancedSheet api={api} onClose={() => {}} />);
     const grp = await screen.findByRole('group', { name: 'Phân loại' });
     expect((within(grp).getByRole('checkbox', { name: /Blackletter/ }) as HTMLInputElement).checked).toBe(true);
   });

@@ -1,3 +1,4 @@
+import { LangBadge, viBadgeFromMissing } from './LangBadge';
 import { memo, useEffect, useRef, useState } from 'react';
 import './libraryGrid.css';
 import '../../components/ui/faceTitle.css';
@@ -181,9 +182,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
           <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
         </Tooltip>
         {format && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
-        <Tooltip label={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>
-          <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}>{missing ? `−${row.viMissing}` : '●'}</span>
-        </Tooltip>
+        <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />
       </div>
     </div>
   );

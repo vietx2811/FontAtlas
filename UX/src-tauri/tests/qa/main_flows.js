@@ -9,6 +9,10 @@
   const log = async (step, ok, detail) => { n++; if (!ok && consoleErrors.length) detail = { detail, consoleErrors: consoleErrors.splice(0, 3) }; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wait = async (fn, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; };
+  // Bộ lọc nay là sheet Advanced (nút data-testid=advanced-open); đóng bằng nút × của sheet.
+  const openAdv = async () => { if (!document.querySelector('[data-testid=advanced-sheet]')) document.querySelector('[data-testid=advanced-open]')?.click(); return await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000); };
+  const closeAdv = async () => { document.querySelector('.fa-adv-close')?.click(); await wait(() => !document.querySelector('[data-testid=advanced-sheet]'), 5000); };
+  const axisPairs = () => [...document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]')].map(r => [...r.querySelectorAll('.fa-axrow-nums input')].map(i => i.value).join('–')).filter(v => v.includes('–'));
   const btn = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.trim() === text && !b.disabled);
   // Cửa sổ QA có thể không ở trước nên WKWebView không chạy animation/transition: chốt về trạng thái cuối trước khi chụp.
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
@@ -131,11 +135,11 @@
     await snap('family-chip');
     await log('view-family', !!chip, { chip: chip?.textContent, title: chip?.getAttribute('aria-label'), target, cells: cells().length, cellNames: cells().slice(0, 6).map(c => c.textContent.replace(/\s+/g, ' ').slice(-40)) });
     // LỌC
-    const fbtn = document.querySelector('button[aria-controls="font-filters"]');
-    fbtn?.click();
-    const fp = await wait(() => document.getElementById('font-filters'));
-    const inputs = fp ? [...fp.querySelectorAll('input[type=text], input[type=number], input[inputmode]')].slice(0, 4).map(i => i.value) : [];
-    const ranges = fp ? [...fp.querySelectorAll('p, small, span')].map(e => e.textContent).filter(t => /Min .* max/.test(t)).slice(0, 3) : [];
+    const fbtn = document.querySelector('[data-testid=advanced-open]');
+    const fp = await openAdv();
+    await wait(() => document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]').length === 18, 20000);
+    const inputs = fp ? [...fp.querySelectorAll('.fa-axrow-nums input')].slice(0, 4).map(i => i.value) : [];
+    const ranges = axisPairs().slice(0, 3);
     const before = cells().length;
     const it = fp && [...fp.querySelectorAll('label')].find(l => (l.textContent.includes('Italic') || l.textContent.includes('In nghiêng')))?.querySelector('input');
     it?.click();
@@ -144,16 +148,102 @@
     await snap('filter-italic');
     await log('filter-italic', !!fp && !!it, { inputs, ranges, before, after: cells().length, chip: chip2?.getAttribute('aria-label'), trigger: fbtn?.textContent });
     it?.click(); await sleep(1000);
-    document.querySelector('[aria-label="Đóng bộ lọc"]')?.click();
+    await closeAdv();
     await log('filter-cleared', true, { cells: cells().length, chip: document.querySelector('.fa-family-chip')?.getAttribute('aria-label') });
     // BỘ LỌC trên toàn thư viện: khoảng slider lấy p1–p99 của chính thư viện, không phải 0–1
     document.querySelector('.fa-family-chip')?.click(); await sleep(1000);
-    document.querySelector('button[aria-controls="font-filters"]')?.click();
-    const fpAll = await wait(() => document.getElementById('font-filters'));
+    const fpAll = await openAdv();
+    await wait(() => axisPairs().length >= 6, 20000);
     await sleep(800); await snap('filter-full-library');
-    const rangesAll = fpAll ? [...fpAll.querySelectorAll('p, small, span')].map(e => e.textContent).filter(t => /Min .* max/.test(t)).slice(0, 6) : [];
-    await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
-    document.querySelector('[aria-label="Đóng bộ lọc"]')?.click(); await sleep(300);
+    const rangesAll = axisPairs().slice(0, 6);
+    await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && rangesAll.some(r => r !== '0–1') && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
+    await closeAdv(); await sleep(300);
+    // ADVANCED + TÓM TẮT + "ĐANG LỌC" (2a)
+    {
+      const key = (el, init) => el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+      const total = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
+      document.querySelector('.fa-family-chip')?.click(); await sleep(600);
+      const base = total();
+      key(document, { key: 'f', code: 'KeyF', metaKey: true, altKey: true });
+      const sheet = await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000);
+      const rows = await wait(() => { const r = document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]'); return r.length === 18 ? r : null; }, 20000);
+      await sleep(600);
+      const th0 = document.documentElement.dataset.theme;
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('advanced-sheet-' + th); }
+      if (th0) document.documentElement.dataset.theme = th0; else delete document.documentElement.dataset.theme;
+      await sleep(150);
+      const cols = sheet && getComputedStyle(sheet.querySelector('[data-testid=advanced-cols]'));
+      const cards = sheet ? [...sheet.querySelectorAll('.fa-adv-card')] : [];
+      const lefts = new Set(cards.map(c => Math.round(c.getBoundingClientRect().left)));
+      const scrollNeeded = sheet ? sheet.querySelector('[data-testid=advanced-cols]').scrollHeight > sheet.querySelector('[data-testid=advanced-cols]').clientHeight + 1 : null;
+      await log('advanced-opens-18-axes', !!sheet && !!rows && lefts.size >= 2 && new Set(cards.filter(c => c.previousElementSibling === null).map(c => Math.round(c.getBoundingClientRect().top))).size === 1, { rows: rows?.length ?? 0, lanes: sheet?.querySelector('[data-testid=advanced-cols]')?.dataset.cols, distinctColumns: lefts.size, laneTops: [...new Set(cards.filter(c => c.previousElementSibling === null).map(c => Math.round(c.getBoundingClientRect().top)))], scrollNeeded, win: [innerWidth, innerHeight] });
+      const tt = await termCheck('[data-testid=advanced-sheet] .fa-axis-name[data-term]');
+      await log('advanced-term-tooltips', tt.n >= 17 && tt.bad.length === 0 && tt.art > 0, tt);
+      // Weight 600+ bằng bàn phím: lưới đổi số lượng, tóm tắt hiện Weight, nháy đúp thanh = bỏ lọc
+      const lo = document.querySelector('[data-axis=weight_class] [data-testid=rs-lo]');
+      lo?.focus(); for (let i = 0; i < 5; i++) { key(lo, { key: 'ArrowRight' }); await sleep(120); }
+      await sleep(900);
+      const sum = document.querySelector('[data-testid=filter-summary]');
+      const after = total();
+      await log('advanced-weight-filters-grid', !!sum && /Weight/.test(sum.textContent) && after > 0 && after < base, { base, after, summary: sum?.textContent });
+      document.querySelector('[data-axis=weight_class] [data-testid=rs-track]')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await sleep(900);
+      await log('advanced-weight-dblclick-resets', !document.querySelector('[data-testid=filter-summary]') && total() === base, { total: total(), base });
+      key(document, { key: 'Escape' }); await sleep(300);
+      await log('advanced-esc-closes', !document.querySelector('[data-testid=advanced-sheet]'), null);
+      // LỌC NGÔN NGỮ (Hyperglot): chọn Tiếng Việt "đủ" → lưới còn font đủ dấu, mọi badge là vie/full; ảnh picker (dark)
+      {
+        const fpL = await openAdv();
+        const row = await wait(() => fpL?.querySelector('[data-code=vie]'), 30000);
+        const totalBefore = total();
+        row?.click();
+        await wait(() => document.querySelector('[data-testid=filter-summary]')?.textContent.includes('Tiếng Việt') || document.querySelector('[data-testid=filter-summary] [data-group=lang]'), 8000);
+        await sleep(1200);
+        const labelFull = row?.getAttribute('aria-label') ?? '';
+        const th2 = document.documentElement.dataset.theme;
+        document.documentElement.dataset.theme = 'dark'; await sleep(250);
+        await snap('lang-picker-dark');
+        if (th2) document.documentElement.dataset.theme = th2; else delete document.documentElement.dataset.theme;
+        await closeAdv(); await sleep(500);
+        const marks = [...document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]')];
+        const after = total();
+        const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
+        await log('lang-filter-narrows-and-badges', !!row && /đủ$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
+        await openAdv();
+        // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
+        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/chưa chọn$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
+        await closeAdv(); await sleep(400);
+        await log('lang-filter-cleared', !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, { total: total(), totalBefore });
+      }
+      // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
+      const fp2 = await openAdv();
+      [...(fp2?.querySelectorAll('label') ?? [])].find(l => l.textContent.includes('Italic') || l.textContent.includes('In nghiêng'))?.querySelector('input')?.click();
+      await sleep(900);
+      await closeAdv(); await sleep(300);
+      const sbox = document.querySelector('.fa-search'); const sinput = sbox?.querySelector('input');
+      const sum2 = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
+      const ratio = sinput && sbox ? sinput.getBoundingClientRect().width / sbox.getBoundingClientRect().width : 0;
+      await log('summary-keeps-input-wide', !!sum2 && ratio >= 0.4, { ratio, summary: sum2?.textContent });
+      sum2?.click();
+      const pop = await wait(() => document.querySelector('[data-testid=active-filters]'), 5000);
+      await sleep(300);
+      const th1 = document.documentElement.dataset.theme;
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('active-filters-popover-' + th); }
+      if (th1) document.documentElement.dataset.theme = th1; else delete document.documentElement.dataset.theme;
+      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
+      key(document, { key: 'Escape' }); await sleep(300);
+      const withFilter = total();
+      sinput?.focus(); key(sinput, { key: 'Backspace' }); await sleep(150);
+      const selected = !!document.querySelector('.fa-fsum-seg[data-selected=true]');
+      key(sinput, { key: 'Backspace' }); await sleep(900);
+      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
+      await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
+      undoBtn?.click(); await sleep(900);
+      await log('toast-undo-restores', !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, { total: total(), withFilter });
+      // dọn: bỏ lọc để các bước sau chạy trên thư viện đầy đủ
+      key(sinput ?? document, { key: 'Backspace', metaKey: true }); await sleep(600);
+      await log('summary-clear-all', !document.querySelector('[data-testid=filter-summary]'), null);
+    }
     // CÀI ĐẶT → SIDEBAR
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));
@@ -524,20 +614,22 @@
     const chipText = (cchip?.textContent ?? '').trim();
     const countNow = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, ''));
     const total0 = countNow();
-    const filterBtn = [...document.querySelectorAll('button')].find(x => /^Lọc/.test(x.textContent.trim()));
-    filterBtn?.click();
+    await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
+    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 15000); // facet tải sau debounce
     const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
-    const chips = await wait(() => document.querySelector('.fa-chips'), 8000);
+    const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
     const facetCount = Number((boxes[0]?.closest('label')?.querySelector('.fa-count')?.textContent ?? '').replace(/\D/g, ''));
     await wait(() => countNow() === facetCount, 10000);
     await sleep(300); await snap('class-filter');
     const total1 = countNow();
     await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
-    chips?.querySelector('button')?.click();
-    await wait(() => !document.querySelector('.fa-chips'), 5000);
+    await closeAdv(); await sleep(200);
+    const sIn = document.querySelector('.fa-search input'); sIn?.focus();
+    sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
+    await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
     // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
     const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
