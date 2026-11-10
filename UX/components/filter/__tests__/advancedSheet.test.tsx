@@ -70,6 +70,13 @@ describe('AdvancedSheet', () => {
     expect(screen.queryByTestId('advanced-sheet')).toBeNull();
   });
 
+  it('the sheet paints an opaque background from a token that exists in index.css', () => {
+    const css = readFileSync(join(__dirname, '../advancedSheet.css'), 'utf8');
+    const token = /\.fa-adv \{[^}]*background:\s*var\((--[a-z0-9-]+)\)/.exec(css)?.[1];
+    expect(token).toBeTruthy();
+    expect(readFileSync(join(__dirname, '../../../index.css'), 'utf8')).toMatch(new RegExp(`\\s${token}:`));
+  });
+
   it('the cards container uses 208px masonry columns', () => {
     const css = readFileSync(join(__dirname, '../advancedSheet.css'), 'utf8');
     expect(css).toMatch(/columns:\s*208px/);

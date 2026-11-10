@@ -30,7 +30,7 @@ export function LangPicker({ api, query, refreshKey }: { api: Api; query: FaceQu
     set(cur === null ? [...others, { code, level: 'full' }] : cur === 'full' ? [...others, { code, level: 'near' }] : others);
   };
   const needle = search.trim().toLowerCase();
-  const items = useMemo(() => (list?.items ?? []).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle]);
+  const items = useMemo(() => [...(list?.items ?? [])].sort((a, b) => Number(b.code === 'vie') - Number(a.code === 'vie') || b.near - a.near || langName(a).localeCompare(langName(b))).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle]);
   // Ngôn ngữ đang chọn nhưng không còn face nào khớp vẫn hiện để bỏ chọn được.
   const ghosts = (langs ?? []).filter(l => !list?.items.some(i => i.code === l.code));
 

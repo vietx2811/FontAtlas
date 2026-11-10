@@ -1,4 +1,4 @@
-.fa-adv { position: fixed; z-index: 40; inset: 52px 0 0 var(--sidebar-w, 220px); display: flex; flex-direction: column; background: var(--bg); border-top: 1px solid var(--border); box-shadow: 0 -8px 24px rgb(0 0 0 / .12); outline: none; overflow: hidden; }
+.fa-adv { position: fixed; z-index: 40; inset: 52px 0 0 var(--sidebar-w, 220px); display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--border); box-shadow: 0 -8px 24px rgb(0 0 0 / .12); outline: none; overflow: hidden; }
 .fa-adv-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .fa-adv-count { color: var(--muted); font-size: var(--text-xs); }
 .fa-adv-reset { margin-left: auto; font-size: var(--text-xs); padding: 3px 8px; border-radius: 4px; color: var(--muted); }

@@ -163,7 +163,11 @@
       key(document, { key: 'f', code: 'KeyF', metaKey: true, altKey: true });
       const sheet = await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000);
       const rows = await wait(() => { const r = document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]'); return r.length === 18 ? r : null; }, 20000);
-      await sleep(600); await snap('advanced-sheet');
+      await sleep(600);
+      const th0 = document.documentElement.dataset.theme;
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('advanced-sheet-' + th); }
+      if (th0) document.documentElement.dataset.theme = th0; else delete document.documentElement.dataset.theme;
+      await sleep(150);
       const cols = sheet && getComputedStyle(sheet.querySelector('[data-testid=advanced-cols]'));
       const cards = sheet ? [...sheet.querySelectorAll('.fa-adv-card')] : [];
       const lefts = new Set(cards.map(c => Math.round(c.getBoundingClientRect().left)));
@@ -195,7 +199,10 @@
       await log('summary-keeps-input-wide', !!sum2 && ratio >= 0.4, { ratio, summary: sum2?.textContent });
       sum2?.click();
       const pop = await wait(() => document.querySelector('[data-testid=active-filters]'), 5000);
-      await sleep(300); await snap('active-filters-popover');
+      await sleep(300);
+      const th1 = document.documentElement.dataset.theme;
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('active-filters-popover-' + th); }
+      if (th1) document.documentElement.dataset.theme = th1; else delete document.documentElement.dataset.theme;
       await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
       key(document, { key: 'Escape' }); await sleep(300);
       const withFilter = total();
