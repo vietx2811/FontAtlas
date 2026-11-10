@@ -223,7 +223,7 @@ fn migration_v2_to_v3_backfills_axis_ranges_with_backup() {
     };
     assert_eq!(marked, vec![2, 3], "face 1 (đủ axes) và face 4 (không Variable) không bị đánh dấu");
     let v: i64 = s.conn().query_row("PRAGMA main.user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(v, 3);
+    assert_eq!(v, i64::from(fontatlas_store::LIBRARY_VERSION), "migrate lên bản mới nhất");
     let (a, b, c, e): (Option<f64>, Option<f64>, Option<f64>, Option<f64>) = s
         .conn()
         .query_row("SELECT wght_min, wght_max, wdth_min, wdth_max FROM faces WHERE face_id = 1", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))

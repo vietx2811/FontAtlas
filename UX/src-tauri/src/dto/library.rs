@@ -103,6 +103,8 @@ pub struct SourceDto {
     pub path: Option<String>,
     pub enabled: bool,
     pub available: bool,
+    /// Nguồn nằm trên ổ cloud (theo đường dẫn): `one_drive` | `google_drive` | `dropbox` | `box` | `icloud` | `other`.
+    pub cloud_provider: Option<String>,
     pub face_count: u32,
     pub last_scan: Option<RescanStatsDto>,
     pub scanning: bool,
@@ -157,7 +159,7 @@ pub fn keys_of(v: &[FaceKeyDto]) -> Result<Vec<FaceKey>, CmdError> {
     v.iter().map(FaceKey::try_from).collect()
 }
 
-/// Đúng 19 khoá của `FaceRow` của store (parser Plan 5 từ chối khoá lạ).
+/// Đúng 20 khoá của `FaceRow` của store (parser Plan 5 từ chối khoá lạ).
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
@@ -181,6 +183,8 @@ pub struct FaceRowDto {
     #[ts(type = "number")]
     pub file_size: u64,
     pub missing: bool,
+    /// Mọi bản còn thấy là placeholder trên ổ cloud (chưa tải về): chưa dùng/bật ngay được.
+    pub on_cloud_only: bool,
     pub is_favorite: bool,
     #[ts(type = "number")]
     pub added_at: i64,
@@ -210,6 +214,7 @@ impl From<FaceRow> for FaceRowDto {
             path: r.path,
             file_size: r.file_size,
             missing: r.missing,
+            on_cloud_only: r.on_cloud_only,
             is_favorite: r.is_favorite,
             added_at: r.added_at,
             lang_badge,

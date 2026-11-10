@@ -280,13 +280,13 @@ impl Store {
             // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
             for p in &placeholders {
                 tx.execute(
-                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0 WHERE path=?1",
+                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=1 WHERE path=?1",
                     params![p.to_string_lossy(), started, generation],
                 )?;
             }
             for f in &unchanged {
                 tx.execute(
-                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0 WHERE path=?1",
+                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=0 WHERE path=?1",
                     params![f.path.to_string_lossy(), started, generation],
                 )?;
             }

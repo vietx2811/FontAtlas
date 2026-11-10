@@ -413,7 +413,20 @@ DROP TABLE face_axes;
 /// Giá trị `pipeline_state.version` mà migration library v3 đặt để buộc phân tích lại.
 pub const AXES_REANALYZE_MARK: &str = "axes-backfill";
 
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3];
+/// Library v4 (0.2.1): `file_locations.cloud_only` = vị trí hiện là placeholder trên ổ cloud (dataless, chưa tải về).
+/// Quét lại đặt 1 khi thấy cờ dataless, 0 khi file đã nằm trên máy. Dữ liệu phân tích giữ nguyên.
+pub(crate) const LIBRARY_V4: &str = r#"
+ALTER TABLE file_locations ADD COLUMN cloud_only INTEGER NOT NULL DEFAULT 0;
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4];
+/// Chỉ cho test: library.db ở v3 (trước cờ cloud_only).
+pub fn create_library_v3_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch(LIBRARY_V2).expect("LIBRARY_V2");
+    c.execute_batch(LIBRARY_V3).expect("LIBRARY_V3");
+    c.execute_batch("PRAGMA user_version = 3;").expect("user_version");
+}
 /// Chỉ cho test: library.db ở v2 (trước dải trục).
 pub fn create_library_v2_for_test(c: &Connection) {
     c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");

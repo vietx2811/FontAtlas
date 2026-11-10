@@ -43,6 +43,7 @@
       },
       "licenseClass": "ofl",
       "missing": false,
+      "onCloudOnly": false,
       "path": "/Users/u/Fonts/Roboto-Regular.ttf",
       "subfamily": "Regular",
       "supportsVi": true,

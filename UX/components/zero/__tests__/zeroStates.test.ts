@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
 import { libraryEmpty, type EmptyCtx } from '../zeroStates';
 
-const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, faceCount: 10, lastScan: null, scanning: false, ...o });
+const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, cloudProvider: null, faceCount: 10, lastScan: null, scanning: false, ...o });
 const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
 
 describe('libraryEmpty', () => {

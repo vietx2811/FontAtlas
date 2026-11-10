@@ -32,7 +32,7 @@ export function mockRows(): FaceRow[] {
       weightClass: w, widthClass: 5, isItalic: italic, isVariable: false, viStatus: viMissing ? 'partial' : 'full',
       supportsVi: viMissing === 0, viMissing, licenseClass: 'ofl',
       path: `/Users/me/Fonts/src${src}/${family.replace(/ /g, '')}-${sub.replace(/ /g, '')}.ttf`,
-      fileSize: 180_000 + n * 1000, missing: false, isFavorite: false, addedAt: n, langBadge: null,
+      fileSize: 180_000 + n * 1000, missing: false, onCloudOnly: false, isFavorite: false, addedAt: n, langBadge: null,
     });
   };
   for (const [family, src, kind, miss] of FAMILIES) {
@@ -76,9 +76,9 @@ export function createMockApi(o: MockOptions = {}): Api {
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
-    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
-    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
-    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, faceCount: 0, lastScan: null, scanning: false },
+    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
+    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
+    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
   ];
   // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
   const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
@@ -190,7 +190,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
-      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false };
+      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false };
       sources = [...sources, s];
       simulateScan(s.id);
       return ok(s);

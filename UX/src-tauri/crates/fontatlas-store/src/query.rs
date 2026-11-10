@@ -169,6 +169,8 @@ pub struct FaceRow {
     /// Kích thước file gốc (byte) — cho ngân sách nạp FontFace.
     pub file_size: u64,
     pub missing: bool,
+    /// Mọi bản còn thấy đều là placeholder trên ổ cloud (chưa tải về): chưa dùng được ngay.
+    pub on_cloud_only: bool,
     pub is_favorite: bool,
     pub added_at: i64,
     /// Độ phủ đã lưu với `FaceQuery::badge_lang` (None: không hỏi, chưa tính, hoặc dưới near).
@@ -483,7 +485,9 @@ impl Store {
                       ORDER BY l.missing, l.location_id LIMIT 1),
                     NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0),
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
-                    fi.first_seen_at, fi.size
+                    fi.first_seen_at, fi.size,
+                    (EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 1)
+                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0))
              FROM {from}
              WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset
@@ -512,6 +516,7 @@ impl Store {
                     path: r.get(14)?,
                     file_size: r.get::<_, i64>(18)?.max(0) as u64,
                     missing: r.get(15)?,
+                    on_cloud_only: r.get(19)?,
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
                     lang_hit: None,

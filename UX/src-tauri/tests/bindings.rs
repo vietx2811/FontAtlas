@@ -121,6 +121,7 @@ fn row(id: i64, h: u8, family: &str, sub: &str, w: u16, italic: bool) -> FaceRow
         )),
         file_size: 176_000 + id as u64,
         missing: false,
+        on_cloud_only: false,
         is_favorite: id == 1,
         added_at: 1_700_000_000_000 + id,
     }
@@ -521,6 +522,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 path: Some("/Users/u/Fonts".into()),
                 enabled: true,
                 available: true,
+                cloud_provider: Some("one_drive".into()),
                 face_count: 1200,
                 last_scan: None,
                 scanning: false,

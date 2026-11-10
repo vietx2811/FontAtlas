@@ -84,3 +84,65 @@ fn os_probe_is_false_for_ordinary_files() {
     assert_eq!((st.not_downloaded, st.analyzed), (0, 1));
     let _ = fonts;
 }
+
+fn row(s: &Store, family: &str) -> fontatlas_store::FaceRow {
+    use fontatlas_store::FaceQuery;
+    s.query_faces(&FaceQuery { text: Some(family.into()), include_missing: true, ..Default::default() })
+        .unwrap()
+        .items
+        .into_iter()
+        .next()
+        .expect(family)
+}
+
+#[test]
+fn evicted_file_is_marked_cloud_only_then_cleared_when_downloaded() {
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf", "open_sans.ttf"]);
+    std::fs::rename(fonts.join("open_sans.ttf"), fonts.join("evicted_open_sans.ttf")).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert!(!row(&s, "open sans").on_cloud_only, "đang ở máy");
+
+    // OneDrive giải phóng file: dataless
+    let st = scan(&mut s, &fonts, src, &mut Vec::new());
+    assert_eq!((st.not_downloaded, st.missing), (1, 0));
+    let r = row(&s, "open sans");
+    assert!(r.on_cloud_only && !r.missing, "{r:?}");
+    assert!(!row(&s, "roboto").on_cloud_only);
+    assert_eq!(count(&s, "SELECT count(*) FROM faces"), 2, "giữ dữ liệu phân tích cũ");
+
+    // người dùng tải về lại (cùng size/mtime): cờ được xoá
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert_eq!(st.not_downloaded, 0);
+    assert!(!row(&s, "open sans").on_cloud_only);
+}
+
+#[test]
+fn one_local_copy_is_enough_to_not_be_cloud_only() {
+    // cùng nội dung ở hai vị trí: một bản dataless, một bản trên máy → face dùng được ngay
+    let (d, fonts, mut s, src) = setup(&["open_sans.ttf"]);
+    let other = d.path().join("Local");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(fonts.join("open_sans.ttf"), other.join("open_sans.ttf")).unwrap();
+    let src2 = s.add_source(SourceKind::Directory, "Local", Some(&other)).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    s.rescan_root_with_probe(src2, &other, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    let evict_all = |p: &Path, _m: &std::fs::Metadata| p.starts_with(&fonts);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &evict_all).unwrap();
+    assert!(!row(&s, "open sans").on_cloud_only);
+}
+
+#[test]
+fn migration_v3_to_v4_adds_cloud_only_defaulting_to_local() {
+    use fontatlas_store::create_library_v3_for_test;
+    let d = tmp();
+    {
+        let c = rusqlite::Connection::open(d.path().join("library.db")).unwrap();
+        create_library_v3_for_test(&c);
+        c.execute("INSERT INTO files (file_id, hash, size, container, num_faces, first_seen_at) VALUES (1, zeroblob(32), 7, 'sfnt', 1, 1)", []).unwrap();
+        c.execute("INSERT INTO file_locations (file_id, source_id, path, size, mtime_ns, last_seen_at) VALUES (1, 1, '/x/a.ttf', 7, 1, 1)", []).unwrap();
+    }
+    let (s, rep) = Store::open(d.path()).unwrap();
+    assert!(!rep.library_recreated);
+    assert_eq!(count(&s, "SELECT cloud_only FROM file_locations WHERE path='/x/a.ttf'"), 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), 1, "dữ liệu cũ còn nguyên");
+}

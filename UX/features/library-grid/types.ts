@@ -25,6 +25,8 @@ export type FaceRow = {
   isItalic: boolean; isVariable: boolean; viStatus: string;
   supportsVi: boolean; viMissing: number; licenseClass: string;
   path: string | null; fileSize: number; missing: boolean;
+  /** Chỉ còn placeholder trên ổ cloud (OneDrive/iCloud…): chưa tải về máy. */
+  onCloudOnly: boolean;
   isFavorite: boolean; addedAt: number;
   /** Chỉ báo ngôn ngữ trên thẻ (thay −N); null khi mã ngôn ngữ lạ. */
   langBadge: LangBadgeDto | null;
@@ -43,7 +45,7 @@ const ROW_SCHEMA: Record<keyof FaceRow, Kind> = {
   weightClass: 'number|null', widthClass: 'number|null',
   isItalic: 'boolean', isVariable: 'boolean', viStatus: 'string',
   supportsVi: 'boolean', viMissing: 'number', licenseClass: 'string',
-  path: 'string|null', fileSize: 'number', missing: 'boolean',
+  path: 'string|null', fileSize: 'number', missing: 'boolean', onCloudOnly: 'boolean',
   isFavorite: 'boolean', addedAt: 'number', langBadge: 'object|null',
 };
 
