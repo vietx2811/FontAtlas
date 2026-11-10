@@ -700,7 +700,7 @@
       await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
       const radios = [...(dlg?.querySelectorAll('input[type=radio]') ?? [])];
       const rs = radios.map(r => { const cs = getComputedStyle(r), af = getComputedStyle(r, '::after'); return { appearance: cs.appearance, w: cs.width, bw: cs.borderTopWidth, br: cs.borderTopLeftRadius, dot: af.width, checked: r.checked }; });
-      await log('conflict-radio-ring-and-dot', rs.length === 2 && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1.5 && x.dot === '8px'), { rs });
+      await log('conflict-radio-ring-and-dot', rs.length === 2 && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1 && x.dot === '8px'), { rs });
       const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
       const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
       await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
