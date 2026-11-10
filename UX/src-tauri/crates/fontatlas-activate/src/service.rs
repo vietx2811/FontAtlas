@@ -32,7 +32,13 @@ pub struct ActivationService<E: ActivationEngine> {
     engine: E,
     in_flight: Mutex<HashSet<[u8; 32]>>,
     ensure_local: EnsureLocalFn,
+    /// Như `ensure_local` nhưng cho app đang đợi trong callback (lý do `auto:*`): hạn chờ ngắn hơn nhiều.
+    ensure_local_auto: EnsureLocalFn,
 }
+
+/// Một app thiết kế (Photoshop…) đang đợi trong callback: không chờ tải cloud quá lâu. Con số này là ước đoán
+/// (chưa đo Photoshop chịu được bao lâu, đo ở L2).
+pub const AUTO_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 /// Giữ một hash trong `in_flight`; nhả khi drop (kể cả khi panic).
 pub(crate) struct InFlight<'a> {
@@ -180,7 +186,14 @@ impl<E: ActivationEngine> ActivationService<E> {
             engine,
             in_flight: Mutex::new(HashSet::new()),
             ensure_local: Box::new(|p| ensure_local(p, CLOUD_DOWNLOAD_TIMEOUT)),
+            ensure_local_auto: Box::new(|p| ensure_local(p, AUTO_DOWNLOAD_TIMEOUT)),
         }
+    }
+
+    /// Thay cách tải cho yêu cầu từ app (`auto:*`) — test hoặc đổi hạn chờ.
+    pub fn with_auto_ensure_local(mut self, f: impl Fn(&Path) -> Result<(), EnsureLocalError> + Send + Sync + 'static) -> Self {
+        self.ensure_local_auto = Box::new(f);
+        self
     }
 
     /// Thay cách tải file cloud (test dataless không cần ổ cloud thật).
@@ -426,7 +439,8 @@ impl<E: ActivationEngine> ActivationService<E> {
         // font còn là placeholder trên ổ cloud: tải về trước (có hạn chót), không bao giờ treo; lỗi trả về rõ ràng
         let mut located = locate(&target);
         if let Located::NotDownloaded(p) = &located {
-            match (self.ensure_local)(p) {
+            let fetch = if matches!(reason, ActivationReason::Auto(_)) { &self.ensure_local_auto } else { &self.ensure_local };
+            match fetch(p) {
                 Ok(()) => {
                     // file vừa về máy: ghi cờ cloud_only=0 ngay (giao diện, hàng phân tích lại dựa vào cờ này)
                     let _ = relock(store).refresh_cloud_flag(p);

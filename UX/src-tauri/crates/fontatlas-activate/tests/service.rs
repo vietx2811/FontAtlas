@@ -1056,3 +1056,26 @@ fn file_gone_during_download_is_missing_outcome() {
     let svc = service(&env).with_ensure_local(|_| Err(EnsureLocalError::Missing));
     assert_eq!(activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome, FileOutcome::MissingFile);
 }
+
+#[test]
+fn auto_request_uses_its_own_short_download_path() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    evict(&env, LIBRE);
+    env.store.lock().unwrap().conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    let (normal, auto) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+    let (n, a) = (Arc::clone(&normal), Arc::clone(&auto));
+    let svc = service(&env)
+        .with_ensure_local(move |_| {
+            n.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .with_auto_ensure_local(move |_| {
+            a.fetch_add(1, Ordering::SeqCst);
+            Err(EnsureLocalError::Timeout)
+        });
+    let rep = svc.activate_auto(&env.store, &[k], fontatlas_store::AutoApp::Photoshop).unwrap();
+    assert!(matches!(&rep.results[0].outcome, FileOutcome::Failed { code, .. } if code == "cloud_timeout"));
+    assert_eq!((normal.load(Ordering::SeqCst), auto.load(Ordering::SeqCst)), (0, 1));
+    assert!(svc.engine().registrations().is_empty());
+}

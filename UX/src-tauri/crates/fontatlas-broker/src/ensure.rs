@@ -85,8 +85,10 @@ pub enum FontStatus {
     Missing,
     /// Máy có font cùng tên nhưng KHÁC nội dung: không tự ghi đè, người dùng quyết trong app.
     Conflict,
-    /// Có trong thư viện nhưng file đã mất / chưa tải về / đã đổi.
+    /// Có trong thư viện nhưng file đã mất / đã đổi.
     Unavailable,
+    /// File là placeholder đám mây (OneDrive/iCloud) và chưa tải xong trong hạn chờ; tải vẫn tiếp tục ngầm, hỏi lại sau.
+    NotDownloaded,
     /// Hệ điều hành từ chối.
     Failed,
     /// Đang có thao tác khác trên cùng file: hỏi lại sau.
@@ -108,6 +110,7 @@ impl FontStatus {
             FontStatus::Missing => "missing",
             FontStatus::Conflict => "conflict",
             FontStatus::Unavailable => "unavailable",
+            FontStatus::NotDownloaded => "not_downloaded",
             FontStatus::Failed => "failed",
             FontStatus::Busy => "busy",
             FontStatus::Invalid => "invalid",
@@ -139,8 +142,11 @@ fn outcome_status(o: &FileOutcome) -> FontStatus {
         FileOutcome::AlreadyActive => FontStatus::AlreadyActive,
         FileOutcome::AlreadyAvailable { .. } => FontStatus::Available,
         FileOutcome::NeedsConfirmation { .. } => FontStatus::Conflict,
-        FileOutcome::MissingFile | FileOutcome::NotDownloaded => FontStatus::Unavailable,
+        FileOutcome::NotDownloaded => FontStatus::NotDownloaded,
+        FileOutcome::MissingFile => FontStatus::Unavailable,
         FileOutcome::Busy => FontStatus::Busy,
+        FileOutcome::Failed { code, .. } if code == "cloud_timeout" => FontStatus::NotDownloaded,
+        FileOutcome::Failed { code, .. } if code == "missing_file" => FontStatus::Unavailable,
         FileOutcome::Failed { code, .. } if code == "file_changed" || code == "not_found" => FontStatus::Unavailable,
         _ => FontStatus::Failed,
     }

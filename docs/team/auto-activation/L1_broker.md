@@ -32,7 +32,7 @@ Mọi yêu cầu cần `Authorization: Bearer <token>` (trừ `OPTIONS`).
 
 - Khớp: `ps` đúng từng ký tự trước; không có thì `family` (gập dấu, không phân biệt hoa thường) + `style` (bỏ khoảng trắng/gạch, rỗng = Regular). Không đoán gần đúng.
 - `app`: nhận tên hiển thị hoặc bundle id; ánh xạ về `photoshop | aftereffects | illustrator | indesign | incopy | sketch | affinity | figma | other`.
-- `status`: `activated` (vừa bật) · `already_active` · `available` (máy đã có đúng file này do bên khác cung cấp) · `missing` (thư viện không có) · `conflict` (máy có font cùng tên nhưng KHÁC nội dung, không tự ghi đè) · `unavailable` (file mất / iCloud chưa tải / đã đổi) · `failed` · `busy` (hỏi lại sau) · `invalid` (yêu cầu rỗng).
+- `status`: `activated` (vừa bật) · `already_active` · `available` (máy đã có đúng file này do bên khác cung cấp) · `missing` (thư viện không có) · `conflict` (máy có font cùng tên nhưng KHÁC nội dung, không tự ghi đè) · `unavailable` (file mất / đã đổi) · `not_downloaded` (file placeholder OneDrive/iCloud chưa tải xong trong hạn chờ; tải vẫn chạy ngầm, hỏi lại sau) · `failed` · `busy` (hỏi lại sau) · `invalid` (yêu cầu rỗng).
 - `found` = `activated | already_active | available`. Phần còn lại vào `missing`; lý do ở `results`.
 - Giới hạn: ≤ 256 font, mỗi chuỗi ≤ 512 ký tự không có ký tự điều khiển, thân ≤ 128 KiB.
 
@@ -58,3 +58,13 @@ Mã lỗi HTTP: 400 (`bad_json`, `bad_request`) · 401 `unauthorized` · 403 `ba
 - Helper font request (L2), panel CEP (L3), startup script (L4), trạng thái từng app + lệnh Tauri cho Settings (L5).
 - Không có lệnh Tauri nào mới: UI chưa thấy gì ngoài `reasons` mới trong `activation_state`.
 - Chưa có bài thử trên CoreText thật qua broker (test dùng `FakeEngine`; hành vi đăng ký session thật đã đo ở spike 06).
+
+
+## File placeholder (dataless): OneDrive / iCloud / FileProvider
+
+Thư viện thật của chủ app nằm dưới `~/Library/CloudStorage/` (OneDrive), nhiều file chỉ là placeholder chưa tải. Việc tải do `fontatlas_activate::ensure_local` (worker 03, `feat/cloud-fonts`) làm; broker chỉ chọn hạn chờ.
+
+- `ActivationService::one_file` gọi `ensure_local` trước khi đăng ký. Yêu cầu từ app (lý do `auto:*`) dùng đường riêng `ensure_local_auto` với `AUTO_DOWNLOAD_TIMEOUT` = 8 s (kích hoạt thủ công vẫn `CLOUD_DOWNLOAD_TIMEOUT` = 30 s), vì app thiết kế đang đứng đợi trong callback. Đổi được bằng `with_auto_ensure_local`.
+- Kết quả broker: tải xong thì bật bình thường; `cloud_timeout` hoặc chỉ có stub `.icloud` → `not_downloaded` (không phải lỗi cứng, tải vẫn có thể tiếp tục, hỏi lại sau); `missing_file` → `unavailable`; `cloud_download_failed` → `failed`.
+- Test: `auto_request_uses_its_own_short_download_path` (đường auto, không đụng đường thường, hết hạn thì không đăng ký gì); các test dataless của 03 cho phần còn lại.
+- CHƯA đo: Photoshop chờ callback CoreText được bao lâu (8 s là đoán, đo ở L2 với helper), và tải thật từ OneDrive (chưa chạm thư viện thật).
