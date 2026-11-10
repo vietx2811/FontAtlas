@@ -209,7 +209,10 @@
         const after = total();
         const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
         await log('lang-filter-narrows-and-badges', !!row && /đủ$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
-        await openAdv(); const r2 = document.querySelector('[data-code=vie]'); r2?.click(); await sleep(150); r2?.click(); await sleep(900); await closeAdv(); await sleep(400);
+        await openAdv();
+        // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
+        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/chưa chọn$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
+        await closeAdv(); await sleep(400);
         await log('lang-filter-cleared', !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, { total: total(), totalBefore });
       }
       // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
@@ -613,6 +616,7 @@
     const total0 = countNow();
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
+    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 15000); // facet tải sau debounce
     const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
