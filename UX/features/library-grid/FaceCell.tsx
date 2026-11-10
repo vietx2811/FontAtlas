@@ -5,6 +5,7 @@ import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
+import { NoteMark } from '../../components/ui/noteMark';
 import { t } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
@@ -148,6 +149,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
+      {row.onCloudOnly && <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />}
       {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope === 'persistent' ? 'persistent' : 'session'} /></Tooltip>}
       {!active && avail && <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-dot" data-testid="active-dot" data-scope="available" /></Tooltip>}
       {onToggleActive && !avail && (
