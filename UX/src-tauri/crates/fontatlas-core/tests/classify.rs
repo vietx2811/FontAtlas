@@ -201,3 +201,18 @@ fn old_analyses_without_flare_classify_exactly_as_before() {
     let c = classify(&i);
     assert!(!c.signals.iter().any(|s| s.detail.contains("chân nhỏ")), "{:?}", c.signals);
 }
+
+#[test]
+fn one_sided_tail_foot_without_top_flag_is_not_a_serif() {
+    // chữ l có đuôi cong (Mooli, Bellota…): serif_foot > 1.6 nhưng chân chỉ nhô một phía, không loe đối xứng, không cờ trên
+    let c = classify(&synthetic("acme regular", 1.63, 1.0, 0.0));
+    assert!(!c.signals.iter().any(|s| s.vote == Some(Class::Serif) && s.detail.contains("serif_foot")), "{:?}", c.signals);
+    assert_ne!(best(&c), Class::Serif);
+    // chân serif thật (loe đối xứng) vẫn là Serif
+    assert_eq!(best(&classify(&synthetic("acme regular", 2.2, 2.2, 0.6))), Class::Serif);
+    // bản phân tích cũ (không có flare/head) giữ hành vi cũ
+    let mut old = synthetic("acme regular", 1.63, 1.0, 0.0);
+    old.m.serif_flare = None;
+    old.m.serif_head = None;
+    assert!(classify(&old).signals.iter().any(|s| s.vote == Some(Class::Serif)));
+}

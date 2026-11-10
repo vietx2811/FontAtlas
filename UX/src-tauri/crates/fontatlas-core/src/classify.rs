@@ -374,7 +374,11 @@ fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
         let (flare, head) = (m.serif_flare.unwrap_or(0.0), m.serif_head.unwrap_or(0.0));
         let small_foot_ev = small_foot_weight(flare, head);
         if sf > 1.6 {
-            v.add("measure", format!("serif_foot {sf:.2} > 1,6"), Class::Serif, 2.0);
+            // chân chỉ nhô MỘT phía (đuôi chữ l, nét vào/ra) và không có cờ trên: không phải chân serif đối xứng
+            let one_sided = m.serif_flare.is_some_and(|f| f < 1.15) && m.serif_head.is_some_and(|h| h < 0.05);
+            if !one_sided {
+                v.add("measure", format!("serif_foot {sf:.2} > 1,6"), Class::Serif, 2.0);
+            }
         } else if sf < 1.2 {
             // chân nhọn: rộng ~0 ngay tại baseline nên `serif_foot` đo thấp dù có cờ/chân loe → không kết luận Sans
             if sf < 0.9 && small_foot_ev > 0.0 {
