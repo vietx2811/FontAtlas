@@ -109,6 +109,7 @@ dependencies = [
  "blake3",
  "block2",
  "fontatlas-activate",
+ "fontatlas-broker",
  "fontatlas-core",
  "fontatlas-describe",
  "fontatlas-embed",
@@ -1609,6 +1610,20 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "fontatlas-broker"
+version = "0.1.0"
+dependencies = [
+ "fontatlas-activate",
+ "fontatlas-core",
+ "fontatlas-store",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tiny_http",
 ]
 
 [[package]]

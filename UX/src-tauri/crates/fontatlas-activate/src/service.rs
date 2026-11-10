@@ -241,6 +241,17 @@ impl<E: ActivationEngine> ActivationService<E> {
         self.activate_files(store, keys, ActivationReason::Manual, scope, policy, progress)
     }
 
+    /// Bật font vì một app thiết kế vừa hỏi: lý do `auto:<app>`, luôn scope session, xung đột → không bật
+    /// (`NeedsConfirmation`, không có ai để hỏi lúc này). Font đã bật ở scope persistent thì chỉ thêm lý do.
+    pub fn activate_auto(
+        &self,
+        store: &Mutex<Store>,
+        keys: &[FaceKey],
+        app: fontatlas_store::AutoApp,
+    ) -> Result<ActivationReport, ActivationError> {
+        self.run(store, keys, ActivationReason::Auto(app), Scope::Session, true, ConflictPolicy::Ask, false, &mut |_| {})
+    }
+
     pub fn activate_collection(
         &self,
         store: &Mutex<Store>,

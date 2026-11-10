@@ -7,6 +7,7 @@ pub mod dup_pick;
 pub mod dup_resolve;
 pub mod duplicates;
 pub mod boot;
+pub mod broker;
 pub mod brief;
 pub mod cloud;
 pub mod cases;

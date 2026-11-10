@@ -27,7 +27,8 @@ fn split(reasons: &[ActivationReason]) -> (bool, Vec<i64>) {
         .iter()
         .filter_map(|r| match r {
             ActivationReason::Collection(id) => Some(*id),
-            ActivationReason::Manual => None,
+            // Auto không giữ font trước người dùng: không tính vào "collection còn giữ".
+            ActivationReason::Manual | ActivationReason::Auto(_) => None,
         })
         .collect();
     (manual, colls)
@@ -164,6 +165,8 @@ impl<E: ActivationEngine> ActivationService<E> {
         let left = relock(store).with_tx(|tx| {
             let left: Vec<ActivationReason> = match what {
                 Lift::Manual(DeactivatePolicy::Ask) => {
+                    // Người dùng tắt tay thì thắng lý do `auto:*` (app sẽ hỏi lại nếu còn cần).
+                    tx.execute("DELETE FROM u.activation_reasons WHERE hash=?1 AND reason GLOB 'auto:*'", [&hash[..]])?;
                     fontatlas_store::remove_activation_reason_tx(tx, &hash, ActivationReason::Manual)?
                 }
                 Lift::Collection(id) => {

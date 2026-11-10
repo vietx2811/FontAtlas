@@ -439,6 +439,34 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
 
+/// v8 (0.3.0 auto-activation): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
+/// vì SQLite không sửa được CHECK) và nhật ký các lần app thiết kế hỏi font.
+pub(crate) const USER_V8: &str = r#"
+ALTER TABLE activation_reasons RENAME TO activation_reasons_v7;
+CREATE TABLE activation_reasons (
+  hash     BLOB NOT NULL REFERENCES activation_state(hash) ON DELETE CASCADE,
+  reason   TEXT NOT NULL CHECK (reason = 'manual'
+           OR (reason GLOB 'collection:[0-9]*' AND reason NOT GLOB 'collection:*[^0-9]*')
+           OR (reason GLOB 'auto:[a-z]*' AND reason NOT GLOB 'auto:*[^a-z]*')),
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, reason)
+) WITHOUT ROWID;
+INSERT INTO activation_reasons (hash, reason, added_at) SELECT hash, reason, added_at FROM activation_reasons_v7;
+DROP TABLE activation_reasons_v7;
+DROP INDEX IF EXISTS activation_reasons_reason;
+CREATE INDEX activation_reasons_reason ON activation_reasons(reason);
+CREATE TABLE auto_activation_log (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  at        INTEGER NOT NULL,
+  app       TEXT NOT NULL,
+  doc       TEXT,
+  requested TEXT NOT NULL,             -- PostScript name hoặc "family / style" như app gửi
+  outcome   TEXT NOT NULL,             -- activated | already_active | available | missing | conflict | failed
+  hash      BLOB
+);
+"#;
+
+
 /// Taxonomy v2 (Font Desk 0.3.x): ghi đè phân loại của người dùng chuyển sang 8 class mới.
 /// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định (không hard-code ở đâu khác): nếu nhánh khác lấy cùng số
 /// (feat/auto-activation cũng thêm một migration user.db), chỉ cần đổi thứ tự mục trong danh sách khi merge.
@@ -546,7 +574,7 @@ CREATE TABLE activation_replaced (
 CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_V8];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
@@ -602,6 +630,16 @@ pub fn create_user_v5_for_test(path: &Path) {
         c.execute_batch(m).expect("USER_Vn");
     }
     c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
+}
+/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (v7 = sau taxonomy v2), để kiểm migration lên v8.
+#[doc(hidden)]
+pub fn create_user_v7_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v7");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_V8).expect("v8 migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
 }
 /// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
 #[doc(hidden)]

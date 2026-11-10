@@ -102,6 +102,8 @@ impl ActivationStatus {
 pub enum ActivationReason {
     Manual,
     Collection(i64),
+    /// Font tự bật khi một app thiết kế hỏi (broker / helper). Luôn scope session.
+    Auto(crate::auto::AutoApp),
 }
 
 impl ActivationReason {
@@ -109,11 +111,15 @@ impl ActivationReason {
         match self {
             ActivationReason::Manual => "manual".into(),
             ActivationReason::Collection(id) => format!("collection:{id}"),
+            ActivationReason::Auto(app) => format!("auto:{}", app.slug()),
         }
     }
     pub fn parse_db(s: &str) -> Option<ActivationReason> {
         if s == "manual" {
             return Some(ActivationReason::Manual);
+        }
+        if let Some(app) = s.strip_prefix("auto:") {
+            return crate::auto::AutoApp::from_slug(app).map(ActivationReason::Auto);
         }
         let id = s.strip_prefix("collection:")?;
         if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
@@ -137,6 +143,12 @@ impl Serialize for ActivationReason {
                 let mut st = s.serialize_struct("ActivationReason", 2)?;
                 st.serialize_field("kind", "collection")?;
                 st.serialize_field("collectionId", id)?;
+                st.end()
+            }
+            ActivationReason::Auto(app) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "auto")?;
+                st.serialize_field("app", app.slug())?;
                 st.end()
             }
         }

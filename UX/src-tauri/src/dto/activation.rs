@@ -84,6 +84,8 @@ pub enum ReasonDto {
         #[ts(type = "number")]
         collection_id: i64,
     },
+    /// Một app thiết kế (photoshop, illustrator, indesign…) đã xin font này.
+    Auto { app: String },
 }
 
 impl From<&ActivationReason> for ReasonDto {
@@ -91,6 +93,7 @@ impl From<&ActivationReason> for ReasonDto {
         match r {
             ActivationReason::Manual => ReasonDto::Manual,
             ActivationReason::Collection(id) => ReasonDto::Collection { collection_id: *id },
+            ActivationReason::Auto(app) => ReasonDto::Auto { app: app.slug().to_string() },
         }
     }
 }

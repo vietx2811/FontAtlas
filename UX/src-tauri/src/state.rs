@@ -72,6 +72,8 @@ pub struct AppState {
     pub embed: EmbedSupervisor,
     pub langs: crate::services::langs::LangSupervisor,
     pub preview: OnceLock<Arc<crate::services::preview::Service>>,
+    /// Máy chủ broker localhost (None khi chưa mở hoặc đã tắt).
+    pub broker: Mutex<Option<fontatlas_broker::Server>>,
 }
 
 impl AppState {
@@ -96,6 +98,7 @@ impl AppState {
             embed: EmbedSupervisor::default(),
             langs: Default::default(),
             preview: OnceLock::new(),
+            broker: Mutex::new(None),
         })
     }
 

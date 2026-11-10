@@ -1,5 +1,6 @@
 //! fontatlas-store: library.db (dẫn xuất) + user.db (người dùng).
 mod activation;
+mod auto;
 mod cases;
 mod cloud;
 mod analysis;
@@ -23,6 +24,7 @@ pub use activation::{
     PrunedReasons,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
+pub use auto::{AutoApp, AutoLogEntry, AutoLogRow, AUTO_LOG_DEDUPE_MS, AUTO_LOG_KEEP};
 pub use analysis::{DupRow, StoredAnalysis};
 pub use cases::{CaseFaceRow, CasePatch, CaseRow, CaseSummary, ComboPatch, ComboRow, MAX_CASE_FACES, MAX_COMBOS, NewCombo, PeekOutcome, ROLES, SlotRow, TRASH_DAYS};
 pub use cloud::{CloudProvider, cloud_provider_of};
@@ -38,5 +40,4 @@ pub use langs::{LangCount, LangPending, LangProgress, LangRow};
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;
 pub use pairs::{NewPair, SavedPair};
-pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test, create_user_pre_replaced_for_test};
-pub use user::{Collection, Source, SourceKind, Tag};
+pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test, create_user_pre_replaced_for_testpub use user::{Collection, Source, SourceKind, Tag};

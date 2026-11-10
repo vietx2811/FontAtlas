@@ -69,6 +69,7 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
     }
     set_phase(state, BootPhase::Activation);
     crate::services::activation::reconcile_now(state, true);
+    crate::services::broker::start(state);
     set_phase(state, BootPhase::Ready);
     after_ready(state);
     snapshot(state)
