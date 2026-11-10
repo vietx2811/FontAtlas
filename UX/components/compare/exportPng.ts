@@ -72,14 +72,25 @@ export function wrapText(ctx: Measure, text: string, maxW: number): string[] {
   return out.length ? out : [''];
 }
 
-/** Bảng màu ảnh theo theme. Specimen: nền/chữ khớp --specimen-* trong index.css (sáng: trắng/đen ấm; tối: gần đen/trắng). */
+/** Bảng màu ảnh theo theme. Specimen: nền/chữ khớp --specimen-* trong index.css (xám trung tính). accent/over là mặc định; khi chạy trong app, renderCompare dùng màu nhấn của hệ điều hành (resolvedAccent). */
 export const EXPORT_PALETTE = {
-  dark: { bg: '#0C0A09', fg: '#F5F5F4', mute: '#A8A29E', faint: '#8A837D', line: '#2A2623', accent: '#E0B07E', page: '#0A0908', ink: '#FAFAF9', warn: '#FB923C', ok: '#4ADE80', ghost: 0.42, over: '#F0B777', rule: '#57534E' },
-  light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#78716C', faint: '#78716C', line: '#E7E5E4', accent: '#9A6B3C', page: '#FFFFFF', ink: '#1F1D1B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#9A6B3C', rule: '#D6D3D1' },
+  dark: { bg: '#0A0A0B', fg: '#F4F4F5', mute: '#A1A1AA', faint: '#85858F', line: '#27272B', accent: '#4DA3FF', page: '#09090B', ink: '#FAFAFA', warn: '#FB923C', ok: '#4ADE80', ghost: 0.42, over: '#4DA3FF', rule: '#52525B' },
+  light: { bg: '#FAFAFA', fg: '#2A2A2A', mute: '#71717A', faint: '#71717A', line: '#E4E4E7', accent: '#0062CC', page: '#FFFFFF', ink: '#18181B', warn: '#C2410C', ok: '#3F7F5F', ghost: 0.28, over: '#0062CC', rule: '#D4D4D8' },
 } as const;
 
 export type ExportManifest = { rows: string[]; texts: string[]; fit: { specimen: number; vi: number }; size: { w: number; h: number }; dark: boolean; specimenBg: string; overlayLayers: number };
 export type ExportResult = { canvas: HTMLCanvasElement; manifest: ExportManifest };
+
+/** Màu --accent-ink đã tính ra rgb (theo màu nhấn macOS); null khi không có DOM thật. */
+function resolvedAccent(): string | null {
+  if (typeof document === 'undefined' || !document.body) return null;
+  const el = document.createElement('span');
+  el.style.color = 'var(--accent-ink)';
+  document.body.appendChild(el);
+  const v = getComputedStyle(el).color;
+  el.remove();
+  return /^rgba?\(/.test(v) && v !== 'rgba(0, 0, 0, 0)' ? v : null;
+}
 
 /** Số đo kèm đơn vị, cùng hàm với màn hình (numberText + unitText). */
 export const metricText = (value: number, unit: string | null): string => [numberText(value, unit), unitText(unit)].filter(Boolean).join(' ');
@@ -92,7 +103,9 @@ export function renderCompare({ data: source, families, sample, fit, dark, overl
   const shows = (id: string, group: string): boolean => !hiddenRows?.has(id) && !collapsed?.has(group);
   const n = data.faces.length;
   const LW = 200, CW = 270, PAD = 20, HEAD_LINE = 18, SPEC = 70, OVL = 96, LH = 15;
-  const c = dark ? EXPORT_PALETTE.dark : EXPORT_PALETTE.light;
+  const base0 = dark ? EXPORT_PALETTE.dark : EXPORT_PALETTE.light;
+  const acc = resolvedAccent();
+  const c = acc ? { ...base0, accent: acc, over: acc } : base0;
   const W = PAD * 2 + LW + n * CW;
   const ui = (typeof getComputedStyle === 'function' ? getComputedStyle(document.body).fontFamily : '') || 'sans-serif';
   const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));

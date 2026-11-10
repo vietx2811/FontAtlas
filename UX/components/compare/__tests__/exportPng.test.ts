@@ -103,8 +103,8 @@ describe('renderCompare (PNG content)', () => {
   });
   it('uses a dark specimen background in dark theme and white in light', async () => {
     const dark = await setup(true); const light = await setup(false);
-    expect(dark.r!.manifest.specimenBg.toLowerCase()).toBe('#0a0908');
-    expect(dark.state.fills).toContain('#0A0908');
+    expect(dark.r!.manifest.specimenBg.toLowerCase()).toBe('#09090b');
+    expect(dark.state.fills).toContain('#09090B');
     expect(light.r!.manifest.specimenBg.toLowerCase()).toBe('#ffffff');
   });
   it('can omit the overlay row when Overlay is off on screen, or when no font is selected', async () => {
@@ -125,7 +125,7 @@ describe('renderCompare (PNG content)', () => {
   it('missing characters are painted grey and listed in plain text (a PNG has no hover)', async () => {
     const { r, state } = await setup(false, undefined, false, { families: true, missing: { Fam0: 'ởố' } });
     expect(r!.manifest.texts.some(x => x.startsWith('Thiếu: '))).toBe(true);
-    expect(state.fills).toContain('#78716C'); // --faint (sáng)
+    expect(state.fills).toContain('#71717A'); // --faint (sáng)
     const clean = await setup(false, undefined, false, { families: true });
     expect(clean.r!.manifest.texts.some(x => x.startsWith('Thiếu: '))).toBe(false);
   });
