@@ -6,8 +6,8 @@ import { t } from '../../i18n';
 import { toMetadataQuery, useUiStore, type LibraryFilters } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { useSourcesStore } from '../../store/sources';
-import { TermTip, classTermKey } from '../ui/terms';
-import { HIDDEN_CLASSES, classLabel } from '../main/classLabels';
+import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
+import { HIDDEN_CLASSES, classLabel, subclassLabel } from '../main/classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
 import { filterChips } from '../main/FilterChips';
 import { Masonry } from './Masonry';
@@ -70,11 +70,26 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
     patch({ varAxisMatch: next.wght && next.wdth ? undefined : next });
   };
   const varMatch = { wght: true, wdth: true, ...(filters.varAxisMatch ?? {}) };
-  const classRows = [...facets.filter(f => !HIDDEN_CLASSES.has(f.class) && (f.count > 0 || filters.classes?.includes(f.class)))];
+  // Class đang chọn vẫn hiện (kể cả đếm 0 hoặc facet chưa tải) để bỏ chọn được.
+  const classRows: ClassFacetDto[] = [
+    ...facets.filter(f => !HIDDEN_CLASSES.has(f.class) && (f.count > 0 || filters.classes?.includes(f.class))),
+    ...(filters.classes ?? []).filter(c => !HIDDEN_CLASSES.has(c) && !facets.some(f => f.class === c)).map(c => ({ class: c, count: 0, subclasses: [] })),
+  ];
+  const toggleClass = (f: ClassFacetDto, on: boolean) => {
+    const cur = useUiStore.getState().filters;
+    const classes = on ? [...(cur.classes ?? []), f.class] : (cur.classes ?? []).filter(c => c !== f.class);
+    const subclasses = on ? cur.subclasses : (cur.subclasses ?? []).filter(x => !f.subclasses.some(sc => sc.subclass === x));
+    patch({ classes, subclasses });
+  };
+  const toggleSub = (sub: string, on: boolean) => {
+    const cur = useUiStore.getState().filters.subclasses ?? [];
+    patch({ subclasses: on ? [...cur, sub] : cur.filter(x => x !== sub) });
+  };
   const condCount = filterChips(filters, sources, view).length;
-  const [left, setLeft] = useState<number | null>(null);
+  const [edge, setEdge] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
-    const measure = () => setLeft(Math.round(document.querySelector('[aria-label="Thanh bên"]')?.getBoundingClientRect().right ?? 0));
+    // Sheet bắt đầu ngay dưới Top Bar (cao hơn khi có hàng family/chọn nhiều) và sát mép phải sidebar.
+    const measure = () => setEdge({ left: Math.round(document.querySelector('[aria-label="Thanh bên"]')?.getBoundingClientRect().right ?? 0), top: Math.round(document.querySelector('.fa-topbar')?.getBoundingClientRect().bottom ?? 0) });
     measure(); window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
@@ -109,7 +124,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   };
 
   return createPortal(
-    <div ref={root} className="fa-adv" role="dialog" aria-label={t('adv.title')} tabIndex={-1} data-testid="advanced-sheet" aria-busy={loading} style={left ? { left } : undefined}>
+    <div ref={root} className="fa-adv" role="dialog" aria-label={t('adv.title')} tabIndex={-1} data-testid="advanced-sheet" aria-busy={loading} style={edge && edge.left ? { left: edge.left, top: edge.top || undefined } : undefined}>
       <header className="fa-adv-head">
         <strong>{t('adv.title')}</strong>
         <span className="fa-adv-count">{t('adv.count', { n: condCount })}</span>
@@ -118,16 +133,23 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
       </header>
       {error && <p role="alert" className="fa-adv-err">{t('adv.error', { msg: error })} <button type="button" onClick={retry}>{t('adv.retry')}</button></p>}
       <Masonry>
-        <section className="fa-adv-card" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length}><h3>{t('adv.class')}</h3>
+        <section className="fa-adv-card" role="group" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length}><h3>{t('adv.class')}</h3>
           {classRows.map(f => (
-            <TermTip key={f.class} term={classTermKey(f.class)}>
-              <label><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => toggle('classes', f.class, e.target.checked)} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
-            </TermTip>
+            <div key={f.class} className="fa-class-opt">
+              <TermTip term={classTermKey(f.class)}>
+                <label><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => toggleClass(f, e.target.checked)} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
+              </TermTip>
+              {filters.classes?.includes(f.class) && f.subclasses.length > 0 && <div className="fa-sub-opts">
+                {f.subclasses.map(sc => <TermTip key={sc.subclass} term={subclassTermKey(sc.subclass)}>
+                  <label><input type="checkbox" checked={filters.subclasses?.includes(sc.subclass) ?? false} onChange={e => toggleSub(sc.subclass, e.target.checked)} />{subclassLabel(sc.subclass)} <span className="fa-count">{sc.count}</span></label>
+                </TermTip>)}
+              </div>}
+            </div>
           ))}
         </section>
         <section className="fa-adv-card" aria-label={t('adv.style')} data-weight={100}><h3>{t('adv.style')}</h3>
-          <label><input type="checkbox" checked={filters.variable === true} onChange={e => patch({ variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>
-          <label><input type="checkbox" checked={filters.italic === true} onChange={e => patch({ italic: e.target.checked ? true : undefined })} />{t('filter.italic')}</label>
+          <label title={t('filter.variable.gloss')}><input type="checkbox" checked={filters.variable === true} onChange={e => patch({ variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>
+          <label title={t('filter.italic.gloss')}><input type="checkbox" checked={filters.italic === true} onChange={e => patch({ italic: e.target.checked ? true : undefined })} />{t('filter.italic')}</label>
         </section>
         <section className="fa-adv-card" aria-label={t('adv.vi')} data-weight={110}><h3>{t('adv.vi')}</h3>
           {VI_OPTIONS.map(([v, k]) => <label key={v}><input type="radio" name="fa-adv-vi" checked={filters.vi === v} onChange={() => patch({ vi: v })} />{t(k)}</label>)}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { Api, SourceDto } from '../../api';
-import { useUiStore, type LibraryFilters } from '../../store/ui';
+import type { LibraryFilters } from '../../store/ui';
 import { useSourcesStore } from '../../store/sources';
 import { useScanStore } from '../../store/scan';
 import { t } from '../../i18n';
@@ -9,8 +9,6 @@ import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from './filterOptions';
 import { langName } from '../filter/langNames';
 import { weightName, widthName } from '../filter/classNames';
 import { AXIS_META, numberText, unitText } from '../detail/tabs/measurements';
-import { Icon } from '../sidebar/icons';
-import './filters.css';
 
 export type Chip = { id: string; label: string; remove(f: LibraryFilters): LibraryFilters };
 
@@ -42,17 +40,4 @@ export function useSources(api: Api): SourceDto[] {
   const version = useScanStore(x => x.version);
   useEffect(() => { void useSourcesStore.getState().load(api, `${version}`); }, [api, version]);
   return sources;
-}
-
-export function FilterChips({ api }: { api: Api }): React.JSX.Element | null {
-  const filters = useUiStore(s => s.filters);
-  const setFilters = useUiStore(s => s.setFilters);
-  const sources = useSources(api);
-  const view = useUiStore(s => s.view);
-  const chips = filterChips(filters, sources, view);
-  if (chips.length === 0) return null;
-  return <ul className="fa-chips" aria-label={t('chips.label')}>
-    {chips.map(c => <li key={c.id} className="fa-chip"><span>{c.label}</span>
-      <button type="button" aria-label={t('chips.remove', { label: c.label })} onClick={() => setFilters(c.remove(useUiStore.getState().filters))}><Icon name="x" size={12} /></button></li>)}
-  </ul>;
 }

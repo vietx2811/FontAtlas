@@ -7,7 +7,6 @@ import { Icon } from '../sidebar/icons';
 import { SearchField } from './SearchField';
 import { useViewSummary } from './useViewSummary';
 import './topbar.css';
-import { FilterPanel } from './FilterPanel';
 import { AdvancedFilters } from '../filter/AdvancedFilters';
 import { filterChips, useSources } from './FilterChips';
 import { TopBarActions } from './TopBarActions';
@@ -33,7 +32,6 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
       <div className="fa-ttl"><h1>{familyScope ? 'Thư viện' : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
       <Tooltip label="Chỉ font đủ dấu tiếng Việt"><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
-      <FilterPanel api={api} />
       <AdvancedFilters api={api} />
       <TopBarActions api={api} />
       <div className="fa-seg" role="group" aria-label="Kiểu hiển thị">
