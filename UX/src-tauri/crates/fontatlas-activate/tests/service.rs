@@ -979,10 +979,25 @@ fn activate_downloads_a_cloud_placeholder_first() {
         std::fs::remove_file(dir.join(format!(".{LIBRE}.icloud"))).unwrap();
         Ok(())
     });
+    env.store.lock().unwrap().conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
     let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
     assert_eq!(rep.results[0].outcome, FileOutcome::Activated);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(svc.engine().registrations().len(), 1);
+    let flag: i64 = env.store.lock().unwrap().conn().query_row("SELECT cloud_only FROM file_locations", [], |r| r.get(0)).unwrap();
+    assert_eq!(flag, 0, "tải xong thì cờ cloud_only về 0 ngay, không đợi lần quét sau");
+}
+
+#[test]
+fn failed_download_leaves_the_cloud_flag_alone() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    evict(&env, LIBRE);
+    env.store.lock().unwrap().conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    let svc = service(&env).with_ensure_local(|_| Err(EnsureLocalError::Timeout));
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let flag: i64 = env.store.lock().unwrap().conn().query_row("SELECT cloud_only FROM file_locations", [], |r| r.get(0)).unwrap();
+    assert_eq!(flag, 1);
 }
 
 #[test]

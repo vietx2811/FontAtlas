@@ -394,7 +394,11 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut located = locate(&target);
         if let Located::NotDownloaded(p) = &located {
             match (self.ensure_local)(p) {
-                Ok(()) => located = locate(&target),
+                Ok(()) => {
+                    // file vừa về máy: ghi cờ cloud_only=0 ngay (giao diện, hàng phân tích lại dựa vào cờ này)
+                    let _ = relock(store).refresh_cloud_flag(p);
+                    located = locate(&target);
+                }
                 Err(EnsureLocalError::PlaceholderStub) => {} // chỉ có stub .icloud: giữ outcome NotDownloaded
                 Err(EnsureLocalError::Missing) => located = Located::Missing(Some(p.clone())),
                 Err(e) => {

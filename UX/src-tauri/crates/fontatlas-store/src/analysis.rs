@@ -232,6 +232,26 @@ impl Store {
         Ok(p.map(PathBuf::from))
     }
 
+    /// Stat lại `path` và đặt `file_locations.cloud_only` đúng với trạng thái thật (không đợi lần quét sau).
+    /// Gọi sau khi một font cloud vừa được tải về (preview, bật font). None: không stat được → không biết → không đổi.
+    pub fn refresh_cloud_flag(&mut self, path: &std::path::Path) -> Result<Option<bool>, StoreError> {
+        self.refresh_cloud_flag_with(path, &crate::rescan::os_placeholder)
+    }
+
+    /// Như `refresh_cloud_flag` với hàm nhận diện thay được (test không cần ổ cloud thật).
+    pub fn refresh_cloud_flag_with(&mut self, path: &std::path::Path, probe: crate::PlaceholderProbe) -> Result<Option<bool>, StoreError> {
+        let Ok(meta) = std::fs::metadata(path) else { return Ok(None) };
+        if !meta.is_file() {
+            return Ok(None);
+        }
+        let dataless = probe(path, &meta);
+        self.conn.execute(
+            "UPDATE file_locations SET cloud_only = ?2 WHERE path = ?1 AND cloud_only <> ?2",
+            rusqlite::params![path.to_string_lossy(), dataless as i64],
+        )?;
+        Ok(Some(dataless))
+    }
+
     /// Số face có bản còn là placeholder cloud ở nguồn này (để gợi ý "chưa tải về máy"). Theo lần quét gần nhất.
     pub fn cloud_only_count(&self, source_id: i64) -> Result<u32, StoreError> {
         let n: i64 = self.conn.query_row(

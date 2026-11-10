@@ -56,6 +56,7 @@ impl Drop for Permit<'_> {
 
 type Probe = Box<dyn Fn(&Path) -> bool + Send + Sync>;
 type Ensure = Box<dyn Fn(&Path, Duration) -> Result<(), EnsureLocalError> + Send + Sync>;
+type OnLocal = Box<dyn Fn(&Path) + Send + Sync>;
 
 /// Đưa file cloud về máy ngay trước khi đọc. File đã ở máy: đi thẳng, không qua cổng.
 pub struct CloudDownloader {
@@ -63,6 +64,7 @@ pub struct CloudDownloader {
     total: Duration,
     is_dataless: Probe,
     ensure: Ensure,
+    on_local: OnLocal,
 }
 
 impl Default for CloudDownloader {
@@ -72,6 +74,7 @@ impl Default for CloudDownloader {
             total: CLOUD_PREVIEW_TIMEOUT,
             is_dataless: Box::new(|p| std::fs::metadata(p).map(|m| fontatlas_store::os_placeholder(p, &m)).unwrap_or(false)),
             ensure: Box::new(fontatlas_activate::ensure_local),
+            on_local: Box::new(|_| {}),
         }
     }
 }
@@ -84,7 +87,13 @@ impl CloudDownloader {
         is_dataless: impl Fn(&Path) -> bool + Send + Sync + 'static,
         ensure: impl Fn(&Path, Duration) -> Result<(), EnsureLocalError> + Send + Sync + 'static,
     ) -> Self {
-        CloudDownloader { gate: CloudGate::new(max), total, is_dataless: Box::new(is_dataless), ensure: Box::new(ensure) }
+        CloudDownloader { gate: CloudGate::new(max), total, is_dataless: Box::new(is_dataless), ensure: Box::new(ensure), on_local: Box::new(|_| {}) }
+    }
+
+    /// Gọi sau khi một font vừa được tải về thành công (để ghi cờ `cloud_only` ngay, không đợi lần quét sau).
+    pub fn on_local(mut self, f: impl Fn(&Path) + Send + Sync + 'static) -> Self {
+        self.on_local = Box::new(f);
+        self
     }
 
     pub fn in_flight(&self) -> usize {
@@ -99,7 +108,10 @@ impl CloudDownloader {
         let _permit = self.gate.acquire(self.total).ok_or(PreviewError::CloudTimeout)?;
         let left = self.total.saturating_sub(started.elapsed());
         match (self.ensure)(path, left) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                (self.on_local)(path);
+                Ok(())
+            }
             Err(EnsureLocalError::Timeout) => Err(PreviewError::CloudTimeout),
             Err(EnsureLocalError::Missing) => Err(PreviewError::NotFound),
             Err(e) => Err(PreviewError::CloudUnavailable(e.message())),
@@ -171,6 +183,19 @@ mod tests {
         assert!(d.before_read(Path::new("/x.ttf")).is_ok());
         let left = seen.lock().unwrap().unwrap();
         assert!(left <= Duration::from_secs(30) && left > Duration::from_secs(25), "{left:?}");
+    }
+
+    #[test]
+    fn on_local_runs_only_after_a_successful_download() {
+        let seen = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+        let mk = |ensure: fn(&Path, Duration) -> Result<(), EnsureLocalError>, dataless: bool| {
+            let s = Arc::clone(&seen);
+            CloudDownloader::with(4, Duration::from_secs(1), move |_| dataless, ensure).on_local(move |p| s.lock().unwrap().push(p.to_path_buf()))
+        };
+        mk(|_, _| Ok(()), true).before_read(Path::new("/ok.ttf")).unwrap();
+        assert!(mk(|_, _| Err(EnsureLocalError::Timeout), true).before_read(Path::new("/slow.ttf")).is_err());
+        mk(|_, _| Ok(()), false).before_read(Path::new("/already-local.ttf")).unwrap();
+        assert_eq!(*seen.lock().unwrap(), vec![PathBuf::from("/ok.ttf")]);
     }
 
     #[test]

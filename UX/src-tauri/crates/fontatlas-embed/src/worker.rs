@@ -194,7 +194,7 @@ impl Run {
         let prepared: Vec<Result<Vec<f32>, JobResult>> = self.pool.install(|| {
             jobs.par_iter()
                 .map(|j| {
-                    catch_unwind(AssertUnwindSafe(|| prepare(j))).unwrap_or_else(|_| {
+                    catch_unwind(AssertUnwindSafe(|| prepare_with(j, &fontatlas_store::is_dataless))).unwrap_or_else(|_| {
                         Err(JobResult::Failed { code: "render_failed", detail: "panic khi render".into() })
                     })
                 })
@@ -234,6 +234,10 @@ impl Run {
                 JobResult::Done { .. } => done += 1,
                 JobResult::Failed { .. } => failed += 1,
                 JobResult::Skipped { .. } => skipped += 1,
+                JobResult::Deferred { .. } => {
+                    // file là placeholder cloud mà cờ trong DB chưa biết: ghi cờ để lượt claim sau bỏ qua, không quay vòng
+                    let _ = self.store.refresh_cloud_flag(&j.path);
+                }
             }
             results.push((j.key, res));
         }
@@ -244,8 +248,12 @@ impl Run {
 }
 
 /// Đọc file, kiểm hash, render, ra tensor. Lỗi → kết quả cuối của job.
-fn prepare(j: &EmbedJob) -> Result<Vec<f32>, JobResult> {
+/// File còn là placeholder cloud (`is_dataless`, chỉ stat) KHÔNG được mở: đọc sẽ kéo cả file về → `Deferred`.
+fn prepare_with(j: &EmbedJob, is_dataless: &dyn Fn(&std::path::Path) -> bool) -> Result<Vec<f32>, JobResult> {
     let fail = |code: &'static str, detail: String| JobResult::Failed { code, detail };
+    if is_dataless(&j.path) {
+        return Err(JobResult::Deferred { code: "cloud_only" });
+    }
     let bytes = std::fs::read(&j.path).map_err(|e| fail("missing_file", e.to_string()))?;
     if blake3::hash(&bytes).as_bytes() != &j.key.hash {
         return Err(fail("stale_file", "file đã đổi sau khi quét".into()));
@@ -265,4 +273,30 @@ fn prepare(j: &EmbedJob) -> Result<Vec<f32>, JobResult> {
     let mut t = vec![0f32; TENSOR_LEN];
     to_tensor(&img, &mut t);
     Ok(t)
+}
+
+#[cfg(test)]
+mod cloud_tests {
+    use super::*;
+
+    fn job(path: &str) -> EmbedJob {
+        EmbedJob { key: FaceKey { hash: [0; 32], face_index: 0 }, path: path.into() }
+    }
+
+    #[test]
+    fn dataless_file_is_deferred_before_any_read() {
+        // đường dẫn không tồn tại: nếu code mở file thì sẽ ra Failed(missing_file), không phải Deferred
+        match prepare_with(&job("/khong/ton/tai.ttf"), &|_| true) {
+            Err(JobResult::Deferred { code }) => assert_eq!(code, "cloud_only"),
+            other => panic!("{:?}", other.map(|v| v.len())),
+        }
+    }
+
+    #[test]
+    fn ordinary_file_is_still_read() {
+        match prepare_with(&job("/khong/ton/tai.ttf"), &|_| false) {
+            Err(JobResult::Failed { code, .. }) => assert_eq!(code, "missing_file"),
+            other => panic!("{:?}", other.map(|v| v.len())),
+        }
+    }
 }

@@ -235,3 +235,44 @@ fn requeue_missing_only_when_location_is_back() {
     assert_eq!(s.requeue_missing_embeddings(RAW).unwrap(), 1);
     assert_eq!(state_of(&s, keys(&s)[0], RAW).0, "pending");
 }
+
+#[test]
+fn claim_never_hands_out_a_cloud_placeholder_and_leaves_it_pending() {
+    let (_d, mut s) = store_with(&["roboto.ttf", "playfair_display.ttf"]);
+    s.conn().execute("UPDATE file_locations SET cloud_only = 1 WHERE path LIKE '%roboto.ttf'", []).unwrap();
+    s.enqueue_embeddings(RAW).unwrap();
+    let j = s.claim_embedding_batch(RAW, 8).unwrap();
+    assert_eq!(j.len(), 1, "chỉ bản đã ở máy");
+    assert!(j[0].path.ends_with("playfair_display.ttf"));
+    let roboto = keys(&s).into_iter().find(|k| k != &j[0].key).unwrap();
+    assert_eq!(state_of(&s, roboto, RAW).0, "pending", "không đánh failed/skipped: tải về rồi sẽ được xử lý");
+    assert!(s.claim_embedding_batch(RAW, 8).unwrap().is_empty());
+    // tải về xong (cờ về 0) → lần sau claim được
+    s.conn().execute("UPDATE file_locations SET cloud_only = 0", []).unwrap();
+    assert_eq!(s.claim_embedding_batch(RAW, 8).unwrap().len(), 1);
+}
+
+#[test]
+fn a_copy_on_this_machine_wins_over_a_cloud_copy() {
+    let (d, mut s) = store_with(&["roboto.ttf"]);
+    let other = d.path().join("local2");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(core_fixture("roboto.ttf"), other.join("roboto-copy.ttf")).unwrap();
+    s.conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    let src2 = s.add_source(SourceKind::Directory, "l2", Some(&other)).unwrap();
+    s.rescan_source(src2).unwrap();
+    s.enqueue_embeddings(RAW).unwrap();
+    let j = s.claim_embedding_batch(RAW, 8).unwrap();
+    assert_eq!(j.len(), 1);
+    assert!(j[0].path.ends_with("roboto-copy.ttf"), "{:?}", j[0].path);
+}
+
+#[test]
+fn deferred_result_puts_the_face_back_to_pending_without_an_error() {
+    let (_d, mut s) = store_with(&["roboto.ttf"]);
+    s.enqueue_embeddings(RAW).unwrap();
+    let j = s.claim_embedding_batch(RAW, 4).unwrap();
+    assert_eq!(s.finish_embeddings(RAW, MV, &[(j[0].key, JobResult::Deferred { code: "cloud_only" })]).unwrap(), 1);
+    let (status, code) = state_of(&s, j[0].key, RAW);
+    assert_eq!((status.as_str(), code), ("pending", None));
+}

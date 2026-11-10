@@ -98,3 +98,31 @@ fn source_dto_counts_faces_that_are_only_placeholders() {
     let s = &sources::list_sources(&st).unwrap()[0];
     assert_eq!((s.cloud_only_count, s.face_count), (1, 1));
 }
+
+// ---- cổng tải cũng áp cho lệnh đọc cmap (missing_chars) ----
+use app_lib::dto::library::FaceKeyDto;
+use app_lib::services::preview::missing_chars_with;
+use fontatlas_preview::PreviewError;
+
+struct Fake { path: std::path::PathBuf, verdict: fn() -> Result<(), PreviewError> }
+impl FaceLocator for Fake {
+    fn locate(&self, _h: &str, _i: u32) -> Option<std::path::PathBuf> { Some(self.path.clone()) }
+    fn before_read(&self, _p: &std::path::Path) -> Result<(), PreviewError> { (self.verdict)() }
+}
+fn face() -> FaceKeyDto { FaceKeyDto { hash_hex: "ab".repeat(32), face_index: 0 } }
+
+#[test]
+fn missing_chars_does_not_open_the_file_when_the_cloud_gate_refuses() {
+    // đường dẫn không tồn tại: nếu bị mở thì lỗi sẽ là invalid_font/io, không phải cloud_timeout
+    let f = Fake { path: "/khong/co/font.ttf".into(), verdict: || Err(PreviewError::CloudTimeout) };
+    let e = missing_chars_with(&f, &face(), &["a".to_string()]).unwrap_err();
+    assert_eq!(e.code, "cloud_timeout");
+}
+
+#[test]
+fn missing_chars_reads_after_the_gate_lets_it_through() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-core/tests/fixtures/roboto.ttf");
+    let f = Fake { path: p, verdict: || Ok(()) };
+    let r = missing_chars_with(&f, &face(), &["a".to_string(), "\u{10FFFE}".to_string()]);
+    assert!(r.is_ok(), "{r:?}");
+}

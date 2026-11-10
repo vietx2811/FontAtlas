@@ -105,6 +105,12 @@ pub fn os_placeholder(_p: &Path, _m: &std::fs::Metadata) -> bool {
     false
 }
 
+/// Đường dẫn này là file giữ chỗ trên ổ cloud (dataless)? Chỉ `stat`, KHÔNG mở file nên không kích hoạt tải.
+/// Hàm dùng chung cho mọi đường đọc nội dung ở nền: không stat được (mất, không phải file) → false.
+pub fn is_dataless(path: &Path) -> bool {
+    std::fs::metadata(path).map(|m| m.is_file() && os_placeholder(path, &m)).unwrap_or(false)
+}
+
 /// `".Tên.ttf.icloud"` → `Some("Tên.ttf")` khi tên thật là font (iCloud Drive thay file bằng stub ẩn).
 fn icloud_real_name(name: &str) -> Option<&str> {
     let real = name.strip_prefix('.')?.strip_suffix(".icloud")?;

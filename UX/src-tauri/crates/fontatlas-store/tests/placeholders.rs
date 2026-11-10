@@ -200,3 +200,32 @@ fn cloud_only_count_per_source_counts_faces_with_a_placeholder_copy_there() {
     assert_eq!(s.cloud_only_count(src).unwrap(), 1);
     assert_eq!(s.cloud_only_count(src + 99).unwrap(), 0);
 }
+
+#[test]
+fn is_dataless_reads_only_the_flag_and_is_false_for_ordinary_or_missing_files() {
+    use fontatlas_store::is_dataless;
+    let (_d, fonts, _s, _src) = setup(&["roboto.ttf"]);
+    assert!(!is_dataless(&fonts.join("roboto.ttf")));
+    assert!(!is_dataless(&fonts.join("khong-co.ttf")), "không stat được → không coi là dataless");
+    assert!(!is_dataless(&fonts), "thư mục không phải file giữ chỗ");
+}
+
+#[test]
+fn refresh_cloud_flag_follows_the_real_state_of_that_file() {
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf", "open_sans.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    let flag = |s: &Store, f: &str| count(s, &format!("SELECT cloud_only FROM file_locations WHERE path LIKE '%{f}'"));
+    s.conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    // đã tải về: stat lại thấy không còn dataless → cờ về 0, chỉ đúng vị trí đó
+    assert_eq!(s.refresh_cloud_flag_with(&fonts.join("roboto.ttf"), &|_, _| false).unwrap(), Some(false));
+    assert_eq!((flag(&s, "roboto.ttf"), flag(&s, "open_sans.ttf")), (0, 1));
+    // bị giải phóng lại: cờ lên 1
+    assert_eq!(s.refresh_cloud_flag_with(&fonts.join("roboto.ttf"), &|_, _| true).unwrap(), Some(true));
+    assert_eq!(flag(&s, "roboto.ttf"), 1);
+    // file không stat được: không biết → không đổi gì
+    assert_eq!(s.refresh_cloud_flag_with(&fonts.join("khong-co.ttf"), &|_, _| false).unwrap(), None);
+    assert_eq!(s.refresh_cloud_flag(&fonts.join("khong-co.ttf")).unwrap(), None);
+    // bản dùng stat thật: file thường → 0
+    assert_eq!(s.refresh_cloud_flag(&fonts.join("roboto.ttf")).unwrap(), Some(false));
+    assert_eq!(flag(&s, "roboto.ttf"), 0);
+}

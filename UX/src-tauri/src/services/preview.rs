@@ -26,7 +26,14 @@ pub struct StoreLocator {
 
 impl StoreLocator {
     pub fn open(dir: &std::path::Path) -> Result<Self, CmdError> {
-        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?), cloud: CloudDownloader::default() })
+        // Font cloud vừa tải về: ghi cờ cloud_only=0 qua một kết nối library riêng (như nền ngôn ngữ), không giành khoá với giao diện.
+        let writer = Store::open_library_only(dir).ok().map(Mutex::new);
+        let cloud = CloudDownloader::default().on_local(move |p| {
+            if let Some(Ok(mut w)) = writer.as_ref().map(|m| m.lock()) {
+                let _ = w.refresh_cloud_flag(p);
+            }
+        });
+        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?), cloud })
     }
 }
 
@@ -139,7 +146,13 @@ pub fn missing_chars(state: &AppState, face: &FaceKeyDto, chars: &[String]) -> R
     if chars.len() > MAX_COVERAGE_CHARS {
         return Err(CmdError::invalid_arg(format!("tối đa {MAX_COVERAGE_CHARS} ký tự mỗi lần")));
     }
-    let path = service(state)?.locator().locate(&face.hash_hex, face.face_index).ok_or_else(|| CmdError::new("not_found", "không tìm thấy file font"))?;
+    missing_chars_with(service(state)?.locator(), face, chars)
+}
+
+/// Tách để test: mở file chỉ sau `before_read` (font cloud đi qua cổng tải, không tải ngầm).
+pub fn missing_chars_with<L: FaceLocator>(locator: &L, face: &FaceKeyDto, chars: &[String]) -> Result<Vec<String>, CmdError> {
+    let path = locator.locate(&face.hash_hex, face.face_index).ok_or_else(|| CmdError::new("not_found", "không tìm thấy file font"))?;
+    locator.before_read(&path)?;
     let file = fontatlas_core::FontFile::open(&path).map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
     let faces = file.faces().map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
     let f = faces.iter().find(|f| f.index() == face.face_index).ok_or_else(|| CmdError::new("not_found", "không có face này trong file"))?;
