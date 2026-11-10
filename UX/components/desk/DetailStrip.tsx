@@ -34,17 +34,17 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
 function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try' }): React.JSX.Element {
   const vi = face?.vi;
   return (
-    <div className="fa-strip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
+    <div className="fa-dstrip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
       <h3>{title}</h3>
       {row ? <>
-        <div className="fa-strip-name">{nameOf(row)}</div>
-        <div className="fa-strip-meta">
+        <div className="fa-dstrip-name">{nameOf(row)}</div>
+        <div className="fa-dstrip-meta">
           {face?.designer && <span>{face.designer}</span>}
           {face?.license && <span>{face.license}</span>}
           {vi && <span data-vi={vi.supports && vi.missing === 0 ? 'ok' : 'warn'}>{vi.supports && vi.missing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: vi.missing })}</span>}
           {vi?.stackedMarksOverflow && <NoteMark inline kind="warn" text={t('compare.viWarn')} />}
         </div>
-      </> : <p className="fa-strip-empty">{tone === 'try' ? t('strip.tryHint') : t('desk.roleEmpty')}</p>}
+      </> : <p className="fa-dstrip-empty">{tone === 'try' ? t('strip.tryHint') : t('desk.roleEmpty')}</p>}
     </div>
   );
 }
@@ -62,17 +62,17 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare 
   const { a, b, loading } = useStripFaces(api, inUse, trial && !same ? trial : null);
   const showTrial = !!trial && !same;
   return (
-    <section className="fa-strip" data-testid="detail-strip" data-collapsed={collapsed || undefined} aria-label={t('strip.title')}>
+    <section className="fa-dstrip" data-testid="detail-strip" data-collapsed={collapsed || undefined} aria-label={t('strip.title')}>
       <header>
         <b>{t('strip.title')}</b>
-        {onCompare && trial && <button type="button" className="fa-strip-cmp" data-testid="strip-compare" onClick={onCompare}>{t('strip.compare')}</button>}
-        <button type="button" className="fa-strip-toggle" data-testid="strip-toggle" aria-expanded={!collapsed} aria-label={collapsed ? t('strip.expand') : t('strip.collapse')} onClick={onToggle}>{collapsed ? '⌃' : '⌄'}</button>
+        {onCompare && trial && <button type="button" className="fa-dstrip-cmp" data-testid="strip-compare" onClick={onCompare}>{t('strip.compare')}</button>}
+        <button type="button" className="fa-dstrip-toggle" data-testid="strip-toggle" aria-expanded={!collapsed} aria-label={collapsed ? t('strip.expand') : t('strip.collapse')} onClick={onToggle}>{collapsed ? '⌃' : '⌄'}</button>
       </header>
       {!collapsed && (
-        <div className="fa-strip-body">
+        <div className="fa-dstrip-body">
           <Card title={t('desk.inUse')} row={inUse} face={a} tone="use" />
           <Card title={t('desk.trying')} row={showTrial ? trial : null} face={b} tone="try" />
-          <table className="fa-strip-table" data-testid="strip-metrics" aria-busy={!!loading}>
+          <table className="fa-dstrip-table" data-testid="strip-metrics" aria-busy={!!loading}>
             <thead><tr><th>{t('strip.metrics')}</th><th>{t('desk.inUse')}</th><th>{t('desk.trying')}</th><th>Δ</th></tr></thead>
             <tbody>
               {COMPARE_METRICS.map(k => {

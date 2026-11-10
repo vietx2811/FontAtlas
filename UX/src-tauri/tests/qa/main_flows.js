@@ -747,7 +747,9 @@
     {
       const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
       const pressOn = (el, key, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
-      const cell0 = await wait(() => cells()[0], 8000);
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+      await sleep(800);
+      const cell0 = await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 10000);
       cell0?.click(); await sleep(400);
       const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000);
       pairTab?.click();
