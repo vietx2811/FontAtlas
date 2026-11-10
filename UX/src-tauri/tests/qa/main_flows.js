@@ -215,7 +215,9 @@
         // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
         for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/chưa chọn$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
         await closeAdv(); await sleep(400);
-        await log('lang-filter-cleared', !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, { total: total(), totalBefore });
+        // Số đếm cập nhật bất đồng bộ sau khi bỏ nhóm lọc: đợi tới khi về đúng giá trị (tối đa 8 giây) thay vì đọc ngay sau một lần sleep cố định.
+        const langCleared = await wait(() => !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, 8000);
+        await log('lang-filter-cleared', !!langCleared, { total: total(), totalBefore });
       }
       // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
       const fp2 = await openAdv();
@@ -235,9 +237,10 @@
       await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
       key(document, { key: 'Escape' }); await sleep(300);
       const withFilter = total();
-      sinput?.focus(); key(sinput, { key: 'Backspace' }); await sleep(150);
-      const selected = !!document.querySelector('.fa-fsum-seg[data-selected=true]');
-      key(sinput, { key: 'Backspace' }); await sleep(900);
+      sinput?.focus(); key(sinput, { key: 'Backspace' });
+      const selected = !!(await wait(() => document.querySelector('.fa-fsum-seg[data-selected=true]'), 5000)); // chọn nhóm cuối: đợi trạng thái thay vì sleep cố định
+      key(sinput, { key: 'Backspace' });
+      await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
       const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
       await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
       undoBtn?.click(); await sleep(900);
@@ -620,10 +623,11 @@
     await sleep(150); await snap('class-chip');
     const chipText = (cchip?.textContent ?? '').trim();
     const countNow = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, ''));
-    const total0 = countNow();
+    // Tổng ban đầu: đợi tới khi > 0 và đứng yên qua hai lần đọc (thư viện còn đang tải thì số chưa ổn định).
+    let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 15000); // facet tải sau debounce
+    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
     const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
@@ -637,6 +641,7 @@
     const sIn = document.querySelector('.fa-search input'); sIn?.focus();
     sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
+    await wait(() => countNow() === total0, 8000); // số đếm làm mới bất đồng bộ sau khi bỏ nhóm lọc
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
     // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
     const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
