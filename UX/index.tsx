@@ -9,7 +9,7 @@ import { StatusProvider } from './context/StatusContext';
 
 // Trong cửa sổ Tauri: lệnh thật (UX/bindings). Ngoài Tauri hoặc VITE_FA_API=mock: mock, kèm preset trạng thái cho dev/QA.
 const dev = import.meta.env.DEV;
-const { api } = createApi(dev ? { initial: devInitial(location.hash), tickMs: 1500 } : {});
+const { api } = createApi(dev ? { initial: devInitial(location.hash), tickMs: 1500, firstRun: /[#&]first=1(&|$)/.test(location.hash) } : {}); // #first=1: mở như lần đầu (onboarding) — chỉ dev/QA
 setApi(api);
 
 const rootElement = document.getElementById('root');

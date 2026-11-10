@@ -47,6 +47,21 @@
     const picks = []; window.__FA_QA_PICKS__ = picks;
     await log('dialog-stub', true, 'window.__FA_QA_PICKS__');
     // Script chạy ngay khi trang load xong: chờ React vẽ onboarding hoặc thư viện (máy bận có thể > 10 s).
+    // SPLASH (lớp phủ khi mở app, ~2 s): phím bỏ qua được và bị NUỐT — Esc không được rơi xuống onboarding (O1 có "Bỏ qua hướng dẫn"), phần dưới inert.
+    // Nếu máy chậm và splash đã tự kết thúc thì không có gì để kiểm.
+    const splash = document.querySelector('[data-testid=splash]');
+    if (splash) {
+      const inertBelow = !!document.querySelector('[inert]');
+      const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      document.dispatchEvent(esc);
+      await wait(() => !document.querySelector('[data-testid=splash]'), 4000);
+      await log('splash-skip', !document.querySelector('[data-testid=splash]') && esc.defaultPrevented, { inertBelow, prevented: esc.defaultPrevented });
+      await wait(() => document.querySelector('.fa-onb h1, .fa-lib'), 90000);
+      await sleep(400);
+      const h1 = document.querySelector('.fa-onb h1')?.textContent ?? null;
+      // Lần đầu: vẫn đứng ở bước 1 (không bị Esc bỏ cả hướng dẫn). Không phải lần đầu: không có onboarding thì không có gì để kiểm.
+      await log('splash-esc-stays-o1', h1 === null ? !!document.querySelector('.fa-lib') : /Chào mừng/.test(h1), { h1 });
+    } else await log('splash-skip', true, 'đã tự kết thúc trước khi kiểm');
     await wait(() => document.querySelector('.fa-onb, .fa-lib'), 90000);
     // ONBOARDING
     let foldersDone = false;
@@ -77,8 +92,10 @@
         go?.click(); await sleep(800); continue;
       }
       const order = /Kích hoạt/.test(h1) ? ['Để sau', 'Tiếp tục'] : ['Đã hiểu', 'Không dùng', 'Bỏ qua', 'Tiếp tục', 'Bắt đầu', 'Vào thư viện'];
-      const b = await wait(() => order.map(t => btn(t)).find(Boolean), 120000);
+      // Intro (nút "Bỏ qua") và outro (~1,5 s, không có nút) là màn chuyển động: outro kết thúc thì .fa-onb biến mất, thoát vòng lặp.
+      const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);
       if (!b) { await log('onb-stuck', false, h1); break; }
+      if (b === true) break;
       b.click(); await sleep(700);
     }
     await log('onb-finished', !document.querySelector('.fa-onb'), '');

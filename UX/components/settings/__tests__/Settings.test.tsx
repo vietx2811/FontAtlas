@@ -287,4 +287,14 @@ describe('Settings', () => {
     expect((await api.onboardingState()).step).toBe('o1');
     expect(onRerun).toHaveBeenCalled();
   });
+
+  it('General has "Hiện splash khi mở app" (default on) that persists under ui.splash', async () => {
+    const { api } = await mount();
+    const sw = screen.getByRole('switch', { name: 'Hiện splash khi mở app' });
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { fireEvent.click(sw); });
+    await settle();
+    expect(await api.getSetting('ui.splash')).toBe('off');
+    expect(screen.getByRole('switch', { name: 'Hiện splash khi mở app' }).getAttribute('aria-checked')).toBe('false');
+  });
 });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
 import { Library } from './components/main/Library';
@@ -13,6 +13,8 @@ import { WindowShell } from './components/shell/WindowShell';
 import { SettingsOverlay } from './components/settings/SettingsOverlay';
 import { SettingsShortcut } from './components/settings/SettingsShortcut';
 import { BootGate } from './components/boot/BootGate';
+import { Splash } from './components/splash/Splash';
+import { readSplashEnabled } from './components/splash/splashState';
 import { NoticeStack } from './components/NoticeStack';
 import { FaceActionsProvider } from './components/faces/FaceActions';
 import { ActivationDialogHost } from './components/activation/ActivationDialogHost';
@@ -96,13 +98,28 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     );
 };
 
+/** Splash chỉ một lần mỗi phiên (cả khi StrictMode dựng hai lần); tắt trong test để không che giao diện. */
+let splashShown = false;
+const SPLASH_ON = import.meta.env.MODE !== 'test';
+const devSplash = (): { hold: boolean } | null => {
+    const v = import.meta.env.DEV ? new URLSearchParams(location.hash.replace(/^#/, '')).get('splash') : null; // #splash=hold: giữ splash để chụp (dev)
+    return v ? { hold: v === 'hold' } : null;
+};
+
 const App: React.FC = () => {
     const api = getApi();
+    const [splash, setSplash] = useState(() => SPLASH_ON && !splashShown);
+    // Công tắc Settings → Chung "Hiện splash khi mở app": đang tắt thì đóng ngay (giữa lúc đọc cài đặt splash đã hiện vài khung).
+    useEffect(() => { if (splash) void readSplashEnabled(api).then(on => { if (!on) { splashShown = true; setSplash(false); } }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     return (
         <ErrorBoundary>
-            <NoticeStack />
-            <SettingsShortcut />
-            <BootGate api={api}><Library_ api={api} /></BootGate>
+            {splash && <Splash api={api} hold={devSplash()?.hold} onDone={() => { splashShown = true; setSplash(false); }} />}
+            {/* Phần dưới inert + ẩn với trình đọc màn hình khi splash hiện: không focus, không phím, không đọc nhầm. */}
+            <div style={{ display: 'contents' }} inert={splash} aria-hidden={splash || undefined}>
+                <NoticeStack />
+                <SettingsShortcut />
+                <BootGate api={api}><Library_ api={api} /></BootGate>
+            </div>
         </ErrorBoundary>
     );
 };
