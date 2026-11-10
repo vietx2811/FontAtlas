@@ -35,6 +35,10 @@
 .fa-vi-ring .strike { stroke: currentColor; opacity: .55; }
 .fa-lang-badge.ok { color: var(--on); } .fa-lang-badge.near { color: var(--accent-ink); }
 .fa-vi-code { font-size: var(--text-2xs); text-transform: uppercase; margin-right: 3px; opacity: .8; }
+/* Khung chờ khi font đang được tải từ cloud: thanh mờ nhấp nháy nhẹ (tắt khi người dùng giảm chuyển động). */
+.fa-cloud-skeleton { border-radius: 6px; background: var(--surface-2); animation: fa-cloud-pulse 1.4s ease-in-out infinite; }
+@keyframes fa-cloud-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fa-cloud-skeleton { animation: none; } }
 .fa-cell > .fa-note-cloud { right: auto; left: 6px; top: 6px; }
 .fa-dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
 .fa-pow { position: absolute; top: 6px; right: 46px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }

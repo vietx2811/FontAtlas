@@ -153,7 +153,7 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
   it('set_settings sends a full patch with null for what did not change', async () => {
     reply = () => ({});
     await createTauriApi().setSettings({ embedEnabled: true });
-    expect(last().args).toEqual({ patch: { embedEnabled: true, licenseNoticeAck: null, uiLang: null, sampleText: null, projectViDefault: null, keepActiveOnExit: null, rescanOnLaunch: null } });
+    expect(last().args).toEqual({ patch: { embedEnabled: true, licenseNoticeAck: null, uiLang: null, sampleText: null, projectViDefault: null, keepActiveOnExit: null, rescanOnLaunch: null, cloudPreviewDownload: null } });
   });
 
   it('similar fills the 6a defaults', async () => {

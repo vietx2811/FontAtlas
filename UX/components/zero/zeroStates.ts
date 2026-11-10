@@ -1,6 +1,7 @@
 import type { SourceDto } from '../../api';
 import type { AccessProblem } from '../../store/scan';
 import type { View } from '../../store/ui';
+import { t } from '../../i18n';
 
 export type EmptyAction = { id: 'add-folder' | 'rescan' | 'clear-filters' | 'go-all' | 'grant'; label: string };
 export type EmptyKind =
@@ -11,6 +12,16 @@ export type EmptyCtx = { view: View; tag: string | null; query: string; viOnly: 
 
 /** Thư viện (lưới) trống: ít chữ (một dòng, một hành động), mỗi tình huống một chữ minh hoạ nhỏ. */
 /** Số file placeholder đám mây của một nguồn: đếm trực tiếp nếu đang quét, nếu không thì theo lần quét cuối. */
+/**
+ * Gợi ý cho nguồn nằm trên ổ cloud: tỉ lệ font còn là placeholder (số thật từ lần quét gần nhất) và cách giữ file trên máy.
+ * null khi không phải nguồn cloud, chưa có font nào cần tải, hoặc nguồn rỗng.
+ */
+export function cloudHint(s: SourceDto): string | null {
+  if (!s.cloudProvider || s.cloudOnlyCount <= 0 || s.faceCount <= 0) return null;
+  const pct = Math.min(100, Math.round((s.cloudOnlyCount / s.faceCount) * 100));
+  return t('cloud.sourceHint', { pct: pct === 0 ? '<1' : String(pct) });
+}
+
 export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}): number => cloud[s.id] ?? s.lastScan?.notDownloaded ?? 0;
 
 export function libraryEmpty(c: EmptyCtx): Empty {

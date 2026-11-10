@@ -47,6 +47,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
+  const [errCode, setErrCode] = useState('');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
   const shownRef = useRef<{ src: string; blob: string } | null>(null);
   const [imgShown, setImgShown] = useState<string | null>(null);
@@ -64,7 +65,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
     let done = false;
     let raf = 0;
     setState('loading');
-    blobs.acquire(url).then(
+    blobs.acquire(url, { cloud: !!row?.onCloudOnly }).then(
       blob => {
         done = true;
         if (!alive) { blobs.release(url); return; }
@@ -78,6 +79,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         done = true;
         if (!alive) return;
         if (err instanceof PreviewHttpError && err.status === 410) { onStale?.(); return; } // xin thế hệ mới, URL mới sẽ tới
+        setErrCode(err instanceof PreviewHttpError ? err.code : '');
         setState('error');
       },
     );
@@ -149,7 +151,12 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {row.onCloudOnly && <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />}
+      {/* theo trạng thái của ẢNH preview (state), không phải `shownState`: hover mở FontFace sống không được đổi ghi chú */}
+      {row.onCloudOnly && (state === 'loading'
+        ? <NoteMark kind="info" className="fa-note-cloud" testId="cloud-loading-note" text={t('cloud.loading')} />
+        : state === 'error'
+          ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(errCode === 'cloud_timeout' ? 'cloud.errTimeout' : errCode === 'not_found' ? 'cloud.errOff' : 'cloud.errFailed')} />
+          : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
       {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope === 'persistent' ? 'persistent' : 'session'} /></Tooltip>}
       {!active && avail && <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-dot" data-testid="active-dot" data-scope="available" /></Tooltip>}
       {onToggleActive && !avail && (
@@ -173,7 +180,9 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         ) : state === 'error' ? (
           <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+          shown
+            ? <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+            : row.onCloudOnly && state === 'loading' && <div data-cloud-skeleton aria-hidden className="fa-cloud-skeleton" style={{ width: Math.min(cw, 160), height: Math.max(10, Math.round(ch * 0.4)) }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />

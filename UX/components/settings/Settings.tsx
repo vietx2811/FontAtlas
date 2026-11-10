@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
-import { notDownloadedOf } from '../zero/zeroStates';
+import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
+import { NoteMark } from '../ui/noteMark';
+import { TermTip } from '../ui/terms';
+import { t } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -120,7 +123,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
       <ul className="fa-set-sources">
         {sources.map(x => (
           <li key={x.id} data-testid="source-row">
-            <div className="who"><strong>{x.name}</strong><span className="path">{x.path}</span></div>
+            <div className="who"><strong>{x.name}{cloudHint(x) && <NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(x)!} />}</strong><span className="path">{x.path}</span></div>
             <span className="meta">{x.faceCount} font · {state(x)}{notDownloadedOf(x, cloud) > 0 ? ` · ${notDownloadedOf(x, cloud)} chưa tải về` : ''}</span>
             {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>Cấp quyền</button>}
             <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? 'Thử lại' : 'Quét lại'}</button>
@@ -129,6 +132,13 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         ))}
       </ul>
       <Switch label="Quét lại khi mở app" on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
+      <Switch label={t('cloud.switch')} on={s.cloudPreviewDownload} onChange={v => void patch({ cloudPreviewDownload: v })} />
+      <p className="fa-set-note">{t('cloud.switch.note')}</p>
+      <p className="fa-set-note">
+        <TermTip term="dataless"><span data-term="dataless" tabIndex={0} className="fa-termword">dataless</span></TermTip>
+        {' · '}
+        <TermTip term="always_keep"><span data-term="always_keep" tabIndex={0} className="fa-termword">Always keep on this device</span></TermTip>
+      </p>
       {removing && (
         <Modal title={`Xoá nguồn “${removing.name}”?`} onClose={() => setRemoving(null)}>
           <p>Chỉ gỡ khỏi thư viện, không xoá file font. Yêu thích, dự án và thẻ được giữ.</p>

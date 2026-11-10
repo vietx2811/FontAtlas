@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
-import { notDownloadedOf } from '../zero/zeroStates';
+import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -13,6 +13,7 @@ import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
 import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
+import { NoteMark } from '../ui/noteMark';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; dups: number | null };
@@ -181,7 +182,12 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)}
-              sub={notDownloadedOf(s, cloud) > 0 ? <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip> : undefined} />
+              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
+                ? <>
+                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip>}
+                    {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
+                  </>
+                : undefined} />
           ))}
         </NavSection>
 

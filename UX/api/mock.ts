@@ -76,9 +76,9 @@ export function createMockApi(o: MockOptions = {}): Api {
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
-    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
-    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
-    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false },
+    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
+    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
+    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
   ];
   // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
   const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
@@ -95,7 +95,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
   const boot = (): BootStatusDto => ({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
-  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
+  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true };
 
   const simulateScan = (id: number) => {
     const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));
@@ -186,11 +186,12 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     fontUrl: () => null,
 
-    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), lastScan: s.lastScan ?? lastScanOf(s.id) }))),
+    // nguồn cloud trong mock: 9/10 font còn là placeholder (để QA và chụp ảnh gợi ý "Always keep on this device")
+    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), cloudOnlyCount: s.cloudProvider ? Math.round(countOf(s.id) * 0.9) : 0, lastScan: s.lastScan ?? lastScanOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
-      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, cloudProvider: null, faceCount: 0, lastScan: null, scanning: false };
+      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false };
       sources = [...sources, s];
       simulateScan(s.id);
       return ok(s);
