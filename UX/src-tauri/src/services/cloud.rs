@@ -108,8 +108,8 @@ impl Default for CloudDownloader {
         CloudDownloader::with(
             MAX_CLOUD_DOWNLOADS,
             CLOUD_PREVIEW_TIMEOUT,
-            |p| fontatlas_store::is_dataless(p),
-            |p, left, permit| fontatlas_activate::ensure_local_holding(p, left, permit),
+            fontatlas_store::is_dataless,
+            fontatlas_activate::ensure_local_holding,
         )
     }
 }
