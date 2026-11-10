@@ -120,7 +120,8 @@ pub fn ensure_local(p: &Path, timeout: Duration) -> Result<(), EnsureLocalError>
 fn read_first_byte(p: &Path) -> std::io::Result<()> {
     use std::io::Read;
     let mut b = [0u8; 1];
-    std::fs::File::open(p)?.read(&mut b)?;
+    // chỉ cần hệ điều hành bắt đầu tải: số byte đọc được (0 với file rỗng) không quan trọng
+    let _read = std::fs::File::open(p)?.read(&mut b)?;
     Ok(())
 }
 

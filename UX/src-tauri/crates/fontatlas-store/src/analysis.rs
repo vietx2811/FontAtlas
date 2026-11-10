@@ -202,6 +202,21 @@ impl Store {
         Ok(p.map(PathBuf::from))
     }
 
+    /// Như `face_path` nhưng bỏ vị trí còn là placeholder trên ổ cloud (`cloud_only`): đường dẫn này an toàn để MỞ ĐỌC
+    /// (preview, FontFace) mà không kích hoạt tải cả file về. None nếu mọi bản còn thấy đều chưa tải.
+    pub fn face_local_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
+        let p: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+                 WHERE fi.hash = ?1 AND l.missing = 0 AND l.cloud_only = 0 ORDER BY l.location_id LIMIT 1",
+                [&key.hash[..]],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(p.map(PathBuf::from))
+    }
+
     /// Sao lưu user.db (VACUUM INTO) vào `<dir>/backups/user-<ms>.db`; trả đường dẫn.
     pub fn backup_user_db(&self) -> Result<PathBuf, StoreError> {
         let dir = self.dir().join(BACKUP_DIR);

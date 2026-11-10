@@ -27,7 +27,8 @@ impl StoreLocator {
 impl FaceLocator for StoreLocator {
     fn locate(&self, hash_hex: &str, face_index: u32) -> Option<PathBuf> {
         let key = FaceKey::from_hex(hash_hex, face_index).ok()?;
-        self.store.lock().ok()?.face_path(&key).ok().flatten()
+        // bỏ vị trí còn là placeholder cloud: mở đọc sẽ kéo cả file về (cuộn lưới không được tải cả ổ)
+        self.store.lock().ok()?.face_local_path(&key).ok().flatten()
     }
 }
 

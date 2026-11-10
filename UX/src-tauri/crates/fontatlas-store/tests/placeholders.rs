@@ -146,3 +146,27 @@ fn migration_v3_to_v4_adds_cloud_only_defaulting_to_local() {
     assert_eq!(count(&s, "SELECT cloud_only FROM file_locations WHERE path='/x/a.ttf'"), 0);
     assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), 1, "dữ liệu cũ còn nguyên");
 }
+
+#[test]
+fn face_local_path_never_returns_a_cloud_placeholder() {
+    use fontatlas_store::FaceKey;
+    let (d, fonts, mut s, src) = setup(&["open_sans.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    let r = row(&s, "open sans");
+    let key = FaceKey::from_hex(&r.hash_hex, r.face_index).unwrap();
+    assert!(s.face_local_path(&key).unwrap().is_some(), "đang ở máy");
+
+    // OneDrive giải phóng bản duy nhất: xem preview/FontFace không được kéo nó về ngầm
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| true).unwrap();
+    assert!(s.face_local_path(&key).unwrap().is_none(), "chỉ còn placeholder → không có đường dẫn đọc được");
+    assert!(s.face_path(&key).unwrap().is_some(), "face_path (hiện đường dẫn, Finder…) vẫn trả vị trí");
+
+    // thêm một bản sao trên máy → dùng bản đó
+    let other = d.path().join("Local");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(fonts.join("open_sans.ttf"), other.join("copy.ttf")).unwrap();
+    let src2 = s.add_source(SourceKind::Directory, "Local", Some(&other)).unwrap();
+    s.rescan_root_with_probe(src2, &other, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    let p = s.face_local_path(&key).unwrap().expect("bản trên máy");
+    assert!(p.starts_with(&other), "{p:?}");
+}
