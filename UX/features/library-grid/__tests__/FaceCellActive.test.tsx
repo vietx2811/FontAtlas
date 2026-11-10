@@ -20,11 +20,12 @@ async function mount(props: Partial<React.ComponentProps<typeof LibraryGrid>>) {
 }
 
 describe('FaceCell activation', () => {
-  it('has a power button that toggles Active for that row only and does not select the card', async () => {
+  it('the status dot is the toggle button: toggles Active for that row only and does not select the card', async () => {
     const onToggleActive = vi.fn(); const onSelect = vi.fn();
     const [a, b] = await mount({ onToggleActive, onSelect, isActive: r => r.faceId === 1 });
     const btn = within(b).getByTestId('cell-active');
-    expect(btn.getAttribute('aria-label')).toBe('Active');
+    expect(btn.getAttribute('aria-label')).toBe('Bật/Tắt font');
+    expect(btn.closest('.fa-meta')?.firstElementChild).toBe(btn); // đứng ngay đầu tên
     expect(btn.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(btn);
     expect(onToggleActive).toHaveBeenCalledTimes(1);
@@ -33,15 +34,15 @@ describe('FaceCell activation', () => {
     expect(within(a).getByTestId('cell-active')).toBeTruthy();
   });
 
-  it('reflects the active state on the button and the dot; the dot tooltip names the scope', async () => {
+  it('reflects the active state on the dot button; the tooltip names the scope', async () => {
     const [a, b] = await mount({ onToggleActive: vi.fn(), isActive: r => r.faceId === 1, activeScopeOf: () => 'persistent' });
     expect(within(a).getByTestId('cell-active').getAttribute('aria-pressed')).toBe('true');
     expect(within(b).queryByTestId('active-dot')).toBeNull();
     const dot = within(a).getByTestId('active-dot');
     expect(dot.getAttribute('data-scope')).toBe('persistent');
-    expect(await tipOf(dot)).toBe('Luôn bật');
-    expect(await tipOf(within(a).getByTestId('cell-active'))).toBe('Tắt Active');
-    expect(await tipOf(within(b).getByTestId('cell-active'))).toBe('Bật Active');
+    expect(await tipOf(within(a).getByTestId('cell-active'))).toBe('Bật/Tắt font · Luôn bật');
+    expect(await tipOf(within(b).getByTestId('cell-active'))).toBe('Bật/Tắt font');
+    expect(within(b).getByTestId('cell-active').querySelector('.fa-dot')?.getAttribute('data-scope')).toBe('off');
   });
 
   it('session scope dot says "Đang bật · phiên này"; no power button without a handler', async () => {
@@ -59,5 +60,15 @@ describe('FaceCell activation', () => {
     expect(within(a).queryByTestId('cell-active')).toBeNull();
     expect(within(b).queryByTestId('active-dot')).toBeNull();
     expect(within(b).getByTestId('cell-active')).toBeTruthy();
+  });
+
+  it('Space on the focused dot button toggles it without selecting the card (native button)', async () => {
+    const onToggleActive = vi.fn(); const onSelect = vi.fn();
+    const [a] = await mount({ onToggleActive, onSelect });
+    const btn = within(a).getByTestId('cell-active');
+    expect(btn.tagName).toBe('BUTTON');
+    btn.focus(); fireEvent.keyDown(btn, { key: ' ' }); fireEvent.click(btn); // jsdom không tự đổi keyup→click
+    expect(onToggleActive).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

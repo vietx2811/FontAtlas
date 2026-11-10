@@ -10,6 +10,7 @@ import { groupFilters, restoreChanged, type Group, type GroupId } from '../filte
 import type { LibraryFilters } from '../../store/ui';
 import { useFilterHistory } from '../filter/useFilterHistory';
 import { useSourcesStore } from '../../store/sources';
+import { AdvancedFunnel } from '../filter/AdvancedFilters';
 
 export const SEARCH_DEBOUNCE_MS = 120;
 
@@ -83,6 +84,7 @@ export function SearchField(): React.JSX.Element {
       {text !== ''
         ? <Tooltip label={t('search.clear')} shortcut="Esc"><button type="button" className="fa-clear" aria-label={t('search.clear')} onClick={() => { commit(''); input.current?.focus(); }}><Icon name="x" size={13} /></button></Tooltip>
         : <span className="fa-kbd">⌘K</span>}
+      <AdvancedFunnel />
     </label>
   );
 }

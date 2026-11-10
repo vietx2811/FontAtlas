@@ -126,3 +126,26 @@ describe('useAxisHistograms (debounce + cancel)', () => {
     expect(spy.mock.calls.length - base).toBe(1);
   });
 });
+
+describe('Advanced funnel inside the search field', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useAdvancedSheet.setState({ open: false }); });
+  it('is an icon button with an aria-label and opens the sheet; there is no separate "Advanced" text button', async () => {
+    const { SearchField } = await import('../../main/SearchField');
+    const api = createMockApi();
+    render(<><SearchField /><AdvancedFilters api={api} /></>);
+    const funnel = screen.getByTestId('advanced-open');
+    expect(funnel.closest('.fa-search')).not.toBeNull();
+    expect(funnel.getAttribute('aria-label')).toBe('Advanced');
+    expect(funnel.textContent).toBe('');
+    fireEvent.click(funnel); await settle();
+    expect(screen.getByTestId('advanced-sheet')).not.toBeNull();
+    expect(funnel.getAttribute('aria-expanded')).toBe('true');
+  });
+  it('shows the number of active filters on the funnel', async () => {
+    const { SearchField } = await import('../../main/SearchField');
+    useUiStore.setState({ ...useUiStore.getState(), filters: { italic: true, weightClass: [600, 900] } });
+    render(<SearchField />);
+    expect(screen.getByTestId('advanced-count').textContent).toBe('2');
+    expect(screen.getByTestId('advanced-open').getAttribute('aria-label')).toBe('Advanced, 2 bộ lọc đang bật');
+  });
+});
