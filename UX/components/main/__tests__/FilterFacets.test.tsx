@@ -100,7 +100,7 @@ describe('filter facets', () => {
   it('Phân loại group lists classFacets with counts, no Display class, subclasses after picking a class', async () => {
     await mount();
     const grp = await screen.findByRole('group', { name: 'Phân loại' });
-    expect(within(grp).getByRole('checkbox', { name: /^Serif/ })).toBeTruthy();
+    expect(await within(grp).findByRole('checkbox', { name: /^Serif/ })).toBeTruthy();
     expect(within(grp).queryByRole('checkbox', { name: /Display/ })).toBeNull();
     expect(within(grp).queryByRole('checkbox', { name: /Didone/ })).toBeNull();
     fireEvent.click(within(grp).getByRole('checkbox', { name: /^Serif/ }));

@@ -9,6 +9,7 @@ import { AdvancedFilters } from '../AdvancedFilters';
 import { AdvancedSheet } from '../AdvancedSheet';
 import { ALL_AXES } from '../axisGroups';
 import { HISTOGRAM_DEBOUNCE_MS } from '../useAxisHistograms';
+import { KEY_COMMIT_MS } from '../RangeSlider';
 
 const initial = useUiStore.getState();
 const settle = async (ms = HISTOGRAM_DEBOUNCE_MS + 50) => { await act(async () => { await new Promise(r => setTimeout(r, ms)); }); };
@@ -36,6 +37,8 @@ describe('AdvancedSheet', () => {
     render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
     const hi = document.querySelector('[data-axis=weight_class] [data-testid=rs-lo]') as HTMLElement;
     fireEvent.keyDown(hi, { key: 'ArrowRight' }); fireEvent.keyDown(hi, { key: 'ArrowRight' }); fireEvent.keyDown(hi, { key: 'ArrowRight' });
+    expect(filters().weightClass).toBeUndefined(); // chưa ghi: đang gộp phím
+    await settle(KEY_COMMIT_MS + 60);
     expect(filters().weightClass).toEqual([400, 900]);
   });
 
@@ -49,6 +52,23 @@ describe('AdvancedSheet', () => {
     fireEvent.change(lo, { target: { value: String(mid).replace('.', ',') } }); fireEvent.keyDown(lo, { key: 'Enter' });
     expect(filters().rawAxisRanges?.[0].axis).toBe('stem');
     fireEvent.change(lo, { target: { value: String(domainLo).replace('.', ',') } }); fireEvent.keyDown(lo, { key: 'Enter' });
+    expect(filters().rawAxisRanges ?? []).toEqual([]);
+  });
+
+  it('an end left at the display edge (p1–p99) is stored as the TRUE extreme, so fonts outside p1–p99 are not lost', async () => {
+    const api = createMockApi();
+    const real = await api.axisHistogram();
+    vi.spyOn(api, 'axisHistogram').mockResolvedValue(real.map(h => (h.axis === 'stem' ? { ...h, lo: 0.1, hi: 0.2 } : h)));
+    vi.spyOn(api, 'axisStats').mockResolvedValue([{ axis: 'stem', unit: 'ratio', count: 13, min: 0.0504, max: 0.3009, p1: 0.1, p99: 0.2 }]);
+    render(<AdvancedSheet api={api} onClose={() => {}} />); await settle();
+    const lo = document.querySelector('[data-axis=stem] [data-testid=rs-lo]') as HTMLElement;
+    fireEvent.keyDown(lo, { key: 'ArrowRight' }); await settle(KEY_COMMIT_MS + 60);
+    const r = filters().rawAxisRanges![0];
+    expect(r.axis).toBe('stem');
+    expect(r.range[0]).toBeCloseTo(0.101, 3);
+    expect(r.range[1]).toBe(0.301); // cận mở = max thật làm tròn lên, KHÔNG phải p99 = 0.2
+    // kéo đầu dưới về mép thì cả hai đầu mở → bỏ lọc
+    fireEvent.keyDown(document.querySelector('[data-axis=stem] [data-testid=rs-lo]')!, { key: 'Home' }); await settle(KEY_COMMIT_MS + 60);
     expect(filters().rawAxisRanges ?? []).toEqual([]);
   });
 

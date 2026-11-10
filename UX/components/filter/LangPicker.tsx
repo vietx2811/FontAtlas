@@ -54,7 +54,7 @@ export function LangPicker({ api, query, refreshKey }: { api: Api; query: FaceQu
 
 function LangRow({ name, sub, level, full, near, code, onClick }: { name: string; sub?: string; level: Level | null; full: number; near: number; code: string; onClick(): void }): React.JSX.Element {
   return (
-    <button type="button" className="fa-lang-row" data-code={code} data-level={level ?? 'off'} aria-pressed={level !== null} onClick={onClick}>
+    <button type="button" className="fa-lang-row" data-code={code} data-level={level ?? 'off'} aria-pressed={level !== null} aria-label={t('lang.row', { name, state: t(level === 'full' ? 'lang.state.full' : level === 'near' ? 'lang.state.near' : 'lang.state.off') })} onClick={onClick}>
       <span className="fa-lang-lv" aria-hidden>{level === 'full' ? '●' : level === 'near' ? '◐' : '○'}</span>
       <span className="fa-lang-name">{name}{sub && <small> {sub}</small>}</span>
       <span className="fa-lang-n" title={t('lang.counts', { full, near })}>{level === 'near' ? near : full}</span>

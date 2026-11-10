@@ -20,3 +20,9 @@ export const FILTER_I18N_3 = {
   'badge.full': '{lang} · đủ ký tự', 'badge.near': '{lang} · gần đủ ({have}/{total} ký tự)', 'badge.partial': '{lang} · thiếu {miss}/{total} ký tự', 'badge.low': '{lang} · thiếu hầu hết ({have}/{total} ký tự)', 'badge.unknown': '{lang} · chưa phân tích',
   'credit.hyperglot': 'Dữ liệu ngôn ngữ: Hyperglot © Rosetta, Apache-2.0',
 } as const;
+
+export const FILTER_I18N_4 = {
+  'fgroup.title': 'Đang lọc', 'fgroup.lang.all': 'đủ tất cả', 'fgroup.lang.any': 'một trong',
+  'search.placeholder': 'Tìm font', 'search.clear': 'Xoá tìm kiếm', 'slider.min': 'tối thiểu', 'slider.max': 'tối đa',
+  'lang.state.off': 'chưa chọn', 'lang.state.full': 'đủ', 'lang.state.near': 'gần đủ', 'lang.row': '{name}: {state}',
+} as const;

@@ -191,6 +191,27 @@
       await log('advanced-weight-dblclick-resets', !document.querySelector('[data-testid=filter-summary]') && total() === base, { total: total(), base });
       key(document, { key: 'Escape' }); await sleep(300);
       await log('advanced-esc-closes', !document.querySelector('[data-testid=advanced-sheet]'), null);
+      // LỌC NGÔN NGỮ (Hyperglot): chọn Tiếng Việt "đủ" → lưới còn font đủ dấu, mọi badge là vie/full; ảnh picker (dark)
+      {
+        const fpL = await openAdv();
+        const row = await wait(() => fpL?.querySelector('[data-code=vie]'), 30000);
+        const totalBefore = total();
+        row?.click();
+        await wait(() => document.querySelector('[data-testid=filter-summary]')?.textContent.includes('Tiếng Việt') || document.querySelector('[data-testid=filter-summary] [data-group=lang]'), 8000);
+        await sleep(1200);
+        const labelFull = row?.getAttribute('aria-label') ?? '';
+        const th2 = document.documentElement.dataset.theme;
+        document.documentElement.dataset.theme = 'dark'; await sleep(250);
+        await snap('lang-picker-dark');
+        if (th2) document.documentElement.dataset.theme = th2; else delete document.documentElement.dataset.theme;
+        await closeAdv(); await sleep(500);
+        const marks = [...document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]')];
+        const after = total();
+        const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
+        await log('lang-filter-narrows-and-badges', !!row && /đủ$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
+        await openAdv(); const r2 = document.querySelector('[data-code=vie]'); r2?.click(); await sleep(150); r2?.click(); await sleep(900); await closeAdv(); await sleep(400);
+        await log('lang-filter-cleared', !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, { total: total(), totalBefore });
+      }
       // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
       const fp2 = await openAdv();
       [...(fp2?.querySelectorAll('label') ?? [])].find(l => l.textContent.includes('Italic') || l.textContent.includes('In nghiêng'))?.querySelector('input')?.click();

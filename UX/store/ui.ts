@@ -122,6 +122,8 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viO
   if (s.tag !== null) q.tagIds = [Number(s.tag)];
   if (s.query.trim()) q.text = s.query.trim();
   if (s.viOnly && !q.vi) q.vi = 'full';
+  // Chỉ báo ngôn ngữ trên thẻ theo ngôn ngữ đang lọc (đầu tiên); không lọc thì mặc định của backend (vie).
+  if (q.langs?.length && !q.badgeLang) q.badgeLang = q.langs[0].code;
   return q;
 }
 

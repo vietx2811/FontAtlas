@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxisRow } from '../AxisRow';
 import { Histogram } from '../Histogram';
-import { RangeSlider } from '../RangeSlider';
+import { KEY_COMMIT_MS, RangeSlider } from '../RangeSlider';
 import { hasTerm, termKey } from '../../ui/terms';
 import { MEASURED_AXES } from '../../../api/mockAnalysis';
 
@@ -11,6 +11,9 @@ describe('every Advanced axis has a TermTip entry', () => {
 });
 
 describe('RangeSlider', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+  const press = (el: Element, key: string) => { fireEvent.keyDown(el, { key }); act(() => { vi.advanceTimersByTime(KEY_COMMIT_MS + 10); }); };
   const setup = (over: Partial<React.ComponentProps<typeof RangeSlider>> = {}) => {
     const onChange = vi.fn(); const onReset = vi.fn();
     render(<RangeSlider min={0} max={10} step={1} value={[2, 8]} label="Test" onChange={onChange} onReset={onReset} {...over} />);
@@ -20,18 +23,38 @@ describe('RangeSlider', () => {
   it('keyboard: arrows step, PageUp ×10, Home/End jump, never crossing the other thumb', () => {
     const { onChange } = setup({ min: 0, max: 100 });
     const lo = screen.getByTestId('rs-lo');
-    fireEvent.keyDown(lo, { key: 'ArrowRight' }); expect(onChange).toHaveBeenLastCalledWith([3, 8]);
-    fireEvent.keyDown(lo, { key: 'PageUp' }); expect(onChange).toHaveBeenLastCalledWith([8, 8]);
-    fireEvent.keyDown(lo, { key: 'End' }); expect(onChange).toHaveBeenLastCalledWith([8, 8]);
-    fireEvent.keyDown(screen.getByTestId('rs-hi'), { key: 'Home' }); expect(onChange).toHaveBeenLastCalledWith([2, 2]);
+    press(lo, 'ArrowRight'); expect(onChange).toHaveBeenLastCalledWith([3, 8]);
+    press(lo, 'PageUp'); expect(onChange).toHaveBeenLastCalledWith([8, 8]);
+    press(lo, 'End'); expect(onChange).toHaveBeenLastCalledWith([8, 8]);
+    press(screen.getByTestId('rs-hi'), 'Home'); expect(onChange).toHaveBeenLastCalledWith([2, 2]);
   });
 
   it('discrete ticks: arrows hop between ticks', () => {
     const { onChange } = setup({ ticks: [0, 3, 7, 10], value: [3, 7] });
-    fireEvent.keyDown(screen.getByTestId('rs-hi'), { key: 'ArrowRight' });
+    press(screen.getByTestId('rs-hi'), 'ArrowRight');
     expect(onChange).toHaveBeenLastCalledWith([3, 10]);
-    fireEvent.keyDown(screen.getByTestId('rs-lo'), { key: 'ArrowLeft' });
+    press(screen.getByTestId('rs-lo'), 'ArrowLeft');
     expect(onChange).toHaveBeenLastCalledWith([0, 7]);
+  });
+
+  it('keyboard changes are coalesced: three quick presses make ONE onChange with the final value', () => {
+    const { onChange } = setup({ min: 0, max: 100, value: [10, 90] });
+    const lo = screen.getByTestId('rs-lo');
+    fireEvent.keyDown(lo, { key: 'ArrowRight' }); fireEvent.keyDown(lo, { key: 'ArrowRight' }); fireEvent.keyDown(lo, { key: 'ArrowRight' });
+    expect(onChange).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(KEY_COMMIT_MS + 10); });
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('with (max − min) not a multiple of step, End and a full drag land exactly on max (and Home on min)', () => {
+    const { onChange } = setup({ min: 0.1, max: 1.05, step: 0.1, value: [0.3, 0.6] });
+    press(screen.getByTestId('rs-hi'), 'End'); expect(onChange).toHaveBeenLastCalledWith([0.3, 1.05]);
+    press(screen.getByTestId('rs-lo'), 'Home'); expect(onChange).toHaveBeenLastCalledWith([0.1, 0.6]);
+  });
+
+  it('on discrete ticks an odd value (typed) starts from the nearest tick, not the first', () => {
+    const { onChange } = setup({ ticks: [100, 200, 300, 400], min: 100, max: 400, step: 100, value: [290, 400] });
+    press(screen.getByTestId('rs-lo'), 'ArrowRight'); expect(onChange).toHaveBeenLastCalledWith([400, 400]);
   });
 
   it('double click on the track resets only when a filter is set', () => {

@@ -10,13 +10,14 @@ import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classLabel, subclassLabel } from '../main/classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
 import { filterChips } from '../main/FilterChips';
+import { roundedValue } from '../detail/tabs/measurements';
 import { Masonry } from './Masonry';
 import { AxisRow } from './AxisRow';
 import { LangPicker } from './LangPicker';
 import { Histogram } from './Histogram';
 import { AXIS_GROUPS } from './axisGroups';
 import { WEIGHT_TICKS, WIDTH_TICKS, weightName, widthName } from './classNames';
-import { useAxisHistograms } from './useAxisHistograms';
+import { HISTOGRAM_DEBOUNCE_MS, useAxisHistograms } from './useAxisHistograms';
 import './advancedSheet.css';
 
 const stepFor = (unit: string): number => unit === 'deg' ? 0.1 : 0.001;
@@ -30,7 +31,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   const version = useScanStore(s => s.version);
   const ui = useUiStore(useShallow(s => ({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, filters: s.filters })));
   const query = useMemo(() => toMetadataQuery(ui), [ui.view, ui.tag, ui.query, ui.viOnly, ui.filters]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { data: hist, loading, error, retry } = useAxisHistograms(api, query, true, version);
+  const { data: hist, extent, loading, error, retry } = useAxisHistograms(api, query, true, version);
   const [facets, setFacets] = useState<ClassFacetDto[]>([]);
   const root = useRef<HTMLDivElement>(null);
   const forced = forcedFacets(view);
@@ -38,7 +39,8 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
 
   useEffect(() => {
     root.current?.focus();
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); } };
+    // Esc đóng MỘT lớp: nếu popover "Đang lọc" đang mở thì để popover tự đóng trước, sheet giữ nguyên.
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-testid=active-filters]')) { e.preventDefault(); e.stopPropagation(); onClose(); } };
     document.addEventListener('keydown', key, true);
     const from = opener.current;
     return () => { document.removeEventListener('keydown', key, true); if (from instanceof HTMLElement) from.focus(); };
@@ -46,8 +48,9 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   useEffect(() => {
     let alive = true;
     const { classes: _c, subclasses: _s, ...rest } = query;
-    api.classFacets(rest).then(f => { if (alive) setFacets(f); }, () => { if (alive) setFacets([]); });
-    return () => { alive = false; };
+    // Cùng nhịp debounce với histogram: kéo slider liên tục không bắn classFacets mỗi lần.
+    const timer = setTimeout(() => { api.classFacets(rest).then(f => { if (alive) setFacets(f); }, () => { if (alive) setFacets([]); }); }, HISTOGRAM_DEBOUNCE_MS);
+    return () => { alive = false; clearTimeout(timer); };
   }, [api, query, version]);
 
   const patch = (next: Partial<LibraryFilters>) => {
@@ -113,10 +116,13 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
     const sel = filters.rawAxisRanges?.find(r => r.axis === axis)?.range ?? null;
     const empty = !h || h.empty;
     const unit = h?.unit ?? '';
-    const min = h ? Math.min(h.lo, sel?.[0] ?? h.lo) : 0;
-    const max = h ? Math.max(h.hi, sel?.[1] ?? h.hi) : 1;
+    const min = h ? h.lo : 0;
+    const max = h ? h.hi : 1;
+    const ext = extent.get(axis);
+    const fullMin = ext?.min != null ? roundedValue(ext.min, unit, 'down') : undefined;
+    const fullMax = ext?.max != null ? roundedValue(ext.max, unit, 'up') : undefined;
     return (
-      <AxisRow key={axis} axis={axis} source={t('adv.measured')} min={min} max={max} step={stepFor(unit)} digits={unit === 'deg' ? 1 : 3}
+      <AxisRow key={axis} axis={axis} source={t('adv.measured')} min={min} max={max} fullMin={fullMin} fullMax={fullMax} step={stepFor(unit)} digits={unit === 'deg' ? 1 : 3}
         value={sel as [number, number] | null} empty={!!h && empty && !sel} count={h?.count} onChange={r => setRange(axis, r)}>
         {h && <Histogram hist={h} />}
       </AxisRow>

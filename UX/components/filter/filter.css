@@ -3,7 +3,7 @@
 .fa-fsum-seg[data-selected="true"] { outline: 2px solid var(--accent); }
 .fa-fsum-more { background: var(--surface-2); color: var(--muted); }
 .fa-search { position: relative; }
-.fa-fpop { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 420px; max-width: 90vw; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / .18)); outline: none; }
+.fa-fpop { position: fixed; z-index: 60; width: 420px; max-width: 90vw; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); box-shadow: var(--shadow-pop, 0 8px 24px rgb(0 0 0 / .18)); outline: none; }
 .fa-fpop-row { display: grid; grid-template-columns: 84px 1fr auto; gap: 8px; align-items: start; padding: 6px 4px; }
 .fa-fpop-label { color: var(--muted); font-size: var(--text-xs); font-weight: 600; padding-top: 2px; }
 .fa-fpop-chips { display: flex; flex-wrap: wrap; gap: 4px; }

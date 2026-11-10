@@ -37,3 +37,10 @@ Cổng: `local_ci` PASS trước mỗi báo cáo; chỉ commit trên nhánh, kh�
 ## 5. Rủi ro / cần Lead chốt
 - Spec ghi "bỏ class_override": giữ nguyên theo lời Lead.
 - usWeightClass/usWidthClass và `wght`/`wdth` cần worker 02 (1b); trước đó trục Weight/Width dùng `weight`/`width_*` đo được.
+
+## 6. Ghi chú sau review (2026-11-10)
+- Chỉ báo ngôn ngữ trên thẻ theo spec §1: mã viết hoa + vòng độ phủ, **không có số** (không còn `−N`); tooltip ghi "thiếu x/y ký tự". `badgeLang` = ngôn ngữ đầu tiên đang lọc.
+- Thanh trượt: đầu ở mép miền hiển thị (p1–p99) lưu **cận mở** = cực trị thật của `axisStats`; phím gộp 300 ms thành một lần ghi; thay đổi trục liên tiếp ≤ 400 ms là một bước hoàn tác.
+- Toast Hoàn tác chỉ khôi phục các khoá của thao tác gỡ nhóm (không pop ngăn xếp). Esc đóng popover trước, rồi mới đóng sheet.
+- "Ặ vi" và nhóm Tiếng Việt là cùng một trạng thái (`filters.vi`, có test); gỡ nhóm = tắt "Ặ vi" là chủ ý.
+- Backend (báo 02): tooltip `langs.rs` ghi "thiếu 70 (0/70)" khi `have = 0`.

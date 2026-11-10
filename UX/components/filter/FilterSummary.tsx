@@ -16,7 +16,7 @@ export function FilterSummary({ groups, selected, open, onOpen }: { groups: Grou
       <button type="button" className="fa-fsum" data-testid="filter-summary" aria-haspopup="dialog" aria-expanded={open} onClick={onOpen}>
         {shown.map(g => (
           <span key={g.id} className="fa-fsum-seg" data-group={g.id} data-selected={selected === g.id}>
-            {g.chips[0].label}{g.chips.length > 1 ? ` +${g.chips.length - 1}` : ''}
+            {g.chips[0].label}{g.chips.length > 1 ? ` +${g.chips.length - 1}` : ''}{g.suffix ? ` · ${g.suffix}` : ''}
           </span>
         ))}
         {hidden > 0 && <span className="fa-fsum-seg fa-fsum-more" data-testid="filter-summary-more">{t('fgroup.more', { n: hidden })}</span>}
