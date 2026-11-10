@@ -22,11 +22,12 @@ Quy ước nguồn: **[code]** đọc từ mã trên dev/mvp, **[web]** trang c�
 6. **Menu chuột phải cho Sidebar** dùng chung `ui/Menu` (thay `.fa-menu` tự chế đang có), mở được bằng phím Menu / ⇧F10, trả focus đúng mục. Mô hình dữ liệu theo loại mục để Case/Smart cắm vào sau.
 7. **Lọc theo taxonomy mới và tag người dùng** (mục D): thêm 2 thẻ vào AdvancedSheet (Đặc điểm / Traits; Phong cách & cảm xúc) và chuyển lọc thẻ vào `filters` để phễu, chip và "Đặt lại" nhất quán.
 
-**Cần quyết định (xếp theo mức chặn):**
+**Cần quyết định (xếp theo mức chặn).** Cập nhật 2026-11-11: Lead đã chốt Q1 (Display là class), Q2–Q5 đồng ý theo đề xuất, đồng ý chuyển `ui.tag` → `filters.tagIds` (vào lát của 05) và dùng `ui/Menu` cho Sidebar. Q6 vẫn là thứ tự làm việc.
+
 
 | # | Câu hỏi | Đề xuất của tôi | Ai quyết |
 |---|---|---|---|
-| Q1 | Taxonomy nghiên cứu đề xuất class `Display`; chủ app đã quyết 2026-11-08 "Display là usage tag, không phải class" (`traits[]`). Spec theo quyết định của chủ app: stencil/inline/pixel/shaded là **traits**, Display là **use tag**. | Giữ quyết định chủ app; Lead xác nhận để 02 không làm class Display. | Lead |
+| Q1 | **Đã quyết (Lead, 2026-11-11):** chủ app duyệt taxonomy mới 8 class, **có `Display`** (thay quyết định cũ 2026-11-08 "Display là usage tag"). Display là class; subclass cấu trúc `stencil`, `inline`, `shaded`, `pixel`; traits giữ độc lập với class; phong cách/mood là tag người dùng gắn. | Theo quyết định. | (đóng) |
 | Q2 | "Nhóm theo Family": tiêu đề nhóm (mọi kiểu vẫn hiện) hay một thẻ đại diện mỗi family? | Tiêu đề nhóm, mặc định **tắt** (giữ hành vi hiện tại). | Chủ app |
 | Q3 | Badge ngôn ngữ thiếu ký tự: giữ hổ phách cũ hay trung tính hoàn toàn? Theo ghi nhớ "note-mark" (missing glyphs = xám) và yêu cầu A2, tôi chọn trung tính. | Trung tính. | Chủ app |
 | Q4 | "Ngày phát hành": file font **không có** trường ngày phát hành. Chỉ có năm trong copyright, `head.created`, `head.modified`. | Gọi là "Năm phát hành (ước lượng)", hiện nguồn + độ tin cậy, font không rõ luôn xếp cuối. | Chủ app |
@@ -311,7 +312,7 @@ Ghi chú:
 
 ### D1. Bộ lọc phân loại (mở rộng thẻ "Phân loại")
 
-Taxonomy §4: class chính `Serif, Slab, Sans, Script, Handwriting, Mono, Blackletter, Symbol, Uncertain` (không có class `Display`; xem Q1), mỗi class ≤ ~5 subclass; `primary` duy nhất để lọc/nhóm, `secondary` chỉ để hiển thị và tìm (taxonomy §5.2).
+Taxonomy §4 đã được chủ app duyệt 2026-11-11 (8 class, **có `Display`**; danh sách class chính thức do Lead/02 chốt, UI đọc từ `classFacets` chứ không cứng danh sách). Các class nghiên cứu liệt kê: `Serif, Slab, Sans, Script, Handwriting, Mono, Display, Blackletter, Symbol, Uncertain`. `Display` có subclass cấu trúc `stencil`, `inline`, `shaded`, `pixel` (taxonomy §4.8). Mỗi class ≤ ~5 subclass; `primary` duy nhất để lọc/nhóm, `secondary` chỉ để hiển thị và tìm (taxonomy §5.2).
 
 - Giữ cấu trúc hiện tại (class có đếm; chọn class mới hiện subclass có đếm). Thêm hai công tắc nhỏ ở cuối thẻ:
   1. **"Gồm cả font lai (hybrid)"** — khớp thêm font có `secondary` thuộc class đã chọn; mặc định **tắt**. Tooltip + `TermTip` "hybrid".
@@ -321,7 +322,7 @@ Taxonomy §4: class chính `Serif, Slab, Sans, Script, Handwriting, Mono, Blackl
 
 ### D2. Thẻ mới "Đặc điểm (Traits)"
 
-Các đặc điểm độc lập với class (taxonomy §4.10, **bao gồm** các cấu trúc Display đã chuyển thành trait theo quyết định chủ app): `rounded`, `stencil`, `inline_outline`, `pixel`, `shaded`, `fat_face`, `reverse_contrast`, `high_contrast`, `monoline`, `condensed`, `extended`, và tag kỹ thuật `variable`, `color`, `has_italic`.
+Các đặc điểm độc lập với class (taxonomy §4.10; **độc lập** với class, một font Sans vẫn có thể mang trait `stencil` mà không thành class Display): `rounded`, `stencil`, `inline_outline`, `pixel`, `shaded`, `fat_face`, `reverse_contrast`, `high_contrast`, `monoline`, `condensed`, `extended`, và tag kỹ thuật `variable`, `color`, `has_italic`.
 
 - Hộp kiểm đa chọn có đếm (từ facet backend); chọn nhiều trait = **AND**? Đề xuất **OR trong nhóm** như class hiện nay, với công tắc "Phải có tất cả" nhỏ. [TK — cần xác nhận ngữ nghĩa với `FaceQuery.traits`.]
 - `variable` và `italic` đang nằm ở thẻ "Style": giữ ở đó, **không lặp** trong Traits.
@@ -333,7 +334,7 @@ Cơ sở: taxonomy §4.11 (mood/use là *tag chủ quan*, "M" — không đo đ�
 
 - **Mô hình:** dùng chính **Thẻ** hiện có (`TagDto`, `tagFaces/untagFaces`), thêm tuỳ chọn `group: 'mood' | 'use' | 'custom'`. App có sẵn **danh sách gợi ý**, tạo thẻ thật khi người dùng dùng lần đầu (không tạo hàng loạt):
   - *Mood (~12, taxonomy §4.11):* Business, Calm, **Refined** (thay *Elegant* — từ này chủ app cấm trong lời giải thích của app, theo hồ sơ trong từ điển mô tả), Playful, Friendly/Cute, Loud/Bold, Vintage/Retro, Futuristic/Tech, Rugged, Artistic, Formal, Handmade.
-  - *Use:* Text, Display, UI, Editorial, Logo/Branding, Packaging, Signage (Display ở đây là **use tag**, đúng quyết định chủ app).
+  - *Use:* Text, Headline, UI, Editorial, Logo/Branding, Packaging, Signage (không có tag `Display` để khỏi trùng với class Display; "Headline" nói mục đích dùng cỡ lớn).
   - Mỗi gợi ý có nhãn tiếng Việt + giải thích ngắn (`TermTip`), vd. *Loud/Bold — ồn, đậm, gây chú ý; hợp poster, ít hợp đoạn văn dài*.
 - **Gắn tag:** menu chuột phải font đã có "Gắn thẻ" + "Thẻ mới" (`faceMenuModel`); thêm phím **⌘T** "Gắn thẻ cho lựa chọn" mở popover chọn nhiều thẻ có ô tìm (theo mẫu ⌘T của Typeface [web]); áp dụng cả khi chọn nhiều font. Có thể bật hiển thị `tags` trên thẻ (A3).
 - **Lọc:** thẻ "Phong cách & cảm xúc" trong AdvancedSheet liệt kê thẻ nhóm mood/use (và thẻ tuỳ ý bên dưới nhãn "Thẻ khác") với đếm `faceCount`. Ngữ nghĩa: **OR trong nhóm, AND giữa nhóm** (cùng quy ước class), kèm công tắc "Phải có tất cả thẻ" cho nhu cầu ngược lại. Chip trên phễu: `Thẻ: Playful`.
