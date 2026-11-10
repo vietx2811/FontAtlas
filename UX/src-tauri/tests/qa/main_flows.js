@@ -235,9 +235,10 @@
       await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
       key(document, { key: 'Escape' }); await sleep(300);
       const withFilter = total();
-      sinput?.focus(); key(sinput, { key: 'Backspace' }); await sleep(150);
-      const selected = !!document.querySelector('.fa-fsum-seg[data-selected=true]');
-      key(sinput, { key: 'Backspace' }); await sleep(900);
+      sinput?.focus(); key(sinput, { key: 'Backspace' });
+      const selected = !!(await wait(() => document.querySelector('.fa-fsum-seg[data-selected=true]'), 5000)); // chọn nhóm cuối: đợi trạng thái thay vì sleep cố định
+      key(sinput, { key: 'Backspace' });
+      await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
       const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
       await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
       undoBtn?.click(); await sleep(900);
@@ -615,10 +616,11 @@
     await sleep(150); await snap('class-chip');
     const chipText = (cchip?.textContent ?? '').trim();
     const countNow = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, ''));
-    const total0 = countNow();
+    // Tổng ban đầu: đợi tới khi > 0 và đứng yên qua hai lần đọc (thư viện còn đang tải thì số chưa ổn định).
+    let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 15000); // facet tải sau debounce
+    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
     const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
