@@ -138,3 +138,66 @@ fn display_is_a_usage_tag_not_a_class() {
     assert!(cj.signals.iter().all(|s| s.vote != Some(Class::Mono)), "{cj:?}");
     assert_eq!(cj.traits, vec!["rounded".to_string()]);
 }
+
+// --- serif chân nhỏ (core-0.9.0): chân loe, cờ trên-trái; tên không lấn số đo ---
+
+fn synthetic(name: &str, foot: f32, flare: f32, head: f32) -> ClassifyInput {
+    ClassifyInput { name: name.into(), m: Metrics { serif_foot: Some(foot), serif_flare: Some(flare), serif_head: Some(head), ..Default::default() }, ..Default::default() }
+}
+
+#[test]
+fn small_foot_serif_fixtures_are_serif_with_measured_flare() {
+    for file in ["dm_serif_display.ttf", "chonburi.ttf"] {
+        let i = inp(file);
+        let (foot, flare) = (i.m.serif_foot.unwrap(), i.m.serif_flare.unwrap());
+        // vùng giữa mà phép đo cũ bỏ trống, và độ loe nhìn thấy chân
+        assert!((1.2..=1.7).contains(&foot), "{file}: foot {foot}");
+        assert!(flare >= 1.5, "{file}: flare {flare}");
+        let c = classify(&i);
+        // Chonburi là chữ rất đậm/tương phản cao (Display): có thể chỉ đạt candidate, nhưng không bao giờ nghiêng về Sans
+        assert_eq!(best(&c), Class::Serif, "{file}: {:?}", c.signals);
+        assert!(c.signals.iter().any(|s| s.vote == Some(Class::Serif) && s.detail.starts_with("chân nhỏ")), "{file}: {:?}", c.signals);
+        if file == "dm_serif_display.ttf" {
+            assert_eq!(c.class, Class::Serif);
+        }
+    }
+}
+
+#[test]
+fn sans_fixtures_have_no_flare_and_stay_sans() {
+    for file in ["roboto.ttf", "open_sans.ttf", "fira_sans_regular.ttf"] {
+        let i = inp(file);
+        assert!(i.m.serif_flare.unwrap() < 1.15, "{file}: {:?}", i.m.serif_flare);
+        assert!(i.m.serif_head.unwrap() < 0.1, "{file}: {:?}", i.m.serif_head);
+        assert_eq!(classify(&i).class, Class::Sans, "{file}");
+    }
+}
+
+#[test]
+fn name_neue_or_grotesk_does_not_override_clear_small_foot_numbers() {
+    // chân nhỏ rõ (loe 1.63, cờ 0.3) ⇒ Serif dù tên có "Neue"/"Grotesk"
+    for name in ["acme neue regular", "acme grotesk regular", "acme regular"] {
+        let c = classify(&synthetic(name, 1.54, 1.63, 0.30));
+        assert_eq!(best(&c), Class::Serif, "{name}: {:?}", c.signals);
+    }
+}
+
+#[test]
+fn pointed_foot_with_top_flag_is_not_called_sans_by_a_low_foot_reading() {
+    // chân nhọn (rộng ~0 ở baseline) + cờ trên-trái: không được kết luận Sans từ serif_foot thấp, kể cả khi tên là "Neue"
+    let c = classify(&synthetic("acme neue regular", 0.61, 1.0, 0.45));
+    assert_ne!(c.class, Class::Sans, "{:?}", c.signals);
+    assert!(!c.signals.iter().any(|s| s.vote == Some(Class::Sans) && s.weight >= 2.0), "{:?}", c.signals);
+    // không có dấu hiệu serif ⇒ vẫn là Sans như trước (không đổi hành vi)
+    assert_eq!(classify(&synthetic("acme sans", 0.61, 1.0, 0.0)).class, Class::Sans);
+    assert_eq!(classify(&synthetic("acme sans", 1.0, 1.0, 0.0)).class, Class::Sans);
+}
+
+#[test]
+fn old_analyses_without_flare_classify_exactly_as_before() {
+    let mut i = synthetic("acme neue regular", 1.54, 1.63, 0.30);
+    i.m.serif_flare = None;
+    i.m.serif_head = None;
+    let c = classify(&i);
+    assert!(!c.signals.iter().any(|s| s.detail.contains("chân nhỏ")), "{:?}", c.signals);
+}

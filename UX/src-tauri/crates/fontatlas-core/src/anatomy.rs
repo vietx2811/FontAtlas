@@ -38,6 +38,10 @@ pub struct Anatomy {
     pub spacing: Metric,
     pub slant_deg: Metric,
     pub serif_foot: Metric,
+    /// Độ loe chân (cực đại trong dải chân ÷ thân): bắt chân nhọn/bracket mà `serif_foot` đo thấp. Từ core-0.9.0.
+    pub serif_flare: Metric,
+    /// Cờ serif phía trên-trái của i/l/n ÷ thân. Từ core-0.9.0.
+    pub serif_head: Metric,
     pub counter: Metric,
     pub a_storeys: Metric,
     pub g_storeys: Metric,
@@ -139,6 +143,8 @@ pub fn measure_with_filter(
         spacing: detail::spacing_lc_xh(&ctx, xh),
         slant_deg: stroke::slant_deg(&ctx),
         serif_foot: stroke::serif_foot(&ctx, xh),
+        serif_flare: stroke::serif_flare(&ctx, xh),
+        serif_head: stroke::serif_head(&ctx, xh),
         counter: stroke::counter_o(&ctx),
         a_storeys: detail::a_storeys(&ctx),
         g_storeys: detail::g_storeys(&ctx),
@@ -191,6 +197,8 @@ fn all_failed(location: Vec<(String, f32)>, r: FailReason) -> Anatomy {
         spacing: f("mean_sidebearings_a_z_over_xh"),
         slant_deg: f("I_T_stem_midline"),
         serif_foot: f("baseline_foot_over_stem_median_iln"),
+        serif_flare: f("peak_foot_band_over_stem_median_iln"),
+        serif_head: f("top_left_flag_over_stem_median_iln"),
         counter: f("o_inner_over_outer_area"),
         a_storeys: f("a_center_vertical_runs"),
         g_storeys: f("g_center_vertical_runs"),

@@ -125,6 +125,10 @@ pub struct ClassifyInput {
 #[derive(Debug, Clone, Default)]
 pub struct Metrics {
     pub serif_foot: Option<f32>,
+    /// Cực đại bề rộng chân trong dải chân ÷ thân (core ≥ 0.9.0; None với bản phân tích cũ).
+    pub serif_flare: Option<f32>,
+    /// Cờ serif trên-trái của i/l/n ÷ thân (core ≥ 0.9.0).
+    pub serif_head: Option<f32>,
     pub contrast: Option<f32>,
     pub stress_abs: Option<f32>,
     pub slant_abs: Option<f32>,
@@ -184,6 +188,8 @@ impl ClassifyInput {
             italic,
             m: Metrics {
                 serif_foot: g("serif_foot"),
+                serif_flare: g("serif_flare"),
+                serif_head: g("serif_head"),
                 contrast: g("contrast"),
                 stress_abs: g("stress_deg").map(f32::abs),
                 slant_abs: g("slant_deg").map(f32::abs),
@@ -365,10 +371,20 @@ fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
     }
     // --- Serif / Sans
     if let Some(sf) = m.serif_foot {
+        let (flare, head) = (m.serif_flare.unwrap_or(0.0), m.serif_head.unwrap_or(0.0));
+        let small_foot_ev = small_foot_weight(flare, head);
         if sf > 1.6 {
             v.add("measure", format!("serif_foot {sf:.2} > 1,6"), Class::Serif, 2.0);
         } else if sf < 1.2 {
-            v.add("measure", format!("serif_foot {sf:.2} < 1,2"), Class::Sans, 2.0);
+            // chân nhọn: rộng ~0 ngay tại baseline nên `serif_foot` đo thấp dù có cờ/chân loe → không kết luận Sans
+            if sf < 0.9 && small_foot_ev > 0.0 {
+                v.add("measure", format!("serif_foot {sf:.2} thấp nhưng có cờ {head:.2} / loe {flare:.2} (chân nhọn)"), Class::Serif, 1.0);
+            } else {
+                v.add("measure", format!("serif_foot {sf:.2} < 1,2"), Class::Sans, 2.0);
+            }
+        } else if small_foot_ev > 0.0 {
+            // vùng giữa 1.2–1.6: serif chân nhỏ. Cờ trên-trái và độ loe quyết định; tên (Neue/Grotesk) chỉ nặng 0.8.
+            v.add("measure", format!("chân nhỏ: serif_foot {sf:.2}, loe {flare:.2}, cờ {head:.2}"), Class::Serif, small_foot_ev);
         }
     }
     if let Some(p) = p.filter(|p| p[0] == 2) {
@@ -408,6 +424,25 @@ pub fn classify(i: &ClassifyInput) -> Classification {
 
 /// Chọn class theo hình dáng: Symbol, Blackletter, Mono, Script cần đủ điểm; còn lại Serif/Sans. Display không phải class.
 /// Tổng điểm Script+Display tối thiểu để coi là font không dùng cho chữ văn bản.
+/// Độ loe chân (`serif_flare`) từ đây là có chân nhỏ; từ STRONG là chân nhỏ rõ.
+const SMALL_FOOT_FLARE: f32 = 1.3;
+const SMALL_FOOT_STRONG: f32 = 1.5;
+/// Bằng chứng serif chân nhỏ từ độ loe của chân (`serif_flare`) và cờ trên-trái (`serif_head`). 0 = không có.
+fn small_foot_weight(flare: f32, head: f32) -> f32 {
+    if flare > 1.6 || head >= SMALL_HEAD_STRONG {
+        2.0
+    } else if flare >= SMALL_FOOT_STRONG || head >= SMALL_HEAD {
+        1.5
+    } else if flare >= SMALL_FOOT_FLARE || head >= SMALL_HEAD_WEAK {
+        1.0
+    } else {
+        0.0
+    }
+}
+/// Cờ trên-trái ÷ thân: từ WEAK là có dấu hiệu, từ SMALL_HEAD khá rõ, từ STRONG là rõ.
+const SMALL_HEAD_WEAK: f32 = 0.15;
+const SMALL_HEAD: f32 = 0.25;
+const SMALL_HEAD_STRONG: f32 = 0.4;
 const ODD_MIN: f32 = 1.6;
 const ODD_MARGIN: f32 = 1.0;
 /// Bằng chứng Display tối thiểu để thêm tag usage Display cho font chữ văn bản (Display không còn là class).
