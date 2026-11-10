@@ -31,3 +31,70 @@ fn source_under_cloudstorage_reports_its_provider() {
     assert_eq!(listed.len(), 3);
     assert_eq!(listed.iter().filter(|s| s.cloud_provider.is_some()).count(), 2);
 }
+
+// ---- xem trước font cloud: công tắc "Tự tải font trên cloud để xem trước" ----
+use std::time::Duration;
+
+use app_lib::dto::model::SettingsPatchDto;
+use app_lib::services::preview::StoreLocator;
+use app_lib::services::settings;
+use fontatlas_preview::FaceLocator;
+
+fn with_one_font(root: &std::path::Path) -> (Arc<AppState>, String, std::path::PathBuf) {
+    let st = state(root);
+    let dir = root.join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-core/tests/fixtures/roboto.ttf"),
+        dir.join("roboto.ttf"),
+    )
+    .unwrap();
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let hash: String = st
+        .with_store(|s| Ok(s.conn().query_row("SELECT lower(hex(hash)) FROM files", [], |r| r.get(0)).unwrap()))
+        .unwrap();
+    (st, hash, dir.join("roboto.ttf"))
+}
+
+fn mark_cloud_only(st: &AppState) {
+    st.with_store(|s| {
+        s.conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn setting_defaults_on_and_round_trips() {
+    let d = tempfile::tempdir().unwrap();
+    let st = state(d.path());
+    assert!(settings::get_settings(&st).unwrap().cloud_preview_download, "mặc định BẬT");
+    let off = settings::set_settings(&st, SettingsPatchDto { cloud_preview_download: Some(false), ..Default::default() }).unwrap();
+    assert!(!off.cloud_preview_download);
+    assert!(!settings::get_settings(&st).unwrap().cloud_preview_download);
+    let on = settings::set_settings(&st, SettingsPatchDto { cloud_preview_download: Some(true), ..Default::default() }).unwrap();
+    assert!(on.cloud_preview_download);
+}
+
+#[test]
+fn preview_locator_reads_cloud_copies_only_when_the_setting_is_on() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, hash, path) = with_one_font(d.path());
+    let loc = StoreLocator::open(&st.dirs.data).unwrap();
+    assert_eq!(loc.locate(&hash, 0), Some(path.clone()), "bản trên máy: luôn đọc được");
+    mark_cloud_only(&st);
+    assert_eq!(loc.locate(&hash, 0), Some(path), "bật (mặc định): font cloud được đọc, sẽ tải lười");
+    settings::set_settings(&st, SettingsPatchDto { cloud_preview_download: Some(false), ..Default::default() }).unwrap();
+    assert_eq!(loc.locate(&hash, 0), None, "tắt: bỏ qua bản cloud_only, không tải gì");
+}
+
+#[test]
+fn source_dto_counts_faces_that_are_only_placeholders() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _hash, _path) = with_one_font(d.path());
+    assert_eq!(sources::list_sources(&st).unwrap()[0].cloud_only_count, 0);
+    mark_cloud_only(&st);
+    let s = &sources::list_sources(&st).unwrap()[0];
+    assert_eq!((s.cloud_only_count, s.face_count), (1, 1));
+}

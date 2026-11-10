@@ -5,4 +5,8 @@ export type SourceDto = { id: number, kind: string, name: string, path: string |
 /**
  * Nguồn nằm trên ổ cloud (theo đường dẫn): `one_drive` | `google_drive` | `dropbox` | `box` | `icloud` | `other`.
  */
-cloudProvider: string | null, faceCount: number, lastScan: RescanStatsDto | null, scanning: boolean, };
+cloudProvider: string | null, 
+/**
+ * Số font của nguồn còn là placeholder trên ổ cloud (chưa tải về máy), theo lần quét gần nhất.
+ */
+cloudOnlyCount: number, faceCount: number, lastScan: RescanStatsDto | null, scanning: boolean, };

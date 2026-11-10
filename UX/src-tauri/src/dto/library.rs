@@ -105,6 +105,8 @@ pub struct SourceDto {
     pub available: bool,
     /// Nguồn nằm trên ổ cloud (theo đường dẫn): `one_drive` | `google_drive` | `dropbox` | `box` | `icloud` | `other`.
     pub cloud_provider: Option<String>,
+    /// Số font của nguồn còn là placeholder trên ổ cloud (chưa tải về máy), theo lần quét gần nhất.
+    pub cloud_only_count: u32,
     pub face_count: u32,
     pub last_scan: Option<RescanStatsDto>,
     pub scanning: bool,

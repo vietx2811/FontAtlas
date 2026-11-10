@@ -217,6 +217,32 @@ impl Store {
         Ok(p.map(PathBuf::from))
     }
 
+    /// Đường dẫn để MỞ ĐỌC khi người dùng cho phép tải font cloud: bản trên máy trước, không có thì bản cloud
+    /// (đọc sẽ kéo về — gọi qua cổng tải có giới hạn). None nếu mọi bản đều missing.
+    pub fn face_read_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
+        let p: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+                 WHERE fi.hash = ?1 AND l.missing = 0 ORDER BY l.cloud_only, l.location_id LIMIT 1",
+                [&key.hash[..]],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(p.map(PathBuf::from))
+    }
+
+    /// Số face có bản còn là placeholder cloud ở nguồn này (để gợi ý "chưa tải về máy"). Theo lần quét gần nhất.
+    pub fn cloud_only_count(&self, source_id: i64) -> Result<u32, StoreError> {
+        let n: i64 = self.conn.query_row(
+            "SELECT count(*) FROM faces f WHERE EXISTS (SELECT 1 FROM file_locations l
+               WHERE l.file_id = f.file_id AND l.source_id = ?1 AND l.missing = 0 AND l.cloud_only = 1)",
+            [source_id],
+            |r| r.get(0),
+        )?;
+        Ok(n.max(0) as u32)
+    }
+
     /// Sao lưu user.db (VACUUM INTO) vào `<dir>/backups/user-<ms>.db`; trả đường dẫn.
     pub fn backup_user_db(&self) -> Result<PathBuf, StoreError> {
         let dir = self.dir().join(BACKUP_DIR);

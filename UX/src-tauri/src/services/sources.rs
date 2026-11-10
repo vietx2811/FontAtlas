@@ -25,6 +25,7 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
             )
             .map_err(StoreError::from)?)
     })?;
+    let cloud_only_count = state.with_store(|st| Ok(st.cloud_only_count(s.id)?))?;
     Ok(SourceDto {
         id: s.id,
         kind: s.kind.as_str().into(),
@@ -33,6 +34,7 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
         name: s.name,
         path: s.path,
         enabled: s.enabled,
+        cloud_only_count,
         face_count: face_count.max(0) as u32,
         last_scan: state.scans.last_scan(s.id),
         scanning: state.scans.is_scanning(s.id),

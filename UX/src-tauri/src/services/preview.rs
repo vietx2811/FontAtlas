@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use fontatlas_preview::{
-    Budgets, CorsPolicy, FaceLocator, PX_BUCKETS, PreviewCache, PreviewHttp, PreviewRequest, PreviewService, RENDERER_VERSION,
+    Budgets, CorsPolicy, FaceLocator, PX_BUCKETS, PreviewCache, PreviewError, PreviewHttp, PreviewRequest, PreviewService, RENDERER_VERSION,
     handle_font_uri, handle_preview_uri,
 };
 use fontatlas_store::{FaceKey, Store};
@@ -11,24 +11,36 @@ use fontatlas_store::{FaceKey, Store};
 use crate::dto::library::FaceKeyDto;
 use crate::dto::preview::{PreviewCacheInfoDto, PreviewInfoDto, PreviewItemDto};
 use crate::error::CmdError;
+use crate::services::cloud::CloudDownloader;
+use crate::services::keys;
 use crate::state::AppState;
 
 /// Tra đường dẫn file theo (hash, face) bằng kết nối đọc riêng của Store.
+///
+/// Font còn là placeholder trên ổ cloud: công tắc `cloud_preview_download` (mặc định bật) cho phép đọc bản cloud —
+/// `before_read` khi đó tải nó về qua cổng (≤ 4 đồng thời, hạn chót 30 s). Tắt: chỉ trả bản đã ở máy, không đọc file dataless.
 pub struct StoreLocator {
     store: Mutex<Store>,
+    cloud: CloudDownloader,
 }
 
 impl StoreLocator {
     pub fn open(dir: &std::path::Path) -> Result<Self, CmdError> {
-        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?) })
+        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?), cloud: CloudDownloader::default() })
     }
 }
 
 impl FaceLocator for StoreLocator {
     fn locate(&self, hash_hex: &str, face_index: u32) -> Option<PathBuf> {
         let key = FaceKey::from_hex(hash_hex, face_index).ok()?;
-        // bỏ vị trí còn là placeholder cloud: mở đọc sẽ kéo cả file về (cuộn lưới không được tải cả ổ)
-        self.store.lock().ok()?.face_local_path(&key).ok().flatten()
+        let store = self.store.lock().ok()?;
+        // đọc công tắc mỗi lần (một truy vấn nhỏ): đổi trong Cài đặt có hiệu lực ngay, không cần đồng bộ cờ
+        let allow_cloud = !matches!(store.setting(keys::CLOUD_PREVIEW_DOWNLOAD).ok().flatten().as_deref(), Some("0") | Some("false"));
+        if allow_cloud { store.face_read_path(&key).ok().flatten() } else { store.face_local_path(&key).ok().flatten() }
+    }
+
+    fn before_read(&self, path: &std::path::Path) -> Result<(), PreviewError> {
+        self.cloud.before_read(path)
     }
 }
 

@@ -137,3 +137,52 @@ fn concurrent_get_and_prewarm() {
     let a = s.get(&reqs[1]).unwrap();
     assert_eq!(a, s.get(&reqs[1]).unwrap());
 }
+
+// ---- font trên ổ cloud: hook before_read chạy trước khi MỞ file (cache hit thì không chạm) ----
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct Hooked { inner: MapLocator, calls: Arc<AtomicUsize>, verdict: fn() -> Result<(), PreviewError> }
+impl FaceLocator for Hooked {
+    fn locate(&self, h: &str, i: u32) -> Option<PathBuf> { self.inner.locate(h, i) }
+    fn before_read(&self, _p: &std::path::Path) -> Result<(), PreviewError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        (self.verdict)()
+    }
+}
+fn hooked(p: &std::path::Path, verdict: fn() -> Result<(), PreviewError>) -> (tempfile::TempDir, PreviewService<Hooked>, Arc<AtomicUsize>) {
+    let d = tempfile::tempdir().unwrap();
+    let cache = PreviewCache::open(&d.path().join("p.db"), Budgets::DEFAULT).unwrap();
+    let map = [((hash_of(p), 0), p.to_path_buf())].into_iter().collect();
+    let calls = Arc::new(AtomicUsize::new(0));
+    (d, PreviewService::new(cache, Hooked { inner: MapLocator(map), calls: Arc::clone(&calls), verdict }), calls)
+}
+
+#[test]
+fn before_read_runs_once_per_cache_miss_and_never_on_a_hit() {
+    let p = core_fixture("roboto.ttf");
+    let (_d, s, calls) = hooked(&p, || Ok(()));
+    s.get(&req(&p, 0, None)).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    s.get(&req(&p, 0, None)).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "cache hit: không được chạm file, nên không có hook");
+}
+
+#[test]
+fn before_read_failure_is_returned_and_nothing_is_read_or_cached() {
+    let p = core_fixture("roboto.ttf");
+    let (_d, s, calls) = hooked(&p, || Err(PreviewError::CloudTimeout));
+    let e = s.get(&req(&p, 0, None)).unwrap_err();
+    assert_eq!((e.code(), e.http_status()), ("cloud_timeout", 504));
+    assert_eq!(s.render_count(), 0);
+    let e = s.get(&req(&p, 0, None)).unwrap_err(); // không cache lỗi: lần sau thử lại
+    assert_eq!(e.code(), "cloud_timeout");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn cloud_unavailable_is_502_with_its_own_code() {
+    let e = PreviewError::CloudUnavailable("offline".into());
+    assert_eq!((e.code(), e.http_status()), ("cloud_unavailable", 502));
+    assert!(e.to_string().contains("offline"));
+}

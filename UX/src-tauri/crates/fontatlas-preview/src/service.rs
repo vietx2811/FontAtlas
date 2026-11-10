@@ -16,6 +16,12 @@ use crate::{PreviewCache, PreviewError, cache_key, check_px, pool_for, render_fa
 /// Tra đường dẫn file theo (hash, face). Plan 6 cài bằng Store.
 pub trait FaceLocator: Send + Sync {
     fn locate(&self, hash_hex: &str, face_index: u32) -> Option<PathBuf>;
+
+    /// Gọi ngay trước khi MỞ ĐỌC `path` (cache preview miss, hoặc phục vụ FontFace). Nơi đưa file cloud về máy
+    /// (có giới hạn đồng thời và hạn chót); lỗi được trả thẳng, không cache. Mặc định: không làm gì.
+    fn before_read(&self, _path: &std::path::Path) -> Result<(), PreviewError> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
@@ -97,6 +103,7 @@ impl<L: FaceLocator> PreviewService<L> {
 
     fn open_checked(&self, req: &PreviewRequest) -> Result<FontFile, PreviewError> {
         let path = self.locator.locate(&req.hash_hex, req.face_index).ok_or(PreviewError::NotFound)?;
+        self.locator.before_read(&path)?;
         self.reads.fetch_add(1, Ordering::Relaxed);
         let file = FontFile::open(&path).map_err(|e| if e.code() == "io" { PreviewError::NotFound } else { e.into() })?;
         if file.hash_hex() != req.hash_hex {

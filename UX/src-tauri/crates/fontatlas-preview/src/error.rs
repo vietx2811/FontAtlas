@@ -24,6 +24,10 @@ pub enum PreviewError {
     Cache(#[from] rusqlite::Error),
     #[error("mã hoá PNG: {0}")]
     Encode(String),
+    #[error("hết thời gian chờ tải font từ ổ cloud")]
+    CloudTimeout,
+    #[error("không tải được font từ ổ cloud: {0}")]
+    CloudUnavailable(String),
 }
 
 impl PreviewError {
@@ -40,6 +44,8 @@ impl PreviewError {
             PreviewError::Core(_) => "core",
             PreviewError::Cache(_) => "cache",
             PreviewError::Encode(_) => "encode",
+            PreviewError::CloudTimeout => "cloud_timeout",
+            PreviewError::CloudUnavailable(_) => "cloud_unavailable",
         }
     }
 
@@ -53,6 +59,8 @@ impl PreviewError {
             PreviewError::Core(e) if e.code() == "io" => 404,
             PreviewError::Core(_) => 422,
             PreviewError::Cache(_) | PreviewError::Encode(_) => 500,
+            PreviewError::CloudTimeout => 504,
+            PreviewError::CloudUnavailable(_) => 502,
         }
     }
 }

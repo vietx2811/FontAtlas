@@ -170,3 +170,33 @@ fn face_local_path_never_returns_a_cloud_placeholder() {
     let p = s.face_local_path(&key).unwrap().expect("bản trên máy");
     assert!(p.starts_with(&other), "{p:?}");
 }
+
+#[test]
+fn face_read_path_prefers_a_local_copy_and_falls_back_to_the_cloud_one() {
+    use fontatlas_store::FaceKey;
+    let (d, fonts, mut s, src) = setup(&["open_sans.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    let r = row(&s, "open sans");
+    let key = FaceKey::from_hex(&r.hash_hex, r.face_index).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| true).unwrap();
+    // chỉ còn bản cloud: cho phép đọc (sẽ được tải về lười) khi người dùng bật tự tải xem trước
+    assert_eq!(s.face_read_path(&key).unwrap(), Some(fonts.join("open_sans.ttf")));
+    // thêm bản trên máy: ưu tiên bản đó dù location_id lớn hơn
+    let other = d.path().join("Local");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(fonts.join("open_sans.ttf"), other.join("copy.ttf")).unwrap();
+    let src2 = s.add_source(SourceKind::Directory, "Local", Some(&other)).unwrap();
+    s.rescan_root_with_probe(src2, &other, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert_eq!(s.face_read_path(&key).unwrap(), Some(other.join("copy.ttf")));
+}
+
+#[test]
+fn cloud_only_count_per_source_counts_faces_with_a_placeholder_copy_there() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf", "roboto.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0);
+    let evict = |p: &Path, _m: &std::fs::Metadata| p.ends_with("open_sans.ttf");
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &evict).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 1);
+    assert_eq!(s.cloud_only_count(src + 99).unwrap(), 0);
+}

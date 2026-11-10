@@ -138,6 +138,7 @@ fn font_bytes<L: FaceLocator>(locator: &L, uri: &str) -> Result<(&'static str, V
         return Err(PreviewError::TtcFace);
     }
     let path = locator.locate(&hash, face).ok_or(PreviewError::NotFound)?;
+    locator.before_read(&path)?;
     let raw = std::fs::read(&path).map_err(|_| PreviewError::NotFound)?;
     if blake3::hash(&raw).to_hex().as_str() != hash {
         return Err(PreviewError::StaleFile);
