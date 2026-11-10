@@ -261,7 +261,7 @@ impl Store {
                  VALUES (?1,?2,?3,?4,?5,?6,0,?7)
                  ON CONFLICT(path) DO UPDATE SET file_id=excluded.file_id, source_id=excluded.source_id,
                    size=excluded.size, mtime_ns=excluded.mtime_ns, last_seen_at=excluded.last_seen_at,
-                   missing=0, scan_gen=excluded.scan_gen",
+                   missing=0, scan_gen=excluded.scan_gen, cloud_only=0",
                 params![
                     file_id,
                     it.source_id,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
-import { libraryEmpty, type EmptyCtx } from '../zeroStates';
+import { cloudHint, libraryEmpty, type EmptyCtx } from '../zeroStates';
 
-const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, faceCount: 10, lastScan: null, scanning: false, ...o });
+const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 10, lastScan: null, scanning: false, ...o });
 const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
 
 describe('libraryEmpty', () => {
@@ -92,5 +92,22 @@ describe('libraryEmpty', () => {
   });
   it('an empty source with no cloud files stays "source-empty"', () => {
     expect(libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0 })] })).kind).toBe('source-empty');
+  });
+});
+
+describe('cloudHint', () => {
+  it('names the real share of fonts that are not on this machine, only for cloud sources that have some', () => {
+    const cloud = src({ cloudProvider: 'one_drive', faceCount: 300, cloudOnlyCount: 280 });
+    const h = cloudHint(cloud)!;
+    expect(h).toMatch(/^93% font của nguồn này chưa tải về máy/);
+    expect(h).toMatch(/Always keep on this device/);
+    expect(h).toMatch(/Finder/);
+    expect(cloudHint(src({ cloudProvider: null, faceCount: 300, cloudOnlyCount: 280 }))).toBeNull();
+    expect(cloudHint(src({ cloudProvider: 'icloud', faceCount: 300, cloudOnlyCount: 0 }))).toBeNull();
+    expect(cloudHint(src({ cloudProvider: 'icloud', faceCount: 0, cloudOnlyCount: 5 }))).toBeNull();
+  });
+  it('never says more than 100% and rounds like a person would', () => {
+    expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 3, cloudOnlyCount: 5 }))).toMatch(/^100%/);
+    expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 1000, cloudOnlyCount: 1 }))).toMatch(/^<1%|^1%/);
   });
 });

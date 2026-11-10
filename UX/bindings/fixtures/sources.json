@@ -1,6 +1,8 @@
 [
   {
     "available": true,
+    "cloudOnlyCount": 1100,
+    "cloudProvider": "one_drive",
     "enabled": true,
     "faceCount": 1200,
     "id": 1,

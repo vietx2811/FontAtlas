@@ -2,7 +2,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use fontatlas_store::{Source, SourceKind, StoreError};
+use fontatlas_store::{Source, SourceKind, StoreError, cloud_provider_of};
 
 use crate::dto::library::SourceDto;
 use crate::error::CmdError;
@@ -25,13 +25,16 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
             )
             .map_err(StoreError::from)?)
     })?;
+    let cloud_only_count = state.with_store(|st| Ok(st.cloud_only_count(s.id)?))?;
     Ok(SourceDto {
         id: s.id,
         kind: s.kind.as_str().into(),
         available: s.path.as_deref().is_none_or(root_available),
+        cloud_provider: s.path.as_deref().and_then(|p| cloud_provider_of(Path::new(p))).map(|c| c.as_str().to_string()),
         name: s.name,
         path: s.path,
         enabled: s.enabled,
+        cloud_only_count,
         face_count: face_count.max(0) as u32,
         last_scan: state.scans.last_scan(s.id),
         scanning: state.scans.is_scanning(s.id),

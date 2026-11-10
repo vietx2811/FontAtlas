@@ -35,6 +35,27 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('button', { name: 'Kiểu chữ' }).textContent).toContain('18 kiểu');
   });
 
+  it('marks a face that is only a cloud placeholder in the header', async () => {
+    const api = createMockApi();
+    const real = api.getFace.bind(api);
+    vi.spyOn(api, 'getFace').mockImplementation(async (...args: Parameters<typeof real>) => {
+      const d = await real(...args);
+      return { ...d, row: { ...d.row, onCloudOnly: true } };
+    });
+    render(<DetailPanel api={api} />);
+    await select(api, 'Public Sans', 'Regular');
+    await settle();
+    expect(screen.getByTestId('cloud-only-note')).toBeTruthy();
+  });
+
+  it('shows no cloud note for a font that is on this machine', async () => {
+    const api = createMockApi();
+    render(<DetailPanel api={api} />);
+    await select(api, 'Public Sans', 'Regular');
+    await settle();
+    expect(screen.queryByTestId('cloud-only-note')).toBeNull();
+  });
+
   it('choosing another style re-reads the face and keeps every tab on that style', async () => {
     const api = createMockApi();
     const spy = vi.spyOn(api, 'getFace');

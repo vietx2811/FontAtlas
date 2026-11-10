@@ -5,6 +5,7 @@ import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
+import { NoteMark } from '../../components/ui/noteMark';
 import { t } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
@@ -12,6 +13,11 @@ import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
 export const HOVER_DELAY_MS = 150;
+
+/** Mã lỗi preview của backend → câu giải thích trên thẻ font cloud (`not_found` là file mất thật, KHÔNG phải công tắc tắt). */
+const CLOUD_ERR_KEY: Record<string, 'cloud.errTimeout' | 'cloud.errFailed' | 'cloud.errOff' | 'cloud.errMissing' | 'cloud.errBusy'> = {
+  cloud_timeout: 'cloud.errTimeout', cloud_unavailable: 'cloud.errFailed', cloud_disabled: 'cloud.errOff', not_found: 'cloud.errMissing', cloud_busy: 'cloud.errBusy',
+};
 
 /** Nhãn định dạng theo đuôi file (TTF, OTF, TTC, WOFF, WOFF2…); không có đường dẫn thì không nhãn. */
 export function fileFormat(path: string | null): string | null {
@@ -46,6 +52,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
+  const [errCode, setErrCode] = useState('');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
   const shownRef = useRef<{ src: string; blob: string } | null>(null);
   const [imgShown, setImgShown] = useState<string | null>(null);
@@ -63,7 +70,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
     let done = false;
     let raf = 0;
     setState('loading');
-    blobs.acquire(url).then(
+    blobs.acquire(url, { cloud: !!row?.onCloudOnly }).then(
       blob => {
         done = true;
         if (!alive) { blobs.release(url); return; }
@@ -77,6 +84,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         done = true;
         if (!alive) return;
         if (err instanceof PreviewHttpError && err.status === 410) { onStale?.(); return; } // xin thế hệ mới, URL mới sẽ tới
+        setErrCode(err instanceof PreviewHttpError ? err.code : '');
         setState('error');
       },
     );
@@ -170,6 +178,12 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
+      {/* theo trạng thái của ẢNH preview (state), không phải `shownState`: hover mở FontFace sống không được đổi ghi chú */}
+      {row.onCloudOnly && (state === 'loading'
+        ? <NoteMark kind="info" className="fa-note-cloud" testId="cloud-loading-note" text={t('cloud.loading')} />
+        : state === 'error'
+          ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(CLOUD_ERR_KEY[errCode] ?? 'cloud.errFailed')} />
+          : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
       <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
         <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>
@@ -183,7 +197,9 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         ) : state === 'error' ? (
           <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+          shown
+            ? <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+            : row.onCloudOnly && state === 'loading' && <div data-cloud-skeleton aria-hidden className="fa-cloud-skeleton" style={{ width: Math.min(cw, 160), height: Math.max(10, Math.round(ch * 0.4)) }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />

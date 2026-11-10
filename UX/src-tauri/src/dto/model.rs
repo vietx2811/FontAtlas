@@ -90,6 +90,8 @@ pub struct SettingsDto {
     pub project_vi_default: bool,
     pub keep_active_on_exit: bool,
     pub rescan_on_launch: bool,
+    /// Tự tải font trên ổ cloud để xem trước (thẻ đang hiện). Tắt: bỏ qua bản chưa tải về, không đọc file dataless.
+    pub cloud_preview_download: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
@@ -103,4 +105,5 @@ pub struct SettingsPatchDto {
     pub project_vi_default: Option<bool>,
     pub keep_active_on_exit: Option<bool>,
     pub rescan_on_launch: Option<bool>,
+    pub cloud_preview_download: Option<bool>,
 }

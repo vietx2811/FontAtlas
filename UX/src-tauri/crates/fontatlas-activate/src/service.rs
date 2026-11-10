@@ -17,15 +17,21 @@ use fontatlas_store::{
 use serde::Serialize;
 
 use crate::engine::{ActivationEngine, Scope};
-use crate::paths::{FileProbe, canonical_path, classify_owner, probe_file, same_content};
+use crate::paths::{
+    CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, probe_file, same_content,
+};
 use crate::types::{
     ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome,
     FileResult, Owner, Progress, SETTING_ACTIVATION_KEEP,
 };
 
+/// Đưa một file cloud về máy trước khi bật (mặc định `ensure_local` với `CLOUD_DOWNLOAD_TIMEOUT`).
+type EnsureLocalFn = Box<dyn Fn(&Path) -> Result<(), EnsureLocalError> + Send + Sync>;
+
 pub struct ActivationService<E: ActivationEngine> {
     engine: E,
     in_flight: Mutex<HashSet<[u8; 32]>>,
+    ensure_local: EnsureLocalFn,
 }
 
 /// Giữ một hash trong `in_flight`; nhả khi drop (kể cả khi panic).
@@ -170,7 +176,17 @@ fn group(keys: &[FaceKey]) -> Vec<([u8; 32], Vec<u32>)> {
 
 impl<E: ActivationEngine> ActivationService<E> {
     pub fn new(engine: E) -> Self {
-        Self { engine, in_flight: Mutex::new(HashSet::new()) }
+        Self {
+            engine,
+            in_flight: Mutex::new(HashSet::new()),
+            ensure_local: Box::new(|p| ensure_local(p, CLOUD_DOWNLOAD_TIMEOUT)),
+        }
+    }
+
+    /// Thay cách tải file cloud (test dataless không cần ổ cloud thật).
+    pub fn with_ensure_local(mut self, f: impl Fn(&Path) -> Result<(), EnsureLocalError> + Send + Sync + 'static) -> Self {
+        self.ensure_local = Box::new(f);
+        self
     }
 
     pub fn engine(&self) -> &E {
@@ -374,7 +390,25 @@ impl<E: ActivationEngine> ActivationService<E> {
         };
         res.extra_faces =
             target.faces.iter().map(|f| f.face_index).filter(|i| !res.requested_faces.contains(i)).collect();
-        let path = match locate(&target) {
+        // font còn là placeholder trên ổ cloud: tải về trước (có hạn chót), không bao giờ treo; lỗi trả về rõ ràng
+        let mut located = locate(&target);
+        if let Located::NotDownloaded(p) = &located {
+            match (self.ensure_local)(p) {
+                Ok(()) => {
+                    // file vừa về máy: ghi cờ cloud_only=0 ngay (giao diện, hàng phân tích lại dựa vào cờ này)
+                    let _ = relock(store).refresh_cloud_flag(p);
+                    located = locate(&target);
+                }
+                Err(EnsureLocalError::PlaceholderStub) => {} // chỉ có stub .icloud: giữ outcome NotDownloaded
+                Err(EnsureLocalError::Missing) => located = Located::Missing(Some(p.clone())),
+                Err(e) => {
+                    res.path = Some(path_str(p));
+                    res.outcome = FileOutcome::Failed { code: e.code().into(), message: e.message() };
+                    return Ok(res);
+                }
+            }
+        }
+        let path = match located {
             Located::Ready(p) => p,
             Located::Missing(p) => {
                 res.path = p.map(|p| path_str(&p));

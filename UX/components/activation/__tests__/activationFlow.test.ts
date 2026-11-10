@@ -21,6 +21,16 @@ describe('describeOutcome', () => {
     expect(t({ kind: 'missing_file' })!.text).toMatch(/Không tìm thấy file/);
     expect(t({ kind: 'not_downloaded' })!.text).toMatch(/iCloud/);
   });
+  it('cloud download failures are explained in their own words, not as a bare code', () => {
+    const timeout = t({ kind: 'failed', code: 'cloud_timeout', message: 'x' })!;
+    expect(timeout.kind).toBe('error');
+    expect(timeout.text).toMatch(/30 giây/);
+    expect(timeout.text).not.toMatch(/cloud_timeout/);
+    const failed = t({ kind: 'failed', code: 'cloud_download_failed', message: 'offline' })!;
+    expect(failed.text).toMatch(/không tải được/i);
+    expect(failed.text).toMatch(/offline/);
+    expect(t({ kind: 'failed', code: 'cloud_stub', message: 'x' })!.text).toMatch(/iCloud/);
+  });
   it('busy is a retry hint; success outcomes say nothing', () => {
     expect(t({ kind: 'busy' })!.text).toMatch(/thử lại/);
     for (const k of ['activated', 'already_active', 'deactivated', 'already_inactive', 'ready'] as const) expect(t({ kind: k })).toBeNull();

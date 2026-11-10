@@ -952,3 +952,107 @@ fn set_scope_keeps_collection_reasons() {
     assert_eq!(r.scope, Scope::Persistent);
     assert_eq!(r.reasons, vec![ActivationReason::Collection(c)]);
 }
+
+// ---- font còn trên ổ cloud (dataless): tải về trước khi bật ----
+
+use fontatlas_activate::EnsureLocalError;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// File thật biến thành stub iCloud; trả về nội dung gốc để "tải" lại.
+fn evict(env: &Env, name: &str) -> Vec<u8> {
+    let bytes = std::fs::read(env.fonts.join(name)).unwrap();
+    std::fs::remove_file(env.fonts.join(name)).unwrap();
+    std::fs::write(env.fonts.join(format!(".{name}.icloud")), b"").unwrap();
+    bytes
+}
+
+#[test]
+fn activate_downloads_a_cloud_placeholder_first() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    let bytes = evict(&env, LIBRE);
+    let (dir, calls) = (env.fonts.clone(), Arc::new(AtomicUsize::new(0)));
+    let c = Arc::clone(&calls);
+    let svc = service(&env).with_ensure_local(move |_p| {
+        c.fetch_add(1, Ordering::SeqCst);
+        std::fs::write(dir.join(LIBRE), &bytes).unwrap(); // OneDrive tải xong
+        std::fs::remove_file(dir.join(format!(".{LIBRE}.icloud"))).unwrap();
+        Ok(())
+    });
+    env.store.lock().unwrap().conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    assert_eq!(rep.results[0].outcome, FileOutcome::Activated);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(svc.engine().registrations().len(), 1);
+    let flag: i64 = env.store.lock().unwrap().conn().query_row("SELECT cloud_only FROM file_locations", [], |r| r.get(0)).unwrap();
+    assert_eq!(flag, 0, "tải xong thì cờ cloud_only về 0 ngay, không đợi lần quét sau");
+}
+
+#[test]
+fn failed_download_leaves_the_cloud_flag_alone() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    evict(&env, LIBRE);
+    env.store.lock().unwrap().conn().execute("UPDATE file_locations SET cloud_only = 1", []).unwrap();
+    let svc = service(&env).with_ensure_local(|_| Err(EnsureLocalError::Timeout));
+    activate(&svc, &env, &[k], ConflictPolicy::Ask);
+    let flag: i64 = env.store.lock().unwrap().conn().query_row("SELECT cloud_only FROM file_locations", [], |r| r.get(0)).unwrap();
+    assert_eq!(flag, 1);
+}
+
+#[test]
+fn local_file_never_triggers_a_download() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c = Arc::clone(&calls);
+    let svc = service(&env).with_ensure_local(move |_| {
+        c.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    });
+    assert_eq!(activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome, FileOutcome::Activated);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn cloud_timeout_and_failure_are_clear_outcomes_not_hangs() {
+    for (err, code) in [
+        (EnsureLocalError::Timeout, "cloud_timeout"),
+        (EnsureLocalError::Io("offline".into()), "cloud_download_failed"),
+        (EnsureLocalError::StillCloudOnly, "cloud_download_failed"),
+    ] {
+        let env = env_with(&[LIBRE]);
+        let k = key_of(&env, LIBRE);
+        evict(&env, LIBRE);
+        let svc = service(&env).with_ensure_local(move |_| Err(err.clone()));
+        let rep = activate(&svc, &env, &[k], ConflictPolicy::Ask);
+        match &rep.results[0].outcome {
+            FileOutcome::Failed { code: c, message } => {
+                assert_eq!(c, code);
+                assert!(!message.is_empty());
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(rep.results[0].path.is_some(), "UI cần biết file nào");
+        assert!(svc.engine().registrations().is_empty());
+        assert!(row(&env, &k.hash).is_none(), "không ghi dòng kích hoạt khi chưa có file");
+    }
+}
+
+#[test]
+fn icloud_stub_without_file_stays_not_downloaded() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    evict(&env, LIBRE);
+    let svc = service(&env).with_ensure_local(|_| Err(EnsureLocalError::PlaceholderStub));
+    assert_eq!(activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome, FileOutcome::NotDownloaded);
+}
+
+#[test]
+fn file_gone_during_download_is_missing_outcome() {
+    let env = env_with(&[LIBRE]);
+    let k = key_of(&env, LIBRE);
+    evict(&env, LIBRE);
+    let svc = service(&env).with_ensure_local(|_| Err(EnsureLocalError::Missing));
+    assert_eq!(activate(&svc, &env, &[k], ConflictPolicy::Ask).results[0].outcome, FileOutcome::MissingFile);
+}

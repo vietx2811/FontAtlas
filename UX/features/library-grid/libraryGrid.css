@@ -40,6 +40,11 @@ button.fa-state:hover { background: var(--surface-2); }
 button.fa-state:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .fa-dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, transparent); }
 .fa-dot[data-scope="session"], .fa-dot[data-scope="persistent"] { background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
+/* Khung chờ khi font đang được tải từ cloud: thanh mờ nhấp nháy nhẹ (tắt khi người dùng giảm chuyển động). */
+.fa-cloud-skeleton { border-radius: 6px; background: var(--surface-2); animation: fa-cloud-pulse 1.4s ease-in-out infinite; }
+@keyframes fa-cloud-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fa-cloud-skeleton { animation: none; } }
+.fa-cell > .fa-note-cloud { right: auto; left: 6px; top: 6px; }
 .fa-star { position: absolute; top: 6px; right: 22px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
 .fa-cell:hover .fa-star, .fa-star[aria-pressed="true"], .fa-star:focus-visible { opacity: 1; }
 .fa-star[aria-pressed="true"] { color: var(--accent); }

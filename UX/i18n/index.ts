@@ -2,6 +2,7 @@
 import { TERM_GLOSS } from './terms';
 import { COMPARE_V2 } from './compareV2';
 import { ACTIVATION_I18N } from './activation';
+import { CLOUD_I18N } from './cloud';
 import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
 import { DESK_I18N } from './desk';
 
@@ -9,6 +10,7 @@ const vi = {
   ...TERM_GLOSS,
   ...COMPARE_V2,
   ...ACTIVATION_I18N,
+  ...CLOUD_I18N,
   ...FILTER_I18N,
   ...FILTER_I18N_2,
   ...FILTER_I18N_3,
