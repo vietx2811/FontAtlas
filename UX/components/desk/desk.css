@@ -57,3 +57,8 @@
 .fa-strip-table td.dl.down { color: var(--danger, #c0392b); }
 .fa-strip-table td.dl.zero { color: var(--muted); }
 @media (max-width: 1100px) { .fa-strip-meta { display: none; } .fa-strip-body { grid-template-columns: 1fr 1fr; } .fa-strip-table { grid-column: 1 / -1; } }
+.fa-combo { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.fa-combo button { padding: 3px 8px; border-radius: 4px; color: var(--muted); }
+.fa-combo button:hover:not(:disabled) { background: var(--chrome-active); color: var(--fg); }
+.fa-combo button:disabled { opacity: .35; }
+.fa-combo-label { color: var(--fg) !important; font-weight: 600; }

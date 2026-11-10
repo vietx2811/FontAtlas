@@ -8,6 +8,8 @@ export const DESK_I18N = {
   'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
   'strip.title': 'Chi tiết', 'strip.metrics': 'Số đo', 'strip.compare': 'Đưa vào Compare', 'strip.expand': 'Mở dải chi tiết', 'strip.collapse': 'Thu dải chi tiết',
   'strip.tryHint': 'Rê chuột lên một ứng viên để xem chênh lệch', 'strip.viOk': 'Đủ tiếng Việt', 'strip.viMissing': 'Thiếu {n} ký tự VI',
+  'combo.new': 'Combo mới', 'combo.duplicate': 'Nhân bản Combo', 'combo.rename': 'Đổi tên Combo', 'combo.makeMain': 'Đặt làm Combo chính', 'combo.isMain': 'Đã là Combo chính',
+  'combo.delete': 'Xoá Combo', 'combo.lastOne': 'Case cần ít nhất một Combo', 'combo.prev': 'Combo trước', 'combo.next': 'Combo sau', 'combo.save': 'Lưu',
   'desk.pageHeading': 'Phở bò Hà Nội', 'desk.sampleLabel': 'Trang mẫu',
   'role.display': 'Display', 'role.heading': 'Heading', 'role.subheading': 'Subheading', 'role.body': 'Body', 'role.caption': 'Caption', 'role.accent': 'Accent', 'role.quote': 'Quote',
   'role.display.gloss': 'tiêu đề lớn, gây chú ý', 'role.heading.gloss': 'tiêu đề mục', 'role.subheading.gloss': 'tiêu đề phụ', 'role.body.gloss': 'đoạn văn dài',

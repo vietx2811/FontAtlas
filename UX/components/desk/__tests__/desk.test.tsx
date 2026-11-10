@@ -179,3 +179,51 @@ describe('DetailStrip (slice 2)', () => {
     expect(screen.getByTestId('strip-metrics')).toBeTruthy();
   });
 });
+
+describe('ComboStepper (slice 3)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  function Host({ api }: { api: ReturnType<typeof createMockApi> }) {
+    const desk = useUiStore(s => s.desk);
+    return desk ? <PairingDesk api={api} desk={desk} /> : null;
+  }
+  async function open() {
+    const api = createMockApi();
+    const r = (await rows(api)).find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
+    render(<Host api={api} />); await settle();
+    return { api, res };
+  }
+  const pick = async (label: RegExp) => { fireEvent.click(screen.getByTestId('combo-label')); await settle(); fireEvent.click(screen.getByRole('menuitem', { name: label })); await settle(); };
+
+  it('shows Combo 1/1 with the main star; prev/next disabled', async () => {
+    await open();
+    expect(screen.getByTestId('combo-label').textContent).toMatch(/★ Combo 1\/1/);
+    expect(screen.getByTestId('combo-prev')).toBeDisabled(); expect(screen.getByTestId('combo-next')).toBeDisabled();
+  });
+
+  it('New creates and steps to Combo 2/2; ] and [ move between them', async () => {
+    const { api, res } = await open();
+    await pick(/Combo mới/);
+    expect(screen.getByTestId('combo-label').textContent).toMatch(/Combo 2\/2/);
+    expect((await api.getCase(res.case.id)).combos.length).toBe(2);
+    const desk = screen.getByTestId('pairing-desk');
+    fireEvent.keyDown(desk, { key: '[' }); await settle();
+    expect(screen.getByTestId('combo-label').textContent).toMatch(/Combo 1\/2/);
+    fireEvent.keyDown(desk, { key: ']' }); await settle();
+    expect(screen.getByTestId('combo-label').textContent).toMatch(/Combo 2\/2/);
+  });
+
+  it('Duplicate copies the slots; Make main moves the star; Delete steps back and is disabled for the last one', async () => {
+    const { api, res } = await open();
+    await pick(/Nhân bản/);
+    const c = await api.getCase(res.case.id);
+    expect(c.combos[1].slots.map(s => s.role)).toEqual(['display']);
+    await pick(/Đặt làm Combo chính/);
+    expect((await api.getCase(res.case.id)).combos.find(x => x.isMain)!.idx).toBe(2);
+    await pick(/Xoá Combo/);
+    expect((await api.getCase(res.case.id)).combos.length).toBe(1);
+    fireEvent.click(screen.getByTestId('combo-label')); await settle();
+    expect(screen.getByRole('menuitem', { name: /Xoá Combo/ }).getAttribute('aria-disabled')).toBe('true');
+  });
+});

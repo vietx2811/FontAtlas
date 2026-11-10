@@ -10,6 +10,7 @@ import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorPairRole, anchorRoles, isHeadingLike } from './deskRoles';
+import { ComboStepper } from './ComboStepper';
 import { DetailStrip } from './DetailStrip';
 import './desk.css';
 
@@ -82,6 +83,17 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('peek.openFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
   }, [api, combo, trial, role]);
 
+  const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('peek.openFail', { msg: e instanceof Error ? e.message : String(e) }) });
+  const goCombo = useCallback((id: number) => { openDesk({ caseId: desk.caseId, comboId: id, role, trial: null }); }, [openDesk, desk.caseId, role]);
+  const comboOps = {
+    go: goCombo,
+    create: () => { void api.createCombo(desk.caseId).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
+    duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
+    rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId)), fail); },
+    makeMain: () => { if (combo) void api.updateCombo(combo.id, { isMain: true }).then(async () => setData(await api.getCase(desk.caseId)), fail); },
+    remove: () => { if (!combo || !data) return; const rest = data.combos.filter(c => c.id !== combo.id); void api.deleteCombo(combo.id).then(async () => { setData(await api.getCase(desk.caseId)); goCombo((rest[Math.max(0, data.combos.findIndex(c => c.id === combo.id) - 1)] ?? rest[0]).id); }, fail); },
+  };
+  const step = (d: -1 | 1) => { if (!data || !combo) return; const i = data.combos.findIndex(c => c.id === combo.id); const n = data.combos[i + d]; if (n) goCombo(n.id); };
   const selectRole = (r: ComboRoleDto) => { if (combo && r !== role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: r, trial: null }); };
 
   useEffect(() => { root.current?.focus(); }, []);
@@ -91,6 +103,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     else if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     else if (e.key === 'Enter' && trial) { e.preventDefault(); void place(); }
+    else if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
     else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setStripCollapsed(c => !c); }
     else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial) { e.preventDefault(); toCompare(); }
   };
@@ -102,7 +115,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
       <header className="fa-desk-head">
         <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={closeDesk}>← {t('desk.back')}</button></Tooltip>
         <h1>{t('desk.title')}</h1>
-        {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}{combo ? ` · Combo ${combo.idx}/${data.combos.length}` : ''}</span>}
+        {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}</span>}
+        {data && combo && <ComboStepper data={data} combo={combo} ops={comboOps} />}
       </header>
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}
       <div className="fa-desk-body">
