@@ -136,6 +136,8 @@
     await log('view-family', !!chip, { chip: chip?.textContent, title: chip?.getAttribute('aria-label'), target, cells: cells().length, cellNames: cells().slice(0, 6).map(c => c.textContent.replace(/\s+/g, ' ').slice(-40)) });
     // LỌC
     const fbtn = document.querySelector('[data-testid=advanced-open]');
+    // Phễu Advanced nằm trong ô tìm kiếm: nút icon (không chữ), có aria-label; không còn nút "Advanced" riêng trên Top Bar.
+    await log('advanced-funnel-in-search', !!fbtn && !!fbtn.closest('.fa-search') && (fbtn.textContent.trim() === '' || !!fbtn.querySelector('.fa-funnel-n')) && !!fbtn.getAttribute('aria-label') && !btn('Advanced', document.querySelector('.fa-topbar')), { inSearch: !!fbtn?.closest('.fa-search'), text: fbtn?.textContent, label: fbtn?.getAttribute('aria-label') });
     const fp = await openAdv();
     await wait(() => document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]').length === 18, 20000);
     const inputs = fp ? [...fp.querySelectorAll('.fa-axrow-nums input')].slice(0, 4).map(i => i.value) : [];
@@ -355,6 +357,11 @@
       const [cOn, cOff] = [cells()[0], cells()[1]].sort((x, y) => Number(pressed(y)) - Number(pressed(x)));
       const dot = cOn.querySelector('[data-testid=active-dot]');
       const powBtn = cOff.querySelector('[data-testid=cell-active]');
+      // Chấm là nút bật/tắt, đứng ĐẦU tên: xanh khi bật, xám khi tắt; badge ngôn ngữ không dùng màu xanh của chấm.
+      const firstOf = c => c.querySelector('.fa-meta')?.firstElementChild;
+      const bgOf = c => getComputedStyle(c.querySelector('.fa-dot')).backgroundColor;
+      const badge = cOn.querySelector('.fa-lang-badge');
+      await log('active-dot-first-and-badge-neutral', firstOf(cOn) === cOn.querySelector('[data-testid=cell-active]') && firstOf(cOff) === powBtn && powBtn.tagName === 'BUTTON' && bgOf(cOn) !== bgOf(cOff) && (!badge || getComputedStyle(badge).color !== bgOf(cOn)), { on: bgOf(cOn), off: bgOf(cOff), badge: badge && getComputedStyle(badge).color });
       await log('active-card-controls', pressed(cOn) && !pressed(cOff) && !!dot && !cOff.querySelector('[data-testid=active-dot]') && !!powBtn, { onHasDot: !!dot, offPressed: pressed(cOff), onPressed: pressed(cOn) });
       powBtn.click();
       st = await waitActive(x => x.length === 2);

@@ -7,6 +7,17 @@ import { TermTip } from '../ui/terms';
 
 type Level = 'full' | 'near';
 
+/** Thứ tự danh sách: Vietnamese đầu, rồi các ngôn ngữ Latin phổ biến, rồi Cyrillic/Greek, còn lại ABC theo tên. */
+const LATIN_COMMON = ['eng', 'fra', 'deu', 'spa', 'ita', 'por', 'nld', 'pol', 'tur', 'ces', 'slk', 'hun', 'ron', 'swe', 'dan', 'nob', 'fin', 'ind', 'cat', 'hrv', 'slv'];
+export function langRank(i: { code: string; script?: string }): number {
+  if (i.code === 'vie') return 0;
+  const c = LATIN_COMMON.indexOf(i.code);
+  if (c >= 0) return 1 + c;
+  if (i.script === 'Cyrl') return 100;
+  if (i.script === 'Grek') return 101;
+  return 200;
+}
+
 /** Chọn ngôn ngữ cần hỗ trợ. Bấm một dòng: bỏ → full → near → bỏ. 2+ ngôn ngữ thì chọn "đủ tất cả" hay "một trong". */
 export function LangPicker({ api, query, refreshKey }: { api: Api; query: FaceQuery; refreshKey?: unknown }): React.JSX.Element {
   const langs = useUiStore(s => s.filters.langs);
@@ -30,7 +41,7 @@ export function LangPicker({ api, query, refreshKey }: { api: Api; query: FaceQu
     set(cur === null ? [...others, { code, level: 'full' }] : cur === 'full' ? [...others, { code, level: 'near' }] : others);
   };
   const needle = search.trim().toLowerCase();
-  const items = useMemo(() => [...(list?.items ?? [])].sort((a, b) => Number(b.code === 'vie') - Number(a.code === 'vie') || b.near - a.near || langName(a).localeCompare(langName(b))).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle]);
+  const items = useMemo(() => [...(list?.items ?? [])].sort((a, b) => langRank(a) - langRank(b) || langName(a).localeCompare(langName(b))).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle]);
   // Ngôn ngữ đang chọn nhưng không còn face nào khớp vẫn hiện để bỏ chọn được.
   const ghosts = (langs ?? []).filter(l => !list?.items.some(i => i.code === l.code));
 

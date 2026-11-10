@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useUiStore } from '../../../store/ui';
 import { LangBadge } from '../../../features/library-grid/LangBadge';
-import { LangPicker } from '../LangPicker';
+import { LangPicker, langRank } from '../LangPicker';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { groupFilters } from '../groupFilters';
 
 const initial = useUiStore.getState();
@@ -83,5 +85,25 @@ describe('LangBadge', () => {
   });
   it('shows the language code in capitals', () => {
     render(mk('full', 134, 'fra')); expect(screen.getByTestId('vi-mark').querySelector('.fa-vi-code')?.textContent).toBe('FR');
+  });
+});
+
+describe('language ordering and badge colour', () => {
+  it('langRank: vie first, common Latin in the stated order, then Cyrillic/Greek, then the rest', () => {
+    const codes = [{ code: 'zzz', script: 'Latn' }, { code: 'ell', script: 'Grek' }, { code: 'rus', script: 'Cyrl' }, { code: 'ces', script: 'Latn' }, { code: 'eng', script: 'Latn' }, { code: 'vie', script: 'Latn' }, { code: 'fra', script: 'Latn' }];
+    expect([...codes].sort((a, b) => langRank(a) - langRank(b)).map(c => c.code)).toEqual(['vie', 'eng', 'fra', 'ces', 'rus', 'ell', 'zzz']);
+  });
+  it('the picker renders vie before eng before fra', async () => {
+    render(<LangPicker api={createMockApi()} query={{}} />); await settle();
+    const order = [...document.querySelectorAll('.fa-lang-row')].map(r => r.getAttribute('data-code'));
+    const at = (c: string) => order.indexOf(c);
+    if (at('vie') >= 0) expect(at('vie')).toBe(0);
+    if (at('eng') >= 0 && at('fra') >= 0) expect(at('eng')).toBeLessThan(at('fra'));
+  });
+  it('the language badge never uses the green "on" token (only the status dot does)', () => {
+    const css = readFileSync(join(__dirname, '../../../features/library-grid/libraryGrid.css'), 'utf8');
+    const rules = css.split('\n').filter(l => /\.fa-(lang-badge|vi-ring|vi\b|vi\.)/.test(l) && !/\.fa-vi-code/.test(l));
+    expect(rules.length).toBeGreaterThan(3);
+    for (const r of rules) expect(r).not.toMatch(/var\(--on\)/);
   });
 });

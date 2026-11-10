@@ -95,11 +95,13 @@ describe('review fixes', () => {
   });
 
   it('the Advanced button and the sheet count conditions the same way as the summary (varAxisMatch alone is not a condition)', () => {
-    render(<AdvancedFilters api={createMockApi()} />);
+    render(<SearchField />);
     set({ varAxisMatch: { wght: false, wdth: true } });
-    expect(screen.getByTestId('advanced-open').getAttribute('data-selected')).toBe('false');
+    expect(screen.getByTestId('advanced-open').getAttribute('data-filtered')).toBe('false');
+    expect(screen.queryByTestId('advanced-count')).toBeNull();
     set({ weightClass: [600, 900], varAxisMatch: { wght: false, wdth: true } });
-    expect(screen.getByTestId('advanced-open').getAttribute('data-selected')).toBe('true');
+    expect(screen.getByTestId('advanced-open').getAttribute('data-filtered')).toBe('true');
+    expect(screen.getByTestId('advanced-count').textContent).toBe('1');
   });
 
   it('LangPicker rows announce their three states', async () => {

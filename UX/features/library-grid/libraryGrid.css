@@ -23,24 +23,23 @@
 /* Tên vẽ bằng font của thẻ: dòng cao cố định để font có ascent/descent lớn không làm thẻ nhảy. */
 .fa-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-xs); line-height: 16px; height: 16px; }
 .fa-vi { font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; }
-.fa-vi.ok { color: var(--on); }
+.fa-vi.ok { color: var(--muted); }
 .fa-vi.miss { color: var(--warn); }
 .fa-lang-badge { gap: 3px; }
 .fa-lang-badge .fa-vi-code { margin: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: .03em; color: var(--muted); opacity: 1; }
 .fa-vi-ring { flex: none; }
 .fa-vi-ring circle, .fa-vi-ring path { fill: none; stroke-width: 2; stroke-linecap: round; }
-.fa-vi-ring .fill { fill: var(--on); stroke: none; }
+.fa-vi-ring .fill { fill: currentColor; stroke: none; }
 .fa-vi-ring .track { stroke: color-mix(in srgb, currentColor 22%, transparent); }
 .fa-vi-ring .arc { stroke: currentColor; }
 .fa-vi-ring .strike { stroke: currentColor; opacity: .55; }
-.fa-lang-badge.ok { color: var(--on); } .fa-lang-badge.near { color: var(--accent-ink); }
+.fa-lang-badge.ok, .fa-lang-badge.near { color: var(--muted); } /* trung tính: màu xanh chỉ dành cho chấm bật/tắt */
 .fa-vi-code { font-size: var(--text-2xs); text-transform: uppercase; margin-right: 3px; opacity: .8; }
-.fa-dot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
-.fa-pow { position: absolute; top: 6px; right: 46px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
-.fa-cell:hover .fa-pow, .fa-pow[aria-pressed="true"], .fa-pow:focus-visible { opacity: 1; }
-.fa-pow:hover { color: var(--fg); background: var(--surface-2); }
-.fa-pow[aria-pressed="true"] { color: var(--on); }
-.fa-cell[data-layout="list"] .fa-pow { top: 50%; margin-top: -11px; }
+.fa-state { flex: none; width: 20px; height: 20px; margin: 0 -2px 0 -4px; display: grid; place-items: center; border-radius: 50%; }
+button.fa-state:hover { background: var(--surface-2); }
+button.fa-state:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fa-dot { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.fa-dot[data-scope="session"], .fa-dot[data-scope="persistent"] { background: var(--on); box-shadow: 0 0 0 3px color-mix(in srgb, var(--on) 18%, transparent); }
 .fa-star { position: absolute; top: 6px; right: 22px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); opacity: 0; }
 .fa-cell:hover .fa-star, .fa-star[aria-pressed="true"], .fa-star:focus-visible { opacity: 1; }
 .fa-star[aria-pressed="true"] { color: var(--accent); }
@@ -50,6 +49,5 @@
 .fa-cell[data-layout="list"][aria-selected="true"] { background: var(--accent-soft); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-meta { width: 220px; flex: none; }
 .fa-cell[data-layout="list"] .fa-spec { flex: 1; align-items: flex-start; }
-.fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--on); box-shadow: none; }
-.fa-cell[data-layout="list"] .fa-dot { top: 50%; margin-top: -3px; }
+.fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--muted); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }

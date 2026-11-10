@@ -5,7 +5,7 @@ export const ACTIVATION_I18N = {
   'act.scope.toPersistent': 'Giữ bật', 'act.scope.toSession': 'Chỉ phiên này',
   'act.scope.toPersistent.tip': 'Giữ font bật cả khi tắt Font Atlas', 'act.scope.toSession.tip': 'Tự tắt khi thoát Font Atlas',
   'act.scope.fail': 'Không đổi được phạm vi bật: {msg}',
-  'act.card.on': 'Tắt Active', 'act.card.off': 'Bật Active', 'act.dot.session': 'Đang bật · phiên này', 'act.dot.persistent': 'Luôn bật',
+  'act.toggle': 'Bật/Tắt font', 'act.dot.off': 'Chưa bật', 'act.dot.session': 'Đang bật · phiên này', 'act.dot.persistent': 'Luôn bật',
   'act.family.on': 'Tắt Active cả family ({n} kiểu)', 'act.family.off': 'Bật Active cả family ({n} kiểu)',
   'act.family.label': 'Active cả family',
   'act.owner.by': 'do {app} cài', 'act.owner.system': 'của hệ thống', 'act.owner.user': 'bạn đã cài', 'act.owner.atlas': 'một file khác trong thư viện', 'act.owner.other': 'một ứng dụng khác',

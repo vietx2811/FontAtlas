@@ -126,6 +126,28 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
     if (onPick) onPick(row, index, { meta: e.metaKey || e.ctrlKey, shift: e.shiftKey });
     else onSelect(row);
   };
+  // Chấm trạng thái đứng ĐẦU tên: xanh = đang bật, xám = chưa bật; có `onToggleActive` thì chính chấm là nút bật/tắt (Space khi focus).
+  const dotScope = activeScope === 'persistent' ? 'persistent' : 'session';
+  const onTip = t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session');
+  const stateDot = active ? (
+    onToggleActive ? (
+      <Tooltip label={`${t('act.toggle')} · ${onTip}`}>
+        <button type="button" className="fa-state" data-testid="cell-active" aria-label={t('act.toggle')} aria-pressed
+          onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
+          <span className="fa-dot" data-testid="active-dot" data-scope={dotScope} />
+        </button>
+      </Tooltip>
+    ) : <Tooltip label={onTip}><span className="fa-state"><span className="fa-dot" data-testid="active-dot" data-scope={dotScope} /></span></Tooltip>
+  ) : avail ? (
+    <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-state"><span className="fa-dot" data-testid="active-dot" data-scope="available" /></span></Tooltip>
+  ) : onToggleActive ? (
+    <Tooltip label={`${t('act.toggle')} · ${t('act.dot.off')}`}>
+      <button type="button" className="fa-state" data-testid="cell-active" aria-label={t('act.toggle')} aria-pressed={false}
+        onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
+        <span className="fa-dot" data-scope="off" />
+      </button>
+    </Tooltip>
+  ) : <span className="fa-state" aria-hidden><span className="fa-dot" data-scope="off" /></span>;
   return (
     <div
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
@@ -148,16 +170,6 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope === 'persistent' ? 'persistent' : 'session'} /></Tooltip>}
-      {!active && avail && <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-dot" data-testid="active-dot" data-scope="available" /></Tooltip>}
-      {onToggleActive && !avail && (
-        <Tooltip label={t(active ? 'act.card.on' : 'act.card.off')}>
-          <button type="button" className="fa-pow" aria-label={t('act.label')} aria-pressed={active} data-testid="cell-active"
-            onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 3.5v8M7.2 6.6a7.5 7.5 0 1 0 9.6 0" /></svg>
-          </button>
-        </Tooltip>
-      )}
       <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
         <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>
@@ -178,6 +190,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         )}
       </div>
       <div className="fa-meta">
+        {stateDot}
         <Tooltip label={name} onlyIfTruncated>
           <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
         </Tooltip>
