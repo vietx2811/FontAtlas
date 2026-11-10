@@ -743,6 +743,51 @@
         await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA, ncells: cells().length, cell0: cells()[0]?.textContent?.slice(0, 40), anyRow: !!document.querySelector('aside.fa-panel [data-testid=active-row]'), rowStatus: document.querySelector('aside.fa-panel [data-testid=active-status]')?.textContent, rowAvailAttr: document.querySelector('aside.fa-panel [data-testid=active-row]')?.getAttribute('data-available'), dotAny: cells()[0]?.querySelector('[data-testid=active-dot]')?.getAttribute('data-scope'), side: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].map(b => b.textContent.trim()).slice(-8) });
       }
     }
+    // PAIRING DESK (2b lát 1–3): Pair từ peek → Desk; ↓ thử, Enter đặt; dải chi tiết có Δ; Combo stepper; Esc về Thư viện
+    {
+      const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
+      const pressOn = (el, key, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+      await sleep(800);
+      const cell0 = await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 10000);
+      cell0?.click(); await sleep(400);
+      const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000);
+      pairTab?.click();
+      const openBtn = await wait(() => document.querySelector('[data-testid=open-desk]'), 15000);
+      openBtn?.click();
+      const desk = await wait(() => deskEl(), 15000);
+      await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 15000);
+      await sleep(500);
+      await log('desk-opens', !!desk && document.querySelectorAll('[data-testid=desk-role]').length >= 2 && !!document.querySelector('[data-testid=desk-heading]'), { roles: document.querySelectorAll('[data-testid=desk-role]').length, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
+      const tb = document.querySelector('header.fa-topbar');
+      await log('desk-is-the-only-page', !!desk && (!tb || tb.offsetParent === null) && !document.querySelector('.cmp-tbl, .pr') && !document.querySelector('[data-testid=duplicates-page]')?.offsetParent, { topbarHidden: !tb || tb.offsetParent === null });
+      if (desk) {
+        document.documentElement.dataset.theme = 'light'; await sleep(250); await snap('font-desk-light');
+        pressOn(desk, 'Enter');
+        const nFilled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
+        await wait(() => nFilled() >= 2, 6000);
+        const filled = nFilled();
+        await log('desk-enter-places', filled >= 2, { filled });
+        const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
+        pressOn(desk, 'ArrowDown'); await sleep(900);
+        const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
+        await log('desk-strip-delta', deltas.length === 8 && (nCand < 2 || deltas.some(x => /^[+−]|±0/.test(x))), { nCand, deltas });
+        pressOn(desk, 'i'); await sleep(150);
+        const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i'); await sleep(150);
+        await log('desk-strip-collapses', collapsed && !!document.querySelector('[data-testid=strip-metrics]'), { collapsed });
+        document.querySelector('[data-testid=combo-label]')?.click(); await sleep(200);
+        [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent))?.click(); await sleep(700);
+        const l2 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
+        pressOn(deskEl(), '['); await sleep(500);
+        const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
+        await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
+        pressOn(deskEl(), 'Escape');
+        await wait(() => !deskEl(), 8000);
+        await log('desk-esc-leaves', !deskEl() && !!cells().length > 0, {});
+      }
+    }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

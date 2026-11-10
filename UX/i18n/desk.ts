@@ -1,0 +1,23 @@
+/** Chuỗi Pairing Desk (2b). Tên vai là thuật ngữ EN; giải thích (gloss) theo locale. */
+export const DESK_I18N = {
+  'desk.title': 'Pairing Desk', 'desk.back': 'Thư viện', 'desk.backTip': 'Về Thư viện', 'desk.case': 'Case',
+  'desk.roles': 'Vai · font', 'desk.roleEmpty': 'Chưa có font', 'desk.missing': 'Font đã đổi hoặc bị xoá khỏi thư viện',
+  'desk.picker': 'Cuộn chọn', 'desk.pickerHint': '↑↓ thử · Enter đặt · Esc về Thư viện', 'desk.source.pair': 'Ghép',
+  'desk.trying': 'Đang thử', 'desk.inUse': 'Đang dùng', 'desk.place': 'Đặt vào vai', 'desk.placed': 'Đã đặt {font} vào vai {role}',
+  'desk.noAnchor': 'Chưa có font ở vai đối diện để ghép. Đặt một font vào vai {role} trước.', 'desk.noCands': 'Không có ứng viên ở mức ghép này',
+  'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
+  'strip.title': 'Chi tiết', 'strip.metrics': 'Số đo', 'strip.compare': 'Đưa vào Compare', 'strip.expand': 'Mở dải chi tiết', 'strip.collapse': 'Thu dải chi tiết',
+  'strip.tryHint': 'Rê chuột lên một ứng viên để xem chênh lệch', 'strip.viOk': 'Đủ tiếng Việt', 'strip.viMissing': 'Thiếu {n} ký tự VI',
+  'combo.new': 'Combo mới', 'combo.duplicate': 'Nhân bản Combo', 'combo.rename': 'Đổi tên Combo', 'combo.makeMain': 'Đặt làm Combo chính', 'combo.isMain': 'Đã là Combo chính',
+  'combo.delete': 'Xoá Combo', 'combo.lastOne': 'Case cần ít nhất một Combo', 'combo.prev': 'Combo trước', 'combo.next': 'Combo sau', 'combo.save': 'Lưu',
+  'desk.opFail': 'Không thực hiện được: {msg}', 'desk.compareNeed': 'Cần hai font khác nhau để so sánh: hãy đặt hoặc thử một font khác vai đang dùng',
+  'strip.deltaTip': 'Chênh lệch của font đang thử so với font đang dùng (mốc). + lớn hơn, − nhỏ hơn.',
+  'combo.label': 'Combo', 'combo.cancel': 'Huỷ', 'combo.delete.title': 'Xoá Combo {n}?', 'combo.delete.body': 'Combo này có {n} vai. Xoá không hoàn tác được; các font vẫn còn trong Case.',
+  'desk.pageHeading': 'Nghệ thuật dàn trang', 'desk.pageBody': 'Một trang in tốt cân bằng nhịp điệu, khoảng trắng và độ tương phản giữa tiêu đề với đoạn văn. Chữ không chỉ để đọc: nó dẫn mắt người xem từ dòng đầu đến dòng cuối.', 'desk.sampleLabel': 'Trang mẫu',
+  'role.display': 'Display', 'role.heading': 'Heading', 'role.subheading': 'Subheading', 'role.body': 'Body', 'role.caption': 'Caption', 'role.accent': 'Accent', 'role.quote': 'Quote',
+  'role.display.gloss': 'tiêu đề lớn, gây chú ý', 'role.heading.gloss': 'tiêu đề mục', 'role.subheading.gloss': 'tiêu đề phụ', 'role.body.gloss': 'đoạn văn dài',
+  'role.caption.gloss': 'chú thích nhỏ', 'role.accent.gloss': 'chữ nhấn, nhãn', 'role.quote.gloss': 'trích dẫn',
+  'peek.openDesk': 'Mở trong Pairing Desk', 'peek.openDeskTip': 'Tạo (hoặc dùng) Case và đặt font này làm {role}; ứng viên đang xem thành lựa chọn thử',
+  'peek.occupied.title': 'Thay font ở vai {role}?', 'peek.occupied.body': 'Vai {role} của Combo hiện tại đang dùng {old}. Thay bằng {new}?', 'peek.occupied.replace': 'Thay', 'peek.occupied.keep': 'Giữ {old}',
+  'peek.openFail': 'Không mở được Pairing Desk: {msg}',
+} as const;
