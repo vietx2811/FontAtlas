@@ -37,7 +37,7 @@ Quy tắc phân loại (`classify.rs`, `small_foot_weight`):
 - `serif_foot` < 0.9 (chân nhọn) mà có cờ hoặc loe: không bỏ phiếu Sans 2.0, chỉ Serif 1.0. Không có dấu hiệu serif thì giữ nguyên Sans như trước.
 - `serif_foot` > 1.6 mà chân chỉ nhô một phía (`serif_flare` < 1.15) và không có cờ trên (`serif_head` < 0.05), như đuôi chữ l của Mooli/Bellota, không còn được tính là Serif.
 - Bản phân tích cũ (không có hai metric mới) phân loại y hệt trước (test `old_analyses_without_flare_classify_exactly_as_before`).
-- Face đã phân tích với `core-0.8.0` tự được phân tích lại (cơ chế `analyzer_version` sẵn có của store). `reference-v1.json` dựng lại: chỉ đổi `analyzer_version` (16 trục tham chiếu không đổi, 3813 face).
+- Face đã phân tích với `core-0.8.0` được phân tích lại ở lần quét, NHƯNG chỉ với file có trên máy: quét đã loại file dataless (`SF_DATALESS`/stub iCloud) trước khi băm hay mở, giữ nguyên bản phân tích cũ và đếm `not_downloaded`. `stale_analysis_count()` = số face còn chờ phân tích lại; file được phân tích lại ở lần quét đầu sau khi tải về. Test `analyzer_version_bump_skips_dataless_files_and_reanalyzes_after_download` (file dataless bị chặn quyền đọc: mở là fail). `reference-v1.json` dựng lại: chỉ đổi `analyzer_version` (16 trục tham chiếu không đổi, 3813 face).
 
 ## 3. Kiểm thử
 
