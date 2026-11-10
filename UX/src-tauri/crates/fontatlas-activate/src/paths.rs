@@ -1,6 +1,8 @@
 //! Đường dẫn: canonical, trạng thái file (thiếu / iCloud chưa tải), đoán chủ sở hữu font trùng tên.
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use crate::types::Owner;
 
@@ -68,6 +70,103 @@ pub fn probe_file(p: &Path) -> FileProbe {
     }
 }
 
+/// Chờ tối đa bao lâu để tải một font từ ổ cloud trước khi bật.
+pub const CLOUD_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Vì sao không đưa được file cloud về máy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnsureLocalError {
+    /// Không còn file (ổ rút, đã xoá).
+    Missing,
+    /// Quá thời gian chờ: mạng chậm hoặc ổ cloud không phản hồi.
+    Timeout,
+    /// Hệ điều hành báo lỗi khi đọc (offline, đăng xuất, hết dung lượng…).
+    Io(String),
+    /// Đọc xong nhưng file vẫn là placeholder tới hạn chót.
+    StillCloudOnly,
+    /// Chỉ có stub `.x.ttf.icloud` (kiểu iCloud cũ), không có file thật để đọc.
+    PlaceholderStub,
+}
+
+impl EnsureLocalError {
+    /// Mã ổn định cho `FileOutcome::Failed.code` (giao diện dịch theo mã).
+    pub fn code(&self) -> &'static str {
+        match self {
+            EnsureLocalError::Missing => "missing_file",
+            EnsureLocalError::Timeout => "cloud_timeout",
+            EnsureLocalError::Io(_) | EnsureLocalError::StillCloudOnly => "cloud_download_failed",
+            EnsureLocalError::PlaceholderStub => "cloud_stub",
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            EnsureLocalError::Missing => "không tìm thấy file".into(),
+            EnsureLocalError::Timeout => format!("hết {} giây chờ tải font từ ổ cloud", CLOUD_DOWNLOAD_TIMEOUT.as_secs()),
+            EnsureLocalError::Io(m) => format!("không tải được font từ ổ cloud: {m}"),
+            EnsureLocalError::StillCloudOnly => "font vẫn chưa về máy sau khi tải".into(),
+            EnsureLocalError::PlaceholderStub => "font mới có bản giữ chỗ iCloud, chưa có file để tải".into(),
+        }
+    }
+}
+
+/// Bảo đảm file đã nằm trên máy: nếu là placeholder (dataless) thì đọc 1 byte trên luồng riêng để hệ điều hành
+/// tải về, chờ tối đa `timeout`, rồi thăm dò lại tới khi cờ dataless gỡ. Không bao giờ treo quá `timeout`
+/// (luồng đọc bị kẹt được bỏ lại). File đã ở máy: trả ngay, không đọc gì.
+pub fn ensure_local(p: &Path, timeout: Duration) -> Result<(), EnsureLocalError> {
+    ensure_local_by(p, timeout, probe_file, read_first_byte)
+}
+
+fn read_first_byte(p: &Path) -> std::io::Result<()> {
+    use std::io::Read;
+    let mut b = [0u8; 1];
+    std::fs::File::open(p)?.read(&mut b)?;
+    Ok(())
+}
+
+/// Như `ensure_local` với bộ thăm dò và hàm tải thay được (test dataless không cần ổ cloud thật).
+pub(crate) fn ensure_local_by(
+    p: &Path,
+    timeout: Duration,
+    probe: impl Fn(&Path) -> FileProbe,
+    fetch: impl FnOnce(&Path) -> std::io::Result<()> + Send + 'static,
+) -> Result<(), EnsureLocalError> {
+    match probe(p) {
+        FileProbe::Ready => return Ok(()),
+        FileProbe::Missing => return Err(EnsureLocalError::Missing),
+        FileProbe::NotDownloaded => {}
+    }
+    let deadline = Instant::now() + timeout;
+    let (tx, rx) = mpsc::channel();
+    let path = p.to_path_buf();
+    std::thread::Builder::new()
+        .name("cloud-fetch".into())
+        .spawn(move || {
+            let _ = tx.send(fetch(&path));
+        })
+        .map_err(|e| EnsureLocalError::Io(e.to_string()))?;
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::NotFound && !p.exists() => return Err(EnsureLocalError::PlaceholderStub),
+        Ok(Err(e)) => return Err(EnsureLocalError::Io(e.to_string())),
+        Err(mpsc::RecvTimeoutError::Timeout) => return Err(EnsureLocalError::Timeout),
+        Err(mpsc::RecvTimeoutError::Disconnected) => return Err(EnsureLocalError::Io("luồng tải bị dừng bất ngờ".into())),
+    }
+    // đọc xong có thể trả về trước khi hệ điều hành gỡ cờ dataless: thăm dò lại tới hạn chót
+    loop {
+        match probe(p) {
+            FileProbe::Ready => return Ok(()),
+            FileProbe::Missing => return Err(EnsureLocalError::Missing),
+            FileProbe::NotDownloaded => {}
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(EnsureLocalError::StillCloudOnly);
+        }
+        std::thread::sleep(left.min(Duration::from_millis(100)));
+    }
+}
+
 /// `dir/x.ttf` → `dir/.x.ttf.icloud` (kiểu placeholder cũ của iCloud Drive).
 fn icloud_placeholder(p: &Path) -> Option<PathBuf> {
     let name = p.file_name()?.to_str()?;
@@ -101,6 +200,116 @@ pub fn classify_owner(path: &Path, home: &Path, ours: &HashSet<PathBuf>) -> Owne
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    /// Bộ thăm dò giả: trả `NotDownloaded` cho tới khi cờ `local` bật.
+    fn probe_flag(local: &Arc<AtomicBool>) -> impl Fn(&Path) -> FileProbe + use<> {
+        let local = Arc::clone(local);
+        move |_| if local.load(Ordering::SeqCst) { FileProbe::Ready } else { FileProbe::NotDownloaded }
+    }
+
+    #[test]
+    fn ensure_local_ready_file_never_spawns_a_fetch() {
+        let fetched = Arc::new(AtomicUsize::new(0));
+        let f = Arc::clone(&fetched);
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_secs(1), |_| FileProbe::Ready, move |_| {
+            f.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        });
+        assert_eq!(r, Ok(()));
+        assert_eq!(fetched.load(Ordering::SeqCst), 0, "file đã ở máy: không đọc gì thêm");
+    }
+
+    #[test]
+    fn ensure_local_missing_is_reported() {
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_secs(1), |_| FileProbe::Missing, |_| Ok(()));
+        assert_eq!(r, Err(EnsureLocalError::Missing));
+    }
+
+    #[test]
+    fn ensure_local_downloads_then_succeeds() {
+        let local = Arc::new(AtomicBool::new(false));
+        let l = Arc::clone(&local);
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_secs(5), probe_flag(&local), move |_| {
+            std::thread::sleep(Duration::from_millis(50)); // "đang tải"
+            l.store(true, Ordering::SeqCst);
+            Ok(())
+        });
+        assert_eq!(r, Ok(()));
+    }
+
+    #[test]
+    fn ensure_local_times_out_instead_of_hanging() {
+        let local = Arc::new(AtomicBool::new(false));
+        let t = Instant::now();
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(150), probe_flag(&local), |_| {
+            std::thread::sleep(Duration::from_secs(5)); // ổ cloud không phản hồi
+            Ok(())
+        });
+        assert_eq!(r, Err(EnsureLocalError::Timeout));
+        assert!(t.elapsed() < Duration::from_secs(2), "phải trả về đúng hạn, không đợi fetch: {:?}", t.elapsed());
+    }
+
+    #[test]
+    fn ensure_local_fetch_error_is_download_failed() {
+        let local = Arc::new(AtomicBool::new(false));
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_secs(1), probe_flag(&local), |_| {
+            Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "mạng đứt"))
+        });
+        match r {
+            Err(EnsureLocalError::Io(m)) => assert!(m.contains("mạng đứt"), "{m}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn ensure_local_read_ok_but_still_placeholder_gives_up_at_deadline() {
+        let local = Arc::new(AtomicBool::new(false));
+        let t = Instant::now();
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(400), probe_flag(&local), |_| Ok(()));
+        assert_eq!(r, Err(EnsureLocalError::StillCloudOnly));
+        assert!(t.elapsed() >= Duration::from_millis(300) && t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn ensure_local_waits_for_late_materialisation_after_read() {
+        // read trả về trước khi cờ dataless được gỡ: phải thăm dò lại tới hạn chót
+        let local = Arc::new(AtomicBool::new(false));
+        let l = Arc::clone(&local);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(250));
+            l.store(true, Ordering::SeqCst);
+        });
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_secs(5), probe_flag(&local), |_| Ok(()));
+        assert_eq!(r, Ok(()));
+    }
+
+    #[test]
+    fn ensure_local_icloud_stub_without_real_file_is_stub_error() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join(".a.ttf.icloud"), b"").unwrap();
+        let r = ensure_local(&d.path().join("a.ttf"), Duration::from_secs(1));
+        assert_eq!(r, Err(EnsureLocalError::PlaceholderStub));
+    }
+
+    #[test]
+    fn ensure_local_real_ready_file_is_ok() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("a.ttf");
+        std::fs::write(&f, b"x").unwrap();
+        assert_eq!(ensure_local(&f, Duration::from_secs(1)), Ok(()));
+    }
+
+    #[test]
+    fn error_codes_are_stable() {
+        assert_eq!(EnsureLocalError::Timeout.code(), "cloud_timeout");
+        assert_eq!(EnsureLocalError::Io("x".into()).code(), "cloud_download_failed");
+        assert_eq!(EnsureLocalError::StillCloudOnly.code(), "cloud_download_failed");
+        assert_eq!(EnsureLocalError::Missing.code(), "missing_file");
+        assert_eq!(EnsureLocalError::PlaceholderStub.code(), "cloud_stub");
+    }
 
     #[test]
     fn classify_owner_table() {

@@ -17,7 +17,7 @@ pub use engine::{ActivationEngine, Scope};
 pub use fake::FakeEngine;
 #[cfg(target_os = "macos")]
 pub use mac::MacCoreTextEngine;
-pub use paths::{FileProbe, canonical_path, classify_owner, probe_file};
+pub use paths::{CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, probe_file};
 pub use reconcile::{AutoDeactivated, ReconcileReport};
 pub use service::{ActivationService, Availability};
 pub use types::{
