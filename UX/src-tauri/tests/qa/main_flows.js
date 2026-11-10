@@ -586,14 +586,16 @@
     const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
-    const chips = await wait(() => document.querySelector('.fa-chips'), 8000);
+    const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
     const facetCount = Number((boxes[0]?.closest('label')?.querySelector('.fa-count')?.textContent ?? '').replace(/\D/g, ''));
     await wait(() => countNow() === facetCount, 10000);
     await sleep(300); await snap('class-filter');
     const total1 = countNow();
     await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
-    chips?.querySelector('button')?.click();
-    await wait(() => !document.querySelector('.fa-chips'), 5000);
+    document.querySelector('[aria-label="Đóng bộ lọc"]')?.click(); await sleep(200);
+    const sIn = document.querySelector('.fa-search input'); sIn?.focus();
+    sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
+    await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
     // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
     const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
