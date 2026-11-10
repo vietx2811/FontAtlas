@@ -1,89 +1,192 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-// Minh hoạ cho từng bước onboarding: tối giản, vẽ bằng chính chữ (glyph lớn, đường x-height/baseline, dấu Việt), SVG nội tuyến,
-// chỉ dùng token màu của theme nên đổi sáng/tối theo ứng dụng. Không ảnh bitmap, không emoji.
+// Minh hoạ cho từng bước onboarding: bản vẽ kỹ thuật phòng lab (blueprint), glyph Inter vẽ nét rồi đổ đặc, callout đánh số, đo kích thước.
+// Bước quét (o4) có hình riêng trong ScanBlocks; ở đây o4 chỉ chừa khung (slot) để ScanBlocks gắn vào qua portal.
 import type { ReactNode } from 'react';
+import { t, type I18nKey } from '../../i18n';
+import { TERM_NAMES, TermTip, termGloss, termKey } from '../ui/terms';
 import type { Step } from '../../store/onboarding';
+import { CAP_HEIGHT, GLYPHS, UPM, X_HEIGHT } from './glyphOutlines';
+import { Callout, Dimension, GlyphArt, Guide, Readout, Sheet, VB_H, VB_W, circlePath, delay, glyphWidth } from './blueprint';
 
 export const ILLUSTRATED_STEPS = ['o1', 'o2', 'o3', 'o5', 'o6', 'o7', 'end'] as const;
 type S = typeof ILLUSTRATED_STEPS[number];
 
-const INK = 'var(--fg)';
-const LINE = 'var(--border)';
-const MUTED = 'var(--muted)';
-const ACCENT = 'var(--accent)';
-const FONT = 'var(--font-ui)';
-const G = ({ x, y, size, c, w = 600, children }: { x: number; y: number; size: number; c?: string; w?: number; children: string }) => (
-  <text x={x} y={y} fontSize={size} fontWeight={w} fill={c ?? INK} fontFamily={FONT} textAnchor="middle">{children}</text>
-);
-const Guide = ({ y, name, x1 = 20, x2 = 220, dash }: { y: number; name: string; x1?: number; x2?: number; dash?: boolean }) => (
-  <line data-guide={name} x1={x1} x2={x2} y1={y} y2={y} stroke={name === 'baseline' ? ACCENT : LINE} strokeWidth="1" strokeDasharray={dash ? '3 3' : undefined} />
-);
-
-const ART: Record<S, { label: string; node: ReactNode }> = {
-  // Chào mừng: chữ Ặ lớn giữa đường x-height và baseline.
-  o1: { label: 'Chữ Ặ lớn đặt giữa đường x-height và đường nền', node: (<>
-    <Guide y={30} name="cap" dash /><Guide y={52} name="x-height" dash /><Guide y={96} name="baseline" />
-    <G x={120} y={96} size={92}>Ặ</G>
-  </>) },
-  // Dữ liệu cũ: chữ ẫ chuyển từ khung cũ sang khung mới.
-  o2: { label: 'Chữ ẫ chuyển từ khung cũ sang khung mới', node: (<>
-    <rect x="22" y="26" width="64" height="64" rx="10" fill="none" stroke={LINE} strokeDasharray="4 4" />
-    <G x={54} y={76} size={44} c={MUTED} w={400}>ẫ</G>
-    <path d="M96 58h40m-9-8l9 8-9 8" fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <rect x="146" y="26" width="64" height="64" rx="10" fill="none" stroke={INK} strokeWidth="1.5" />
-    <G x={178} y={76} size={44}>ẫ</G>
-  </>) },
-  // Thư mục: hình thư mục vẽ bằng nét, bên trong là chữ A trên đường nền.
-  o3: { label: 'Thư mục chứa chữ A đặt trên đường nền', node: (<>
-    <path d="M46 36h46l10 12h72a8 8 0 0 1 8 8v42a8 8 0 0 1-8 8H46a8 8 0 0 1-8-8V44a8 8 0 0 1 8-8z" fill="none" stroke={INK} strokeWidth="1.5" strokeLinejoin="round" />
-    <Guide y={92} name="baseline" x1={64} x2={176} />
-    <G x={120} y={92} size={46}>A</G>
-  </>) },
-  // Giấy phép: con dấu tròn bao quanh chữ ự.
-  o5: { label: 'Con dấu tròn bao quanh chữ ự', node: (<>
-    <circle cx="120" cy="60" r="44" fill="none" stroke={INK} strokeWidth="1.5" />
-    <circle cx="120" cy="60" r="38" fill="none" stroke={LINE} strokeDasharray="2 4" />
-    <G x={120} y={76} size={52}>ự</G>
-    <path d="M96 100l-8 14 14-4 6 10 6-18m24 18l6-10 14 4-8-14" fill="none" stroke={ACCENT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </>) },
-  // Phân tích hình ảnh: chữ ê trong khung ngắm, các điểm lấy mẫu.
-  o6: { label: 'Chữ ê trong khung ngắm với các điểm lấy mẫu', node: (<>
-    <path d="M70 34v-8a4 4 0 0 1 4-4h8M158 22h8a4 4 0 0 1 4 4v8M170 86v8a4 4 0 0 1-4 4h-8M82 98h-8a4 4 0 0 1-4-4v-8" fill="none" stroke={INK} strokeWidth="1.5" strokeLinecap="round" />
-    <G x={120} y={82} size={58}>ê</G>
-    {[[92, 44], [120, 40], [148, 44], [90, 70], [150, 70]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y} r="2.2" fill={ACCENT} />)}
-  </>) },
-  // Kích hoạt: công tắc bật, chữ Ă nối sang một cửa sổ ứng dụng.
-  o7: { label: 'Công tắc bật nối chữ Ă với một cửa sổ ứng dụng', node: (<>
-    <rect x="22" y="40" width="58" height="32" rx="16" fill={ACCENT} />
-    <circle cx="64" cy="56" r="12" fill="var(--sheet)" />
-    <path d="M86 56h34" fill="none" stroke={ACCENT} strokeWidth="2" strokeDasharray="3 4" strokeLinecap="round" />
-    <rect x="128" y="26" width="84" height="62" rx="8" fill="none" stroke={INK} strokeWidth="1.5" />
-    <path d="M128 40h84" fill="none" stroke={LINE} />
-    <G x={170} y={80} size={36}>Ă</G>
-  </>) },
-  // Kết thúc: Aa trên đường nền với dấu tick.
-  end: { label: 'Chữ Aa trên đường nền, đánh dấu hoàn tất', node: (<>
-    <Guide y={86} name="baseline" x1={50} x2={190} />
-    <G x={96} y={86} size={64}>A</G><G x={148} y={86} size={44} w={400}>a</G>
-    <circle cx="196" cy="34" r="13" fill="var(--on)" />
-    <path d="M190 34.5l4.2 4.2 7.8-8" fill="none" stroke="var(--sheet)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-  </>) },
+/** Thuật ngữ mà số callout của từng bước trỏ tới (theo thứ tự số 1, 2, 3…). Giải thích nằm ở TermTip và ở legend. */
+export const LEGEND: Partial<Record<S, readonly string[]>> = {
+  o1: ['cap_height', 'x_height', 'baseline', 'vi_marks'],
+  o7: ['activate'],
 };
 
-export function Illustration({ step }: { step: Step | S }): React.JSX.Element | null {
-  const art = (ART as Record<string, { label: string; node: ReactNode }>)[step];
-  const g = useRef<SVGGElement>(null);
-  const [box, setBox] = useState<[number, number] | null>(null);
-  // Hình vẽ nằm giữa khung 240; cắt khung theo đúng bề ngang hình để mép trái thẳng hàng với tiêu đề.
-  useLayoutEffect(() => {
-    const b = g.current && typeof g.current.getBBox === 'function' ? g.current.getBBox() : null;
-    setBox(b && b.width > 0 ? [Math.floor(b.x), Math.ceil(b.width)] : null);
-  }, [step]);
-  if (!art) return null;
-  const [x, w] = box ?? [0, 240];
+const em = (units: number, size: number) => (units * size) / UPM;
+
+function Welcome(): React.JSX.Element {
+  const size = 210; const base = 236; const x = 170;
+  const cap = base - em(CAP_HEIGHT, size); const xh = base - em(X_HEIGHT, size); const top = base - em(GLYPHS['Ặ'].top, size);
+  const apex = x + em((GLYPHS.A.x0 + GLYPHS.A.x1) / 2, size);
   return (
-    <svg className="fa-illus" role="img" aria-label={art.label} viewBox={`${x} -14 ${w} 134`} width={w} height="134">
-      <g ref={g}>{art.node}</g>
-    </svg>
+    <>
+      <Sheet fig="FIG.01 · ANATOMY" />
+      <Guide y={cap} name="cap" at={200} />
+      <Guide y={xh} name="x-height" at={320} />
+      <Guide y={base} name="baseline" at={440} tone="base" />
+      <Guide y={top} name="top" at={560} x1={apex - 40} x2={apex + 40} />
+      <Dimension x={150} y1={cap} y2={base} at={1000} />
+      <Dimension x={124} y1={xh} y2={base} at={1100} />
+      <GlyphArt ch="Ặ" x={x} y={base} size={size} at={700} fillAt={1700} />
+      <Callout n={1} px={apex} py={cap} cx={380} cy={cap} at={1400} />
+      <Callout n={2} px={x + em(449, size)} py={xh} cx={380} cy={xh} at={1520} />
+      <Callout n={3} px={x + em(51, size)} py={base} cx={380} cy={base} at={1640} />
+      <Callout n={4} px={apex} py={(top + cap) / 2 - 2} cx={380} cy={top + 6} at={1760} />
+      <Readout x={396} y={cap + 3.5} to={CAP_HEIGHT / UPM} at={1000} />
+      <Readout x={396} y={xh + 3.5} to={X_HEIGHT / UPM} at={1100} />
+    </>
+  );
+}
+
+function Legacy(): React.JSX.Element {
+  const size = 118; const base = 200;
+  const w = glyphWidth('ẫ', size);
+  return (
+    <>
+      <Sheet fig="FIG.02 · MIGRATION" />
+      <g className="bp-frame old" style={delay(100)}><rect x="40" y="64" width="160" height="176" rx="6" /><text x="52" y="82" className="bp-tag">v1</text></g>
+      <g className="bp-frame new" style={delay(500)}><rect x="280" y="64" width="160" height="176" rx="6" /><text x="292" y="82" className="bp-tag">v2</text></g>
+      <GlyphArt ch="ẫ" x={120 - w / 2} y={base} size={size} at={300} fill={false} className="old" />
+      <path d="M208 152H272M264 146L272 152L264 158" className="bp-flow" pathLength={1} style={delay(900)} />
+      {[0, 1, 2].map(i => <rect key={i} x="208" y="147" width="8" height="10" rx="1.5" className="bp-packet" style={delay(1300 + i * 420)} />)}
+      <GlyphArt ch="ẫ" x={360 - w / 2} y={base} size={size} at={1500} fillAt={2300} />
+    </>
+  );
+}
+
+function Tray(): React.JSX.Element {
+  const tiles = ['A', 'a', 'g', 'H', 'x', 'ê'];
+  const size = 40;
+  return (
+    <>
+      <Sheet fig="FIG.03 · SAMPLE TRAY" />
+      <path className="bp-tray" pathLength={1} style={delay(150)} d="M64 124V104a6 6 0 0 1 6-6h88l16 22h236a6 6 0 0 1 6 6V252a6 6 0 0 1-6 6H70a6 6 0 0 1-6-6z" />
+      {tiles.map((ch, i) => {
+        const col = i % 3; const row = Math.floor(i / 3);
+        const cx = 84 + col * 108; const cy = 150 + row * 52;
+        return (
+          <g key={ch} data-well={i}>
+            <rect x={cx} y={cy} width="92" height="42" rx="4" className="bp-well" />
+            <g className="bp-drop" style={delay(700 + i * 260)}>
+              <GlyphArt ch={ch} x={cx + 46 - glyphWidth(ch, size) / 2} y={cy + 30} size={size} at={900 + i * 260} fillAt={1200 + i * 260} sw={1.2} />
+            </g>
+          </g>
+        );
+      })}
+      <path d="M240 36V84M232 76L240 84L248 76" className="bp-flow" pathLength={1} style={delay(300)} />
+    </>
+  );
+}
+
+function Seal(): React.JSX.Element {
+  const size = 104; const w = glyphWidth('ự', size);
+  return (
+    <>
+      <Sheet fig="FIG.05 · SPECIMEN LABEL" />
+      <rect x="120" y="44" width="240" height="236" rx="8" className="bp-card" style={delay(100)} />
+      <circle cx="240" cy="132" r="62" className="bp-ring spin" />
+      <path d={circlePath(240, 132, 52)} className="bp-ring-solid" pathLength={1} style={delay(300)} />
+      <GlyphArt ch="ự" x={240 - w / 2} y={156} size={size} at={600} fillAt={1500} />
+      {[[150, 224, 180], [150, 240, 130], [150, 256, 156]].map(([x, y, wd], i) => (
+        <rect key={y} x={x} y={y} width={wd} height="6" rx="3" className="bp-bar" style={delay(1600 + i * 200)} />
+      ))}
+      <path d="M278 262c8-14 14-14 18-2s10 8 22-6" className="bp-sign" pathLength={1} style={delay(2200)} />
+    </>
+  );
+}
+
+function Embedding(): React.JSX.Element {
+  const size = 188; const base = 236; const x = 52; const w = glyphWidth('ê', size);
+  const top = base - em(GLYPHS['ê'].top, size);
+  const pts: React.JSX.Element[] = [];
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) {
+    const px = x + 8 + c * ((w - 16) / 4); const py = top + 14 + r * ((base - top - 28) / 5);
+    pts.push(<circle key={`${r}${c}`} cx={px} cy={py} r="2.2" className="bp-sample" style={delay(1000 + ((r * 5 + c) * 53) % 700)} />);
+  }
+  const bars = [0.5, 0.82, 0.35, 0.94, 0.62, 0.28, 0.76, 0.48];
+  return (
+    <>
+      <Sheet fig="FIG.06 · FEATURE SCAN" />
+      <GlyphArt ch="ê" x={x} y={base} size={size} at={250} fillAt={1800} className="ghost" />
+      {pts}
+      <rect x={x - 8} y={top} width={w + 16} height="3" className="bp-beam sweep" style={{ ...delay(900), ['--travel' as string]: `${base - top}px` }} />
+      <path d={`M${x + w + 28} 150H300M292 144L300 150L292 156`} className="bp-flow" pathLength={1} style={delay(1500)} />
+      <line x1="316" x2="440" y1="236" y2="236" className="bp-guide base" />
+      {bars.map((v, i) => <rect key={i} x={318 + i * 15} y={236 - v * 110} width="9" height={v * 110} className="bp-vec" style={delay(1800 + i * 90)} />)}
+    </>
+  );
+}
+
+function Activate(): React.JSX.Element {
+  const size = 92; const w = glyphWidth('ă', size);
+  return (
+    <>
+      <Sheet fig="FIG.07 · PROTOTYPE" />
+      <rect x="48" y="130" width="112" height="112" rx="6" className="bp-frame-box" style={delay(150)} />
+      <GlyphArt ch="ă" x={104 - w / 2} y={206} size={size} at={400} fillAt={1100} className="src" />
+      <Callout n={1} px={150} py={77} cx={196} cy={46} at={1200} />
+      <g className="bp-switch" style={delay(1000)}><rect x="86" y="62" width="64" height="30" rx="15" className="bp-pill" /><circle cx="101" cy="77" r="11" className="bp-knob" /></g>
+      <path d="M168 186H236" className="bp-flow dash" pathLength={1} style={delay(1400)} />
+      <g className="bp-window" style={delay(1500)}>
+        <rect x="244" y="104" width="196" height="148" rx="8" className="bp-wire" />
+        <path d="M244 128H440" className="bp-wire" />
+        {[0, 1, 2].map(i => <circle key={i} cx={258 + i * 13} cy="116" r="3" className="bp-dot" />)}
+        <GlyphArt ch="ă" x={342 - w / 2} y={220} size={size} at={1900} fillAt={2400} className="fly" />
+        <rect x="262" y="142" width="60" height="5" rx="2.5" className="bp-bar" style={delay(2400)} />
+        <rect x="360" y="142" width="62" height="5" rx="2.5" className="bp-bar" style={delay(2500)} />
+      </g>
+    </>
+  );
+}
+
+function Done(): React.JSX.Element {
+  return (
+    <>
+      <Sheet fig="FIG.08 · COMPLETE" />
+      <Guide y={238} name="baseline" at={200} tone="base" />
+      <Guide y={238 - em(X_HEIGHT, 150)} name="x-height" at={320} />
+      <GlyphArt ch="A" x={100} y={238} size={150} at={500} fillAt={1500} />
+      <GlyphArt ch="a" x={100 + glyphWidth('A', 150) + 6} y={238} size={150} at={800} fillAt={1700} />
+      <path d={circlePath(388, 104, 34)} className="bp-ring-solid" pathLength={1} style={delay(1600)} />
+      <path d="M372 105l11 11 21-23" className="bp-tick-mark" pathLength={1} style={delay(2100)} />
+    </>
+  );
+}
+
+const ART: Record<S, () => React.JSX.Element> = { o1: Welcome, o2: Legacy, o3: Tray, o5: Seal, o6: Embedding, o7: Activate, end: Done };
+
+function Legend({ terms }: { terms: readonly string[] }): React.JSX.Element {
+  return (
+    <ol className="fa-legend" aria-label={t('onb.legend')}>
+      {terms.map((term, i) => {
+        const key = termKey(term);
+        return (
+          <li key={key}>
+            <b aria-hidden>{i + 1}</b>
+            <TermTip term={key}><span className="name" tabIndex={0}>{TERM_NAMES[key] ?? key}</span></TermTip>
+            <span className="gloss">{termGloss(key)}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Khung hình (stage) của một bước. `slotRef` chỉ dùng ở o4: nơi ScanBlocks gắn hình quét vào. */
+export function Illustration({ step, slotRef }: { step: Step | S; slotRef?: (el: HTMLDivElement | null) => void }): React.JSX.Element | null {
+  if (step === 'o4') return <figure className="fa-stage" data-step="o4"><div className="fa-stage-slot" ref={slotRef} /></figure>;
+  const Art = (ART as Record<string, (() => React.JSX.Element) | undefined>)[step];
+  if (!Art) return null;
+  const terms = LEGEND[step as S];
+  const node: ReactNode = <Art />;
+  return (
+    <figure className="fa-stage" data-step={step}>
+      <svg className="fa-bp" role="img" aria-label={t(`onb.art.${step}` as I18nKey)} viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet">{node}</svg>
+      {terms && <Legend terms={terms} />}
+    </figure>
   );
 }

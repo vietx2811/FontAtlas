@@ -77,8 +77,10 @@
         go?.click(); await sleep(800); continue;
       }
       const order = /Kích hoạt/.test(h1) ? ['Để sau', 'Tiếp tục'] : ['Đã hiểu', 'Không dùng', 'Bỏ qua', 'Tiếp tục', 'Bắt đầu', 'Vào thư viện'];
-      const b = await wait(() => order.map(t => btn(t)).find(Boolean), 120000);
+      // Intro (nút "Bỏ qua") và outro (~1,5 s, không có nút) là màn chuyển động: outro kết thúc thì .fa-onb biến mất, thoát vòng lặp.
+      const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);
       if (!b) { await log('onb-stuck', false, h1); break; }
+      if (b === true) break;
       b.click(); await sleep(700);
     }
     await log('onb-finished', !document.querySelector('.fa-onb'), '');

@@ -11,7 +11,7 @@ async function mount(opts: Parameters<typeof createMockApi>[0] = { firstRun: tru
   const api = createMockApi(opts);
   const onDone = vi.fn();
   const step = vi.spyOn(api, 'setOnboardingStep');
-  render(<Onboarding api={api} pickFolder={async () => '/Users/me/FontsDemo'} onDone={onDone} {...extra} />);
+  render(<Onboarding api={api} pickFolder={async () => '/Users/me/FontsDemo'} onDone={onDone} animated={false} {...extra} />);
   await settle();
   return { api, onDone, step };
 }
@@ -51,7 +51,7 @@ describe('Onboarding', () => {
   it('resumes where it stopped', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('o5');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect(heading()).toBe('Giấy phép và trách nhiệm');
   });
@@ -88,7 +88,7 @@ describe('Onboarding', () => {
   it('O5 cannot be skipped: no "Để sau", but you can go back', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('o5');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect(screen.queryByRole('button', { name: 'Để sau' })).toBeNull();
     expect(screen.getByText(/Dữ liệu không rời khỏi máy/)).toBeTruthy();
@@ -99,7 +99,7 @@ describe('Onboarding', () => {
   it('O6: disk space check, "Không dùng" turns analysis off, "Tải ngay" shows progress until the user continues', async () => {
     const api = createMockApi({ firstRun: true, initial: { model: { diskFree: 100 * 1024 * 1024 } } });
     await api.setOnboardingStep('o6');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect((screen.getByRole('button', { name: 'Tải ngay' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Cần thêm \d+ MB trống/)).toBeTruthy();
@@ -107,7 +107,7 @@ describe('Onboarding', () => {
     const api2 = createMockApi({ firstRun: true });
     await api2.setOnboardingStep('o6');
     const dl = vi.spyOn(api2, 'modelDownload');
-    render(<Onboarding api={api2} onDone={() => {}} />);
+    render(<Onboarding api={api2} onDone={() => {}} animated={false} />);
     await settle();
     expect(screen.getByText(/371 MB/)).toBeTruthy();
     await click('Tải ngay');
@@ -123,7 +123,7 @@ describe('Onboarding', () => {
     const api = createMockApi({ firstRun: true });
     await api.setSettings({ embedEnabled: true });
     await api.setOnboardingStep('o6');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     await click('Không dùng');
     expect((await api.getSettings()).embedEnabled).toBe(false);
@@ -133,7 +133,7 @@ describe('Onboarding', () => {
   it('O6 exposes checking and collapsed technical errors with cancellation resume', async () => {
     const api = createMockApi({ firstRun: true, initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
     await api.setOnboardingStep('o6');
-    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />); await settle();
     expect(screen.getByText('Đang kiểm tra tệp…')).toBeTruthy();
     expect(screen.getByTestId('model-spinner')).toBeTruthy();
     const { useModelStore } = await import('../../../store/model');
@@ -149,7 +149,7 @@ describe('Onboarding', () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('o7');
     const keep = vi.spyOn(api, 'activationSetKeep');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect((screen.getByRole('radio', { name: /Tắt các font đã kích hoạt/ }) as HTMLInputElement).checked).toBe(true);
     await click('Bật kích hoạt font');
@@ -162,7 +162,7 @@ describe('Onboarding', () => {
     await api.setOnboardingStep('o7');
     const keep = vi.spyOn(api, 'activationSetKeep');
     const activate = vi.spyOn(api, 'activationActivate');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     fireEvent.click(screen.getByRole('radio', { name: /Giữ font hoạt động/ }));
     await click('Bật kích hoạt font');
@@ -173,7 +173,7 @@ describe('Onboarding', () => {
   it('O7 mentions another font manager only when one is installed', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('o7');
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect(screen.getByText(/Phát hiện FontBase/)).toBeTruthy();
     expect(screen.queryByText(/Phát hiện RightFont/)).toBeNull();
@@ -182,7 +182,7 @@ describe('Onboarding', () => {
   it('O3 explains a nested folder instead of failing silently', async () => {
     const api = createMockApi({ firstRun: false });
     await api.setOnboardingStep('o3');
-    render(<Onboarding api={api} pickFolder={async () => '/Users/me/Fonts/src1/sub'} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolder={async () => '/Users/me/Fonts/src1/sub'} onDone={() => {}} animated={false} />);
     await settle();
     await click(/Thêm thư mục/);
     expect(screen.getByRole('alert').textContent).toMatch(/đã nằm trong nguồn/);
@@ -192,7 +192,7 @@ describe('Onboarding', () => {
     const api = createMockApi({ firstRun: false, legacy: true });
     await api.legacyImport();
     await api.setOnboardingStep('o1');
-    render(<Onboarding api={api} pickFolders={async () => ['/Users/me/Thiết kế/Khách hàng A', '/Volumes/Font/Thư viện chữ Việt rất dài']} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolders={async () => ['/Users/me/Thiết kế/Khách hàng A', '/Volumes/Font/Thư viện chữ Việt rất dài']} onDone={() => {}} animated={false} />);
     await settle();
     await click('Bắt đầu');
     expect(heading()).toBe('Thư mục font');
@@ -209,7 +209,7 @@ describe('Onboarding', () => {
     const api = createMockApi();
     await api.setOnboardingStep('o3');
     const pickFolders = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce(['/Users/me/Fonts/src1', '/Users/me/Fonts', '/Users/me/New']);
-    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} animated={false} />);
     await settle();
     const old = (await api.listSources()).map(s => s.id);
     await click(/Thêm thư mục/);
@@ -227,7 +227,7 @@ describe('Onboarding', () => {
     let resolve!: (paths: string[]) => void;
     const pickFolders = vi.fn(() => new Promise<string[]>(r => { resolve = r; }));
     vi.spyOn(api, 'addSource').mockRejectedValue(new CmdError('io', 'Permission denied'));
-    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolders={pickFolders} onDone={() => {}} animated={false} />);
     await settle();
     await click(/Thêm thư mục/);
     await click(/Thêm thư mục/);
@@ -245,7 +245,7 @@ describe('Onboarding', () => {
     await api.setOnboardingStep('o3');
     vi.spyOn(api, 'listSources').mockRejectedValueOnce(new Error('offline'));
     vi.spyOn(api, 'removeSource').mockRejectedValue(new CmdError('busy', 'scanning'));
-    render(<Onboarding api={api} onDone={() => {}} />);
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />);
     await settle();
     expect(screen.getByRole('alert').textContent).toContain('offline');
     await click('Thử lại');
@@ -260,7 +260,7 @@ describe('Onboarding', () => {
     const api = createMockApi(); await api.setOnboardingStep('o3');
     const sources = vi.spyOn(api, 'listSources');
     vi.spyOn(api, 'addSource').mockRejectedValueOnce(new CmdError('io', 'Folder A denied')).mockRejectedValueOnce(new CmdError('io', 'Folder B denied'));
-    render(<Onboarding api={api} pickFolders={async () => ['/A', '/B']} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolders={async () => ['/A', '/B']} onDone={() => {}} animated={false} />);
     await settle();
     sources.mockRejectedValueOnce(new Error('refresh unavailable'));
     await click(/Thêm thư mục/);
@@ -274,7 +274,7 @@ describe('Onboarding', () => {
     const sources = await api.listSources();
     vi.spyOn(api, 'scanStatus').mockResolvedValue({ running: true, paused: false, currentSourceId: sources[0].id, queued: [sources[1].id] });
     const remove = vi.spyOn(api, 'removeSource');
-    render(<Onboarding api={api} onDone={() => {}} />); await settle();
+    render(<Onboarding api={api} onDone={() => {}} animated={false} />); await settle();
     for (const source of sources.slice(0, 2)) {
       const button = screen.getByRole('button', { name: `Xoá ${source.name}` });
       expect(button).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(button);
@@ -287,7 +287,7 @@ describe('Onboarding', () => {
     vi.useFakeTimers();
     const api = createMockApi({ firstRun: true, tickMs: 100 });
     await api.setOnboardingStep('o3');
-    render(<Onboarding api={api} pickFolder={async () => '/Users/me/NewFonts'} onDone={() => {}} />);
+    render(<Onboarding api={api} pickFolder={async () => '/Users/me/NewFonts'} onDone={() => {}} animated={false} />);
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Thêm thư mục/ })); await vi.advanceTimersByTimeAsync(10); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' })); await vi.advanceTimersByTimeAsync(10); });
@@ -297,6 +297,111 @@ describe('Onboarding', () => {
     expect(screen.getByRole('img', { name: 'Đã quét xong' })).toBeTruthy(); // xong → vòng tròn xanh
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.getAllByTestId('scan-block')).toHaveLength(9);
+  });
+  describe('lab layout, intro and outro', () => {
+    const startFresh = async (extra: Partial<React.ComponentProps<typeof Onboarding>> = {}) => {
+      const api = createMockApi({ firstRun: true });
+      const onDone = vi.fn();
+      render(<Onboarding api={api} onDone={onDone} {...extra} />);
+      await settle();
+      return { api, onDone };
+    };
+
+    it('first run opens with the intro (no step content yet); "Bỏ qua" goes straight to step 1', async () => {
+      await startFresh();
+      expect(screen.getByTestId('onb-intro')).toBeTruthy();
+      expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+      await click('Bỏ qua');
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+      expect(screen.queryByTestId('onb-intro')).toBeNull();
+    });
+
+    it('the intro ends by itself after its duration', async () => {
+      vi.useFakeTimers();
+      const api = createMockApi({ firstRun: true });
+      render(<Onboarding api={api} onDone={() => {}} introMs={2800} />);
+      for (let i = 0; i < 6; i++) await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(screen.getByTestId('onb-intro')).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(2900); });
+      expect(screen.queryByTestId('onb-intro')).toBeNull();
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+    });
+
+    it('no intro when resuming mid-way, and none when the system asks for reduced motion', async () => {
+      const api = createMockApi({ firstRun: true });
+      await api.setOnboardingStep('o5');
+      render(<Onboarding api={api} onDone={() => {}} />);
+      await settle();
+      expect(screen.queryByTestId('onb-intro')).toBeNull();
+      expect(heading()).toBe('Giấy phép và trách nhiệm');
+      cleanupAll();
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('prefers-reduced-motion'), media: q, addEventListener: () => {}, removeEventListener: () => {} }));
+      await startFresh();
+      expect(screen.queryByTestId('onb-intro')).toBeNull();
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+      vi.unstubAllGlobals();
+    });
+
+    it('"Vào thư viện" plays the outro and only then calls onDone; the step is saved first', async () => {
+      const api = createMockApi({ firstRun: true });
+      await api.setOnboardingStep('end');
+      const onDone = vi.fn();
+      const save = vi.spyOn(api, 'setOnboardingStep');
+      render(<Onboarding api={api} onDone={onDone} introMs={0} outroMs={50} />);
+      await settle();
+      await click('Vào thư viện');
+      expect(save).toHaveBeenLastCalledWith('done');
+      expect(screen.getByTestId('onb-outro')).toBeTruthy();
+      expect(onDone).not.toHaveBeenCalled();
+      await act(async () => { await new Promise(r => setTimeout(r, 120)); });
+      expect(onDone).toHaveBeenCalledTimes(1);
+    });
+
+    it('"Bỏ qua hướng dẫn" skips the outro', async () => {
+      const { onDone } = await startFresh();
+      await click('Bỏ qua');
+      await click('Bỏ qua hướng dẫn');
+      expect(onDone).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('onb-outro')).toBeNull();
+    });
+
+    it('shows "Bước n/total" and keeps the group label; the stage and the text are separate regions', async () => {
+      await mount();
+      expect(document.querySelector('.fa-onb-stepno')!.textContent).toMatch(/^Bước 1\/\d$/);
+      expect(screen.getByRole('group', { name: /^Bước 1\/\d$/ })).toBeTruthy();
+      expect(document.querySelector('.fa-onb-body > .fa-stage')).toBeTruthy();
+      expect(document.querySelector('.fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+    });
+
+    it('keyboard: → advances only on safe buttons; the licence step is never acknowledged by a key', async () => {
+      await mount();
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowRight' }); });
+      await settle();
+      expect(heading()).toBe('Thư mục font');
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowLeft' }); });
+      await settle();
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+      cleanupAll();
+      const api2 = createMockApi({ firstRun: true });
+      await api2.setOnboardingStep('o5');
+      render(<Onboarding api={api2} onDone={() => {}} animated={false} />);
+      await settle();
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowRight' }); fireEvent.keyDown(document.body, { key: 'Enter' }); });
+      await settle();
+      expect(heading()).toBe('Giấy phép và trách nhiệm');
+      expect((await api2.getSettings()).licenseNoticeAck).toBe(false);
+    });
+
+    it('keyboard: arrows inside the radios are left to the radios; Esc on step 1 skips the guide', async () => {
+      const { onDone } = await mount();
+      const radio = screen.getByRole('radio', { name: 'English' });
+      radio.focus();
+      await act(async () => { fireEvent.keyDown(radio, { key: 'ArrowRight' }); });
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
+      await settle();
+      expect(onDone).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

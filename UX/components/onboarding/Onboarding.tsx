@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
 import { CmdError } from '../../api';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
+import { Intro, Outro, INTRO_MS, OUTRO_MS } from './Intro';
+import { usePrefersReducedMotion } from './blueprint';
+import { t } from '../../i18n';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
 
-type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void };
+type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
+  /** false: không có intro/outro (test, QA). Giảm chuyển động của hệ thống cũng tắt chúng. */ animated?: boolean; introMs?: number; outroMs?: number };
+type Phase = 'intro' | 'steps' | 'outro';
 const MB = 1024 * 1024;
 const kindOf = (p: string | null) => (!p ? 'trong máy' : p.startsWith('/Volumes/') ? 'ổ ngoài' : /iCloud|Mobile Documents/.test(p) ? 'iCloud' : 'trong máy');
 
-export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone }: Props): React.JSX.Element | null {
+export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone, animated = true, introMs = INTRO_MS, outroMs = OUTRO_MS }: Props): React.JSX.Element | null {
+  const reduced = usePrefersReducedMotion();
+  const motion = animated && !reduced;
+  const [phase, setPhase] = useState<Phase>('steps');
+  const [stage, setStage] = useState<HTMLDivElement | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const hold = import.meta.env.DEV && new URLSearchParams(location.hash.replace(/^#/, '')).get('hold') === '1'; // QA: giữ intro/outro để chụp
+  const motionRef = useRef(motion); motionRef.current = motion;
   const [state, setState] = useState<OnboardingDto | null>(null);
   const [step, setStep] = useState<Step>('o1');
   const [working, setWorking] = useState(false);
@@ -29,6 +42,8 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
       setState(s);
       const dev = import.meta.env.DEV ? new URLSearchParams(location.hash.replace(/^#/, '')).get('ob') : null; // chỉ cho QA
       setStep(dev && (['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'end'] as string[]).includes(dev) ? (dev as Step) : startStep(s));
+      if (dev === 'intro' || dev === 'outro') setPhase(dev); // chỉ cho QA/ảnh chụp (#ob=intro|outro&hold=1)
+      if (!dev && motionRef.current && s.step === null && startStep(s) === 'o1') setPhase('intro'); // chỉ lần đầu và khi cho phép chuyển động
     }).catch(e => { if (alive) setLoadError(String(e)); });
     return () => { alive = false; };
   }, [api]);
@@ -38,9 +53,29 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
     setStep(to);
     await api.setOnboardingStep(to);
   }, [api]);
-  const finish = useCallback(async () => { await api.setOnboardingStep(DONE); onDone(); }, [api, onDone]);
+  /** `quick`: bỏ qua màn kết (nút "Bỏ qua hướng dẫn"). */
+  const finish = useCallback(async (quick?: boolean) => { await api.setOnboardingStep(DONE); if (quick || !motionRef.current) onDone(); else setPhase('outro'); }, [api, onDone]);
+  const stepRef = useRef(step); stepRef.current = step;
+  // Phím: ← quay lại; → hoặc Enter (khi không focus gì) đi tiếp CHỈ ở nút an toàn (data-keynav: không xác nhận giấy phép hay đổi cài đặt); Esc ở O1 = Bỏ qua hướng dẫn.
+  useEffect(() => {
+    if (phase !== 'steps') return;
+    const q = (sel: string) => root.current?.querySelector<HTMLButtonElement>(sel);
+    const on = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+      if (typing || document.querySelector('[role="dialog"], [role="menu"]')) return;
+      if (e.key === 'ArrowLeft') q('.fa-onb-back:not(:disabled)')?.click();
+      else if (e.key === 'ArrowRight' || (e.key === 'Enter' && (el === document.body || !el))) q('button[data-keynav]:not(:disabled)')?.click();
+      else if (e.key === 'Escape' && stepRef.current === 'o1') q('button[data-skip]')?.click();
+    };
+    document.addEventListener('keydown', on);
+    return () => document.removeEventListener('keydown', on);
+  }, [phase]);
 
   if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? `Không tải được hướng dẫn: ${loadError}` : "Đang mở hướng dẫn…"}</p>{loadError && <button type="button" onClick={() => location.reload()}>Thử lại</button>}</main></div>;
+  if (phase === 'intro') return <div className="fa-onb" ref={root} data-phase="intro"><Intro ms={hold ? 1e9 : introMs} onDone={() => setPhase('steps')} /></div>;
+  if (phase === 'outro') return <div className="fa-onb" ref={root} data-phase="outro"><Outro ms={hold ? 1e9 : outroMs} onDone={onDone} /></div>;
   const steps = visibleSteps(state);
   // Số chấm cố định suốt hướng dẫn: bước quét (o4) luôn có chấm, kể cả trước khi thêm nguồn,
   // để chấm không tăng giữa chừng. Màn "Xong" tô hết.
@@ -48,35 +83,41 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   const idx = step === 'end' ? dots.length - 1 : Math.max(0, dots.indexOf(step));
   const next = () => go(nextStep(step, state));
   const back = prevStep(step, state);
-  const ctx = { api, state, reload, next, finish, pickFolders: pickFolder ? async () => { const p = await pickFolder(); return p ? [p] : []; } : pickFolders, setWorking };
+  const ctx = { api, state, reload, next, finish, stage, pickFolders: pickFolder ? async () => { const p = await pickFolder(); return p ? [p] : []; } : pickFolders, setWorking };
 
   return (
-    <div className="fa-onb" data-step={step}>
+    <div className="fa-onb" ref={root} data-step={step}>
       <header className="fa-onb-top">
         {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>Quay lại</button> : <span />}
-        <div className="fa-onb-dots" role="group" aria-label={`Bước ${Math.min(idx + 1, dots.length)}/${dots.length}`}>
-          {dots.map((d, i) => <i key={d} data-on={i <= idx} aria-hidden />)}
+        <div className="fa-onb-dots" role="group" aria-label={t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}>
+          {dots.map((d, i) => <i key={d} data-on={i <= idx} data-now={i === idx} aria-hidden />)}
         </div>
-        <span />
+        <div className="fa-onb-meta" aria-hidden>
+          <span className="fa-onb-stepno">{t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}</span>
+          <span className="fa-onb-keys"><kbd>←</kbd> {t('onb.keys.back')} · <kbd>→</kbd> {t('onb.keys.next')}{step === 'o1' && <> · <kbd>Esc</kbd> {t('onb.keys.skip')}</>}</span>
+        </div>
       </header>
       <main className="fa-onb-body">
-        <Illustration step={step} />
-        {step === 'o1' && <O1 {...ctx} />}
-        {step === 'o2' && <O2 {...ctx} />}
-        {step === 'o3' && <O3 {...ctx} />}
-        {step === 'o4' && <O4 {...ctx} />}
-        {step === 'o5' && <O5 {...ctx} />}
-        {step === 'o6' && <O6 {...ctx} />}
-        {step === 'o7' && <O7 {...ctx} />}
-        {step === 'end' && <End {...ctx} />}
+        <Illustration step={step} slotRef={setStage} />
+        <div className="fa-onb-pane">
+          {step === 'o1' && <O1 {...ctx} />}
+          {step === 'o2' && <O2 {...ctx} />}
+          {step === 'o3' && <O3 {...ctx} />}
+          {step === 'o4' && <O4 {...ctx} />}
+          {step === 'o5' && <O5 {...ctx} />}
+          {step === 'o6' && <O6 {...ctx} />}
+          {step === 'o7' && <O7 {...ctx} />}
+          {step === 'end' && <End {...ctx} />}
+        </div>
       </main>
     </div>
   );
 }
 
-type Ctx = { api: Api; state: OnboardingDto; reload(): Promise<OnboardingDto>; next(): Promise<void>; finish(): Promise<void>; pickFolders(): Promise<string[]>; setWorking(busy: boolean): void };
+type Ctx = { api: Api; state: OnboardingDto; reload(): Promise<OnboardingDto>; next(): Promise<void>; finish(quick?: boolean): Promise<void>; stage: HTMLElement | null; pickFolders(): Promise<string[]>; setWorking(busy: boolean): void };
 const Actions = ({ children }: { children: React.ReactNode }) => <div className="fa-onb-actions">{children}</div>;
-const Primary = (p: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button type="button" className="primary" {...p} />;
+/** `safe`: cho phép phím → / Enter kích hoạt (chỉ nút không có hệ quả pháp lý hay đổi cài đặt). */
+const Primary = ({ safe, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { safe?: boolean }) => <button type="button" className="primary" data-keynav={safe ? '' : undefined} {...p} />;
 
 function O1({ api, next, finish }: Ctx) {
   const [lang, setLang] = useState<'vi' | 'en'>('vi');
@@ -93,7 +134,7 @@ function O1({ api, next, finish }: Ctx) {
         {([['system', 'Theo hệ thống'], ['light', 'Sáng'], ['dark', 'Tối']] as const).map(([v, label]) => (
           <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{label}</label>))}
       </fieldset>
-      <Actions><button type="button" onClick={() => void finish()}>Bỏ qua hướng dẫn</button><Primary onClick={() => void next()}>Bắt đầu</Primary></Actions>
+      <Actions><button type="button" data-skip onClick={() => void finish(true)}>Bỏ qua hướng dẫn</button><Primary safe onClick={() => void next()}>Bắt đầu</Primary></Actions>
     </>
   );
 }
@@ -215,12 +256,12 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
         <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add(['/Library/Fonts'])}>Font hệ thống</button>
       </div>
       {sources.some(s => s.path?.startsWith('/Volumes/')) && <p className="fa-onb-note">Ổ ngoài cần được kết nối để xem và dùng font.</p>}
-      <Actions><button type="button" disabled={busy} onClick={() => void next()}>Để sau</button><Primary disabled={busy || loading || !!loadError || sources.length === 0} onClick={() => void next()}>Tiếp tục</Primary></Actions>
+      <Actions><button type="button" disabled={busy} onClick={() => void next()}>Để sau</button><Primary safe disabled={busy || loading || !!loadError || sources.length === 0} onClick={() => void next()}>Tiếp tục</Primary></Actions>
     </>
   );
 }
 
-function O4({ api, next }: Ctx) {
+function O4({ api, next, stage }: Ctx) {
   const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31));
   const [st, setSt] = useState<{ scanning: boolean; progress: number | null; done: boolean }>({ scanning: false, progress: null, done: false });
   const [seen, setSeen] = useState(0); const [written, setWritten] = useState(0);
@@ -240,11 +281,11 @@ function O4({ api, next }: Ctx) {
   const text = stats.finished ? `Đã tìm ${stats.seen} file · đã phân tích ${stats.analyzed} font · ${stats.failed} file có vấn đề` : `Đã tìm ${seen} file · đã phân tích ${written} font`;
   return (
     <>
-      <ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />
+      {stage && createPortal(<ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />, stage)}
       <h1>{st.done ? 'Quét xong' : 'Đang quét thư viện'}</h1>
       <p className="sr-only" data-testid="scan-summary" aria-live="polite">{text}</p>
       {!st.done && <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>}
-      <Actions><Primary onClick={() => void next()}>Tiếp tục</Primary></Actions>
+      <Actions><Primary safe onClick={() => void next()}>Tiếp tục</Primary></Actions>
     </>
   );
 }
@@ -325,7 +366,7 @@ function End({ finish }: Ctx) {
       <h1>Xong</h1>
       <p>Thư viện của bạn đang được phân tích. Vài gợi ý để bắt đầu:</p>
       <ul className="fa-onb-list"><li>Mở một font để xem giải phẫu.</li><li>Thử ghép cặp hai font.</li><li>Đổi chữ mẫu ở thanh dưới cùng.</li></ul>
-      <Actions><Primary onClick={() => void finish()}>Vào thư viện</Primary></Actions>
+      <Actions><Primary safe onClick={() => void finish()}>Vào thư viện</Primary></Actions>
     </>
   );
 }

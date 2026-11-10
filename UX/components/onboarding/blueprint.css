@@ -1,0 +1,123 @@
+/* Blueprint / phòng lab. Mọi màu qua token theme (sáng/tối). Trạng thái mặc định = khung CUỐI; animation đi từ khung đầu (fill-mode both),
+   nên giảm chuyển động chỉ cần tắt animation. Chỉ animate transform / opacity / stroke-dashoffset. */
+.fa-onb {
+  --bp-paper: color-mix(in srgb, var(--accent) 5%, var(--card));
+  --bp-grid: color-mix(in srgb, var(--accent) 15%, transparent);
+  --bp-grid-strong: color-mix(in srgb, var(--accent) 28%, transparent);
+  --bp-ink: var(--fg);
+  --bp-dim: var(--muted);
+  --bp-acc: var(--accent-ink);
+  --bp-ease: cubic-bezier(.65, 0, .35, 1);
+}
+.fa-bp { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: 14px; background: var(--bp-paper); overflow: hidden; }
+.bp-paper { fill: var(--bp-paper); }
+.bp-gridline { fill: none; stroke: var(--bp-grid); stroke-width: 1; }
+.bp-gridline.strong { stroke: var(--bp-grid-strong); }
+.bp-tick { stroke: var(--bp-dim); stroke-width: 1; opacity: .55; }
+.bp-corner { fill: none; stroke: var(--bp-dim); stroke-width: 1.2; opacity: .8; }
+.bp-corner.small { stroke: var(--bp-acc); opacity: .5; stroke-width: 1; }
+.bp-fig { font: 500 8px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .08em; fill: var(--bp-dim); }
+.bp-tag { font: 600 10px/1 "JetBrains Mono", ui-monospace, monospace; fill: var(--bp-dim); }
+.bp-read { font: 600 10.5px/1 "JetBrains Mono", ui-monospace, monospace; fill: var(--bp-acc); font-variant-numeric: tabular-nums; white-space: pre; }
+.bp-word { font: 600 34px/1 var(--font-ui); letter-spacing: .03em; fill: var(--bp-ink); animation: bp-rise .8s var(--bp-ease) var(--d, 0ms) both; }
+
+.bp-outline { fill: none; stroke: var(--bp-ink); stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: bp-draw 1.1s var(--bp-ease) var(--d, 0ms) both; }
+.bp-outline.on { animation: none; stroke: var(--bp-acc); }
+.bp-solid { fill: var(--bp-ink); stroke: none; opacity: .94; animation: bp-fill .7s ease var(--d, 0ms) both; }
+.ghost .bp-solid { opacity: .16; }
+.bp-solid.on { animation: none; opacity: .14; fill: var(--bp-acc); }
+g.old .bp-outline { stroke: var(--bp-dim); stroke-dasharray: none; stroke-width: inherit; opacity: .75; animation: bp-fade .6s ease var(--d, 0ms) both; }
+
+.bp-guide { stroke: var(--bp-acc); stroke-width: 1; stroke-dasharray: 1; stroke-dashoffset: 0; opacity: .75; animation: bp-draw .7s var(--bp-ease) var(--d, 0ms) both; }
+.bp-guide.dash { stroke-dasharray: .006 .008; animation-name: bp-fade; }
+.bp-guide.base { stroke-width: 1.6; opacity: 1; }
+.bp-dimline { fill: none; stroke: var(--bp-dim); stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.bp-dimline.draw { stroke-dasharray: 1; animation: bp-draw .7s var(--bp-ease) var(--d, 0ms) both; }
+.bp-dim { animation: bp-fade .4s ease var(--d, 0ms) both; }
+
+.bp-callout { animation: bp-pop .5s var(--bp-ease) var(--d, 0ms) both; transform-box: fill-box; transform-origin: center; }
+.bp-lead { stroke: var(--bp-dim); stroke-width: 1; }
+.bp-dot { fill: var(--bp-acc); }
+.bp-bubble { fill: var(--sheet); stroke: var(--bp-acc); stroke-width: 1.4; }
+.bp-num { font: 700 10px/1 "JetBrains Mono", ui-monospace, monospace; fill: var(--bp-ink); }
+
+.bp-frame rect { fill: none; stroke: var(--bp-ink); stroke-width: 1.4; }
+.bp-frame.old rect { stroke: var(--bp-dim); stroke-dasharray: 5 4; }
+.bp-frame { animation: bp-fade .5s ease var(--d, 0ms) both; }
+.bp-flow { fill: none; stroke: var(--bp-acc); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: bp-draw .8s var(--bp-ease) var(--d, 0ms) both; }
+.bp-flow.dash { stroke-dasharray: .04 .03; }
+.bp-packet { fill: var(--bp-acc); animation: bp-travel 2.4s linear var(--d, 0ms) infinite both; }
+
+.bp-tray { fill: color-mix(in srgb, var(--bp-ink) 3%, transparent); stroke: var(--bp-ink); stroke-width: 1.5; stroke-linejoin: round; stroke-dasharray: 1; animation: bp-draw 1s var(--bp-ease) var(--d, 0ms) both; }
+.bp-well { fill: color-mix(in srgb, var(--bp-ink) 4%, transparent); stroke: var(--border); stroke-width: 1; }
+.bp-drop { animation: bp-drop .6s var(--bp-ease) var(--d, 0ms) both; }
+
+.bp-card { fill: var(--sheet); stroke: var(--bp-ink); stroke-width: 1.4; animation: bp-fade .5s ease var(--d, 0ms) both; }
+.bp-ring { fill: none; stroke: var(--bp-dim); stroke-width: 1.2; stroke-dasharray: 3 5; transform-box: fill-box; transform-origin: center; }
+.bp-ring.spin { animation: bp-spin 28s linear infinite; }
+.bp-ring-solid { fill: none; stroke: var(--bp-acc); stroke-width: 1.8; stroke-dasharray: 1; animation: bp-draw 1s var(--bp-ease) var(--d, 0ms) both; }
+.bp-bar { fill: var(--border); transform-box: fill-box; transform-origin: left center; animation: bp-grow-x .6s var(--bp-ease) var(--d, 0ms) both; }
+.bp-sign { fill: none; stroke: var(--bp-ink); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 1; animation: bp-draw 1s var(--bp-ease) var(--d, 0ms) both; }
+
+.bp-sample { fill: var(--bp-acc); animation: bp-blink 2.6s ease-in-out var(--d, 0ms) infinite both; }
+.bp-beam { fill: color-mix(in srgb, var(--accent) 38%, transparent); }
+.bp-beam.sweep { animation: bp-sweep 2.4s var(--bp-ease) var(--d, 0ms) infinite both; }
+.bp-beam.scan { animation: bp-scan 2.8s var(--bp-ease) infinite alternate both; opacity: 0; }
+.fa-bp[data-spinning="true"] .bp-beam.scan { opacity: 1; }
+.bp-vec { fill: var(--bp-acc); transform-box: fill-box; transform-origin: bottom center; animation: bp-grow-y .7s var(--bp-ease) var(--d, 0ms) both; }
+
+.bp-frame-box { fill: none; stroke: var(--bp-dim); stroke-width: 1.3; stroke-dasharray: 5 4; animation: bp-fade .5s ease var(--d, 0ms) both; }
+.bp-pill { fill: var(--bp-acc); }
+.bp-knob { fill: var(--sheet); animation: bp-knob .5s var(--bp-ease) calc(var(--d, 0ms) + 500ms) both; }
+.bp-switch { animation: bp-fade .4s ease var(--d, 0ms) both; }
+.bp-window { animation: bp-fade .5s ease var(--d, 0ms) both; }
+.bp-wire { fill: none; stroke: var(--bp-ink); stroke-width: 1.3; opacity: .8; }
+.bp-window .bp-dot { fill: var(--bp-dim); }
+g.fly { animation: bp-land .8s var(--bp-ease) var(--d, 0ms) both; }
+.bp-tick-mark { fill: none; stroke: var(--bp-acc); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: bp-draw .6s var(--bp-ease) var(--d, 0ms) both; }
+
+@keyframes bp-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes bp-fill { from { opacity: 0; } }
+@keyframes bp-fade { from { opacity: 0; } }
+@keyframes bp-pop { from { opacity: 0; transform: translateY(6px) scale(.85); } }
+@keyframes bp-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes bp-drop { from { opacity: 0; transform: translateY(-26px); } }
+@keyframes bp-spin { to { transform: rotate(360deg); } }
+@keyframes bp-grow-x { from { transform: scaleX(0); } }
+@keyframes bp-grow-y { from { transform: scaleY(0); } }
+@keyframes bp-blink { 0%, 100% { opacity: .2; } 45%, 55% { opacity: 1; } }
+@keyframes bp-sweep { 0% { transform: translateY(0); } 100% { transform: translateY(var(--travel, 100px)); } }
+@keyframes bp-scan { 0% { transform: translateX(0); } 100% { transform: translateX(var(--travel, 300px)); } }
+@keyframes bp-travel { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(56px); opacity: 0; } }
+@keyframes bp-knob { to { transform: translateX(34px); } }
+@keyframes bp-land { from { transform: translateX(-190px); opacity: 0; } 30% { opacity: 1; } }
+
+/* Legend (HTML) đi kèm callout đánh số */
+.fa-legend { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 16px; }
+.fa-legend li { display: grid; grid-template-columns: 20px auto; grid-template-areas: "n name" ". gloss"; column-gap: 8px; align-items: baseline; font-size: 12px; }
+.fa-legend b { grid-area: n; width: 18px; height: 18px; border-radius: 50%; border: 1.4px solid var(--bp-acc); display: grid; place-items: center; font: 700 10px/1 "JetBrains Mono", ui-monospace, monospace; color: var(--fg); }
+.fa-legend .name { grid-area: name; font-weight: 600; color: var(--fg); cursor: help; border-bottom: 1px dotted var(--muted); justify-self: start; }
+.fa-legend .name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.fa-legend .gloss { grid-area: gloss; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Intro / Outro */
+.fa-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; background: var(--sheet); }
+.fa-intro .fa-bp { width: min(760px, 92%); }
+.fa-intro-tag { margin: 0; font: 500 12px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--bp-dim); animation: bp-rise .7s var(--bp-ease) var(--d, 0ms) both; }
+.fa-intro-tag span { text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
+.fa-intro-skip { position: absolute; right: 24px; bottom: 24px; height: 32px; padding: 0 14px; border-radius: 9px; background: var(--surface-2); color: var(--fg); font-size: 13px; }
+.fa-intro-skip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fa-outro .bp-outline, .fa-outro .bp-solid, .fa-outro .bp-guide { animation: none; }
+.fa-outro .bp-grid, .fa-outro .bp-tick, .fa-outro .bp-corner, .fa-outro .bp-fig, .fa-outro .bp-guide { animation: bp-out calc(var(--outro-ms, 1500ms) * .55) ease both; }
+.fa-outro .fa-mark-glyph { transform-box: view-box; transform-origin: 240px 150px; animation: bp-shrink calc(var(--outro-ms, 1500ms) * .85) var(--bp-ease) calc(var(--outro-ms, 1500ms) * .1) both; }
+/* Intro: lưới đo hiện trước, rồi mới dựng chữ */
+.fa-intro:not(.fa-outro) .bp-grid { animation: bp-fade .9s ease both; }
+.fa-intro:not(.fa-outro) .bp-tick, .fa-intro:not(.fa-outro) .bp-corner, .fa-intro:not(.fa-outro) .bp-fig { animation: bp-fade .6s ease .3s both; }
+@keyframes bp-out { to { opacity: 0; } }
+@keyframes bp-shrink { to { transform: translate(-210px, -120px) scale(.12); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fa-onb *, .fa-onb *::before, .fa-onb *::after { animation: none !important; transition: none !important; }
+  .bp-beam, .bp-packet { opacity: 0 !important; }
+  .fa-outro .fa-mark-glyph { opacity: 1; }
+}
