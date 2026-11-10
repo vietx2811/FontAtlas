@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { CmdError } from '../../../api';
 import { Onboarding } from '../Onboarding';
+import { setSplashOpen } from '../../splash/splashState';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name })); }); await settle(); };
@@ -307,39 +308,23 @@ describe('Onboarding', () => {
       return { api, onDone };
     };
 
-    it('first run opens with the intro (no step content yet); "Bỏ qua" goes straight to step 1', async () => {
-      await startFresh();
-      expect(screen.getByTestId('onb-intro')).toBeTruthy();
-      expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
-      await click('Bỏ qua');
-      expect(heading()).toBe('Chào mừng đến với Font Atlas');
-      expect(screen.queryByTestId('onb-intro')).toBeNull();
-    });
-
-    it('the intro ends by itself after its duration', async () => {
-      vi.useFakeTimers();
-      const api = createMockApi({ firstRun: true });
-      render(<Onboarding api={api} onDone={() => {}} introMs={2800} />);
-      for (let i = 0; i < 6; i++) await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-      expect(screen.getByTestId('onb-intro')).toBeTruthy();
-      await act(async () => { await vi.advanceTimersByTimeAsync(2900); });
-      expect(screen.queryByTestId('onb-intro')).toBeNull();
-      expect(heading()).toBe('Chào mừng đến với Font Atlas');
-    });
-
-    it('no intro when resuming mid-way, and none when the system asks for reduced motion', async () => {
-      const api = createMockApi({ firstRun: true });
-      await api.setOnboardingStep('o5');
-      render(<Onboarding api={api} onDone={() => {}} />);
-      await settle();
-      expect(screen.queryByTestId('onb-intro')).toBeNull();
-      expect(heading()).toBe('Giấy phép và trách nhiệm');
-      cleanupAll();
+    it('reduced motion: "Vào thư viện" finishes at once, with no outro', async () => {
       vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('prefers-reduced-motion'), media: q, addEventListener: () => {}, removeEventListener: () => {} }));
+      const api = createMockApi({ firstRun: true });
+      await api.setOnboardingStep('end');
+      const onDone = vi.fn();
+      render(<Onboarding api={api} onDone={onDone} />);
+      await settle();
+      await click('Vào thư viện');
+      expect(onDone).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('onb-outro')).toBeNull();
+      vi.unstubAllGlobals();
+    });
+
+    it('no intro of its own: the guide opens straight on step 1 (the splash belongs to the app)', async () => {
       await startFresh();
       expect(screen.queryByTestId('onb-intro')).toBeNull();
       expect(heading()).toBe('Chào mừng đến với Font Atlas');
-      vi.unstubAllGlobals();
     });
 
     it('"Vào thư viện" plays the outro and only then calls onDone; the step is saved first', async () => {
@@ -347,7 +332,7 @@ describe('Onboarding', () => {
       await api.setOnboardingStep('end');
       const onDone = vi.fn();
       const save = vi.spyOn(api, 'setOnboardingStep');
-      render(<Onboarding api={api} onDone={onDone} introMs={0} outroMs={50} />);
+      render(<Onboarding api={api} onDone={onDone} outroMs={50} />);
       await settle();
       await click('Vào thư viện');
       expect(save).toHaveBeenLastCalledWith('done');
@@ -359,7 +344,6 @@ describe('Onboarding', () => {
 
     it('"Bỏ qua hướng dẫn" skips the outro', async () => {
       const { onDone } = await startFresh();
-      await click('Bỏ qua');
       await click('Bỏ qua hướng dẫn');
       expect(onDone).toHaveBeenCalledTimes(1);
       expect(screen.queryByTestId('onb-outro')).toBeNull();
@@ -392,6 +376,25 @@ describe('Onboarding', () => {
       expect((await api2.getSettings()).licenseNoticeAck).toBe(false);
     });
 
+    it('while the splash is open the guide ignores every key (Esc must not skip the guide, Enter must not advance)', async () => {
+      const { onDone } = await mount();
+      setSplashOpen(true);
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'Escape' }); fireEvent.keyDown(document.body, { key: 'Enter' }); fireEvent.keyDown(document.body, { key: 'ArrowRight' }); });
+      await settle();
+      expect(onDone).not.toHaveBeenCalled();
+      expect(heading()).toBe('Chào mừng đến với Font Atlas');
+      setSplashOpen(false);
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowRight' }); });
+      await settle();
+      expect(heading()).toBe('Thư mục font');
+    });
+
+    it('describes its keys for screen readers (aria-describedby)', async () => {
+      await mount();
+      const main = document.querySelector('.fa-onb-body')!;
+      expect(document.getElementById(main.getAttribute('aria-describedby')!)!.textContent).toMatch(/Esc/);
+    });
+
     it('keyboard: arrows inside the radios are left to the radios; Esc on step 1 skips the guide', async () => {
       const { onDone } = await mount();
       const radio = screen.getByRole('radio', { name: 'English' });
@@ -409,3 +412,15 @@ describe('Onboarding', () => {
 import { cleanup } from '@testing-library/react';
 const cleanupAll = () => cleanup();
 void within;
+
+describe('Outro keys', () => {
+  it('Enter held down (key repeat) does not skip the outro; a single press does', async () => {
+    const { Outro } = await import('../Outro');
+    const onDone = vi.fn();
+    render(<Outro onDone={onDone} ms={10_000} />);
+    fireEvent.keyDown(document.body, { key: 'Enter', repeat: true });
+    expect(onDone).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+});

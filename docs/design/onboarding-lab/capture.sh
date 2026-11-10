@@ -2,7 +2,8 @@
 # Chụp từng bước onboarding (sáng/tối) bằng Chrome headless từ dev server (mock, #first=1). Khung CUỐI của animation (reduced-motion) để ảnh ổn định.
 # Dùng:  (cd UX && npx vite --port 5397 --strictPort) &  rồi  bash docs/design/onboarding-lab/capture.sh
 set -euo pipefail
-OUT="$(cd "$(dirname "$0")" && pwd)"; PORT="${PORT:-5397}"
+OUT="${OUT_DIR:-$(cd "$(dirname "$0")" && pwd)}"; PORT="${PORT:-5397}"; mkdir -p "$OUT"
+# Repo chỉ giữ ~6 ảnh tiêu biểu (xem README); chạy với OUT_DIR=/tmp/onb-shots để chụp đủ bộ ngoài repo.
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; PROFILE="$(mktemp -d)"
 shot() { # tên, hash, sáng=1/tối=0, w, h
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$PROFILE" --window-size="$4,$5" --virtual-time-budget=6000 \
@@ -10,8 +11,8 @@ shot() { # tên, hash, sáng=1/tối=0, w, h
 }
 for theme in dark light; do
   s=0; [ "$theme" = light ] && s=1
-  for step in ${STEPS:-o1 o2 o3 o4 o5 o6 o7 end}; do shot "$theme-$step" "ob=$step" $s 1280 800; done
-  shot "$theme-intro" "ob=intro&hold=1" $s 1280 800
+  for step in ${STEPS:-o1 o2 o3 o4 o5 o6 o7 end}; do [ "$step" = none ] && continue; shot "$theme-$step" "ob=$step" $s 1280 800; done
+  shot "$theme-splash" "splash=hold" $s 1280 800
   shot "$theme-narrow-o1" "ob=o1" $s 720 900
 done
 rm -rf "$PROFILE"

@@ -6,9 +6,10 @@ import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSt
 import { applyTheme, type ThemeMode } from '../../theme';
 import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
-import { Intro, Outro, INTRO_MS, OUTRO_MS } from './Intro';
+import { Outro, OUTRO_MS } from './Outro';
 import { usePrefersReducedMotion } from './blueprint';
 import { t } from '../../i18n';
+import { isSplashOpen } from '../splash/splashState';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 import { useModelStore, useModelUi } from '../../store/model';
@@ -16,18 +17,18 @@ import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
-  /** false: không có intro/outro (test, QA). Giảm chuyển động của hệ thống cũng tắt chúng. */ animated?: boolean; introMs?: number; outroMs?: number };
-type Phase = 'intro' | 'steps' | 'outro';
+  /** false: không có outro (test, QA). Giảm chuyển động của hệ thống cũng tắt nó. Phần mở đầu là Splash của App, không nằm ở đây. */ animated?: boolean; outroMs?: number };
+type Phase = 'steps' | 'outro';
 const MB = 1024 * 1024;
 const kindOf = (p: string | null) => (!p ? 'trong máy' : p.startsWith('/Volumes/') ? 'ổ ngoài' : /iCloud|Mobile Documents/.test(p) ? 'iCloud' : 'trong máy');
 
-export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone, animated = true, introMs = INTRO_MS, outroMs = OUTRO_MS }: Props): React.JSX.Element | null {
+export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone, animated = true, outroMs = OUTRO_MS }: Props): React.JSX.Element | null {
   const reduced = usePrefersReducedMotion();
   const motion = animated && !reduced;
   const [phase, setPhase] = useState<Phase>('steps');
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const hold = import.meta.env.DEV && new URLSearchParams(location.hash.replace(/^#/, '')).get('hold') === '1'; // QA: giữ intro/outro để chụp
+  const hold = import.meta.env.DEV && new URLSearchParams(location.hash.replace(/^#/, '')).get('hold') === '1'; // QA: giữ outro để chụp
   const motionRef = useRef(motion); motionRef.current = motion;
   const [state, setState] = useState<OnboardingDto | null>(null);
   const [step, setStep] = useState<Step>('o1');
@@ -42,8 +43,7 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
       setState(s);
       const dev = import.meta.env.DEV ? new URLSearchParams(location.hash.replace(/^#/, '')).get('ob') : null; // chỉ cho QA
       setStep(dev && (['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 'o7', 'end'] as string[]).includes(dev) ? (dev as Step) : startStep(s));
-      if (dev === 'intro' || dev === 'outro') setPhase(dev); // chỉ cho QA/ảnh chụp (#ob=intro|outro&hold=1)
-      if (!dev && motionRef.current && s.step === null && startStep(s) === 'o1') setPhase('intro'); // chỉ lần đầu và khi cho phép chuyển động
+      if (dev === 'outro') setPhase('outro'); // chỉ cho QA/ảnh chụp (#ob=outro&hold=1)
     }).catch(e => { if (alive) setLoadError(String(e)); });
     return () => { alive = false; };
   }, [api]);
@@ -61,7 +61,7 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
     if (phase !== 'steps') return;
     const q = (sel: string) => root.current?.querySelector<HTMLButtonElement>(sel);
     const on = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isSplashOpen() || e.defaultPrevented || e.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return; // splash còn hiện: phím thuộc về nó
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
       if (typing || document.querySelector('[role="dialog"], [role="menu"]')) return;
@@ -74,7 +74,6 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   }, [phase]);
 
   if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? `Không tải được hướng dẫn: ${loadError}` : "Đang mở hướng dẫn…"}</p>{loadError && <button type="button" onClick={() => location.reload()}>Thử lại</button>}</main></div>;
-  if (phase === 'intro') return <div className="fa-onb" ref={root} data-phase="intro"><Intro ms={hold ? 1e9 : introMs} onDone={() => setPhase('steps')} /></div>;
   if (phase === 'outro') return <div className="fa-onb" ref={root} data-phase="outro"><Outro ms={hold ? 1e9 : outroMs} onDone={onDone} /></div>;
   const steps = visibleSteps(state);
   // Số chấm cố định suốt hướng dẫn: bước quét (o4) luôn có chấm, kể cả trước khi thêm nguồn,
@@ -97,7 +96,8 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
           <span className="fa-onb-keys"><kbd>←</kbd> {t('onb.keys.back')} · <kbd>→</kbd> {t('onb.keys.next')}{step === 'o1' && <> · <kbd>Esc</kbd> {t('onb.keys.skip')}</>}</span>
         </div>
       </header>
-      <main className="fa-onb-body">
+      <span id="onb-keys-desc" className="sr-only">{t('onb.keys.aria')}</span>
+      <main className="fa-onb-body" aria-describedby="onb-keys-desc">
         <Illustration step={step} slotRef={setStage} />
         <div className="fa-onb-pane">
           {step === 'o1' && <O1 {...ctx} />}

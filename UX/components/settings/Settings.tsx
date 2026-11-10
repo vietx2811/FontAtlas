@@ -1,3 +1,4 @@
+import { readSplashEnabled, writeSplashEnabled } from '../splash/splashState';
 import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
 import { openPrivacySettings } from '../../privacy';
@@ -63,7 +64,7 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
       </nav>
       <section className="fa-set-body">
         <header><h2>{label}</h2><button type="button" className="fa-set-done" onClick={onClose}>Xong</button></header>
-        {s && group === 'general' && <General s={s} patch={patch} />}
+        {s && group === 'general' && <General api={api} s={s} patch={patch} />}
         {s && group === 'library' && <Library api={api} s={s} patch={patch} />}
         {s && group === 'vision' && <Vision api={api} s={s} patch={patch} store={modelStore} />}
         {s && group === 'activation' && <Activation api={api} s={s} patch={patch} />}
@@ -85,7 +86,9 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
 
 type SubProps = { s: SettingsDto; patch(p: Partial<SettingsDto>): Promise<void> };
 
-function General({ s, patch }: SubProps) {
+function General({ api, s, patch }: { api: Api } & SubProps) {
+  const [splashOn, setSplashOn] = useState(true);
+  useEffect(() => { let alive = true; void readSplashEnabled(api).then(v => { if (alive) setSplashOn(v); }); return () => { alive = false; }; }, [api]);
   const [theme, setTheme] = useState<ThemeMode>(() => (document.documentElement.dataset.theme as ThemeMode | undefined) ?? 'system');
   const setSample = useUiStore(x => x.setSample);
   const apply = (t: string) => { setSample(t); void patch({ sampleText: t }); };
@@ -102,6 +105,7 @@ function General({ s, patch }: SubProps) {
         <div className="fa-set-presets">{SAMPLE_PRESETS.map(([n, t]) => <button key={n} type="button" onClick={() => apply(t)}>{n}</button>)}</div>
       </div>
       <Switch label="Dự án dùng tiếng Việt mặc định" on={s.projectViDefault} onChange={v => void patch({ projectViDefault: v })} />
+      <Switch label="Hiện splash khi mở app" on={splashOn} onChange={v => { setSplashOn(v); void writeSplashEnabled(api, v); }} />
     </>
   );
 }
