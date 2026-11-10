@@ -77,10 +77,21 @@ describe('AdvancedSheet', () => {
     expect(readFileSync(join(__dirname, '../../../index.css'), 'utf8')).toMatch(new RegExp(`\\s${token}:`));
   });
 
-  it('the cards container uses 208px masonry columns', () => {
+  it('masonry lanes all start at the top: every lane is a flex column, no CSS multi-column', () => {
     const css = readFileSync(join(__dirname, '../advancedSheet.css'), 'utf8');
-    expect(css).toMatch(/columns:\s*208px/);
+    expect(css).not.toMatch(/columns:\s*208px/);
+    expect(css).toMatch(/\.fa-adv-cols \{[^}]*align-items:\s*flex-start/);
+    expect(css).toMatch(/\.fa-adv-lane \{[^}]*flex-direction:\s*column/);
   });
+
+  it('Masonry puts every card in exactly one lane, keeping order within a lane, and balances by weight', async () => {
+    render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
+    const lanes = [...document.querySelectorAll('.fa-adv-lane')];
+    expect(lanes.length).toBeGreaterThan(0);
+    const labels = lanes.flatMap(l => [...l.children].map(c => c.getAttribute('aria-label')));
+    expect(labels).toHaveLength(12); expect(new Set(labels).size).toBe(12);
+  });
+
 });
 
 describe('useAxisHistograms (debounce + cancel)', () => {

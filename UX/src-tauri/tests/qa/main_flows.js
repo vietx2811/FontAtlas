@@ -172,7 +172,7 @@
       const cards = sheet ? [...sheet.querySelectorAll('.fa-adv-card')] : [];
       const lefts = new Set(cards.map(c => Math.round(c.getBoundingClientRect().left)));
       const scrollNeeded = sheet ? sheet.querySelector('[data-testid=advanced-cols]').scrollHeight > sheet.querySelector('[data-testid=advanced-cols]').clientHeight + 1 : null;
-      await log('advanced-opens-18-axes', !!sheet && !!rows && lefts.size >= 2, { rows: rows?.length ?? 0, columnWidth: cols?.columnWidth, columnCount: cols?.columnCount, distinctColumns: lefts.size, scrollNeeded, win: [innerWidth, innerHeight] });
+      await log('advanced-opens-18-axes', !!sheet && !!rows && lefts.size >= 2 && new Set(cards.filter(c => c.previousElementSibling === null).map(c => Math.round(c.getBoundingClientRect().top))).size === 1, { rows: rows?.length ?? 0, lanes: sheet?.querySelector('[data-testid=advanced-cols]')?.dataset.cols, distinctColumns: lefts.size, laneTops: [...new Set(cards.filter(c => c.previousElementSibling === null).map(c => Math.round(c.getBoundingClientRect().top)))], scrollNeeded, win: [innerWidth, innerHeight] });
       const tt = await termCheck('[data-testid=advanced-sheet] .fa-axis-name[data-term]');
       await log('advanced-term-tooltips', tt.n >= 17 && tt.bad.length === 0 && tt.art > 0, tt);
       // Weight 600+ bằng bàn phím: lưới đổi số lượng, tóm tắt hiện Weight, nháy đúp thanh = bỏ lọc

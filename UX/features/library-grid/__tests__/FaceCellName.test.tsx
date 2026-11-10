@@ -70,7 +70,7 @@ describe('card title in its own font', () => {
   it('badges, star and active dot all carry tooltips instead of native titles', async () => {
     await mount([makeRow(0, { viMissing: 3, supportsVi: false, path: '/f/a.otf' })]);
     expect(await tipOf(screen.getByTestId('face-format'))).toBe('Định dạng file OTF');
-    expect(await tipOf(screen.getByTestId('vi-mark'))).toBe('Thiếu 3 ký tự tiếng Việt');
+    expect(await tipOf(screen.getByTestId('vi-mark'))).toBe('Tiếng Việt · thiếu 3/134 ký tự');
     expect(await tipOf(screen.getByRole('button', { name: 'Yêu thích' }))).toBe('Yêu thích');
     expect(document.querySelectorAll('[title]')).toHaveLength(0);
   });

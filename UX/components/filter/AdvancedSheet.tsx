@@ -10,6 +10,7 @@ import { TermTip, classTermKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classLabel } from '../main/classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
 import { filterChips } from '../main/FilterChips';
+import { Masonry } from './Masonry';
 import { AxisRow } from './AxisRow';
 import { LangPicker } from './LangPicker';
 import { Histogram } from './Histogram';
@@ -116,36 +117,36 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
         <button type="button" className="fa-adv-close" aria-label={t('adv.close')} onClick={onClose}>×</button>
       </header>
       {error && <p role="alert" className="fa-adv-err">{t('adv.error', { msg: error })} <button type="button" onClick={retry}>{t('adv.retry')}</button></p>}
-      <div className="fa-adv-cols" data-testid="advanced-cols">
-        <section className="fa-adv-card" aria-label={t('adv.class')}><h3>{t('adv.class')}</h3>
+      <Masonry>
+        <section className="fa-adv-card" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length}><h3>{t('adv.class')}</h3>
           {classRows.map(f => (
             <TermTip key={f.class} term={classTermKey(f.class)}>
               <label><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => toggle('classes', f.class, e.target.checked)} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
             </TermTip>
           ))}
         </section>
-        <section className="fa-adv-card" aria-label={t('adv.style')}><h3>{t('adv.style')}</h3>
+        <section className="fa-adv-card" aria-label={t('adv.style')} data-weight={100}><h3>{t('adv.style')}</h3>
           <label><input type="checkbox" checked={filters.variable === true} onChange={e => patch({ variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>
           <label><input type="checkbox" checked={filters.italic === true} onChange={e => patch({ italic: e.target.checked ? true : undefined })} />{t('filter.italic')}</label>
         </section>
-        <section className="fa-adv-card" aria-label={t('adv.vi')}><h3>{t('adv.vi')}</h3>
+        <section className="fa-adv-card" aria-label={t('adv.vi')} data-weight={110}><h3>{t('adv.vi')}</h3>
           {VI_OPTIONS.map(([v, k]) => <label key={v}><input type="radio" name="fa-adv-vi" checked={filters.vi === v} onChange={() => patch({ vi: v })} />{t(k)}</label>)}
           {filters.vi && <button type="button" className="fa-linkbtn" onClick={() => patch({ vi: undefined })}>{t('filter.vi.clear')}</button>}
         </section>
-        <section className="fa-adv-card" aria-label={t('adv.lang')}><h3>{t('adv.lang')}</h3><LangPicker api={api} query={query} refreshKey={version} /></section>
-        <section className="fa-adv-card" aria-label={t('adv.library')}><h3>{t('adv.library')}</h3>
+        <section className="fa-adv-card" aria-label={t('adv.lang')} data-weight={440}><h3>{t('adv.lang')}</h3><LangPicker api={api} query={query} refreshKey={version} /></section>
+        <section className="fa-adv-card" aria-label={t('adv.library')} data-weight={60 + 31 * (1 + sources.length)}><h3>{t('adv.library')}</h3>
           <label><input type="checkbox" disabled={forced.favorites} checked={!!filters.favoritesOnly || forced.favorites} onChange={e => patch({ favoritesOnly: e.target.checked ? true : undefined })} />{t('filter.favorites')}</label>
           {sources.map(s => <label key={s.id}><input type="checkbox" disabled={forced.source} checked={filters.sourceIds?.includes(s.id) ?? false} onChange={e => toggle('sourceIds', s.id, e.target.checked)} />{s.name}</label>)}
         </section>
-        <section className="fa-adv-card" aria-label={t('adv.license')}><h3>{t('adv.license')}</h3>
+        <section className="fa-adv-card" aria-label={t('adv.license')} data-weight={150}><h3>{t('adv.license')}</h3>
           {LICENSE_OPTIONS.map(([v, k]) => <label key={v}><input type="checkbox" checked={filters.license?.includes(v) ?? false} onChange={e => toggle('license', v, e.target.checked)} />{t(k)}</label>)}
         </section>
         {AXIS_GROUPS.map(g => (
-          <section key={g.id} className="fa-adv-card" aria-label={g.title} data-group={g.id}><h3>{g.title}</h3>
+          <section key={g.id} className="fa-adv-card" aria-label={g.title} data-group={g.id} data-weight={56 + 133 * g.axes.length}><h3>{g.title}</h3>
             {g.axes.map(renderAxis)}
           </section>
         ))}
-      </div>
+      </Masonry>
     </div>,
     document.body,
   );

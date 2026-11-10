@@ -66,14 +66,22 @@ describe('language chips and groups', () => {
 
 describe('LangBadge', () => {
   const mk = (state: 'full' | 'near' | 'partial' | 'low' | 'unknown', have = 120, code = 'vie') => <LangBadge badge={{ code, bcp47: code === 'vie' ? 'vi' : 'fr', state, have, total: 134 }} />;
-  it.each([['full', '●'], ['near', '◐'], ['partial', '−14'], ['low', '−14'], ['unknown', '?']] as const)('%s → %s', (state, mark) => {
-    render(mk(state)); expect(screen.getByTestId('vi-mark').textContent).toBe(mark);
+  it.each(['full', 'near', 'partial', 'low'] as const)('%s renders a ring and no digits', state => {
+    render(mk(state)); const m = screen.getByTestId('vi-mark');
+    expect(m.dataset.state).toBe(state); expect(m.textContent).toBe('VI'); expect(m.querySelector('svg')).not.toBeNull();
   });
+  it('the four states differ in shape, not only colour', () => {
+    const shape = (s: 'full' | 'near' | 'partial' | 'low') => { const { container, unmount } = render(mk(s, s === 'near' ? 125 : 60)); const r = container.querySelector('svg')!.innerHTML.replace(/stroke-dasharray="[^"]*"/, 'D'); unmount(); return r; };
+    expect(new Set([shape('full'), shape('near'), shape('low')]).size).toBe(3);
+    const arcs = (s: 'near' | 'partial') => { const { container, unmount } = render(mk(s, s === 'near' ? 125 : 60)); const d = container.querySelector('.arc')!.getAttribute('stroke-dasharray'); unmount(); return d; };
+    expect(arcs('near')).not.toBe(arcs('partial'));
+  });
+  it('unknown shows nothing', () => { const { container } = render(mk('unknown')); expect(container.firstChild).toBeNull(); });
   it('only partial and low carry the warning flag', () => {
     const { unmount } = render(mk('partial')); expect(screen.getByTestId('vi-mark').dataset.warn).toBe('true'); unmount();
     render(mk('near')); expect(screen.getByTestId('vi-mark').dataset.warn).toBeUndefined();
   });
-  it('a non-Vietnamese badge shows its language code', () => {
-    render(mk('full', 134, 'fra')); expect(screen.getByTestId('vi-mark').querySelector('.fa-vi-code')?.textContent).toBe('fra');
+  it('shows the language code in capitals', () => {
+    render(mk('full', 134, 'fra')); expect(screen.getByTestId('vi-mark').querySelector('.fa-vi-code')?.textContent).toBe('FR');
   });
 });
