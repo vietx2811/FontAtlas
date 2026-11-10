@@ -14,9 +14,9 @@
 .fa-clear:hover { background: var(--chrome-active); }
 .fa-funnel { position: relative; flex: none; display: grid; width: 24px; height: 24px; place-items: center; border-radius: var(--radius-sm); color: var(--muted); }
 .fa-funnel:hover, .fa-funnel[aria-pressed="true"] { background: var(--chrome-active); color: var(--fg); }
-.fa-funnel[data-filtered="true"] { color: var(--accent-ink); }
+.fa-funnel[data-filtered="true"] { color: var(--accent); }
 .fa-funnel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.fa-funnel-n { position: absolute; top: -3px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: var(--accent); color: var(--bg, #fff); font: 700 9px/14px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+.fa-funnel-n { position: absolute; top: -3px; right: -4px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: var(--accent); color: var(--card); font: 700 9px/14px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
 .fa-seg { display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-2); }
 .fa-seg .fa-iconbtn { width: 28px; height: 26px; }
 .fa-vi-toggle { height: 30px; padding: 0 10px; border-radius: var(--radius-md); background: var(--surface-2); font-weight: 600; font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
