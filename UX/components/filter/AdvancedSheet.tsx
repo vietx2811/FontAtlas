@@ -9,6 +9,7 @@ import { useSourcesStore } from '../../store/sources';
 import { TermTip, classTermKey } from '../ui/terms';
 import { HIDDEN_CLASSES, classLabel } from '../main/classLabels';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
+import { filterChips } from '../main/FilterChips';
 import { AxisRow } from './AxisRow';
 import { LangPicker } from './LangPicker';
 import { Histogram } from './Histogram';
@@ -69,7 +70,13 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   };
   const varMatch = { wght: true, wdth: true, ...(filters.varAxisMatch ?? {}) };
   const classRows = [...facets.filter(f => !HIDDEN_CLASSES.has(f.class) && (f.count > 0 || filters.classes?.includes(f.class)))];
-  const condCount = Object.keys(filters).length;
+  const condCount = filterChips(filters, sources, view).length;
+  const [left, setLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const measure = () => setLeft(Math.round(document.querySelector('[aria-label="Thanh bên"]')?.getBoundingClientRect().right ?? 0));
+    measure(); window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   const renderAxis = (axis: string) => {
     const h: AxisHistogramDto | undefined = hist.get(axis);
@@ -101,7 +108,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   };
 
   return createPortal(
-    <div ref={root} className="fa-adv" role="dialog" aria-label={t('adv.title')} tabIndex={-1} data-testid="advanced-sheet" aria-busy={loading}>
+    <div ref={root} className="fa-adv" role="dialog" aria-label={t('adv.title')} tabIndex={-1} data-testid="advanced-sheet" aria-busy={loading} style={left ? { left } : undefined}>
       <header className="fa-adv-head">
         <strong>{t('adv.title')}</strong>
         <span className="fa-adv-count">{t('adv.count', { n: condCount })}</span>

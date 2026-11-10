@@ -29,12 +29,20 @@ const parse = (s: string): number => Number(s.trim().replace(',', '.'));
 export function AxisRow({ axis, source, min, max, step, ticks, value, digits = 2, format, onChange, children, extra, empty, count }: AxisRowProps): React.JSX.Element {
   const fmt = format ?? ((v: number) => new Intl.NumberFormat('vi-VN', { useGrouping: false, maximumFractionDigits: digits }).format(v));
   const shown: Range = value ?? [min, max];
-  const [draft, setDraft] = useState<[string, string]>([String(shown[0]), String(shown[1])]);
+  // Ô nhập hiện số làm tròn `digits` chữ số (miền đo có thể dài 10 chữ số); chỉ ghi lại khi người dùng thật sự sửa chữ.
+  const seed = (r: Range): [string, string] => [String(Number(r[0].toFixed(digits))), String(Number(r[1].toFixed(digits)))];
+  const [draft, setDraft] = useState<[string, string]>(() => seed(shown));
   const [bad, setBad] = useState(false);
-  useEffect(() => { setDraft([String(shown[0]), String(shown[1])]); setBad(false); }, [shown[0], shown[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setDraft(seed(shown)); setBad(false); }, [shown[0], shown[1]]); // eslint-disable-line react-hooks/exhaustive-deps
   const name = termName(axis);
   const commit = () => {
-    const a = parse(draft[0]); const b = parse(draft[1]);
+    const base = seed(shown);
+    if (draft[0] === base[0] && draft[1] === base[1]) { setBad(false); return; }
+    // Đầu nào chưa sửa thì giữ nguyên giá trị đầy đủ (không bị làm tròn ngầm).
+    const tol = 10 ** -digits / 2;
+    // Số gõ khớp mép miền (sau làm tròn hiển thị) thì coi là đúng mép.
+    const edge = (v: number) => Math.abs(v - min) <= tol ? min : Math.abs(v - max) <= tol ? max : v;
+    const a = draft[0] === base[0] ? shown[0] : edge(parse(draft[0])); const b = draft[1] === base[1] ? shown[1] : edge(parse(draft[1]));
     if (!Number.isFinite(a) || !Number.isFinite(b) || a > b || a < min || b > max) { setBad(true); return; }
     setBad(false);
     if (a === shown[0] && b === shown[1]) return;
