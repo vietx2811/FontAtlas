@@ -50,9 +50,9 @@ Quy tắc phân loại (`classify.rs`, `small_foot_weight`):
 | | đúng | Uncertain | sai | đúng/đã gán |
 |---|---|---|---|---|
 | Trước (core-0.8.0) | 1208 | 451 | 63 | 95.0% |
-| Sau (core-0.9.0) | 1216 | 449 | 57 | 95.5% |
+| Sau (core-0.9.0) | 1208 | 461 | 53 | 95.8% |
 
-Không tụt. Đổi trạng thái: thêm đúng 6 do chân nhỏ (Alegreya, Aref Ruqaa ×2, Cormorant Upright, DM Serif Display, Sahitya) và 5 chữ viết tay (Licorice, Ole, Over the Rainbow, The Girl Next Door, Warnes) nhờ bỏ phiếu Serif cho chân một phía; mất đúng 3 (Bilbo Swash Caps, KoHo, Tsukimi Rounded → Uncertain).
+Số đúng không tụt, sai giảm 63 → 53 (một phần sai chuyển thành Uncertain). Chi tiết mọi mặt, Italic, tune/test: `docs/team/eval/classify-small-serif/README.md`. Đổi trạng thái: thêm đúng 6 do chân nhỏ (Alegreya, Aref Ruqaa ×2, Cormorant Upright, DM Serif Display, Sahitya) và 5 chữ viết tay (Licorice, Ole, Over the Rainbow, The Girl Next Door, Warnes) nhờ bỏ phiếu Serif cho chân một phía; mất đúng 3 (Bilbo Swash Caps, KoHo, Tsukimi Rounded → Uncertain).
 
 ## 5. Mười lăm họ BeauType Regular (số đo, trước → sau)
 
@@ -67,3 +67,12 @@ Chỉ thay đổi 2 họ; 13 họ còn lại giữ nguyên (nhãn và độ tin 
 | 11 họ còn lại | 1.00 | 1.00 | 0.00–0.59 | Sans/Uncertain | không đổi |
 
 Chín họ foot = 1.00 là Sans thật theo hình (không chân, thân đều); không phải lỗi đo.
+
+## 6. Ghi chú review
+
+- Italic: `ctx.glyph(.., upright=true)` đã bù độ nghiêng (shear theo `italicAngle` hoặc độ nghiêng đo được) trước khi so lề trái/phải, nên italic không bị coi là chân một phía. Test: `italic_fixtures_measure_like_their_upright_counterparts`; eval mọi mặt: Italic sai 6 → 2.
+- foot 0.9–1.2 với cờ trên ≥ 0.4 (semi-serif/italic serif): phiếu Sans giảm 2.0 → 1.0.
+- KoHo, Tsukimi Rounded (Sans đúng, chân nhọn + cờ 0.42/0.79) thành Uncertain: chủ ý, không phân biệt được với Annam Neue/Noirist bằng hai số này. Nợ: cần thêm tín hiệu (ví dụ độ cong đáy) để tách.
+- `foot_ratio` đo từ `bbox.y0` (không phải baseline 0) vì chân nhọn nằm dưới baseline; chân phẳng có y0 = 0.
+- Chonburi (chữ rất đậm, contrast 8) chỉ đạt candidate Serif, không đạt class: giữ assert `best()`.
+- Nợ: fixture CFF, test riêng "chỉ `l` có đuôi" ở mức font thật.

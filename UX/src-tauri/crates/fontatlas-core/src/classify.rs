@@ -383,6 +383,9 @@ fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
             // chân nhọn: rộng ~0 ngay tại baseline nên `serif_foot` đo thấp dù có cờ/chân loe → không kết luận Sans
             if sf < 0.9 && small_foot_ev > 0.0 {
                 v.add("measure", format!("serif_foot {sf:.2} thấp nhưng có cờ {head:.2} / loe {flare:.2} (chân nhọn)"), Class::Serif, 1.0);
+            } else if sf >= 0.9 && head >= SMALL_HEAD_STRONG {
+                // chân phẳng nhưng cờ trên-trái rõ (semi-serif, italic serif): số đo nói "Sans" yếu hơn, để tín hiệu khác quyết
+                v.add("measure", format!("serif_foot {sf:.2} < 1,2 (nhưng cờ trên {head:.2})"), Class::Sans, 1.0);
             } else {
                 v.add("measure", format!("serif_foot {sf:.2} < 1,2"), Class::Sans, 2.0);
             }

@@ -216,3 +216,40 @@ fn one_sided_tail_foot_without_top_flag_is_not_a_serif() {
     old.m.serif_head = None;
     assert!(classify(&old).signals.iter().any(|s| s.vote == Some(Class::Serif)));
 }
+
+#[test]
+fn flat_foot_with_strong_top_flag_is_ambiguous_not_a_confident_sans() {
+    // semi-serif / italic serif: foot ~1.0 nhưng cờ trên 0.9 (Libre Baskerville Italic): Sans chỉ nặng 1.0 ⇒ không còn Sans 2.0
+    let c = classify(&synthetic("acme italic", 1.04, 1.0, 0.93));
+    assert!(!c.signals.iter().any(|s| s.vote == Some(Class::Sans) && s.weight >= 2.0), "{:?}", c.signals);
+    // không có cờ ⇒ Sans như trước
+    assert_eq!(classify(&synthetic("acme regular", 1.04, 1.0, 0.0)).class, Class::Sans);
+}
+
+#[test]
+fn sans_with_weak_or_moderate_flag_and_flat_foot_keeps_its_sans_vote() {
+    for head in [0.0, 0.1, 0.2, 0.3] {
+        let c = classify(&synthetic("acme regular", 1.0, 1.0, head));
+        assert!(c.signals.iter().any(|s| s.vote == Some(Class::Sans) && s.weight >= 2.0), "head {head}: {:?}", c.signals);
+    }
+}
+
+#[test]
+fn monospace_sans_with_tall_flag_is_never_serif() {
+    // mono sans: i/l có cờ trên rất rõ nhưng chân phẳng; không được thành Serif
+    let mut i = synthetic("acme mono regular", 1.0, 1.0, 0.8);
+    i.is_fixed_pitch = true;
+    let c = classify(&i);
+    assert_ne!(best(&c), Class::Serif, "{:?}", c.signals);
+}
+
+#[test]
+fn italic_fixtures_measure_like_their_upright_counterparts() {
+    // ctx.glyph(upright) bù độ nghiêng trước khi so lề trái/phải: italic không bị coi là chân một phía
+    let r = inp("roboto_italic_vf.ttf");
+    assert!(r.m.serif_flare.unwrap() < 1.15 && r.m.serif_head.unwrap() < 0.1, "{:?} {:?}", r.m.serif_flare, r.m.serif_head);
+    let b = inp("libre_baskerville_italic_vf.ttf");
+    assert!(b.m.serif_head.unwrap() > 0.4, "serif italic vẫn thấy cờ trên: {:?}", b.m.serif_head);
+    let up = inp("libre_baskerville.ttf");
+    assert!(up.m.serif_flare.unwrap() > 2.0 && up.m.serif_head.unwrap() > 0.4);
+}

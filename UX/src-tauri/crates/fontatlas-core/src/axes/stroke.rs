@@ -280,6 +280,8 @@ pub fn slant_deg(ctx: &GlyphCtx) -> Metric {
 
 /// Dải chiều cao (tỷ lệ x-height tính từ đáy glyph) mà chân được đo: đủ cao cho chân có bracket/flare,
 /// đủ thấp để không chạm vào thân/vai chữ.
+/// Đáy = `bbox.y0` của glyph (không phải baseline 0): chân nhọn/đuôi nằm DƯỚI baseline (Annam Neue: -20) cần được đo từ điểm thấp nhất,
+/// còn chân phẳng thì y0 = 0.
 const FOOT_BAND: (f64, f64) = (0.0125, 0.15);
 const FOOT_STEPS: usize = 12;
 
