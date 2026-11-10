@@ -17,13 +17,13 @@ export const viBadgeFromMissing = (viMissing: number): LangBadgeDto => {
 /**
  * Chỉ báo ngôn ngữ trên thẻ font (thay `−N`, không có số): mã ngôn ngữ viết hoa + vòng độ phủ.
  * Đủ = vòng đầy · Gần đủ ≥ 90% = cung gần kín · Thiếu 25–90% = cung theo tỷ lệ (cảnh báo) · < 25% = vòng rỗng gạch ngang.
- * Bốn trạng thái khác HÌNH, không chỉ khác màu. Chưa phân tích thì không hiện. Chi tiết (thiếu bao nhiêu) nằm ở tooltip.
+ * Bốn trạng thái khác HÌNH, không chỉ khác màu. Đã tính nhưng dưới "gần đủ" mà không có số đếm (`below`) = vòng rỗng gạch ngang, tooltip không in x/y. Chưa phân tích thì không hiện. Chi tiết (thiếu bao nhiêu) nằm ở tooltip.
  */
 export function LangBadge({ badge }: { badge: LangBadgeDto }): React.JSX.Element | null {
   if (badge.state === 'unknown') return null;
   const lang = langName({ code: badge.code, bcp47: badge.bcp47 });
   const miss = Math.max(0, badge.total - badge.have);
-  const warn = badge.state === 'partial' || badge.state === 'low';
+  const warn = badge.state === 'partial' || badge.state === 'low' || badge.state === 'below';
   const ratio = badge.total ? badge.have / badge.total : 0;
   const tip = t(`badge.${badge.state}` as 'badge.full', { lang, have: badge.have, total: badge.total, miss });
   return (
@@ -35,7 +35,7 @@ export function LangBadge({ badge }: { badge: LangBadgeDto }): React.JSX.Element
             ? <circle cx="7" cy="7" r="6" className="fill" />
             : <>
               <circle cx="7" cy="7" r={R} className="track" />
-              {badge.state === 'low'
+              {badge.state === 'low' || badge.state === 'below'
                 ? <path d="M3 11L11 3" className="strike" />
                 : <circle cx="7" cy="7" r={R} className="arc" strokeDasharray={`${C * ratio} ${C}`} transform="rotate(-90 7 7)" />}
             </>}

@@ -17,7 +17,7 @@ export const FILTER_I18N_3 = {
   'lang.mode': 'Cách ghép ngôn ngữ', 'lang.mode.all': 'Đủ tất cả', 'lang.mode.any': 'Một trong các ngôn ngữ', 'lang.counts': '{full} font đủ 100% · {near} font gần đủ (≥ 90%) trở lên',
   'lang.levels': '● đủ 100% · ◐ gần đủ (≥ 90%, đủ dấu và chữ riêng)', 'lang.full': 'đủ', 'lang.near': 'gần đủ',
   'fgroup.lang': 'Ngôn ngữ',
-  'badge.full': '{lang} · đủ ký tự', 'badge.near': '{lang} · gần đủ ({have}/{total} ký tự)', 'badge.partial': '{lang} · thiếu {miss}/{total} ký tự', 'badge.low': '{lang} · thiếu hầu hết ({have}/{total} ký tự)', 'badge.unknown': '{lang} · chưa phân tích',
+  'badge.full': '{lang} · đủ ký tự', 'badge.near': '{lang} · gần đủ ({have}/{total} ký tự)', 'badge.partial': '{lang} · thiếu {miss}/{total} ký tự', 'badge.low': '{lang} · thiếu hầu hết ({have}/{total} ký tự)', 'badge.below': '{lang} · chưa đủ ký tự (dưới 90%)', 'badge.unknown': '{lang} · chưa phân tích',
   'credit.hyperglot': 'Dữ liệu ngôn ngữ: Hyperglot © Rosetta, Apache-2.0',
 } as const;
 
