@@ -278,7 +278,36 @@ pub fn slant_deg(ctx: &GlyphCtx) -> Metric {
     )
 }
 
+/// Dải chiều cao (tỷ lệ x-height tính từ đáy glyph) mà chân được đo: đủ cao cho chân có bracket/flare,
+/// đủ thấp để không chạm vào thân/vai chữ.
+/// Đáy = `bbox.y0` của glyph (không phải baseline 0): chân nhọn/đuôi nằm DƯỚI baseline (Annam Neue: -20) cần được đo từ điểm thấp nhất,
+/// còn chân phẳng thì y0 = 0.
+const FOOT_BAND: (f64, f64) = (0.0125, 0.15);
+const FOOT_STEPS: usize = 12;
+
+/// Độ loe ĐỐI XỨNG lớn nhất của nét đầu tiên trong dải chân ÷ thân ở 35% xh. Sans ≈ 1, serif chân nhỏ ≈ 1.3–1.6,
+/// slab/serif rõ ≥ 1.6. Lấy cực đại trong dải (không lấy một dòng quét sát baseline): chân nhọn/bracket
+/// có bề rộng gần 0 ngay tại baseline nhưng loe ra trong vài % x-height tiếp theo. Chỉ phần loe có ở CẢ HAI bên
+/// thân được tính (`thân + 2 × min(trái, phải)`): nét vào/ra một phía của chữ viết tay không phải chân serif.
+pub(crate) fn foot_ratio(g: &GlyphShape, xh: f64) -> Option<f64> {
+    let (sa, sb) = hline(g, xh * 0.35).first().copied()?;
+    let stem = sb - sa;
+    if stem <= 0.0 {
+        return None;
+    }
+    let peak = (0..FOOT_STEPS)
+        .filter_map(|k| {
+            let f = FOOT_BAND.0 + (FOOT_BAND.1 - FOOT_BAND.0) * k as f64 / (FOOT_STEPS - 1) as f64;
+            let (a, b) = hline(g, g.bbox.y0 + xh * f).first().copied()?;
+            Some(stem + 2.0 * (sa - a).max(0.0).min((b - sb).max(0.0)))
+        })
+        .fold(None, |m: Option<f64>, w| Some(m.map_or(w, |m| m.max(w))))?;
+    let r = peak / stem;
+    r.is_finite().then_some(r)
+}
+
 /// Bề rộng mực sát baseline ÷ thân ở 35% xh, trung vị trên 'i','l','n'. Sans ≈ 1, serif ≥ 1.6.
+/// Chỉ một dòng quét ở 2.5% xh: chân nhọn/bracket (rộng ~0 ngay tại baseline) bị đo thấp, xem `serif_flare`.
 pub fn serif_foot(ctx: &GlyphCtx, xh: f64) -> Metric {
     const M: &str = "baseline_foot_over_stem_median_iln";
     let mut foot: Vec<f64> = ['i', 'l', 'n']
@@ -288,16 +317,46 @@ pub fn serif_foot(ctx: &GlyphCtx, xh: f64) -> Metric {
         .filter(|v| v.is_finite())
         .collect();
     foot.sort_by(f64::total_cmp);
-    Metric::from_opt(
-        foot.get(foot.len() / 2).copied(),
-        if ctx.is_slanted() {
-            Quality::Estimated
-        } else {
-            Quality::Measured
-        },
-        FailReason::MissingGlyph,
-        M,
-    )
+    Metric::from_opt(foot.get(foot.len() / 2).copied(), foot_quality(ctx), FailReason::MissingGlyph, M)
+}
+
+fn foot_quality(ctx: &GlyphCtx) -> Quality {
+    if ctx.is_slanted() { Quality::Estimated } else { Quality::Measured }
+}
+
+/// Độ loe của chân: trung vị `foot_ratio` (cực đại trong dải chân) trên 'i','l','n'. Bổ sung cho `serif_foot`.
+pub fn serif_flare(ctx: &GlyphCtx, xh: f64) -> Metric {
+    const M: &str = "peak_foot_band_over_stem_median_iln";
+    let mut v: Vec<f64> = ['i', 'l', 'n'].iter().filter_map(|c| ctx.glyph(*c, true)).filter_map(|g| foot_ratio(&g, xh)).collect();
+    v.sort_by(f64::total_cmp);
+    Metric::from_opt(v.get(v.len() / 2).copied(), foot_quality(ctx), FailReason::MissingGlyph, M)
+}
+
+/// Độ dài cờ serif phía trên-trái của thân (i, l, n) ÷ bề dày thân: phần mực nhô sang trái thân trong dải
+/// 3–15% x-height ngay dưới đỉnh. Sans ≈ 0; serif/semi-serif (kể cả chân nhọn không có slab) > 0.25.
+pub(crate) fn head_ratio(g: &GlyphShape, top: f64, xh: f64) -> Option<f64> {
+    let (sa, sb) = hline(g, xh * 0.35).first().copied()?;
+    let stem = sb - sa;
+    if stem <= 0.0 {
+        return None;
+    }
+    let ext = [0.03, 0.06, 0.09, 0.12, 0.15]
+        .iter()
+        .filter_map(|f| hline(g, top - xh * f).first().map(|(a, _)| (sa - a).max(0.0)))
+        .fold(0.0_f64, f64::max);
+    Some(ext / stem)
+}
+
+/// Cờ serif phía trên: trung vị `head_ratio` trên 'i','l','n' (đỉnh = x-height; 'l' = đỉnh glyph).
+pub fn serif_head(ctx: &GlyphCtx, xh: f64) -> Metric {
+    const M: &str = "top_left_flag_over_stem_median_iln";
+    let mut v: Vec<f64> = ['i', 'l', 'n']
+        .iter()
+        .filter_map(|c| ctx.glyph(*c, true).map(|g| (*c, g)))
+        .filter_map(|(c, g)| head_ratio(&g, if c == 'l' { g.bbox.y1 } else { xh }, xh))
+        .collect();
+    v.sort_by(f64::total_cmp);
+    Metric::from_opt(v.get(v.len() / 2).copied(), foot_quality(ctx), FailReason::MissingGlyph, M)
 }
 
 /// Diện tích lòng 'o' ÷ diện tích bao ngoài (tích phân scanline).
@@ -326,6 +385,85 @@ pub fn counter_o(ctx: &GlyphCtx) -> Metric {
 mod synthetic_stress {
     use super::*;
     use kurbo::{Affine, BezPath, Ellipse};
+
+    /// Thân thẳng (rộng `stem`, cao `h`) ghép chân tuỳ ý: danh sách (độ cao, nửa-bề-rộng thêm hai bên).
+    fn stem_with_foot(stem: f64, h: f64, foot: &[(f64, f64)]) -> GlyphShape {
+        let c = 300.0;
+        let mut right: Vec<(f64, f64)> = vec![(0.0, stem / 2.0 + foot.first().map_or(0.0, |f| f.1))];
+        right.extend(foot.iter().map(|&(y, e)| (y, stem / 2.0 + e)));
+        right.push((h, stem / 2.0));
+        let mut p = BezPath::new();
+        p.move_to((c - right[0].1, right[0].0));
+        for &(y, hw) in &right {
+            p.line_to((c + hw, y));
+        }
+        for &(y, hw) in right.iter().rev() {
+            p.line_to((c - hw, y));
+        }
+        p.close_path();
+        GlyphShape { bbox: p.bounding_box(), path: p, adv: 600.0 }
+    }
+
+    /// Phép đo cũ: một dòng quét ở 2.5% xh trên đáy glyph.
+    fn old_single_scanline(g: &GlyphShape, xh: f64) -> f64 {
+        first_stem(g, g.bbox.y0 + xh * 0.025).unwrap() / first_stem(g, xh * 0.35).unwrap()
+    }
+
+    #[test]
+    fn foot_ratio_sans_stem_is_exactly_one() {
+        let g = stem_with_foot(100.0, 500.0, &[]);
+        assert!((foot_ratio(&g, 500.0).unwrap() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn foot_ratio_slab_and_bracket_serif_are_clearly_above_sans() {
+        // slab: chân hình chữ nhật rộng gấp 2.4 lần thân, cao 8% xh
+        let slab = stem_with_foot(100.0, 500.0, &[(40.0, 70.0), (41.0, 0.0)]);
+        assert!(foot_ratio(&slab, 500.0).unwrap() > 1.6, "{:?}", foot_ratio(&slab, 500.0));
+        // bracket loe dần: 0 → +30 mỗi bên ở 10% xh → ≈ 1.6
+        let bracket = stem_with_foot(100.0, 500.0, &[(50.0, 30.0), (100.0, 0.0)]);
+        let r = foot_ratio(&bracket, 500.0).unwrap();
+        assert!((1.3..=1.7).contains(&r), "{r}");
+    }
+
+    #[test]
+    fn one_sided_entry_stroke_is_not_a_serif_foot() {
+        // nét vào của chữ viết tay: chỉ loe sang trái (Playwrite…), không đối xứng như chân serif
+        let xh = 500.0;
+        let mut p = BezPath::new();
+        let (c, st) = (300.0, 50.0);
+        p.move_to((c - st - 120.0, 0.0));
+        p.line_to((c + st, 0.0));
+        p.line_to((c + st, 500.0));
+        p.line_to((c - st, 500.0));
+        p.line_to((c - st, xh * 0.1));
+        p.close_path();
+        let g = GlyphShape { bbox: p.bounding_box(), path: p, adv: 600.0 };
+        let r = foot_ratio(&g, xh).unwrap();
+        assert!((r - 1.0).abs() < 0.05, "{r}");
+    }
+
+    #[test]
+    fn pointed_foot_is_not_mistaken_for_a_stem_narrower_than_the_stem() {
+        // chân nhọn: đáy gần như một điểm (rộng ~4), loe tới 1.5× thân ở 8% xh rồi thu về thân ở 16%
+        // (tái hiện lỗi: Annam Neue/Noirist đo 0.61/0.26 vì chỉ nhìn dòng quét sát baseline)
+        let xh = 500.0;
+        let mut p = BezPath::new();
+        let (c, st) = (300.0, 50.0);
+        p.move_to((c - 2.0, 0.0));
+        p.line_to((c + 2.0, 0.0));
+        p.line_to((c + st * 1.5, xh * 0.08));
+        p.line_to((c + st, xh * 0.16));
+        p.line_to((c + st, 500.0));
+        p.line_to((c - st, 500.0));
+        p.line_to((c - st, xh * 0.16));
+        p.line_to((c - st * 1.5, xh * 0.08));
+        p.close_path();
+        let g = GlyphShape { bbox: p.bounding_box(), path: p, adv: 600.0 };
+        assert!(old_single_scanline(&g, xh) < 0.6, "lỗi cũ còn tái hiện được: {}", old_single_scanline(&g, xh));
+        let r = foot_ratio(&g, xh).unwrap();
+        assert!((1.4..=1.6).contains(&r), "{r}");
+    }
 
     /// o tổng hợp: viền ngoài tròn đều, counter là ellipse quay `deg` (dương = nghiêng trái).
     /// Điểm mảnh nhất nằm ở hai đầu trục dài của counter → trục nhấn đúng bằng `deg`.
