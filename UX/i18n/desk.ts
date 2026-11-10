@@ -6,6 +6,8 @@ export const DESK_I18N = {
   'desk.trying': 'Đang thử', 'desk.inUse': 'Đang dùng', 'desk.place': 'Đặt vào vai', 'desk.placed': 'Đã đặt {font} vào vai {role}',
   'desk.noAnchor': 'Chưa có font ở vai đối diện để ghép. Đặt một font vào vai {role} trước.', 'desk.noCands': 'Không có ứng viên ở mức ghép này',
   'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
+  'strip.title': 'Chi tiết', 'strip.metrics': 'Số đo', 'strip.compare': 'Đưa vào Compare', 'strip.expand': 'Mở dải chi tiết', 'strip.collapse': 'Thu dải chi tiết',
+  'strip.tryHint': 'Rê chuột lên một ứng viên để xem chênh lệch', 'strip.viOk': 'Đủ tiếng Việt', 'strip.viMissing': 'Thiếu {n} ký tự VI',
   'desk.pageHeading': 'Phở bò Hà Nội', 'desk.sampleLabel': 'Trang mẫu',
   'role.display': 'Display', 'role.heading': 'Heading', 'role.subheading': 'Subheading', 'role.body': 'Body', 'role.caption': 'Caption', 'role.accent': 'Accent', 'role.quote': 'Quote',
   'role.display.gloss': 'tiêu đề lớn, gây chú ý', 'role.heading.gloss': 'tiêu đề mục', 'role.subheading.gloss': 'tiêu đề phụ', 'role.body.gloss': 'đoạn văn dài',

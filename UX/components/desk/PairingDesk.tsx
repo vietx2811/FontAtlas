@@ -10,6 +10,7 @@ import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorPairRole, anchorRoles, isHeadingLike } from './deskRoles';
+import { DetailStrip } from './DetailStrip';
 import './desk.css';
 
 const faceOf = (r: { hashHex: string; faceIndex: number }): FaceKeyDto => ({ hashHex: r.hashHex, faceIndex: r.faceIndex });
@@ -22,6 +23,8 @@ type Trial = { face: FaceKeyDto; row: FaceRowDto; summary: string; fromPeek?: bo
 export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React.JSX.Element {
   const closeDesk = useUiStore(s => s.closeDesk);
   const openDesk = useUiStore(s => s.openDesk);
+  const openCompare = useUiStore(s => s.openCompare);
+  const [stripCollapsed, setStripCollapsed] = useState(false);
   const sample = useUiStore(s => s.sample);
   const [data, setData] = useState<CaseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +72,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const bodyFam = useFontFamily(api, bodyFace);
   const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
 
+  const inUseSame = same(current?.key, trial?.face);
   const place = useCallback(async () => {
     if (!combo || !trial) return;
     try {
@@ -81,15 +85,17 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const selectRole = (r: ComboRoleDto) => { if (combo && r !== role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: r, trial: null }); };
 
   useEffect(() => { root.current?.focus(); }, []);
+  const toCompare = () => { if (trial) openCompare(current && !current.missing && !inUseSame ? [current.key, trial.face] : [trial.face]); };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { e.preventDefault(); closeDesk(); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     else if (e.key === 'Enter' && trial) { e.preventDefault(); void place(); }
+    else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setStripCollapsed(c => !c); }
+    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial) { e.preventDefault(); toCompare(); }
   };
 
   const shownRoles = ROLE_ORDER.filter(r => slotOf(r) || r === role);
-  const inUseSame = same(current?.key, trial?.face);
 
   return (
     <div ref={root} className="fa-desk" data-testid="pairing-desk" tabIndex={-1} onKeyDown={onKey}>
@@ -143,6 +149,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
             {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}</span>}
             <button type="button" className="fa-desk-place" data-testid="desk-place" disabled={!trial || inUseSame} onClick={() => void place()}>↵ {t('desk.place')}</button>
           </div>
+          <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} />
         </section>
       </div>
     </div>

@@ -15,3 +15,7 @@ Nhánh `feat/font-desk` từ `feat/advanced-search`. Nguồn: `docs/design/font-
 - Vai chọn khi mở = `otherRole` (vai còn lại); anchor = font của vai đối diện nhóm (heading-like: display/heading/subheading/accent/quote; body-like: body/caption).
 - Chuỗi qua i18n `desk.*`; tên vai là thuật ngữ EN (Display, Body…) có gloss; mã `notes`/lỗi chưa dùng ở lát này.
 - `trial` là trạng thái chưa đặt: hiển thị "Đang thử", không ghi DB tới khi `Enter`.
+
+## Lát 2 (đã làm)
+- `components/desk/DetailStrip.tsx` dưới trang: thẻ Đang dùng / Đang thử (designer, license, VI) và bảng Số đo 8 hàng với Δ (mốc = font đang dùng, dùng lại `deltaOf`/`deltaText` của Compare; số đo đọc bằng `getFace` + `buildCompare`, nhớ theo khoá nên ↑↓ không đọc lại). Phím `I` thu/mở, `⇧C` và nút "Đưa vào Compare" gọi `openCompare([đang dùng, đang thử])` (Compare tích hợp đầy đủ ở lát 4; rời Desk khi mở Compare).
+- Chưa làm: tag trục biến thiên, vòng VI x/186, hàng Glyphs/Δ, ẩn meta ở 1100 px đã có bằng CSS.

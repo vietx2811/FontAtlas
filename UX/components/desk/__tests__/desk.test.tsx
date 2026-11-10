@@ -135,3 +135,47 @@ describe('PairingDesk', () => {
     unmount();
   });
 });
+
+describe('DetailStrip (slice 2)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  async function mounted() {
+    const api = createMockApi();
+    const r = (await rows(api)).find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: 'display', trial: null }} />); await settle();
+    return { api, res };
+  }
+
+  it('lists the metric rows; the trial card hints until there is a trial different from the one in use', async () => {
+    const { res } = await mounted();
+    expect(screen.getByTestId('detail-strip')).toBeTruthy();
+    expect(screen.getAllByTestId('strip-delta').length).toBe(8);
+    expect(screen.getByTestId('strip-card-use').textContent).toMatch(/Playfair Display/);
+    void res;
+  });
+
+  it('after placing a font, trying another shows the signed delta against the one in use', async () => {
+    const { api, res } = await mounted();
+    // body is empty: place the first candidate, then step to the next.
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
+    const { unmount } = render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null }} />); await settle();
+    const desks = screen.getAllByTestId('pairing-desk'); const desk = desks[desks.length - 1];
+    fireEvent.keyDown(desk, { key: 'Enter' }); await settle();
+    fireEvent.keyDown(desk, { key: 'ArrowDown' }); await settle();
+    const cards = screen.getAllByTestId('strip-card-try');
+    expect(cards[cards.length - 1].textContent).not.toMatch(/Rê chuột/);
+    const deltas = screen.getAllByTestId('strip-delta').slice(-8).map(d => d.textContent);
+    expect(deltas.some(x => /^[+−]|±0/.test(x ?? ''))).toBe(true);
+    unmount();
+  });
+
+  it('I collapses and reopens the strip', async () => {
+    await mounted();
+    const desk = screen.getByTestId('pairing-desk');
+    fireEvent.keyDown(desk, { key: 'i' });
+    expect(screen.getByTestId('detail-strip').dataset.collapsed).toBe('true');
+    expect(screen.queryByTestId('strip-metrics')).toBeNull();
+    fireEvent.click(screen.getByTestId('strip-toggle'));
+    expect(screen.getByTestId('strip-metrics')).toBeTruthy();
+  });
+});
