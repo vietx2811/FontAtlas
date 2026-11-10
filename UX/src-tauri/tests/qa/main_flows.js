@@ -549,6 +549,44 @@
     await wait(() => !document.querySelector('.pr') && document.querySelector('[data-testid=selection-count]'), 8000);
     await log('pair-these-close-keeps-selection', !document.querySelector('.pr') && /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), { count: document.querySelector('[data-testid=selection-count]')?.textContent });
 
+    // PAIRING DESK (2b lát 1–3): Pair từ peek → Desk; ↓ thử, Enter đặt; dải chi tiết có Δ; Combo stepper; Esc về Thư viện
+    {
+      const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
+      const pressOn = (el, key, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
+      const cell0 = await wait(() => cells()[0], 8000);
+      cell0?.click(); await sleep(400);
+      const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000);
+      pairTab?.click();
+      const openBtn = await wait(() => document.querySelector('[data-testid=open-desk]'), 15000);
+      openBtn?.click();
+      const desk = await wait(() => deskEl(), 15000);
+      await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 15000);
+      await sleep(500);
+      await log('desk-opens', !!desk && document.querySelectorAll('[data-testid=desk-role]').length >= 2 && !!document.querySelector('[data-testid=desk-heading]'), { roles: document.querySelectorAll('[data-testid=desk-role]').length, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
+      if (desk) {
+        document.documentElement.dataset.theme = 'light'; await sleep(250); await snap('font-desk-light');
+        pressOn(desk, 'Enter'); await sleep(600);
+        const filled = [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
+        await log('desk-enter-places', filled >= 2, { filled });
+        pressOn(desk, 'ArrowDown'); await sleep(900);
+        const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
+        await log('desk-strip-delta', deltas.length === 8 && deltas.some(x => /^[+−]|±0/.test(x)), { deltas });
+        pressOn(desk, 'i'); await sleep(150);
+        const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i'); await sleep(150);
+        await log('desk-strip-collapses', collapsed && !!document.querySelector('[data-testid=strip-metrics]'), { collapsed });
+        document.querySelector('[data-testid=combo-label]')?.click(); await sleep(200);
+        [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent))?.click(); await sleep(700);
+        const l2 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
+        pressOn(deskEl(), '['); await sleep(500);
+        const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
+        await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
+        pressOn(deskEl(), 'Escape');
+        await wait(() => !deskEl(), 8000);
+        await log('desk-esc-leaves', !deskEl() && !!cells().length > 0, {});
+      }
+    }
+
     // Menu ngữ cảnh trong vùng chọn → giữ vùng chọn, menu nhiều font
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));
