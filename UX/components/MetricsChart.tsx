@@ -37,16 +37,16 @@ export const MetricsChart: React.FC<MetricsChartProps> = ({ metrics }) => {
           <YAxis 
             dataKey="name" 
             type="category" 
-            tick={{ fontSize: 10, fill: '#78716c', fontFamily: 'sans-serif' }} 
+            tick={{ fontSize: 10, fill: '#71717a', fontFamily: 'sans-serif' }} 
             width={70}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip 
-            cursor={{fill: '#f5f5f4'}}
+            cursor={{fill: '#f4f4f5'}}
             contentStyle={{ 
               backgroundColor: '#fff', 
-              border: '1px solid #e7e5e4', 
+              border: '1px solid #e4e4e7', 
               boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
               fontSize: '12px'
             }}
@@ -54,7 +54,7 @@ export const MetricsChart: React.FC<MetricsChartProps> = ({ metrics }) => {
           />
           <Bar dataKey="value" radius={[0, 2, 2, 0]}>
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill="#44403c" />
+              <Cell key={`cell-${index}`} fill="#3f3f46" />
             ))}
           </Bar>
         </BarChart>

@@ -51,8 +51,8 @@ describe('font UI đóng gói cục bộ (Plan 6b T2, G9)', () => {
 });
 
 describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
-  const light = { '--sheet': '#FAFAFA', '--card': '#FFFFFF', '--fg': '#2A2A2A', '--muted': '#78716C', '--border': '#E7E5E4', '--surface-2': '#F3F2F0', '--accent': '#D4A574', '--accent-ink': '#9A6B3C', '--accent-soft': '#F5E6D3', '--on': '#3FA66B', '--warn': '#C2410C' };
-  const dark = { '--sheet': '#0C0A09', '--card': '#151311', '--panel': '#1C1917', '--float': '#292522', '--fg': '#FAFAF9', '--muted': '#A8A29E', '--faint': '#8A837D', '--surface-2': '#24211E', '--accent': '#E0B07E', '--accent-ink': '#E0B07E', '--on': '#4ADE80', '--warn': '#FB923C' };
+  const light = { '--sheet': '#FAFAFA', '--card': '#FFFFFF', '--fg': '#2A2A2A', '--muted': '#71717A', '--border': '#E4E4E7', '--surface-2': '#F4F4F5', '--on': '#3FA66B', '--warn': '#C2410C' };
+  const dark = { '--sheet': '#0A0A0B', '--card': '#131315', '--panel': '#1A1A1D', '--float': '#27272B', '--fg': '#FAFAFA', '--muted': '#A1A1AA', '--faint': '#85858F', '--surface-2': '#222226', '--on': '#4ADE80', '--warn': '#FB923C' };
   const block = (sel: RegExp) => { const m = css.match(sel); expect(m, String(sel)).toBeTruthy(); return m![1]; };
 
   it('light values on :root', () => {
@@ -72,8 +72,14 @@ describe('token của prototype gộp vào index.css (Plan 6b §4)', () => {
     expect(lum('--sheet')).toBeLessThan(lum('--card'));
     expect(lum('--card')).toBeLessThan(lum('--panel'));
     expect(lum('--panel')).toBeLessThan(lum('--float'));
-    expect(forced).toMatch(/--border:\s*rgba\(250, 250, 249, \.0[5-9]\)/);
-    expect(forced).toMatch(/--specimen-bg:\s*#0A0908/i);
+    expect(forced).toMatch(/--border:\s*rgba\(250, 250, 250, \.0[5-9]\)/);
+    expect(forced).toMatch(/--specimen-bg:\s*#09090B/i);
+  });
+
+  it('accent follows the macOS accent color and neutrals are cool grey (no warm stone)', () => {
+    expect(css).toMatch(/--accent:\s*var\(--os-accent\);/);
+    expect(css).toMatch(/@supports \(color: -apple-system-control-accent\)\s*{\s*:root\s*{\s*--os-accent:\s*-apple-system-control-accent;/);
+    for (const warm of ['#1C1917', '#292524', '#78716C', '#A8A29E', '#E7E5E4', '#D4A574', '#E0B07E', '#9A6B3C', '#0C0A09']) expect(css.toUpperCase()).not.toContain(warm);
   });
 
   it('keeps the old names working as aliases', () => {
