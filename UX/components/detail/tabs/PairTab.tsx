@@ -85,7 +85,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
           </div>
         </Modal>
       )}
-      {error && <p role="alert" className="fa-soon">Không tải được ứng viên: {error}</p>}
+      {error && <p role="alert" className="fa-soon">{t('desk.candFail', { msg: error })}</p>}
 
       {!cand && !error && (() => {
         if (lacksVi) return <ZeroState compact glyph="ạ" text="Font tiêu đề này thiếu ký tự tiếng Việt" action={{ id: 'see', label: 'Xem ký tự thiếu' }} onAction={() => setPanelTab('vi')} />;

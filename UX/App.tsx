@@ -71,18 +71,20 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
         <FaceActionsProvider api={api}>
         <WindowShell collapsed={collapsed} sidebar={<Sidebar api={api} />} titlebarAccessory={<SidebarToggle />}>
             <div className="h-full flex text-[var(--foreground)] relative">
-                {/* Thư viện giữ nguyên (ẩn) khi đang Compare: quay lại không mất vùng chọn và vị trí cuộn. */}
-                {dups ? <>
+                {/* Thư viện và Trùng lặp giữ nguyên (ẩn) khi đang Compare/Desk/Pair these: quay lại không mất trạng thái. */}
+                <div style={{ display: compare || pairThese || desk ? 'none' : 'contents' }}>
+                  {dups ? <>
                     <main className="flex-1 min-w-0 h-full"><DuplicatesPage api={api} /></main>
                     <DetailPanel api={api} />
-                </> : <div style={{ display: compare || pairThese || desk ? 'none' : 'contents' }}>
+                  </> : <>
                     <main className="flex-1 min-w-0 h-full flex flex-col relative">
                         <TopBar api={api} />
                         <div className="flex-1 min-h-0"><Library api={api} /></div>
                         <SampleComposer />
                     </main>
                     <DetailPanel api={api} />
-                </div>}
+                  </>}
+                </div>
                 {compare && <main className="flex-1 min-w-0 h-full"><ComparePage api={api} faces={compare} /></main>}
                 {desk && <main className="flex-1 min-w-0 h-full"><PairingDesk api={api} desk={desk} /></main>}
                 {pairThese && <main className="flex-1 min-w-0 h-full"><PairThesePage api={api} faces={pairThese} /></main>}

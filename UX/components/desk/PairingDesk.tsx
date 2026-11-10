@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Modal } from '../Modal';
 import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
-import { PARAGRAPH } from '../detail/tabs/SpecimenTab';
 import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
@@ -17,6 +17,7 @@ import './desk.css';
 const faceOf = (r: { hashHex: string; faceIndex: number }): FaceKeyDto => ({ hashHex: r.hashHex, faceIndex: r.faceIndex });
 const same = (a: FaceKeyDto | null | undefined, b: FaceKeyDto | null | undefined) => !!a && !!b && a.hashHex === b.hashHex && a.faceIndex === b.faceIndex;
 const nameOf = (r: FaceRowDto | null): string => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
+const keyStr = (f: FaceKeyDto | null | undefined) => (f ? `${f.hashHex}:${f.faceIndex}` : '');
 const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
 type Trial = { face: FaceKeyDto; row: FaceRowDto; summary: string; fromPeek?: boolean };
 
@@ -45,12 +46,15 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const slotOf = useCallback((r: ComboRoleDto) => combo?.slots.find(s => s.role === r), [combo]);
   const anchor = useMemo(() => { for (const r of anchorRoles(role)) { const s = slotOf(r); if (s && !s.missing) return s; } return undefined; }, [role, slotOf]);
 
+  const anchorKey = keyStr(anchor?.key); const trialKey = keyStr(desk.trial);
+  const selRef = useRef<{ role: ComboRoleDto; key: string } | null>(null);
+  const mode0 = data?.settings.mode ?? 'safe'; const vi0 = data?.settings.vi ?? true; const ready = !!data && !!combo;
   // Ứng viên cho vai đang chọn: đầu danh sách là `trial` từ peek (nếu có), sau đó pairCandidates quanh font neo.
   useEffect(() => {
-    if (!data || !combo) return;
+    if (!ready || !data) return;
     let alive = true; setCandError(null);
     const base: Promise<Trial[]> = anchor
-      ? api.pairCandidates(anchor.key, { role: anchorPairRole(role), mode: data.settings.mode ?? 'safe', projectVi: data.settings.vi, k: 20, collectionId: null, lang: 'vi' })
+      ? api.pairCandidates(anchor.key, { role: anchorPairRole(role), mode: mode0, projectVi: vi0, k: 20, collectionId: null, lang: 'vi' })
         .then((c: PairCandidateDto[]) => c.filter(x => !same(x.face, anchor.key)).map(x => ({ face: x.face, row: x.row, summary: x.summary })))
       : Promise.resolve([]);
     const peek: Promise<Trial | null> = desk.trial && desk.role === role
@@ -59,12 +63,16 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     Promise.all([base, peek]).then(([list, p]) => {
       if (!alive) return;
       const merged = p ? [p, ...list.filter(x => !same(x.face, p.face))] : list;
-      setCands(merged); setIdx(merged.length ? 0 : -1);
+      // Giữ font đang chọn theo khoá khi danh sách nạp lại (đặt font, đổi tên Combo…): không nhảy về đầu.
+      const prev = selRef.current && selRef.current.role === role ? merged.findIndex(x => keyStr(x.face) === selRef.current!.key) : -1;
+      setCands(merged); setIdx(prev >= 0 ? prev : merged.length ? 0 : -1);
     }, e => { if (alive) { setCands([]); setIdx(-1); setCandError(e?.message ?? String(e)); } });
     return () => { alive = false; };
-  }, [api, data, combo, anchor, role, desk.trial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, ready, mode0, vi0, anchorKey, role, trialKey]);
 
   const trial = idx >= 0 ? cands[idx] : undefined;
+  useEffect(() => { selRef.current = trial ? { role, key: keyStr(trial.face) } : null; }, [trial, role]);
   const current = slotOf(role);
   // Trang: tiêu đề dùng font của nhóm heading, đoạn văn dùng font nhóm body; vai đang thử thay font hiện tại.
   const headingFace = (isHeadingLike(role) ? trial?.row : undefined) ?? ROLE_ORDER.filter(isHeadingLike).map(r => slotOf(r)?.row).find(Boolean) ?? null;
@@ -80,32 +88,56 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
       const next = await api.setComboSlot(combo.id, role, trial.face);
       setData(d => (d ? { ...d, combos: d.combos.map(c => (c.id === next.id ? next : c)) } : d));
       useNoticeStore.getState().push({ kind: 'info', text: t('desk.placed', { font: nameOf(trial.row), role: roleName(role) }) });
-    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('peek.openFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
   }, [api, combo, trial, role]);
 
-  const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('peek.openFail', { msg: e instanceof Error ? e.message : String(e) }) });
+  const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) });
   const goCombo = useCallback((id: number) => { openDesk({ caseId: desk.caseId, comboId: id, role, trial: null }); }, [openDesk, desk.caseId, role]);
+  const [confirmDel, setConfirmDel] = useState(false);
   const comboOps = {
     go: goCombo,
     create: () => { void api.createCombo(desk.caseId).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
     duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
     rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId)), fail); },
-    makeMain: () => { if (combo) void api.updateCombo(combo.id, { isMain: true }).then(async () => setData(await api.getCase(desk.caseId)), fail); },
-    remove: () => { if (!combo || !data) return; const rest = data.combos.filter(c => c.id !== combo.id); void api.deleteCombo(combo.id).then(async () => { setData(await api.getCase(desk.caseId)); goCombo((rest[Math.max(0, data.combos.findIndex(c => c.id === combo.id) - 1)] ?? rest[0]).id); }, fail); },
+    makeMain: () => { if (combo) comboOps.makeMainOf(combo.id); },
+    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); }, fail); },
+    remove: () => setConfirmDel(true),
+    removeNow: async () => {
+      if (!combo || !data) return;
+      const pos = data.combos.findIndex(c => c.id === combo.id);
+      try {
+        await api.deleteCombo(combo.id);
+        const fresh = await api.getCase(desk.caseId); setData(fresh);
+        const next = fresh.combos[Math.max(0, Math.min(pos - 1, fresh.combos.length - 1))];
+        if (next) goCombo(next.id);
+      } catch (e) { fail(e); }
+    },
   };
   const step = (d: -1 | 1) => { if (!data || !combo) return; const i = data.combos.findIndex(c => c.id === combo.id); const n = data.combos[i + d]; if (n) goCombo(n.id); };
   const selectRole = (r: ComboRoleDto) => { if (combo && r !== role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: r, trial: null }); };
 
   useEffect(() => { root.current?.focus(); }, []);
-  const toCompare = () => { if (trial) openCompare(current && !current.missing && !inUseSame ? [current.key, trial.face] : [trial.face]); };
+  // Nút vừa bị vô hiệu (‹ ở Combo 1, Xoá…) làm focus rơi về body: đưa về Desk để phím tắt còn sống.
+  useEffect(() => {
+    const a = document.activeElement as HTMLElement | null;
+    if (!a || a === document.body || !root.current?.contains(a) || (a as HTMLButtonElement).disabled) root.current?.focus();
+  }, [desk.comboId, confirmDel]);
+  const leave = useCallback(() => { closeDesk(); requestAnimationFrame(() => (document.querySelector('[data-testid=open-desk]') as HTMLElement | null)?.focus()); }, [closeDesk]);
+  const cmpFaces = trial ? (current && !current.missing && !inUseSame ? [current.key, trial.face] : [trial.face]) : [];
+  const compareReason = cmpFaces.length < 2 ? t('desk.compareNeed') : null;
+  const toCompare = () => { if (!compareReason) openCompare(cmpFaces); };
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); closeDesk(); }
+    const tgt = e.target as HTMLElement;
+    // Sự kiện nổi bọt từ portal (menu, hộp đổi tên) hoặc từ ô nhập không thuộc phím tắt của Desk.
+    if (!root.current?.contains(tgt) || tgt.closest('input, textarea, select, [contenteditable]')) return;
+    const onList = tgt === root.current || !!tgt.closest('[role=option]');
+    if (e.key === 'Escape') { e.preventDefault(); leave(); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-    else if (e.key === 'Enter' && trial) { e.preventDefault(); void place(); }
-    else if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
+    else if (e.key === 'Enter' && onList && !e.repeat && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
     else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setStripCollapsed(c => !c); }
-    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial) { e.preventDefault(); toCompare(); }
+    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial && !compareReason) { e.preventDefault(); toCompare(); }
   };
 
   const shownRoles = ROLE_ORDER.filter(r => slotOf(r) || r === role);
@@ -113,7 +145,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   return (
     <div ref={root} className="fa-desk" data-testid="pairing-desk" tabIndex={-1} onKeyDown={onKey}>
       <header className="fa-desk-head">
-        <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={closeDesk}>← {t('desk.back')}</button></Tooltip>
+        <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={leave}>← {t('desk.back')}</button></Tooltip>
         <h1>{t('desk.title')}</h1>
         {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}</span>}
         {data && combo && <ComboStepper data={data} combo={combo} ops={comboOps} />}
@@ -127,7 +159,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
               const s = slotOf(r);
               return (
                 <li key={r}><button type="button" className="fa-desk-role" data-testid="desk-role" data-role={r} aria-pressed={r === role} onClick={() => selectRole(r)}>
-                  <span className="fa-desk-role-name" data-term={`role.${r}`} title={t(`role.${r}.gloss` as 'role.display.gloss')}>{roleName(r)}</span>
+                  <Tooltip label={t(`role.${r}.gloss` as 'role.display.gloss')}><span className="fa-desk-role-name" data-term={`role.${r}`}>{roleName(r)}</span></Tooltip>
                   {s
                     ? <FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle>
                     : <span className="fa-desk-role-empty">{t('desk.roleEmpty')}</span>}
@@ -156,16 +188,25 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <section className="fa-desk-page" aria-label={t('desk.sampleLabel')}>
           <div className="fa-desk-sheet">
             <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() || t('desk.pageHeading')}</div>
-            <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{PARAGRAPH}</p>
+            <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
           </div>
           <div className="fa-desk-strip">
             {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b></span>}
             {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}</span>}
             <button type="button" className="fa-desk-place" data-testid="desk-place" disabled={!trial || inUseSame} onClick={() => void place()}>↵ {t('desk.place')}</button>
           </div>
-          <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} />
+          <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />
         </section>
       </div>
+      {confirmDel && combo && (
+        <Modal title={t('combo.delete.title', { n: combo.idx })} onClose={() => setConfirmDel(false)}>
+          <p>{t('combo.delete.body', { n: String(combo.slots.length) })}</p>
+          <div className="fa-modal-actions">
+            <button type="button" data-testid="combo-delete-cancel" onClick={() => setConfirmDel(false)}>{t('combo.cancel')}</button>
+            <button type="button" className="primary" data-testid="combo-delete-confirm" onClick={() => { setConfirmDel(false); void comboOps.removeNow(); }}>{t('combo.delete')}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

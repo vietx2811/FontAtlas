@@ -6,29 +6,34 @@ import { t } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { NoteMark } from '../ui/noteMark';
-import { termName } from '../ui/termNames';
+import { TermTip, termKey, termName } from '../ui/terms';
+import { Tooltip } from '../ui/Tooltip';
 
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
 
-/** Đọc số đo của hai font (đang dùng + đang thử), nhớ theo khoá để ↑↓ không đọc lại. Lỗi một font → null, không chặn font kia. */
+/** Đọc số đo của hai font (đang dùng + đang thử), nhớ theo khoá để ↑↓ không đọc lại. Lỗi một font → null cho lần này, KHÔNG nhớ (lần sau đọc lại). */
 export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKeyDto | null) {
   const cache = useRef(new Map<string, CompareFace | null>());
+  const pending = useRef(new Set<string>());
+  const mounted = useRef(true);
   const [, bump] = useState(0);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const ik = inUse ? keyOf(inUse) : null, tk = trial ? keyOf(trial) : null;
   useEffect(() => {
-    let alive = true;
-    const need = ([[inUse, ik], [trial, tk]] as const).filter(([f, k]) => f && k && !cache.current.has(k)) as Array<[FaceKeyDto, string]>;
-    for (const [f, k] of need) {
-      api.getFace(f, 'vi').then((d: FaceDetailDto) => buildCompare([d]).faces[0] ?? null, () => null).then(cf => {
-        cache.current.set(k, cf); if (alive) bump(n => n + 1);
+    for (const [f, k] of [[inUse, ik], [trial, tk]] as const) {
+      if (!f || !k || cache.current.has(k) || pending.current.has(k)) continue;
+      pending.current.add(k);
+      api.getFace(f, 'vi').then((d: FaceDetailDto) => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
+        pending.current.delete(k);
+        if (cf !== undefined) cache.current.set(k, cf);
+        if (mounted.current) bump(n => n + 1);
       });
-      cache.current.set(k, undefined as unknown as null); // đang đọc: không gọi lại; `undefined` = loading
     }
-    return () => { alive = false; };
   }, [api, inUse, trial, ik, tk]);
-  const get = (k: string | null) => (k ? cache.current.get(k) : null);
-  return { a: get(ik), b: get(tk), loading: (ik && get(ik) === undefined) || (tk && get(tk) === undefined) };
+  const get = (k: string | null): CompareFace | null | undefined => (k ? (cache.current.get(k) ?? (pending.current.has(k) ? undefined : null)) : null);
+  const loading = !!((ik && pending.current.has(ik)) || (tk && pending.current.has(tk)));
+  return { a: get(ik) ?? null, b: get(tk) ?? null, loading };
 }
 
 function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try' }): React.JSX.Element {
@@ -55,8 +60,8 @@ function Cell({ m }: { m: CompareMetric | undefined }): React.JSX.Element {
 }
 
 /** Dải chi tiết dưới trang (06 §2.1): thẻ Đang dùng / Đang thử và bảng Số đo với Δ (mốc = font đang dùng). */
-export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare }: {
-  api: Api; inUse: FaceRowDto | null; trial: FaceRowDto | null; collapsed: boolean; onToggle(): void; onCompare?(): void;
+export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare, compareReason }: {
+  api: Api; inUse: FaceRowDto | null; trial: FaceRowDto | null; collapsed: boolean; onToggle(): void; onCompare?(): void; compareReason?: string | null;
 }): React.JSX.Element {
   const same = !!inUse && !!trial && keyOf(inUse) === keyOf(trial);
   const { a, b, loading } = useStripFaces(api, inUse, trial && !same ? trial : null);
@@ -65,7 +70,9 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare 
     <section className="fa-dstrip" data-testid="detail-strip" data-collapsed={collapsed || undefined} aria-label={t('strip.title')}>
       <header>
         <b>{t('strip.title')}</b>
-        {onCompare && trial && <button type="button" className="fa-dstrip-cmp" data-testid="strip-compare" onClick={onCompare}>{t('strip.compare')}</button>}
+        {onCompare && trial && (compareReason
+          ? <Tooltip label={compareReason}><button type="button" className="fa-dstrip-cmp" data-testid="strip-compare" aria-disabled="true" onClick={e => e.preventDefault()}>{t('strip.compare')}</button></Tooltip>
+          : <button type="button" className="fa-dstrip-cmp" data-testid="strip-compare" onClick={onCompare}>{t('strip.compare')}</button>)}
         <button type="button" className="fa-dstrip-toggle" data-testid="strip-toggle" aria-expanded={!collapsed} aria-label={collapsed ? t('strip.expand') : t('strip.collapse')} onClick={onToggle}>{collapsed ? '⌃' : '⌄'}</button>
       </header>
       {!collapsed && (
@@ -73,14 +80,14 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare 
           <Card title={t('desk.inUse')} row={inUse} face={a} tone="use" />
           <Card title={t('desk.trying')} row={showTrial ? trial : null} face={b} tone="try" />
           <table className="fa-dstrip-table" data-testid="strip-metrics" aria-busy={!!loading}>
-            <thead><tr><th>{t('strip.metrics')}</th><th>{t('desk.inUse')}</th><th>{t('desk.trying')}</th><th>Δ</th></tr></thead>
+            <thead><tr><th>{t('strip.metrics')}</th><th>{t('desk.inUse')}</th><th>{t('desk.trying')}</th><th><Tooltip label={t('strip.deltaTip')}><span data-testid="strip-delta-head">Δ</span></Tooltip></th></tr></thead>
             <tbody>
               {COMPARE_METRICS.map(k => {
                 const ma = a?.metrics[k], mb = showTrial ? b?.metrics[k] : undefined;
                 const d = ma && mb ? deltaOf(k, mb, ma) : null; const dt = d ? deltaText(d) : null;
                 return (
                   <tr key={k} data-metric={k}>
-                    <th scope="row" data-term={k}>{termName(k)}</th>
+                    <th scope="row"><TermTip term={k}><span data-term={termKey(k)}>{termName(k)}</span></TermTip></th>
                     <Cell m={ma} />
                     {showTrial ? <Cell m={mb} /> : <td className="na">—</td>}
                     <td className={`dl ${dt?.tone ?? 'zero'}`} data-testid="strip-delta">{dt ? dt.text.replace(/^Δ\s*/, '') : '—'}</td>

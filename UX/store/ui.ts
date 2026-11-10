@@ -200,7 +200,7 @@ export function createUiStore(): UiStore {
       set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, settingsOpen: false });
     },
     closeCompare: () => set({ compare: null }),
-    resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, settingsOpen: false } : s)),
+    resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, desk: null, settingsOpen: false } : s)),
     addCompareFace: f => {
       const s = get(); const cs = s.compareSession;
       if (!cs || cs.faces.length >= COMPARE_MAX || cs.faces.some(x => faceKey(x) === faceKey(f))) return false;

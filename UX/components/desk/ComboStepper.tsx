@@ -6,6 +6,7 @@ import { NamePrompt } from '../ui/NamePrompt';
 import { Tooltip } from '../ui/Tooltip';
 
 type Ops = { create(): void; duplicate(): void; rename(name: string): void; makeMain(): void; remove(): void; go(id: number): void };
+export const comboTitle = (c: { idx: number; name: string | null }): string => `Combo ${c.idx}`.replace(/^Combo/, t('combo.label')) + (c.name && c.name !== `Combo ${c.idx}` ? ` · ${c.name}` : '');
 
 /** `‹ Combo n/m ▾ ›` (06 §1): bước giữa các Combo của Case, menu tạo/nhân bản/đổi tên/đặt chính/xoá. `[` `]` bước, xử lý ở Desk. */
 export function ComboStepper({ data, combo, ops }: { data: CaseDto; combo: ComboDto; ops: Ops }): React.JSX.Element {
@@ -26,11 +27,11 @@ export function ComboStepper({ data, combo, ops }: { data: CaseDto; combo: Combo
     <span className="fa-combo" data-testid="combo-stepper">
       <Tooltip label={t('combo.prev')} shortcut="["><button type="button" data-testid="combo-prev" disabled={i <= 0} onClick={() => ops.go(list[i - 1].id)}>‹</button></Tooltip>
       <button ref={btn} type="button" className="fa-combo-label" data-testid="combo-label" aria-haspopup="menu" onClick={() => setMenu({ rect: rect() })}>
-        {combo.isMain ? '★ ' : ''}Combo {i + 1}/{list.length}{combo.name ? ` · ${combo.name}` : ''} ▾
+        {combo.isMain ? '★ ' : ''}{t('combo.label')} {i + 1}/{list.length}{combo.name && combo.name !== `Combo ${combo.idx}` ? ` · ${combo.name}` : ''} ▾
       </button>
       <Tooltip label={t('combo.next')} shortcut="]"><button type="button" data-testid="combo-next" disabled={i >= list.length - 1} onClick={() => ops.go(list[i + 1].id)}>›</button></Tooltip>
       {menu && <Menu entries={entries} anchor={menu} onClose={() => setMenu(null)} label="Combo" returnFocus={btn.current} />}
-      {rename && <NamePrompt label={t('combo.rename')} initial={combo.name ?? ''} submitLabel={t('combo.save')} anchor={rename} onCancel={() => setRename(null)} onSubmit={n => { setRename(null); ops.rename(n); }} />}
+      {rename && <NamePrompt label={t('combo.rename')} initial={combo.name ?? ''} submitLabel={t('combo.save')} cancelLabel={t('combo.cancel')} anchor={rename} onCancel={() => { setRename(null); btn.current?.focus(); }} onSubmit={n => { setRename(null); btn.current?.focus(); ops.rename(n); }} />}
     </span>
   );
 }

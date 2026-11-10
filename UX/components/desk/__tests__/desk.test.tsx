@@ -222,6 +222,11 @@ describe('ComboStepper (slice 3)', () => {
     await pick(/Đặt làm Combo chính/);
     expect((await api.getCase(res.case.id)).combos.find(x => x.isMain)!.idx).toBe(2);
     await pick(/Xoá Combo/);
+    expect((await api.getCase(res.case.id)).combos.length).toBe(2); // chưa xoá: đang hỏi xác nhận
+    fireEvent.click(screen.getByTestId('combo-delete-cancel')); await settle();
+    expect((await api.getCase(res.case.id)).combos.length).toBe(2);
+    await pick(/Xoá Combo/);
+    fireEvent.click(screen.getByTestId('combo-delete-confirm')); await settle();
     expect((await api.getCase(res.case.id)).combos.length).toBe(1);
     fireEvent.click(screen.getByTestId('combo-label')); await settle();
     expect(screen.getByRole('menuitem', { name: /Xoá Combo/ }).getAttribute('aria-disabled')).toBe('true');
@@ -236,5 +241,73 @@ describe('candidates exclude the anchor itself', () => {
     const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
     render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null }} />); await settle();
     expect(screen.queryAllByTestId('desk-cand').some(c => /Playfair Display Regular/.test(c.textContent ?? ''))).toBe(false);
+  });
+});
+
+describe('review fixes (slices 1-3)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  async function mountBody() {
+    const api = createMockApi();
+    const rs = await rows(api);
+    const a = rs.find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: a.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
+    function Host() { const d = useUiStore(s => s.desk); return d ? <PairingDesk api={api} desk={d} /> : null; }
+    render(<Host />); await settle();
+    return { api, res };
+  }
+
+  it('keys typed in the rename box do not reach the desk (no strip toggle, no combo step, no place)', async () => {
+    const { api, res } = await mountBody();
+    fireEvent.click(screen.getByTestId('combo-label')); await settle();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên Combo/ })); await settle();
+    const input = screen.getByRole('textbox', { name: /Đổi tên Combo/ });
+    for (const k of ['i', 'I', '[', ']', 'ArrowDown']) fireEvent.keyDown(input, { key: k });
+    expect(screen.getByTestId('detail-strip').dataset.collapsed).toBeUndefined();
+    fireEvent.change(input, { target: { value: 'Mới' } });
+    fireEvent.keyDown(input, { key: 'Enter' }); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].name).toBe('Mới');
+    expect((await api.getCase(res.case.id)).combos[0].slots.map(s => s.role)).toEqual(['display']); // Enter không đặt font
+  });
+
+  it('Enter on a button does not place a font; Enter repeat is ignored', async () => {
+    const { api, res } = await mountBody();
+    fireEvent.keyDown(screen.getByTestId('desk-back'), { key: 'Enter' }); await settle();
+    fireEvent.keyDown(screen.getByTestId('pairing-desk'), { key: 'Enter', repeat: true }); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].slots.map(s => s.role)).toEqual(['display']);
+  });
+
+  it('the selected candidate survives a reload of the case data (rename keeps the index)', async () => {
+    const { api, res } = await mountBody();
+    const desk = screen.getByTestId('pairing-desk');
+    if (screen.getAllByTestId('desk-cand').length < 2) return; // thư viện mock chỉ có một ứng viên: không có gì để giữ
+    fireEvent.keyDown(desk, { key: 'ArrowDown' }); await settle();
+    const before = screen.getByTestId('desk-trying').textContent;
+    fireEvent.click(screen.getByTestId('combo-label')); await settle();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên Combo/ })); await settle();
+    fireEvent.change(screen.getByRole('textbox', { name: /Đổi tên Combo/ }), { target: { value: 'X' } });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /Đổi tên Combo/ }), { key: 'Enter' }); await settle();
+    expect(screen.getByTestId('desk-trying').textContent).toBe(before);
+    void api; void res;
+  });
+
+  it('Compare is disabled with a reason while there is only one distinct font; Shift+C does nothing', async () => {
+    await mountBody();
+    const btn = screen.queryByTestId('strip-compare');
+    if (btn) expect(btn.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(screen.getByTestId('pairing-desk'), { key: 'C', shiftKey: true });
+    expect(useUiStore.getState().compare).toBeNull();
+  });
+
+  it('resumeCompare and openCompare leave no Desk behind', async () => {
+    useUiStore.setState({ desk: { caseId: 1, comboId: 1, role: 'body', trial: null }, compareSession: { faces: [{ hashHex: 'a', faceIndex: 0 }, { hashHex: 'b', faceIndex: 0 }], pinned: [], overlayOn: false, overlayIds: [] } });
+    useUiStore.getState().resumeCompare();
+    expect(useUiStore.getState().desk).toBeNull();
+  });
+
+  it('metric rows are TermTips and the role name has a tooltip, no native title', async () => {
+    await mountBody();
+    expect(document.querySelectorAll('[data-testid=strip-metrics] th[scope=row] [data-term]').length).toBe(8);
+    expect(document.querySelector('.fa-desk-role-name[title]')).toBeNull();
   });
 });

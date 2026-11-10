@@ -759,6 +759,8 @@
       await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 15000);
       await sleep(500);
       await log('desk-opens', !!desk && document.querySelectorAll('[data-testid=desk-role]').length >= 2 && !!document.querySelector('[data-testid=desk-heading]'), { roles: document.querySelectorAll('[data-testid=desk-role]').length, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
+      const tb = document.querySelector('header.fa-topbar');
+      await log('desk-is-the-only-page', !!desk && (!tb || tb.offsetParent === null) && !document.querySelector('.cmp-tbl, .pr') && !document.querySelector('[data-testid=duplicates-page]')?.offsetParent, { topbarHidden: !tb || tb.offsetParent === null });
       if (desk) {
         document.documentElement.dataset.theme = 'light'; await sleep(250); await snap('font-desk-light');
         pressOn(desk, 'Enter');

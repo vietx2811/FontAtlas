@@ -61,4 +61,5 @@
 .fa-combo button { padding: 3px 8px; border-radius: 4px; color: var(--muted); }
 .fa-combo button:hover:not(:disabled) { background: var(--chrome-active); color: var(--fg); }
 .fa-combo button:disabled { opacity: .35; }
-.fa-combo-label { color: var(--fg) !important; font-weight: 600; }
+.fa-combo .fa-combo-label { color: var(--fg); font-weight: 600; }
+.fa-combo { margin-left: auto; }
