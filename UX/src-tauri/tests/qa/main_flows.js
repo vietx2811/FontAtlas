@@ -55,8 +55,8 @@
       const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
       document.dispatchEvent(esc);
       await wait(() => !document.querySelector('[data-testid=splash]'), 4000);
-      // prevented chỉ ghi lại (nợ 0.2.1: có lúc false trên máy CI tải nặng); yêu cầu thật — Esc không rơi xuống onboarding — kiểm ở splash-esc-stays-o1.
-      await log('splash-skip', !document.querySelector('[data-testid=splash]') && inertBelow, { inertBelow, prevented: esc.defaultPrevented });
+      // Esc phải bị nuốt (defaultPrevented) — listener ở window capture + layout effect nên không có khoảng hở khi máy tải; Esc không rơi xuống onboarding còn kiểm ở splash-esc-stays-o1.
+      await log('splash-skip', !document.querySelector('[data-testid=splash]') && inertBelow && esc.defaultPrevented, { inertBelow, prevented: esc.defaultPrevented });
       await wait(() => document.querySelector('.fa-onb h1, .fa-lib'), 90000);
       await sleep(400);
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? null;
