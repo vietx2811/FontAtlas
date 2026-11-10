@@ -62,6 +62,8 @@ export interface UiState {
   pairThese: FaceKeyDto[] | null;
   /** Pairing Desk đang mở (Case + Combo + vai đang chọn + ứng viên đang thử); null = không mở. Loại trừ với `compare`/`pairThese`. */
   desk: DeskState | null;
+  /** Desk đang mở lúc vào Compare: đóng Compare thì quay về đúng chỗ. */
+  deskReturn: DeskState | null;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
   /** Tăng khi dữ liệu thư viện đổi từ nơi khác (thêm vào dự án, gắn thẻ…): thanh bên nạp lại số đếm/danh sách. */
@@ -172,7 +174,7 @@ export function createUiStore(): UiStore {
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
     filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
-    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, libraryRev: 0, gridRev: 0, ...initial,
+    selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, deskReturn: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
     openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null, desk: null }),
@@ -197,9 +199,9 @@ export function createUiStore(): UiStore {
     openCompare: faces => {
       if (faces.length < COMPARE_MIN) return;
       const f = faces.slice(0, COMPARE_MAX);
-      set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, settingsOpen: false });
+      set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, deskReturn: get().desk, settingsOpen: false });
     },
-    closeCompare: () => set({ compare: null }),
+    closeCompare: () => set(s => ({ compare: null, desk: s.deskReturn, deskReturn: null })),
     resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, desk: null, settingsOpen: false } : s)),
     addCompareFace: f => {
       const s = get(); const cs = s.compareSession;
@@ -244,7 +246,7 @@ export function createUiStore(): UiStore {
     openPairThese: faces => { if (faces.length >= 2) set({ pairThese: faces.slice(0, 4), compare: null, desk: null, settingsOpen: false }); },
     closePairThese: () => set({ pairThese: null }),
     openDesk: desk => set({ desk, compare: null, pairThese: null, settingsOpen: false }),
-    closeDesk: () => set({ desk: null }),
+    closeDesk: () => set({ desk: null, deskReturn: null }),
     toggleSettings: () => set(s => ({ settingsOpen: !s.settingsOpen })),
     requestAddFolder: () => set(s => ({ addFolderRequest: s.addFolderRequest + 1 })),
     toggleInfo: () => set(s => ({ infoExpanded: !s.infoExpanded })),

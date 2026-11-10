@@ -31,7 +31,7 @@
 .fa-desk-trying b { color: var(--accent-ink); }
 .fa-desk-using { color: var(--muted); }
 .fa-desk-place { margin-left: auto; padding: 4px 12px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-.fa-desk-place:disabled { opacity: .45; }
+.fa-desk-place[aria-disabled="true"] { opacity: .45; cursor: default; }
 .fa-desk-open { align-self: flex-start; margin: 4px 0 8px; padding: 4px 10px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
 .fa-desk-open:hover { filter: brightness(.97); }
 .fa-dstrip { margin: 0 16px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); font-size: var(--text-sm); }
@@ -63,3 +63,4 @@
 .fa-combo button:disabled { opacity: .35; }
 .fa-combo .fa-combo-label { color: var(--fg); font-weight: 600; }
 .fa-combo { margin-left: auto; }
+.fa-dstrip-table td.sk i { display: block; height: 10px; width: 60%; border-radius: 3px; background: var(--border); opacity: .6; }

@@ -16,6 +16,7 @@ const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` 
 export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKeyDto | null) {
   const cache = useRef(new Map<string, CompareFace | null>());
   const pending = useRef(new Set<string>());
+  const failed = useRef(new Set<string>());
   const mounted = useRef(true);
   const [, bump] = useState(0);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -23,17 +24,18 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
   useEffect(() => {
     for (const [f, k] of [[inUse, ik], [trial, tk]] as const) {
       if (!f || !k || cache.current.has(k) || pending.current.has(k)) continue;
-      pending.current.add(k);
+      pending.current.add(k); failed.current.delete(k);
       api.getFace(f, 'vi').then((d: FaceDetailDto) => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
         pending.current.delete(k);
-        if (cf !== undefined) cache.current.set(k, cf);
+        if (cf !== undefined) cache.current.set(k, cf); else failed.current.add(k);
         if (mounted.current) bump(n => n + 1);
       });
     }
   }, [api, inUse, trial, ik, tk]);
-  const get = (k: string | null): CompareFace | null | undefined => (k ? (cache.current.get(k) ?? (pending.current.has(k) ? undefined : null)) : null);
-  const loading = !!((ik && pending.current.has(ik)) || (tk && pending.current.has(tk)));
-  return { a: get(ik) ?? null, b: get(tk) ?? null, loading };
+  // Đang đọc = có khoá, chưa có trong bộ nhớ, chưa lỗi (kể cả lượt render đầu, trước khi effect đánh dấu pending).
+  const busy = (k: string | null) => !!k && !cache.current.has(k) && !failed.current.has(k);
+  const get = (k: string | null): CompareFace | null => (k ? (cache.current.get(k) ?? null) : null);
+  return { a: get(ik), b: get(tk), loading: busy(ik) || busy(tk), aLoading: busy(ik), bLoading: busy(tk) };
 }
 
 function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try' }): React.JSX.Element {
@@ -54,7 +56,8 @@ function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | nul
   );
 }
 
-function Cell({ m }: { m: CompareMetric | undefined }): React.JSX.Element {
+function Cell({ m, loading }: { m: CompareMetric | undefined; loading?: boolean }): React.JSX.Element {
+  if (!m && loading) return <td className="sk" aria-hidden="true"><i /></td>;
   if (!m || m.value === null) return <td className="na">{t('compare.na')}</td>;
   return <td><b>{numberText(m.value, m.unit)}</b><u>{unitText(m.unit)}</u>{m.quality === 'estimated' && <NoteMark inline kind="info" text={t('compare.est')} />}</td>;
 }
@@ -64,7 +67,7 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
   api: Api; inUse: FaceRowDto | null; trial: FaceRowDto | null; collapsed: boolean; onToggle(): void; onCompare?(): void; compareReason?: string | null;
 }): React.JSX.Element {
   const same = !!inUse && !!trial && keyOf(inUse) === keyOf(trial);
-  const { a, b, loading } = useStripFaces(api, inUse, trial && !same ? trial : null);
+  const { a, b, loading, aLoading, bLoading } = useStripFaces(api, inUse, trial && !same ? trial : null);
   const showTrial = !!trial && !same;
   return (
     <section className="fa-dstrip" data-testid="detail-strip" data-collapsed={collapsed || undefined} aria-label={t('strip.title')}>
@@ -88,8 +91,8 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
                 return (
                   <tr key={k} data-metric={k}>
                     <th scope="row"><TermTip term={k}><span data-term={termKey(k)}>{termName(k)}</span></TermTip></th>
-                    <Cell m={ma} />
-                    {showTrial ? <Cell m={mb} /> : <td className="na">—</td>}
+                    <Cell m={ma} loading={aLoading} />
+                    {showTrial ? <Cell m={mb} loading={bLoading} /> : <td className="na">—</td>}
                     <td className={`dl ${dt?.tone ?? 'zero'}`} data-testid="strip-delta">{dt ? dt.text.replace(/^Δ\s*/, '') : '—'}</td>
                   </tr>
                 );

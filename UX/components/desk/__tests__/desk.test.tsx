@@ -91,7 +91,7 @@ describe('PairingDesk', () => {
     expect(roles[0].textContent).toMatch(/Playfair Display/);
     expect(roles[1].getAttribute('aria-pressed')).toBe('true');
     expect(screen.getAllByTestId('desk-cand').length).toBeGreaterThan(0);
-    expect(screen.getByTestId('desk-place')).not.toBeDisabled();
+    expect(screen.getByTestId('desk-place').getAttribute('aria-disabled')).toBe('false');
   });
 
   it('ArrowDown tries the next candidate; Enter places it in the role through setComboSlot', async () => {
@@ -200,6 +200,39 @@ describe('ComboStepper (slice 3)', () => {
     await open();
     expect(screen.getByTestId('combo-label').textContent).toMatch(/★ Combo 1\/1/);
     expect(screen.getByTestId('combo-prev')).toBeDisabled(); expect(screen.getByTestId('combo-next')).toBeDisabled();
+  });
+
+  it('with the delete confirm open no Desk key runs and focus is not stolen from the dialog', async () => {
+    const { api, res } = await open();
+    await pick(/Nhân bản/);
+    await pick(/Xoá Combo/);
+    const before = (await api.getCase(res.case.id)).combos.length;
+    const desk = screen.getByTestId('pairing-desk');
+    fireEvent.keyDown(desk, { key: 'Enter' }); fireEvent.keyDown(desk, { key: '[' }); await settle();
+    expect(screen.getByTestId('combo-delete-confirm')).toBeTruthy();
+    expect(useUiStore.getState().desk).not.toBeNull();
+    expect((await api.getCase(res.case.id)).combos.length).toBe(before);
+    expect(document.activeElement).not.toBe(desk);
+  });
+
+  it('the heading uses the neutral copy while the sample is the app default, and the owner text once edited', async () => {
+    await open();
+    expect(screen.getByTestId('desk-heading').textContent).toBe('Nghệ thuật dàn trang');
+    act(() => { useUiStore.setState({ sample: 'Cà phê sữa đá' }); }); await settle();
+    expect(screen.getByTestId('desk-heading').textContent).toBe('Cà phê sữa đá');
+  });
+
+  it('closing Compare opened from the Desk returns to that Desk', async () => {
+    const { res } = await open();
+    const rs = await rows(createMockApi());
+    useUiStore.getState().openCompare([{ hashHex: rs[0].hashHex, faceIndex: 0 }, { hashHex: rs[1].hashHex, faceIndex: 0 }]);
+    expect(useUiStore.getState().desk).toBeNull();
+    useUiStore.getState().closeCompare();
+    expect(useUiStore.getState().desk?.caseId).toBe(res.case.id);
+    useUiStore.getState().closeDesk();
+    useUiStore.getState().openCompare([{ hashHex: rs[0].hashHex, faceIndex: 0 }, { hashHex: rs[1].hashHex, faceIndex: 0 }]);
+    useUiStore.getState().closeCompare();
+    expect(useUiStore.getState().desk).toBeNull();
   });
 
   it('New creates and steps to Combo 2/2; ] and [ move between them', async () => {

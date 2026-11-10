@@ -4,7 +4,7 @@ import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
-import { useUiStore, type DeskState } from '../../store/ui';
+import { DEFAULT_SAMPLE_TEXT, useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
 import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
@@ -50,7 +50,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const selRef = useRef<{ role: ComboRoleDto; key: string } | null>(null);
   const mode0 = data?.settings.mode ?? 'safe'; const vi0 = data?.settings.vi ?? true; const ready = !!data && !!combo;
   // Ứng viên cho vai đang chọn: đầu danh sách là `trial` từ peek (nếu có), sau đó pairCandidates quanh font neo.
+  const candRole = useRef(role);
   useEffect(() => {
+    if (candRole.current !== role) { candRole.current = role; setCands([]); setIdx(-1); } // đổi vai: bỏ ứng viên của vai cũ tới khi vai mới về
     if (!ready || !data) return;
     let alive = true; setCandError(null);
     const base: Promise<Trial[]> = anchor
@@ -96,11 +98,11 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const [confirmDel, setConfirmDel] = useState(false);
   const comboOps = {
     go: goCombo,
-    create: () => { void api.createCombo(desk.caseId).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
-    duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }, fail); },
-    rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId)), fail); },
+    create: () => { void api.createCombo(desk.caseId).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }).catch(fail); },
+    duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }).catch(fail); },
+    rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId))).catch(fail); },
     makeMain: () => { if (combo) comboOps.makeMainOf(combo.id); },
-    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); }, fail); },
+    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); }).catch(fail); },
     remove: () => setConfirmDel(true),
     removeNow: async () => {
       if (!combo || !data) return;
@@ -119,6 +121,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   useEffect(() => { root.current?.focus(); }, []);
   // Nút vừa bị vô hiệu (‹ ở Combo 1, Xoá…) làm focus rơi về body: đưa về Desk để phím tắt còn sống.
   useEffect(() => {
+    if (confirmDel) return; // hộp xác nhận đang giữ focus: không cướp
     const a = document.activeElement as HTMLElement | null;
     if (!a || a === document.body || !root.current?.contains(a) || (a as HTMLButtonElement).disabled) root.current?.focus();
   }, [desk.comboId, confirmDel]);
@@ -127,6 +130,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const compareReason = cmpFaces.length < 2 ? t('desk.compareNeed') : null;
   const toCompare = () => { if (!compareReason) openCompare(cmpFaces); };
   const onKey = (e: React.KeyboardEvent) => {
+    if (confirmDel) return; // hộp xác nhận mở: không phím tắt nào của Desk chạy
     const tgt = e.target as HTMLElement;
     // Sự kiện nổi bọt từ portal (menu, hộp đổi tên) hoặc từ ô nhập không thuộc phím tắt của Desk.
     if (!root.current?.contains(tgt) || tgt.closest('input, textarea, select, [contenteditable]')) return;
@@ -187,13 +191,13 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         </section>
         <section className="fa-desk-page" aria-label={t('desk.sampleLabel')}>
           <div className="fa-desk-sheet">
-            <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() || t('desk.pageHeading')}</div>
+            <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() && sample !== DEFAULT_SAMPLE_TEXT ? sample : t('desk.pageHeading')}</div>
             <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
           </div>
           <div className="fa-desk-strip">
             {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b></span>}
             {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}</span>}
-            <button type="button" className="fa-desk-place" data-testid="desk-place" disabled={!trial || inUseSame} onClick={() => void place()}>↵ {t('desk.place')}</button>
+            <button type="button" className="fa-desk-place" data-testid="desk-place" aria-disabled={!trial || inUseSame} onClick={() => { if (trial && !inUseSame) void place(); }}>↵ {t('desk.place')}</button>
           </div>
           <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />
         </section>
