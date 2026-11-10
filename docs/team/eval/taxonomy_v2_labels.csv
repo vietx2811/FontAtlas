@@ -74,159 +74,161 @@ T064,Archivo,sans,grotesque,,ofl,archivo,GF tag,gf,,/Sans/Grotesque,GF Sans/Grot
 T065,Schibsted Grotesk,sans,grotesque,,ofl,schibstedgrotesk,GF tag,gf,,/Sans/Grotesque,GF Sans/Grotesque
 T066,Heebo,sans,grotesque,,ofl,heebo,GF tag,gf,,/Sans/Grotesque,GF Sans/Grotesque
 T067,Space Grotesk,sans,grotesque,,ofl,spacegrotesk,GF tag,gf,,/Sans/Grotesque;/Sans/Neo Grotesque;/Theme/Techno,GF Sans/Grotesque
-T068,Inter,sans,neo_grotesque,,ofl,inter,GF tag,gf,,/Sans/Neo Grotesque,"GF Sans/Neo Grotesque (Arimo không có tag: clone metric của Arial, gán tay)"
-T069,Roboto,sans,neo_grotesque,,ofl,roboto,GF tag,gf,,/Sans/Neo Grotesque,"GF Sans/Neo Grotesque (Arimo không có tag: clone metric của Arial, gán tay)"
-T070,Hanken Grotesk,sans,neo_grotesque,,ofl,hankengrotesk,GF tag,gf,,/Sans/Neo Grotesque,"GF Sans/Neo Grotesque (Arimo không có tag: clone metric của Arial, gán tay)"
-T071,Bricolage Grotesque,sans,neo_grotesque,,ofl,bricolagegrotesque,GF tag,gf,,/Sans/Neo Grotesque,"GF Sans/Neo Grotesque (Arimo không có tag: clone metric của Arial, gán tay)"
-T072,Arimo,sans,neo_grotesque,,ofl,arimo,GF tag,gf,,,"GF Sans/Neo Grotesque (Arimo không có tag: clone metric của Arial, gán tay)"
-T073,Montserrat,sans,geometric,,ofl,montserrat,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T074,Poppins,sans,geometric,,ofl,poppins,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T075,Outfit,sans,geometric,,ofl,outfit,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T076,Jost,sans,geometric,,ofl,jost,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Geometric
-T077,Lexend,sans,geometric,,ofl,lexend,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T078,Urbanist,sans,geometric,,ofl,urbanist,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T079,Raleway,sans,geometric,,ofl,raleway,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T080,Albert Sans,sans,geometric,,ofl,albertsans,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
-T081,Open Sans,sans,humanist,,ofl,opensans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T082,Source Sans 3,sans,humanist,,ofl,sourcesans3,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T083,Noto Sans,sans,humanist,,ofl,notosans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T084,Fira Sans,sans,humanist,,ofl,firasans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T085,Lato,sans,humanist,,ofl,lato,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T086,PT Sans,sans,humanist,,ofl,ptsans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T087,Cabin,sans,humanist,,ofl,cabin,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T088,Alegreya Sans,sans,humanist,,ofl,alegreyasans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
-T089,Belleza,sans,flared,serif/glyphic,ofl,belleza,tay,visual,,/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T090,Tenor Sans,sans,flared,serif/glyphic,ofl,tenorsans,tay,visual,,/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T091,Faculty Glyphic,sans,flared,serif/glyphic,ofl,facultyglyphic,tay,visual,,/Sans/Glyphic;/Theme/Art Nouveau,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T092,Aboreto,sans,flared,serif/glyphic,ofl,aboreto,tay,visual,,/Sans/Glyphic;/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T093,Federo,sans,flared,serif/glyphic,ofl,federo,tay,visual,,/Theme/Art Deco,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T094,Libertinus Sans,sans,flared,serif/glyphic,ofl,libertinussans,tay,visual,,/Sans/Glyphic,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
-T095,Nunito,sans,rounded,,ofl,nunito,GF tag,gf,,/Sans/Neo Grotesque;/Sans/Rounded,GF Sans/Rounded
-T096,Varela Round,sans,rounded,,ofl,varelaround,GF tag,gf,,/Sans/Humanist;/Sans/Rounded,GF Sans/Rounded
-T097,Quicksand,sans,rounded,,ofl,quicksand,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
-T098,M PLUS Rounded 1c,sans,rounded,,ofl,mplusrounded1c,GF tag,gf,,/Sans/Humanist;/Sans/Rounded,GF Sans/Rounded
-T099,Fredoka,sans,rounded,,ofl,fredoka,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
-T100,Comfortaa,sans,rounded,,ofl,comfortaa,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
-T101,Dongle,sans,rounded,,ofl,dongle,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
-T102,Baloo 2,sans,rounded,,ofl,baloo2,GF tag,gf,,/Sans/Rounded,GF Sans/Rounded
-T103,Exo 2,sans,squarish,,ofl,exo2,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T104,Michroma,sans,squarish,,ofl,michroma,GF tag,gf,,/Sans/Superellipse;/Theme/Techno,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T105,Saira,sans,squarish,,ofl,saira,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T106,Aldrich,sans,squarish,,ofl,aldrich,GF tag,gf,,/Sans/Geometric;/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T107,Bai Jamjuree,sans,squarish,,ofl,baijamjuree,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T108,Blinker,sans,squarish,,ofl,blinker,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T109,Rajdhani,sans,squarish,,ofl,rajdhani,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
-T110,Mooli,sans,,,ofl,mooli,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
-T111,Bellota,sans,,,ofl,bellota,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
-T112,Ruluko,sans,,,ofl,ruluko,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
-T113,Port Lligat Sans,sans,,,ofl,portlligatsans,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
-T114,Pinyon Script,script,formal_copperplate,,ofl,pinyonscript,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T115,Great Vibes,script,formal_copperplate,,ofl,greatvibes,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T116,Allura,script,formal_copperplate,,ofl,allura,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T117,Alex Brush,script,formal_copperplate,,ofl,alexbrush,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T118,Tangerine,script,formal_copperplate,,ofl,tangerine,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T119,Italianno,script,formal_copperplate,,ofl,italianno,GF tag,gf,,/Script/Formal;/Script/Handwritten,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T120,Monsieur La Doulaise,script,formal_copperplate,,ofl,monsieurladoulaise,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T121,Parisienne,script,formal_copperplate,,ofl,parisienne,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
-T122,Kaushan Script,script,brush,,ofl,kaushanscript,tay,visual,,/Script/Informal,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T123,Leckerli One,script,brush,,ofl,leckerlione,tay,visual,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T124,Mr Dafoe,script,brush,,ofl,mrdafoe,tay,visual,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T125,Damion,script,brush,,ofl,damion,tay,visual,,,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T126,Yesteryear,script,brush,,ofl,yesteryear,tay,visual,,,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T127,Kolker Brush,script,brush,,ofl,kolkerbrush,tay,visual,,/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
-T128,Sacramento,script,monoline_script,,ofl,sacramento,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T129,Merienda,script,monoline_script,,ofl,merienda,tay,visual,,/Script/Handwritten;/Theme/Brush,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T130,Birthstone,script,monoline_script,,ofl,birthstone,tay,visual,,/Script/Handwritten,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T131,Send Flowers,script,monoline_script,,ofl,sendflowers,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T132,Whisper,script,monoline_script,,ofl,whisper,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T133,Euphoria Script,script,monoline_script,,ofl,euphoriascript,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T134,Dancing Script,script,monoline_script,,ofl,dancingscript,tay,visual,,,"nối, nét gần đều, contrast ≈ 0; xem tay"
-T135,Mr De Haviland,script,signature,,ofl,mrdehaviland,tay,weak,,/Script/Formal;/Script/Handwritten,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T136,Waterfall,script,signature,,ofl,waterfall,tay,weak,,/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T137,Ephesis,script,signature,,ofl,ephesis,tay,weak,,/Script/Formal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T138,WindSong,script,signature,,ofl,windsong,tay,weak,,/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T139,Fuggles,script,signature,,ofl,fuggles,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T140,Qwitcher Grypen,script,signature,,ofl,qwitchergrypen,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T141,Vujahday Script,script,signature,,ofl,vujahdayscript,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
-T142,Borel,script,upright_script,,ofl,borel,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
-T143,Engagement,script,upright_script,,ofl,engagement,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
-T144,Betania Patmos,script,upright_script,,ofl,betaniapatmos,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
-T145,Berkshire Swash,script,upright_script,,ofl,berkshireswash,GF tag,weak,,/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
-T146,Playwrite IT Moderna,script,upright_script,,ofl,playwriteitmoderna,GF tag,weak,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
-T147,Uncial Antiqua,script,calligraphic_unjoined,,ofl,uncialantiqua,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
-T148,Almendra,script,calligraphic_unjoined,,ofl,almendra,tay,visual,,/Serif/Humanist Venetian,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
-T149,Macondo,script,calligraphic_unjoined,,ofl,macondo,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
-T150,Eagle Lake,script,calligraphic_unjoined,,ofl,eaglelake,tay,visual,,/Script/Formal;/Script/Handwritten;/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
-T151,MedievalSharp,script,calligraphic_unjoined,,ofl,medievalsharp,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
-T152,Caveat,handwriting,casual_print,,ofl,caveat,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T153,Patrick Hand,handwriting,casual_print,,ofl,patrickhand,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T154,Kalam,handwriting,casual_print,,ofl,kalam,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T155,Indie Flower,handwriting,casual_print,,ofl,indieflower,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T156,Shadows Into Light,handwriting,casual_print,,ofl,shadowsintolight,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T157,Gloria Hallelujah,handwriting,casual_print,,ofl,gloriahallelujah,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T158,Mynerve,handwriting,casual_print,,ofl,mynerve,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T159,Fuzzy Bubbles,handwriting,casual_print,,ofl,fuzzybubbles,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
-T160,Sedgwick Ave,handwriting,marker,,ofl,sedgwickave,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
-T161,Covered By Your Grace,handwriting,marker,,ofl,coveredbyyourgrace,tay,weak,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét bút dạ/marker đậm, jitter; xem tay"
-T162,Nanum Pen Script,handwriting,marker,,ofl,nanumpenscript,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
-T163,Reenie Beanie,handwriting,marker,,ofl,reeniebeanie,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
-T164,Nothing You Could Do,handwriting,marker,,ofl,nothingyoucoulddo,tay,weak,,/Script/Handwritten;/Script/Informal,"nét bút dạ/marker đậm, jitter; xem tay"
-T165,Sue Ellen Francisco,handwriting,marker,,ofl,sueellenfrancisco,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
-T166,Gochi Hand,handwriting,childlike,,ofl,gochihand,tay,weak,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,nét trẻ con/comic — taxonomy xếp M
-T167,Short Stack,handwriting,childlike,,ofl,shortstack,tay,weak,,/Script/Handwritten,nét trẻ con/comic — taxonomy xếp M
-T168,Itim,handwriting,childlike,,ofl,itim,tay,weak,,/Script/Handwritten;/Theme/Brush,nét trẻ con/comic — taxonomy xếp M
-T169,Chilanka,handwriting,childlike,,ofl,chilanka,tay,weak,,/Script/Handwritten;/Theme/Brush,nét trẻ con/comic — taxonomy xếp M
-T170,Swanky and Moo Moo,handwriting,childlike,,ofl,swankyandmoomoo,tay,weak,,/Script/Handwritten,nét trẻ con/comic — taxonomy xếp M
-T171,JetBrains Mono,mono,sans_mono,,ofl,jetbrainsmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
-T172,IBM Plex Mono,mono,sans_mono,,ofl,ibmplexmono,GF tag,gf,,/Monospace/Monospace;/Sans/Neo Grotesque,GF Monospace + tag Sans/*
-T173,Roboto Mono,mono,sans_mono,,ofl,robotomono,GF tag,gf,,/Monospace/Monospace;/Sans/Neo Grotesque,GF Monospace + tag Sans/*
-T174,Space Mono,mono,sans_mono,,ofl,spacemono,GF tag,gf,,/Monospace/Monospace;/Sans/Grotesque;/Sans/Neo Grotesque;/Theme/Techno,GF Monospace + tag Sans/*
-T175,DM Mono,mono,sans_mono,,ofl,dmmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
-T176,Red Hat Mono,mono,sans_mono,,ofl,redhatmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
-T177,Inconsolata,mono,sans_mono,,ofl,inconsolata,GF tag,gf,,/Monospace/Monospace;/Sans/Humanist,GF Monospace + tag Sans/*
-T178,Anonymous Pro,mono,sans_mono,,ofl,anonymouspro,GF tag,gf,,/Monospace/Monospace;/Sans/Humanist,GF Monospace + tag Sans/*
-T179,Xanh Mono,mono,serif_mono,,ofl,xanhmono,GF tag,gf,,/Monospace/Monospace;/Serif/Modern,GF Monospace + tag Serif/*
-T180,Libertinus Mono,mono,serif_mono,,ofl,libertinusmono,GF tag,gf,,/Monospace/Monospace;/Serif/Transitional,GF Monospace + tag Serif/*
-T181,JetBrains Mono,mono,coding,,ofl,jetbrainsmono,tay,weak,,/Monospace/Monospace;/Sans/Geometric,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T182,Fira Code,mono,coding,,ofl,firacode,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T183,Source Code Pro,mono,coding,,ofl,sourcecodepro,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T184,Victor Mono,mono,coding,,ofl,victormono,tay,weak,,/Monospace/Monospace;/Sans/Neo Grotesque;/Sans/Superellipse,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T185,Cascadia Code,mono,coding,,ofl,cascadiacode,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T186,Intel One Mono,mono,coding,,ofl,intelonemono,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
-T187,Courier Prime,mono,typewriter,slab/clarendon,ofl,courierprime,GF tag,gf,,/Monospace/Monospace;/Slab/Clarendon,GF Monospace + Slab/Clarendon
-T188,Cutive Mono,mono,typewriter,slab/clarendon,ofl,cutivemono,GF tag,gf,,/Monospace/Monospace;/Slab/Clarendon,GF Monospace + Slab/Clarendon
-T189,Allerta Stencil,display,stencil,,ofl,allertastencil,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
-T190,Stardos Stencil,display,stencil,,ofl,stardosstencil,GF tag,gf,,/Serif/Scotch;/Theme/Stencil,GF Theme/Stencil
-T191,Sirin Stencil,display,stencil,,ofl,sirinstencil,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
-T192,Black Ops One,display,stencil,,ofl,blackopsone,GF tag,gf,,/Sans/Geometric;/Theme/Stencil,GF Theme/Stencil
-T193,Wallpoet,display,stencil,,ofl,wallpoet,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
-T194,Stick No Bills,display,stencil,,ofl,sticknobills,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
-T195,Kenia,display,stencil,,ofl,kenia,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
-T196,Monoton,display,inline_outline,,ofl,monoton,GF tag,gf,,/Sans/Geometric;/Theme/Art Deco;/Theme/Inline,GF Theme/Inline
-T197,Bungee Inline,display,inline_outline,,ofl,bungeeinline,GF tag,gf,,/Sans/Geometric;/Sans/Rounded;/Theme/Inline,GF Theme/Inline
-T198,Fascinate Inline,display,inline_outline,,ofl,fascinateinline,GF tag,gf,,/Theme/Art Deco;/Theme/Inline,GF Theme/Inline
-T199,Tilt Prism,display,inline_outline,,ofl,tiltprism,GF tag,gf,,/Theme/Inline,GF Theme/Inline
-T200,Miltonian,display,inline_outline,,ofl,miltonian,GF tag,gf,,/Theme/Inline,GF Theme/Inline
-T201,Geostar,display,inline_outline,,ofl,geostar,GF tag,gf,,/Theme/Inline,GF Theme/Inline
-T202,Train One,display,inline_outline,,ofl,trainone,GF tag,gf,,/Theme/Inline,GF Theme/Inline
-T203,Nabla,display,shaded_3d,,ofl,nabla,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T204,Foldit,display,shaded_3d,,ofl,foldit,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T205,Akronim,display,shaded_3d,,ofl,akronim,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T206,Ewert,display,shaded_3d,,ofl,ewert,GF tag,gf,,/Theme/Shaded;/Theme/Tuscan,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T207,Honk,display,shaded_3d,,ofl,honk,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T208,Rampart One,display,shaded_3d,,ofl,rampartone,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T209,Bungee Shade,display,shaded_3d,,ofl,bungeeshade,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
-T210,Press Start 2P,display,pixel_bitmap,,ofl,pressstart2p,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
-T211,Silkscreen,display,pixel_bitmap,,ofl,silkscreen,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
-T212,Pixelify Sans,display,pixel_bitmap,,ofl,pixelifysans,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
-T213,Jersey 10,display,pixel_bitmap,,ofl,jersey10,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
-T214,Tiny5,display,pixel_bitmap,,ofl,tiny5,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
-T215,Micro 5,display,pixel_bitmap,,ofl,micro5,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
-T216,VT323,display,pixel_bitmap,,ofl,vt323,GF tag,gf,,/Monospace/Monospace;/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
-T217,UnifrakturMaguntia,blackletter,,,ofl,unifrakturmaguntia,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T218,Pirata One,blackletter,,,ofl,pirataone,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T219,Grenze Gotisch,blackletter,,,ofl,grenzegotisch,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T220,UnifrakturCook,blackletter,,,ofl,unifrakturcook,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T221,New Rocker,blackletter,,,ofl,newrocker,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T222,Germania One,blackletter,,,ofl,germaniaone,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
-T223,Texturina,blackletter,,,ofl,texturina,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T068,Inter,sans,neo_grotesque,,ofl,inter,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T069,Roboto,sans,neo_grotesque,,ofl,roboto,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T070,Hanken Grotesk,sans,neo_grotesque,,ofl,hankengrotesk,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T071,Bricolage Grotesque,sans,neo_grotesque,,ofl,bricolagegrotesque,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T072,IBM Plex Sans,sans,neo_grotesque,,ofl,ibmplexsans,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T073,Manrope,sans,neo_grotesque,,ofl,manrope,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T074,Be Vietnam Pro,sans,neo_grotesque,,ofl,bevietnampro,GF tag,gf,,/Sans/Neo Grotesque,GF Sans/Neo Grotesque
+T075,Montserrat,sans,geometric,,ofl,montserrat,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T076,Poppins,sans,geometric,,ofl,poppins,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T077,Outfit,sans,geometric,,ofl,outfit,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T078,Jost,sans,geometric,,ofl,jost,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Geometric
+T079,Lexend,sans,geometric,,ofl,lexend,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T080,Urbanist,sans,geometric,,ofl,urbanist,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T081,Raleway,sans,geometric,,ofl,raleway,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T082,Albert Sans,sans,geometric,,ofl,albertsans,GF tag,gf,,/Sans/Geometric,GF Sans/Geometric
+T083,Open Sans,sans,humanist,,ofl,opensans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T084,Source Sans 3,sans,humanist,,ofl,sourcesans3,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T085,Noto Sans,sans,humanist,,ofl,notosans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T086,Fira Sans,sans,humanist,,ofl,firasans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T087,Lato,sans,humanist,,ofl,lato,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T088,PT Sans,sans,humanist,,ofl,ptsans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T089,Cabin,sans,humanist,,ofl,cabin,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T090,Alegreya Sans,sans,humanist,,ofl,alegreyasans,GF tag,gf,,/Sans/Humanist,GF Sans/Humanist
+T091,Belleza,sans,flared,serif/glyphic,ofl,belleza,tay,visual,,/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T092,Tenor Sans,sans,flared,serif/glyphic,ofl,tenorsans,tay,visual,,/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T093,Faculty Glyphic,sans,flared,serif/glyphic,ofl,facultyglyphic,tay,visual,,/Sans/Glyphic;/Theme/Art Nouveau,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T094,Aboreto,sans,flared,serif/glyphic,ofl,aboreto,tay,visual,,/Sans/Glyphic;/Sans/Humanist,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T095,Federo,sans,flared,serif/glyphic,ofl,federo,tay,visual,,/Theme/Art Deco,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T096,Libertinus Sans,sans,flared,serif/glyphic,ofl,libertinussans,tay,visual,,/Sans/Glyphic,"terminal loe kiểu Optima, không có serif thật; đã xem tay. Aboreto/Faculty Glyphic/Libertinus Sans có GF Sans/Glyphic"
+T097,Nunito,sans,rounded,,ofl,nunito,GF tag,gf,,/Sans/Neo Grotesque;/Sans/Rounded,GF Sans/Rounded
+T098,Varela Round,sans,rounded,,ofl,varelaround,GF tag,gf,,/Sans/Humanist;/Sans/Rounded,GF Sans/Rounded
+T099,Quicksand,sans,rounded,,ofl,quicksand,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
+T100,M PLUS Rounded 1c,sans,rounded,,ofl,mplusrounded1c,GF tag,gf,,/Sans/Humanist;/Sans/Rounded,GF Sans/Rounded
+T101,Fredoka,sans,rounded,,ofl,fredoka,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
+T102,Comfortaa,sans,rounded,,ofl,comfortaa,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
+T103,Dongle,sans,rounded,,ofl,dongle,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Sans/Rounded
+T104,Baloo 2,sans,rounded,,ofl,baloo2,GF tag,gf,,/Sans/Rounded,GF Sans/Rounded
+T105,Exo 2,sans,squarish,,ofl,exo2,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T106,Michroma,sans,squarish,,ofl,michroma,GF tag,gf,,/Sans/Superellipse;/Theme/Techno,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T107,Saira,sans,squarish,,ofl,saira,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T108,Aldrich,sans,squarish,,ofl,aldrich,GF tag,gf,,/Sans/Geometric;/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T109,Bai Jamjuree,sans,squarish,,ofl,baijamjuree,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T110,Blinker,sans,squarish,,ofl,blinker,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T111,Rajdhani,sans,squarish,,ofl,rajdhani,GF tag,gf,,/Sans/Superellipse,GF Sans/Superellipse (Orbitron chỉ có tag Techno)
+T112,Mooli,sans,,,ofl,mooli,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
+T113,Bellota,sans,,,ofl,bellota,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
+T114,Ruluko,sans,,,ofl,ruluko,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
+T115,Port Lligat Sans,sans,,,ofl,portlligatsans,tay,visual,tailed_l_sans,/Sans/Humanist,"ranh giới: chữ l có đuôi cong làm serif_foot ≈ 1.4–1.6 nhưng không có serif; kỳ vọng Sans, KHÔNG được thành Serif"
+T116,Pinyon Script,script,formal_copperplate,,ofl,pinyonscript,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T117,Great Vibes,script,formal_copperplate,,ofl,greatvibes,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T118,Allura,script,formal_copperplate,,ofl,allura,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T119,Alex Brush,script,formal_copperplate,,ofl,alexbrush,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T120,Tangerine,script,formal_copperplate,,ofl,tangerine,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T121,Italianno,script,formal_copperplate,,ofl,italianno,GF tag,gf,,/Script/Formal;/Script/Handwritten,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T122,Monsieur La Doulaise,script,formal_copperplate,,ofl,monsieurladoulaise,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T123,Parisienne,script,formal_copperplate,,ofl,parisienne,GF tag,gf,,/Script/Formal,"GF Script/Formal; xem tay: roundhand, nghiêng, nối, contrast cao"
+T124,Kaushan Script,script,brush,,ofl,kaushanscript,tay,visual,,/Script/Informal,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T125,Leckerli One,script,brush,,ofl,leckerlione,tay,visual,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T126,Mr Dafoe,script,brush,,ofl,mrdafoe,tay,visual,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T127,Damion,script,brush,,ofl,damion,tay,visual,,,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T128,Yesteryear,script,brush,,ofl,yesteryear,tay,visual,,,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T129,Kolker Brush,script,brush,,ofl,kolkerbrush,tay,visual,,/Script/Informal;/Theme/Brush,"nét cọ, độ dày không đều; Mr Dafoe/Leckerli One có GF Theme/Brush, còn lại xem tay"
+T130,Sacramento,script,monoline_script,,ofl,sacramento,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T131,Merienda,script,monoline_script,,ofl,merienda,tay,visual,,/Script/Handwritten;/Theme/Brush,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T132,Birthstone,script,monoline_script,,ofl,birthstone,tay,visual,,/Script/Handwritten,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T133,Send Flowers,script,monoline_script,,ofl,sendflowers,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T134,Whisper,script,monoline_script,,ofl,whisper,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T135,Euphoria Script,script,monoline_script,,ofl,euphoriascript,tay,visual,,/Script/Informal,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T136,Dancing Script,script,monoline_script,,ofl,dancingscript,tay,visual,,,"nối, nét gần đều, contrast ≈ 0; xem tay"
+T137,Mr De Haviland,script,signature,,ofl,mrdehaviland,tay,weak,,/Script/Formal;/Script/Handwritten,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T138,Waterfall,script,signature,,ofl,waterfall,tay,weak,,/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T139,Ephesis,script,signature,,ofl,ephesis,tay,weak,,/Script/Formal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T140,WindSong,script,signature,,ofl,windsong,tay,weak,,/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T141,Fuggles,script,signature,,ofl,fuggles,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T142,Qwitcher Grypen,script,signature,,ofl,qwitchergrypen,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T143,Vujahday Script,script,signature,,ofl,vujahdayscript,tay,weak,,/Script/Handwritten;/Script/Informal,"chữ ký nét mảnh, nhịp nhanh; ranh giới với copperplate/brush mờ (taxonomy xếp M — cần người gán)"
+T144,Borel,script,upright_script,,ofl,borel,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
+T145,Engagement,script,upright_script,,ofl,engagement,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
+T146,Betania Patmos,script,upright_script,,ofl,betaniapatmos,GF tag,weak,,/Script/Formal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
+T147,Berkshire Swash,script,upright_script,,ofl,berkshireswash,GF tag,weak,,/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
+T148,Playwrite IT Moderna,script,upright_script,,ofl,playwriteitmoderna,GF tag,weak,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,GF Script/Upright Script nhưng tag này gán cho 86 họ lẫn handwriting; chỉ giữ họ vừa Upright vừa nối/formal hoặc đã xem tay. Playwrite IT Moderna trông không nối ở mặc định
+T149,Uncial Antiqua,script,calligraphic_unjoined,,ofl,uncialantiqua,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
+T150,Almendra,script,calligraphic_unjoined,,ofl,almendra,tay,visual,,/Serif/Humanist Venetian,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
+T151,Macondo,script,calligraphic_unjoined,,ofl,macondo,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
+T152,Eagle Lake,script,calligraphic_unjoined,,ofl,eaglelake,tay,visual,,/Script/Formal;/Script/Handwritten;/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
+T153,MedievalSharp,script,calligraphic_unjoined,,ofl,medievalsharp,tay,visual,,/Theme/Medieval,"bút bẹt, chữ rời, uncial/medieval; Uncial Antiqua/Macondo/Eagle Lake/MedievalSharp có GF Theme/Medieval"
+T154,Caveat,handwriting,casual_print,,ofl,caveat,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T155,Patrick Hand,handwriting,casual_print,,ofl,patrickhand,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T156,Kalam,handwriting,casual_print,,ofl,kalam,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T157,Indie Flower,handwriting,casual_print,,ofl,indieflower,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T158,Shadows Into Light,handwriting,casual_print,,ofl,shadowsintolight,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T159,Gloria Hallelujah,handwriting,casual_print,,ofl,gloriahallelujah,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T160,Mynerve,handwriting,casual_print,,ofl,mynerve,GF tag,gf,,/Script/Handwritten;/Script/Informal,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T161,Fuzzy Bubbles,handwriting,casual_print,,ofl,fuzzybubbles,GF tag,gf,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"GF Script/Handwritten; chữ rời, nét bút bi/bút chì"
+T162,Sedgwick Ave,handwriting,marker,,ofl,sedgwickave,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
+T163,Covered By Your Grace,handwriting,marker,,ofl,coveredbyyourgrace,tay,weak,,/Script/Handwritten;/Script/Informal;/Theme/Brush,"nét bút dạ/marker đậm, jitter; xem tay"
+T164,Nanum Pen Script,handwriting,marker,,ofl,nanumpenscript,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
+T165,Reenie Beanie,handwriting,marker,,ofl,reeniebeanie,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
+T166,Nothing You Could Do,handwriting,marker,,ofl,nothingyoucoulddo,tay,weak,,/Script/Handwritten;/Script/Informal,"nét bút dạ/marker đậm, jitter; xem tay"
+T167,Sue Ellen Francisco,handwriting,marker,,ofl,sueellenfrancisco,tay,weak,,/Script/Handwritten,"nét bút dạ/marker đậm, jitter; xem tay"
+T168,Gochi Hand,handwriting,childlike,,ofl,gochihand,tay,weak,,/Script/Handwritten;/Script/Informal;/Script/Upright Script,nét trẻ con/comic — taxonomy xếp M
+T169,Short Stack,handwriting,childlike,,ofl,shortstack,tay,weak,,/Script/Handwritten,nét trẻ con/comic — taxonomy xếp M
+T170,Itim,handwriting,childlike,,ofl,itim,tay,weak,,/Script/Handwritten;/Theme/Brush,nét trẻ con/comic — taxonomy xếp M
+T171,Chilanka,handwriting,childlike,,ofl,chilanka,tay,weak,,/Script/Handwritten;/Theme/Brush,nét trẻ con/comic — taxonomy xếp M
+T172,Swanky and Moo Moo,handwriting,childlike,,ofl,swankyandmoomoo,tay,weak,,/Script/Handwritten,nét trẻ con/comic — taxonomy xếp M
+T173,JetBrains Mono,mono,sans_mono,,ofl,jetbrainsmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
+T174,IBM Plex Mono,mono,sans_mono,,ofl,ibmplexmono,GF tag,gf,,/Monospace/Monospace;/Sans/Neo Grotesque,GF Monospace + tag Sans/*
+T175,Roboto Mono,mono,sans_mono,,ofl,robotomono,GF tag,gf,,/Monospace/Monospace;/Sans/Neo Grotesque,GF Monospace + tag Sans/*
+T176,Space Mono,mono,sans_mono,,ofl,spacemono,GF tag,gf,,/Monospace/Monospace;/Sans/Grotesque;/Sans/Neo Grotesque;/Theme/Techno,GF Monospace + tag Sans/*
+T177,DM Mono,mono,sans_mono,,ofl,dmmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
+T178,Red Hat Mono,mono,sans_mono,,ofl,redhatmono,GF tag,gf,,/Monospace/Monospace;/Sans/Geometric,GF Monospace + tag Sans/*
+T179,Inconsolata,mono,sans_mono,,ofl,inconsolata,GF tag,gf,,/Monospace/Monospace;/Sans/Humanist,GF Monospace + tag Sans/*
+T180,Anonymous Pro,mono,sans_mono,,ofl,anonymouspro,GF tag,gf,,/Monospace/Monospace;/Sans/Humanist,GF Monospace + tag Sans/*
+T181,Xanh Mono,mono,serif_mono,,ofl,xanhmono,GF tag,gf,,/Monospace/Monospace;/Serif/Modern,GF Monospace + tag Serif/*
+T182,Libertinus Mono,mono,serif_mono,,ofl,libertinusmono,GF tag,gf,,/Monospace/Monospace;/Serif/Transitional,GF Monospace + tag Serif/*
+T183,JetBrains Mono,mono,coding,,ofl,jetbrainsmono,tay,weak,,/Monospace/Monospace;/Sans/Geometric,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T184,Fira Code,mono,coding,,ofl,firacode,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T185,Source Code Pro,mono,coding,,ofl,sourcecodepro,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T186,Victor Mono,mono,coding,,ofl,victormono,tay,weak,,/Monospace/Monospace;/Sans/Neo Grotesque;/Sans/Superellipse,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T187,Cascadia Code,mono,coding,,ofl,cascadiacode,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T188,Intel One Mono,mono,coding,,ofl,intelonemono,tay,weak,,/Monospace/Monospace;/Sans/Humanist,"mono có calt/ligature hoặc zero có gạch/chấm, phân biệt l/1/I — theo tài liệu upstream, chưa kiểm GSUB trong bộ này"
+T189,Courier Prime,mono,typewriter,slab/clarendon,ofl,courierprime,GF tag,gf,,/Monospace/Monospace;/Slab/Clarendon,GF Monospace + Slab/Clarendon
+T190,Cutive Mono,mono,typewriter,slab/clarendon,ofl,cutivemono,GF tag,gf,,/Monospace/Monospace;/Slab/Clarendon,GF Monospace + Slab/Clarendon
+T191,Allerta Stencil,display,stencil,,ofl,allertastencil,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
+T192,Stardos Stencil,display,stencil,,ofl,stardosstencil,GF tag,gf,,/Serif/Scotch;/Theme/Stencil,GF Theme/Stencil
+T193,Sirin Stencil,display,stencil,,ofl,sirinstencil,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
+T194,Black Ops One,display,stencil,,ofl,blackopsone,GF tag,gf,,/Sans/Geometric;/Theme/Stencil,GF Theme/Stencil
+T195,Wallpoet,display,stencil,,ofl,wallpoet,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
+T196,Stick No Bills,display,stencil,,ofl,sticknobills,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
+T197,Kenia,display,stencil,,ofl,kenia,GF tag,gf,,/Theme/Stencil,GF Theme/Stencil
+T198,Monoton,display,inline_outline,,ofl,monoton,GF tag,gf,,/Sans/Geometric;/Theme/Art Deco;/Theme/Inline,GF Theme/Inline
+T199,Bungee Inline,display,inline_outline,,ofl,bungeeinline,GF tag,gf,,/Sans/Geometric;/Sans/Rounded;/Theme/Inline,GF Theme/Inline
+T200,Fascinate Inline,display,inline_outline,,ofl,fascinateinline,GF tag,gf,,/Theme/Art Deco;/Theme/Inline,GF Theme/Inline
+T201,Tilt Prism,display,inline_outline,,ofl,tiltprism,GF tag,gf,,/Theme/Inline,GF Theme/Inline
+T202,Miltonian,display,inline_outline,,ofl,miltonian,GF tag,gf,,/Theme/Inline,GF Theme/Inline
+T203,Geostar,display,inline_outline,,ofl,geostar,GF tag,gf,,/Theme/Inline,GF Theme/Inline
+T204,Train One,display,inline_outline,,ofl,trainone,GF tag,gf,,/Theme/Inline,GF Theme/Inline
+T205,Nabla,display,shaded_3d,,ofl,nabla,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T206,Foldit,display,shaded_3d,,ofl,foldit,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T207,Akronim,display,shaded_3d,,ofl,akronim,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T208,Ewert,display,shaded_3d,,ofl,ewert,GF tag,gf,,/Theme/Shaded;/Theme/Tuscan,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T209,Honk,display,shaded_3d,,ofl,honk,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T210,Rampart One,display,shaded_3d,,ofl,rampartone,GF tag,gf,,/Theme/Shaded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T211,Bungee Shade,display,shaded_3d,,ofl,bungeeshade,GF tag,gf,,/Sans/Geometric;/Sans/Rounded,GF Theme/Shaded; Bungee Shade gán tay (GF không gắn Shaded)
+T212,Press Start 2P,display,pixel_bitmap,,ofl,pressstart2p,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
+T213,Silkscreen,display,pixel_bitmap,,ofl,silkscreen,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
+T214,Pixelify Sans,display,pixel_bitmap,,ofl,pixelifysans,GF tag,gf,,/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
+T215,Jersey 10,display,pixel_bitmap,,ofl,jersey10,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
+T216,Tiny5,display,pixel_bitmap,,ofl,tiny5,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
+T217,Micro 5,display,pixel_bitmap,,ofl,micro5,GF tag,gf,,/Theme/Pixel,GF Theme/Pixel
+T218,VT323,display,pixel_bitmap,,ofl,vt323,GF tag,gf,,/Monospace/Monospace;/Theme/Pixel;/Theme/Techno,GF Theme/Pixel
+T219,UnifrakturMaguntia,blackletter,,,ofl,unifrakturmaguntia,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T220,Pirata One,blackletter,,,ofl,pirataone,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T221,Grenze Gotisch,blackletter,,,ofl,grenzegotisch,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T222,UnifrakturCook,blackletter,,,ofl,unifrakturcook,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T223,New Rocker,blackletter,,,ofl,newrocker,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T224,Germania One,blackletter,,,ofl,germaniaone,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T225,Texturina,blackletter,,,ofl,texturina,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter

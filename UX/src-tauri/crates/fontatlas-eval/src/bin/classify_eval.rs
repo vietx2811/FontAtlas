@@ -1,4 +1,6 @@
 //! classify_eval --gf <google-fonts> --tags <families.csv> [--split tune|test|all] [--out <md>]
+//! classify_eval --gf <google-fonts> --taxonomy-v2 <taxonomy_v2_labels.csv> [--split tune|test|all] [--dump <csv>] [--out <md>]
+//!   (bảng nhãn taxonomy v2; --gf là thư mục do docs/team/eval/taxonomy_v2/fetch_fonts.sh tải hoặc bản google/fonts đầy đủ)
 //! Phân loại mặt Regular của từng họ GF bằng `fontatlas_core::classify`, so với ground truth (tag ≥ 50 + category).
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -60,6 +62,7 @@ fn read_family(dir: &Path) -> Option<Fam> {
 fn main() {
     let mut a = std::env::args().skip(1);
     let (mut gf, mut tags, mut split, mut out, mut dump) = (None, None, "all".to_string(), None, None);
+    let mut taxonomy_v2: Option<String> = None;
     let mut all_faces = false;
     let mut time_n = 0usize;
     while let Some(k) = a.next() {
@@ -69,10 +72,15 @@ fn main() {
             "--split" => split = a.next().unwrap_or_default(),
             "--out" => out = a.next(),
             "--dump" => dump = a.next(),
+            "--taxonomy-v2" => taxonomy_v2 = a.next(),
             "--faces" => all_faces = a.next().as_deref() == Some("all"),
             "--time" => time_n = a.next().and_then(|v| v.parse().ok()).unwrap_or(0),
             _ => {}
         }
+    }
+    if let (Some(labels), Some(gf)) = (&taxonomy_v2, &gf) {
+        run_taxonomy_v2(Path::new(labels), Path::new(gf), &split, dump.as_deref(), out.as_deref());
+        return;
     }
     let (Some(gf), Some(tags)) = (gf, tags) else {
         eprintln!("dùng: classify_eval --gf <google-fonts> --tags <families.csv> [--split tune|test|all] [--out md]");
@@ -264,6 +272,72 @@ fn main() {
     wrong_list.sort();
     for l in wrong_list.iter().take(40) {
         md.push_str(&format!("- {l}\n"));
+    }
+    print!("{md}");
+    if let Some(o) = out {
+        std::fs::write(o, md).expect("ghi báo cáo");
+    }
+}
+
+/// Dự đoán của classifier HIỆN TẠI quy về taxonomy v2 (ánh xạ 7 class cũ → mới).
+/// Khi classifier taxonomy v2 xong, chỉ cần thay thân hàm này bằng kết quả trực tiếp của nó.
+fn predict_v2(file: &Path) -> Option<fontatlas_eval::taxonomy_v2::Pred> {
+    let r = fontatlas_core::analyze_path(file).ok()?;
+    let face = r.faces.first()?;
+    let inp = ClassifyInput::from_json(&serde_json::to_value(&face.metadata).ok()?, &serde_json::to_value(&face.anatomy).ok()?);
+    let c = classify(&inp);
+    Some(fontatlas_eval::taxonomy_v2::map_old_classifier(c.class.snake(), c.subclass.as_deref(), &c.traits))
+}
+
+/// Eval taxonomy v2: mặt Regular của từng họ trong bảng nhãn → ma trận nhầm lẫn class + subclass theo split.
+fn run_taxonomy_v2(labels: &Path, gf: &Path, split: &str, dump: Option<&str>, out: Option<&str>) {
+    use fontatlas_eval::taxonomy_v2::{Pred, Truth as T2, load_labels, report, truths};
+    let truths = truths(&load_labels(labels).expect("đọc bảng nhãn")).expect("bảng nhãn");
+    let mut missing = Vec::new();
+    let mut jobs: Vec<(T2, PathBuf)> = Vec::new();
+    for t in truths {
+        match read_family(&gf.join("ofl").join(&t.gf_dir)) {
+            Some(f) if f.name == t.family => jobs.push((t, f.faces[f.regular].2.clone())),
+            Some(f) => missing.push(format!("{}: thư mục {} là họ {:?}", t.family, t.gf_dir, f.name)),
+            None => missing.push(format!("{}: không đọc được ofl/{}", t.family, t.gf_dir)),
+        }
+    }
+    let results: Vec<(T2, Option<Pred>)> = jobs.into_par_iter().map(|(t, p)| (t, predict_v2(&p))).collect();
+    let failed: Vec<String> = results.iter().filter(|r| r.1.is_none()).map(|r| r.0.family.clone()).collect();
+    let rows: Vec<(T2, Pred)> = results.into_iter().filter_map(|(t, p)| p.map(|p| (t, p))).collect();
+    let mut md = format!(
+        "## Taxonomy v2 — baseline classifier hiện tại (ánh xạ class cũ → mới)\n\n{} họ có kết quả, {} thiếu font/METADATA, {} không phân tích được.\n",
+        rows.len(),
+        missing.len(),
+        failed.len()
+    );
+    for m in missing.iter().chain(failed.iter()).take(20) {
+        md.push_str(&format!("- {m}\n"));
+    }
+    let splits: Vec<&str> = if split == "all" { vec!["test", "tune", "all"] } else { vec![split] };
+    for s in splits {
+        let sel: Vec<(T2, Pred)> = rows.iter().filter(|r| s == "all" || fontatlas_embed::family_split(&r.0.family) == s).cloned().collect();
+        md.push_str(&format!("\n## Split `{s}` ({} họ)\n\n{}", sel.len(), report(&sel)));
+    }
+    if let Some(d) = dump {
+        let mut lines: Vec<String> = rows
+            .iter()
+            .map(|(t, p)| {
+                let subs: Vec<&str> = t.subs.iter().map(|x| x.0.as_str()).collect();
+                format!(
+                    "{},{},{},{:?},{},{},{}",
+                    t.family.replace(',', " "),
+                    t.class,
+                    subs.join("|"),
+                    t.quality,
+                    p.class,
+                    p.subclass.clone().unwrap_or_default(),
+                    fontatlas_embed::family_split(&t.family)
+                )
+            })
+            .collect();
+        lines.sort();
+        std::fs::write(d, format!("family,class,subs,quality,pred_class,pred_sub,split\n{}\n", lines.join("\n"))).expect("ghi dump");
     }
     print!("{md}");
     if let Some(o) = out {
