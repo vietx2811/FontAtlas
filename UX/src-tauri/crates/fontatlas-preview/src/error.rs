@@ -28,6 +28,10 @@ pub enum PreviewError {
     CloudTimeout,
     #[error("không tải được font từ ổ cloud: {0}")]
     CloudUnavailable(String),
+    #[error("tự tải font cloud đang tắt trong Cài đặt")]
+    CloudDisabled,
+    #[error("ổ cloud đang bận tải font khác, thử lại sau")]
+    CloudBusy,
 }
 
 impl PreviewError {
@@ -46,6 +50,8 @@ impl PreviewError {
             PreviewError::Encode(_) => "encode",
             PreviewError::CloudTimeout => "cloud_timeout",
             PreviewError::CloudUnavailable(_) => "cloud_unavailable",
+            PreviewError::CloudDisabled => "cloud_disabled",
+            PreviewError::CloudBusy => "cloud_busy",
         }
     }
 
@@ -61,6 +67,8 @@ impl PreviewError {
             PreviewError::Cache(_) | PreviewError::Encode(_) => 500,
             PreviewError::CloudTimeout => 504,
             PreviewError::CloudUnavailable(_) => 502,
+            PreviewError::CloudDisabled => 403,
+            PreviewError::CloudBusy => 503,
         }
     }
 }

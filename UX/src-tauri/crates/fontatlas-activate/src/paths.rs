@@ -117,6 +117,12 @@ pub fn ensure_local(p: &Path, timeout: Duration) -> Result<(), EnsureLocalError>
     ensure_local_by(p, timeout, probe_file, read_first_byte)
 }
 
+/// Như `ensure_local`, nhưng `hold` (vd giấy phép của cổng tải) được chuyển vào luồng đọc và chỉ nhả khi lần đọc thật sự
+/// kết thúc — kể cả khi người gọi đã hết hạn và bỏ đi — để số lần tải thật không vượt giới hạn của cổng.
+pub fn ensure_local_holding<H: Send + 'static>(p: &Path, timeout: Duration, hold: H) -> Result<(), EnsureLocalError> {
+    ensure_local_hold_by(p, timeout, probe_file, read_first_byte, hold)
+}
+
 fn read_first_byte(p: &Path) -> std::io::Result<()> {
     use std::io::Read;
     let mut b = [0u8; 1];
@@ -132,6 +138,16 @@ pub(crate) fn ensure_local_by(
     probe: impl Fn(&Path) -> FileProbe,
     fetch: impl FnOnce(&Path) -> std::io::Result<()> + Send + 'static,
 ) -> Result<(), EnsureLocalError> {
+    ensure_local_hold_by(p, timeout, probe, fetch, ())
+}
+
+pub(crate) fn ensure_local_hold_by<H: Send + 'static>(
+    p: &Path,
+    timeout: Duration,
+    probe: impl Fn(&Path) -> FileProbe,
+    fetch: impl FnOnce(&Path) -> std::io::Result<()> + Send + 'static,
+    hold: H,
+) -> Result<(), EnsureLocalError> {
     match probe(p) {
         FileProbe::Ready => return Ok(()),
         FileProbe::Missing => return Err(EnsureLocalError::Missing),
@@ -143,6 +159,7 @@ pub(crate) fn ensure_local_by(
     std::thread::Builder::new()
         .name("cloud-fetch".into())
         .spawn(move || {
+            let _hold = hold; // nhả sau khi đọc xong, không phải khi người gọi bỏ cuộc
             let _ = tx.send(fetch(&path));
         })
         .map_err(|e| EnsureLocalError::Io(e.to_string()))?;
@@ -301,6 +318,43 @@ mod tests {
         let f = d.path().join("a.ttf");
         std::fs::write(&f, b"x").unwrap();
         assert_eq!(ensure_local(&f, Duration::from_secs(1)), Ok(()));
+    }
+
+    /// Giữ chỗ (permit) trong luồng tải: chỉ nhả khi lần đọc thật sự kết thúc, kể cả khi người gọi đã hết hạn.
+    struct DropFlag(Arc<AtomicBool>);
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn hold_is_kept_until_the_stuck_read_really_finishes_even_after_a_timeout() {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let local = Arc::new(AtomicBool::new(false));
+        let r = ensure_local_hold_by(
+            Path::new("/x.ttf"),
+            Duration::from_millis(60),
+            probe_flag(&local),
+            |_| {
+                std::thread::sleep(Duration::from_millis(400)); // đọc kẹt
+                Ok(())
+            },
+            DropFlag(Arc::clone(&dropped)),
+        );
+        assert_eq!(r, Err(EnsureLocalError::Timeout));
+        assert!(!dropped.load(Ordering::SeqCst), "người gọi đã bỏ cuộc nhưng lần tải thật vẫn chạy → chưa được nhả chỗ");
+        std::thread::sleep(Duration::from_millis(700));
+        assert!(dropped.load(Ordering::SeqCst), "đọc xong thì nhả");
+    }
+
+    #[test]
+    fn hold_is_released_when_the_file_is_already_local_and_when_it_is_missing() {
+        for probe in [FileProbe::Ready, FileProbe::Missing] {
+            let dropped = Arc::new(AtomicBool::new(false));
+            let _ = ensure_local_hold_by(Path::new("/x.ttf"), Duration::from_secs(1), move |_| probe, |_| Ok(()), DropFlag(Arc::clone(&dropped)));
+            assert!(dropped.load(Ordering::SeqCst), "{probe:?}: không có lần tải nào → nhả ngay");
+        }
     }
 
     #[test]

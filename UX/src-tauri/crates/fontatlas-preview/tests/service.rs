@@ -181,6 +181,15 @@ fn before_read_failure_is_returned_and_nothing_is_read_or_cached() {
 }
 
 #[test]
+fn cloud_disabled_and_busy_have_their_own_codes_apart_from_not_found() {
+    let off = PreviewError::CloudDisabled;
+    assert_eq!((off.code(), off.http_status()), ("cloud_disabled", 403));
+    let busy = PreviewError::CloudBusy;
+    assert_eq!((busy.code(), busy.http_status()), ("cloud_busy", 503));
+    assert_eq!((PreviewError::NotFound.code(), PreviewError::NotFound.http_status()), ("not_found", 404));
+}
+
+#[test]
 fn cloud_unavailable_is_502_with_its_own_code() {
     let e = PreviewError::CloudUnavailable("offline".into());
     assert_eq!((e.code(), e.http_status()), ("cloud_unavailable", 502));

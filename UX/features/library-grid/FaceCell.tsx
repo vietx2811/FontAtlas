@@ -14,6 +14,11 @@ import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
 export const HOVER_DELAY_MS = 150;
 
+/** Mã lỗi preview của backend → câu giải thích trên thẻ font cloud (`not_found` là file mất thật, KHÔNG phải công tắc tắt). */
+const CLOUD_ERR_KEY: Record<string, 'cloud.errTimeout' | 'cloud.errFailed' | 'cloud.errOff' | 'cloud.errMissing' | 'cloud.errBusy'> = {
+  cloud_timeout: 'cloud.errTimeout', cloud_unavailable: 'cloud.errFailed', cloud_disabled: 'cloud.errOff', not_found: 'cloud.errMissing', cloud_busy: 'cloud.errBusy',
+};
+
 /** Nhãn định dạng theo đuôi file (TTF, OTF, TTC, WOFF, WOFF2…); không có đường dẫn thì không nhãn. */
 export function fileFormat(path: string | null): string | null {
   const m = /\.([a-z0-9]{2,5})$/i.exec(path ?? '');
@@ -155,7 +160,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       {row.onCloudOnly && (state === 'loading'
         ? <NoteMark kind="info" className="fa-note-cloud" testId="cloud-loading-note" text={t('cloud.loading')} />
         : state === 'error'
-          ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(errCode === 'cloud_timeout' ? 'cloud.errTimeout' : errCode === 'not_found' ? 'cloud.errOff' : 'cloud.errFailed')} />
+          ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(CLOUD_ERR_KEY[errCode] ?? 'cloud.errFailed')} />
           : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
       {active && <Tooltip label={t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session')}><span className="fa-dot" data-testid="active-dot" data-scope={activeScope === 'persistent' ? 'persistent' : 'session'} /></Tooltip>}
       {!active && avail && <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-dot" data-testid="active-dot" data-scope="available" /></Tooltip>}

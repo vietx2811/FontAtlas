@@ -3,6 +3,8 @@ export const CLOUD_I18N = {
   'cloud.loading': 'Trên cloud — đang tải về để xem trước…',
   'cloud.errTimeout': 'Hết 30 giây chờ tải font từ cloud nên chưa có preview. Kiểm tra mạng hoặc ứng dụng ổ cloud; kéo lại thẻ này để thử lại.',
   'cloud.errFailed': 'Không tải được font từ cloud nên chưa có preview. Kiểm tra mạng hoặc ứng dụng ổ cloud.',
+  'cloud.errMissing': 'Không tìm thấy file font (ổ chưa kết nối hoặc file đã bị xoá/di chuyển) nên chưa có preview.',
+  'cloud.errBusy': 'Ổ cloud đang bận tải các font khác nên chưa tới lượt font này. Kéo lại thẻ này để thử lại.',
   'cloud.errOff': 'Font chưa tải về máy nên chưa có preview. Bật “Tự tải font trên cloud để xem trước” trong Cài đặt → Thư viện.',
   'cloud.sourceHint': '{pct}% font của nguồn này chưa tải về máy — chọn Always keep on this device trong Finder để xem nhanh hơn.',
   'cloud.switch': 'Tự tải font trên cloud để xem trước',

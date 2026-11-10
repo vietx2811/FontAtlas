@@ -78,15 +78,39 @@ fn setting_defaults_on_and_round_trips() {
 }
 
 #[test]
-fn preview_locator_reads_cloud_copies_only_when_the_setting_is_on() {
+fn preview_locator_always_locates_and_the_switch_decides_in_before_read() {
+    use app_lib::services::cloud::CloudDownloader;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     let d = tempfile::tempdir().unwrap();
     let (st, hash, path) = with_one_font(d.path());
-    let loc = StoreLocator::open(&st.dirs.data).unwrap();
-    assert_eq!(loc.locate(&hash, 0), Some(path.clone()), "bản trên máy: luôn đọc được");
     mark_cloud_only(&st);
-    assert_eq!(loc.locate(&hash, 0), Some(path), "bật (mặc định): font cloud được đọc, sẽ tải lười");
+    let downloads = Arc::new(AtomicUsize::new(0));
+    let c = Arc::clone(&downloads);
+    // file "thật sự" là placeholder (dù cờ DB nói gì): bộ tải giả đếm số lần tải
+    let cloud = CloudDownloader::with(4, Duration::from_secs(5), |_| true, move |_, _, _permit| {
+        c.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    });
+    let loc = StoreLocator::open_with(&st.dirs.data, cloud).unwrap();
+    assert_eq!(loc.locate(&hash, 0), Some(path.clone()));
+    loc.before_read(&path).expect("mặc định bật: tải được");
+    assert_eq!(downloads.load(Ordering::SeqCst), 1);
     settings::set_settings(&st, SettingsPatchDto { cloud_preview_download: Some(false), ..Default::default() }).unwrap();
-    assert_eq!(loc.locate(&hash, 0), None, "tắt: bỏ qua bản cloud_only, không tải gì");
+    assert_eq!(loc.locate(&hash, 0), Some(path.clone()), "tắt: vẫn chỉ ra file, để lỗi nói rõ lý do");
+    let e = loc.before_read(&path).unwrap_err();
+    assert_eq!(e.code(), "cloud_disabled");
+    assert_eq!(downloads.load(Ordering::SeqCst), 1, "tắt thì không tải thêm");
+}
+
+#[test]
+fn switch_off_still_reads_an_ordinary_local_file() {
+    use app_lib::services::cloud::CloudDownloader;
+    let d = tempfile::tempdir().unwrap();
+    let (st, hash, path) = with_one_font(d.path());
+    settings::set_settings(&st, SettingsPatchDto { cloud_preview_download: Some(false), ..Default::default() }).unwrap();
+    let loc = StoreLocator::open_with(&st.dirs.data, CloudDownloader::default()).unwrap();
+    assert_eq!(loc.locate(&hash, 0), Some(path.clone()));
+    assert!(loc.before_read(&path).is_ok(), "font đã ở máy không bị công tắc cản");
 }
 
 #[test]

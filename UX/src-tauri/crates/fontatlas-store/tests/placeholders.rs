@@ -229,3 +229,46 @@ fn refresh_cloud_flag_follows_the_real_state_of_that_file() {
     assert_eq!(s.refresh_cloud_flag(&fonts.join("roboto.ttf")).unwrap(), Some(false));
     assert_eq!(flag(&s, "roboto.ttf"), 0);
 }
+
+fn load_version(s: &Store) -> String {
+    // trạng thái của hash mà vị trí `roboto.ttf` đang trỏ tới (hash cũ có thể còn dòng riêng cho tới khi gc)
+    s.conn()
+        .query_row(
+            "SELECT p.version FROM pipeline_state p JOIN files fi ON fi.hash = p.hash JOIN file_locations l ON l.file_id = fi.file_id
+             WHERE p.face_index = -1 AND p.stage = 'load' AND l.path LIKE '%roboto.ttf'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap()
+}
+
+#[test]
+fn unchanged_placeholder_keeps_its_analysis_fresh() {
+    use fontatlas_core::ANALYZER_VERSION;
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| true).unwrap();
+    assert_eq!(load_version(&s), ANALYZER_VERSION, "size/mtime khớp → dữ liệu cũ vẫn đáng tin");
+    assert!(row(&s, "roboto").on_cloud_only);
+}
+
+#[test]
+fn placeholder_whose_size_or_mtime_changed_is_not_trusted_and_is_reanalyzed_after_download() {
+    use fontatlas_core::ANALYZER_VERSION;
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf"]);
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    // nội dung đổi trên cloud (cùng đường dẫn, khác size) rồi file bị giải phóng: ta chỉ thấy placeholder mới
+    std::fs::copy(core_fixture("playfair_display.ttf"), fonts.join("roboto.ttf")).unwrap();
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| true).unwrap();
+    assert_eq!((st.not_downloaded, st.missing, st.analyzed, st.failed), (1, 0, 0, 0), "không đọc nội dung");
+    assert_ne!(load_version(&s), ANALYZER_VERSION, "không giữ kết quả của hash cũ như thể còn đúng");
+    let new_size = std::fs::metadata(fonts.join("roboto.ttf")).unwrap().len() as i64;
+    assert_eq!(count(&s, "SELECT size FROM file_locations WHERE path LIKE '%roboto.ttf'"), new_size);
+    assert!(row(&s, "roboto").on_cloud_only, "vẫn hiện (dữ liệu cũ) và vẫn ghi là trên cloud");
+    // tải về: lần quét sau băm lại và phân tích lại nội dung mới
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert_eq!(st.analyzed, 1);
+    let p = row(&s, "playfair");
+    assert!(!p.on_cloud_only);
+    assert_eq!(load_version(&s), ANALYZER_VERSION);
+}

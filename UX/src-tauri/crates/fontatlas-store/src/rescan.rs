@@ -13,6 +13,8 @@ use crate::error::StoreError;
 use crate::ingest::{Analysis, IngestItem, ScannedFile, parse_hash};
 use crate::open::{Store, now_ms};
 
+/// `pipeline_state.version` đặt khi placeholder đổi size/mtime: kết quả cũ không còn đáng tin, phân tích lại khi tải về.
+pub const CLOUD_STALE_MARK: &str = "cloud-stale";
 pub const FONT_EXTENSIONS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
 pub const INGEST_BATCH: usize = 256;
 
@@ -118,7 +120,10 @@ fn icloud_real_name(name: &str) -> Option<&str> {
 }
 
 /// Như `walk_fonts`, kèm các thư mục không đọc được (font bên trong không được coi là đã xoá).
-fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>, Vec<PathBuf>, Vec<PathBuf>) {
+/// Placeholder tìm thấy: đường dẫn + (size, mtime) từ stat nếu có (stub `.icloud` không có file thật nên không có).
+type Placeholder = (PathBuf, Option<(u64, i64)>);
+
+fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>, Vec<PathBuf>, Vec<Placeholder>) {
     let mut out = Vec::new();
     let mut placeholders = Vec::new();
     let mut failed = Vec::new();
@@ -136,7 +141,7 @@ fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>,
             };
             let fname = e.file_name().to_string_lossy().into_owned();
             if let Some(real) = icloud_real_name(&fname) {
-                placeholders.push(dir.join(real));
+                placeholders.push((dir.join(real), None));
                 continue;
             }
             if fname.starts_with('.') {
@@ -154,22 +159,22 @@ fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>,
                     failed.push(dir.clone());
                     continue;
                 };
-                if probe(&p, &m) {
-                    placeholders.push(p);
-                    continue;
-                }
                 let mtime_ns = m
                     .modified()
                     .ok()
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_nanos() as i64)
                     .unwrap_or(0);
+                if probe(&p, &m) {
+                    placeholders.push((p, Some((m.len(), mtime_ns))));
+                    continue;
+                }
                 out.push(ScannedFile { path: p, size: m.len(), mtime_ns });
             }
         }
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
-    placeholders.sort();
+    placeholders.sort_by(|a, b| a.0.cmp(&b.0));
     (out, failed, placeholders)
 }
 
@@ -284,11 +289,31 @@ impl Store {
         {
             let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
             // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
-            for p in &placeholders {
-                tx.execute(
-                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=1 WHERE path=?1",
-                    params![p.to_string_lossy(), started, generation],
-                )?;
+            for (p, meta) in &placeholders {
+                let path = p.to_string_lossy();
+                let changed = match (known.get(path.as_ref()), meta) {
+                    (Some(&(ksize, kmtime, _)), Some((size, mtime))) => ksize != *size as i64 || kmtime != *mtime,
+                    _ => false,
+                };
+                if changed {
+                    // Nội dung trên cloud đã đổi mà ta không được đọc: kết quả của hash cũ không còn đáng tin. Ghi size/mtime mới
+                    // và đánh dấu lần phân tích cũ là "cần làm lại"; khi file được tải về, lần quét sau băm và phân tích lại.
+                    let (size, mtime) = meta.unwrap_or_default();
+                    tx.execute(
+                        "UPDATE pipeline_state SET version=?2 WHERE stage='load' AND face_index=-1 AND hash IN
+                           (SELECT fi.hash FROM file_locations l JOIN files fi USING(file_id) WHERE l.path=?1)",
+                        params![path, CLOUD_STALE_MARK],
+                    )?;
+                    tx.execute(
+                        "UPDATE file_locations SET size=?2, mtime_ns=?3, last_seen_at=?4, scan_gen=?5, missing=0, cloud_only=1 WHERE path=?1",
+                        params![path, size as i64, mtime, started, generation],
+                    )?;
+                } else {
+                    tx.execute(
+                        "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=1 WHERE path=?1",
+                        params![path, started, generation],
+                    )?;
+                }
             }
             for f in &unchanged {
                 tx.execute(

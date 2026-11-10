@@ -32,7 +32,7 @@ const holdBlobs = (status?: number) => {
   const pending: Array<(s?: number) => void> = [];
   const d: BlobDeps = {
     fetch: vi.fn(() => new Promise(resolve => {
-      const fire = (s = status ?? 200) => resolve({ ok: s === 200, status: s, blob: async () => new Blob(['p']), text: async () => ({ 504: 'cloud_timeout', 502: 'cloud_unavailable', 404: 'not_found' } as Record<number, string>)[s] ?? '' });
+      const fire = (s = status ?? 200) => resolve({ ok: s === 200, status: s, blob: async () => new Blob(['p']), text: async () => ({ 504: 'cloud_timeout', 502: 'cloud_unavailable', 404: 'not_found', 403: 'cloud_disabled', 503: 'cloud_busy' } as Record<number, string>)[s] ?? '' });
       if (status !== undefined) fire(status); else pending.push(fire);
     })) as BlobDeps['fetch'],
     createObjectURL: () => 'blob:x', revokeObjectURL: () => {},
@@ -62,7 +62,9 @@ describe('FaceCell cloud preview states', () => {
   it.each([
     [504, 'cloud.errTimeout'],
     [502, 'cloud.errFailed'],
-    [404, 'cloud.errOff'],
+    [403, 'cloud.errOff'],
+    [404, 'cloud.errMissing'],
+    [503, 'cloud.errBusy'],
   ] as const)('a %i answer shows the matching error note and the fallback text', async (status, key) => {
     const { blobs } = holdBlobs(status);
     const [a] = await mountRows([makeRow(0, { onCloudOnly: true })], blobs);
