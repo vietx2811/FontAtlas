@@ -6,7 +6,7 @@ import { toGridQuery, useUiStore } from '../../../store/ui';
 import { ViewOptions } from '../ViewOptions';
 
 const initial = useUiStore.getState();
-const q = () => { const s = useUiStore.getState(); return toGridQuery({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, recentViews: s.recentViews, active: s.active, filters: s.filters, familyScope: s.familyScope, sort: s.sort }); };
+const q = () => { const s = useUiStore.getState(); return toGridQuery({ view: s.view, query: s.query, viOnly: s.viOnly, recentViews: s.recentViews, active: s.active, filters: s.filters, familyScope: s.familyScope, sort: s.sort }); };
 const settle = async (ms = 0) => { await act(async () => { await new Promise(r => setTimeout(r, ms)); }); };
 
 describe('sort prefs', () => {

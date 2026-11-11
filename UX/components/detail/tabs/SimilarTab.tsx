@@ -53,7 +53,7 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
 const PAGE_SIZE = 6;
 
 export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; detail: FaceDetailDto; store?: ModelStore }): React.JSX.Element {
-  const state = useUiStore(useShallow(s => ({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, filters: s.filters, select: s.select, setPanelTab: s.setPanelTab, openFamily: s.openFamily, setView: s.setView, setQuery: s.setQuery, setViOnly: s.setViOnly, setFilters: s.setFilters })));
+  const state = useUiStore(useShallow(s => ({ view: s.view, query: s.query, viOnly: s.viOnly, filters: s.filters, select: s.select, setPanelTab: s.setPanelTab, openFamily: s.openFamily, setView: s.setView, setQuery: s.setQuery, setViOnly: s.setViOnly, setFilters: s.setFilters })));
   const scanVersion = useScanStore(s => s.version);
   const faceActions = useFaceActions();
   const queryKey = JSON.stringify(toMetadataQuery(state));

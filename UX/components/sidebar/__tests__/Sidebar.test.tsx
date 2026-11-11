@@ -56,7 +56,7 @@ describe('Sidebar', () => {
     await settle();
     act(() => useUiStore.getState().setSettingsOpen(true));
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).not.toBeNull();
+    expect(useUiStore.getState().filters.tagIds).toHaveLength(1);
     expect(useUiStore.getState().settingsOpen).toBe(false);
   });
 
@@ -102,9 +102,9 @@ describe('Sidebar', () => {
     render(<Sidebar api={api} pickFolder={async () => null} />);
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).toBe(String(t.id));
+    expect(useUiStore.getState().filters.tagIds).toEqual([t.id]);
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).toBeNull();
+    expect(useUiStore.getState().filters.tagIds).toBeUndefined();
   });
 
   it('adds a font folder through the picker and switches to the new source', async () => {
@@ -350,7 +350,7 @@ describe('Sidebar', () => {
       useUiStore.getState().bumpLibrary(false); await settle();
       fireEvent.contextMenu(await screen.findByRole('button', { name: 'serif' })); await settle();
       fireEvent.click(screen.getByRole('menuitem', { name: 'Lọc theo thẻ này' })); await settle();
-      expect(useUiStore.getState().tag).toBe(String(t.id));
+      expect(useUiStore.getState().filters.tagIds).toEqual([t.id]);
     });
   });
 });

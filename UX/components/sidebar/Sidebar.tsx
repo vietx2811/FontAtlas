@@ -3,7 +3,8 @@ import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } f
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
-import { useUiStore } from '../../store/ui';
+import { singleTagId, useUiStore } from '../../store/ui';
+import { useTagsStore } from '../../store/tags';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
@@ -43,7 +44,7 @@ export function SidebarToggle(): React.JSX.Element {
 
 export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings }: Props): React.JSX.Element {
   const view = useUiStore(s => s.view);
-  const tag = useUiStore(s => s.tag);
+  const tag = useUiStore(s => { const id = singleTagId(s.filters); return id === null ? null : String(id); });
   const open = useUiStore(s => s.openSections);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
@@ -79,7 +80,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
       api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
     ]);
-    setSources(s); setCols(c); setTags(t);
+    setSources(s); setCols(c); setTags(t); useTagsStore.getState().set(t);
     setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);

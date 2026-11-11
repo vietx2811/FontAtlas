@@ -3,15 +3,15 @@ import { createMockApi } from '../../api/mock';
 import { createUiStore, toGridQuery, faceKey, PERSIST_DEBOUNCE_MS, RECENT_MAX, RECENT_DEBOUNCE_MS } from '../ui';
 
 describe('toGridQuery', () => {
-  const base = { view: 'all', tag: null, query: '', viOnly: false, recentViews: [], active: new Map<string, readonly number[]>() } as const;
+  const base = { view: 'all', query: '', viOnly: false, recentViews: [], active: new Map<string, readonly number[]>() } as const;
   it('maps every sidebar view to query_faces params', () => {
     expect(toGridQuery({ ...base })).toEqual({});
     expect(toGridQuery({ ...base, view: 'star' })).toEqual({ favoritesOnly: true });
     expect(toGridQuery({ ...base, view: 'col:7' })).toEqual({ collectionId: 7 });
     expect(toGridQuery({ ...base, view: 'src:3' })).toEqual({ sourceIds: [3] });
   });
-  it('adds tag, text and vi-only', () => {
-    expect(toGridQuery({ ...base, tag: '4', query: '  phở ', viOnly: true })).toEqual({ tagIds: [4], text: 'phở', vi: 'full' });
+  it('adds tag (from filters.tagIds), text and vi-only', () => {
+    expect(toGridQuery({ ...base, filters: { tagIds: [4] }, query: '  phở ', viOnly: true })).toEqual({ tagIds: [4], text: 'phở', vi: 'full' });
   });
   it('recent = faceKeys in viewing order (newest first), kept in that order by sort=match', () => {
     const recentViews = [{ face: 'bb:0', at: 2 }, { face: 'aa:1', at: 1 }];
@@ -35,11 +35,16 @@ describe('toGridQuery', () => {
 });
 
 describe('ui store', () => {
-  it('resets tag when switching view and clears the selection style', () => {
+  it('tagIds live in filters: the sidebar tag replaces them, a view change keeps them, bấm lại bỏ; clears the selection style', () => {
     const s = createUiStore();
     s.getState().setTag('2');
+    expect(s.getState().filters.tagIds).toEqual([2]);
+    s.getState().setTag('3');
+    expect(s.getState().filters.tagIds).toEqual([3]);
     s.getState().setView('star');
-    expect(s.getState().tag).toBeNull();
+    expect(s.getState().filters.tagIds).toEqual([3]); // đổi view không xoá thẻ đã chọn
+    s.getState().setTag(null);
+    expect(s.getState().filters.tagIds).toBeUndefined();
     s.getState().select('aa:0');
     s.getState().setStyle('Bold');
     s.getState().select('bb:0');

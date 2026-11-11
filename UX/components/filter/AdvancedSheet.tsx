@@ -29,8 +29,8 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   const view = useUiStore(s => s.view);
   const sources = useSourcesStore(s => s.sources);
   const version = useScanStore(s => s.version);
-  const ui = useUiStore(useShallow(s => ({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, filters: s.filters })));
-  const query = useMemo(() => toMetadataQuery(ui), [ui.view, ui.tag, ui.query, ui.viOnly, ui.filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ui = useUiStore(useShallow(s => ({ view: s.view, query: s.query, viOnly: s.viOnly, filters: s.filters })));
+  const query = useMemo(() => toMetadataQuery(ui), [ui.view, ui.query, ui.viOnly, ui.filters]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data: hist, extent, loading, error, retry } = useAxisHistograms(api, query, true, version);
   const [facets, setFacets] = useState<ClassFacetDto[]>([]);
   const root = useRef<HTMLDivElement>(null);

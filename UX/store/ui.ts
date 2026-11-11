@@ -25,7 +25,7 @@ export type SectionKey = 'col' | 'src' | 'tag';
 /** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
 export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode' | 'tagIds'>;
 export type DeskState = { caseId: number; comboId: number; role: ComboRoleDto; trial: FaceKeyDto | null };
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 
@@ -33,7 +33,6 @@ export interface UiState {
   filters: LibraryFilters;
   familyScope: FamilyScope | null;
   view: View;
-  tag: string | null; // id thẻ (số, dạng chuỗi)
   query: string;
   viOnly: boolean;
   layout: 'grid' | 'list';
@@ -130,12 +129,11 @@ export const parseFaceKey = (id: string): FaceKeyDto => {
 };
 
 /** Metadata dùng cho discovery/stats; không phụ thuộc membership của family/Gần đây/Đang bật. */
-export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'> & Partial<Pick<UiState, 'filters'>>): GridQuery {
+export function toMetadataQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly'> & Partial<Pick<UiState, 'filters'>>): GridQuery {
   const q: GridQuery = { ...s.filters };
   if (s.view === 'star') q.favoritesOnly = true;
   else if (s.view.startsWith('col:')) q.collectionId = Number(s.view.slice(4));
   else if (s.view.startsWith('src:')) q.sourceIds = [Number(s.view.slice(4))];
-  if (s.tag !== null) q.tagIds = [Number(s.tag)];
   if (s.query.trim()) q.text = s.query.trim();
   if (s.viOnly && !q.vi) q.vi = 'full';
   // Chỉ báo ngôn ngữ trên thẻ theo ngôn ngữ đang lọc (đầu tiên); không lọc thì mặc định của backend (vie).
@@ -144,7 +142,7 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viO
 }
 
 /** Gần đây/Đang bật/family giới hạn library bằng faceKeys; discovery dùng toMetadataQuery. */
-export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope' | 'sort'>>): GridQuery {
+export function toGridQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope' | 'sort'>>): GridQuery {
   const q = toMetadataQuery(s);
   // Sắp xếp của người dùng; 'match' chỉ khi đang có chữ tìm. Gần đây / Đang bật ghi đè bên dưới (thứ tự đưa vào).
   const so = s.sort;
@@ -159,6 +157,11 @@ export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly'
   if (s.familyScope) q.faceKeys = s.familyScope.faces;
   return q;
 }
+
+export const dropTags = (f: LibraryFilters): LibraryFilters => { const { tagIds: _, ...rest } = f; return rest; };
+
+/** Thẻ duy nhất đang lọc (chế độ "xem một thẻ" của thanh bên); nhiều thẻ hoặc không có → null. */
+export const singleTagId = (f: LibraryFilters): number | null => (f.tagIds?.length === 1 ? f.tagIds[0] : null);
 
 const SECTIONS: SectionKey[] = ['col', 'src', 'tag'];
 const toDto = (s: UiState): UiStateDto => ({
@@ -185,13 +188,14 @@ export function createUiStore(): UiStore {
   const initial = fromDto(DEFAULT_UI_STATE);
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
-    filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT, sort: { ...DEFAULT_SORT },
+    filters: {}, familyScope: null, view: 'all', query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT, sort: { ...DEFAULT_SORT },
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, deskReturn: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
-    openFamily: familyScope => set({ familyScope, view: 'all', tag: null, query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null, desk: null }),
-    setView: v => set({ view: v, tag: null, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null }),
-    setTag: t => set({ tag: t, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null }),
+    openFamily: familyScope => set(s => ({ filters: dropTags(s.filters), familyScope, view: 'all', query: '', selectedId: null, style: null, panelTab: 'spec', settingsOpen: false, compare: null, pairThese: null, desk: null })),
+    setView: v => set({ view: v, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null }),
+    // Mục "Thẻ" ở thanh bên đặt tagIds = [id] (thay mọi thẻ đang chọn); bấm lại thẻ đang là thẻ duy nhất thì bỏ.
+    setTag: t => set(s => ({ filters: t === null ? dropTags(s.filters) : { ...s.filters, tagIds: [Number(t)] }, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null })),
     setQuery: q => set({ query: q, familyScope: null }),
     setViOnly: on => set(s => { const { vi: _vi, ...rest } = s.filters; return { viOnly: on, filters: on ? { ...rest, vi: 'full' } : rest }; }),
     setLayout: l => set({ layout: l }),
