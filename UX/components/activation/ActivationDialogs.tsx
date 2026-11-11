@@ -80,12 +80,12 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
           {strong && choice === 'replace' && (
             <label className="fa-radio"><input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)} />{t('act.replace.strong')}</label>
           )}
-          {/* Cảnh báo, scope và hướng dẫn thu vào một dòng mở được: hộp thoại giữ gọn (QA conflict-dialog-compact). */}
+          {/* Một dòng cảnh báo luôn hiện; scope và hướng dẫn chi tiết thu vào một dòng mở được: hộp thoại giữ gọn (QA conflict-dialog-compact). */}
+          <p id={warnId} className="fa-conf-warn" data-testid="replace-warning">
+            {warnText}
+          </p>
           <details className="fa-conf-more">
             <summary>{t('act.replace.more')}</summary>
-            <p id={warnId} className="fa-conf-warn" data-testid="replace-warning">
-              {warnText}
-            </p>
             <p className="fa-conf-scope">
               {fillSlots(t('act.replace.scope', { session: '{session}', persistent: '{persistent}' }), {
                 session: <TermTip term="scope_session"><span data-term="scope_session" tabIndex={0} className="fa-termword">session scope</span></TermTip>,

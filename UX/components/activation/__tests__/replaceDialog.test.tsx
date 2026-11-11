@@ -245,12 +245,13 @@ describe('conflict dialog stays compact and "skip" does not replace', () => {
     render(<ConflictDialog items={[item([c('right_font', '/lib/a.ttf', { replaceTier: 'replace' })])]} total={25} onCancel={() => {}} onConfirm={onConfirm} onReplace={onReplace} />);
     return { onConfirm, onReplace };
   };
-  it('warning, scope and guide live inside one collapsed <details>', () => {
+  it('one short warning stays visible; scope and guide live inside one collapsed <details>', () => {
     open();
     const det = document.querySelector('details.fa-conf-more') as HTMLDetailsElement;
     expect(det).toBeTruthy();
     expect(det.open).toBe(false);
-    for (const id of ['replace-warning', 'guide-text']) expect(det.contains(screen.getByTestId(id))).toBe(true);
+    expect(det.contains(screen.getByTestId('replace-warning'))).toBe(false);
+    expect(det.contains(screen.getByTestId('guide-text'))).toBe(true);
     cleanup();
   });
   it('choosing skip then continue only confirms (no replace); replace is the pre-selected default for a known app', () => {
