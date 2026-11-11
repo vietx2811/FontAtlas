@@ -48,7 +48,7 @@ Mã lỗi HTTP: 400 (`bad_json`, `bad_request`) · 401 `unauthorized` · 403 `ba
 
 ## Dữ liệu
 
-- `activation_reasons.reason` nhận thêm `auto:<app>` (user.db **v7**, dựng lại bảng vì SQLite không sửa được CHECK; có backup `user.v6.<ms>.db` trước migrate, giữ dữ liệu và index).
+- `activation_reasons.reason` nhận thêm `auto:<app>` (user.db **v8** (sau taxonomy-v2 = v7), dựng lại bảng vì SQLite không sửa được CHECK; có backup `user.v7.<ms>.db` trước migrate, giữ dữ liệu và index).
 - Bảng mới `auto_activation_log(at, app, doc, requested, outcome, hash)`: giữ 500 dòng mới nhất; không ghi `already_active`/`available`/`invalid`; cùng (app, tên, kết quả) trong 60 s chỉ ghi một lần (Photoshop hỏi lại mỗi lần vẽ chữ).
 - Tắt tay một font (Manual) cũng gỡ mọi lý do `auto:*` của nó. Gỡ collection mà font còn `auto:*` thì `KeptActive{manual:false, collectionIds:[]}`: UI hiểu là "đang có app dùng".
 - `ReasonDto` thêm `{"kind":"auto","app":"photoshop"}` (bindings đã sinh lại).
