@@ -99,7 +99,9 @@ describe('Settings', () => {
       fireEvent.click(within(dlg).getByRole('button', { name: 'Huỷ' }));
       expect(await api.listSources()).toHaveLength(3);
       fireEvent.click(within(screen.getAllByTestId('source-row')[1]).getByRole('button', { name: 'Xoá nguồn' }));
-      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xoá khỏi thư viện' })); });
+      await settle();
+      expect(screen.getByTestId('rmsrc-facts')).toBeTruthy(); // số liệu thật từ bản xem trước
+      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Gỡ khỏi thư viện' })); });
       await settle();
       expect((await api.listSources()).map(s => s.id)).toEqual([1, 3]);
       expect(screen.getAllByTestId('source-row')).toHaveLength(2);

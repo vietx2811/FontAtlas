@@ -7,7 +7,7 @@ export type SidebarMenuKind = 'source' | 'collection' | 'tag' | 'recent' | 'acti
 export type SidebarMenuCtx = {
   open(): void;
   /** Nguồn */
-  sourceAvailable?: boolean; hasPath?: boolean; scanning?: boolean; reveal?(): void; rescan?(): void;
+  sourceAvailable?: boolean; hasPath?: boolean; scanning?: boolean; reveal?(): void; rescan?(): void; removeSource?(): void;
   /** Dự án */
   rename?(): void; deactivateAll?(): void; /** Số font ĐANG BẬT trong dự án; chưa biết (đang đếm) → undefined. */ colActive?: number; remove?(): void;
   /** Thẻ */
@@ -30,6 +30,8 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
       open(c),
       { id: 'reveal', label: t('smenu.reveal'), disabled: !c.sourceAvailable || !c.hasPath, reason: t('smenu.reveal.off'), onSelect: c.reveal },
       { id: 'rescan', label: t('smenu.rescan'), disabled: !!c.scanning || !c.sourceAvailable, reason: c.scanning ? t('smenu.rescan.busy') : t('smenu.reveal.off'), onSelect: c.rescan },
+      sep,
+      { id: 'remove', label: t('smenu.removeSource'), danger: true, disabled: !!c.scanning, reason: t('smenu.removeSource.busy'), onSelect: c.removeSource },
     ];
     case 'collection': return [
       open(c),

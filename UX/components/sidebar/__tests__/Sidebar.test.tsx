@@ -355,6 +355,30 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('Gỡ nguồn (R7)', () => {
+    it('source menu → Gỡ nguồn… opens the preview with real numbers; confirm removes it, leaves its view, and tells how many locations went', async () => {
+      const { api } = await mount();
+      const target = (await api.listSources()).find(s => s.name === 'Dự án khách')!;
+      useUiStore.getState().setView(`src:${target.id}` as never); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Gỡ nguồn/ })); await settle();
+      const preview = await api.removeSourcePreview(target.id);
+      expect(screen.getByTestId('rmsrc-facts').querySelector('[data-fact="locations"]')?.textContent).toContain(`${preview.removedLocations} vị trí`);
+      expect((await api.listSources()).some(s => s.id === target.id)).toBe(true);
+      fireEvent.click(screen.getByTestId('rmsrc-confirm')); await settle();
+      expect((await api.listSources()).some(s => s.id === target.id)).toBe(false);
+      expect(useUiStore.getState().view).toBe('all');
+      expect(screen.queryByRole('button', { name: /Dự án khách/ })).toBeNull();
+    });
+    it('is disabled with a reason while a scan runs', async () => {
+      await mount();
+      useScanStore.setState({ scanning: true });
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Gỡ nguồn/ }).getAttribute('aria-disabled')).toBe('true');
+      useScanStore.setState({ scanning: false });
+    });
+  });
+
   describe('Thẻ: đổi tên và xoá (R6)', () => {
     const openMenu = async (name: string | RegExp) => { fireEvent.contextMenu(await screen.findByRole('button', { name })); await settle(); };
     const seed = async () => { const m = await mount(); const a = await m.api.createTag('serif'); await m.api.createTag('display'); useUiStore.getState().bumpLibrary(false); await settle(); return { ...m, a }; };

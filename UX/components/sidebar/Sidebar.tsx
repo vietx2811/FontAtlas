@@ -20,6 +20,7 @@ import { Menu, type MenuAnchor } from '../ui/Menu';
 import { Modal } from '../Modal';
 import { CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
 import { NoteMark } from '../ui/noteMark';
+import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; dups: number | null };
@@ -75,6 +76,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [renamingTag, setRenamingTag] = useState<number | null>(null);
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [removingSrc, setRemovingSrc] = useState<SourceDto | null>(null);
   const recentCount = useUiStore(s => s.recentViews.length);
   const scanningNow = useScanStore(s => s.scanning);
 
@@ -217,6 +219,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       sourceAvailable: src?.available, hasPath: !!src?.path, scanning: scanningNow,
       reveal: () => { if (src?.path) api.revealLocation(src.path).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
+      removeSource: () => { if (src) setRemovingSrc(src); },
       rename: () => { if (col) setRenaming(col.id); },
       colActive: c.colActive,
       deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
@@ -312,6 +315,14 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </div>
       </div>
     </nav>
+    {removingSrc && <RemoveSourceDialog api={api} source={removingSrc} onClose={() => setRemovingSrc(null)}
+      onRemoved={rep => {
+        const s = removingSrc; setRemovingSrc(null);
+        if (useUiStore.getState().view === `src:${s.id}`) setView('all');
+        useNoticeStore.getState().push({ kind: 'info', text: t('rmsrc.done', { name: s.name, n: rep.removedLocations }) });
+        useUiStore.getState().bumpLibrary(true);
+        void refresh();
+      }} />}
     {ctx && <Menu entries={menuEntries(ctx)} anchor={ctx.anchor} label={t('smenu.menuOf', { name: ctx.name })} focusFirst={ctx.keyboard} returnFocus={ctx.el} onClose={() => setCtx(null)} />}
     {confirm && (
       <Modal title={confirm.title} onClose={() => setConfirm(null)}>
