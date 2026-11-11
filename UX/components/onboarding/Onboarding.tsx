@@ -15,6 +15,7 @@ import './onboarding.css';
 import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
+import { ShortcutsOverlay } from '../help/ShortcutsOverlay';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
   /** false: không có outro (test, QA). Giảm chuyển động của hệ thống cũng tắt nó. Phần mở đầu là Splash của App, không nằm ở đây. */ animated?: boolean; outroMs?: number };
@@ -91,10 +92,7 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
         <div className="fa-onb-dots" role="group" aria-label={t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}>
           {dots.map((d, i) => <i key={d} data-on={i <= idx} data-now={i === idx} aria-hidden />)}
         </div>
-        <div className="fa-onb-meta" aria-hidden>
-          <span className="fa-onb-stepno">{t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}</span>
-          <span className="fa-onb-keys"><kbd>←</kbd> {t('onb.keys.back')} · <kbd>→</kbd> {t('onb.keys.next')}{step === 'o1' && <> · <kbd>Esc</kbd> {t('onb.keys.skip')}</>}</span>
-        </div>
+        <span />
       </header>
       <span id="onb-keys-desc" className="sr-only">{t('onb.keys.aria')}</span>
       <main className="fa-onb-body" aria-describedby="onb-keys-desc">
@@ -361,12 +359,15 @@ function O7({ api, state, next }: Ctx) {
 }
 
 function End({ finish }: Ctx) {
+  // Trước màn kết: bảng phím tắt & tính năng chính. Esc, bấm nền hay nút đều vào thư viện (bỏ qua được).
+  const [tips, setTips] = useState(() => import.meta.env.DEV && new URLSearchParams(location.hash.replace(/^#/, '')).get('tips') === '1'); // tips=1: chỉ cho ảnh chụp/QA dev
   return (
     <>
+      {tips && <ShortcutsOverlay primary={t('tips.start')} onClose={() => void finish()} />}
       <h1>Xong</h1>
       <p>Thư viện của bạn đang được phân tích. Vài gợi ý để bắt đầu:</p>
       <ul className="fa-onb-list"><li>Mở một font để xem giải phẫu.</li><li>Thử ghép cặp hai font.</li><li>Đổi chữ mẫu ở thanh dưới cùng.</li></ul>
-      <Actions><Primary safe onClick={() => void finish()}>Vào thư viện</Primary></Actions>
+      <Actions><Primary safe onClick={() => setTips(true)}>Vào thư viện</Primary></Actions>
     </>
   );
 }

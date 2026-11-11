@@ -5,7 +5,7 @@ import { t, type I18nKey } from '../../i18n';
 import { TERM_NAMES, TermTip, termGloss, termKey } from '../ui/terms';
 import type { Step } from '../../store/onboarding';
 import { CAP_HEIGHT, GLYPHS, UPM, X_HEIGHT } from './glyphOutlines';
-import { Callout, Dimension, GlyphArt, Guide, Readout, Sheet, VB_H, VB_W, circlePath, delay, glyphWidth } from './blueprint';
+import { Callout, Dimension, GlyphArt, Guide, Readout, Sheet, VB_SQ, VB_W, circlePath, delay, glyphWidth } from './blueprint';
 
 export const ILLUSTRATED_STEPS = ['o1', 'o2', 'o3', 'o5', 'o6', 'o7', 'end'] as const;
 type S = typeof ILLUSTRATED_STEPS[number];
@@ -24,7 +24,7 @@ function Welcome(): React.JSX.Element {
   const apex = x + em((GLYPHS.A.x0 + GLYPHS.A.x1) / 2, size);
   return (
     <>
-      <Sheet fig="FIG.01 · ANATOMY" />
+      <Sheet fig="FIG.01 · ANATOMY" h={VB_SQ}>
       <Guide y={cap} name="cap" at={200} />
       <Guide y={xh} name="x-height" at={320} />
       <Guide y={base} name="baseline" at={440} tone="base" />
@@ -38,6 +38,7 @@ function Welcome(): React.JSX.Element {
       <Callout n={4} px={apex} py={(top + cap) / 2 - 2} cx={380} cy={top + 6} at={1760} />
       <Readout x={396} y={cap + 3.5} to={CAP_HEIGHT / UPM} at={1000} />
       <Readout x={396} y={xh + 3.5} to={X_HEIGHT / UPM} at={1100} />
+      </Sheet>
     </>
   );
 }
@@ -47,13 +48,14 @@ function Legacy(): React.JSX.Element {
   const w = glyphWidth('ẫ', size);
   return (
     <>
-      <Sheet fig="FIG.02 · MIGRATION" />
+      <Sheet fig="FIG.02 · MIGRATION" h={VB_SQ}>
       <g className="bp-frame old" style={delay(100)}><rect x="40" y="64" width="160" height="176" rx="6" /><text x="52" y="82" className="bp-tag">v1</text></g>
       <g className="bp-frame new" style={delay(500)}><rect x="280" y="64" width="160" height="176" rx="6" /><text x="292" y="82" className="bp-tag">v2</text></g>
       <GlyphArt ch="ẫ" x={120 - w / 2} y={base} size={size} at={300} fill={false} className="old" />
       <path d="M208 152H272M264 146L272 152L264 158" className="bp-flow" pathLength={1} style={delay(900)} />
       {[0, 1, 2].map(i => <rect key={i} x="208" y="147" width="8" height="10" rx="1.5" className="bp-packet" style={delay(1300 + i * 420)} />)}
       <GlyphArt ch="ẫ" x={360 - w / 2} y={base} size={size} at={1500} fillAt={2300} />
+      </Sheet>
     </>
   );
 }
@@ -63,7 +65,7 @@ function Tray(): React.JSX.Element {
   const size = 40;
   return (
     <>
-      <Sheet fig="FIG.03 · SAMPLE TRAY" />
+      <Sheet fig="FIG.03 · SAMPLE TRAY" h={VB_SQ}>
       <path className="bp-tray" pathLength={1} style={delay(150)} d="M64 124V104a6 6 0 0 1 6-6h88l16 22h236a6 6 0 0 1 6 6V252a6 6 0 0 1-6 6H70a6 6 0 0 1-6-6z" />
       {tiles.map((ch, i) => {
         const col = i % 3; const row = Math.floor(i / 3);
@@ -78,6 +80,7 @@ function Tray(): React.JSX.Element {
         );
       })}
       <path d="M240 36V84M232 76L240 84L248 76" className="bp-flow" pathLength={1} style={delay(300)} />
+      </Sheet>
     </>
   );
 }
@@ -86,7 +89,7 @@ function Seal(): React.JSX.Element {
   const size = 104; const w = glyphWidth('ự', size);
   return (
     <>
-      <Sheet fig="FIG.05 · SPECIMEN LABEL" />
+      <Sheet fig="FIG.05 · SPECIMEN LABEL" h={VB_SQ}>
       <rect x="120" y="44" width="240" height="236" rx="8" className="bp-card" style={delay(100)} />
       <circle cx="240" cy="132" r="62" className="bp-ring spin" />
       <path d={circlePath(240, 132, 52)} className="bp-ring-solid" pathLength={1} style={delay(300)} />
@@ -95,6 +98,7 @@ function Seal(): React.JSX.Element {
         <rect key={y} x={x} y={y} width={wd} height="6" rx="3" className="bp-bar" style={delay(1600 + i * 200)} />
       ))}
       <path d="M278 262c8-14 14-14 18-2s10 8 22-6" className="bp-sign" pathLength={1} style={delay(2200)} />
+      </Sheet>
     </>
   );
 }
@@ -110,13 +114,14 @@ function Embedding(): React.JSX.Element {
   const bars = [0.5, 0.82, 0.35, 0.94, 0.62, 0.28, 0.76, 0.48];
   return (
     <>
-      <Sheet fig="FIG.06 · FEATURE SCAN" />
+      <Sheet fig="FIG.06 · FEATURE SCAN" h={VB_SQ}>
       <GlyphArt ch="ê" x={x} y={base} size={size} at={250} fillAt={1800} className="ghost" />
       {pts}
       <rect x={x - 8} y={top} width={w + 16} height="3" className="bp-beam sweep" style={{ ...delay(900), ['--travel' as string]: `${base - top}px` }} />
       <path d={`M${x + w + 28} 150H300M292 144L300 150L292 156`} className="bp-flow" pathLength={1} style={delay(1500)} />
       <line x1="316" x2="440" y1="236" y2="236" className="bp-guide base" />
       {bars.map((v, i) => <rect key={i} x={318 + i * 15} y={236 - v * 110} width="9" height={v * 110} className="bp-vec" style={delay(1800 + i * 90)} />)}
+      </Sheet>
     </>
   );
 }
@@ -125,7 +130,7 @@ function Activate(): React.JSX.Element {
   const size = 92; const w = glyphWidth('ă', size);
   return (
     <>
-      <Sheet fig="FIG.07 · PROTOTYPE" />
+      <Sheet fig="FIG.07 · PROTOTYPE" h={VB_SQ}>
       <rect x="48" y="130" width="112" height="112" rx="6" className="bp-frame-box" style={delay(150)} />
       <GlyphArt ch="ă" x={104 - w / 2} y={206} size={size} at={400} fillAt={1100} className="src" />
       <Callout n={1} px={150} py={77} cx={196} cy={46} at={1200} />
@@ -139,6 +144,7 @@ function Activate(): React.JSX.Element {
         <rect x="262" y="142" width="60" height="5" rx="2.5" className="bp-bar" style={delay(2400)} />
         <rect x="360" y="142" width="62" height="5" rx="2.5" className="bp-bar" style={delay(2500)} />
       </g>
+      </Sheet>
     </>
   );
 }
@@ -146,13 +152,14 @@ function Activate(): React.JSX.Element {
 function Done(): React.JSX.Element {
   return (
     <>
-      <Sheet fig="FIG.08 · COMPLETE" />
+      <Sheet fig="FIG.08 · COMPLETE" h={VB_SQ}>
       <Guide y={238} name="baseline" at={200} tone="base" />
       <Guide y={238 - em(X_HEIGHT, 150)} name="x-height" at={320} />
       <GlyphArt ch="A" x={100} y={238} size={150} at={500} fillAt={1500} />
       <GlyphArt ch="a" x={100 + glyphWidth('A', 150) + 6} y={238} size={150} at={800} fillAt={1700} />
       <path d={circlePath(388, 104, 34)} className="bp-ring-solid" pathLength={1} style={delay(1600)} />
       <path d="M372 105l11 11 21-23" className="bp-tick-mark" pathLength={1} style={delay(2100)} />
+      </Sheet>
     </>
   );
 }
@@ -185,7 +192,7 @@ export function Illustration({ step, slotRef }: { step: Step | S; slotRef?: (el:
   const node: ReactNode = <Art />;
   return (
     <figure className="fa-stage" data-step={step}>
-      <svg className="fa-bp" role="img" aria-label={t(`onb.art.${step}` as I18nKey)} viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet">{node}</svg>
+      <svg className="fa-bp" role="img" aria-label={t(`onb.art.${step}` as I18nKey)} viewBox={`0 0 ${VB_W} ${VB_SQ}`} preserveAspectRatio="xMidYMid meet">{node}</svg>
       {terms && <Legend terms={terms} />}
     </figure>
   );

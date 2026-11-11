@@ -44,7 +44,7 @@ describe('Onboarding', () => {
     expect(heading()).toBe('Kích hoạt font cho app thiết kế');
     await click('Để sau');
     expect(heading()).toBe('Xong');
-    await click('Vào thư viện');
+    await click('Vào thư viện'); await click('Bắt đầu');
     expect(step).toHaveBeenLastCalledWith('done');
     expect(onDone).toHaveBeenCalledTimes(1);
   });
@@ -315,7 +315,7 @@ describe('Onboarding', () => {
       const onDone = vi.fn();
       render(<Onboarding api={api} onDone={onDone} />);
       await settle();
-      await click('Vào thư viện');
+      await click('Vào thư viện'); await click('Bắt đầu');
       expect(onDone).toHaveBeenCalledTimes(1);
       expect(screen.queryByTestId('onb-outro')).toBeNull();
       vi.unstubAllGlobals();
@@ -334,7 +334,7 @@ describe('Onboarding', () => {
       const save = vi.spyOn(api, 'setOnboardingStep');
       render(<Onboarding api={api} onDone={onDone} outroMs={50} />);
       await settle();
-      await click('Vào thư viện');
+      await click('Vào thư viện'); await click('Bắt đầu');
       expect(save).toHaveBeenLastCalledWith('done');
       expect(screen.getByTestId('onb-outro')).toBeTruthy();
       expect(onDone).not.toHaveBeenCalled();
@@ -349,12 +349,42 @@ describe('Onboarding', () => {
       expect(screen.queryByTestId('onb-outro')).toBeNull();
     });
 
-    it('shows "Bước n/total" and keeps the group label; the stage and the text are separate regions', async () => {
+    it('the step indicator is plain dots (group label only: no "Bước n/total" text, no key hints); the stage and the text are separate regions', async () => {
       await mount();
-      expect(document.querySelector('.fa-onb-stepno')!.textContent).toMatch(/^Bước 1\/\d$/);
+      expect(document.querySelector('.fa-onb-stepno')).toBeNull();
+      expect(document.querySelector('.fa-onb-keys')).toBeNull();
+      expect(document.querySelector('.fa-onb-top')!.textContent).not.toMatch(/Bước|Esc|←|→/);
+      expect(document.querySelectorAll('.fa-onb-dots i').length).toBeGreaterThanOrEqual(6);
       expect(screen.getByRole('group', { name: /^Bước 1\/\d$/ })).toBeTruthy();
       expect(document.querySelector('.fa-onb-body > .fa-stage')).toBeTruthy();
       expect(document.querySelector('.fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+    });
+
+    it('the last step shows the shortcuts overlay BEFORE the outro; Esc skips it and finishes', async () => {
+      const api = createMockApi({ firstRun: true });
+      await api.setOnboardingStep('end');
+      const onDone = vi.fn();
+      const save = vi.spyOn(api, 'setOnboardingStep');
+      render(<Onboarding api={api} onDone={onDone} outroMs={50} />);
+      await settle();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      await click('Vào thư viện');
+      expect(screen.getByRole('dialog', { name: 'Phím tắt & tính năng chính' })).toBeTruthy();
+      expect(screen.getAllByTestId('tip-card').length).toBeGreaterThanOrEqual(8);
+      expect(screen.queryByTestId('onb-outro')).toBeNull();
+      expect(save).not.toHaveBeenCalledWith('done');
+      await act(async () => { fireEvent.keyDown(document.body, { key: 'Escape' }); });
+      await settle();
+      expect(save).toHaveBeenLastCalledWith('done');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByTestId('onb-outro')).toBeTruthy();
+    });
+
+    it('the illustration frame is square and has no border', async () => {
+      await mount();
+      const svg = document.querySelector('.fa-stage svg.fa-bp')!;
+      expect(svg.getAttribute('viewBox')).toBe('0 0 480 480');
+      expect(getComputedStyle(svg).borderTopWidth).not.toBe('1px');
     });
 
     it('keyboard: → advances only on safe buttons; the licence step is never acknowledged by a key', async () => {

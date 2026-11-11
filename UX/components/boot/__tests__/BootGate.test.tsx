@@ -25,7 +25,7 @@ describe('BootGate', { timeout: 15000 }, () => {
     // Onboarding có thể render lại (reload trạng thái) khi máy bận, làm nút đã tìm bị tách khỏi DOM.
     // Luôn bấm nút hiện tại cho tới khi vào thư viện; finish() là idempotent.
     await waitFor(() => {
-      if (!screen.queryByTestId('app')) fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' }));
+      if (!screen.queryByTestId('app')) fireEvent.click(screen.queryByRole('button', { name: 'Bắt đầu' }) ?? screen.getByRole('button', { name: 'Vào thư viện' }));
       expect(screen.getByTestId('app')).toBeTruthy();
     }, { timeout: 8000 });
   });

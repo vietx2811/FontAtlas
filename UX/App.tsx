@@ -12,6 +12,7 @@ import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
 import { SettingsOverlay } from './components/settings/SettingsOverlay';
 import { SettingsShortcut } from './components/settings/SettingsShortcut';
+import { ShortcutsHelp } from './components/help/ShortcutsHelp';
 import { BootGate } from './components/boot/BootGate';
 import { Splash } from './components/splash/Splash';
 import { readSplashEnabled } from './components/splash/splashState';
@@ -125,6 +126,7 @@ const App: React.FC = () => {
             <div style={{ display: 'contents' }} inert={splash} aria-hidden={splash || undefined}>
                 <NoticeStack />
                 <SettingsShortcut />
+                <ShortcutsHelp />
                 <BootGate api={api}><Library_ api={api} /></BootGate>
             </div>
         </ErrorBoundary>

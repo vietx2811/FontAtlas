@@ -9,7 +9,8 @@
   --bp-acc: var(--accent-ink);
   --bp-ease: cubic-bezier(.65, 0, .35, 1);
 }
-.fa-bp { width: 100%; height: auto; display: block; border: 1px solid var(--border); border-radius: 14px; background: var(--bp-paper); overflow: hidden; }
+.fa-bp { width: 100%; height: auto; display: block; border: 0; border-radius: 0; background: var(--bp-paper); overflow: hidden; }
+.fa-stage .fa-bp { aspect-ratio: 1 / 1; }
 .bp-paper { fill: var(--bp-paper); }
 .bp-gridline { fill: none; stroke: var(--bp-grid); stroke-width: 1; }
 .bp-gridline.strong { stroke: var(--bp-grid-strong); }

@@ -10,3 +10,9 @@ Ngôn ngữ hình: bản vẽ kỹ thuật (blueprint) — lưới đo 20 px, đ
 - Phím: ← quay lại; → hoặc Enter (khi không focus gì) chỉ kích hoạt nút an toàn (`data-keynav`): KHÔNG xác nhận giấy phép (O5), KHÔNG đổi cài đặt (O6, O7); Esc ở bước 1 = Bỏ qua hướng dẫn.
 - Dev/QA (chỉ `vite dev`): `#first=1&ob=o1…end|outro` (+`&hold=1` giữ outro); `#splash=hold` giữ splash.
 - Ảnh: repo chỉ giữ 6 ảnh tiêu biểu (dark-o1, light-o1, dark-o4, dark-splash, light-splash, light-narrow-o1); bộ đầy đủ chụp ra ngoài repo bằng `OUT_DIR=/tmp/onb-shots bash capture.sh`. `capture.sh` chụp bằng Chrome headless ở khung cuối (reduced-motion), sáng và tối, rộng 1280 và hẹp 720. `*-splash.png` là frame cuối của splash; outro không có ảnh tĩnh có nghĩa.
+
+## 0.3.0 — chỉnh gọn (feat/onboarding-polish)
+- Splash: wordmark nhỏ hơn (`--wm` 34–76 px) và xám nhạt (pha `--fg` vào `--sheet`, token nên sáng/tối đều đúng); vạch đo nhạt theo. Vạch baseline/x-height đo lại khi font nạp xong (`document.fonts.ready`) và khi đổi cỡ cửa sổ — trước đó có thể lệch baseline khi frame cuối hiện trước khi font sẵn sàng.
+- Onboarding: chỉ báo bước là chấm tròn đơn giản; bỏ chữ "Bước x/y" và dòng gợi ý phím (phím ← → Enter Esc vẫn chạy; mô tả cho trình đọc màn hình giữ nguyên, ẩn). Ô minh hoạ vuông (viewBox 480×480, tối đa 400 px), KHÔNG viền khung và bỏ góc khung; lưới, thước, vạch đo, callout giữ nguyên.
+- Trước màn kết: bảng "Phím tắt & tính năng chính" (`UX/components/help`) — lưới 9 thẻ lấy từ danh sách phím thật (`shortcuts.ts`, mỗi mục ghi nơi đăng ký phím); Esc / bấm nền / "Bắt đầu" đều vào thư viện. Mở lại bất kỳ lúc nào bằng phím `?` (trừ khi đang gõ chữ, có hộp thoại/menu hoặc đang trong hướng dẫn).
+- Chụp: `capture.sh` có thêm `-tips` (hash dev `ob=end&tips=1`).

@@ -1,13 +1,13 @@
-/* Splash: nền token (xám lạnh), chữ --fg. --wm = cỡ chữ của phần Atlas (sans); phần serif/font khác chỉnh theo x-height bằng `em`. */
-.fa-splash { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; align-content: center; background: var(--sheet); color: var(--fg); transition: opacity .22s ease; --wm: clamp(56px, 11vw, 132px); }
+/* Splash: nền token (xám lạnh), chữ xám nhạt (pha --fg vào --sheet), cỡ nhỏ. --wm = cỡ chữ của phần Atlas (sans); phần serif/font khác chỉnh theo x-height bằng `em`. */
+.fa-splash { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; align-content: center; background: var(--sheet); color: color-mix(in srgb, var(--fg) 42%, var(--sheet)); transition: opacity .22s ease; --wm: clamp(34px, 6.5vw, 76px); }
 .fa-splash[data-leaving="true"] { opacity: 0; pointer-events: none; }
 .fa-splash-stage { position: relative; width: min(92vw, 920px); height: calc(var(--wm) * 1.7); display: grid; place-items: center; }
 .fa-wm { display: flex; align-items: baseline; justify-content: center; font-size: var(--wm); line-height: 1; white-space: nowrap; letter-spacing: 0; font-kerning: normal; }
 .fa-wm > span { display: inline; }
 .fa-wm-base { display: inline-block; width: 0; height: 0; }
-.fa-splash-guide { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); transform-origin: left center; animation: sp-guide .7s cubic-bezier(.65, 0, .35, 1) both; pointer-events: none; }
+.fa-splash-guide { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); transform-origin: left center; animation: sp-guide .7s cubic-bezier(.65, 0, .35, 1) both; pointer-events: none; }
 .fa-splash-guide.x { border-top-style: dashed; animation-delay: .1s; }
-.fa-splash-guide.base { border-top-color: var(--accent-ink); }
+.fa-splash-guide.base { border-top-color: color-mix(in srgb, var(--accent-ink) 40%, transparent); }
 .fa-splash-hint { position: absolute; bottom: 28px; margin: 0; font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); opacity: .8; }
 @keyframes sp-guide { from { transform: scaleX(0); opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .fa-splash, .fa-splash-guide { transition: none; animation: none; } }

@@ -120,11 +120,20 @@ export function Splash({ api, onDone, durationMs = SPLASH_MS, rand = Math.random
   // Vạch baseline / x-height khớp thật: đo vị trí baseline của dòng chữ ở frame cuối.
   const wm = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (!final || !stage.current || !mark.current || !wm.current) return;
-    const s = stage.current.getBoundingClientRect(); const b = mark.current.getBoundingClientRect();
-    const size = parseFloat(getComputedStyle(wm.current).fontSize);
-    if (!(s.height > 0) || !Number.isFinite(size)) return;
-    setGuides({ base: b.bottom - s.top, x: b.bottom - s.top - size * xRatio(SANS) });
+    if (!final) return;
+    const measure = () => {
+      if (!stage.current || !mark.current || !wm.current) return;
+      const s = stage.current.getBoundingClientRect(); const b = mark.current.getBoundingClientRect();
+      const size = parseFloat(getComputedStyle(wm.current).fontSize);
+      if (!(s.height > 0) || !Number.isFinite(size)) return;
+      setGuides({ base: b.bottom - s.top, x: b.bottom - s.top - size * xRatio(SANS) });
+    };
+    measure();
+    // Reduced motion (hoặc máy nhanh): frame cuối hiện trước khi font nạp xong → đo lại khi font sẵn sàng, nếu không vạch lệch baseline thật.
+    let alive = true;
+    void document.fonts?.ready.then(() => { if (alive) measure(); });
+    window.addEventListener('resize', measure);
+    return () => { alive = false; window.removeEventListener('resize', measure); };
   }, [final]);
 
   return (
