@@ -140,6 +140,18 @@ describe('Splash', () => {
     document.removeEventListener('keydown', below);
   });
 
+  it('catches a key dispatched straight at document even when an earlier document listener would swallow it', async () => {
+    const early = (e: Event) => { e.stopImmediatePropagation(); }; document.addEventListener('keydown', early);
+    const onDone = vi.fn(); render(<Splash onDone={onDone} />);
+    await advance(100);
+    const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.dispatchEvent(esc);
+    expect(esc.defaultPrevented).toBe(true);
+    await advance(300);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    document.removeEventListener('keydown', early);
+  });
+
   it('chords (⌘/Ctrl/Alt) are neither a skip nor swallowed; key repeat does not skip but is swallowed', async () => {
     const below = vi.fn(); document.addEventListener('keydown', below);
     const onDone = vi.fn(); render(<Splash onDone={onDone} />);

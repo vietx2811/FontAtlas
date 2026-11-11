@@ -105,14 +105,16 @@ export function Splash({ api, onDone, durationMs = SPLASH_MS, rand = Math.random
 
   // Bấm hoặc phím bất kỳ → bỏ qua, và NUỐT sự kiện (capture + stopImmediatePropagation) để Esc/Enter không rơi xuống Onboarding hay phím tắt bên dưới.
   // Tổ hợp ⌘/Ctrl/Alt và phím modifier đơn lẻ không tính là "bỏ qua" và không bị nuốt.
-  useEffect(() => {
+  // Đăng ký trên WINDOW (capture) và bằng useLayoutEffect: window capture luôn chạy trước mọi listener của document (kể cả sự kiện gửi thẳng vào document, nơi WebKit chạy theo thứ tự đăng ký),
+  // còn layout effect gắn listener ngay lúc commit — không có khoảng hở giữa lúc splash hiện trong DOM và lúc nó bắt được phím (máy tải nặng).
+  useLayoutEffect(() => {
     const skip = (e: Event) => {
       if (e instanceof KeyboardEvent && (e.metaKey || e.ctrlKey || e.altKey || e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta')) return;
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       if (!(e instanceof KeyboardEvent && e.repeat)) finish();
     };
-    document.addEventListener('keydown', skip, true); document.addEventListener('keyup', swallowUp, true); document.addEventListener('pointerdown', skip, true);
-    return () => { document.removeEventListener('keydown', skip, true); document.removeEventListener('keyup', swallowUp, true); document.removeEventListener('pointerdown', skip, true); };
+    window.addEventListener('keydown', skip, true); window.addEventListener('keyup', swallowUp, true); window.addEventListener('pointerdown', skip, true);
+    return () => { window.removeEventListener('keydown', skip, true); window.removeEventListener('keyup', swallowUp, true); window.removeEventListener('pointerdown', skip, true); };
   }, [finish]);
 
   // Vạch baseline / x-height khớp thật: đo vị trí baseline của dòng chữ ở frame cuối.
