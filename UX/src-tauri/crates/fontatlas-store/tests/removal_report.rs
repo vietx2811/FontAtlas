@@ -24,7 +24,7 @@ fn report_counts_active_fonts_and_user_links_then_remove_changes_nothing_of_the_
         .execute("INSERT INTO u.activation_state(hash,state,scope,method,updated_at) VALUES (?1,'active','session','fake',0)", [&hash[..]])
         .unwrap();
     let tag = s.tag("giữ").unwrap();
-    s.tag_faces(tag, &[key.clone()]).unwrap();
+    s.tag_faces(tag, &[key]).unwrap();
     s.set_favorite(&key, true).unwrap();
 
     let before = s.source_removal_report(src).unwrap();
