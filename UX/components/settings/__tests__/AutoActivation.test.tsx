@@ -94,6 +94,17 @@ describe('Settings → Bật font tự động', () => {
     expect(warns.join(' ')).not.toContain('FontBase');
   });
 
+  it('font request source failed to open: a note with the guidance and the running managers; none when it runs', async () => {
+    await mount(createMockApi({ auto: { fontRequestError: 'refused', others: [{ name: 'RightFont', installed: true, running: true }] } }));
+    const w = screen.getByTestId('auto-fontreq-warn');
+    expect(w.textContent).toContain('chưa tự bật font được');
+    expect(w.textContent).toContain('RightFont');
+    expect(within(w).getByRole('img').getAttribute('aria-label')).toContain('thoát các trình quản lý font khác');
+    cleanup();
+    await mount(createMockApi());
+    expect(screen.queryByTestId('auto-fontreq-warn')).toBeNull();
+  });
+
   it('the log lists app, font, outcome (newest first) and "last activity"; empty log has its own message', async () => {
     const empty = createMockApi();
     await mount(empty);

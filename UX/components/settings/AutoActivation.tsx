@@ -164,6 +164,12 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
           </div>
           {status.isolatedBuild && <p className="fa-set-note" data-testid="auto-isolated"><NoteMark inline kind="info" text={t('auto.isolatedBuild.why')} /> {t('auto.isolatedBuild.short')}</p>}
           {status.enabled && !status.brokerRunning && <p className="fa-set-note" data-testid="auto-broker-warn">{t('auto.broker')}</p>}
+          {status.enabled && status.fontRequestError && (
+            <p className="fa-set-note" data-testid="auto-fontreq-warn">
+              <NoteMark inline kind="warn" text={t('auto.fontreq.warn', { why: t(status.fontRequestError === 'timeout' ? 'auto.fontreq.timeout' : status.fontRequestError === 'thread' ? 'auto.fontreq.thread' : 'auto.fontreq.refused') })} /> {t('auto.fontreq.short')}
+              {runningMgrs.length > 0 && <> {t('auto.fontreq.hint', { names: runningMgrs.map(m => m.name).join(', ') })}</>}
+            </p>
+          )}
           {runningMgrs.map(m => <p key={m.name} className="fa-set-note fa-auto-mgr" data-testid="auto-manager-warn"><NoteMark inline kind="warn" text={t('auto.managers.warn', { name: m.name })} /> {t('auto.managers.short', { name: m.name })}</p>)}
           <h3 className="fa-auto-h">{t('auto.apps')}</h3>
           <ul className="fa-auto-apps" aria-label={t('auto.apps')}>

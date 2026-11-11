@@ -2,7 +2,7 @@ import { CmdError } from './types';
 import type { AutoAppDto, AutoLogDto, AutoStatusDto, AutoTargetDto, OtherManagerDto } from './types';
 
 /** Bật font tự động (mock, gương services/auto.rs): 6 app cố định thứ tự, cài/gỡ chỉ đổi cờ trong bộ nhớ. */
-export type MockAutoOptions = { isolated?: boolean; keyPresent?: boolean; enabled?: boolean; others?: OtherManagerDto[]; running?: string[]; installed?: string[]; log?: AutoLogDto[] };
+export type MockAutoOptions = { isolated?: boolean; keyPresent?: boolean; enabled?: boolean; others?: OtherManagerDto[]; running?: string[]; installed?: string[]; log?: AutoLogDto[]; fontRequestError?: string | null };
 const APPS: Array<Pick<AutoAppDto, 'id' | 'label' | 'method' | 'evidence' | 'installable'>> = [
   { id: 'photoshop', label: 'Photoshop', method: 'font_request', evidence: 'measured', installable: false },
   { id: 'aftereffects', label: 'After Effects', method: 'font_request', evidence: 'untested', installable: false },
@@ -23,7 +23,7 @@ export function createMockAuto(o: MockAutoOptions = {}) {
   const isolated = o.isolated ?? false;
   const refuse = () => { if (isolated) throw new CmdError('isolated_build', 'isolated build'); };
   const status = (): AutoStatusDto => ({
-    enabled, brokerRunning: enabled, fontRequestRunning: enabled && !isolated, signingKeyPresent: key, isolatedBuild: isolated,
+    enabled, brokerRunning: enabled, fontRequestRunning: enabled && !isolated && !o.fontRequestError, signingKeyPresent: key, isolatedBuild: isolated, fontRequestError: enabled && !isolated ? (o.fontRequestError ?? null) : null,
     apps: APPS.map(a => {
       const inst = a.installable ? installed.has(a.id) : true;
       const state: AutoAppDto['state'] = !enabled ? 'off' : a.installable && !inst ? 'needs_install' : 'ready';
