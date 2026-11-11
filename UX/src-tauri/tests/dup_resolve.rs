@@ -90,6 +90,7 @@ fn req(plan: &ResolvePlanDto, action: ResolveActionDto) -> ResolveRequestDto {
         action,
         explicit_trash_paths: vec![],
         mode: ResolveModeDto::Chosen,
+        join_batch: None,
     }
 }
 
@@ -237,6 +238,7 @@ fn apply_revalidates_and_refuses_unsafe_requests() {
         action: ResolveActionDto::Hide,
         explicit_trash_paths: vec![],
         mode: ResolveModeDto::Chosen,
+        join_batch: None,
     };
     // bản giữ không thuộc nhóm / bản thua trùng bản giữ / bản thua lạ
     let r = dup_resolve::resolve_apply(&st, &mk("/khong/co.ttf", vec![it.losers[0].path.clone()]), &no_trash, 1).unwrap();
@@ -325,6 +327,95 @@ fn source_priority_decides_which_copy_is_kept() {
     let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
     assert_eq!(plan.items[0].keeper.source_id, order[1], "đổi thứ tự → đổi bản giữ");
     assert!(dup_resolve::set_source_priority(&st, &[9999]).is_err());
+}
+
+fn item_of(it: &PlanItemDto, keeper: &str, losers: &[&str], members: Vec<String>) -> ResolveItemDto {
+    let p = |n: &str| it.member_paths.iter().find(|m| m.contains(&format!("/{n}/"))).unwrap().clone();
+    ResolveItemDto { kind: it.kind, key: it.key.clone(), keeper_path: p(keeper), loser_paths: losers.iter().map(|l| p(l)).collect(), member_paths: members }
+}
+
+#[test]
+fn a_second_request_can_join_the_batch_of_the_first_and_one_undo_reverts_both() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let all_members = it.member_paths.clone();
+    let trash_dir = td.path().join("trash");
+
+    // yêu cầu 1: Thùng rác v2
+    let r1 = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v2"], all_members.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &fake_trash(&trash_dir),
+        1000,
+    )
+    .unwrap();
+    assert!(r1.failed.is_empty(), "{:?}", r1.failed);
+    // yêu cầu 2: chỉ ẩn v1, vào CÙNG mẻ (nhóm giờ chỉ còn v1, v3)
+    let members2: Vec<String> = all_members.iter().filter(|m| !m.contains("/v2/")).cloned().collect();
+    let r2 = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: Some(r1.batch_id.clone()) },
+        &no_trash,
+        2000,
+    )
+    .unwrap();
+    assert!(r2.failed.is_empty(), "{:?}", r2.failed);
+    assert_eq!(r2.batch_id, r1.batch_id, "cùng một batchId");
+    let live = dup_resolve::resolve_list(&st, false).unwrap();
+    assert_eq!(live.len(), 2);
+    assert!(live.iter().all(|r| r.batch_id == r1.batch_id));
+
+    // hoàn tác cả mẻ một lần
+    let ids: Vec<i64> = live.iter().map(|r| r.id).collect();
+    let u = dup_resolve::resolve_undo(&st, &ids, 3000).unwrap();
+    assert!(u.failed.is_empty(), "{:?}", u.failed);
+    assert!(dup_resolve::resolve_list(&st, false).unwrap().is_empty());
+}
+
+#[test]
+fn joining_an_invalid_batch_is_rejected_without_changing_anything() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("old/playfair.ttf", patch_revision(&base, 1.1)), ("new/playfair.ttf", patch_revision(&base, 1.2))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let join = |b: &str| {
+        let mut r = req(&plan, ResolveActionDto::Hide);
+        r.join_batch = Some(b.to_string());
+        dup_resolve::resolve_apply(&st, &r, &no_trash, 9)
+    };
+    // không tồn tại
+    assert_eq!(join("dup-1-1").unwrap_err().code, "batch_not_found");
+    assert_eq!(join("").unwrap_err().code, "batch_not_found");
+    // mẻ của phiên khác (pid khác)
+    let it = &plan.items[0];
+    let foreign = fontatlas_store::NewResolution {
+        kind: "versions".into(),
+        group_key: it.key.clone(),
+        keeper: fontatlas_store::FaceKey::from_hex(&it.keeper.face.hash_hex, it.keeper.face.face_index).unwrap(),
+        keeper_path: it.keeper.path.clone(),
+        loser: fontatlas_store::FaceKey::from_hex(&it.losers[0].face.hash_hex, it.losers[0].face.face_index).unwrap(),
+        loser_path: it.losers[0].path.clone(),
+        action: "hide".into(),
+        trash_path: None,
+        reason: "{}".into(),
+        was_active: false,
+        loser_scope: None,
+    };
+    let id = st.with_store(|s| Ok(s.begin_resolution("dup-5-1", &foreign, 5)?)).unwrap();
+    st.with_store(|s| Ok(s.complete_resolution(id, None)?)).unwrap();
+    assert_eq!(join("dup-5-1").unwrap_err().code, "batch_other_session");
+    // mẻ của phiên này nhưng đã hoàn tác hết
+    let mine = format!("dup-6-{}", std::process::id());
+    st.with_store(|s| Ok(s.undo_resolution(id, 6).map(|_| ())?)).unwrap();
+    let id2 = st.with_store(|s| Ok(s.begin_resolution(&mine, &foreign, 7)?)).unwrap();
+    st.with_store(|s| Ok(s.undo_resolution(id2, 8).map(|_| ())?)).unwrap();
+    assert_eq!(join(&mine).unwrap_err().code, "batch_undone");
+    assert!(dup_resolve::resolve_list(&st, false).unwrap().is_empty(), "không đổi gì");
 }
 
 #[test]

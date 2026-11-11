@@ -410,6 +410,23 @@ fn reactivate(state: &AppState, key: &FaceKey, scope: Scope, path: &str, failed:
     }
 }
 
+/// `joinBatch` hợp lệ? Mẻ do CHÍNH phiên này tạo (id `dup-<ms>-<pid>`, pid hiện tại), có ít nhất một dòng, và còn ít nhất
+/// một dòng chưa hoàn tác. Lỗi mang mã cho UI dịch; không đổi gì.
+fn check_joinable_batch(state: &AppState, batch: &str) -> Result<String, CmdError> {
+    let rows: Vec<ResolutionRow> = state.with_store(|s| Ok(s.resolutions(false)?))?.into_iter().filter(|r| r.batch_id == batch).collect();
+    if rows.is_empty() {
+        return Err(CmdError::new("batch_not_found", batch));
+    }
+    let mine = batch.strip_prefix("dup-").and_then(|r| r.rsplit_once('-')).is_some_and(|(_, pid)| pid == std::process::id().to_string());
+    if !mine {
+        return Err(CmdError::new("batch_other_session", batch));
+    }
+    if rows.iter().all(|r| r.undone_at.is_some()) {
+        return Err(CmdError::new("batch_undone", batch));
+    }
+    Ok(batch.to_string())
+}
+
 /// Áp dụng. Mỗi bản thua độc lập; mọi lỗi nằm trong `failed` (xem `ResolveFailureDto.code`).
 /// `trasher` chuyển tệp vào Thùng rác và trả đường dẫn mới (tiêm để test).
 pub fn resolve_apply(
@@ -420,7 +437,10 @@ pub fn resolve_apply(
 ) -> Result<ResolveResultDto, CmdError> {
     let _guard = lock();
     let (_, mut failed) = recover_pending_report(state, now)?;
-    let batch_id = format!("dup-{now}-{}", std::process::id());
+    let batch_id = match &req.join_batch {
+        Some(b) => check_joinable_batch(state, b)?,
+        None => format!("dup-{now}-{}", std::process::id()),
+    };
     let all_groups = duplicates::current_groups(state, None)?;
     let ctx = ctx_for(state, &all_groups)?;
     let trash = req.action == ResolveActionDto::Trash;

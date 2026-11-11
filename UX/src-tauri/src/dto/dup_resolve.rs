@@ -156,6 +156,12 @@ pub struct ResolveRequestDto {
     pub explicit_trash_paths: Vec<String>,
     #[serde(default)]
     pub mode: ResolveModeDto,
+    /// Ghi các quyết định của request này vào CÙNG mẻ với một `batchId` đã có (vd request "chỉ ẩn" thứ hai sau request
+    /// Thùng rác của cùng một thao tác của người dùng), để hoàn tác cả mẻ một lần. Batch phải tồn tại, do phiên này tạo,
+    /// và còn ít nhất một quyết định chưa hoàn tác; ngược lại cả request bị từ chối với lỗi `batch_not_found` |
+    /// `batch_other_session` | `batch_undone` (không đổi gì). Bỏ trống = mẻ mới.
+    #[serde(default)]
+    pub join_batch: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
