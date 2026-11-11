@@ -6,7 +6,7 @@ import { CmdError } from '../types';
 
 const req = (it: PlanItemDto, over: Partial<{ keeperPath: string; loserPaths: string[]; memberPaths: string[] }> = {}) => ({
   items: [{ kind: it.kind, key: it.key, keeperPath: it.keeper.path, loserPaths: it.losers.map(l => l.path), memberPaths: it.memberPaths, ...over }],
-  action: 'hide' as const, explicitTrashPaths: [] as string[], mode: 'chosen' as const,
+  action: 'hide' as const, explicitTrashPaths: [] as string[], mode: 'chosen' as const, joinBatch: null as string | null,
 });
 
 describe('mock resolve mirrors the backend contract', () => {
@@ -114,5 +114,19 @@ describe('mock resolve mirrors the backend contract', () => {
     const after = await find();
     expect(after.keeper.sourceId).toBe(2); expect(after.losers[0].sourceId).toBe(1);
     expect(resolveHooks(api)).toBeTruthy();
+  });
+
+  it('joinBatch puts a second request in the first request\'s batch; one undo reverts both; wrong batches are errors that change nothing', async () => {
+    const api = createMockApi();
+    const items = (await api.resolvePreview({ type: 'all_safe' })).items;
+    const first = await api.resolveApply({ ...req(items[0]), action: 'hide' });
+    const second = await api.resolveApply({ ...req(items[1]), joinBatch: first.batchId });
+    expect(second.batchId).toBe(first.batchId);
+    expect(new Set((await api.resolveList(false)).map(r => r.batchId)).size).toBe(1);
+    await expect(api.resolveApply({ ...req(items[2]), joinBatch: 'nope' })).rejects.toMatchObject({ code: 'batch_not_found' });
+    expect(await api.resolveList(false)).toHaveLength(2);
+    const u = await api.resolveUndo([...first.done, ...second.done].map(d => d.id));
+    expect(u.done).toHaveLength(2);
+    await expect(api.resolveApply({ ...req(items[2]), joinBatch: first.batchId })).rejects.toMatchObject({ code: 'batch_undone' });
   });
 });

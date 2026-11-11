@@ -299,7 +299,7 @@ describe('duplicates resolve', () => {
     expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'all_safe' }, q: toFaceQueryDto(q) } });
     await createTauriApi().resolvePreview({ type: 'group', kind: 'versions', key: 'K' });
     expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'group', kind: 'versions', key: 'K' }, q: toFaceQueryDto({}) } });
-    const req = { items: [{ kind: 'same_file' as const, key: 'k', keeperPath: '/a', loserPaths: ['/b'], memberPaths: ['/a', '/b'] }], action: 'trash' as const, explicitTrashPaths: ['/b'], mode: 'chosen' as const };
+    const req = { items: [{ kind: 'same_file' as const, key: 'k', keeperPath: '/a', loserPaths: ['/b'], memberPaths: ['/a', '/b'] }], action: 'trash' as const, explicitTrashPaths: ['/b'], mode: 'chosen' as const, joinBatch: 'b1' };
     await createTauriApi().resolveApply(req);
     expect(last()).toEqual({ cmd: 'resolve_apply', args: { req } });
     await createTauriApi().resolveUndo([3, 2]);

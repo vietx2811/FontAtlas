@@ -63,6 +63,7 @@ export const DUP_EN = {
   'dup.fail.trash_mismatch': '{name}: the file in the Trash is no longer the original', 'dup.fail.newer_resolution_depends': '{name}: a newer decision depends on this copy, undo the whole batch', 'dup.fail.db_error': '{name}: could not save the data',
   'dup.fail.rollback_failed': '{name}: handled, but one undo step did not work', 'dup.fail.reactivate_failed': '{name}: handled, but the font that was in use could not be turned back on',
   'dup.fail.keeper_activation_failed': '{name}: handled, but the kept copy could not be turned on', 'dup.fail.keeper_deactivate_failed': '{name}: undone, but the kept copy could not be turned off',
+  'dup.fail.batch_not_found': '{name}: the batch no longer exists, please review the plan again', 'dup.fail.batch_other_session': '{name}: this batch belongs to another run of the app', 'dup.fail.batch_undone': '{name}: this batch was already undone',
   'dup.fail.unknown': '{name}: could not be done',
   'dup.done.title': 'Resolved', 'dup.done.empty': 'No group resolved yet', 'dup.done.loading': 'Loading…', 'dup.done.error': 'Could not read the list: {msg}',
   'dup.done.batch': 'Batch {n}', 'dup.done.batchCount': '{n} copies', 'dup.done.undoBatch': 'Undo the whole batch', 'dup.done.undo': 'Undo',

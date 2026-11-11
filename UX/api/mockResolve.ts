@@ -94,7 +94,12 @@ export function createMockResolve(deps: MockResolveDeps) {
 
   async function apply(req: ResolveRequestDto): Promise<ResolveResultDto> {
     log.applied.push(structuredClone(req));
-    const batchId = `b${nextBatch++}`;
+    if (req.joinBatch) {
+      const rows = resolutions.filter(r => r.batchId === req.joinBatch);
+      if (rows.length === 0) throw new CmdError('batch_not_found', 'batch not found');
+      if (rows.every(r => r.undoneAt !== null)) throw new CmdError('batch_undone', 'batch already undone');
+    }
+    const batchId = req.joinBatch ?? `b${nextBatch++}`;
     const done: ResolutionDto[] = [], failed: ResolveFailureDto[] = [];
     const groups = await liveGroups();
     for (const it of req.items) {

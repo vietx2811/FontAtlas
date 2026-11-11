@@ -65,6 +65,7 @@ export const DUP_I18N = {
   'dup.fail.trash_mismatch': '{name}: tệp trong Thùng rác không còn là tệp cũ', 'dup.fail.newer_resolution_depends': '{name}: có quyết định mới hơn đang dựa vào bản này, hãy hoàn tác cả mẻ', 'dup.fail.db_error': '{name}: lỗi khi ghi dữ liệu',
   'dup.fail.rollback_failed': '{name}: đã xử lý, nhưng một bước đảo lại không thành công', 'dup.fail.reactivate_failed': '{name}: đã xử lý, nhưng không bật lại được font đang dùng',
   'dup.fail.keeper_activation_failed': '{name}: đã xử lý, nhưng không bật được bản giữ', 'dup.fail.keeper_deactivate_failed': '{name}: đã hoàn tác, nhưng không tắt được bản giữ',
+  'dup.fail.batch_not_found': '{name}: mẻ thao tác không còn nữa, hãy xem lại kế hoạch', 'dup.fail.batch_other_session': '{name}: mẻ này thuộc một lần mở app khác', 'dup.fail.batch_undone': '{name}: mẻ này đã được hoàn tác',
   'dup.fail.unknown': '{name}: chưa làm được',
   // Đã giải quyết
   'dup.done.title': 'Đã giải quyết', 'dup.done.empty': 'Chưa giải quyết nhóm nào', 'dup.done.loading': 'Đang tải…', 'dup.done.error': 'Không đọc được danh sách: {msg}',

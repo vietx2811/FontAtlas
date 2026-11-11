@@ -213,6 +213,8 @@ describe('DuplicatesPage: the Trash is a deliberate, per-file choice', () => {
     confirm();
     await waitFor(() => expect(hooks.__log.applied.length).toBe(2));
     const [trash, hide] = hooks.__log.applied;
+    expect(trash.joinBatch).toBeNull();
+    expect(hide.joinBatch).toMatch(/^b\d+$/); // the follow-up Hide joins the Trash request's batch
     expect(trash.action).toBe('trash'); expect(trash.mode).toBe('chosen');
     expect(trash.explicitTrashPaths).toEqual([]);
     const sent = trash.items.flatMap(i => i.loserPaths);
@@ -320,8 +322,8 @@ describe('DuplicatesPage: Đã giải quyết', () => {
     // Oswald has three copies: hide one keeping A, then hide A keeping the third → chain
     const plan = await api.resolvePreview({ type: 'group', kind: 'formats', key: 'Oswald|Regular|400|false' });
     const it = plan.items[0]; const all = [it.keeper, ...it.losers];
-    const first = await api.resolveApply({ items: [{ kind: it.kind, key: it.key, keeperPath: all[0].path, loserPaths: [all[1].path], memberPaths: it.memberPaths }], action: 'hide', explicitTrashPaths: [], mode: 'chosen' });
-    const second = await api.resolveApply({ items: [{ kind: it.kind, key: it.key, keeperPath: all[2].path, loserPaths: [all[0].path], memberPaths: it.memberPaths.filter(p => p !== all[1].path) }], action: 'hide', explicitTrashPaths: [], mode: 'chosen' });
+    const first = await api.resolveApply({ items: [{ kind: it.kind, key: it.key, keeperPath: all[0].path, loserPaths: [all[1].path], memberPaths: it.memberPaths }], action: 'hide', explicitTrashPaths: [], mode: 'chosen', joinBatch: null });
+    const second = await api.resolveApply({ items: [{ kind: it.kind, key: it.key, keeperPath: all[2].path, loserPaths: [all[0].path], memberPaths: it.memberPaths.filter(p => p !== all[1].path) }], action: 'hide', explicitTrashPaths: [], mode: 'chosen', joinBatch: null });
     expect(first.done).toHaveLength(1); expect(second.done).toHaveLength(1);
     render(<DuplicatesPage api={api} />);
     click(await screen.findByRole('tab', { name: 'Đã giải quyết' }));
@@ -412,5 +414,33 @@ describe('DuplicatesPage: review fixes', () => {
     confirm();
     const close = await screen.findByRole('button', { name: 'Đóng' });
     await waitFor(() => expect(document.activeElement).toBe(close));
+  });
+});
+
+describe('DuplicatesPage: one Trash action is one batch', () => {
+  it('Trash + Hide land in a single batch row; one "Hoàn tác mẻ" undoes both', async () => {
+    const api = await mount();
+    click(screen.getByTestId('resolve-all-safe'));
+    const d = await screen.findByRole('dialog'); await within(d).findByTestId('pv-summary');
+    click(within(d).getByLabelText(/Chuyển vào Thùng rác/)); confirm();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    click(screen.getByRole('tab', { name: 'Đã giải quyết' }));
+    expect(await screen.findAllByTestId('dup-res-row')).toHaveLength(4);
+    expect(screen.getAllByTestId('dup-batch')).toHaveLength(1);
+    click(screen.getByRole('button', { name: 'Hoàn tác cả mẻ' }));
+    await waitFor(() => expect(screen.queryAllByTestId('dup-res-row')).toHaveLength(0));
+    expect(await api.resolveList(false)).toEqual([]);
+  });
+
+  it('a batch_* error on the follow-up request is reported in words, the first request stays done', async () => {
+    const api = await mount();
+    const real = api.resolveApply.bind(api); let n = 0;
+    vi.spyOn(api, 'resolveApply').mockImplementation(async r => { if (++n === 2) throw new (await import('../../../api/types')).CmdError('batch_not_found', 'x'); return real(r); });
+    click(screen.getByTestId('resolve-all-safe'));
+    const d = await screen.findByRole('dialog'); await within(d).findByTestId('pv-summary');
+    click(within(d).getByLabelText(/Chuyển vào Thùng rác/)); confirm();
+    expect((await screen.findByTestId('res-fails')).textContent).toMatch(/mẻ thao tác không còn nữa/);
+    expect(document.body.textContent).not.toMatch(/batch_not_found/);
+    expect((await api.resolveList(false)).length).toBe(2);
   });
 });
