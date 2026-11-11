@@ -16,7 +16,7 @@ for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre
 # G (cuối QA): bản chép một font hệ thống (giống hệt từng byte) → trạng thái "Có sẵn trên máy". Không có thì QA bỏ qua bước.
 SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
-sed "s#__QA_DIR__#$QA#g" "$HERE/main_flows.js" > "$QA/qa.js"
+sed -e "s#__QA_DIR__#$QA#g" -e "s#__QA_LANG__#${QA_LANG:-vi}#g" "$HERE/main_flows.js" > "$QA/qa.js"
 # Lỗi cú pháp trong kịch bản làm QA "treo" 15 phút mà không ghi bước nào: kiểm trước khi mở app.
 if command -v node >/dev/null; then node --check "$QA/qa.js" || { echo "qa.js lỗi cú pháp"; exit 1; }; fi
 FONTATLAS_DATA_DIR="$QA/data" FONTATLAS_QA_SCRIPT="$QA/qa.js" "$APP" > "$QA/app.log" 2>&1 &
@@ -36,5 +36,5 @@ import sys, json
 fail = 0
 for line in sys.stdin:
     d = json.loads(line); fail += not d["ok"]
-    print("OK  " if d["ok"] else "FAIL", "%4ss" % d.get("t", "?"), d["step"], "" if d["ok"] else json.dumps(d["detail"], ensure_ascii=False)[:600])
+    print("OK  " if d["ok"] else "FAIL", "%4ss" % d.get("t", "?"), d["step"], "" if d["ok"] else json.dumps(d.get("detail"), ensure_ascii=False)[:600])
 sys.exit(1 if fail else 0)'

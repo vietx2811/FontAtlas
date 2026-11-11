@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FamilyStyleDto } from '../../api';
 import type { FontFaceLoader } from '../../features/library-grid/fontFaceLoader';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { FaceTitle } from '../ui/FaceTitle';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -77,21 +77,21 @@ export function StyleDropdown({ styles, value, onChange, loader = null, family }
 
   return (
     <div ref={root} className={`fa-dd${open ? ' open' : ''}${family ? ' has-act' : ''}`}>
-      <button ref={btn} type="button" className="fa-dd-btn" aria-label="Kiểu chữ" aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
+      <button ref={btn} type="button" className="fa-dd-btn" aria-label={t('dd.styleLabel')} aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
         onClick={() => (open ? close() : show())} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); show(); } }}>
         <span className="cur" style={current ? css(current) : undefined}>{current ? title(current, styleLabel(current)) : '—'}</span>
-        <span className="cnt">{flat.length} kiểu</span>
+        <span className="cnt">{tn('dd.count', { n: flat.length })}</span>
         {!disabled && <span className="chev" aria-hidden />}
       </button>
       {family && (
-        <Tooltip label={t(family.on ? 'act.family.on' : 'act.family.off', { n: flat.length })}>
+        <Tooltip label={tn(family.on ? 'act.family.on' : 'act.family.off', { n: flat.length })}>
           <button type="button" className="fa-dd-act" data-testid="family-active" aria-label={t('act.family.label')} aria-pressed={family.on} onClick={family.onToggle}>
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M12 3.5v8M7.2 6.6a7.5 7.5 0 1 0 9.6 0" /></svg>
           </button>
         </Tooltip>
       )}
       {open && (
-        <ul ref={list} className="fa-dd-list" role="listbox" tabIndex={-1} aria-label="Kiểu chữ" aria-activedescendant={optId(active)} onKeyDown={onListKey}>
+        <ul ref={list} className="fa-dd-list" role="listbox" tabIndex={-1} aria-label={t('dd.styleLabel')} aria-activedescendant={optId(active)} onKeyDown={onListKey}>
           {romans.map(option)}
           {italics.length > 0 && romans.length > 0 && <li role="separator" className="sep" />}
           {italics.map(option)}

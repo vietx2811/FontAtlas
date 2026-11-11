@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AUTO_I18N } from '../auto';
-import { AUTO_EN } from '../en-pending/auto.en';
+import { AUTO_EN } from '../en/auto';
 
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
 

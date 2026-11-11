@@ -84,8 +84,8 @@ pub struct EmbedFailureDto {
 pub struct SettingsDto {
     pub embed_enabled: bool,
     pub license_notice_ack: bool,
-    /// "vi" | "en"
-    pub ui_lang: String,
+    /// "vi" | "en"; null = chưa chọn (theo ngôn ngữ hệ thống)
+    pub ui_lang: Option<String>,
     pub sample_text: String,
     pub project_vi_default: bool,
     pub keep_active_on_exit: bool,

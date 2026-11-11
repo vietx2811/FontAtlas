@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { COMPARE_METRICS, type CompareDto, type CompareFace } from '../../api/compare';
-import { hasKey, t, type I18nKey } from '../../i18n';
+import { hasKey, t, type I18nKey, tn } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { COMPARE_MAX, COMPARE_MIN, OVERLAY_MAX, useUiStore } from '../../store/ui';
 import { Icon } from '../sidebar/icons';
@@ -138,7 +138,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
     const sess = useUiStore.getState().compareSession; if (!sess) return;
     const bad = data.failed.filter(x => sess.faces.some(f => keyOf(f) === keyOf(x.face)));
     if (bad.length === 0) return;
-    useNoticeStore.getState().push({ kind: 'error', text: t('compare.skipped', { n: bad.length, reason: bad.map(x => x.reason).join('; ') }) });
+    useNoticeStore.getState().push({ kind: 'error', text: tn('compare.skipped', { n: bad.length, reason: bad.map(x => x.reason).join('; ') }) });
     useUiStore.getState().pruneCompareFaces(bad.map(x => keyOf(x.face)));
     const gone = new Set(bad.map(x => keyOf(x.face)));
     setData(d => (d ? { ...d, failed: d.failed.filter(x => !gone.has(keyOf(x.face))) } : d));
@@ -236,7 +236,7 @@ export function ComparePage({ api, faces }: { api: Api; faces: FaceKeyDto[] }): 
   return (
     <div className="cmp">
       {header}
-      {data.failed.length > 0 && <div role="alert" className="cmp-state warn">{t('compare.skipped', { n: data.failed.length, reason: data.failed.map(x => x.reason).join('; ') })}</div>}
+      {data.failed.length > 0 && <div role="alert" className="cmp-state warn">{tn('compare.skipped', { n: data.failed.length, reason: data.failed.map(x => x.reason).join('; ') })}</div>}
       <div className="cmp-body">
         {overlay && <OverlayPanel api={api} base={base} selected={data.faces.filter(f => overlayIds.includes(keyOf(f.face)))} scale={scale} />}
         <div className="cmp-tbl" role="table" aria-label={t('compare.title')} style={{ ['--n' as string]: shown.length }}>

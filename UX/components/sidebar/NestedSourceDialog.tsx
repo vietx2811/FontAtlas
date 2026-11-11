@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { SourceDto } from '../../api';
+import { t, tn } from '../../i18n';
 
 export type Nesting = 'inside' | 'contains';
 type Props = {
@@ -13,25 +14,25 @@ export function NestedSourceDialog({ newPath, existing, nesting, onCancel, onCre
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { box.current?.querySelector<HTMLButtonElement>('button')?.focus(); }, []);
   const name = baseName(newPath);
-  const title = nesting === 'inside' ? 'Thư mục này nằm trong một nguồn đã có' : `Thư mục này chứa nguồn “${existing.name}” đã có`;
+  const title = nesting === 'inside' ? t('nsd.titleInside') : t('nsd.titleContains', { name: existing.name });
   return (
     <div className="fa-modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div ref={box} role="dialog" aria-modal="true" aria-labelledby="d4-title" className="fa-modal" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onCancel(); } }}>
         <h2 id="d4-title">{title}</h2>
         <dl className="fa-d4-paths">
-          <dt>Mới</dt><dd>{newPath}</dd>
-          <dt>Đã có</dt><dd>{existing.path}<span className="fa-d4-count"> ({existing.faceCount} font)</span></dd>
+          <dt>{t('nsd.new')}</dt><dd>{newPath}</dd>
+          <dt>{t('nsd.existing')}</dt><dd>{existing.path}<span className="fa-d4-count">{tn('nsd.count', { n: existing.faceCount })}</span></dd>
         </dl>
         {nesting === 'inside' ? (
-          <p>Font trong “{name}” đã có trong thư viện qua nguồn “{existing.name}”. Muốn nhóm riêng font này, hãy tạo một collection.</p>
+          <p>{t('nsd.bodyInside', { name, source: existing.name })}</p>
         ) : (
-          <p>Thay nguồn cũ bằng thư mục này: yêu thích, collection và thẻ được giữ vì khoá theo hash; chỉ quét lại phần mới.</p>
+          <p>{t('nsd.bodyReplace')}</p>
         )}
         <div className="fa-modal-actions">
-          <button type="button" onClick={onCancel}>Huỷ</button>
+          <button type="button" onClick={onCancel}>{t('nsd.cancel')}</button>
           {nesting === 'inside'
-            ? <button type="button" className="primary" onClick={() => onCreateCollection(name)}>Tạo collection “{name}”</button>
-            : <button type="button" className="primary" onClick={onReplace}>Thay nguồn cũ bằng thư mục này</button>}
+            ? <button type="button" className="primary" onClick={() => onCreateCollection(name)}>{t('nsd.createCollection', { name })}</button>
+            : <button type="button" className="primary" onClick={onReplace}>{t('nsd.replace')}</button>}
         </div>
       </div>
     </div>

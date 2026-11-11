@@ -123,7 +123,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
   const boot = (): BootStatusDto => ({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
-  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true };
+  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: null, sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true };
 
   const simulateScan = (id: number) => {
     const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));

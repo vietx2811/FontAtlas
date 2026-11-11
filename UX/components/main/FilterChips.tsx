@@ -22,7 +22,7 @@ export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view =
   if (f.variable != null) out.push({ id: 'variable', label: t('filter.variable'), remove: drop('variable') });
   if (f.italic != null) out.push({ id: 'italic', label: t('filter.italic'), remove: drop('italic') });
   if (f.favoritesOnly && !forced.favorites) out.push({ id: 'favorites', label: t('filter.favorites'), remove: drop('favoritesOnly') });
-  for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? `Nguồn ${id}`, remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
+  for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? t('main.sourceN', { id }), remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
   // Trang Trùng lặp không lọc theo thẻ: không hiện chip/đếm bộ lọc không có tác dụng.
   for (const id of view === 'dups' ? [] : f.tagIds ?? []) out.push({ id: `tag:${id}`, label: t('filter.tag', { name: tags.find(x => x.id === id)?.name ?? '…' }), remove: x => { const next = (x.tagIds ?? []).filter(v => v !== id); const { tagIds: _, ...rest } = x; return next.length ? { ...rest, tagIds: next } : rest; } });
   for (const c of f.classes ?? []) out.push({ id: `class:${c}`, label: classLabel(c), remove: x => { const next = (x.classes ?? []).filter(v => v !== c); const { classes: _, ...rest } = x; return next.length ? { ...rest, classes: next } : rest; } });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DUP_I18N } from '../dup';
-import { DUP_EN, DUP_TERMS_EN } from '../en-pending/dup.en';
+import { DUP_EN, DUP_TERMS_EN } from '../en/dup';
 import { hasKey } from '../index';
 
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();

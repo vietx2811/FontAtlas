@@ -8,7 +8,7 @@ import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
 import { Outro, OUTRO_MS } from './Outro';
 import { usePrefersReducedMotion } from './blueprint';
-import { t } from '../../i18n';
+import { chooseLocale, t, useLocale } from '../../i18n';
 import { isSplashOpen } from '../splash/splashState';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
@@ -120,7 +120,7 @@ const Actions = ({ children }: { children: React.ReactNode }) => <div className=
 const Primary = ({ safe, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { safe?: boolean }) => <button type="button" className="primary" data-keynav={safe ? '' : undefined} {...p} />;
 
 function O1({ api, next, finish }: Ctx) {
-  const [lang, setLang] = useState<'vi' | 'en'>('vi');
+  const lang = useLocale();
   const [theme, setTheme] = useState<ThemeMode>('system');
   return (
     <>
@@ -128,7 +128,7 @@ function O1({ api, next, finish }: Ctx) {
       <p>Phân tích giải phẫu font, tìm font tương tự và ghép cặp có giải thích theo từng trục.</p>
       <fieldset className="fa-onb-field"><legend>Ngôn ngữ</legend>
         {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, label]) => (
-          <label key={v}><input type="radio" name="lang" checked={lang === v} onChange={() => { setLang(v); void api.setSettings({ uiLang: v }); }} />{label}</label>))}
+          <label key={v}><input type="radio" name="lang" checked={lang === v} onChange={() => { chooseLocale(v); void api.setSettings({ uiLang: v }); }} />{label}</label>))}
       </fieldset>
       <fieldset className="fa-onb-field"><legend>Giao diện</legend>
         {([['system', 'Theo hệ thống'], ['light', 'Sáng'], ['dark', 'Tối']] as const).map(([v, label]) => (

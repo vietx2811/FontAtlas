@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { RangeSlider, type Range } from './RangeSlider';
 import { TermTip, termKey, termName } from '../ui/terms';
-import { t } from '../../i18n';
+import { t, localeTag } from '../../i18n';
 import './axisRow.css';
 
 export type AxisRowProps = {
@@ -31,7 +31,7 @@ const parse = (s: string): number => Number(s.trim().replace(',', '.'));
 
 /** Một hàng bộ lọc trục: tên (TermTip có hình), slider hai đầu, ô nhập số tại chỗ. Nháy đúp thanh = bỏ lọc. */
 export function AxisRow({ axis, source, min, max, step, ticks, fullMin: fMin, fullMax: fMax, value, digits = 2, format, onChange, children, extra, empty, count }: AxisRowProps): React.JSX.Element {
-  const fmt = format ?? ((v: number) => new Intl.NumberFormat('vi-VN', { useGrouping: false, maximumFractionDigits: digits }).format(v));
+  const fmt = format ?? ((v: number) => new Intl.NumberFormat(localeTag(), { useGrouping: false, maximumFractionDigits: digits }).format(v));
   const fullMin = Math.min(fMin ?? min, min); const fullMax = Math.max(fMax ?? max, max);
   const shown: Range = value ?? [fullMin, fullMax];
   // Đầu thanh nằm ở mép miền hiển thị → cận mở (cực trị thật); cả hai đầu mở = không lọc.

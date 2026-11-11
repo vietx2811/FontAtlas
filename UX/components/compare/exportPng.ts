@@ -315,8 +315,8 @@ export function renderCompareCanvas(input: ExportInput): HTMLCanvasElement | nul
 export async function renderCompareBlob(input: ExportInput): Promise<{ blob: Blob; name: string }> {
   const loaded = await ensureFonts(input.families.values(), input.sample);
   const canvas = renderCompareCanvas({ ...input, loaded });
-  if (!canvas) throw new Error('canvas 2D không khả dụng');
+  if (!canvas) throw new Error(t('png.noCanvas'));
   const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
-  if (!blob) throw new Error('không tạo được ảnh');
+  if (!blob) throw new Error(t('png.noImage'));
   return { blob, name: exportFileName(input.data) };
 }

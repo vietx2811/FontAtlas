@@ -1,0 +1,21 @@
+/** Chuỗi giao diện khu «err» (vi). */
+export const ERR_I18N = {
+  'err.internal': 'Lỗi nội bộ của Font Atlas.',
+  'err.invalid_arg': 'Yêu cầu không hợp lệ.',
+  'err.not_found': 'Không tìm thấy mục này.',
+  'err.busy': 'Font Atlas đang bận, hãy thử lại sau giây lát.',
+  'err.io': 'Không đọc hoặc ghi được tệp.',
+  'err.exists': 'Đã có tệp trùng tên; hãy chọn tên khác.',
+  'err.sqlite': 'Lỗi cơ sở dữ liệu của thư viện.',
+  'err.newer_schema': 'Dữ liệu được tạo bởi bản Font Atlas mới hơn.',
+  'err.migration': 'Không nâng cấp được dữ liệu thư viện.',
+  'err.bad_hash': 'Mã định danh font không hợp lệ.',
+  'err.legacy': 'Không đọc được dữ liệu cũ.',
+  'err.nested_source': 'Thư mục này lồng với một nguồn có sẵn.',
+  'err.permission_denied': 'macOS không cho phép đọc thư mục này.',
+  'err.timeout': 'Không mở được thư mục sau vài giây (có thể đang chờ cấp quyền).',
+  'err.model_missing': 'Model chưa được phát hành.',
+  'err.insufficient_disk': 'Không đủ chỗ trống để tải model.',
+  'err.cloud_busy': 'Ổ cloud đang bận tải font khác, thử lại sau.',
+  'err.generic': 'Đã xảy ra lỗi ({code}).',
+} as const;

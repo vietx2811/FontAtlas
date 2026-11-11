@@ -49,8 +49,14 @@ describe('Settings', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'English' }));
       await settle();
       expect(set).toHaveBeenLastCalledWith({ uiLang: 'en' });
-      fireEvent.click(screen.getByRole('radio', { name: 'Tối' }));
+      expect(document.documentElement.lang).toBe('en');
+      // Ngôn ngữ đổi ngay, không cần khởi động lại: nhãn đã sang tiếng Anh.
+      fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
       expect(document.documentElement.dataset.theme).toBe('dark');
+      fireEvent.click(screen.getByRole('radio', { name: 'Tiếng Việt' }));
+      await settle();
+      expect(set).toHaveBeenLastCalledWith({ uiLang: 'vi' });
+      expect(screen.getByRole('radio', { name: 'Tối' })).toBeTruthy();
       fireEvent.change(screen.getByRole('textbox', { name: 'Chữ mẫu mặc định' }), { target: { value: 'Bún chả' } });
       await settle();
       expect(set).toHaveBeenLastCalledWith({ sampleText: 'Bún chả' });

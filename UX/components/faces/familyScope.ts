@@ -1,5 +1,6 @@
 import type { Api } from '../../api';
 import { faceKey, type FamilyScope } from '../../store/ui';
+import { t } from '../../i18n';
 
 export const FAMILY_MAX = 2000;
 
@@ -7,7 +8,7 @@ export const FAMILY_MAX = 2000;
 export async function fetchFamilyScope(api: Api, family: string): Promise<FamilyScope> {
   const styles = await api.getFamilyStyles(family);
   const faces = [...new Map(styles.map(s => [faceKey(s.face), s.face])).values()];
-  if (!faces.length) throw new Error('Family chưa có kiểu font khả dụng.');
-  if (faces.length > FAMILY_MAX) throw new Error('Family có hơn 2.000 kiểu; hãy mở font đại diện.');
+  if (!faces.length) throw new Error(t('faces.famNoStyles'));
+  if (faces.length > FAMILY_MAX) throw new Error(t('faces.famTooBig'));
   return { name: family, faces };
 }

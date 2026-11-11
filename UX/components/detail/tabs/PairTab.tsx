@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole, PeekOpenResultDto } from '../../../api';
-import { t } from '../../../i18n';
+import { t, getLocale } from '../../../i18n';
 import { useNoticeStore } from '../../../store/notices';
 import { Modal } from '../../Modal';
 import '../../desk/desk.css';
@@ -15,7 +15,7 @@ import { TermOrTip, termKey } from '../../ui/terms';
 import { AXIS_META } from './AnatomyTab';
 import { PARAGRAPH } from './SpecimenTab';
 
-const MODES: Array<[PairMode, string]> = [['safe', 'An toàn'], ['controlled', 'Có kiểm soát'], ['experimental', 'Thử nghiệm']];
+const modes = (): Array<[PairMode, string]> => [['safe', t('pair.gate.safe')], ['controlled', t('pair.gate.controlled')], ['experimental', t('pair.gate.experimental')]];
 
 type Props = { api: Api; detail: FaceDetailDto; css: CSSProperties };
 
@@ -35,7 +35,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   useEffect(() => {
     let alive = true;
     setIdx(0); setError(null);
-    api.pairCandidates({ hashHex: hash, faceIndex: index }, { role, mode, projectVi, k: 12, collectionId: null, lang: 'vi' }).then(
+    api.pairCandidates({ hashHex: hash, faceIndex: index }, { role, mode, projectVi, k: 12, collectionId: null, lang: getLocale() }).then(
       c => { if (alive) setCands(c); },
       e => { if (alive) { setCands([]); setError(e?.message ?? String(e)); } },
     );
@@ -56,22 +56,22 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   const candFamily = useFontFamily(api, cand ? { hashHex: cand.row.hashHex, faceIndex: cand.row.faceIndex, fileSize: cand.row.fileSize } : null);
   const candCss: CSSProperties = { fontFamily: candFamily ? `"${candFamily}", var(--font-ui)` : undefined, fontWeight: cand?.row.weightClass ?? undefined, fontStyle: cand?.row.isItalic ? 'italic' : undefined };
   const [headCss, bodyCss] = role === 'heading' ? [css, candCss] : [candCss, css];
-  const modeName = MODES.find(([m]) => m === mode)![1];
+  const modeName = modes().find(([m]) => m === mode)![1];
   const lacksVi = role === 'heading' && projectVi && detail.row.viMissing > 0;
 
   return (
     <>
       <div className="fa-pair-bar">
-        <div className="fa-seg-sm" role="group" aria-label="Vai trò của font này">
-          <button type="button" aria-pressed={role === 'heading'} onClick={() => setRole('heading')}>Font này là tiêu đề</button>
-          <button type="button" aria-pressed={role === 'body'} onClick={() => setRole('body')}>Font này là nội dung</button>
+        <div className="fa-seg-sm" role="group" aria-label={t('pt.roleGroup')}>
+          <button type="button" aria-pressed={role === 'heading'} onClick={() => setRole('heading')}>{t('pt.isHeading')}</button>
+          <button type="button" aria-pressed={role === 'body'} onClick={() => setRole('body')}>{t('pt.isBody')}</button>
         </div>
-        <div className="fa-seg-sm" role="group" aria-label="Chế độ ghép">
-          {MODES.map(([m, name]) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>{name}</button>)}
+        <div className="fa-seg-sm" role="group" aria-label={t('pt.modeGroup')}>
+          {modes().map(([m, name]) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}>{name}</button>)}
         </div>
         <label className="fa-switch-row">
-          <span>Dự án dùng tiếng Việt</span>
-          <button type="button" role="switch" className="fa-switch" aria-checked={projectVi} aria-label="Dự án dùng tiếng Việt" onClick={() => setProjectVi(v => !v)} />
+          <span>{t('pt.projectVi')}</span>
+          <button type="button" role="switch" className="fa-switch" aria-checked={projectVi} aria-label={t('pt.projectVi')} onClick={() => setProjectVi(v => !v)} />
         </label>
       </div>
 
@@ -88,26 +88,26 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
       {error && <p role="alert" className="fa-soon">{t('desk.candFail', { msg: error })}</p>}
 
       {!cand && !error && (() => {
-        if (lacksVi) return <ZeroState compact glyph="ạ" text="Font tiêu đề này thiếu ký tự tiếng Việt" action={{ id: 'see', label: 'Xem ký tự thiếu' }} onAction={() => setPanelTab('vi')} />;
+        if (lacksVi) return <ZeroState compact glyph="ạ" text={t('pt.lacksVi')} action={{ id: 'see', label: t('pt.seeMissing') }} onAction={() => setPanelTab('vi')} />;
         const nextMode = mode === 'safe' ? 'controlled' : mode === 'controlled' ? 'experimental' : null;
-        const nextName = MODES.find(([m]) => m === nextMode)?.[1];
-        const action = nextMode ? { id: 'mode', label: `Thử ${nextName}` } : projectVi ? { id: 'vi', label: 'Tắt dự án tiếng Việt' } : undefined;
-        return <ZeroState compact glyph="ơ" text={`Không có ứng viên ở chế độ ${modeName}`} action={action} onAction={id => (id === 'mode' ? setMode(nextMode!) : setProjectVi(false))} />;
+        const nextName = modes().find(([m]) => m === nextMode)?.[1];
+        const action = nextMode ? { id: 'mode', label: t('pt.tryMode', { name: nextName ?? '' }) } : projectVi ? { id: 'vi', label: t('pt.turnOffVi') } : undefined;
+        return <ZeroState compact glyph="ơ" text={t('pt.noCands', { mode: modeName })} action={action} onAction={id => (id === 'mode' ? setMode(nextMode!) : setProjectVi(false))} />;
       })()}
 
       {cand && (
         <>
           <div className="fa-pair-nav">
-            <button type="button" aria-label="Ứng viên trước" disabled={idx === 0} onClick={() => setIdx(i => Math.max(0, i - 1))}>◀</button>
+            <button type="button" aria-label={t('pt.prev')} disabled={idx === 0} onClick={() => setIdx(i => Math.max(0, i - 1))}>◀</button>
             <span data-testid="pair-counter">{idx + 1} / {cands.length}</span>
-            <button type="button" aria-label="Ứng viên sau" disabled={idx >= cands.length - 1} onClick={() => setIdx(i => Math.min(cands.length - 1, i + 1))}>▶</button>
+            <button type="button" aria-label={t('pt.next')} disabled={idx >= cands.length - 1} onClick={() => setIdx(i => Math.min(cands.length - 1, i + 1))}>▶</button>
           </div>
           <div className="fa-pair-card" {...faceMenuProps(faceActions, [cand.row])}>
             <div className="fa-pair-heading" data-testid="pair-heading" style={{ ...headCss, fontSize: 26, lineHeight: 1.2 }}>{sample.trim() || 'Phở bò Hà Nội'}</div>
             <p className="fa-pair-body" data-testid="pair-body" style={{ ...bodyCss, fontSize: 14, lineHeight: 1.55, margin: 0 }}>{PARAGRAPH}</p>
           </div>
           <p className="fa-pair-name" {...faceMenuProps(faceActions, [cand.row])}>
-            <FaceTitle api={api} face={cand.row} className="fa-pair-title">{cand.row.family}{cand.row.subfamily ? ` ${cand.row.subfamily}` : ''}</FaceTitle> · {role === 'heading' ? 'nội dung' : 'tiêu đề'}
+            <FaceTitle api={api} face={cand.row} className="fa-pair-title">{cand.row.family}{cand.row.subfamily ? ` ${cand.row.subfamily}` : ''}</FaceTitle> · {role === 'heading' ? t('pt.asBody') : t('pt.asHeading')}
           </p>
           <p data-testid="pair-summary" className="fa-pair-summary">{cand.summary}</p>
           <ul className="fa-pair-labels">

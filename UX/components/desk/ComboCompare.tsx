@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Api } from '../../api';
 import type { CaseCompareDto, ComboColumnDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
-import { t } from '../../i18n';
+import { t, getLocale, tn } from '../../i18n';
 import { useFontStatus } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
@@ -41,7 +41,7 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     let alive = true; setErr(null);
-    api.caseCompare(caseId, [], 'vi').then(d => { if (alive) setData(d); }, e => { if (alive) setErr(e?.message ?? String(e)); });
+    api.caseCompare(caseId, [], getLocale()).then(d => { if (alive) setData(d); }, e => { if (alive) setErr(e?.message ?? String(e)); });
     return () => { alive = false; };
   }, [api, caseId]);
   if (err) return <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: err })}</p>;
@@ -75,8 +75,8 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
             </td>))}</tr>
           <tr data-row="vi"><th scope="row" className="has-tip"><Tooltip label={t('cc.vi.tip')}><span>{t('cc.vi')}</span></Tooltip></th>{cols.map(c => (
             <td key={c.combo.id} data-testid="cc-vi">
-              {c.worstViMissing === null ? '—' : c.worstViMissing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: c.worstViMissing })}
-              {c.missingCount > 0 && <NoteMark inline kind="warn" text={t('cc.partial', { n: c.missingCount })} />}
+              {c.worstViMissing === null ? '—' : c.worstViMissing === 0 ? t('strip.viOk') : tn('strip.viMissing', { n: c.worstViMissing })}
+              {c.missingCount > 0 && <NoteMark inline kind="warn" text={tn('cc.partial', { n: c.missingCount })} />}
             </td>))}</tr>
           <tr data-row="fonts"><th scope="row">{t('cc.fonts')}</th>{cols.map(c => <td key={c.combo.id}>{c.fontCount}</td>)}</tr>
           <tr data-row="license"><th scope="row">{t('cc.license')}</th>{cols.map(c => <td key={c.combo.id}>{c.licenses.length ? c.licenses.join(' · ') : '—'}</td>)}</tr>

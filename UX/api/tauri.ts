@@ -7,18 +7,28 @@ import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
+import { t, getLocale, hasKey } from '../i18n';
 
 /** Đọc Blob thành ArrayBuffer (jsdom và WebView cũ chưa có Blob.arrayBuffer: dùng FileReader). */
 const blobBuffer = (b: Blob): Promise<ArrayBuffer> => (typeof b.arrayBuffer === 'function' ? b.arrayBuffer() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as ArrayBuffer); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); }));
+
+/**
+ * Backend viết thông báo lỗi bằng tiếng Việt (chi tiết kỹ thuật cho nhật ký). Giao diện tiếng Anh thay bằng câu theo `code`; tiếng Việt giữ nguyên câu gốc.
+ */
+export function localizeCmdMessage(code: string, message: string): string {
+  if (getLocale() === 'vi') return message;
+  const key = `err.${code}`;
+  return hasKey(key) ? t(key) : t('err.generic', { code });
+}
 
 /** Lệnh Tauri reject bằng object `{code, message, detail}` (CmdError của 6a); gói lại thành lớp để `instanceof` được. */
 export function toCmdError(e: unknown): CmdError {
   if (e instanceof CmdError) return e;
   if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
     const x = e as { code: string; message: string; detail?: unknown };
-    return new CmdError(x.code, x.message, x.detail ?? undefined);
+    return new CmdError(x.code, localizeCmdMessage(x.code, x.message), x.detail ?? undefined);
   }
-  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? 'lỗi không rõ');
+  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? t('api.unknownError'));
 }
 
 type Args<K extends CommandName> = TauriCommandMap[K]['args'];
@@ -132,17 +142,17 @@ export function createTauriApi(): Api {
     reorderCombos: (caseId, ids) => none(call('reorder_combos', { caseId, ids })),
     setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
     createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
-    caseCompare: (caseId, comboIds, lang = 'vi') => call('case_compare', { caseId, comboIds, lang }),
+    caseCompare: (caseId, comboIds, lang = getLocale()) => call('case_compare', { caseId, comboIds, lang }),
     briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),
     axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
-      return fromWire(await call('compare_faces', { faces, opts: { lang: 'vi' } }));
+      return fromWire(await call('compare_faces', { faces, opts: { lang: getLocale() } }));
     },
     async pairThese(faces, o = {}) {
       if (faces.length < 2 || faces.length > 4) throw new Error(`pair these needs 2–4 faces, got ${faces.length}`);
-      return call('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: 'vi', maxCombos: o.maxCombos ?? 3 } });
+      return call('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: getLocale(), maxCombos: o.maxCombos ?? 3 } });
     },
     async savePng(png, suggestedName) {
       // Backend mở hộp thoại Lưu (lọc .png), kiểm PNG magic và ≤ 32 MB, rồi ghi file; trả đường dẫn hoặc null nếu huỷ.

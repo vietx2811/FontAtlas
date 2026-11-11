@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { Modal } from '../Modal';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
@@ -119,7 +119,7 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
 type HeldProps = { collectionCount: number; onCancel(): void; onConfirm(): void };
 export function HeldDialog({ collectionCount, onCancel, onConfirm }: HeldProps): React.JSX.Element {
   return (
-    <Modal title={t('act.held.title', { n: collectionCount })} onClose={onCancel}>
+    <Modal title={tn('act.held.title', { n: collectionCount })} onClose={onCancel}>
       <p>{t('act.held.body')}</p>
       <div className="fa-modal-actions">
         <button type="button" onClick={onCancel}>{t('act.held.cancel')}</button>
