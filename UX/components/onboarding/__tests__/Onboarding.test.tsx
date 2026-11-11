@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { CmdError } from '../../../api';
 import { Onboarding } from '../Onboarding';
 import { setSplashOpen } from '../../splash/splashState';
+import { setLocale } from '../../../i18n';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name })); }); await settle(); };
@@ -20,7 +21,18 @@ const heading = () => screen.getByRole('heading', { level: 1 }).textContent;
 
 describe('Onboarding', () => {
   beforeEach(() => document.documentElement.removeAttribute('data-theme'));
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => { vi.useRealTimers(); setLocale('vi'); });
+
+  it('choosing English at O1 switches the title and numbers at once, and saves uiLang', async () => {
+    const { api } = await mount();
+    expect(heading()).toBe('Chào mừng đến với Font Atlas');
+    await act(async () => { fireEvent.click(screen.getByRole('radio', { name: 'English' })); });
+    await settle();
+    expect(heading()).toBe('Welcome to Font Atlas');
+    expect((await api.getSettings()).uiLang).toBe('en');
+    await click('Get started');
+    expect(heading()).not.toMatch(/[ăâđêôơư]/i);
+  });
 
   it('walks the whole first run and saves every step', async () => {
     const { api, onDone, step } = await mount();
@@ -69,9 +81,10 @@ describe('Onboarding', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'English' }));
     await settle();
     expect((await api.getSettings()).uiLang).toBe('en');
-    fireEvent.click(screen.getByRole('radio', { name: 'Tối' }));
+    expect(heading()).toBe('Welcome to Font Atlas');
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
-    fireEvent.click(screen.getByRole('radio', { name: 'Theo hệ thống' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Match system' }));
     expect(document.documentElement.dataset.theme).toBeUndefined();
   });
 

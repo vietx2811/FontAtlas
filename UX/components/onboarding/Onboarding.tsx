@@ -8,7 +8,7 @@ import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
 import { Outro, OUTRO_MS } from './Outro';
 import { usePrefersReducedMotion } from './blueprint';
-import { chooseLocale, t, useLocale } from '../../i18n';
+import { chooseLocale, formatNumber, t, useLocale } from '../../i18n';
 import { isSplashOpen } from '../splash/splashState';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
@@ -22,7 +22,6 @@ type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?
 type Phase = 'steps' | 'outro';
 const MB = 1024 * 1024;
 const kindOf = (p: string | null) => t(!p ? 'onb.kind.local' : p.startsWith('/Volumes/') ? 'onb.kind.external' : /iCloud|Mobile Documents/.test(p) ? 'onb.kind.icloud' : 'onb.kind.local');
-const num = (n: number) => n.toLocaleString(t('onb.locale'));
 
 export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone, animated = true, outroMs = OUTRO_MS }: Props): React.JSX.Element | null {
   const reduced = usePrefersReducedMotion();
@@ -240,7 +239,7 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
           const active = s.scanning || scanning.includes(s.id);
           return <li key={s.id}>
             <div className="fa-onb-source-info"><strong>{s.name}</strong><Tooltip label={s.path ?? s.name} onlyIfTruncated><span className="path">{s.path ?? s.name}</span></Tooltip>
-              <span className="kind">{kindOf(s.path)} · {!s.available ? t('onb.o3.unavailable') : active ? t('onb.o3.scanning') : t('onb.o3.faces', { n: num(s.faceCount) })}</span>
+              <span className="kind">{kindOf(s.path)} · {!s.available ? t('onb.o3.unavailable') : active ? t('onb.o3.scanning') : t('onb.o3.faces', { n: formatNumber(s.faceCount) })}</span>
             </div>
             <Tooltip label={active ? t('onb.o3.removeWait') : t('onb.o3.removeTip')}><button type="button" aria-disabled={busy || active || undefined} aria-label={t('onb.o3.removeAria', { name: s.name })} onClick={() => { if (!busy && !active) void run(async () => { await api.removeSource(s.id); await refresh(); }); }}>{t('onb.o3.remove')}</button></Tooltip>
           </li>;
@@ -322,7 +321,7 @@ function O6({ api, next }: Ctx) {
       <p>{t('onb.o6.intro')}</p>
       <ul className="fa-onb-list">
         <li>{t('onb.o6.size')}</li>
-        {info && <li>{info.faces > 0 ? t('onb.o6.faces', { n: num(info.faces), mins }) : ''}{t('onb.o6.free', { gb: Math.round(info.free / (1024 * MB)) })}</li>}
+        {info && <li>{info.faces > 0 ? t('onb.o6.faces', { n: formatNumber(info.faces), mins }) : ''}{t('onb.o6.free', { gb: Math.round(info.free / (1024 * MB)) })}</li>}
       </ul>
       {short > 0 && <p role="alert">{t('onb.o6.short', { mb: Math.ceil(short / MB) })}</p>}
       {initError && <p role="alert">{t('onb.o6.initFail')}</p>}

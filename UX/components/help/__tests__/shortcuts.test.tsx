@@ -18,6 +18,23 @@ describe('shortcut list', () => {
   });
 });
 
+describe('auto-activation card', () => {
+  it('has no keys, and its link opens Settings on the auto group, then closes the overlay', async () => {
+    const { useUiStore } = await import('../../../store/ui');
+    const { takeSettingsGroup } = await import('../../settings/groupRequest');
+    useUiStore.getState().setSettingsOpen(false);
+    let closed = 0;
+    render(<ShortcutsOverlay primary="Bắt đầu" onClose={() => { closed++; }} />);
+    const card = screen.getByText('Bật font tự động').closest('li')!;
+    expect(card.querySelector('kbd')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Mở Cài đặt/ }));
+    expect(useUiStore.getState().settingsOpen).toBe(true);
+    expect(takeSettingsGroup()).toBe('auto');
+    expect(closed).toBe(1);
+    useUiStore.getState().setSettingsOpen(false);
+  });
+});
+
 describe('ShortcutsOverlay', () => {
   it('is a labelled modal dialog with one card per shortcut; Esc and the button close it', () => {
     let closed = 0;

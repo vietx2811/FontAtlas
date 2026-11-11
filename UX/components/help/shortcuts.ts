@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import type { I18nKey } from '../../i18n';
 
-export type ShortcutItem = { id: string; keys: readonly string[]; title: I18nKey; desc: I18nKey; where: string };
+export type ShortcutItem = { id: string; keys: readonly string[]; title: I18nKey; desc: I18nKey; where: string; /** Thẻ không có phím: bấm để mở Cài đặt ở nhóm này. */ openSettings?: string };
 export const SHORTCUTS: readonly ShortcutItem[] = [
   { id: 'search', keys: ['⌘', 'K'], title: 'tips.search', desc: 'tips.search.d', where: 'main/SearchField.tsx' },
   { id: 'advanced', keys: ['⌥', '⌘', 'F'], title: 'tips.advanced', desc: 'tips.advanced.d', where: 'filter/AdvancedFilters.tsx' },
@@ -13,6 +13,7 @@ export const SHORTCUTS: readonly ShortcutItem[] = [
   { id: 'pair', keys: ['⇧', 'P'], title: 'tips.pair', desc: 'tips.pair.d', where: 'main/TopBarActions.tsx' },
   { id: 'compare', keys: ['⇧', 'C'], title: 'tips.compare', desc: 'tips.compare.d', where: 'main/TopBarActions.tsx' },
   { id: 'desk', keys: ['[', ']'], title: 'tips.desk', desc: 'tips.desk.d', where: 'desk/PairingDesk.tsx' },
+  { id: 'auto', keys: [], title: 'tips.auto', desc: 'tips.auto.d', where: 'settings/AutoActivation.tsx', openSettings: 'auto' },
   { id: 'settings', keys: ['⌘', ','], title: 'tips.settings', desc: 'tips.settings.d', where: 'settings/SettingsShortcut.tsx' },
 ];
 

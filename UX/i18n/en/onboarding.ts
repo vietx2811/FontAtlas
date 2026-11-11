@@ -24,7 +24,6 @@ export const EN_ONBOARDING: Record<keyof typeof ONBOARDING_I18N, string> = {
   'onb.loading': 'Opening the guide…',
   'onb.loadFail': 'Could not load the guide: {msg}',
   'onb.retry': 'Try again',
-  'onb.locale': 'en-US',
   'onb.o1.title': 'Welcome to Font Atlas',
   'onb.o1.intro': 'Analyse font anatomy, find similar fonts, and pair them with explanations.',
   'onb.o1.lang': 'Language',
@@ -124,6 +123,9 @@ export const EN_ONBOARDING: Record<keyof typeof ONBOARDING_I18N, string> = {
   'tips.compare.d': 'Compare 2–8 selected fonts with measurements side by side (select at least 2).',
   'tips.desk': 'Browse candidates',
   'tips.desk.d': 'In the Pairing Desk: step back and forth through candidates.',
+  'tips.auto': 'Auto-activation',
+  'tips.auto.d': 'Let your open design app find and turn on the fonts it needs, so you don’t activate them by hand first.',
+  'tips.openSettings': 'Open Settings →',
   'tips.settings': 'Settings',
   'tips.settings.d': 'Open settings: font sources, appearance, splash, image analysis.',
 };

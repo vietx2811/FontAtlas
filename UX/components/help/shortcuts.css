@@ -5,3 +5,4 @@
 .fa-tips-grid kbd { font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace; min-width: 20px; height: 20px; padding: 0 5px; display: inline-grid; place-items: center; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); color: var(--fg); }
 .fa-tips-grid b { font-size: 13px; font-weight: 600; color: var(--fg); }
 .fa-tips-grid .d { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.fa-tips-grid .fa-tip-link { justify-self: start; margin-top: 2px; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--accent-ink, var(--accent)); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

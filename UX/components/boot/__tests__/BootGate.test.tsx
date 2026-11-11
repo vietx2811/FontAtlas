@@ -18,6 +18,7 @@ describe('BootGate', { timeout: 15000 }, () => {
   it('first run: onboarding first, the library after "Vào thư viện"', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('end');
+    await api.setSettings({ uiLang: 'vi' }); // jsdom báo en-US; BootGate đọc ngôn ngữ đã lưu
     render(<BootGate api={api}>{app}</BootGate>);
     const h1 = await screen.findByRole('heading', { level: 1 }, { timeout: 8000 });
     expect(screen.queryByTestId('app')).toBeNull();
