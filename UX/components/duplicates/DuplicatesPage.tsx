@@ -1,108 +1,135 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Api, DuplicateGroupDto, DuplicateMemberDto } from '../../api';
-import { hasKey, t, type I18nKey } from '../../i18n';
-import { faceKey, toMetadataQuery, useUiStore, dropTags } from '../../store/ui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Api, ResolvePlanDto, ResolveResultDto, ResolveScopeDto } from '../../api';
+import { t } from '../../i18n';
+import { dropTags, toMetadataQuery, useUiStore } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { useNoticeStore } from '../../store/notices';
-import { Tooltip } from '../ui/Tooltip';
 import { ZeroState } from '../zero/ZeroState';
-import { dateText, groupTitle, revisionText, splitPath, tailDepth } from './duplicatesFormat';
+import { itemId, memberName, viewOf } from './dupPlan';
+import { GroupCard, kindGloss, kindLabel } from './GroupCard';
+import { IgnoredTab } from './IgnoredTab';
+import { ResolveDialog } from './ResolveDialog';
+import { ResolvedTab } from './ResolvedTab';
+import { ResultDialog } from './ResultDialog';
+import { undoWithFeedback } from './undoFlow';
 import './duplicates.css';
 
 const KINDS = ['same_file', 'versions', 'formats'] as const;
-const humanize = (code: string): string => { const x = code.replace(/_/g, ' ').trim(); return x.charAt(0).toUpperCase() + x.slice(1); };
-const kindName = (k: string): string => (hasKey(`dup.kind.${k}`) ? t(`dup.kind.${k}` as I18nKey) : humanize(k));
-const kindGloss = (k: string): string | null => (hasKey(`dup.kind.${k}.gloss`) ? t(`dup.kind.${k}.gloss` as I18nKey) : null);
+type Tab = 'todo' | 'done' | 'ignored';
+const TABS: Tab[] = ['todo', 'done', 'ignored'];
+const tabName = (x: Tab) => t(`dup.tab.${x}` as 'dup.tab.todo');
 
-function Member({ api, m, kind, depth }: { api: Api; m: DuplicateMemberDto; kind: string; depth: number }): React.JSX.Element {
-  const sameFile = kind === 'same_file'; // backend cố ý không đọc revision/ngày cho nhóm cùng tệp
-  const p = m.path ? splitPath(m.path, depth) : null;
-  const key = { hashHex: m.row.hashHex, faceIndex: m.row.faceIndex };
-  const reveal = async () => {
-    if (!m.path) return;
-    try { await api.revealLocation(m.path); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.revealFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
-  };
-  return (
-    <li className={`dup-member${sameFile ? ' same' : ''}`} data-testid="dup-member">
-      <div className="dup-main">
-        <b className="dup-name">{m.row.family}{m.row.subfamily ? ` ${m.row.subfamily}` : ''}</b>
-        <span className="dup-fmt">{m.format.toUpperCase()}</span>
-        {m.isNewest && <span className="dup-new">{t('dup.newest')}</span>}
-      </div>
-      <Tooltip label={m.path ?? '—'}>
-        <span className="dup-path" data-testid="dup-path" title={m.path ?? undefined}>
-          {p ? <>{p.head && <span className="dup-head">{p.head}</span>}<span className="dup-tail">{p.tail}</span></> : '—'}
-        </span>
-      </Tooltip>
-      {sameFile ? (m.version && <div className="dup-meta"><span>{m.version}</span></div>) : <div className="dup-meta">
-        {m.version === null && m.revision === null && m.modified === null ? <span>—</span> : <>
-          <span>{m.version ?? '—'}</span>
-          <span>{m.revision !== null ? t('dup.revision', { n: revisionText(m.revision) }) : '—'}</span>
-          <span>{dateText(m.modified)}</span>
-        </>}
-      </div>}
-      <div className="dup-acts">
-        {m.path && <button type="button" onClick={() => void reveal()}>{t('dup.reveal')}</button>}
-        <button type="button" onClick={() => useUiStore.getState().select(faceKey(key))}>{t('dup.open')}</button>
-      </div>
-    </li>
-  );
-}
-
-function Group({ api, g }: { api: Api; g: DuplicateGroupDto }): React.JSX.Element {
-  const depth = tailDepth(g.faces.map(f => f.path));
-  return (
-    <article className="dup-group" data-testid="dup-group">
-      <header>
-        <b>{groupTitle(g)}</b>
-        <span className="dup-count">{t('dup.members', { n: g.faces.length })}</span>
-        {g.kind === 'versions' && !g.newestKnown && <span className="dup-unknown">{t('dup.newestUnknown')}</span>}
-      </header>
-      <ul>{g.faces.map((m, i) => <Member key={`${m.row.hashHex}:${m.row.faceIndex}:${m.path ?? i}`} api={api} m={m} kind={g.kind} depth={depth} />)}</ul>
-    </article>
-  );
-}
-
-/** Danh sách nhóm font trùng (cùng tệp / phiên bản / định dạng), tôn trọng bộ lọc hiện tại. Chỉ để xem: không có xoá hay di chuyển. */
+/**
+ * Trang Trùng lặp: giải quyết nhóm font trùng. Mặc định Ẩn (không đụng tệp); Thùng rác là lựa chọn phụ có xác nhận từng tệp.
+ * Tab "Cần xử lý" (máy chắc → "Giải quyết N nhóm an toàn"; máy chưa chắc → "Cần bạn xem"), "Đã giải quyết" (hoàn tác), "Đã bỏ qua".
+ */
 export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
   const ui = useUiStore();
   const version = useScanStore(s => s.version);
   const q = useMemo(() => toMetadataQuery({ view: 'all', query: ui.query, viOnly: ui.viOnly, filters: dropTags(ui.filters) }), [ui.query, ui.viOnly, ui.filters]);
   const qKey = JSON.stringify(q);
-  const [groups, setGroups] = useState<DuplicateGroupDto[] | null>(null);
+  const [tab, setTab] = useState<Tab>('todo');
+  const [plan, setPlan] = useState<ResolvePlanDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [choices, setChoices] = useState<Record<string, string>>({});
+  const [dialog, setDialog] = useState<ResolveScopeDto | null>(null);
+  const [result, setResult] = useState<ResolveResultDto | null>(null);
+  const [busy, setBusy] = useState(false);
+  const seq = useRef(0);
 
-  useEffect(() => {
-    let alive = true; setError(null);
-    api.duplicateGroups(q).then(g => { if (alive) setGroups(g); }, e => { if (alive) { setGroups(null); setError(e instanceof Error ? e.message : String(e)); } });
-    return () => { alive = false; };
-  }, [api, qKey, version, ui.libraryRev, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = useCallback(() => {
+    const mine = ++seq.current; setError(null);
+    api.resolvePreview({ type: 'all' }, q).then(p => {
+      if (mine !== seq.current) return;
+      setPlan(p);
+      // Lựa chọn "Đổi bản giữ" chỉ còn hiệu lực khi nhóm vẫn có đúng bản đó.
+      setChoices(prev => { const next: Record<string, string> = {}; for (const it of p.items) { const c = prev[itemId(it)]; if (c && it.memberPaths.includes(c)) next[itemId(it)] = c; } return next; });
+    }, e => { if (mine === seq.current) { setPlan(null); setError(e instanceof Error ? e.message : String(e)); } });
+  }, [api, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); return () => { seq.current++; }; }, [load, qKey, version, ui.libraryRev, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Loại đã biết theo thứ tự cố định, loại lạ (backend mới) xếp sau.
-  const kinds = groups ? [...KINDS.filter(k => groups.some(g => g.kind === k)), ...new Set(groups.map(g => g.kind).filter(k => !(KINDS as readonly string[]).includes(k)))] : [];
+  const items = plan?.items ?? [];
+  const safe = items.filter(i => i.autoSafe), review = items.filter(i => !i.autoSafe);
+
+  const onDone = (r: ResolveResultDto, action: 'hide' | 'trash') => {
+    setDialog(null);
+    if (r.done.length > 0) {
+      useUiStore.getState().bumpLibrary(true);
+      const n = r.done.length;
+      useNoticeStore.getState().push({
+        kind: 'info', text: action === 'trash' && r.done.every(d => d.action === 'trash') ? t('dup.res.trashed', { n }) : t('dup.res.hidden', { n }),
+        action: { label: t('dup.res.undo'), run: () => { void undoWithFeedback(api, r.done.map(d => d.id)); } },
+      });
+    }
+    if (r.failed.length > 0 || r.done.length === 0) setResult(r);
+  };
+
+  const ignore = async (it: (typeof items)[number]) => {
+    if (busy) return; setBusy(true);
+    const name = memberName(viewOf(it, choices[itemId(it)]).keeper);
+    try {
+      await api.duplicateIgnore(it.kind, it.key);
+      useUiStore.getState().bumpLibrary();
+      useNoticeStore.getState().push({ kind: 'info', text: t('dup.ign.done', { name }), action: { label: t('dup.res.undo'), run: () => { void api.duplicateUnignore(it.kind, it.key).then(() => useUiStore.getState().bumpLibrary()); } } });
+    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.ign.fail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+    finally { setBusy(false); }
+  };
+
+  const card = (it: (typeof items)[number]) => (
+    <GroupCard key={itemId(it)} api={api} item={it} choice={choices[itemId(it)]} busy={busy}
+      onSwap={p => setChoices(c => ({ ...c, [itemId(it)]: p }))}
+      onResolve={() => setDialog({ type: 'group', kind: it.kind, key: it.key })}
+      onIgnore={() => void ignore(it)} />
+  );
+  const onTabKey = (e: React.KeyboardEvent) => {
+    const i = TABS.indexOf(tab); const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return; e.preventDefault(); const nx = TABS[(i + d + TABS.length) % TABS.length]; setTab(nx);
+    requestAnimationFrame(() => document.getElementById(`dup-tab-${nx}`)?.focus());
+  };
+
   return (
     <section className="dup" aria-label={t('dup.title')}>
       <header className="dup-h">
         <h1>{t('dup.title')}</h1>
-        {groups && groups.length > 0 && <span className="dup-total">{t('dup.count', { n: groups.length })}</span>}
-        <span className="dup-sp" />
-        <span className="dup-note">{t('dup.note')}</span>
+        <div role="tablist" aria-label={t('dup.tabs')} className="dup-tabs" onKeyDown={onTabKey}>
+          {TABS.map(x => <button key={x} id={`dup-tab-${x}`} role="tab" type="button" aria-selected={tab === x} aria-controls="dup-panel" tabIndex={tab === x ? 0 : -1} onClick={() => setTab(x)}>{tabName(x)}{x === 'todo' && plan && items.length > 0 && <span className="dup-total">{items.length}</span>}</button>)}
+        </div>
       </header>
-      <div className="dup-body">
-        {error && <div role="alert" className="dup-state warn">{t('dup.error', { msg: error })} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t('dup.retry')}</button></div>}
-        {!error && !groups && <div role="status" className="dup-state">{t('dup.loading')}</div>}
-        {groups && groups.length === 0 && <ZeroState glyph="=" text={t('dup.empty')} />}
-        {kinds.map(k => {
-          const list = groups!.filter(g => g.kind === k);
-          return (
-            <section key={k} className="dup-kind" aria-labelledby={`dup-k-${k}`}>
-              <h2 id={`dup-k-${k}`}>{kindName(k)}{kindGloss(k) && <small> · {kindGloss(k)}</small>}<span className="dup-total">{list.length}</span></h2>
-              {list.map(g => <Group key={`${g.kind}:${g.key}`} api={api} g={g} />)}
+      <div id="dup-panel" role="tabpanel" aria-labelledby={`dup-tab-${tab}`} className="dup-body">
+        {tab === 'done' && <ResolvedTab api={api} />}
+        {tab === 'ignored' && <IgnoredTab api={api} />}
+        {tab === 'todo' && <>
+          {error && <div role="alert" className="dup-state warn">{t('dup.error', { msg: error })} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t('dup.retry')}</button></div>}
+          {!error && !plan && <div role="status" className="dup-state">{t('dup.loading')}</div>}
+          {plan && items.length === 0 && <ZeroState glyph="=" text={t('dup.empty')} />}
+          {plan && items.length > 0 && (
+            <div className="dup-summary">
+              <p data-testid="dup-summary">{t('dup.head', { n: items.length })} {safe.length > 0 && review.length > 0 ? t('dup.head.split', { safe: safe.length, review: review.length }) : safe.length > 0 ? t('dup.head.allSafe', { safe: safe.length }) : t('dup.head.allReview', { review: review.length })}</p>
+              {safe.length > 0 && <button type="button" className="primary" title={t('dup.resolveAllSafe.tip')} data-testid="resolve-all-safe" onClick={() => setDialog({ type: 'all_safe' })}>{t('dup.resolveAllSafe', { n: safe.length })}</button>}
+            </div>
+          )}
+          {review.length > 0 && (
+            <section className="dup-kind" aria-labelledby="dup-k-review" data-testid="dup-review-section">
+              <h2 id="dup-k-review">{t('dup.section.review')}<span className="dup-total">{review.length}</span></h2>
+              <p className="dup-note">{t('dup.section.review.sub')}</p>
+              {review.map(card)}
             </section>
-          );
-        })}
+          )}
+          {[...KINDS, ...new Set(safe.map(i => i.kind).filter(k => !(KINDS as readonly string[]).includes(k)))].map(k => {
+            const list = safe.filter(i => i.kind === k); if (!list.length) return null;
+            return (
+              <section key={k} className="dup-kind" aria-labelledby={`dup-k-${k}`}>
+                <h2 id={`dup-k-${k}`}>{kindLabel(k)}{kindGloss(k) && <small> · {kindGloss(k)}</small>}<span className="dup-total">{list.length}</span></h2>
+                {list.map(card)}
+              </section>
+            );
+          })}
+        </>}
       </div>
+      {dialog && <ResolveDialog api={api} scope={dialog} q={q} choices={choices} onClose={() => setDialog(null)} onDone={onDone} />}
+      {result && <ResultDialog result={result} onClose={() => setResult(null)} onUndo={result.done.length ? () => { const ids = result.done.map(d => d.id); setResult(null); void undoWithFeedback(api, ids); } : undefined} />}
     </section>
   );
 }
+

@@ -291,3 +291,30 @@ describe('taxonomy v2 query flags', () => {
     expect([e.includeSecondary, e.confidentOnly, e.minConfidence]).toEqual([false, false, null]);
   });
 });
+
+describe('duplicates resolve', () => {
+  it('maps the nine commands with their exact argument names', async () => {
+    const q = { text: 'inter' };
+    await createTauriApi().resolvePreview({ type: 'all_safe' }, q);
+    expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'all_safe' }, q: toFaceQueryDto(q) } });
+    await createTauriApi().resolvePreview({ type: 'group', kind: 'versions', key: 'K' });
+    expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'group', kind: 'versions', key: 'K' }, q: toFaceQueryDto({}) } });
+    const req = { items: [{ kind: 'same_file' as const, key: 'k', keeperPath: '/a', loserPaths: ['/b'], memberPaths: ['/a', '/b'] }], action: 'trash' as const, explicitTrashPaths: ['/b'], mode: 'chosen' as const };
+    await createTauriApi().resolveApply(req);
+    expect(last()).toEqual({ cmd: 'resolve_apply', args: { req } });
+    await createTauriApi().resolveUndo([3, 2]);
+    expect(last()).toEqual({ cmd: 'resolve_undo', args: { ids: [3, 2] } });
+    await createTauriApi().resolveList(true);
+    expect(last()).toEqual({ cmd: 'resolve_list', args: { includeUndone: true } });
+    await createTauriApi().duplicateIgnore('formats', 'k');
+    expect(last()).toEqual({ cmd: 'duplicate_ignore', args: { kind: 'formats', key: 'k' } });
+    await createTauriApi().duplicateUnignore('formats', 'k');
+    expect(last()).toEqual({ cmd: 'duplicate_unignore', args: { kind: 'formats', key: 'k' } });
+    await createTauriApi().duplicateIgnored();
+    expect(last().cmd).toBe('duplicate_ignored');
+    await createTauriApi().sourcePriority();
+    expect(last().cmd).toBe('source_priority');
+    await createTauriApi().setSourcePriority([2, 1]);
+    expect(last()).toEqual({ cmd: 'set_source_priority', args: { ids: [2, 1] } });
+  });
+});

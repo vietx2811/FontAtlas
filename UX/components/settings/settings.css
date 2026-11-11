@@ -38,3 +38,19 @@ button.danger { color: var(--warn); }
 .fa-set-sheet { width: min(100%, 960px); height: min(100%, 680px); border-radius: var(--radius-lg, 14px); border: 1px solid var(--border); overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.35); background: var(--sheet); }
 .fa-set-sheet:focus { outline: none; }
 .fa-termword { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+
+/* Thứ tự ưu tiên nguồn */
+.fa-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.fa-set-prio { margin: 12px 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.fa-set-prio h3 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+.fa-set-prio ol { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; touch-action: none; }
+.fa-set-prio li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); font-size: 13px; }
+.fa-set-prio li[data-dragging="true"] { background: var(--accent-soft); border-color: var(--accent-ink); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.fa-set-prio .pos { width: 72px; color: var(--muted); font-size: 11px; }
+.fa-set-prio strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.fa-set-prio .grip { cursor: grab; color: var(--muted); letter-spacing: -2px; padding: 2px 6px; border-radius: 6px; }
+.fa-set-prio li[data-dragging="true"] .grip { cursor: grabbing; }
+.fa-set-prio .grip:focus-visible, .fa-set-prio .mv button:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.fa-set-prio .mv { display: flex; gap: 2px; }
+.fa-set-prio .mv button { width: 24px; height: 24px; border-radius: 6px; background: var(--surface-2); font-size: 12px; }
+.fa-set-prio .mv button[aria-disabled="true"] { opacity: .35; cursor: default; }
