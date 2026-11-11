@@ -383,6 +383,11 @@ pub struct FaceQueryDto {
     pub width_class: Option<[u16; 2]>,
     /// Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
     pub var_axis_match: VarAxisMatchDto,
+    /// `true`: `queryFaces` xếp theo NHÓM family (mỗi family liền nhau; thứ tự nhóm theo `sort`/`descending`:
+    /// family → tên, weight/added/released/file_created → kiểu nhẹ nhất|cũ nhất khi tăng, nặng nhất|mới nhất khi giảm,
+    /// match → điểm cao nhất; không có giá trị → cuối). Trong nhóm: Weight tăng → thẳng trước nghiêng → tên.
+    /// `familyGroups` với cùng truy vấn trả khoảng `[start, start+count)` của từng nhóm trong thứ tự này.
+    pub group_by_family: bool,
 }
 
 /// Bật/tắt khớp theo dải trục Variable. `wdth` (%) quy về class theo bảng OS/2.
@@ -397,6 +402,28 @@ pub struct VarAxisMatchDto {
 impl Default for VarAxisMatchDto {
     fn default() -> Self {
         VarAxisMatchDto { wght: true, wdth: true }
+    }
+}
+
+/// Một nhóm family trong kết quả `familyGroups` (xem `FaceQueryDto.groupByFamily`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct FamilyGroupDto {
+    pub family: String,
+    /// Vị trí face đầu của nhóm trong thứ tự `queryFaces` (`groupByFamily = true`): khớp `offset` của `pagedFaces`.
+    pub start: u32,
+    /// Số face của family trong truy vấn.
+    pub count: u32,
+    /// Số kiểu khớp bộ lọc (= `count`).
+    pub match_count: u32,
+    /// Tổng số kiểu của family trong thư viện, không áp bộ lọc — chip "matchCount/styleTotal kiểu".
+    pub style_total: u32,
+}
+
+impl From<fontatlas_store::FamilyGroup> for FamilyGroupDto {
+    fn from(g: fontatlas_store::FamilyGroup) -> Self {
+        FamilyGroupDto { family: g.family, start: g.start, count: g.count, match_count: g.match_count, style_total: g.style_total }
     }
 }
 

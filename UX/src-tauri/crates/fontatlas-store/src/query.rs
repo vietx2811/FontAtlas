@@ -87,6 +87,9 @@ pub struct FaceQuery {
     pub var_weight: bool,
     /// Như trên cho `wdth` (quy % về class theo bảng OS/2, xem `WIDTH_PCT`).
     pub var_width: bool,
+    /// Xếp theo NHÓM family: mỗi family liền nhau (không bao giờ bị xé), thứ tự nhóm theo `sort`, trong nhóm Weight
+    /// tăng → thẳng trước nghiêng → tên. `family_groups` trả đúng thứ tự này.
+    pub group_by_family: bool,
 }
 
 /// `wdth` (%) ứng với usWidthClass 1..=9 theo OS/2.
@@ -305,6 +308,9 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
 /// (Tên/Ngày/Weight) xếp THUẦN theo trường, không xếp hạng khớp. `Match` có scope (Gần đây / Đang bật) giữ thứ tự đưa vào.
 /// Trả kèm tham số.
 fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
+    if q.group_by_family {
+        return grouped_order(q, scoped, true);
+    }
     let rank = match q.text.as_deref().and_then(text_match) {
         Some(TextMatch::Fts { start, word, .. }) if q.sort == SortKey::Auto || (q.sort == SortKey::Match && !scoped) => Some((
             "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
@@ -315,6 +321,43 @@ fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
     };
     let (head, params) = rank.unwrap_or_default();
     (format!("{head}{}", user_order(q, scoped)), params)
+}
+
+/// Thứ tự theo nhóm family. `window = true`: dùng cho từng hàng face (cực trị của family tính bằng hàm cửa sổ);
+/// `false`: dùng cho truy vấn GROUP BY family_key (cực trị là hàm gộp) — cả hai cho cùng thứ tự nhóm.
+/// Khoá nhóm: family → tên; weight/added/released/file_created → cực trị của family theo chiều (nhỏ nhất khi tăng,
+/// lớn nhất khi giảm; không có giá trị → cuối); match có scope → điểm cao nhất; còn lại → tên (khớp đầu từ lên trước).
+fn grouped_order(q: &FaceQuery, scoped: bool, window: bool) -> (String, Vec<Value>) {
+    let agg = |func: &str, expr: &str| {
+        if window {
+            format!("{func}({expr}) OVER (PARTITION BY f.family_key)")
+        } else {
+            format!("{func}({expr})")
+        }
+    };
+    let dir = if q.descending { "DESC" } else { "ASC" };
+    let ext = if q.descending { "MAX" } else { "MIN" };
+    let mut params = Vec::new();
+    let mut head = String::new();
+    if let Some(TextMatch::Fts { start, word, .. }) = q.text.as_deref().and_then(text_match)
+        && (q.sort == SortKey::Auto || (q.sort == SortKey::Match && !scoped))
+    {
+        head = format!(
+            "{}, ",
+            agg("MIN", "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END")
+        );
+        params = vec![Value::Text(start), Value::Text(word)];
+    }
+    let nulls_last = |k: String| format!("({k} IS NULL), {k} {dir}");
+    let key = match q.sort {
+        SortKey::Weight => nulls_last(agg(ext, "f.weight_class")),
+        SortKey::Added => nulls_last(agg(ext, "fi.first_seen_at")),
+        SortKey::Released => nulls_last(agg(ext, "f.release_year")),
+        SortKey::FileCreated => nulls_last(agg(ext, FILE_CREATED_SQL)),
+        SortKey::Match if scoped => format!("{} DESC", agg("MAX", "sc.score")),
+        SortKey::Auto | SortKey::Family | SortKey::Match => format!("f.family_key {dir}"),
+    };
+    (format!("{head}{key}, f.family_key"), params)
 }
 
 /// Ngày tạo file sớm nhất của face (các vị trí chưa missing).
@@ -343,6 +386,21 @@ pub struct ClassHistogram {
     pub default_bins: [u32; 9],
     /// Như `default_bins` + font Variable đếm vào mọi nấc dải trục của nó phủ.
     pub span_bins: [u32; 9],
+}
+
+/// Một nhóm family trong kết quả `family_groups`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FamilyGroup {
+    /// Tên hiển thị (tên family của một face trong nhóm).
+    pub family: String,
+    /// Vị trí face đầu của nhóm trong thứ tự `query_faces` với `group_by_family = true`.
+    pub start: u32,
+    /// Số face của family trong truy vấn (đang khớp bộ lọc).
+    pub count: u32,
+    /// = `count`: số kiểu khớp bộ lọc (chip "4/9 kiểu").
+    pub match_count: u32,
+    /// Tổng số kiểu của family trong thư viện, KHÔNG áp bộ lọc (chỉ tính face còn hiện diện).
+    pub style_total: u32,
 }
 
 /// Trục rời rạc của OS/2 có histogram theo nấc.
@@ -430,6 +488,64 @@ impl Store {
         out
     }
 
+    /// Các nhóm family của tập `q` (cùng bộ lọc/scope với `query_faces`), theo đúng thứ tự `query_faces` khi
+    /// `group_by_family = true` (bỏ qua `q.group_by_family`, `offset`, `limit`): nhóm kế tiếp bắt đầu đúng nơi
+    /// nhóm trước kết thúc, một family không bao giờ thành hai nhóm. Một truy vấn GROUP BY, không tải face.
+    pub fn family_groups(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<Vec<FamilyGroup>, StoreError> {
+        let scoped = scope.is_some();
+        let (w, p) = where_clause(q);
+        let (order, order_params) = grouped_order(q, scoped, false);
+        let from = if scoped {
+            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+        } else {
+            "faces f JOIN files fi ON fi.file_id = f.file_id"
+        };
+        // tham số: WHERE trước, ORDER BY sau (đúng thứ tự `?` trong câu lệnh)
+        let all: Vec<&dyn ToSql> = p.iter().chain(order_params.iter()).map(|v| v as &dyn ToSql).collect();
+        let sql = format!(
+            "SELECT f.family_key, MIN(f.family_name), count(*) FROM {from} WHERE {w} GROUP BY f.family_key ORDER BY {order}"
+        );
+        if let Some(sc) = scope {
+            self.load_scope(sc)?;
+        }
+        let out = (|| -> Result<Vec<(String, String, u32)>, StoreError> {
+            let mut st = self.conn.prepare(&sql)?;
+            let rows = st.query_map(all.as_slice(), |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)? as u32)))?;
+            Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        })();
+        if scope.is_some() {
+            self.clear_scope();
+        }
+        let groups = out?;
+        let totals = self.family_style_totals()?;
+        let mut start = 0u32;
+        Ok(groups
+            .into_iter()
+            .map(|(key, family, count)| {
+                let g = FamilyGroup {
+                    style_total: totals.get(&key).copied().unwrap_or(count).max(count),
+                    family,
+                    start,
+                    count,
+                    match_count: count,
+                };
+                start += count;
+                g
+            })
+            .collect())
+    }
+
+    /// `family_key → số kiểu` trên toàn thư viện (face còn ít nhất một vị trí hiện diện, chưa bị ẩn).
+    fn family_style_totals(&self) -> Result<std::collections::HashMap<String, u32>, StoreError> {
+        let mut st = self.conn.prepare(&format!(
+            "SELECT f.family_key, count(*) FROM faces f WHERE EXISTS \
+             (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND NOT {HIDDEN_LOC}) \
+             GROUP BY f.family_key"
+        ))?;
+        let rows = st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u32)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// `face_id` của mọi face khớp `q` (và `scope` nếu có) — không phân trang, không sắp xếp: dùng để lập tập
     /// "được phép" một lần cho các phép thống kê.
     pub fn face_ids_matching(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<Vec<i64>, StoreError> {
@@ -506,7 +622,10 @@ impl Store {
             refs.as_slice(),
             |r| r.get(0),
         )?;
-        let (order, order_params) = order_by(q, scoped);
+        let (mut order, order_params) = order_by(q, scoped);
+        if q.group_by_family {
+            order.push_str(", f.weight_class, f.is_italic, f.full_name, f.face_id");
+        }
         // đường dẫn / trạng thái missing / cloud của hàng KHÔNG tính vị trí đã ẩn (trừ khi chủ ý lấy cả bản đã ẩn)
         let nh = if q.include_hidden { String::new() } else { format!(" AND NOT {HIDDEN_LOC}") };
         let limit = match q.limit {

@@ -230,3 +230,26 @@ fn backup_and_disk_free() {
     assert!(system::disk_free(&st, "models").unwrap() > 0 && system::disk_free(&st, "data").unwrap() > 0);
     assert_eq!(system::disk_free(&st, "../etc").unwrap_err().code, "invalid_arg");
 }
+
+#[test]
+fn family_groups_follows_query_faces_order_and_filters() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf", "playfair_display.ttf"]);
+    let q = FaceQueryDto { group_by_family: true, limit: 100, ..Default::default() };
+    let page = library::query_faces(&st, &q).unwrap();
+    let groups = library::family_groups(&st, &q).unwrap();
+    assert_eq!(groups.iter().map(|g| g.count as u64).sum::<u64>(), page.total);
+    let mut next = 0;
+    for g in &groups {
+        assert_eq!(g.start, next);
+        assert!(page.items[g.start as usize..(g.start + g.count) as usize].iter().all(|r| r.family == g.family));
+        assert_eq!(g.match_count, g.count);
+        assert!(g.style_total >= g.match_count);
+        next += g.count;
+    }
+    // bộ lọc dùng chung với query_faces: tìm "roboto" chỉ còn nhóm Roboto, styleTotal không bị lọc
+    let q = FaceQueryDto { text: Some("roboto".into()), ..q };
+    let g = library::family_groups(&st, &q).unwrap();
+    assert_eq!(g.len(), 1);
+    assert_eq!(g[0].family, "Roboto");
+}

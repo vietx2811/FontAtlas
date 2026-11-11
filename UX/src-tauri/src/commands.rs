@@ -66,6 +66,7 @@ macro_rules! command_list {
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
             async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
+            async family_groups(q: FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError>;
             async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
             async set_favorite(face: FaceKeyDto, on: bool) -> Result<(), CmdError>;
             async list_collections() -> Result<Vec<CollectionDto>, CmdError>;
@@ -306,6 +307,7 @@ macro_rules! cmd {
 }
 
 cmd!(query_faces(q: FaceQueryDto) -> FacePageDto => |s| library::query_faces(s, &q));
+cmd!(family_groups(q: FaceQueryDto) -> Vec<FamilyGroupDto> => |s| library::family_groups(s, &q));
 cmd!(get_family_styles(family: String) -> Vec<FamilyStyleDto> => |s| library::get_family_styles(s, &family));
 cmd!(set_favorite(face: FaceKeyDto, on: bool) -> () => |s| library::set_favorite(s, &face, on));
 cmd!(list_collections() -> Vec<CollectionDto> => |s| library::list_collections(s));

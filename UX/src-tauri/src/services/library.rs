@@ -49,6 +49,7 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         width_class: q.width_class,
         var_weight: q.var_axis_match.wght,
         var_width: q.var_axis_match.wdth,
+        group_by_family: q.group_by_family,
         badge_lang: Some(q.badge_lang.clone().unwrap_or_else(|| crate::services::langs::DEFAULT_BADGE_LANG.to_string())),
     }
 }
@@ -132,6 +133,14 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
             })
             .collect(),
     })
+}
+
+/// Các nhóm family của truy vấn (cùng bộ lọc/scope với `query_faces`), theo đúng thứ tự `query_faces` với `groupByFamily`.
+pub fn family_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError> {
+    let scope = scope_of(state, q)?;
+    let sq = to_store_query(q);
+    let groups = state.with_store(|s| Ok(s.family_groups(&sq, scope.as_deref())?))?;
+    Ok(groups.into_iter().map(FamilyGroupDto::from).collect())
 }
 
 /// Phân loại hiệu lực của một face (ghi đè > tự động), kèm độ tin cậy và class phụ để lọc không phải dựng lại.

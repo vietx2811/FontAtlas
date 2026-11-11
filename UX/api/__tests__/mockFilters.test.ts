@@ -88,3 +88,21 @@ describe('taxonomy v2 query flags', () => {
     );
   });
 });
+
+describe('familyGroups (R3)', () => {
+  it('groups are contiguous, start matches queryFaces(groupByFamily) and counts add up', async () => {
+    const api = createMockApi();
+    const q = { sort: 'family' as const, groupByFamily: true };
+    const page = await api.queryFaces({ ...q, offset: 0, limit: 1000 });
+    const groups = await api.familyGroups(q);
+    expect(groups.reduce((n, g) => n + g.count, 0)).toBe(page.total);
+    let next = 0;
+    for (const g of groups) {
+      expect(g.start).toBe(next);
+      expect(page.items.slice(g.start, g.start + g.count).every(r => r.family === g.family)).toBe(true);
+      expect(g.styleTotal).toBeGreaterThanOrEqual(g.matchCount);
+      next += g.count;
+    }
+    expect(new Set(groups.map(g => g.family)).size).toBe(groups.length);
+  });
+});

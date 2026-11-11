@@ -65,6 +65,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeSecondary: q.includeSecondary ?? false, confidentOnly: q.confidentOnly ?? false, minConfidence: q.minConfidence ?? null,
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
     weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
+    groupByFamily: q.groupByFamily ?? false,
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -84,6 +85,7 @@ export function createTauriApi(): Api {
   return {
     // Xem trước và lưới
     queryFaces: async q => parseFacePage(await call('query_faces', { q: toFaceQueryDto(q) })),
+    familyGroups: (q = {}) => call('family_groups', { q: toFaceQueryDto(q) }),
     previewInfo: () => call('preview_info'),
     bumpGeneration: () => call('preview_bump_generation'),
     previewUrl, fontUrl,

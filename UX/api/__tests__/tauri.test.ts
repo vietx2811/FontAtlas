@@ -31,7 +31,7 @@ describe('query_faces', () => {
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'auto', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null,
       langs: [], langMode: 'all', badgeLang: null,
-      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
+      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true }, groupByFamily: false,
     });
   });
 

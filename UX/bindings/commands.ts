@@ -41,6 +41,7 @@ import type { FaceDetailDto } from './FaceDetailDto';
 import type { FaceKeyDto } from './FaceKeyDto';
 import type { FacePageDto } from './FacePageDto';
 import type { FaceQueryDto } from './FaceQueryDto';
+import type { FamilyGroupDto } from './FamilyGroupDto';
 import type { FamilyStyleDto } from './FamilyStyleDto';
 import type { FontManagerDto } from './FontManagerDto';
 import type { IgnoredGroupDto } from './IgnoredGroupDto';
@@ -103,6 +104,7 @@ export interface TauriCommandMap {
   scan_status: { args: Record<string, never>; result: ScanStatusDto };
   scan_subscribe: { args: { onEvent: Channel<ScanEvent> }; result: null };
   query_faces: { args: { q: FaceQueryDto }; result: FacePageDto };
+  family_groups: { args: { q: FaceQueryDto }; result: FamilyGroupDto[] };
   get_family_styles: { args: { family: string }; result: FamilyStyleDto[] };
   set_favorite: { args: { face: FaceKeyDto; on: boolean }; result: null };
   list_collections: { args: Record<string, never>; result: CollectionDto[] };

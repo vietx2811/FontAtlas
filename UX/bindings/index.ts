@@ -73,6 +73,7 @@ export type { FaceKeyDto } from './FaceKeyDto';
 export type { FacePageDto } from './FacePageDto';
 export type { FaceQueryDto } from './FaceQueryDto';
 export type { FaceRowDto } from './FaceRowDto';
+export type { FamilyGroupDto } from './FamilyGroupDto';
 export type { FamilyStructureDto } from './FamilyStructureDto';
 export type { FamilyStyleDto } from './FamilyStyleDto';
 export type { FeaturesDto } from './FeaturesDto';
