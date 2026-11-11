@@ -338,6 +338,8 @@ pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, 
         state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![h] });
     }
     Ok(out.into())
+}
+
 /// "Bật tất cả" theo Dự án: font KHÔNG `missing` của Case đi qua đúng luồng `activate` (xung đột tên family/PostScript,
 /// tải trước file cloud, báo cáo theo file); font `missing` không gửi xuống engine mà liệt kê ở `skipped_missing`.
 /// Kích hoạt kiểu thủ công (không gắn lý do "dự án": tắt Dự án không tự tắt font).

@@ -66,6 +66,7 @@ import type { PreviewInfoDto } from './PreviewInfoDto';
 import type { PreviewItemDto } from './PreviewItemDto';
 import type { ProblemDto } from './ProblemDto';
 import type { ProgressDto } from './ProgressDto';
+import type { RemoveSourceReportDto } from './RemoveSourceReportDto';
 import type { ReplacedEntryDto } from './ReplacedEntryDto';
 import type { ResolutionDto } from './ResolutionDto';
 import type { ResolvePlanDto } from './ResolvePlanDto';
