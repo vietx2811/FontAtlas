@@ -19,15 +19,29 @@ use crate::{Answer, AppNamer, Request, Responder};
 
 #[derive(Debug)]
 pub enum StartError {
-    /// Hệ thống không tạo được nguồn (macOS quá cũ hoặc bị từ chối).
-    NoSource,
+    /// Hệ thống trả về "không có nguồn" ngay (macOS quá cũ, tiến trình không thuộc phiên đồ hoạ, hoặc bị từ chối).
+    Refused,
+    /// Luồng nguồn không báo sẵn sàng trong hạn (máy rất bận / dịch vụ font chậm): thử lại sau thường được.
+    TimedOut,
     Thread(std::io::Error),
+}
+
+impl StartError {
+    /// Mã ngắn để báo lên UI (`AutoStatusDto.font_request_error`).
+    pub fn code(&self) -> &'static str {
+        match self {
+            StartError::Refused => "refused",
+            StartError::TimedOut => "timeout",
+            StartError::Thread(_) => "thread",
+        }
+    }
 }
 
 impl std::fmt::Display for StartError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StartError::NoSource => write!(f, "hệ thống không tạo được nguồn font request"),
+            StartError::Refused => write!(f, "hệ thống từ chối tạo nguồn font request"),
+            StartError::TimedOut => write!(f, "nguồn font request không sẵn sàng trong hạn"),
             StartError::Thread(e) => write!(f, "không mở được luồng font request: {e}"),
         }
     }
@@ -46,6 +60,8 @@ pub struct FontRequestSource {
 
 /// Chờ luồng nguồn dừng tối đa ngần này khi đóng; quá hạn thì bỏ rơi (detach). Một callback đang chạy không bao giờ giữ app thoát.
 const CLOSE_WAIT: Duration = Duration::from_secs(1);
+/// Chờ luồng nguồn báo sẵn sàng. Đo cục bộ mở trong vài ms; CI (máy bận hàng chục phút) đã từng vượt hạn cũ 5 s.
+const START_WAIT: Duration = Duration::from_secs(15);
 
 impl FontRequestSource {
     /// Đăng ký nguồn. Trả `Err` nếu hệ thống từ chối; khi đó app vẫn chạy, chỉ mất tự bật font cho Photoshop/AE.
@@ -62,12 +78,17 @@ impl FontRequestSource {
                 let _ = done_tx.send(());
             })
             .map_err(StartError::Thread)?;
-        match rx.recv_timeout(Duration::from_secs(5)) {
+        match rx.recv_timeout(START_WAIT) {
             Ok(true) => Ok(Self { stop, thread: Some(thread), done: done_rx, responder }),
-            _ => {
+            other => {
                 stop.store(true, Ordering::SeqCst);
-                let _ = thread.join();
-                Err(StartError::NoSource)
+                let timed_out = matches!(other, Err(mpsc::RecvTimeoutError::Timeout));
+                if timed_out {
+                    drop(thread); // không join: luồng có thể còn kẹt trong CoreText; nó tự thoát khi `stop` được thấy
+                } else {
+                    let _ = thread.join();
+                }
+                Err(if timed_out { StartError::TimedOut } else { StartError::Refused })
             }
         }
     }

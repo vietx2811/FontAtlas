@@ -16,6 +16,8 @@ pub struct Inputs {
     pub enabled: bool,
     pub broker_running: bool,
     pub font_request_running: bool,
+    /// Mã lỗi mở nguồn lần gần nhất (xem `AutoStatusDto::font_request_error`).
+    pub font_request_error: Option<String>,
     pub signing_key_present: bool,
     /// Bản cô lập: từ chối cài/gỡ/xoá khoá (xem `is_isolated`).
     pub isolated_build: bool,
@@ -77,7 +79,14 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
                         state = AutoAppStateDto::IsolatedBuild;
                     } else {
                         state = AutoAppStateDto::Error;
-                        detail = Some("nguồn font request của hệ thống không mở được".into());
+                        detail = Some(
+                            match i.font_request_error.as_deref() {
+                                Some("timeout") => "nguồn font request chưa sẵn sàng (hệ thống bận); Font Atlas sẽ thử lại",
+                                Some("refused") => "hệ thống từ chối nguồn font request; Font Atlas sẽ thử lại",
+                                _ => "nguồn font request của hệ thống không mở được",
+                            }
+                            .into(),
+                        );
                     }
                 }
                 AutoMethodDto::CepPanel => {
@@ -149,6 +158,7 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
         enabled: i.enabled,
         broker_running: i.broker_running,
         font_request_running: i.font_request_running,
+        font_request_error: if i.font_request_running { None } else { i.font_request_error.clone() },
         signing_key_present: i.signing_key_present,
         isolated_build: i.isolated_build,
         apps,
@@ -218,6 +228,7 @@ pub fn status(state: &AppState) -> Result<AutoStatusDto, CmdError> {
         // ping thật: worker chết thì cổng vẫn mở nhưng không ai trả lời
         broker_running: crate::services::broker::healthy(state),
         font_request_running: state.fontreq.lock().map(|g| g.is_some()).unwrap_or(false),
+        font_request_error: state.fontreq_error.lock().ok().and_then(|e| e.clone()),
         signing_key_present: crate::services::cep::key_present(state),
         isolated_build: is_isolated(state),
         isolated: !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst)

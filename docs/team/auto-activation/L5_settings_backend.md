@@ -19,7 +19,7 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 
 ### `AutoStatusDto`
 
-`{ enabled, brokerRunning, fontRequestRunning, signingKeyPresent, isolatedBuild, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
+`{ enabled, brokerRunning, fontRequestRunning, fontRequestError, signingKeyPresent, isolatedBuild, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
 
 `brokerRunning` là kết quả PING thật (không chỉ cổng còn mở). `signingKeyPresent`: Settings phải nói rõ "Font Atlas giữ một khoá ký riêng của máy này ở thư mục dữ liệu để cài lại panel Illustrator" và cho nút **Xoá khoá** (`auto_forget_key`) khi panel đã gỡ.
 
@@ -62,6 +62,7 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 - App có trên máy: tên gói `.app` hoặc thư mục `Adobe …` trong `/Applications`, `~/Applications`, khớp tiền tố ("Adobe Photoshop" khớp "Adobe Photoshop 2026"; "Affinity").
 - App đang chạy / trình quản lý khác đang chạy: `proc_listallpids` + `proc_pidpath`, lấy thành phần `.app` của đường dẫn file chạy.
 - `lastActivityMs`: dòng mới nhất của app đó trong `auto_activation_log` (500 dòng gần nhất).
+- `fontRequestError`: `null` hoặc `refused` / `timeout` / `thread` khi nguồn chưa chạy dù được phép; app tự thử lại mỗi 30 s (xem L2). UI hiện NoteMark + hướng dẫn, kết hợp `otherManagers[].running`.
 - `fontRequestRunning`: nguồn font request của L2 đang mở. Chỉ app thật (`lib.rs`) mở; `AppState` dựng trong test không mở (cờ `system_hooks`). Bản chạy với `FONTATLAS_DATA_DIR` cũng không mở trừ khi đặt `FONTATLAS_FONTREQ=1`.
 
 ## Kiểm

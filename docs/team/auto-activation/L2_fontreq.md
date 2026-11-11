@@ -29,6 +29,24 @@ Photoshop 2026 (và app khác theo cơ chế CoreText) hỏi font còn thiếu q
 - `tests/coretext_e2e.rs` (macOS, CoreText thật): nguồn trong tiến trình test, `examples/requester` (tiến trình khác) hỏi `LibreBaskerville-Regular` → nhận đúng font (`got=`, có URL); hỏi tên lạ → không nhận; thời gian trả lời < 2 s; mở/đóng/mở lại nguồn được. Chỉ trả URL fixture, không đăng ký font nào vào hệ thống.
 - `crates/fontatlas-broker/tests/ensure.rs`: `path` có cho kết quả dùng được (cả `already_active`), không có cho `missing`; không lộ khi không dùng được.
 
+## Nhiều nguồn trong một phiên đăng nhập, và `NoSource` (đo 2026-11-11)
+
+Lead nghi chỉ một tiến trình trong phiên đăng nhập được giữ nguồn font request, nên `NoSource` ở CI là hành vi thật. Đo trên máy này (macOS, RightFont và RightFontHelper đang chạy):
+
+- Mở nguồn **không bị chặn** bởi tiến trình khác: `listen` mở được 3/3 lần khi RightFont chạy; hai tiến trình `listen` cùng giữ nguồn một lúc đều mở được, không báo lỗi.
+- Nhưng khi có **hai người giữ nguồn, chỉ người đăng ký trước nhận request**: A (mở trước) nhận cả 3 request của `requester`, B (mở sau) nhận 0 và không biết mình bị bỏ đói. RightFont đang chạy vẫn không giành request của ta (không rõ nó có giữ nguồn không; chưa đo bằng app thật).
+- `NoSource` ở CI **chưa tái hiện** và chưa xác định nguyên nhân. Mã cũ gộp hai trường hợp: hệ thống trả "không có nguồn" ngay, hoặc luồng nguồn không báo sẵn sàng trong 5 s. Lượt CI đó chạy 1166 s (máy rất bận), nên nghi ngờ nhất là hạn 5 s. Chỉ là phỏng đoán.
+
+Đã làm:
+
+- `StartError` tách `Refused` / `TimedOut` / `Thread` (mã `refused` / `timeout` / `thread`); hạn chờ sẵn sàng nâng từ 5 s lên 15 s.
+- Mở lỗi thì app **không bỏ cuộc**: `services::fontreq::start_with` ghi mã vào `AppState.fontreq_error` và thử lại mỗi 30 s trên luồng nền (dừng khi thoát app). Mở được thì xoá lỗi.
+- `auto_status` trả thêm `fontRequestError: string | null` (`null` khi đang chạy hoặc cố ý không mở). Ứng dụng Photoshop/AE ở trạng thái `error` kèm `detail` cho biết sẽ thử lại. UI dùng `fontRequestError` để hiện NoteMark + hướng dẫn, và `otherManagers[].running` để gợi ý trình quản lý khác đang chạy.
+- Test: `tests/fontreq_retry.rs` (lỗi được ghi, thử lại tới khi mở được, `stop` dừng vòng thử lại) và `font_request_error_is_reported_and_explained`.
+- Test CoreText thật (`coretext_e2e`) chỉ chạy khi đặt `FONTATLAS_E2E_CORETEXT=1` (phụ thuộc trạng thái cả phiên đăng nhập; không chặn CI chung).
+
+Chưa làm được: phát hiện "bị bỏ đói" (có nguồn nhưng không ai gửi request tới vì tiến trình khác giữ trước, ví dụ hai bản Font Atlas). Bản dữ liệu riêng (QA/test) đã cố ý không mở nguồn nên tránh được trường hợp thường gặp nhất; bản thật thứ hai thì chưa có cách biết.
+
 ## Quan sát lạ (cần biết)
 
 - **Treo do hệ thống khi một nguồn bị đóng lúc còn request đang chờ, hoặc khi cùng một tiến trình mở/đóng nhiều nguồn liên tiếp.** Đã tái hiện ổn định bằng `coretext_e2e`: tiến trình hỏi font đứng `TAutoActivationManager::CopyFontsFromFontProvider` (XPC đồng bộ tới dịch vụ font) hàng chục giây (>40 s) trong khi luồng nguồn của ta rỗi; request kế tiếp của tiến trình khác cũng bị kẹt. Hiện tượng KHÔNG xảy ra khi chỉ có một nguồn sống suốt đời tiến trình (đúng cách app thật dùng). Cách giảm đã làm: ân hạn 0,4 s + `CFRunLoopSourceInvalidate` trước khi gỡ; trả lời mọi callback đang chờ ngay khi đóng; app không mở lại nguồn lúc chạy (công tắc đọc mỗi request, không đóng/mở nguồn). Test e2e gom thành MỘT test trên MỘT nguồn vì lý do này. Còn rủi ro: app thoát giữa lúc một app thiết kế đang chờ thì app đó có thể bị kẹt đến khi dịch vụ font hết hạn; hiếm và ngoài khả năng kiểm soát của ta.

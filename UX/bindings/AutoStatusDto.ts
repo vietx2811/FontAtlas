@@ -4,6 +4,13 @@ import type { OtherManagerDto } from "./OtherManagerDto";
 
 export type AutoStatusDto = { enabled: boolean, brokerRunning: boolean, fontRequestRunning: boolean, 
 /**
+ * Vì sao nguồn font request chưa chạy dù được phép (`None` = chạy hoặc cố ý không mở): `refused` (hệ thống từ chối),
+ * `timeout` (không sẵn sàng trong hạn), `thread`. App tự thử lại mỗi 30 s; nguồn mở được thì trường này về `None`.
+ * Photoshop/After Effects chỉ tự bật font khi nguồn chạy. Settings nên hiện NoteMark kèm hướng dẫn (thoát app khác
+ * cũng nhận font request, mở lại Font Atlas) và dùng `otherManagers[].running` để gợi ý trình quản lý đang chạy.
+ */
+fontRequestError: string | null, 
+/**
  * Khoá ký panel Illustrator của máy này đang được giữ ở thư mục dữ liệu (`<data>/cep/signing.pem`, quyền 0600).
  * Settings nên nói rõ điều này và cho nút **Xoá khoá** (`auto_forget_key`, chỉ khi panel đã gỡ).
  */

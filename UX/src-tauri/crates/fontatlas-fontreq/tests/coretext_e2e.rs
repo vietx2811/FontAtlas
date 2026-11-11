@@ -55,6 +55,12 @@ fn ask(name: &str) -> String {
 
 #[test]
 fn coretext_end_to_end_on_one_source() {
+    // Phụ thuộc trạng thái của cả phiên đăng nhập (dịch vụ font, tiến trình khác giữ nguồn, máy bận): không chặn CI chung.
+    // Chạy tay trước khi đổi gì ở lớp này: FONTATLAS_E2E_CORETEXT=1 cargo test -p fontatlas-fontreq --test coretext_e2e
+    if std::env::var_os("FONTATLAS_E2E_CORETEXT").is_none() {
+        eprintln!("bỏ qua: đặt FONTATLAS_E2E_CORETEXT=1 để chạy test đi qua CoreText thật (xem docs L2)");
+        return;
+    }
     let path = fixture();
     let want = path.to_string_lossy().into_owned();
     let asked = Arc::new(AtomicU64::new(0));

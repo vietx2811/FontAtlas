@@ -12,6 +12,7 @@ fn base() -> Inputs {
         enabled: true,
         broker_running: true,
         font_request_running: true,
+        font_request_error: None,
         isolated: false,
         installed_apps: vec!["Adobe Photoshop 2026".into(), "Adobe Illustrator".into(), "Adobe InDesign 2027".into()],
         running_exes: vec![],
@@ -199,4 +200,18 @@ fn isolated_build_flag_is_explicit_and_matches_the_refusal() {
     assert!(!build_status(&i).isolated_build);
     i.isolated_build = true;
     assert!(build_status(&i).isolated_build);
+}
+
+#[test]
+fn font_request_error_is_reported_and_explained() {
+    let mut i = base();
+    i.font_request_running = false;
+    i.font_request_error = Some("timeout".into());
+    let s = build_status(&i);
+    assert_eq!(s.font_request_error.as_deref(), Some("timeout"));
+    let ps = app(&s, "photoshop");
+    assert_eq!(ps.state, AutoAppStateDto::Error);
+    assert!(ps.detail.as_deref().unwrap().contains("thử lại"));
+    i.font_request_running = true;
+    assert_eq!(build_status(&i).font_request_error, None, "đang chạy thì không còn lỗi");
 }
