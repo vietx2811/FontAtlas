@@ -29,7 +29,7 @@ describe('query_faces', () => {
   it('fills every FaceQueryDto field with the 6a defaults (camelCase, no missing keys)', () => {
     expect(toFaceQueryDto({})).toEqual({
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
-      includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [],
+      includeMissing: false, sort: 'auto', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null,
       langs: [], langMode: 'all', badgeLang: null,
       weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
     });
@@ -279,5 +279,15 @@ describe('reveal_location', () => {
     reply = () => null;
     await createTauriApi().revealLocation('/Users/u/Downloads/A.ttf');
     expect(last()).toEqual({ cmd: 'reveal_location', args: { path: '/Users/u/Downloads/A.ttf' } });
+  });
+});
+
+describe('taxonomy v2 query flags', () => {
+  it('toFaceQueryDto sends includeSecondary / confidentOnly / minConfidence (explicit null when unset)', async () => {
+    const { toFaceQueryDto } = await import('../tauri');
+    const d = toFaceQueryDto({ classes: ['slab'], includeSecondary: true, confidentOnly: true, minConfidence: 0.9 });
+    expect([d.includeSecondary, d.confidentOnly, d.minConfidence]).toEqual([true, true, 0.9]);
+    const e = toFaceQueryDto({});
+    expect([e.includeSecondary, e.confidentOnly, e.minConfidence]).toEqual([false, false, null]);
   });
 });

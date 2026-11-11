@@ -6,6 +6,7 @@ import { CLOUD_I18N } from './cloud';
 import { ONBOARDING_I18N } from './onboarding';
 import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
 import { DESK_I18N } from './desk';
+import { VIEW_I18N } from './view';
 
 const vi = {
   ...TERM_GLOSS,
@@ -17,6 +18,7 @@ const vi = {
   ...FILTER_I18N_3,
   ...FILTER_I18N_4,
   ...DESK_I18N,
+  ...VIEW_I18N,
   ...ONBOARDING_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
@@ -26,13 +28,13 @@ const vi = {
   'filter.license.ofl': 'OFL', 'filter.license.apache': 'Apache', 'filter.license.other': 'Khác / thương mại', 'filter.license.unknown': 'Chưa rõ',
   'filter.favorites': 'Yêu thích', 'filter.variable': 'Variable', 'filter.variable.gloss': 'font biến thiên theo trục',
   'filter.italic': 'Italic', 'filter.italic.gloss': 'chữ nghiêng',
-  'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain', 'class.unclassified': 'Chưa phân loại',
-  'class.serif.gloss': 'có chân', 'class.sans.gloss': 'không chân', 'class.mono.gloss': 'cùng độ rộng', 'class.script.gloss': 'chữ viết tay', 'class.blackletter.gloss': 'chữ Gothic', 'class.symbol.gloss': 'ký hiệu', 'class.uncertain.gloss': 'chưa đủ chắc', 'class.unclassified.gloss': 'chưa phân tích',
+  'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.slab': 'Slab', 'class.handwriting': 'Handwriting', 'class.display': 'Display', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain', 'class.unclassified': 'Chưa phân loại',
+  'class.serif.gloss': 'có chân', 'class.sans.gloss': 'không chân', 'class.mono.gloss': 'cùng độ rộng', 'class.script.gloss': 'chữ viết nối nét', 'class.slab.gloss': 'chân vuông dày', 'class.handwriting.gloss': 'chữ viết tay, các chữ rời nhau', 'class.display.gloss': 'cấu trúc đặc biệt, cỡ lớn', 'class.blackletter.gloss': 'chữ Gothic', 'class.symbol.gloss': 'ký hiệu', 'class.uncertain.gloss': 'chưa đủ chắc', 'class.unclassified.gloss': 'chưa phân tích',
   'class.edited': 'Đã sửa', 'class.auto': 'Về tự động', 'class.maybe': 'có lẽ là {label}', 'class.machine': 'Máy nghĩ: {label}', 'class.menu': 'Đổi phân loại',
   'class.error': 'Không đổi được phân loại: {msg}',
   'class.signal.measure': 'Số đo', 'class.signal.panose': 'Panose', 'class.signal.os2_class': 'OS/2 class', 'class.signal.name': 'Tên font', 'class.signal.cmap': 'cmap', 'class.signal.post': 'post',
-  'class.usage.text': 'Text (đoạn văn)', 'class.usage.display': 'Display (tiêu đề lớn)', 'class.usage.ui': 'UI (giao diện)',
-  'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
+  'class.usage.text': 'Text (đoạn văn)', 'class.usage.display': 'Headline (tiêu đề cỡ lớn)', 'class.usage.ui': 'UI (giao diện)',
+  'class.secondary': 'Có thể cũng là {label}', 'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
   'topbar.group': 'Pair / Compare', 'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar',
   'topbar.pair.gloss': 'ghép cặp', 'topbar.pairThese.gloss': 'ghép các font đã chọn', 'topbar.compare.gloss': 'so sánh cạnh nhau', 'topbar.similar.gloss': 'tìm font giống',
   'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font đang chọn — nên ≤ {max} để so cho rõ.', 'topbar.narrow.short': 'nên ≤ {max}', 'topbar.narrow.title': 'Chọn quá nhiều để so sánh', 'topbar.useFirst': 'Chỉ lấy {max} đầu',

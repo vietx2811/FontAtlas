@@ -56,3 +56,5 @@ button.fa-state:focus-visible { outline: 2px solid var(--accent); outline-offset
 .fa-cell[data-layout="list"] .fa-spec { flex: 1; align-items: flex-start; }
 .fa-dot[data-scope="available"] { background: transparent; box-sizing: border-box; border: 1.5px solid var(--muted); box-shadow: none; }
 .fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }
+/* Hàng thông tin thứ 2 (giấy phép, VAR): kéo sát hàng trên để vừa đúng CARD_ROW2_H (14 + 4 = 18 px), không tràn boxHeight. */
+.fa-meta2 { margin-top: -6px; min-height: 14px; flex: none; }

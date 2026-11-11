@@ -248,7 +248,9 @@ impl From<FacePage> for FacePageDto {
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
 pub enum SortKeyDto {
+    // Không chọn sort (mặc định): như `family` nhưng có chữ tìm thì vẫn xếp khớp đầu từ trước.
     #[default]
+    Auto,
     Family,
     Weight,
     Added,
@@ -258,6 +260,7 @@ pub enum SortKeyDto {
 impl From<SortKeyDto> for SortKey {
     fn from(s: SortKeyDto) -> Self {
         match s {
+            SortKeyDto::Auto => SortKey::Auto,
             SortKeyDto::Family => SortKey::Family,
             SortKeyDto::Weight => SortKey::Weight,
             SortKeyDto::Added => SortKey::Added,
@@ -330,13 +333,21 @@ pub struct FaceQueryDto {
     pub hard: Vec<String>,
     /// Chỉ các face này (≤ 2000), giữ thứ tự khi `sort = "match"`.
     pub face_keys: Option<Vec<FaceKeyDto>>,
-    /// Lọc theo class (OR trong nhóm): serif | sans | mono | script | blackletter | symbol | uncertain
+    /// Lọc theo class (OR trong nhóm): serif | slab | sans | mono | script | handwriting | display | blackletter | symbol | uncertain
     /// | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
     /// Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
     pub classes: Vec<String>,
     /// Lọc theo subclass (snake_case, OR trong nhóm; AND với `classes`).
     pub subclasses: Vec<String>,
-    /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    /// `true`: `classes`/`subclasses` khớp cả class PHỤ (hybrid, `ClassificationDto.secondary`) của phân loại tự động,
+    /// không chỉ class chính. Face bị người dùng ghi đè không có class phụ. Mặc định `false` (chỉ class chính).
+    pub include_secondary: bool,
+    /// `true`: chỉ giữ face có nhãn phân loại tự tin: độ tin cậy ≥ `CONF_MIN` (0.88). Face đã bị người dùng ghi đè
+    /// luôn tính là tự tin; face `uncertain` (dưới ngưỡng) bị loại. Áp dụng cả khi `classes` rỗng.
+    pub confident_only: bool,
+    /// Ngưỡng độ tin cậy tuỳ ý 0–1 (nâng ngưỡng của `confidentOnly`, không hạ thấp). `null` = không đặt thêm.
+    pub min_confidence: Option<f32>,
+    /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative | reverse_contrast | high_contrast | monoline.
     pub traits: Vec<String>,
     /// Lọc theo ngôn ngữ (Hyperglot). Rỗng = không lọc. Chỉ face đã tính độ phủ mới khớp.
     pub langs: Vec<LangFilterDto>,
@@ -397,6 +408,28 @@ pub struct TagDto {
     pub id: i64,
     pub name: String,
     pub face_count: u32,
+}
+
+/// Danh mục tag hệ thống (phong cách, mood, mục đích dùng): KHÔNG đo bằng máy, chỉ là tag người dùng gán.
+/// Tên lưu: `namespace:key` (ví dụ `mood:calm`); `create_tag` chuẩn hoá và từ chối tiền tố dành riêng không có trong danh mục.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SystemTagGroupDto {
+    /// "style" | "mood" | "use"
+    pub namespace: String,
+    pub label: String,
+    pub tags: Vec<SystemTagDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SystemTagDto {
+    pub key: String,
+    pub label: String,
+    /// Tên tag đầy đủ để gọi `create_tag` / so với `TagDto.name`: `namespace:key`.
+    pub name: String,
 }
 
 impl From<Tag> for TagDto {

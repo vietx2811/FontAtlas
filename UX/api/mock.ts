@@ -10,7 +10,7 @@ import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './moc
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
-  type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
+  type FamilyStyleDto, type SettingsDto, type SourceDto, type SystemTagGroupDto, type TagDto, type UiStateDto,
 } from './types';
 
 const WEIGHTS: Array<[string, number]> = [['Thin', 100], ['ExtraLight', 200], ['Light', 300], ['Regular', 400], ['Medium', 500], ['SemiBold', 600], ['Bold', 700], ['ExtraBold', 800], ['Black', 900]];
@@ -20,6 +20,8 @@ const FAMILIES: Array<[string, number, 'ri' | 'r4' | '1', number]> = [
   ['Playfair Display', 1, 'r4', 0], ['Source Serif 4', 1, 'r4', 0], ['Fraunces', 2, 'r4', 3], ['DM Serif Display', 2, '1', 0],
   ['Bebas Neue', 2, '1', 12], ['Pacifico', 2, '1', 21], ['Lobster', 2, '1', 18], ['Oswald', 2, 'r4', 5],
   ['IBM Plex Mono', 2, 'r4', 0], ['JetBrains Mono', 1, 'r4', 0], ['Cormorant', 2, 'r4', 2], ['Abril Fatface', 3, '1', 9],
+  // Taxonomy v2: Slab, Handwriting, Display (có class phụ) để UI thấy đủ class mới.
+  ['Roboto Slab', 1, '1', 0], ['Caveat', 1, '1', 4], ['Monoton', 1, '1', 7],
 ];
 
 export function mockRows(): FaceRow[] {
@@ -73,6 +75,10 @@ export function createMockApi(o: MockOptions = {}): Api {
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
   const classOver = new Map<string, { class: string; subclass: string | null }>();
   const effClass = (r: FaceRow) => classOver.get(keyOf(r)) ?? mockAutoClass(r.family);
+  // Class phụ chỉ có ở nhãn tự động (ghi đè của người dùng không có class phụ), như backend.
+  const secClass = (r: FaceRow) => (classOver.has(keyOf(r)) ? null : mockSecondary(r.family));
+  // Ghi đè của người dùng = tin cậy tuyệt đối; còn lại dùng độ tin cậy tự động. Mock không có class phụ nên `includeSecondary` không đổi kết quả.
+  const mockConfidence = (r: FaceRow) => (classOver.has(keyOf(r)) ? 1 : mockAutoClass(r.family).class === 'uncertain' ? 0 : mockAutoClass(r.family).confidence);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
@@ -145,7 +151,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         usedBody.add(body.family);
         return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
       });
-      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null, langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
       return {
         describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
         query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
@@ -165,7 +171,9 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.favoritesOnly || r.isFavorite) &&
         (!q.license?.length || q.license.includes(r.licenseClass)) &&
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
-        (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
+        (!q.classes?.length || q.classes.includes(effClass(r).class) || (!!q.includeSecondary && q.classes.includes(secClass(r)?.class ?? '')))
+        && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '') || (!!q.includeSecondary && q.subclasses.includes(secClass(r)?.subclass ?? ''))) &&
+        (!(q.confidentOnly || q.minConfidence != null) || mockConfidence(r) >= Math.max(q.confidentOnly ? 0.88 : 0, q.minConfidence ?? 0)) &&
         (q.includeMissing || !r.missing) &&
         (!q.weightClass || matchesWeight(r, q.weightClass, q.varAxisMatch?.wght ?? true)) &&
         (!q.widthClass || matchesWidth(r, q.widthClass, q.varAxisMatch?.wdth ?? true)) &&
@@ -218,9 +226,10 @@ export function createMockApi(o: MockOptions = {}): Api {
       faces.forEach(f => c.faces.delete(keyOf(f)));
       act.collectionChanged(faces.map(f => [f, id] as [typeof f, number]), 'left_collection');
     },
+    systemTagCatalog: () => ok(MOCK_SYSTEM_TAGS),
     listTags: () => ok([...tags.values()].map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))),
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
-    async createTag(name) { const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
+    async createTag(name) { name = canonicalSystemTag(name); const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
     async tagFaces(id, faces) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); faces.forEach(f => t.faces.add(keyOf(f))); },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
@@ -279,11 +288,13 @@ export function createMockApi(o: MockOptions = {}): Api {
     async classFacets(q = {}) {
       const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });
       const by = new Map<string, Map<string, number>>();
-      for (const r of items) { const c = effClass(r); const m = by.get(c.class) ?? new Map(); if (c.subclass) m.set(c.subclass, (m.get(c.subclass) ?? 0) + 1); by.set(c.class, m); }
-      const count = (cls: string) => items.filter(r => effClass(r).class === cls).length;
+      // includeSecondary: face còn được đếm thêm ở class phụ của nó, nên tổng facet có thể lớn hơn số face duy nhất.
+      const slots = (r: FaceRow) => [effClass(r), ...(q.includeSecondary && secClass(r) ? [secClass(r)!] : [])];
+      for (const r of items) for (const c of slots(r)) { const m = by.get(c.class) ?? new Map(); if (c.subclass) m.set(c.subclass, (m.get(c.subclass) ?? 0) + 1); by.set(c.class, m); }
+      const count = (cls: string) => items.filter(r => slots(r).some(c => c.class === cls)).length;
       return [...by].map(([cls, subs]) => ({ class: cls, count: count(cls), subclasses: [...subs].map(([subclass, n]) => ({ subclass, count: n })) }));
     },
-    async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
+    async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), v2Override(o.class, o.subclass)); },
     async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
     async languageList(q = {}) { return listFor((await this.queryFaces({ ...q, langs: [], offset: 0, limit: Infinity })).items); },
     async langCoverage(faceId, code) { const r = rows.find(x => x.faceId === faceId); if (!r) throw new CmdError('not_found', 'face not found'); return coverageFor(r, code); },
@@ -402,15 +413,27 @@ export function createMockApi(o: MockOptions = {}): Api {
 }
 
 /** Phân loại tự động giả cho mock (cố định theo họ font). */
+/** Class phụ (hybrid) giả: chỉ hiển thị/tìm kiếm; lọc/nhóm luôn theo class chính. */
+const MOCK_SECONDARY: Array<[RegExp, { class: string; subclass: string | null }]> = [[/Monoton/, { class: 'sans', subclass: 'geometric' }]];
+export const mockSecondary = (family: string): { class: string; subclass: string | null } | null => MOCK_SECONDARY.find(([re]) => re.test(family))?.[1] ?? null;
 const MOCK_AUTO: Array<[RegExp, string, string | null, number]> = [
+  [/Roboto Slab/, 'slab', 'clarendon', 0.92],
+  [/Caveat/, 'handwriting', 'marker', 0.9],
+  [/Monoton/, 'display', 'inline_outline', 0.91],
   [/Pacifico|Lobster/, 'uncertain', null, 0.55],
   [/Didone|Playfair|Abril|Bodoni/, 'serif', 'didone', 0.94],
-  [/Serif|Fraunces|Cormorant/, 'serif', 'old_style', 0.9],
+  [/Serif|Fraunces|Cormorant/, 'serif', 'garalde', 0.9],
   [/Mono/, 'mono', null, 0.95],
   [/Bebas/, 'unclassified', null, 0],
   [/Oswald/, 'sans', 'grotesque', 0.9],
 ];
-const CLASS_LABEL: Record<string, string> = { serif: 'Serif', sans: 'Sans', mono: 'Mono', script: 'Script', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain', unclassified: 'Chưa phân loại' };
+const CLASS_LABEL: Record<string, string> = { serif: 'Serif', slab: 'Slab', sans: 'Sans', mono: 'Mono', script: 'Script', handwriting: 'Handwriting', display: 'Display', blackletter: 'Blackletter', symbol: 'Symbol', uncertain: 'Uncertain', unclassified: 'Chưa phân loại' };
+/** Như backend: ghi đè nhãn v1 được nhận nhưng LƯU thành v2 (serif/slab → slab, handwritten/script cũ → handwriting, formal → formal_copperplate…). */
+const V1_SUB: Record<string, string> = { humanist_oldstyle: 'venetian_oldstyle', old_style: 'garalde', formal: 'formal_copperplate', casual_brush: 'brush', handwritten: 'casual_print' };
+export function v2Override(cls: string, sub: string | null): { class: string; subclass: string | null } {
+  if (cls === 'serif/slab') return { class: 'slab', subclass: null };
+  return { class: cls, subclass: sub ? V1_SUB[sub] ?? sub : null };
+}
 export function mockAutoClass(family: string): { class: string; subclass: string | null; confidence: number } {
   const hit = MOCK_AUTO.find(([re]) => re.test(family));
   return hit ? { class: hit[1], subclass: hit[2], confidence: hit[3] } : { class: 'sans', subclass: null, confidence: 0.9 };
@@ -435,6 +458,25 @@ function mockClassification(family: string, over?: { class: string; subclass: st
     // Cố ý có giá trị lạ như dữ liệu thật (vote 'usage', nguồn và trait chưa dịch) để UI không giả định tập khoá đóng.
     signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }, ...(/Abril|Pacifico/.test(family) ? [{ source: 'future_source', detail: 'x', vote: 'usage', weight: 0.1 }] : [])],
     traits: /Bebas/.test(family) ? ['fat_face'] : /Abril/.test(family) ? ['Fat face', 'Quirky_new_trait'] : [],
-    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
+    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null, secondary: over ? null : mockSecondary(family),
   };
+}
+
+// Danh mục tag hệ thống giống backend (fontatlas-core/system_tags.rs): phong cách, mood, mục đích dùng.
+const mkSys = (namespace: string, label: string, tags: [string, string][]): SystemTagGroupDto => ({ namespace, label, tags: tags.map(([key, l]) => ({ key, label: l, name: `${namespace}:${key}` })) });
+export const MOCK_SYSTEM_TAGS: SystemTagGroupDto[] = [
+  mkSys('style', 'Style', [['art_deco', 'Art Deco'], ['art_nouveau', 'Art Nouveau'], ['wood_type', 'Wood type'], ['western', 'Western'], ['retro_vintage', 'Retro / Vintage'], ['psychedelic', 'Psychedelic'], ['brutalist', 'Brutalist'], ['techno', 'Techno'], ['medieval', 'Medieval'], ['tuscan', 'Tuscan'], ['distressed', 'Distressed'], ['blobby', 'Blobby'], ['wacky', 'Wacky']]),
+  mkSys('mood', 'Mood', [['business', 'Business'], ['calm', 'Calm'], ['elegant', 'Elegant'], ['playful', 'Playful'], ['friendly_cute', 'Friendly / Cute'], ['loud_bold', 'Loud / Bold'], ['vintage_retro', 'Vintage / Retro'], ['futuristic_tech', 'Futuristic / Tech'], ['rugged', 'Rugged'], ['artistic', 'Artistic'], ['formal', 'Formal'], ['handmade', 'Handmade']]),
+  mkSys('use', 'Use', [['editorial', 'Editorial'], ['logo_branding', 'Logo / Branding'], ['packaging', 'Packaging'], ['signage', 'Signage']]),
+];
+/** Như backend `create_tag`: tiền tố dành riêng được chuẩn hoá và phải có trong danh mục; tên khác giữ nguyên. */
+function canonicalSystemTag(raw: string): string {
+  const name = raw.trim();
+  const i = name.indexOf(':');
+  if (i < 0) return name;
+  const g = MOCK_SYSTEM_TAGS.find(x => x.namespace === name.slice(0, i).trim().toLowerCase());
+  if (!g) return name;
+  const t = g.tags.find(x => x.key === name.slice(i + 1).trim().toLowerCase());
+  if (!t) throw new CmdError('invalid_arg', `tag hệ thống không có trong danh mục: ${name}`);
+  return t.name;
 }

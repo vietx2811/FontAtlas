@@ -109,11 +109,11 @@ describe('SimilarTab', () => {
     render(<SimilarTab api={api} detail={d} />);
     await screen.findAllByTestId('similar-hit');
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await waitFor(() => expect(screen.getByText('7–12 / 15')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('7–12 / 18')).toBeTruthy());
     act(() => useUiStore.getState().setQuery('Inter'));
     await waitFor(() => expect(spy.mock.calls.at(-1)![2]).toMatchObject({ text: 'Inter', offset: 0 }));
     act(() => useUiStore.getState().setQuery(''));
-    await waitFor(() => expect(screen.getByText('1–6 / 15')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1–6 / 18')).toBeTruthy());
     shrink = true;
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
     await waitFor(() => expect(screen.getByText('1–3 / 3')).toBeTruthy());

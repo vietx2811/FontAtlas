@@ -10,6 +10,7 @@ mod load;
 mod metadata;
 mod metric;
 mod vietnamese;
+pub mod system_tags;
 
 pub use anatomy::{Anatomy, MeasureAt, measure_with_filter, standard_location};
 pub use error::CoreError;

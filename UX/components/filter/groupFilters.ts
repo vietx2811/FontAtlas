@@ -3,27 +3,28 @@ import type { LibraryFilters } from '../../store/ui';
 import { t, type I18nKey } from '../../i18n';
 import { filterChips, type Chip } from '../main/FilterChips';
 
-export type GroupId = 'class' | 'style' | 'vi' | 'lang' | 'library' | 'license' | 'axes';
+export type GroupId = 'class' | 'style' | 'vi' | 'lang' | 'library' | 'tags' | 'license' | 'axes';
 export type Group = { id: GroupId; label: string; chips: Chip[]; /** Ghi chú ngắn sau giá trị trong tóm tắt (vd cách ghép ngôn ngữ "một trong"). */ suffix?: string; remove(f: LibraryFilters): LibraryFilters };
 
 const ORDER: ReadonlyArray<[GroupId, I18nKey]> = [
-  ['class', 'fgroup.class'], ['style', 'fgroup.style'], ['vi', 'fgroup.vi'], ['lang', 'fgroup.lang'], ['library', 'fgroup.library'], ['license', 'fgroup.license'], ['axes', 'fgroup.axes'],
+  ['class', 'fgroup.class'], ['style', 'fgroup.style'], ['vi', 'fgroup.vi'], ['lang', 'fgroup.lang'], ['library', 'fgroup.library'], ['tags', 'fgroup.tags'], ['license', 'fgroup.license'], ['axes', 'fgroup.axes'],
 ];
 
 const groupOf = (chipId: string): GroupId => {
   const head = chipId.split(':')[0];
-  if (head === 'class' || head === 'subclass') return 'class';
+  if (head === 'class' || head === 'subclass') return 'class'; // gồm cả công tắc class-hybrid / class-confident
   if (head === 'variable' || head === 'italic') return 'style';
   if (head === 'vi') return 'vi';
   if (head === 'lang') return 'lang';
   if (head === 'favorites' || head === 'source') return 'library';
+  if (head === 'tag') return 'tags';
   if (head === 'license') return 'license';
   return 'axes';
 };
 
 /** Bộ lọc → nhóm theo thứ tự cố định (chỉ nhóm có giá trị). Dùng chung cho tóm tắt, "Đang lọc", Backspace và toast. Thuần, không đọc store. */
-export function groupFilters(f: LibraryFilters, sources: SourceDto[] = [], view = 'all'): Group[] {
-  const chips = filterChips(f, sources, view);
+export function groupFilters(f: LibraryFilters, sources: SourceDto[] = [], view = 'all', tags: ReadonlyArray<{ id: number; name: string }> = []): Group[] {
+  const chips = filterChips(f, sources, view, tags);
   const out: Group[] = [];
   for (const [id, key] of ORDER) {
     const mine = chips.filter(c => groupOf(c.id) === id);

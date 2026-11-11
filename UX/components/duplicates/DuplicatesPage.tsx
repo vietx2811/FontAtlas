@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Api, DuplicateGroupDto, DuplicateMemberDto } from '../../api';
 import { hasKey, t, type I18nKey } from '../../i18n';
-import { faceKey, toMetadataQuery, useUiStore } from '../../store/ui';
+import { faceKey, toMetadataQuery, useUiStore, dropTags } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { useNoticeStore } from '../../store/notices';
 import { Tooltip } from '../ui/Tooltip';
@@ -67,7 +67,7 @@ function Group({ api, g }: { api: Api; g: DuplicateGroupDto }): React.JSX.Elemen
 export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
   const ui = useUiStore();
   const version = useScanStore(s => s.version);
-  const q = useMemo(() => toMetadataQuery({ view: 'all', tag: null, query: ui.query, viOnly: ui.viOnly, filters: ui.filters }), [ui.query, ui.viOnly, ui.filters]);
+  const q = useMemo(() => toMetadataQuery({ view: 'all', query: ui.query, viOnly: ui.viOnly, filters: dropTags(ui.filters) }), [ui.query, ui.viOnly, ui.filters]);
   const qKey = JSON.stringify(q);
   const [groups, setGroups] = useState<DuplicateGroupDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -38,7 +38,7 @@
       if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
       el = live(term) ?? el; fire(el, 'pointerout');
       const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
-      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + ')');
+      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
     }
     return { n, bad, art };
   };
@@ -55,8 +55,8 @@
       const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
       document.dispatchEvent(esc);
       await wait(() => !document.querySelector('[data-testid=splash]'), 4000);
-      // prevented chỉ ghi lại (nợ 0.2.1: có lúc false trên máy CI tải nặng); yêu cầu thật — Esc không rơi xuống onboarding — kiểm ở splash-esc-stays-o1.
-      await log('splash-skip', !document.querySelector('[data-testid=splash]') && inertBelow, { inertBelow, prevented: esc.defaultPrevented });
+      // Esc phải bị nuốt (defaultPrevented) — listener ở window capture + layout effect nên không có khoảng hở khi máy tải; Esc không rơi xuống onboarding còn kiểm ở splash-esc-stays-o1.
+      await log('splash-skip', !document.querySelector('[data-testid=splash]') && inertBelow && esc.defaultPrevented, { inertBelow, prevented: esc.defaultPrevented });
       await wait(() => document.querySelector('.fa-onb h1, .fa-lib'), 90000);
       await sleep(400);
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? null;
@@ -645,8 +645,8 @@
     let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
-    const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
+    await wait(() => grp?.querySelectorAll('.fa-class-opt input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
+    const boxes = [...(grp?.querySelectorAll('.fa-class-opt input[type=checkbox]') ?? [])].filter(b => !b.closest('.fa-sub-opts')); // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
     const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
@@ -654,7 +654,7 @@
     await wait(() => countNow() === facetCount, 10000);
     await sleep(300); await snap('class-filter');
     const total1 = countNow();
-    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
+    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
     await closeAdv(); await sleep(200);
     const sIn = document.querySelector('.fa-search input'); sIn?.focus();
     sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
@@ -816,6 +816,49 @@
         await wait(() => !deskEl(), 8000);
         await log('desk-esc-leaves', !deskEl() && !!cells().length > 0, {});
       }
+    }
+
+    // Hiển thị (A3): mở bằng nút, bật Giấy phép → thẻ có hàng 2, Đặt lại, Esc trả focus về nút.
+    {
+      const vb = () => document.querySelector('[data-testid=view-open]');
+      if (vb()) {
+        vb().click();
+        await wait(() => !!document.querySelector('[data-testid=view-pop]'), 5000);
+        const cellH = () => document.querySelector('[role=gridcell][data-face-id]')?.getBoundingClientRect().height ?? 0;
+        const h0 = cellH();
+        const before = document.querySelectorAll('[data-testid=face-meta2]').length;
+        document.querySelector('[data-field=license] input')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length > 0, 8000);
+        const after = document.querySelectorAll('[data-testid=face-meta2]').length;
+        await sleep(300);
+        const h1 = cellH();
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('view-options-' + th); }
+        document.querySelector('[data-testid=view-reset]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
+        (document.activeElement && document.querySelector('[data-testid=view-pop]')?.contains(document.activeElement) ? document.activeElement : document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]'), { before, after, h0, h1, popOpen: !!document.querySelector('[data-testid=view-pop]') });
+        await wait(() => document.activeElement === vb(), 1000);
+        await log('view-options-focus-returns', document.activeElement === vb(), { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
+        await log('view-options-row-height', h0 > 0 && Math.abs((h1 - h0) - 18) <= 2, { h0, h1 });
+      } else await log('view-options', false, 'no view-open button');
+    }
+
+    // Menu chuột phải Sidebar (C6): mở trên "Gần đây" không đổi view; Esc đóng và trả focus.
+    {
+      const nav = [...document.querySelectorAll('[data-testid=sidebar] .fa-nav')].find(b => /Gần đây/.test(b.textContent));
+      if (nav) {
+        const viewBefore = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        const r = nav.getBoundingClientRect();
+        nav.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 10 }));
+        await wait(() => !!document.querySelector('[role=menu]'), 5000);
+        const opened = !!document.querySelector('[role=menu]') && nav.dataset.context === 'true';
+        await snap('sidebar-context-menu');
+        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        await log('sidebar-context-menu', opened && !document.querySelector('[role=menu]') && viewBefore === viewAfter && document.activeElement === nav, { viewBefore, viewAfter });
+      } else await log('sidebar-context-menu', false, 'no Gần đây item');
     }
 
     await log('done', true, '');

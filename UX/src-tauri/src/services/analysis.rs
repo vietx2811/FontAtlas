@@ -448,12 +448,24 @@ pub fn class_facets(state: &AppState, q: &FaceQueryDto) -> Result<Vec<ClassFacet
         if !allowed.contains(k) {
             continue;
         }
-        let Some((c, sub)) = eff.get(&m.face_id) else { continue };
+        let Some(ec) = eff.get(&m.face_id) else { continue };
         classified += 1;
-        let e = by.entry(c.clone()).or_default();
+        let e = by.entry(ec.class.clone()).or_default();
         e.0 += 1;
-        if let Some(s) = sub {
+        if let Some(s) = &ec.sub {
             *e.1.entry(s.clone()).or_default() += 1;
+        }
+        // includeSecondary: face cũng được đếm dưới class phụ (hybrid) của nó, trừ khi trùng class chính.
+        // Vì vậy tổng các facet có thể lớn hơn số face duy nhất khi bật cờ này.
+        if q.include_secondary
+            && let Some((sc, ssub)) = &ec.secondary
+            && *sc != ec.class
+        {
+            let e2 = by.entry(sc.clone()).or_default();
+            e2.0 += 1;
+            if let Some(s) = ssub {
+                *e2.1.entry(s.clone()).or_default() += 1;
+            }
         }
     }
     // Face thoả bộ lọc nhưng không có hồ sơ trong Index (chưa phân tích / JSON hỏng): tách thành bucket riêng
@@ -992,9 +1004,9 @@ mod raw_stats_tests {
 
 /// Phân loại tự động từ JSON đã lưu, rồi áp ghi đè của người dùng (ưu tiên hơn).
 pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy: &Value) -> Result<ClassificationDto, CmdError> {
-    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify, usage_for};
+    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify_v2, usage_for};
     let input = ClassifyInput::from_json(meta, anatomy);
-    let auto = classify(&input);
+    let auto = classify_v2(&input);
     let ov = state.with_user(|u| Ok(u.classification_override(key)?))?;
     let usage_str = |u: &[Usage]| -> Vec<String> {
         u.iter()
@@ -1026,6 +1038,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
             usage: usage_str(&usage_for(&input, c)),
             source: "override".into(),
             auto_class: Some(snake(auto.class)),
+            secondary: None,
         });
     }
     Ok(ClassificationDto {
@@ -1039,6 +1052,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
         usage: usage_str(&auto.usage),
         source: "auto".into(),
         auto_class: None,
+        secondary: auto.secondary.map(|x| ClassSecondaryDto { class: x.class.snake().into(), subclass: x.subclass }),
     })
 }
 
@@ -1055,7 +1069,10 @@ pub fn set_classification_override(state: &AppState, o: &ClassificationOverrideD
     if state.with_store(|s| Ok(s.face_ids_of(&[k])?))?.is_empty() {
         return Err(CmdError::not_found("không có face này trong thư viện"));
     }
-    state.with_user(|u| Ok(u.set_classification_override(&k, &o.class.to_ascii_lowercase(), o.subclass.as_deref())?))?;
+    // nhãn v1 (serif/slab, script/handwritten, casual_brush, formal, humanist_oldstyle) vẫn được đọc nhưng KHÔNG được lưu:
+    // chuyển sang taxonomy v2 trước khi ghi để user.db chỉ chứa nhãn v2 (cùng ánh xạ với migration)
+    let (class, subclass) = fontatlas_core::classify::migrate_legacy(&o.class.to_ascii_lowercase(), o.subclass.as_deref());
+    state.with_user(|u| Ok(u.set_classification_override(&k, &class, subclass.as_deref())?))?;
     crate::services::library::bump_class_generation();
     Ok(())
 }

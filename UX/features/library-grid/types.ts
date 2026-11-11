@@ -12,6 +12,10 @@ export type FaceQuery = {
   faceKeys?: Array<{ hashHex: string; faceIndex: number }>;
   /** D1 (feat/classify): lọc theo phân loại hiệu lực; OR trong nhóm, AND giữa hai nhóm. */
   classes?: string[]; subclasses?: string[]; traits?: string[];
+  /** Taxonomy v2: `classes`/`subclasses` khớp cả class PHỤ (hybrid) của phân loại tự động; mặc định chỉ class chính. */
+  includeSecondary?: boolean;
+  /** Taxonomy v2: bỏ nhãn dưới CONF_MIN (0.88); ghi đè của người dùng luôn tự tin; `minConfidence` (0–1) nâng ngưỡng thêm. */
+  confidentOnly?: boolean; minConfidence?: number;
   /** 0.3.0 (Hyperglot): lọc ngôn ngữ; `all` = đủ mọi ngôn ngữ (mặc định), `any` = ít nhất một; `badgeLang` = ngôn ngữ trên thẻ (mặc định vie). */
   langs?: LangFilterDto[]; langMode?: 'all' | 'any'; badgeLang?: string;
   /** 0.3.0 (advanced filters): usWeightClass 100–900 / usWidthClass 1–9, khoảng đóng. `varAxisMatch` (mặc định bật cả hai): font Variable khớp khi dải trục wght/wdth giao khoảng. */

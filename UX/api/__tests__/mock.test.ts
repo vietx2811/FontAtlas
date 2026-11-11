@@ -198,3 +198,15 @@ describe('advanced filters (weight/width class, histograms)', () => {
     expect((await api.axisHistogram({}, 500))[0].bins).toHaveLength(64);
   });
 });
+
+describe('system tags (style/mood/use)', () => {
+  it('catalog has 3 groups with 12 moods; create_tag canonicalises and rejects unknown reserved values', async () => {
+    const api = createMockApi();
+    const cat = await api.systemTagCatalog();
+    expect(cat.map(g => g.namespace)).toEqual(['style', 'mood', 'use']);
+    expect(cat[1].tags).toHaveLength(12);
+    expect((await api.createTag(' Mood: CALM ')).name).toBe('mood:calm');
+    await expect(api.createTag('style:nope')).rejects.toMatchObject({ code: 'invalid_arg' });
+    expect((await api.createTag('tet:2027')).name).toBe('tet:2027');
+  });
+});

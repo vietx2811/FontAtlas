@@ -57,8 +57,9 @@ pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
     validate_class_ranges(q)?;
-    if !q.classes.is_empty() || !q.subclasses.is_empty() {
-        let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
+    let min_conf = min_confidence_of(q)?;
+    if !q.classes.is_empty() || !q.subclasses.is_empty() || min_conf.is_some() {
+        let ids = class_face_ids(state, &q.classes, &q.subclasses, q.include_secondary, min_conf)?;
         match &mut scope {
             Some(prev) => prev.retain(|x| ids.contains(&x.0)),
             None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
@@ -132,7 +133,17 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
     })
 }
 
-type EffMap = std::sync::Arc<std::collections::HashMap<i64, (String, Option<String>)>>;
+/// Phân loại hiệu lực của một face (ghi đè > tự động), kèm độ tin cậy và class phụ để lọc không phải dựng lại.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct EffClass {
+    pub class: String,
+    pub sub: Option<String>,
+    /// Ghi đè của người dùng = 1.0; tự động = độ tin cậy của bộ phân loại (0 khi `uncertain`).
+    pub conf: f32,
+    /// Class phụ (hybrid) của phân loại TỰ ĐỘNG; ghi đè không có.
+    pub secondary: Option<(String, Option<String>)>,
+}
+type EffMap = std::sync::Arc<std::collections::HashMap<i64, EffClass>>;
 static CLASS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 type EffCache = Option<(std::sync::Weak<crate::index_bundle::IndexBundle>, u64, EffMap)>;
 static EFF_CACHE: std::sync::Mutex<EffCache> = std::sync::Mutex::new(None);
@@ -159,25 +170,35 @@ pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
         .into_iter()
         .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
         .collect();
-    let map: EffMap = std::sync::Arc::new(
-        b.meta
-            .iter()
-            .map(|(k, m)| {
-                let eff = match ov.get(&(k.hash.clone(), k.index)) {
-                    Some(o) => (o.class.clone(), o.subclass.clone()),
-                    None => (m.auto_class.clone(), m.auto_subclass.clone()),
-                };
-                (m.face_id, eff)
-            })
-            .collect(),
-    );
+    let mut map: std::collections::HashMap<i64, EffClass> = b
+        .meta
+        .iter()
+        .map(|(k, m)| {
+            let eff = match ov.get(&(k.hash.clone(), k.index)) {
+                Some(o) => EffClass { class: o.class.clone(), sub: o.subclass.clone(), conf: 1.0, secondary: None },
+                None => EffClass { class: m.auto_class.clone(), sub: m.auto_subclass.clone(), conf: m.auto_confidence, secondary: m.auto_secondary.clone() },
+            };
+            (m.face_id, eff)
+        })
+        .collect();
+    // ghi đè cho face chưa có hồ sơ trong Index: lựa chọn của người dùng vẫn là phân loại hiệu lực
+    let in_meta: std::collections::HashSet<(&str, u32)> = b.meta.keys().map(|k| (k.hash.as_str(), k.index)).collect();
+    let orphans: Vec<FaceKey> = ov.values().filter(|o| !in_meta.contains(&(o.key.hash_hex().as_str(), o.key.face_index))).map(|o| o.key).collect();
+    if !orphans.is_empty() {
+        for (k, id) in state.with_store(|s| Ok(s.face_ids_of(&orphans)?))? {
+            if let Some(o) = ov.get(&(k.hash_hex(), k.face_index)) {
+                map.insert(id, EffClass { class: o.class.clone(), sub: o.subclass.clone(), conf: 1.0, secondary: None });
+            }
+        }
+    }
+    let map: EffMap = std::sync::Arc::new(map);
     if let Ok(mut g) = EFF_CACHE.lock() {
         *g = Some((std::sync::Arc::downgrade(&b), generation, map.clone()));
     }
     Ok(map)
 }
 
-pub const TRAITS: [&str; 6] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative"];
+pub const TRAITS: [&str; 9] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative", "reverse_contrast", "high_contrast", "monoline"];
 
 /// Face có ít nhất một trait trong `traits`. Traits lấy từ phân loại TỰ ĐỘNG (tên/Panose/sFamilyClass); ghi đè của
 /// người dùng chỉ đổi class/subclass, không đổi traits.
@@ -189,7 +210,42 @@ fn trait_face_ids(state: &AppState, traits: &[String]) -> Result<std::collection
     Ok(b.meta.values().filter(|m| m.auto_traits.iter().any(|t| traits.contains(t))).map(|m| m.face_id).collect())
 }
 
-fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
+/// Ngưỡng độ tin cậy hiệu lực của truy vấn: `confidentOnly` → CONF_MIN; `minConfidence` nâng thêm; `None` = không lọc.
+fn min_confidence_of(q: &FaceQueryDto) -> Result<Option<f32>, CmdError> {
+    if let Some(m) = q.min_confidence
+        && !(0.0..=1.0).contains(&m)
+    {
+        return Err(CmdError::invalid_arg("minConfidence: phải trong khoảng 0–1"));
+    }
+    let base = q.confident_only.then_some(fontatlas_core::classify::CONF_MIN);
+    Ok(match (base, q.min_confidence) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    })
+}
+
+/// Face khớp bộ lọc class/subclass? Class chính luôn tính; class phụ chỉ khi `include_secondary`.
+/// `classes` rỗng = mọi class; `subclasses` rỗng = mọi subclass (AND giữa hai nhóm, OR trong nhóm).
+pub(crate) fn class_hit(
+    classes: &[String],
+    subclasses: &[String],
+    include_secondary: bool,
+    primary: (&str, &Option<String>),
+    secondary: Option<&(String, Option<String>)>,
+) -> bool {
+    let one = |c: &str, sub: &Option<String>| {
+        (classes.is_empty() || classes.iter().any(|x| x == c)) && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
+    };
+    one(primary.0, primary.1) || (include_secondary && secondary.is_some_and(|(c, s)| one(c, s)))
+}
+
+fn class_face_ids(
+    state: &AppState,
+    classes: &[String],
+    subclasses: &[String],
+    include_secondary: bool,
+    min_conf: Option<f32>,
+) -> Result<std::collections::HashSet<i64>, CmdError> {
     use fontatlas_core::classify::{Class, subclasses_of};
     let classes: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
     for c in &classes {
@@ -197,7 +253,7 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
             return Err(CmdError::invalid_arg(format!("classes: class không hợp lệ: {c}")));
         }
     }
-    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script]
+    let known: Vec<&str> = [Class::Serif, Class::Slab, Class::Sans, Class::Mono, Class::Script, Class::Handwriting, Class::Display]
         .into_iter()
         .flat_map(subclasses_of)
         .copied()
@@ -207,16 +263,20 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
             return Err(CmdError::invalid_arg(format!("subclasses: subclass không hợp lệ: {s}")));
         }
     }
+    let filter_classes = !classes.is_empty() || !subclasses.is_empty();
     let mut out: std::collections::HashSet<i64> = effective_classes(state)?
         .iter()
-        .filter(|(_, (c, sub))| {
-            (classes.is_empty() || classes.contains(c))
-                && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
+        .filter(|(_, e)| {
+            if min_conf.is_some_and(|t| e.conf < t) {
+                return false;
+            }
+            !filter_classes || class_hit(&classes, subclasses, include_secondary, (&e.class, &e.sub), e.secondary.as_ref())
         })
         .map(|(id, _)| *id)
         .collect();
     // "unclassified": face chưa có hồ sơ trong Index (chưa phân tích / JSON hỏng) — luôn tách riêng, không lẫn vào "uncertain".
-    if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() {
+    // Không có nhãn nên không bao giờ "tự tin": bị loại khi đặt ngưỡng độ tin cậy.
+    if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() && min_conf.is_none() {
         let b = crate::services::analysis::bundle(state)?;
         let known_ids: std::collections::HashSet<i64> = b.meta.values().map(|m| m.face_id).collect();
         out.extend(state.with_store(|s| Ok(s.all_face_ids()?))?.into_iter().filter(|id| !known_ids.contains(id)));
@@ -376,11 +436,35 @@ pub fn tags_of(state: &AppState, face: &FaceKeyDto) -> Result<Vec<TagDto>, CmdEr
     state.with_user(|u| Ok(u.tags_of(&k)?.into_iter().map(Into::into).collect()))
 }
 
+/// Danh mục tag hệ thống (style/mood/use). Chỉ đọc.
+pub fn system_tag_catalog() -> Vec<SystemTagGroupDto> {
+    use fontatlas_core::system_tags::{SYSTEM_TAG_GROUPS, tag_name};
+    SYSTEM_TAG_GROUPS
+        .iter()
+        .map(|g| SystemTagGroupDto {
+            namespace: g.namespace.into(),
+            label: g.label.into(),
+            tags: g.tags.iter().map(|t| SystemTagDto { key: t.key.into(), label: t.label.into(), name: tag_name(g.namespace, t.key) }).collect(),
+        })
+        .collect()
+}
+
 pub fn create_tag(state: &AppState, name: &str) -> Result<TagDto, CmdError> {
+    use fontatlas_core::system_tags::{canonical_name, check_name};
     let name = name.trim();
     if name.is_empty() {
         return Err(CmdError::invalid_arg("tên tag trống"));
     }
+    // tiền tố dành riêng (style:/mood:/use:) chỉ nhận giá trị trong danh mục, lưu dạng chuẩn hoá
+    let canon;
+    let name = match check_name(name) {
+        Some(true) => {
+            canon = canonical_name(name).unwrap_or_else(|| name.to_string());
+            canon.as_str()
+        }
+        Some(false) => return Err(CmdError::invalid_arg(format!("tag hệ thống không có trong danh mục: {name}"))),
+        None => name,
+    };
     state.with_user(|u| {
         let id = u.tag(name)?;
         u.tags()?
@@ -516,4 +600,46 @@ fn family_styles(s: &Store, family: &str) -> Result<Vec<FamilyStyleDto>, StoreEr
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod class_filter_tests {
+    use super::*;
+
+    fn v(x: &[&str]) -> Vec<String> {
+        x.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn secondary_only_counts_when_asked() {
+        let sec = ("serif".to_string(), None);
+        let none: Option<String> = None;
+        let sans = ("sans", &none);
+        // class chính luôn khớp
+        assert!(class_hit(&v(&["sans"]), &[], false, sans, Some(&sec)));
+        // chỉ class phụ khớp: cần includeSecondary
+        assert!(!class_hit(&v(&["serif"]), &[], false, sans, Some(&sec)));
+        assert!(class_hit(&v(&["serif"]), &[], true, sans, Some(&sec)));
+        // không có class phụ: includeSecondary không đổi gì
+        assert!(!class_hit(&v(&["serif"]), &[], true, sans, None));
+        // subclass của class phụ cũng được so (AND với classes)
+        let sec2 = ("slab".to_string(), Some("clarendon".to_string()));
+        let disp = ("display", &Some("stencil".to_string()));
+        assert!(class_hit(&v(&["slab"]), &v(&["clarendon"]), true, disp, Some(&sec2)));
+        assert!(!class_hit(&v(&["slab"]), &v(&["egyptian"]), true, disp, Some(&sec2)));
+        assert!(!class_hit(&v(&["slab"]), &v(&["clarendon"]), false, disp, Some(&sec2)));
+    }
+
+    #[test]
+    fn min_confidence_combines_confident_only_and_explicit_threshold() {
+        let q = |c: bool, m: Option<f32>| FaceQueryDto { confident_only: c, min_confidence: m, ..Default::default() };
+        assert_eq!(min_confidence_of(&q(false, None)).unwrap(), None);
+        assert_eq!(min_confidence_of(&q(true, None)).unwrap(), Some(fontatlas_core::classify::CONF_MIN));
+        assert_eq!(min_confidence_of(&q(false, Some(0.5))).unwrap(), Some(0.5));
+        // nâng ngưỡng, không hạ thấp
+        assert_eq!(min_confidence_of(&q(true, Some(0.5))).unwrap(), Some(fontatlas_core::classify::CONF_MIN));
+        assert_eq!(min_confidence_of(&q(true, Some(0.95))).unwrap(), Some(0.95));
+        assert!(min_confidence_of(&q(false, Some(1.5))).is_err());
+        assert!(min_confidence_of(&q(false, Some(f32::NAN))).is_err());
+    }
 }

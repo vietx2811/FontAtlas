@@ -33,6 +33,7 @@
         "class": "serif",
         "confidence": 0.9100000262260437,
         "label": "Serif",
+        "secondary": null,
         "signals": [
           {
             "detail": "contrast 3.4",
@@ -210,6 +211,7 @@
         "class": "serif",
         "confidence": 0.9100000262260437,
         "label": "Serif",
+        "secondary": null,
         "signals": [
           {
             "detail": "contrast 3.4",

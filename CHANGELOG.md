@@ -4,6 +4,31 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.2.2] — 2026-11-11
+
+### Thêm mới
+
+**Classification mới (10 class)**
+- Thêm 3 class: **Slab** (chân dày, khối), **Handwriting** (chữ viết tay, các chữ rời nhau), **Display** (chữ trang trí có cấu trúc riêng: stencil, inline/outline, pixel).
+- Subclass mới cho từng class: Serif (venetian oldstyle, garalde, transitional, didone, glyphic), Slab (clarendon, egyptian), Sans (grotesque, neo-grotesque, geometric, humanist, rounded), Mono (sans, serif, typewriter, coding), Script (copperplate, brush, monoline, upright), Handwriting (casual print, marker). Subclass nào máy chưa đo chắc thì để trống, không đoán.
+- **Font lai**: font mang dáng của hai class (ví dụ Display có khung Sans) có dấu "!" cho biết class phụ.
+- Bộ lọc thêm **Gồm cả font lai** (khớp cả class phụ) và **Chỉ nhãn chắc chắn** (bỏ nhãn máy chưa chắc; nhãn bạn tự sửa luôn tính là chắc).
+- Mọi class và subclass có tooltip tên tiếng Anh kèm giải thích; các thuật ngữ mới có hình minh hoạ.
+- Thẻ công dụng "Display" đổi tên thành **Headline** để không trùng với class Display.
+- Class bạn đã tự sửa được chuyển sang nhãn mới, không mất (ví dụ slab → Slab, handwritten → Handwriting).
+
+**Thư viện**
+- Panel **Hiển thị** (⌘J): chọn thông tin hiện trên thẻ font — định dạng, ngôn ngữ, giấy phép, Variable.
+- **Sắp xếp** theo tên, ngày thêm, Weight, hoặc độ khớp khi đang tìm; đổi chiều tăng/giảm. Ở Gần đây và Đang bật thứ tự giữ theo thời gian.
+- **Menu chuột phải ở Sidebar**: nguồn (mở, hiện trong Finder, quét lại), dự án (mở, đổi tên F2, tắt tất cả font, xoá), thẻ, Gần đây (xoá lịch sử), Đang bật (tắt tất cả), Đang so sánh (tiếp tục, đóng phiên).
+- Lọc theo thẻ nằm chung với các bộ lọc khác: hiện chip, được tính trên phễu và gỡ được như bộ lọc thường.
+
+### Sửa lỗi
+- Splash: phím bấm để bỏ qua splash không còn lọt xuống onboarding.
+- Splash đảo cả các font trên ổ cloud đã tải về máy (font chưa tải vẫn không bị kéo về).
+- "Tắt tất cả" báo số font đã tắt và số font lỗi; hỏi lại theo số font đang bật.
+- Đổi tên dự án bị trùng hoặc để trống: app báo và giữ ô nhập.
+
 ## [0.2.1] — 2026-11-11
 
 Bản này thêm Pairing Desk, tìm kiếm nâng cao, độ phủ ngôn ngữ, hỗ trợ font trên ổ cloud và giao diện mới (màu theo macOS, onboarding mới). Bật font tự động khi app thiết kế cần (Adobe, Affinity…) sẽ có ở 0.3.0.

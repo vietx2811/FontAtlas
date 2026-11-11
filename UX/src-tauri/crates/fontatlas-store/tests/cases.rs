@@ -29,7 +29,7 @@ fn migration_v5_to_v6_keeps_data_and_backs_up() {
         .unwrap();
     }
     let (s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 6);
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(s.collections().unwrap().len(), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.pairs"), 1);
     for t in ["cases", "case_faces", "combos", "combo_slots"] {

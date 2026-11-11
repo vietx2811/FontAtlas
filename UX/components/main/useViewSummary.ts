@@ -17,7 +17,6 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
   const filters = useUiStore(s => s.filters);
   const familyScope = useUiStore(s => s.familyScope);
   const view = useUiStore(s => s.view);
-  const tag = useUiStore(s => s.tag);
   const query = useUiStore(s => s.query);
   const viOnly = useUiStore(s => s.viOnly);
   const scanVersion = useScanStore(s => s.version);
@@ -27,11 +26,11 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
 
   useEffect(() => {
     let alive = true;
-    const q = toGridQuery({ view, tag, query, viOnly, recentViews, active, filters, familyScope });
+    const q = toGridQuery({ view, query, viOnly, recentViews, active, filters, familyScope });
     Promise.all([titleOf(api, view), api.queryFaces({ ...q, limit: 1 }).then(p => p.total)])
       .then(([title, count]) => { if (alive) setOut({ title: familyScope?.name ?? title, count }); })
       .catch(() => { if (alive) setOut(o => ({ ...o, count: null })); });
     return () => { alive = false; };
-  }, [api, view, tag, query, viOnly, recentViews, active, scanVersion, filters, familyScope]);
+  }, [api, view, query, viOnly, recentViews, active, scanVersion, filters, familyScope]);
   return out;
 }

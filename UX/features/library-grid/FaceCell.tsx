@@ -9,10 +9,14 @@ import { NoteMark } from '../../components/ui/noteMark';
 import { t } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
+import { useCardFields } from '../../store/cardFields';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
 export const HOVER_DELAY_MS = 150;
+/** Chiều cao thêm của hàng thông tin thứ 2 (giấy phép, Variable) ở dạng lưới. */
+export const CARD_ROW2_H = 18;
+const LICENSE_KEY: Record<string, 'view.license.ofl' | 'view.license.apache' | 'view.license.other' | 'view.license.unknown'> = { ofl: 'view.license.ofl', apache: 'view.license.apache', other: 'view.license.other', unknown: 'view.license.unknown' };
 
 /** Mã lỗi preview của backend → câu giải thích trên thẻ font cloud (`not_found` là file mất thật, KHÔNG phải công tắc tắt). */
 const CLOUD_ERR_KEY: Record<string, 'cloud.errTimeout' | 'cloud.errFailed' | 'cloud.errOff' | 'cloud.errMissing' | 'cloud.errBusy'> = {
@@ -49,6 +53,7 @@ type Props = {
 export type PickMods = { meta: boolean; shift: boolean };
 
 function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+  const fields = useCardFields(s => s.fields);
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
@@ -156,6 +161,11 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       </button>
     </Tooltip>
   ) : <span className="fa-state" aria-hidden><span className="fa-dot" data-scope="off" /></span>;
+  const hasExtras = fields.includes('license') || fields.includes('variable');
+  const extras = <>
+    {fields.includes('license') && <span className="fa-fmt" data-testid="face-license">{LICENSE_KEY[row.licenseClass] ? t(LICENSE_KEY[row.licenseClass]) : row.licenseClass.toUpperCase()}</span>}
+    {fields.includes('variable') && row.isVariable && <Tooltip label={t('view.var.tip')}><span className="fa-fmt" data-testid="face-variable">VAR</span></Tooltip>}
+  </>;
   return (
     <div
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
@@ -210,9 +220,11 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         <Tooltip label={name} onlyIfTruncated>
           <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
         </Tooltip>
-        {format && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
-        <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />
+        {format && fields.includes('format') && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
+        {fields.includes('lang') && <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />}
+        {layout === 'list' && extras}
       </div>
+      {layout === 'grid' && hasExtras && <div className="fa-meta fa-meta2" data-testid="face-meta2">{extras}</div>}
     </div>
   );
 }

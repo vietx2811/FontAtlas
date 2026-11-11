@@ -7,7 +7,8 @@ import { toMetadataQuery, useUiStore, type LibraryFilters } from '../../store/ui
 import { useScanStore } from '../../store/scan';
 import { useSourcesStore } from '../../store/sources';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
-import { HIDDEN_CLASSES, classLabel, subclassLabel } from '../main/classLabels';
+import { CLASS_ORDER, classLabel, subclassLabel } from '../main/classLabels';
+import { Tooltip } from '../ui/Tooltip';
 import { LICENSE_OPTIONS, VI_OPTIONS, forcedFacets } from '../main/filterOptions';
 import { filterChips } from '../main/FilterChips';
 import { roundedValue } from '../detail/tabs/measurements';
@@ -29,8 +30,8 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   const view = useUiStore(s => s.view);
   const sources = useSourcesStore(s => s.sources);
   const version = useScanStore(s => s.version);
-  const ui = useUiStore(useShallow(s => ({ view: s.view, tag: s.tag, query: s.query, viOnly: s.viOnly, filters: s.filters })));
-  const query = useMemo(() => toMetadataQuery(ui), [ui.view, ui.tag, ui.query, ui.viOnly, ui.filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ui = useUiStore(useShallow(s => ({ view: s.view, query: s.query, viOnly: s.viOnly, filters: s.filters })));
+  const query = useMemo(() => toMetadataQuery(ui), [ui.view, ui.query, ui.viOnly, ui.filters]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data: hist, extent, loading, error, retry } = useAxisHistograms(api, query, true, version);
   const [facets, setFacets] = useState<ClassFacetDto[]>([]);
   const root = useRef<HTMLDivElement>(null);
@@ -53,9 +54,12 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
     return () => { alive = false; clearTimeout(timer); };
   }, [api, query, version]);
 
+  const hasClassSel = !!filters.classes?.length || !!filters.subclasses?.length;
   const patch = (next: Partial<LibraryFilters>) => {
     const cur = useUiStore.getState().filters;
     const merged = { ...cur, ...next } as Record<string, unknown>;
+    // "Gồm cả font lai" chỉ có nghĩa khi có class/subclass được chọn: bỏ chọn hết thì cờ cũng đi.
+    if (!(merged.classes as unknown[] | undefined)?.length && !(merged.subclasses as unknown[] | undefined)?.length) delete merged.includeSecondary;
     for (const k of Object.keys(merged)) if (merged[k] === undefined || (Array.isArray(merged[k]) && (merged[k] as unknown[]).length === 0)) delete merged[k];
     setFilters(merged as LibraryFilters);
   };
@@ -73,11 +77,12 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
     patch({ varAxisMatch: next.wght && next.wdth ? undefined : next });
   };
   const varMatch = { wght: true, wdth: true, ...(filters.varAxisMatch ?? {}) };
+  const classRank = (c: string) => { const i = (CLASS_ORDER as readonly string[]).indexOf(c); return i < 0 ? CLASS_ORDER.length : i; };
   // Class đang chọn vẫn hiện (kể cả đếm 0 hoặc facet chưa tải) để bỏ chọn được.
   const classRows: ClassFacetDto[] = [
-    ...facets.filter(f => !HIDDEN_CLASSES.has(f.class) && (f.count > 0 || filters.classes?.includes(f.class))),
-    ...(filters.classes ?? []).filter(c => !HIDDEN_CLASSES.has(c) && !facets.some(f => f.class === c)).map(c => ({ class: c, count: 0, subclasses: [] })),
-  ];
+    ...facets.filter(f => f.count > 0 || filters.classes?.includes(f.class)),
+    ...(filters.classes ?? []).filter(c => !facets.some(f => f.class === c)).map(c => ({ class: c, count: 0, subclasses: [] })),
+  ].sort((a, b) => classRank(a.class) - classRank(b.class)); // thứ tự cố định theo CLASS_ORDER, class lạ xuống cuối
   const toggleClass = (f: ClassFacetDto, on: boolean) => {
     const cur = useUiStore.getState().filters;
     const classes = on ? [...(cur.classes ?? []), f.class] : (cur.classes ?? []).filter(c => c !== f.class);
@@ -139,7 +144,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
       </header>
       {error && <p role="alert" className="fa-adv-err">{t('adv.error', { msg: error })} <button type="button" onClick={retry}>{t('adv.retry')}</button></p>}
       <Masonry>
-        <section className="fa-adv-card" role="group" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length}><h3>{t('adv.class')}</h3>
+        <section className="fa-adv-card" role="group" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length + 60}><h3>{t('adv.class')}</h3>
           {classRows.map(f => (
             <div key={f.class} className="fa-class-opt">
               <TermTip term={classTermKey(f.class)}>
@@ -152,6 +157,12 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
               </div>}
             </div>
           ))}
+          <div className="fa-class-switches">
+            <TermTip term="hybrid"><label data-disabled={!hasClassSel || undefined}><input type="checkbox" data-testid="adv-hybrid" aria-disabled={!hasClassSel} aria-describedby={hasClassSel ? undefined : 'adv-hybrid-need'} checked={hasClassSel && filters.includeSecondary === true}
+              onChange={e => { if (hasClassSel) patch({ includeSecondary: e.target.checked ? true : undefined }); }} />{t('filter.hybrid')}</label></TermTip>
+            {!hasClassSel && <small id="adv-hybrid-need" className="fa-class-need" data-testid="adv-hybrid-need">{t('filter.hybrid.need')}</small>}
+            <Tooltip label={t('filter.confident.tip')}><label><input type="checkbox" data-testid="adv-confident" checked={filters.confidentOnly === true} onChange={e => patch({ confidentOnly: e.target.checked ? true : undefined })} />{t('filter.confident')}</label></Tooltip>
+          </div>
         </section>
         <section className="fa-adv-card" aria-label={t('adv.style')} data-weight={100}><h3>{t('adv.style')}</h3>
           <label title={t('filter.variable.gloss')}><input type="checkbox" checked={filters.variable === true} onChange={e => patch({ variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>

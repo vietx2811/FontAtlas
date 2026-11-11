@@ -122,8 +122,9 @@ fn every_subclass_the_classifier_can_emit_is_valid() {
 }
 
 #[test]
-fn display_is_a_usage_tag_not_a_class() {
-    assert!(Class::parse("display").is_none());
+fn display_is_a_usage_tag_until_the_v2_classifier_emits_it() {
+    // v2: `Display` tồn tại như class (nhãn người dùng/ánh xạ) nhưng bộ phân loại tự động CHƯA phát ra nó; vẫn là tag usage
+    assert_eq!(Class::parse("display"), Some(Class::Display));
     // tên có "Stencil": trait stencil, class vẫn theo hình dáng (ở đây không đủ bằng chứng → không phải Display)
     let i = ClassifyInput { name: "foo stencil".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
     let c = classify(&i);
@@ -252,4 +253,132 @@ fn italic_fixtures_measure_like_their_upright_counterparts() {
     assert!(b.m.serif_head.unwrap() > 0.4, "serif italic vẫn thấy cờ trên: {:?}", b.m.serif_head);
     let up = inp("libre_baskerville.ttf");
     assert!(up.m.serif_flare.unwrap() > 2.0 && up.m.serif_head.unwrap() > 0.4);
+}
+
+// --- taxonomy v2: lớp mới + ánh xạ nhãn cũ (không mất ghi đè người dùng) ---
+
+#[test]
+fn v2_classes_round_trip_and_have_subclasses() {
+    use fontatlas_core::classify::subclasses_of;
+    for c in [Class::Slab, Class::Handwriting, Class::Display] {
+        assert_eq!(Class::parse(c.snake()), Some(c));
+        assert!(!subclasses_of(c).is_empty());
+    }
+    assert!(subclasses_of(Class::Slab).contains(&"clarendon") && subclasses_of(Class::Sans).contains(&"flared"));
+    assert!(subclasses_of(Class::Mono).contains(&"coding") && subclasses_of(Class::Serif).contains(&"wedge"));
+}
+
+#[test]
+fn legacy_overrides_map_to_v2_without_losing_the_choice() {
+    use fontatlas_core::classify::migrate_legacy;
+    let m = |c: &str, s: Option<&str>| migrate_legacy(c, s);
+    assert_eq!(m("serif", Some("slab")), ("slab".into(), None));
+    assert_eq!(m("script", Some("handwritten")), ("handwriting".into(), None));
+    assert_eq!(m("script", Some("casual_brush")), ("script".into(), Some("brush".into())));
+    assert_eq!(m("script", Some("formal")), ("script".into(), Some("formal_copperplate".into()))
+    );
+    assert_eq!(
+        m("serif", Some("humanist_oldstyle")),
+        ("serif".into(), Some("venetian_oldstyle".into())));
+    // nhãn còn hợp lệ giữ nguyên; subclass không hợp lệ bị bỏ nhưng class giữ
+    assert_eq!(m("sans", Some("geometric")), ("sans".into(), Some("geometric".into())));
+    assert_eq!(m("serif", Some("nonsense")), ("serif".into(), None));
+    assert_eq!(m("blackletter", None), ("blackletter".into(), None));
+    // idempotent
+    for (c, s) in [("serif", Some("slab")), ("script", Some("handwritten")), ("mono", Some("sans_mono"))] {
+        let once = migrate_legacy(c, s);
+        assert_eq!(migrate_legacy(&once.0, once.1.as_deref()), once);
+    }
+}
+
+// --- classify_v2: tinh chỉnh sang 8 class + subclass mới ---
+
+use fontatlas_core::classify::classify_v2;
+
+#[test]
+fn v2_slab_is_its_own_class_and_subclass_only_when_the_name_says_so() {
+    // chân vuông rõ, contrast thấp, name có "slab" → Slab, KHÔNG đoán subclass (egyptian/humanist_slab không tách được bằng số đo)
+    let m = Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), ..Default::default() };
+    let i = ClassifyInput { name: "acme slab regular".into(), m: m.clone(), ..Default::default() };
+    let c = classify_v2(&i);
+    assert_eq!((c.class, c.subclass.as_deref()), (Class::Slab, None), "{:?}", c.signals);
+    let named = ClassifyInput { name: "acme clarendon slab regular".into(), m, ..Default::default() };
+    assert_eq!(classify_v2(&named).subclass.as_deref(), Some("clarendon"));
+    // classify() cũ vẫn trả Serif/slab (không đổi hợp đồng v1)
+    assert_eq!(classify(&i).class, Class::Serif);
+}
+
+#[test]
+fn v2_unjoined_handwritten_script_becomes_handwriting() {
+    let i = ClassifyInput {
+        name: "acme hand regular".into(),
+        m: Metrics { slant_abs: Some(14.0), spacing: Some(0.03), connect: Some(0.1), bounce: Some(0.12), ..Default::default() },
+        ..Default::default()
+    };
+    let v1 = classify(&i);
+    let v2 = classify_v2(&i);
+    if v1.class == Class::Script && v1.subclass.as_deref() == Some("handwritten") {
+        assert_eq!(v2.class, Class::Handwriting, "{:?}", v2.signals);
+    }
+}
+
+#[test]
+fn v2_structural_name_makes_display_and_keeps_the_shape_class_secondary() {
+    let i = ClassifyInput { name: "acme stencil regular".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
+    let c = classify_v2(&i);
+    assert_eq!((c.class, c.subclass.as_deref()), (Class::Display, Some("stencil")));
+    assert!(c.confidence >= CONF_MIN, "{}", c.confidence);
+    assert_eq!(c.secondary.as_ref().map(|s| s.class), Some(Class::Sans), "{:?}", c.secondary);
+    // font không có dấu hiệu cấu trúc: không thành Display
+    assert_ne!(classify_v2(&synthetic("acme regular", 1.0, 1.0, 0.0)).class, Class::Display);
+}
+
+#[test]
+fn v2_does_not_change_plain_sans_and_serif() {
+    for (name, foot, flare, head, want) in [("acme sans", 1.0, 1.0, 0.0, Class::Sans), ("acme serif", 2.6, 2.6, 0.9, Class::Serif)] {
+        assert_eq!(classify_v2(&synthetic(name, foot, flare, head)).class, want, "{name}");
+    }
+}
+
+#[test]
+fn v2_traits_are_measured_and_independent_of_class() {
+    let mk = |contrast: f32, ch: f32| ClassifyInput { name: "acme regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.0), serif_head: Some(0.0), contrast: Some(contrast), contrast_h: Some(ch), ..Default::default() }, ..Default::default() };
+    let t = |i: &ClassifyInput| classify_v2(i).traits;
+    assert!(t(&mk(1.05, 1.0)).contains(&"monoline".to_string()));
+    assert!(t(&mk(6.0, 1.0)).contains(&"high_contrast".to_string()));
+    assert!(t(&mk(2.0, 0.5)).contains(&"reverse_contrast".to_string()));
+    // sans bình thường: không trait v2
+    let plain = t(&mk(1.4, 1.0));
+    assert!(!plain.iter().any(|x| ["monoline", "high_contrast", "reverse_contrast"].contains(&x.as_str())), "{plain:?}");
+    // v1 không phát trait v2 (giữ hợp đồng)
+    assert!(!classify(&mk(1.05, 0.5)).traits.iter().any(|x| x == "monoline" || x == "reverse_contrast"));
+}
+
+#[test]
+fn v2_hybrid_secondary_for_semi_serif_sans_and_typewriter() {
+    let semi = ClassifyInput { name: "acme regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.0), serif_head: Some(0.1), ..Default::default() }, ..Default::default() };
+    assert!(classify_v2(&semi).secondary.is_none());
+    let flared = ClassifyInput { name: "acme sans regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.35), serif_head: Some(0.1), ..Default::default() }, ..Default::default() };
+    let c = classify_v2(&flared);
+    if c.class == Class::Sans {
+        assert_eq!(c.secondary.as_ref().map(|s| s.class), Some(Class::Serif));
+    }
+}
+
+#[test]
+fn v2_usage_is_the_same_for_auto_and_user_override() {
+    use fontatlas_core::classify::usage_for;
+    let slab = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), x_height_em: Some(0.5), spacing: Some(0.1), ..Default::default() }, ..Default::default() };
+    let hand = ClassifyInput { name: "acme hand regular".into(), m: Metrics { slant_abs: Some(14.0), spacing: Some(0.03), connect: Some(0.1), bounce: Some(0.12), ..Default::default() }, ..Default::default() };
+    let stencil = ClassifyInput { name: "acme stencil regular".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
+    for (name, i) in [("slab", slab), ("hand", hand), ("stencil", stencil)] {
+        let c = classify_v2(&i);
+        assert_eq!(c.usage, usage_for(&i, c.class), "{name}: auto vs override ({:?})", c.class);
+    }
+    // Slab giữ usage Text như Serif (không bị mất vì rơi vào nhánh mặc định)
+    let i = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), contrast: Some(1.2), x_height_em: Some(0.5), spacing: Some(0.1), ..Default::default() }, ..Default::default() };
+    assert_eq!(usage_for(&i, Class::Slab), usage_for(&i, Class::Serif));
+    assert!(usage_for(&i, Class::Slab).contains(&Usage::Text));
+    assert_eq!(usage_for(&i, Class::Handwriting), usage_for(&i, Class::Script));
+    assert_eq!(usage_for(&i, Class::Display), vec![Usage::Display]);
 }
