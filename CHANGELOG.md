@@ -15,6 +15,7 @@ Bản lớn: bật font tự động khi app thiết kế cần, tiếng Anh, gi
 - Illustrator: cài một panel nền nhỏ (Font Atlas tự ký trên máy bạn) để tự bật font khi mở tài liệu. InDesign và InCopy: cài một script khởi động. Cài/gỡ từ Settings, có xác nhận nói rõ sẽ ghi gì; gỡ chỉ xoá phần của Font Atlas.
 - Nhật ký các lần tự bật; cảnh báo khi RightFont, Typeface, FontBase… đang chạy. Nếu một trình quản lý font khác nhận yêu cầu font trước Font Atlas, trang này báo rõ và có nút **Kiểm tra lại**.
 - Font trên ổ cloud được tải về trước khi bật (hạn chờ ngắn để app thiết kế không bị treo).
+- Đã kiểm với Photoshop thật. Panel Illustrator và script InDesign/InCopy đã kiểm từng phần (định dạng, chữ ký, cài/gỡ) nhưng chưa đo trọn trên app thật; Settings ghi rõ mức đã kiểm của từng app.
 
 **Thay bản đang bật bởi app khác**
 - Khi bật một font mà bản cùng tên đã được bật ở nơi khác, hộp xung đột có thêm **Thay bằng bản này**: tắt bản cũ và bật bản của Font Atlas, kèm cảnh báo khi app kia có thể bật lại. Có hướng dẫn tắt trong RightFont, Typeface, FontBase…
