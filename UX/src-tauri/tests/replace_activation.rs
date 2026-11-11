@@ -87,7 +87,7 @@ fn replace_without_a_conflict_reports_no_replaced_entries() {
     let d = tempfile::tempdir().unwrap();
     let (st, eng, key, foreign) = setup(d.path());
     eng.unregister(&foreign, Scope::Persistent).unwrap();
-    let rep = activation::replace(&st, &[key.clone()], None, &confirmed(&st, &key), &mut noop).unwrap();
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &confirmed(&st, &key), &mut noop).unwrap();
     assert!(matches!(rep.results[0].outcome, FileOutcomeDto::Activated));
     assert!(rep.results[0].replaced.is_none());
 }
@@ -96,7 +96,7 @@ fn replace_without_a_conflict_reports_no_replaced_entries() {
 fn replace_json_carries_the_replaced_list_in_camel_case() {
     let d = tempfile::tempdir().unwrap();
     let (st, _eng, key, _foreign) = setup(d.path());
-    let rep = activation::replace(&st, &[key.clone()], None, &confirmed(&st, &key), &mut noop).unwrap();
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &confirmed(&st, &key), &mut noop).unwrap();
     let v = serde_json::to_value(&rep.results[0]).unwrap();
     assert_eq!(v["replaced"][0]["owner"], "right_font");
     assert_eq!(v["replaced"][0]["scopes"][0], "persistent");
