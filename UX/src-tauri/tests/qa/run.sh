@@ -17,6 +17,13 @@ for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre
 SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
 sed -e "s#__QA_DIR__#$QA#g" -e "s#__QA_LANG__#${QA_LANG:-vi}#g" "$HERE/main_flows.js" > "$QA/qa.js"
+# QA_LANG=en: các bộ chọn theo aria-label viết bằng tiếng Việt đổi sang đúng chuỗi tiếng Anh của app (khoá i18n tương ứng), để các bước vẫn tìm được phần tử và chụp ảnh bản tiếng Anh.
+if [ "${QA_LANG:-vi}" = "en" ]; then
+  for pair in 'Thanh bên|Sidebar' 'Cài đặt|Settings' 'Giao diện sáng/tối|Light/dark theme' 'Chi tiết font|Font details' 'Tương tự|Similar' 'Tên dự án|Project name' 'Phân loại|Class' 'Giải phẫu|Anatomy' 'Ghép cặp|Pairing'; do
+    sed -i '' "s#aria-label=\"${pair%%|*}\"#aria-label=\"${pair##*|}\"#g" "$QA/qa.js"
+  done
+  sed -i '' "s#'Xem family'#'View family'#g" "$QA/qa.js"
+fi
 # Lỗi cú pháp trong kịch bản làm QA "treo" 15 phút mà không ghi bước nào: kiểm trước khi mở app.
 if command -v node >/dev/null; then node --check "$QA/qa.js" || { echo "qa.js lỗi cú pháp"; exit 1; }; fi
 FONTATLAS_DATA_DIR="$QA/data" FONTATLAS_QA_SCRIPT="$QA/qa.js" "$APP" > "$QA/app.log" 2>&1 &
