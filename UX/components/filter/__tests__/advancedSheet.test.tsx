@@ -185,4 +185,14 @@ describe('AdvancedSheet · class switches (D1)', () => {
     expect(filters().includeSecondary).toBeUndefined(); expect(filters().confidentOnly).toBeUndefined();
     expect(Object.keys(filters())).not.toContain('includeSecondary');
   });
+
+  it('the class facets are asked WITH includeSecondary / confidentOnly (counts follow the switches) but without the class selection itself', async () => {
+    const api = createMockApi();
+    const spy = vi.spyOn(api, 'classFacets');
+    useUiStore.setState({ filters: { classes: ['display'], includeSecondary: true, confidentOnly: true } });
+    render(<AdvancedSheet api={api} onClose={() => {}} />); await settle();
+    const q = spy.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(q).toMatchObject({ includeSecondary: true, confidentOnly: true });
+    expect(q.classes).toBeUndefined();
+  });
 });
