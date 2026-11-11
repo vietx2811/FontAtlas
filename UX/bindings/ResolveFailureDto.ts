@@ -5,4 +5,10 @@ export type ResolveFailureDto = { path: string,
  * keeper_missing | keeper_not_in_group | loser_not_in_group | not_allowed | collection_file | active_copy_in_use |
  * trash_failed | not_found | already_undone | path_occupied | trash_emptied | db_error
  */
-code: string, message: string, };
+code: string, 
+/**
+ * Chẩn đoán thô, KHÔNG dịch, không hiện thẳng cho người dùng (UI dịch theo `code`): lỗi hệ điều hành / DB cho
+ * `trash_failed`, `db_error`; với `not_allowed` là lý do chặn (`managed_source` | `system_path` | `collection_file` |
+ * `missing_file` | `needs_explicit`).
+ */
+detail: string | null, };

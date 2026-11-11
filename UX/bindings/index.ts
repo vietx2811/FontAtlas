@@ -73,6 +73,7 @@ export type { FileOutcomeDto } from './FileOutcomeDto';
 export type { FileResultDto } from './FileResultDto';
 export type { FontManagerDto } from './FontManagerDto';
 export type { GroupWeightsDto } from './GroupWeightsDto';
+export type { IgnoredGroupDto } from './IgnoredGroupDto';
 export type { InstanceDto } from './InstanceDto';
 export type { KerningDto } from './KerningDto';
 export type { LangBadgeDto } from './LangBadgeDto';

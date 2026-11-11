@@ -728,6 +728,16 @@ pub struct DuplicateGroupDto {
     pub newest_known: bool,
 }
 
+/// Nhóm người dùng đã "Bỏ qua" (tab "Đã bỏ qua", có nút hiện lại).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct IgnoredGroupDto {
+    pub group: DuplicateGroupDto,
+    #[ts(type = "number")]
+    pub ignored_at: i64,
+}
+
 /// Số nhóm theo loại, cho sidebar ("Trùng lặp" N).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

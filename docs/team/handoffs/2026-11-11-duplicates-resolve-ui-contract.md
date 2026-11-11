@@ -86,7 +86,7 @@ Thuật ngữ font (PostScript name, revision, variable/static…) theo quy ư�
 - Đầu trang: "Tìm thấy N nhóm font bị trùng. M nhóm xử lý được ngay, K nhóm cần bạn xem." + nút chính "Giải quyết M nhóm an toàn" → `resolve_preview({type:'all_safe'}, q)` → màn xem trước (số bản giữ/ẩn, `reclaimableBytes`, chọn Ẩn / Thùng rác) → `resolve_apply`.
 - Thẻ nhóm: hai cột cạnh nhau, cùng một dòng mẫu (gồm "Việt Nam"); bản giữ có nhãn "Nên giữ" + câu từ `reason`; nút Giải quyết / Đổi bản giữ / Bỏ qua. Chi tiết kỹ thuật (đường dẫn đầy đủ, hash, `key`, `revision`, `modified`, mã định dạng, Mở trong Finder) sau "Chi tiết".
 - Tên loại: `same_file` "Bản sao giống hệt", `versions` "Bản cũ và bản mới", `formats` "Cùng font, khác định dạng".
-- "Bỏ qua nhóm này": chưa có lệnh backend (không nằm trong phạm vi 0.3.0); nếu cần, báo 04.
+- "Bỏ qua nhóm này": `duplicate_ignore` (mục 5); tab "Đã bỏ qua" dùng `duplicate_ignored`.
 
 ## 4. Hành vi backend UI nên biết
 
@@ -98,13 +98,24 @@ Thuật ngữ font (PostScript name, revision, variable/static…) theo quy ư�
 - **Rescan**: quyết định nằm trong sổ bền theo đường dẫn; quét lại không làm bản đã ẩn hiện lại.
 - **Thùng rác**: macOS `NSFileManager.trashItem`; hoàn tác đưa tệp về đúng đường dẫn cũ; nếu chỗ cũ đã có tệp khác (`path_occupied`) hoặc Thùng rác đã dọn (`trash_emptied`) thì không làm gì và quyết định vẫn giữ nguyên.
 
-## 5. Chưa có trong 0.3.0 (đã biết)
+## 5. Bỏ qua nhóm và thứ tự nguồn (lệnh bổ sung)
 
-- Thứ tự nguồn "kéo sắp xếp" trong Settings: backend đang dùng thứ tự thêm nguồn (`source_id`). Khi Settings có thứ tự riêng, đổi nguồn của `source_rank` (một chỗ: `services/dup_resolve.rs`, `ctx.sources`).
-- Số `library.db`/`user.db`: migration `USER_DUP_RESOLVE` nằm cuối `USER_MIGRATIONS` (hiện thành v8 trên dev/mvp); Lead đánh lại khi merge theo `USER_MIGRATIONS`.
+| Lệnh | Tham số | Trả | Ghi chú |
+|---|---|---|---|
+| `duplicate_ignore` | `kind`, `key` | `null` | "Bỏ qua nhóm này": nhóm biến mất khỏi `duplicate_groups`, `duplicate_summary` và mọi `resolve_preview`; gọi lại không lỗi |
+| `duplicate_unignore` | `kind`, `key` | `null` | Hiện lại nhóm |
+| `duplicate_ignored` | – | `IgnoredGroupDto[]` | `{ group: DuplicateGroupDto, ignoredAt }`, mới bỏ qua trước; nhóm đã hết trùng thì không hiện. Dùng cho tab "Đã bỏ qua" có nút "Hiện lại" |
+| `source_priority` | – | `number[]` | Id nguồn, ưu tiên giữ bản nhất đứng đầu. Mặc định: nguồn thêm trước |
+| `set_source_priority` | `ids: number[]` | `number[]` | `ids` là phần đầu của danh sách; nguồn không nêu xếp sau theo thứ tự cũ. Id lạ hoặc lặp → lỗi, không đổi gì. Trả thứ tự đầy đủ mới. Kéo-thả xong gửi toàn bộ danh sách. Sau khi đổi, gọi lại `resolve_preview` (bản giữ có thể đổi) |
+
+Bỏ qua nhóm theo `(kind, key)`; `key` đổi (vd đổi tên PostScript) thì coi như nhóm mới. Nguồn mới thêm tự xếp cuối.
+
+## 6. Chưa có trong 0.3.0 (đã biết)
+
+- Số `user.db`: migration `USER_DUP_RESOLVE` (cũng thêm cột `sources.priority` và bảng `dup_ignored`) nằm cuối `USER_MIGRATIONS`; dự kiến là v10 khi merge (v8 của auto-activation, v9 của replace-activation). Lead đánh lại theo vị trí trong `USER_MIGRATIONS`.
 - Ngưỡng "nhiều glyph hơn rõ rệt" của kiểm tra bản mới ít glyph hơn là 2% (hằng số trong `dup_pick.rs`).
 - Chưa kiểm với designer thật thứ tự OTF > TTF và mặc định Ẩn (xem nghiên cứu §4.9).
 
-## 6. Với phần còn lại của app (không cần UI sửa)
+## 7. Với phần còn lại của app (không cần UI sửa)
 
 `FaceQuery` có cờ nội bộ `include_hidden` (mặc định false) nên mọi truy vấn lưới thư viện và tra cứu face (kể cả face trong Case) tự bỏ qua bản đã ẩn. Chỉ mục embedding (Similar/Pairing) KHÔNG đổi: bản đã ẩn có thể còn nằm trong chỉ mục nhưng kết quả cuối đi qua truy vấn thư viện nên không hiện ra; nếu 05 thấy ngoại lệ, báo 04. Trang "Đã giải quyết" lấy tên qua `resolve_list`, không cần cờ này.

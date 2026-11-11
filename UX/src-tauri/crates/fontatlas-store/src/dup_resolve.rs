@@ -233,6 +233,58 @@ impl Store {
 }
 
 impl Store {
+    /// Ghi nhớ nhóm bị bỏ qua (gọi lại không lỗi). `kind` phải là same_file | versions | formats.
+    pub fn ignore_group(&mut self, kind: &str, key: &str, now: i64) -> Result<(), StoreError> {
+        if !matches!(kind, "same_file" | "versions" | "formats") {
+            return Err(StoreError::Invalid(format!("loại nhóm không hợp lệ: {kind}")));
+        }
+        self.conn.execute(
+            "INSERT OR IGNORE INTO u.dup_ignored(kind,group_key,created_at) VALUES (?1,?2,?3)",
+            params![kind, key, now],
+        )?;
+        Ok(())
+    }
+
+    /// Bỏ ghi nhớ; `true` nếu trước đó có.
+    pub fn unignore_group(&mut self, kind: &str, key: &str) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("DELETE FROM u.dup_ignored WHERE kind=?1 AND group_key=?2", params![kind, key])? > 0)
+    }
+
+    /// (kind, key, created_at), mới nhất trước.
+    pub fn ignored_groups(&self) -> Result<Vec<(String, String, i64)>, StoreError> {
+        let mut st = self.conn.prepare("SELECT kind, group_key, created_at FROM u.dup_ignored ORDER BY created_at DESC, kind, group_key")?;
+        Ok(st.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Id nguồn theo thứ tự ưu tiên giữ bản trùng: nguồn đã sắp (theo `priority`), rồi nguồn chưa sắp theo thứ tự tạo.
+    pub fn source_priority(&self) -> Result<Vec<i64>, StoreError> {
+        let mut st = self.conn.prepare("SELECT source_id FROM u.sources ORDER BY priority IS NULL, priority, source_id")?;
+        Ok(st.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Đặt thứ tự: `ids` là phần đầu danh sách ưu tiên; nguồn không nêu giữ thứ tự cũ và xếp sau. Id lạ hoặc lặp → lỗi, không đổi gì.
+    pub fn set_source_priority(&mut self, ids: &[i64]) -> Result<(), StoreError> {
+        let current = self.source_priority()?;
+        let mut seen = std::collections::HashSet::new();
+        for id in ids {
+            if !current.contains(id) {
+                return Err(StoreError::NotFound(format!("nguồn #{id}")));
+            }
+            if !seen.insert(*id) {
+                return Err(StoreError::Invalid(format!("nguồn #{id} xuất hiện hai lần")));
+            }
+        }
+        let full: Vec<i64> = ids.iter().copied().chain(current.iter().copied().filter(|i| !seen.contains(i))).collect();
+        self.with_tx(|tx| {
+            for (pos, id) in full.iter().enumerate() {
+                tx.execute("UPDATE u.sources SET priority=?2 WHERE source_id=?1", params![id, pos as i64])?;
+            }
+            Ok(())
+        })
+    }
+}
+
+impl Store {
     /// Ghi một mẻ quyết định trong MỘT transaction (lỗi → không đổi gì) và chuyển liên kết sang bản giữ.
     /// Trả id theo thứ tự `items`. Một vị trí chỉ có thể bị ẩn bởi một quyết định đang sống.
     pub fn apply_resolutions(&mut self, batch_id: &str, items: &[NewResolution], now: i64) -> Result<Vec<i64>, StoreError> {

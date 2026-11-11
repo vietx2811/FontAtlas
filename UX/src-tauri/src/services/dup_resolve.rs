@@ -72,7 +72,9 @@ struct Ctx {
 fn ctx_for(state: &AppState, groups: &[RawGroup]) -> Result<Ctx, CmdError> {
     let ids: Vec<i64> = groups.iter().flat_map(|g| g.members.iter().map(|m| m.face_id)).collect::<std::collections::HashSet<_>>().into_iter().collect();
     let rows = duplicates::rows_by_id(state, &ids)?;
-    let sources = state.with_store(|s| Ok(s.sources()?))?;
+    // thứ tự ưu tiên người dùng đặt (mặc định: nguồn thêm trước); `rank` = vị trí trong danh sách này
+    let (mut sources, order) = state.with_store(|s| Ok((s.sources()?, s.source_priority()?)))?;
+    sources.sort_by_key(|s| order.iter().position(|i| *i == s.id).unwrap_or(usize::MAX));
     Ok(Ctx { rows, sources, home: std::env::var_os("HOME").map(PathBuf::from) })
 }
 
@@ -148,6 +150,19 @@ fn plan_item(g: &RawGroup, built: &[Built], d: &Decision, ctx: &Ctx) -> PlanItem
         review: d.review.as_ref().map(reason_dto),
         warnings: d.warnings.iter().map(reason_dto).collect(),
     }
+}
+
+/// Thứ tự nguồn ưu tiên giữ bản trùng (id, ưu tiên nhất trước).
+pub fn source_priority(state: &AppState) -> Result<Vec<i64>, CmdError> {
+    state.with_store(|s| Ok(s.source_priority()?))
+}
+
+/// Đặt thứ tự (id nêu trước đứng đầu, nguồn không nêu xếp sau); trả thứ tự đầy đủ mới. Sau đó xem trước kế hoạch sẽ khác.
+pub fn set_source_priority(state: &AppState, ids: &[i64]) -> Result<Vec<i64>, CmdError> {
+    state.with_store(|s| {
+        s.set_source_priority(ids)?;
+        Ok(s.source_priority()?)
+    })
 }
 
 /// Kế hoạch giữ / ẩn theo quy tắc. Không đổi gì.

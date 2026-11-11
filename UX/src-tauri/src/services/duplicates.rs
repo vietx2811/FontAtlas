@@ -273,7 +273,25 @@ fn is_filtered(q: &FaceQueryDto) -> bool {
     serde_json::to_value(&base).ok() != serde_json::to_value(&d).ok()
 }
 
+/// Nhóm hiện có sau bộ lọc, TRỪ các nhóm người dùng đã bỏ qua.
 fn filtered_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<RawGroup>, CmdError> {
+    let mut groups = filtered_groups_raw(state, q)?;
+    let ignored: HashSet<(String, String)> = state.with_store(|s| Ok(s.ignored_groups()?))?.into_iter().map(|(k, key, _)| (k, key)).collect();
+    if !ignored.is_empty() {
+        groups.retain(|g| !ignored.contains(&(kind_name(g.kind).to_string(), g.key.clone())));
+    }
+    Ok(groups)
+}
+
+pub(crate) fn kind_name(k: DuplicateKindDto) -> &'static str {
+    match k {
+        DuplicateKindDto::SameFile => "same_file",
+        DuplicateKindDto::Versions => "versions",
+        DuplicateKindDto::Formats => "formats",
+    }
+}
+
+fn filtered_groups_raw(state: &AppState, q: &FaceQueryDto) -> Result<Vec<RawGroup>, CmdError> {
     let b = bundle(state)?;
     let mut groups: Vec<RawGroup> = base_groups(state, &b)?.as_ref().clone();
     // chỉ giữ nhóm có ít nhất một thành viên khớp bộ lọc hiện tại
@@ -333,7 +351,37 @@ pub(crate) fn rows_by_id(state: &AppState, ids: &[i64]) -> Result<HashMap<i64, F
 }
 
 pub fn duplicate_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError> {
-    let mut groups = filtered_groups(state, q)?;
+    group_dtos(state, filtered_groups(state, q)?)
+}
+
+/// Bỏ qua nhóm này: ghi nhớ, nhóm biến mất khỏi danh sách, đếm và "Giải quyết tất cả". Hoàn tác bằng `duplicate_unignore`.
+pub fn duplicate_ignore(state: &AppState, kind: DuplicateKindDto, key: &str, now: i64) -> Result<(), CmdError> {
+    state.with_store(|s| Ok(s.ignore_group(kind_name(kind), key, now)?))
+}
+
+pub fn duplicate_unignore(state: &AppState, kind: DuplicateKindDto, key: &str) -> Result<(), CmdError> {
+    state.with_store(|s| Ok(s.unignore_group(kind_name(kind), key)?)).map(|_| ())
+}
+
+/// Các nhóm đã bỏ qua mà vẫn còn là nhóm trùng (nhóm đã hết trùng thì không hiện), mới bỏ qua trước.
+pub fn duplicate_ignored(state: &AppState) -> Result<Vec<IgnoredGroupDto>, CmdError> {
+    let ignored = state.with_store(|s| Ok(s.ignored_groups()?))?;
+    if ignored.is_empty() {
+        return Ok(vec![]);
+    }
+    let all = filtered_groups_raw(state, &FaceQueryDto::default())?;
+    let mut out = Vec::new();
+    for (kind, key, at) in ignored {
+        if let Some(g) = all.iter().find(|g| kind_name(g.kind) == kind && g.key == key).cloned()
+            && let Some(dto) = group_dtos(state, vec![g])?.into_iter().next()
+        {
+            out.push(IgnoredGroupDto { group: dto, ignored_at: at });
+        }
+    }
+    Ok(out)
+}
+
+fn group_dtos(state: &AppState, mut groups: Vec<RawGroup>) -> Result<Vec<DuplicateGroupDto>, CmdError> {
     // chỉ nhóm `versions` cần head (để biết bản mới nhất)
     for g in &mut groups {
         apply_heads(g, &|m| m.path.as_deref().map_or((None, None), |p| head_of(&m.key, p)));

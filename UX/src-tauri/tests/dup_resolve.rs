@@ -267,6 +267,59 @@ fn trash_is_refused_for_paths_outside_user_folders_but_hide_is_allowed() {
 }
 
 #[test]
+fn ignoring_a_group_hides_it_everywhere_and_unignoring_brings_it_back() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let v_new = patch_revision(&patch_name(&base, "Version 1.203", "Version 1.204"), 1.204);
+    let st = state_with(td.path(), &[("old/playfair.ttf", patch_revision(&base, 1.203)), ("new/playfair.ttf", v_new)]);
+    let g = app_lib::services::duplicates::duplicate_groups(&st, &all()).unwrap();
+    assert_eq!(g.len(), 1);
+    let (kind, key) = (g[0].kind, g[0].key.clone());
+
+    app_lib::services::duplicates::duplicate_ignore(&st, kind, &key, 5).unwrap();
+    assert!(app_lib::services::duplicates::duplicate_groups(&st, &all()).unwrap().is_empty());
+    assert_eq!(app_lib::services::duplicates::duplicate_summary(&st, &all()).unwrap().total, 0);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    assert!(plan.items.is_empty() && plan.needs_review == 0, "nhóm đã bỏ qua không vào 'giải quyết tất cả'");
+    let ig = app_lib::services::duplicates::duplicate_ignored(&st).unwrap();
+    assert_eq!(ig.len(), 1);
+    assert_eq!((ig[0].group.key.as_str(), ig[0].ignored_at), (key.as_str(), 5));
+    assert_eq!(ig[0].group.faces.len(), 2);
+
+    app_lib::services::duplicates::duplicate_unignore(&st, kind, &key).unwrap();
+    assert_eq!(app_lib::services::duplicates::duplicate_groups(&st, &all()).unwrap().len(), 1);
+    assert!(app_lib::services::duplicates::duplicate_ignored(&st).unwrap().is_empty());
+}
+
+#[test]
+fn source_priority_decides_which_copy_is_kept() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let roboto = std::fs::read(fixture("roboto.ttf")).unwrap();
+    let st = state_with(td.path(), &[("a/roboto.ttf", roboto.clone())]);
+    // nguồn thứ hai có bản sao cùng nội dung
+    let dir2 = td.path().join("Second");
+    std::fs::create_dir_all(&dir2).unwrap();
+    std::fs::write(dir2.join("roboto.ttf"), roboto).unwrap();
+    sources::add_source(&st, dir2.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(wait_rebuilt(&st, Duration::from_secs(60)));
+
+    let order = dup_resolve::source_priority(&st).unwrap();
+    assert_eq!(order.len(), 2);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
+    assert_eq!(plan.items[0].reason.code, "preferred_source");
+    assert_eq!(plan.items[0].keeper.source_id, order[0], "mặc định: nguồn thêm trước");
+
+    let flipped = dup_resolve::set_source_priority(&st, &[order[1]]).unwrap();
+    assert_eq!(flipped, vec![order[1], order[0]]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
+    assert_eq!(plan.items[0].keeper.source_id, order[1], "đổi thứ tự → đổi bản giữ");
+    assert!(dup_resolve::set_source_priority(&st, &[9999]).is_err());
+}
+
+#[test]
 fn groups_that_need_a_human_are_not_in_all_safe_but_are_counted() {
     let _g = serial();
     let td = tempfile::tempdir().unwrap();

@@ -162,6 +162,37 @@ fn undo_does_not_overwrite_a_pair_the_user_changed_meanwhile() {
 }
 
 #[test]
+fn ignored_groups_are_remembered_and_can_be_restored() {
+    let mut w = setup();
+    assert!(w.s.ignored_groups().unwrap().is_empty());
+    w.s.ignore_group("versions", "dup-ps", 10).unwrap();
+    w.s.ignore_group("versions", "dup-ps", 11).unwrap(); // lặp lại: không lỗi, không nhân đôi
+    w.s.ignore_group("same_file", "abcd", 12).unwrap();
+    let l = w.s.ignored_groups().unwrap();
+    assert_eq!(l.len(), 2);
+    assert_eq!(l[0], ("same_file".to_string(), "abcd".to_string(), 12), "mới nhất trước");
+    assert!(w.s.unignore_group("versions", "dup-ps").unwrap());
+    assert!(!w.s.unignore_group("versions", "dup-ps").unwrap(), "đã bỏ rồi");
+    assert_eq!(w.s.ignored_groups().unwrap().len(), 1);
+    assert!(w.s.ignore_group("bogus", "x", 1).is_err(), "loại nhóm không hợp lệ");
+}
+
+#[test]
+fn source_priority_defaults_to_creation_order_and_can_be_reordered() {
+    let mut w = setup();
+    let first = w.s.sources().unwrap()[0].id;
+    let second = w.s.add_source(SourceKind::Directory, "B", Some(std::path::Path::new("/tmp/zzz-b"))).unwrap();
+    let third = w.s.add_source(SourceKind::Directory, "C", Some(std::path::Path::new("/tmp/zzz-c"))).unwrap();
+    assert_eq!(w.s.source_priority().unwrap(), vec![first, second, third]);
+    w.s.set_source_priority(&[third, first]).unwrap(); // thiếu `second`: nguồn không nêu xếp sau, theo thứ tự tạo
+    assert_eq!(w.s.source_priority().unwrap(), vec![third, first, second]);
+    let fourth = w.s.add_source(SourceKind::Directory, "D", Some(std::path::Path::new("/tmp/zzz-d"))).unwrap();
+    assert_eq!(w.s.source_priority().unwrap(), vec![third, first, second, fourth], "nguồn mới xếp cuối");
+    assert!(w.s.set_source_priority(&[third, 99_999]).is_err(), "nguồn không tồn tại");
+    assert_eq!(w.s.source_priority().unwrap(), vec![third, first, second, fourth], "lỗi thì không đổi gì");
+}
+
+#[test]
 fn resolutions_survive_a_rescan_of_the_index() {
     let mut w = setup();
     w.s.apply_resolutions("b1", &[res(&w, &w.b.clone(), "/f/B.ttf", "hide")], 10).unwrap();

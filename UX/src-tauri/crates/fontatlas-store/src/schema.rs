@@ -503,6 +503,15 @@ CREATE TABLE dup_resolutions (
   created_at  INTEGER NOT NULL,
   undone_at   INTEGER
 );
+-- nhóm người dùng chọn "Bỏ qua": nhớ theo (loại, khoá nhóm), có thể bỏ qua → hiện lại
+CREATE TABLE dup_ignored (
+  kind       TEXT NOT NULL CHECK (kind IN ('same_file','versions','formats')),
+  group_key  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (kind, group_key)
+) WITHOUT ROWID;
+-- thứ tự nguồn ưu tiên giữ bản trùng (nhỏ = ưu tiên hơn); NULL = chưa sắp, xếp sau theo thứ tự tạo
+ALTER TABLE sources ADD COLUMN priority INTEGER;
 CREATE UNIQUE INDEX dup_resolutions_live ON dup_resolutions(loser_path) WHERE undone_at IS NULL;
 CREATE INDEX dup_resolutions_batch ON dup_resolutions(batch_id);
 CREATE TABLE dup_link_moves (

@@ -103,6 +103,11 @@ macro_rules! command_list {
             async resolve_apply(req: ResolveRequestDto) -> Result<ResolveResultDto, CmdError>;
             async resolve_undo(ids: Vec<i64>) -> Result<ResolveResultDto, CmdError>;
             async resolve_list(include_undone: bool) -> Result<Vec<ResolutionDto>, CmdError>;
+            async duplicate_ignore(kind: DuplicateKindDto, key: String) -> Result<(), CmdError>;
+            async duplicate_unignore(kind: DuplicateKindDto, key: String) -> Result<(), CmdError>;
+            async duplicate_ignored() -> Result<Vec<IgnoredGroupDto>, CmdError>;
+            async source_priority() -> Result<Vec<i64>, CmdError>;
+            async set_source_priority(ids: Vec<i64>) -> Result<Vec<i64>, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
             async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
             async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
@@ -333,6 +338,11 @@ cmd!(resolve_preview(scope: ResolveScopeDto, q: FaceQueryDto) -> ResolvePlanDto 
 cmd!(resolve_apply(req: ResolveRequestDto) -> ResolveResultDto => |s| dup_resolve::resolve_apply(s, &req, &crate::trash::trash_item, dup_resolve::now_ms()));
 cmd!(resolve_undo(ids: Vec<i64>) -> ResolveResultDto => |s| dup_resolve::resolve_undo(s, &ids, dup_resolve::now_ms()));
 cmd!(resolve_list(include_undone: bool) -> Vec<ResolutionDto> => |s| dup_resolve::resolve_list(s, include_undone));
+cmd!(duplicate_ignore(kind: DuplicateKindDto, key: String) -> () => |s| duplicates::duplicate_ignore(s, kind, &key, dup_resolve::now_ms()));
+cmd!(duplicate_unignore(kind: DuplicateKindDto, key: String) -> () => |s| duplicates::duplicate_unignore(s, kind, &key));
+cmd!(duplicate_ignored() -> Vec<IgnoredGroupDto> => |s| duplicates::duplicate_ignored(s));
+cmd!(source_priority() -> Vec<i64> => |s| dup_resolve::source_priority(s));
+cmd!(set_source_priority(ids: Vec<i64>) -> Vec<i64> => |s| dup_resolve::set_source_priority(s, &ids));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
 cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
