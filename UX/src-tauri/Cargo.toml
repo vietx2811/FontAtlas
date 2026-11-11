@@ -18,6 +18,7 @@ tauri-build = { version = "2.5.3", features = [] }
 [dependencies]
 fontatlas-activate = { path = "crates/fontatlas-activate" }
 fontatlas-broker = { path = "crates/fontatlas-broker" }
+fontatlas-cep = { path = "crates/fontatlas-cep" }
 fontatlas-core = { path = "crates/fontatlas-core" }
 fontatlas-describe = { path = "crates/fontatlas-describe" }
 fontatlas-embed = { path = "crates/fontatlas-embed" }
@@ -53,5 +54,11 @@ tempfile = "3.27"
 tiny_http = "0.12"
 
 [workspace]
-members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-broker", "crates/fontatlas-fontreq", "crates/fontatlas-describe"]
+members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-broker", "crates/fontatlas-fontreq", "crates/fontatlas-cep", "crates/fontatlas-describe"]
 resolver = "2"
+
+# Sinh khoá RSA 2048 ở bản debug (test, QA) rất chậm nếu không tối ưu phần số lớn.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+[profile.dev.package.rsa]
+opt-level = 3
