@@ -114,6 +114,17 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
 
   const shown = [...(base ? [base] : []), ...ordered];
   const addable = suggestions.filter(s => !cols.some(c => keyOf(c.face) === keyOf(s.face)) && !(base && keyOf(base.face) === keyOf(s.face)));
+  // Thêm cột từ THƯ VIỆN (ngoài gợi ý ghép): tìm theo tên, tối đa 30 kết quả, bỏ font đã có cột / mốc.
+  const [search, setSearch] = useState('');
+  const [lib, setLib] = useState<FcFace[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(() => {
+      api.queryFaces({ text: search.trim() || undefined, limit: 30 }).then(p => { if (alive) setLib(p.items.map(r => ({ face: { hashHex: r.hashHex, faceIndex: r.faceIndex }, row: r as unknown as FaceRowDto }))); }, () => { if (alive) setLib([]); });
+    }, search ? 200 : 0);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [api, search]);
+  const libAddable = lib.filter(s => !cols.some(c => keyOf(c.face) === keyOf(s.face)) && keyOf(s.face) !== baseKey && !addable.some(a => keyOf(a.face) === keyOf(s.face)));
   const root = useRef<HTMLDivElement>(null);
   // Nút vừa thao tác biến mất (bỏ cột, đặt xong): trả focus về Desk để phím tắt còn sống.
   const refocus = () => requestAnimationFrame(() => (root.current?.closest('.fa-desk') as HTMLElement | null)?.focus());
@@ -143,9 +154,11 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
           <button type="button" data-testid="fc-view-pages" aria-pressed={view === 'pages'} onClick={() => setView('pages')}>{t('fc.view.pages')}</button>
         </span>
         <label>{t('fc.add')}{' '}
-          <select data-testid="fc-add" value="" disabled={addable.length === 0} onChange={e => { const f = addable.find(a => keyOf(a.face) === e.target.value); if (f) { touched.current = true; setCols(cs => [...cs, f]); } }}>
-            <option value="">{addable.length ? t('fc.add.pick') : t('fc.add.none')}</option>
-            {addable.map(a => <option key={keyOf(a.face)} value={keyOf(a.face)}>{nameOf(a.row)}</option>)}
+          <input type="search" data-testid="fc-add-search" value={search} placeholder={t('fc.add.search')} aria-label={t('fc.add.search')} onChange={e => setSearch(e.target.value)} />
+          <select data-testid="fc-add" value="" disabled={addable.length + libAddable.length === 0} onChange={e => { const f = [...addable, ...libAddable].find(a => keyOf(a.face) === e.target.value); if (f) { touched.current = true; setCols(cs => [...cs, f]); } }}>
+            <option value="">{addable.length + libAddable.length ? t('fc.add.pick') : t('fc.add.none')}</option>
+            {addable.length > 0 && <optgroup label={t('fc.add.group.pair')}>{addable.map(a => <option key={keyOf(a.face)} value={keyOf(a.face)}>{nameOf(a.row)}</option>)}</optgroup>}
+            {libAddable.length > 0 && <optgroup label={t('fc.add.group.lib')}>{libAddable.map(a => <option key={keyOf(a.face)} value={keyOf(a.face)}>{nameOf(a.row)}</option>)}</optgroup>}
           </select>
         </label>
         <span className="fa-fc-role">{t('fc.role')}: <b>{roleName(role)}</b></span>

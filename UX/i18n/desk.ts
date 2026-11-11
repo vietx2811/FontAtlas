@@ -15,6 +15,7 @@ export const DESK_I18N = {
   'desk.mode.pairing':'Pairing','desk.mode.combos':'So sánh Combo','desk.mode.tip':'Chuyển giữa chọn font và so sánh các Combo của Case',
   'desk.mode.fonts':'So sánh Font','fc.sort':'Sắp theo','fc.sort.order':'Thứ tự thêm','fc.sort.name':'Tên','fc.sort.vi':'Thiếu VI','fc.dir':'Đảo chiều sắp','fc.view':'Cách hiển thị','fc.view.table':'Bảng','fc.view.pages':'Song bản',
   'fc.add':'Thêm cột','fc.add.pick':'Chọn từ gợi ý ghép…','fc.add.none':'Hết gợi ý','fc.role':'Vai','fc.noBase':'Vai {role} chưa có font đang dùng, nên chưa có mốc để tính Δ.',
+  'fc.add.search':'Tìm font trong thư viện…','fc.add.group.pair':'Gợi ý ghép','fc.add.group.lib':'Thư viện',
   'fc.pin':'Ghim','fc.unpin':'Bỏ ghim','fc.try':'Thử trong Pairing','fc.remove':'Bỏ cột',
   'cc.license':'Giấy phép','cc.relations.tip':'Quan hệ giữa các giọng của Combo (cặp tiêu đề ↔ nội dung): nhãn so sánh x-height, contrast, độ đậm…','cc.vi.tip':'Số ký tự tiếng Việt thiếu nhiều nhất trong các font của Combo.',
   'fc.pinned':'Đã ghim','fc.readFail':'Không đọc được số đo của font này','fc.cloudOnly':'Font chưa tải về: chưa hiện chữ mẫu.',

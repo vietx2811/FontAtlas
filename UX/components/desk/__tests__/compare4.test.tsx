@@ -48,6 +48,23 @@ describe('FontCompare (review fixes)', () => {
     expect(screen.getAllByTestId('fc-col')).toHaveLength(before);
   });
 
+  it('"Thêm cột" also offers LIBRARY fonts (searchable) when there are no pairing suggestions; the base and existing columns are not offered', async () => {
+    const api = createMockApi(); const fs = await faces(api, 2);
+    mountFc(api, { base: fs[0], suggestions: [] });
+    await settle(12);
+    const sel = screen.getByTestId('fc-add') as HTMLSelectElement;
+    expect(sel.disabled).toBe(false);
+    const opts = [...sel.options].map(o => o.value).filter(Boolean);
+    expect(opts.length).toBeGreaterThan(0);
+    expect(opts).not.toContain(`${fs[0].face.hashHex}:${fs[0].face.faceIndex}`);
+    fireEvent.change(sel, { target: { value: opts[0] } }); await settle();
+    expect(screen.getAllByTestId('fc-col')).toHaveLength(2); // mốc + cột vừa thêm
+    fireEvent.change(screen.getByTestId('fc-add-search'), { target: { value: 'Roboto' } }); await act(async () => { await new Promise(r => setTimeout(r, 350)); }); await settle(4);
+    const labels = [...(screen.getByTestId('fc-add') as HTMLSelectElement).options].map(o => o.textContent).filter(t => t && !/^Chọn|^Hết/.test(t));
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.every(l => /Roboto/i.test(l!))).toBe(true);
+  });
+
   it('a getFace failure marks that column, is not retried in a loop, and the other columns still read', async () => {
     const api = createMockApi(); const fs = await faces(api, 3);
     const real = api.getFace.bind(api);
