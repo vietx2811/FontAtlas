@@ -28,6 +28,10 @@ Photoshop 2026 (và app khác theo cơ chế CoreText) hỏi font còn thiếu q
 - `tests/coretext_e2e.rs` (macOS, CoreText thật): nguồn trong tiến trình test, `examples/requester` (tiến trình khác) hỏi `LibreBaskerville-Regular` → nhận đúng font (`got=`, có URL); hỏi tên lạ → không nhận; thời gian trả lời < 2 s; mở/đóng/mở lại nguồn được. Chỉ trả URL fixture, không đăng ký font nào vào hệ thống.
 - `crates/fontatlas-broker/tests/ensure.rs`: `path` có cho kết quả dùng được (cả `already_active`), không có cho `missing`; không lộ khi không dùng được.
 
+## Quan sát lạ (cần biết)
+
+- Một lần trong ~6 lần chạy `coretext_e2e`, tiến trình hỏi font đứng 10 phút ở `TAutoActivationManager::CopyFontsFromFontProvider` (XPC đồng bộ tới dịch vụ font của hệ thống) trong khi luồng nguồn của ta rỗi trong runloop: hệ thống KHÔNG gọi callback của ta. Chạy lại 4 lần đều ổn, chưa tìm ra nguyên nhân (nghi hệ thống đang chờ một nguồn font request khác, hoặc cache của fontd). Ý nghĩa: nếu có thật ngoài đời thì app thiết kế bị treo do hệ thống chứ không do ta; ta không kiểm soát được. Test đã đặt hạn 30 s cho tiến trình hỏi để không treo CI. Nên để ý khi đo với Photoshop thật.
+
 ## Chưa đo / chưa làm
 
 - **Photoshop chờ callback bao lâu** trước khi bỏ cuộc: chưa đo (cần Photoshop thật + tài liệu thiếu font; không dùng osascript lúc này). `AUTO_DOWNLOAD_TIMEOUT` = 8 s vẫn là phỏng đoán. Cách đo: chạy app với `FONTATLAS_FONTREQ=1`, một font placeholder (dataless) trong thư viện, mở tài liệu Photoshop dùng font đó, đọc log `font request ... (took)` và quan sát Photoshop có hiển thị đúng không khi 2, 5, 8, 15 s.

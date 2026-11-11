@@ -21,9 +21,27 @@ fn requester() -> PathBuf {
     exe.parent().unwrap().parent().unwrap().join("examples").join("requester")
 }
 
+/// Hỏi font bằng tiến trình khác, có hạn: hệ thống đã từng giữ yêu cầu chờ XPC rất lâu (1/6 lần chạy, nguồn của ta không
+/// hề được gọi), nên test không được phép treo theo. Quá hạn → giết tiến trình con và báo lỗi rõ.
 fn ask(name: &str) -> String {
-    let out = Command::new(requester()).arg(name).output().expect("chạy requester (cargo build --examples)");
-    String::from_utf8_lossy(&out.stdout).into_owned()
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = Command::new(requester()).arg(name).stdout(Stdio::piped()).spawn().expect("chạy requester (cargo build --examples)");
+    let t0 = std::time::Instant::now();
+    loop {
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        if t0.elapsed() > Duration::from_secs(30) {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("requester treo >30 s khi hỏi {name} (hệ thống không gọi nguồn?)");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut out = String::new();
+    child.stdout.take().unwrap().read_to_string(&mut out).unwrap();
+    out
 }
 
 #[test]
