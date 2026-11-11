@@ -28,6 +28,7 @@ type Ctx = { kind: SidebarMenuKind; id: number | null; name: string; anchor: Men
 type Confirm = { title: string; body: string; ok: string; run(): Promise<void> | void };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
+const tl = t; // `t` bị che bởi tham số Thẻ trong vòng lặp
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
 export const cloudTip = (): string => t('side.cloudTip');
@@ -71,6 +72,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [nested, setNested] = useState<Nested | null>(null);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
+  const [renamingTag, setRenamingTag] = useState<number | null>(null);
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const recentCount = useUiStore(s => s.recentViews.length);
@@ -155,6 +157,31 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     if (useUiStore.getState().view === `col:${id}`) setView('all');
     await refresh();
   };
+  const focusTag = (id: number) => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-tag-id="${id}"]`)?.focus());
+  const tagRenameBusy = useRef(false);
+  const endTagRename = (id: number, refocus: boolean) => { setRenamingTag(null); if (refocus) focusTag(id); };
+  /** Enter / blur: rỗng hoặc lỗi → báo và giữ ô (không mất tên đã gõ); trùng tên → báo rõ, không gộp ngầm. */
+  const commitTagRename = async (tg: TagDto, raw: string, input: HTMLInputElement, via: 'enter' | 'blur') => {
+    if (tagRenameBusy.current) return;
+    const name = raw.trim();
+    if (name === tg.name) { endTagRename(tg.id, via === 'enter'); return; }
+    if (!name) {
+      if (via === 'blur') { endTagRename(tg.id, false); return; }
+      setNotice({ text: t('smenu.tag.empty') }); input.focus(); return;
+    }
+    tagRenameBusy.current = true;
+    try { await api.renameTag(tg.id, name); await refresh(); endTagRename(tg.id, via === 'enter'); }
+    catch (e) {
+      const code = e instanceof CmdError ? e.code : '';
+      setNotice({ text: code === 'conflict' ? t('smenu.tag.conflict', { name }) : code === 'invalid_arg' ? t('smenu.tag.invalid') : code === 'not_found' ? t('smenu.tag.gone') : `Không đổi được tên thẻ: ${(e as Error)?.message ?? e}` });
+      if (code === 'not_found') { endTagRename(tg.id, false); await refresh().catch(() => undefined); } else if (via === 'enter') input.focus(); else endTagRename(tg.id, false);
+    } finally { tagRenameBusy.current = false; }
+  };
+  const removeTag = async (tg: TagDto) => {
+    const n = await api.deleteTag(tg.id);
+    useNoticeStore.getState().push({ kind: 'info', text: t('smenu.delTag.done', { name: tg.name, n }) });
+    await refresh();
+  };
   const at = (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }): MenuAnchor => (e.keyboard ? { rect: e.el.getBoundingClientRect() } : { x: e.x, y: e.y });
   const openCtx = (kind: SidebarMenuKind, id: number | null, name: string) => (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     setCtx({ kind, id, name, anchor: at(e), el: e.el, keyboard: e.keyboard });
@@ -183,6 +210,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const menuEntries = (c: Ctx) => {
     const col = c.kind === 'collection' ? cols.find(x => x.id === c.id) : undefined;
     const src = c.kind === 'source' ? sources.find(x => x.id === c.id) : undefined;
+    const tg = c.kind === 'tag' ? tags.find(x => x.id === c.id) : undefined;
     const goView = (v: string) => () => setView(v as never);
     return buildSidebarMenu(c.kind, {
       open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
@@ -194,6 +222,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
       remove: () => { if (col) setConfirm({ title: t('smenu.delCol.title', { name: col.name }), body: t('smenu.delCol.body'), ok: t('smenu.delCol.ok'), run: () => removeCollection(col.id).catch(warn) }); },
       filterByTag: () => setTag(String(c.id)),
+      renameTag: () => { if (tg) setRenamingTag(tg.id); },
+      deleteTag: () => { if (tg) setConfirm({ title: t('smenu.delTag.title', { name: tg.name }), body: t('smenu.delTag.body', { n: tg.faceCount }), ok: t('smenu.delTag.ok'), run: () => removeTag(tg).catch(warn) }); },
       recentCount, clearRecent: () => setConfirm({ title: t('smenu.clearRecent.title'), body: t('smenu.clearRecent.body'), ok: t('smenu.clearRecent.ok'), run: () => useUiStore.getState().clearRecent() }),
       activeCount, closeSession: () => useUiStore.getState().closeCompareSession(),
     });
@@ -261,10 +291,14 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
 
         <NavSection title={t('side.tags')} open={open.tag} onToggle={() => toggleSection('tag')}>
           <div className="fa-tags">
-            {tags.map(t => (
-              <button key={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
+            {tags.map(t => renamingTag === t.id
+              ? <input key={t.id} className="fa-inline-input fa-tag-input" data-testid="tag-rename" aria-label={tl('smenu.tag.renameLabel')} autoFocus defaultValue={t.name}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endTagRename(t.id, true); } }}
+                  onBlur={e => void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'blur')} />
+              : (
+              <button key={t.id} data-tag-id={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
                 onContextMenu={e => { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); }}
-                onKeyDown={e => { if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
+                onKeyDown={e => { if (e.key === 'F2') { e.preventDefault(); setRenamingTag(t.id); } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
             ))}
           </div>
         </NavSection>
