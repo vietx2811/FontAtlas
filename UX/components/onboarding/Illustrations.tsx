@@ -21,7 +21,6 @@ function Welcome(): React.JSX.Element {
       <Guide y={cap} name="cap" at={200} />
       <Guide y={xh} name="x-height" at={320} />
       <Guide y={base} name="baseline" at={440} tone="base" />
-      <Guide y={top} name="top" at={560} x1={apex - 40} x2={apex + 40} />
       <Dimension x={150} y1={cap} y2={base} at={1000} />
       <Dimension x={124} y1={xh} y2={base} at={1100} />
       <GlyphArt ch="Ặ" x={x} y={base} size={size} at={700} fillAt={1700} />
