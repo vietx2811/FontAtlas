@@ -4,7 +4,7 @@ import { useNoticeStore } from '../../store/notices';
 import { needsOnboarding } from '../../store/onboarding';
 import { Onboarding } from '../onboarding/Onboarding';
 import './boot.css';
-import { t } from '../../i18n';
+import { t, initLocale, hasChosenThisSession } from '../../i18n';
 
 const phaseText = (phase: string): string => ({ starting: t('boot.starting'), scanning: t('boot.scanning'), indexing: t('boot.indexing'), activation: t('boot.activation') } as Record<string, string>)[phase] ?? t('boot.default');
 
@@ -25,6 +25,8 @@ export function BootGate({ api, children }: { api: Api; children: React.ReactNod
         announced = true;
         useNoticeStore.getState().push({ kind: 'info', text: t('boot.recreated') });
       }
+      // Backend đã sẵn sàng: đọc lại ngôn ngữ đã lưu (lần vẽ đầu có thể đã dùng ngôn ngữ hệ thống). Không ghi đè lựa chọn vừa làm trong phiên.
+      void api.getSettings().then(s => { if (alive && !hasChosenThisSession()) initLocale(s.uiLang); }, () => {});
       const ob = await api.onboardingState();
       if (alive) setGate(needsOnboarding(ob) ? { kind: 'onboarding' } : { kind: 'ready' });
     };

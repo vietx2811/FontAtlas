@@ -10,7 +10,7 @@ import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { NavSection } from './NavSection';
 import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
@@ -171,14 +171,14 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
   const reportOff = (rep: ActivationReportDto) => {
     const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
-    const parts = [failed ? t('smenu.off.doneErr', { n: rep.changed, m: failed }) : t('smenu.off.done', { n: rep.changed })];
+    const parts = [failed ? tn('smenu.off.doneErr', { n: rep.changed, m: failed }) : tn('smenu.off.done', { n: rep.changed })];
     if (kept) parts.push(t('smenu.off.kept', { k: kept }));
     if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
     useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
   };
   const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
     const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
-    if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: t('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
+    if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: tn('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
   };
   const menuEntries = (c: Ctx) => {
     const col = c.kind === 'collection' ? cols.find(x => x.id === c.id) : undefined;
@@ -252,7 +252,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
               sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
                 ? <>
-                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{t('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
+                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
                   </>
                 : undefined} />
@@ -270,7 +270,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? t('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{t('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
+        {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? tn('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <Tooltip label={dark ? t('side.themeLight') : t('side.themeDark')}><button type="button" className="fa-iconbtn" aria-label={t('side.themeToggle')} aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>

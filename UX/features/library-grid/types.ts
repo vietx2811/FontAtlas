@@ -83,7 +83,7 @@ export function parseFacePage(x: unknown): FacePage {
 
 export const PX_BUCKETS = [32, 48, 64, 96] as const;
 export type PxBucket = typeof PX_BUCKETS[number];
-export const DEFAULT_SAMPLE = 'Hamburgefonts Ăn phở'; // i18n-ok: chữ mẫu
+export const DEFAULT_SAMPLE = 'Hamburgefonts Ăn phở';
 
 /** Một nửa canvas Rust (ảnh 2×): W = 13·px, H = ⌊7·px/3⌋. */
 export function cssSize(px: PxBucket): { width: number; height: number } {

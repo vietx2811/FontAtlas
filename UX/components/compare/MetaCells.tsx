@@ -1,5 +1,5 @@
 import type { CompareFace } from '../../api/compare';
-import { hasKey, t, type I18nKey, localeTag } from '../../i18n';
+import { hasKey, t, type I18nKey, localeTag, tn } from '../../i18n';
 import { NoteMark } from '../ui/noteMark';
 
 const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fallback);
@@ -63,7 +63,7 @@ export function FamilyCell({ face }: { face: CompareFace }): React.JSX.Element {
   const w = f.weights.length ? range([Math.min(...f.weights), Math.max(...f.weights)]) : null;
   return (
     <div className="cmp-meta-list">
-      <span>{t('meta.faces', { n: f.faces })}{w && ` · ${t('meta.weights', { range: w })}`}</span>
+      <span>{tn('meta.faces', { n: f.faces })}{w && ` · ${t('meta.weights', { range: w })}`}</span>
       <span className="cmp-tags">
         {f.hasItalic && <Chip>{t('meta.hasItalic')}</Chip>}{f.hasOblique && <Chip>{t('meta.hasOblique')}</Chip>}
         {f.hasVariable && <Chip>{t('meta.hasVariable')}</Chip>}{f.hasOpsz && <Chip>{t('meta.hasOpsz')}</Chip>}

@@ -4,10 +4,10 @@ import { ZeroState } from '../../zero/ZeroState';
 import { Tooltip } from '../../ui/Tooltip';
 import { t } from '../../../i18n';
 
-const LOWER = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ'; // i18n-ok: bộ ký tự
+const LOWER = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
 /** 67 chữ thường + 67 chữ hoa = 134 ký tự (UX 03 §6.2). */
 export const VI_CHARS: string[] = [...LOWER, ...LOWER.toUpperCase()];
-const STACK = ['Ắ Ằ Ẳ Ẵ Ặ', 'ấ ầ ẩ ẫ ậ', 'Ơ ơ Ư ư Đ đ']; // i18n-ok: bộ ký tự
+const STACK = ['Ắ Ằ Ẳ Ẵ Ặ', 'ấ ầ ẩ ẫ ậ', 'Ơ ơ Ư ư Đ đ'];
 const caps = (): Array<[keyof FaceDetailDto['vietnamese'], string]> => [
   ['precomposedComposite', t('vi.caps.precomposed')], ['gposMark', t('vi.caps.mark')], ['gposMkmk', t('vi.caps.mkmk')], ['gsubCcmp', t('vi.caps.ccmp')], ['dongSign', t('vi.caps.dong')],
 ];

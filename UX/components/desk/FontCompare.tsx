@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { buildCompare, COMPARE_METRICS, type CompareFace, type CompareMetric } from '../../api/compare';
 import type { ComboRoleDto, FaceRowDto } from '../../bindings';
-import { t } from '../../i18n';
+import { t, getLocale, tn } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontStatus } from '../detail/useFontFamily';
@@ -32,7 +32,7 @@ function useFacesData(api: Api, faces: FaceKeyDto[]): { cache: Map<string, Compa
       const k = keyOf(f);
       if (cache.current.has(k) || pending.current.has(k) || failed.current.has(k)) continue;
       pending.current.add(k);
-      api.getFace(f, 'vi').then(d => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
+      api.getFace(f, getLocale()).then(d => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
         pending.current.delete(k);
         if (cf !== undefined) cache.current.set(k, cf); else failed.current.add(k);
         if (alive.current) bump(n => n + 1);
@@ -190,7 +190,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
             </tr>
           ))}
           {view === 'table' && <>
-            <tr data-row="vi"><th scope="row" className="has-tip"><Tooltip label={t('cc.vi.tip')}><span>{t('cc.vi')}</span></Tooltip></th>{shown.map(c => { const d = dataOf(c); return <td key={keyOf(c.face)} data-testid="fc-vi">{!d ? '—' : d.vi.supports && d.vi.missing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: d.vi.missing })}</td>; })}</tr>
+            <tr data-row="vi"><th scope="row" className="has-tip"><Tooltip label={t('cc.vi.tip')}><span>{t('cc.vi')}</span></Tooltip></th>{shown.map(c => { const d = dataOf(c); return <td key={keyOf(c.face)} data-testid="fc-vi">{!d ? '—' : d.vi.supports && d.vi.missing === 0 ? t('strip.viOk') : tn('strip.viMissing', { n: d.vi.missing })}</td>; })}</tr>
             <tr data-row="license"><th scope="row">{t('cc.license')}</th>{shown.map(c => <td key={keyOf(c.face)}>{dataOf(c)?.license ?? '—'}</td>)}</tr>
           </>}
         </tbody>

@@ -1,7 +1,8 @@
 {
- "components/onboarding/Illustrations.tsx": 14,
- "components/onboarding/Onboarding.tsx": 66,
- "components/onboarding/ScanBlocks.tsx": 1,
- "components/settings/Settings.tsx": 1,
- "store/model.ts": 2
+ "components/FontActionPanel.tsx": 1,
+ "components/PairedFontCard.tsx": 8,
+ "components/PairingTab.tsx": 15,
+ "components/onboarding/Onboarding.tsx": 105,
+ "components/onboarding/ScanBlocks.tsx": 3,
+ "components/onboarding/blueprint.tsx": 1
 }

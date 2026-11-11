@@ -8,7 +8,7 @@ export const SETTINGS_I18N = {
   'set.g.data': 'Dữ liệu',
   'set.g.shortcuts': 'Phím tắt',
   'set.g.help': 'Trợ giúp',
-  'set.preset.fnb': 'Tiêu đề F&B',
+  'set.preset.fnb': 'Tiêu đề lớn',
   'set.preset.marks': 'Chữ hoa chồng dấu',
   'set.preset.menu': 'Thực đơn có giá',
   'set.preset.para': 'Đoạn văn',

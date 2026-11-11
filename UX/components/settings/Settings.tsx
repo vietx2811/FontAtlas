@@ -7,7 +7,7 @@ import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
-import { chooseLocale, t, useLocale } from '../../i18n';
+import { chooseLocale, t, useLocale, tn } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -25,8 +25,8 @@ export const SETTINGS_GROUPS = [
 type GroupId = typeof SETTINGS_GROUPS[number]['id'];
 
 const samplePresets = (): Array<[string, string]> => [
-  [t('set.preset.fnb'), 'Phở bò Hà Nội'], [t('set.preset.marks'), 'ẮẰẲẴẶ ẤẦẨẪẬ ƠỚỜỞỠỢ ƯỨỪỬỮỰ'], [t('set.preset.menu'), 'Cà phê sữa đá 35.000đ'], // i18n-ok: chữ mẫu
-  [t('set.preset.para'), 'Hà Nội mùa thu, cây cơm nguội vàng'], [t('set.preset.numbers'), '0123456789 ₫ & @ % ?'], // i18n-ok: chữ mẫu
+  [t('set.preset.fnb'), 'Phở bò Hà Nội'], [t('set.preset.marks'), 'ẮẰẲẴẶ ẤẦẨẪẬ ƠỚỜỞỠỢ ƯỨỪỬỮỰ'], [t('set.preset.menu'), 'Cà phê sữa đá 35.000đ'],
+  [t('set.preset.para'), 'Hà Nội mùa thu, cây cơm nguội vàng'], [t('set.preset.numbers'), '0123456789 ₫ & @ % ?'],
 ];
 const shortcuts = (): Array<[string, string]> => [['⌘K', t('set.key.search')], ['⌘,', t('set.key.settings')], ['Esc', t('set.key.esc')], ['↑ ↓', t('set.key.style')], ['Enter', t('set.key.enter')]];
 const MB = 1024 * 1024;
@@ -133,7 +133,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         {sources.map(x => (
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}{cloudHint(x) && <NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(x)!} />}</strong><span className="path">{x.path}</span></div>
-            <span className="meta">{t('set.src.meta', { n: x.faceCount, state: state(x) })}{notDownloadedOf(x, cloud) > 0 ? t('set.src.notDl', { n: notDownloadedOf(x, cloud) }) : ''}</span>
+            <span className="meta">{tn('set.src.meta', { n: x.faceCount, state: state(x) })}{notDownloadedOf(x, cloud) > 0 ? t('set.src.notDl', { n: notDownloadedOf(x, cloud) }) : ''}</span>
             {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>{t('set.src.grant')}</button>}
             <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? t('set.src.retry') : t('set.src.rescan')}</button>
             <button type="button" className="danger" onClick={() => setRemoving(x)}>{t('set.src.remove')}</button>
@@ -209,7 +209,7 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
       <div className="fa-set-group"><button type="button" className="danger" disabled={active.size === 0} onClick={() => setConfirm(true)}>{t('set.act.offAll', { n: active.size })}</button></div>
       {confirm && (
         <Modal title={t('set.act.offTitle')} onClose={() => setConfirm(false)}>
-          <p>{t('set.act.offBody', { n: active.size })}</p>
+          <p>{tn('set.act.offBody', { n: active.size })}</p>
           <div className="fa-modal-actions">
             <button type="button" onClick={() => setConfirm(false)}>{t('set.cancel')}</button>
             <button type="button" className="primary" onClick={async () => { setConfirm(false); await api.activationDeactivateAll(); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
@@ -238,10 +238,10 @@ function Data({ api }: { api: Api }) {
         <p className="fa-set-note">{t('set.data.backupNote')}</p>
       </div>
       <div className="fa-set-group"><span>{t('set.data.cache')}</span>
-        <p className="fa-set-note" data-testid="cache-info">{cache ? t('set.data.cacheInfo', { mb: Math.round(cache.bytes / MB), n: cache.entries }) : '…'}</p>
+        <p className="fa-set-note" data-testid="cache-info">{cache ? tn('set.data.cacheInfo', { mb: Math.round(cache.bytes / MB), n: cache.entries }) : '…'}</p>
         <button type="button" onClick={async () => { await api.clearPreviewCache(); await load(); }}>{t('set.data.clearCache')}</button>
       </div>
-      <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? t('set.data.noProblems') : t('set.data.problems', { n: problems.length })}</span>
+      <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? t('set.data.noProblems') : tn('set.data.problems', { n: problems.length })}</span>
         {problems.length > 0 && <>
           <ul className="fa-set-note">{problems.slice(0, 5).map(p => <li key={`${p.hashHex}${p.faceIndex}`}>{p.code}{p.path ? ` · ${p.path.split('/').pop()}` : ''}</li>)}</ul>
           <button type="button" onClick={async () => { await api.retryProblems(); await load(); }}>{t('set.data.retryAll')}</button>

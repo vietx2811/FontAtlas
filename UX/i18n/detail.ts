@@ -46,4 +46,5 @@ export const DETAIL_I18N = {
   'sim.pageNav': 'Trang family tương tự',
   'sim.prevPage': 'Trang trước',
   'sim.nextPage': 'Trang sau',
+  'det.glyphs': '{n} glyph',
 } as const;

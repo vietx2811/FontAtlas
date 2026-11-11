@@ -506,7 +506,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
             v(&SettingsDto {
                 embed_enabled: true,
                 license_notice_ack: false,
-                ui_lang: "vi".into(),
+                ui_lang: None,
                 sample_text: "Phở bò Hà Nội".into(),
                 project_vi_default: true,
                 keep_active_on_exit: false,

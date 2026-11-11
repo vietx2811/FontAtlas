@@ -1,12 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach } from 'vitest';
-import { setLocale } from '../i18n/locale';
+import { resetChosenForTests, setLocale } from '../i18n/locale';
 
 // Vitest không bật globals → Testing Library không tự dọn DOM giữa các test.
 afterEach(() => cleanup());
 // Ngôn ngữ giao diện là trạng thái module: mỗi test bắt đầu ở tiếng Việt (mặc định của bộ test cũ) và không mang dấu "đã chọn" sang test khác.
-beforeEach(() => { try { localStorage.removeItem('fa.lang'); } catch { /* bỏ qua */ } setLocale('vi'); });
+beforeEach(() => { resetChosenForTests(); setLocale('vi'); });
 
 // jsdom thiếu các API trình duyệt mà lưới dùng.
 if (!('ResizeObserver' in globalThis)) {

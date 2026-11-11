@@ -25,14 +25,21 @@ const root = ReactDOM.createRoot(rootElement);
 const render = () => root.render(
   <React.StrictMode>
     <LocaleBoundary>
-      <StatusProvider>
-        <App />
-      </StatusProvider>
+      {() => (
+        <StatusProvider>
+          <App />
+        </StatusProvider>
+      )}
     </LocaleBoundary>
   </React.StrictMode>
 );
 // Ngôn ngữ giao diện quyết định trước lần vẽ đầu: lựa chọn đã lưu → setting backend → ngôn ngữ ưu tiên của hệ điều hành.
-const langReady = api.getSettings().then(s => { initLocale(s.uiLang); }, () => { initLocale(null); });
+// Chờ tối đa LANG_WAIT_MS: backend chậm thì vẽ theo ngôn ngữ hệ thống, BootGate đọc lại `uiLang` khi backend sẵn sàng.
+const LANG_WAIT_MS = 300;
+const langReady = Promise.race([
+  api.getSettings().then(s => { initLocale(s.uiLang); }, () => { initLocale(null); }),
+  new Promise<void>(res => setTimeout(() => { initLocale(null); res(); }, LANG_WAIT_MS)),
+]);
 if (dev) {
   void applyDevBoot(api, location.hash).catch(e => console.warn('dev boot', e)).then(() => langReady).finally(() => {
     render();

@@ -16,10 +16,10 @@ import { loaderFor, useFontFamily } from './useFontFamily';
 import { FaceTitle } from '../ui/FaceTitle';
 import { Tooltip } from '../ui/Tooltip';
 import { NoteMark } from '../ui/noteMark';
-import { t } from '../../i18n';
+import { t, tn, formatNumber } from '../../i18n';
 import './detail.css';
 
-const tabs = (): Array<[PanelTab, string, string]> => [['spec', t('det.specimen'), 'Aa'], ['vi', t('det.vietnamese'), 'Ặ' /* i18n-ok */], ['anat', t('det.anatomy'), '⌖'], ['sim', t('det.similar'), '◎'], ['pair', t('det.pairing'), '∞']];
+const tabs = (): Array<[PanelTab, string, string]> => [['spec', t('det.specimen'), 'Aa'], ['vi', t('det.vietnamese'), 'Ặ'], ['anat', t('det.anatomy'), '⌖'], ['sim', t('det.similar'), '◎'], ['pair', t('det.pairing'), '∞']];
 const FORMAT: Record<string, string> = { glyf: 'TTF', cff: 'OTF', cff2: 'OTF', none: '' };
 
 export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
@@ -45,7 +45,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const bodyCss: React.CSSProperties = {
     fontFamily: family ? `"${family}", var(--font-ui)` : undefined, fontWeight: chosen?.weight ?? undefined, fontStyle: chosen?.italic ? 'italic' : undefined,
   };
-  const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
+  const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), tn('det.glyphs', { n: formatNumber(detail.file.numGlyphs) })].filter(Boolean).join(' · ') : '';
 
   return (
     <aside ref={panel} className="fa-panel" aria-label={t('det.panel')}>

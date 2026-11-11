@@ -112,7 +112,7 @@ export function PairThesePage({ api, faces }: { api: Api; faces: FaceKeyDto[] })
         {!error && !combos && <div role="status" className="pr-state">{t('pair.loading')}</div>}
         {combos && combos.length === 0 && <ZeroState compact glyph="ơ" text={t('pair.empty')} action={projectVi ? { id: 'vi', label: t('pair.emptyVi') } : undefined} onAction={() => setProjectVi(false)} />}
         {combos && combos.length > 0 && <>
-          <div className="pr-list">{combos.map(c => <Combo key={`${keyOf(c.heading)}>${keyOf(c.body)}`} api={api} c={c} sample={sample.trim() || 'Phở bò Hà Nội' /* i18n-ok: chữ mẫu */} />)}</div>
+          <div className="pr-list">{combos.map(c => <Combo key={`${keyOf(c.heading)}>${keyOf(c.body)}`} api={api} c={c} sample={sample.trim() || 'Phở bò Hà Nội'} />)}</div>
           <p className="pr-legend">{t('pair.legend')}</p>
         </>}
       </div>

@@ -4,7 +4,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { t } from '../../i18n';
 
 export const COMPOSER_INSET = 120; // khoảng chừa ở đáy lưới để thẻ cuối không bị ô nổi che
-const presets = (): Array<[label: string, text: string, name: string]> => [['Aa', 'Aa', 'Aa'], ['Ặẫ', 'Ặẫỡự', t('sample.presetMarks')], ['12', '0123456789', t('sample.presetNumbers')]]; // i18n-ok: chữ mẫu
+const presets = (): Array<[label: string, text: string, name: string]> => [['Aa', 'Aa', 'Aa'], ['Ặẫ', 'Ặẫỡự', t('sample.presetMarks')], ['12', '0123456789', t('sample.presetNumbers')]];
 
 export function SampleComposer(): React.JSX.Element {
   const sample = useUiStore(s => s.sample);

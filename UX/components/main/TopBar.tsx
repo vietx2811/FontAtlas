@@ -33,7 +33,7 @@ export function TopBar({ api }: { api: Api }): React.JSX.Element {
     <header className={`fa-topbar${familyScope ? ' has-family' : ''}${familyScope || showSelection ? ' has-row' : ''}`}>
       <div className="fa-ttl"><h1>{familyScope ? t('main.library') : title}</h1>{count !== null && <span className="fa-cnt" data-testid="view-count">{count}</span>}</div>
       <SearchField />
-      <Tooltip label={t('main.viOnlyTip')}><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi{/* i18n-ok: nhãn nút */}</button></Tooltip>
+      <Tooltip label={t('main.viOnlyTip')}><button type="button" className="fa-vi-toggle" aria-pressed={viOnly} onClick={() => setViOnly(!viOnly)}>Ặ vi</button></Tooltip>
       <AdvancedFilters api={api} />
       <TopBarActions api={api} />
       <ViewOptions />

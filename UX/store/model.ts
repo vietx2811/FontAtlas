@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, EmbedStatusDto, ModelEvent, ModelStatusDto, ErrorInfoDto } from '../api';
 import { useNoticeStore } from './notices';
-import { t, formatNumber, formatDate, localeTag } from '../i18n';
+import { t, formatNumber, formatDate, localeTag, useLocale, tn } from '../i18n';
 
 export type EState = 'E0' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5' | 'E6' | 'E7' | 'E8' | 'E9' | 'E10' | 'E11';
 export type ModelAction = 'download' | 'stop' | 'retry' | 'redownload' | 'remove' | 'pause' | 'resume';
@@ -104,8 +104,8 @@ export function deriveModelUi(i: ModelUiInput): ModelUi {
       detail: e.device ? t('mdl.embDevice', { device: e.device === 'metal' ? 'Metal (GPU)' : 'CPU' }) : undefined,
     };
   }
-  if (i.justFinished && e) return { ...ready, code: 'E10', text: t('mdl.embDone', { n: fmtInt(e.done) }) };
-  if (e && e.failed > 0) return { ...ready, code: 'E11', text: null, settingsText: t('mdl.embFailed', { n: fmtInt(e.failed) }) };
+  if (i.justFinished && e) return { ...ready, code: 'E10', text: tn('mdl.embDone', { n: fmtInt(e.done) }) };
+  if (e && e.failed > 0) return { ...ready, code: 'E11', text: null, settingsText: tn('mdl.embFailed', { n: fmtInt(e.failed) }) };
   return { ...ready, code: 'E0', text: null };
 }
 
@@ -187,5 +187,6 @@ export function useModelUi(store: ModelStore = useModelStore): ModelUi {
   const e1Dismissed = store(s => s.e1Dismissed);
   const model = store(s => s.model);
   const embed = store(s => s.embed);
-  return useMemo(() => deriveModelUi({ embedEnabled, justFinished, e1Dismissed, model, embed }), [embedEnabled, justFinished, e1Dismissed, model, embed]);
+  const locale = useLocale(); // nhãn/câu do deriveModelUi dựng bằng t(): tính lại khi đổi ngôn ngữ
+  return useMemo(() => deriveModelUi({ embedEnabled, justFinished, e1Dismissed, model, embed }), [embedEnabled, justFinished, e1Dismissed, model, embed, locale]); // eslint-disable-line react-hooks/exhaustive-deps
 }

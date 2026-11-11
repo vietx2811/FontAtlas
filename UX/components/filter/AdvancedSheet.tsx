@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Api, AxisHistogramDto, ClassFacetDto } from '../../api';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { toMetadataQuery, useUiStore, type LibraryFilters } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { useSourcesStore } from '../../store/sources';
@@ -138,7 +138,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
     <div ref={root} className="fa-adv" role="dialog" aria-label={t('adv.title')} tabIndex={-1} data-testid="advanced-sheet" aria-busy={loading} style={edge && edge.left ? { left: edge.left, top: edge.top || undefined } : undefined}>
       <header className="fa-adv-head">
         <strong>{t('adv.title')}</strong>
-        <span className="fa-adv-count">{t('adv.count', { n: condCount })}</span>
+        <span className="fa-adv-count">{tn('adv.count', { n: condCount })}</span>
         <button type="button" className="fa-adv-reset" disabled={!condCount} onClick={() => setFilters({})}>{t('adv.reset')}</button>
         <button type="button" className="fa-adv-close" aria-label={t('adv.close')} onClick={onClose}>×</button>
       </header>

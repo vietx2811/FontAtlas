@@ -6,7 +6,7 @@ import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { NoteMark } from '../../components/ui/noteMark';
-import { t } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
 import { useCardFields } from '../../store/cardFields';
@@ -54,6 +54,7 @@ export type PickMods = { meta: boolean; shift: boolean };
 
 function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
   const fields = useCardFields(s => s.fields);
+  useLocale(); // memo: vẽ lại khi đổi ngôn ngữ
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');

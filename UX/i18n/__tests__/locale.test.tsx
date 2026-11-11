@@ -1,6 +1,7 @@
-import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { chooseLocale, formatDate, formatNumber, getLocale, hasKey, resolveLocale, setLocale, t, vi, useLocale, type I18nKey } from '..';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { describe, expect, it, vi as vitest } from 'vitest';
+import { chooseLocale, formatDate, formatNumber, getLocale, hasChosenThisSession, hasKey, resolveLocale, setLocale, t, tn, vi, EN_ONE, type I18nKey } from '..';
 import { en } from '../en';
 import { LocaleBoundary } from '../LocaleBoundary';
 import { localeFromSystem } from '../locale';
@@ -40,35 +41,35 @@ describe('t() follows the locale', () => {
 });
 
 describe('resolving the starting language', () => {
-  it('follows the system language when nothing was chosen: vi* → vi, anything else → en', () => {
-    expect(localeFromSystem(['vi-VN', 'en'])).toBe('vi');
-    expect(localeFromSystem(['en-US', 'vi'])).toBe('en');
-    expect(localeFromSystem(['fr-FR'])).toBe('en');
-    expect(resolveLocale('vi', null, ['en-US'])).toBe('en');
-    expect(resolveLocale('vi', null, ['vi'])).toBe('vi');
+  it('uses the saved uiLang; when none is saved (null) it follows the system language: vi* → vi, anything else → en', () => {
+    expect(resolveLocale('en', ['vi'])).toBe('en');
+    expect(resolveLocale('vi', ['en-US'])).toBe('vi');
+    expect(resolveLocale(null, ['vi-VN', 'en'])).toBe('vi');
+    expect(resolveLocale(null, ['en-US', 'vi'])).toBe('en');
+    expect(resolveLocale(undefined, ['fr-FR'])).toBe('en');
+    expect(localeFromSystem(['vi'])).toBe('vi');
   });
-  it('an explicit choice wins over the system language; a stored "en" counts as a choice', () => {
-    expect(resolveLocale('vi', 'vi', ['en-US'])).toBe('vi');
-    expect(resolveLocale('vi', 'en', ['vi'])).toBe('en');
-    expect(resolveLocale('en', null, ['vi'])).toBe('en');
-  });
-  it('chooseLocale applies now, sets <html lang> and remembers the choice', () => {
+  it('chooseLocale applies now, sets <html lang> and marks the session as chosen', () => {
+    expect(hasChosenThisSession()).toBe(false);
     chooseLocale('en');
     expect(getLocale()).toBe('en');
     expect(document.documentElement.lang).toBe('en');
-    expect(resolveLocale('vi', undefined, ['vi'])).toBe('en');
+    expect(hasChosenThisSession()).toBe(true);
   });
 });
 
 describe('switching re-renders without a restart', () => {
-  it('components that call t() during render show the new language; LocaleBoundary remounts the tree', () => {
-    const Probe = () => { const l = useLocale(); return <p data-testid="p">{l}:{t('settings.title')}</p>; };
-    render(<LocaleBoundary><Probe /></LocaleBoundary>);
-    expect(screen.getByTestId('p').textContent).toBe('vi:Cài đặt');
+  it('components that call t() during render show the new language and KEEP their state (no remount)', () => {
+    const Probe = () => { const [n, setN] = useState(0); return <button data-testid="p" onClick={() => setN(n + 1)}>{n}:{t('settings.title')}</button>; };
+    render(<LocaleBoundary>{() => <Probe />}</LocaleBoundary>);
+    fireEvent.click(screen.getByTestId('p')); fireEvent.click(screen.getByTestId('p'));
+    expect(screen.getByTestId('p').textContent).toBe('2:Cài đặt');
+    const node = screen.getByTestId('p');
     act(() => setLocale('en'));
-    expect(screen.getByTestId('p').textContent).toBe('en:Settings');
+    expect(screen.getByTestId('p').textContent).toBe('2:Settings');
+    expect(screen.getByTestId('p')).toBe(node); // cùng một DOM node: không bị dựng lại
     act(() => setLocale('vi'));
-    expect(screen.getByTestId('p').textContent).toBe('vi:Cài đặt');
+    expect(screen.getByTestId('p').textContent).toBe('2:Cài đặt');
   });
   it('numbers and dates are formatted for the current language', () => {
     expect(formatNumber(1234.5)).toBe('1.234,5');
@@ -87,5 +88,38 @@ describe('backend error messages', () => {
     setLocale('en');
     expect(toCmdError(raw).message).toBe('Couldn’t find that item.');
     expect(toCmdError({ code: 'weird_new_code', message: 'lỗi lạ' }).message).toBe('Something went wrong (weird_new_code).');
+  });
+});
+
+describe('key hygiene', () => {
+  it('no key is declared in two groups (a later spread would silently override the earlier one)', async () => {
+    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err'].map(n => import(`../${n}.ts`)));
+    const { MAIN_I18N } = await import('..');
+    const seen = new Map<string, string>(); const dup: string[] = [];
+    const groups: Array<[string, object]> = [['main', MAIN_I18N]];
+    for (const [i, m] of mods.entries()) for (const [name, v] of Object.entries(m)) if (v && typeof v === 'object') groups.push([`${i}:${name}`, v as object]);
+    for (const [g, o] of groups) for (const k of Object.keys(o)) { if (seen.has(k)) dup.push(`${k} in ${seen.get(k)} and ${g}`); else seen.set(k, g); }
+    expect(dup).toEqual([]);
+    expect(seen.size).toBe(Object.keys(vi).length);
+  });
+  it('a missing dynamic key returns the key and warns once in dev', () => {
+    const warn = vitest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(t('class.__nope__' as I18nKey)).toBe('class.__nope__');
+    expect(t('class.__nope__' as I18nKey)).toBe('class.__nope__');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('class.__nope__');
+    warn.mockRestore();
+  });
+  it('tn picks the English singular for n = 1 only; Vietnamese has a single form', () => {
+    expect(tn('faces.nFonts', { n: 1 })).toBe('1 font');
+    setLocale('en');
+    expect(tn('faces.nFonts', { n: 1 })).toBe('1 font');
+    expect(tn('faces.nFonts', { n: 2 })).toBe('2 fonts');
+    expect(tn('faces.nFonts', { n: '1' })).toBe('1 font');
+    expect(tn('faces.nFonts', { n: formatNumber(1234) })).toBe('1,234 fonts');
+  });
+  it('every singular form (EN_ONE) matches a key and its placeholders', () => {
+    const vars = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort().join(',');
+    for (const [k, one] of Object.entries(EN_ONE)) { expect(hasKey(k), k).toBe(true); expect(vars(one), k).toBe(vars((en as Record<string, string>)[k])); }
   });
 });

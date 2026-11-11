@@ -10,7 +10,7 @@ import { Menu, type MenuAnchor } from '../ui/Menu';
 import { NamePrompt } from '../ui/NamePrompt';
 import { buildFaceMenu, faceName, projectEntries, type FaceMenuActions } from './faceMenuModel';
 import { fetchFamilyScope } from './familyScope';
-import { t, formatNumber } from '../../i18n';
+import { t, formatNumber, tn } from '../../i18n';
 
 export type OpenOpts = { keyboard?: boolean; returnFocus?: HTMLElement | null };
 export interface FaceActionsApi {
@@ -29,7 +29,7 @@ export const useFaceActions = (): FaceActionsApi | null => useContext(Ctx);
 
 const CHUNK = 12;
 const keyOf = (r: FaceRow): FaceKeyDto => ({ hashHex: r.hashHex, faceIndex: r.faceIndex });
-const what = (rows: readonly FaceRow[]): string => (rows.length === 1 ? `«${faceName(rows[0])}»` : t('faces.nFonts', { n: formatNumber(rows.length) }));
+const what = (rows: readonly FaceRow[]): string => (rows.length === 1 ? `«${faceName(rows[0])}»` : tn('faces.nFonts', { n: formatNumber(rows.length) }));
 const errText = (e: unknown): string => (e as { message?: string } | null)?.message ?? String(e);
 const say = (kind: 'info' | 'error', text: string): void => void useNoticeStore.getState().push({ kind, text });
 

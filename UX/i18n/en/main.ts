@@ -188,7 +188,7 @@ export const EN_MAIN: Record<MainKey, string> = {
   'pair.title': 'Pair these',
   'pair.back': 'Back to Library',
   'pair.vi': 'Project uses Vietnamese',
-  'pair.loading': 'Pairing…',
+  'pair.loading': 'Finding pairs…',
   'pair.error': 'Couldn’t pair: {msg}',
   'pair.retry': 'Try again',
   'pair.combo': 'Combo {n}',

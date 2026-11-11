@@ -16,7 +16,7 @@ export const SAMPLE_MAX = 72;
 export const COMPARE_MAX = 8;
 export const COMPARE_MIN = 2;
 export const OVERLAY_MAX = 4;
-export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội'; // i18n-ok: chữ mẫu
+export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
 
 export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };

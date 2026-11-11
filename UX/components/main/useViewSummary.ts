@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Api } from '../../api';
 import { useScanStore } from '../../store/scan';
 import { toGridQuery, useUiStore, type View } from '../../store/ui';
-import { t } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 
 const FIXED = (): Record<string, string> => ({ all: t('side.all'), star: t('side.favorites'), recent: t('side.recent'), active: t('side.active'), dups: t('main.dups') });
 
@@ -22,8 +22,9 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
   const viOnly = useUiStore(s => s.viOnly);
   const scanVersion = useScanStore(s => s.version);
   const recentViews = useUiStore(s => s.recentViews);
+  const locale = useLocale();
   const active = useUiStore(s => s.active);
-  const [out, setOut] = useState<{ title: string; count: number | null }>({ title: FIXED[view] ?? '', count: null });
+  const [out, setOut] = useState<{ title: string; count: number | null }>({ title: FIXED()[view] ?? '', count: null });
 
   useEffect(() => {
     let alive = true;
@@ -32,6 +33,6 @@ export function useViewSummary(api: Api): { title: string; count: number | null 
       .then(([title, count]) => { if (alive) setOut({ title: familyScope?.name ?? title, count }); })
       .catch(() => { if (alive) setOut(o => ({ ...o, count: null })); });
     return () => { alive = false; };
-  }, [api, view, query, viOnly, recentViews, active, scanVersion, filters, familyScope]);
+  }, [api, view, query, viOnly, recentViews, active, scanVersion, filters, familyScope, locale]);
   return out;
 }

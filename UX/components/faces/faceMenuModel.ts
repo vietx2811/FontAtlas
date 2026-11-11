@@ -3,7 +3,7 @@ import type { CollectionDto, TagDto } from '../../api';
 import type { FaceRow } from '../../features/library-grid/types';
 import type { View } from '../../store/ui';
 import type { MenuEntry } from '../ui/Menu';
-import { t, formatNumber } from '../../i18n';
+import { t, formatNumber, tn } from '../../i18n';
 
 export type FaceMenuActions = {
   openDetail(row: FaceRow): void;
@@ -57,7 +57,7 @@ export function buildFaceMenu(rows: readonly FaceRow[], ctx: FaceMenuCtx): MenuE
       { id: 'pair', label: t('faces.pair'), onSelect: () => a.pairWith(one) },
       { type: 'sep', id: 'sep-nav' },
     );
-  } else out.push({ type: 'label', id: 'count', text: t('faces.selectedN', { n: formatNumber(n) }) });
+  } else out.push({ type: 'label', id: 'count', text: tn('faces.selectedN', { n: formatNumber(n) }) });
 
   const allFav = rows.every(ctx.isFavorite);
   out.push({ id: 'fav', label: allFav ? t('faces.unfav') : t('faces.fav'), onSelect: () => a.setFavorite(rows, !allFav) });

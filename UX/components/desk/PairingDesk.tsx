@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../Modal';
 import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
-import { t } from '../../i18n';
+import { t, getLocale } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { DEFAULT_SAMPLE_TEXT, useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
@@ -60,7 +60,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     if (!ready || !data) return;
     let alive = true; setCandError(null);
     const base: Promise<Trial[]> = anchor
-      ? api.pairCandidates(anchor.key, { role: anchorPairRole(role), mode: mode0, projectVi: vi0, k: 20, collectionId: null, lang: 'vi' })
+      ? api.pairCandidates(anchor.key, { role: anchorPairRole(role), mode: mode0, projectVi: vi0, k: 20, collectionId: null, lang: getLocale() })
         .then((c: PairCandidateDto[]) => c.filter(x => !same(x.face, anchor.key)).map(x => ({ face: x.face, row: x.row, summary: x.summary })))
       : Promise.resolve([]);
     const peek: Promise<Trial | null> = desk.trial && desk.role === role

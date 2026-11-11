@@ -3,7 +3,7 @@ import { Tooltip } from '../ui/Tooltip';
 import type { Api } from '../../api';
 import { useUiStore } from '../../store/ui';
 import type { CompareFace, CompareMetric } from '../../api/compare';
-import { hasKey, t, localeTag } from '../../i18n';
+import { hasKey, t, localeTag, tn } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
@@ -13,9 +13,9 @@ import { NoteMark } from '../ui/noteMark';
 import { graphemes, missingList, useMissingChars } from './glyphCoverage';
 import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
 
-export const SAMPLE_VI = 'ỮẶỆỖỞ ươ'; // i18n-ok: chữ mẫu
+export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
 export const PLACEHOLDER = 'Hxg';
-export const OVERLAY_TEXT = 'Hxgă'; // i18n-ok: chữ mẫu
+export const OVERLAY_TEXT = 'Hxgă';
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
 /** Nạp font của một cột rồi đưa họ font cho phần vẽ (null khi chưa nạp: dùng font UI dự phòng). */
@@ -114,7 +114,7 @@ export type ViNote = { kind: 'warn' | 'ok'; text: string; title?: string };
 export function viNotes(face: CompareFace): ViNote[] {
   const { stackedMarksOverflow: over, supports, missing } = face.vi;
   const out: ViNote[] = [];
-  if (!supports) out.push({ kind: 'warn', text: missing > 0 ? t('compare.viMissing', { n: missing }) : t('compare.viNone') });
+  if (!supports) out.push({ kind: 'warn', text: missing > 0 ? tn('compare.viMissing', { n: missing }) : t('compare.viNone') });
   if (supports && over) out.push({ kind: 'warn', text: overText(face) });
   if (supports && !over) out.push({ kind: 'ok', text: t('compare.viOk'), title: face.vi.overCapPctEm != null ? t('compare.viOkTip', { pct: pct1(face.vi.overCapPctEm) }) : undefined });
   if (!supports && over) out.push({ kind: 'warn', text: t('compare.viWarn') });

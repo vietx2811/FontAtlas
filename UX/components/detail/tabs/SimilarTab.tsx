@@ -10,7 +10,7 @@ import { faceMenuProps, useFaceActions } from '../../faces/FaceActions';
 import { FaceTitle } from '../../ui/FaceTitle';
 import { Tooltip } from '../../ui/Tooltip';
 import { AXIS_META } from './AnatomyTab';
-import { t, formatNumber } from '../../../i18n';
+import { t, formatNumber, tn } from '../../../i18n';
 
 // Getter: chuỗi theo ngôn ngữ hiện tại tại thời điểm đọc.
 export const SOURCE_BADGE: Record<SimilarSource, string> = { get axes() { return t('sim.badge.axes'); }, get axes_and_image() { return t('sim.badge.both'); }, get image() { return t('sim.badge.image'); } };
@@ -125,7 +125,7 @@ export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; d
           return <li key={group.family} data-testid="similar-hit" className="fa-sim-hit" {...faceMenuProps(faceActions, [h.row])}>
             <FaceTitle as="strong" api={api} face={h.row} className="fa-sim-name">{group.family}</FaceTitle>
             <Tooltip label={SOURCE_TIP[h.source]}><span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span></Tooltip>
-            <p className="fa-sim-style">{h.row.subfamily ?? t('sim.repStyle')} · {t('sim.styles', { n: formatNumber(group.count) })}</p>
+            <p className="fa-sim-style">{h.row.subfamily ?? t('sim.repStyle')} · {tn('sim.styles', { n: formatNumber(group.count) })}</p>
             <p className="fa-sim-why">{h.same.length ? t('sim.same', { names: names(h.same) }) : t('sim.noAxes')}{h.differ.length ? t('sim.differ', { names: names(h.differ) }) : ''}</p>
             <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>{t('sim.openFont')}</button><Tooltip label={t('sim.tooLargeTip')} disabled={!tooLarge}><button type="button" aria-disabled={tooLarge || openingFamily !== null || undefined} onClick={() => { if (!tooLarge && openingFamily === null) void openFamily(group.family); }}>{t('sim.viewFamily')}</button></Tooltip></div>
             {tooLarge && <p className="fa-sim-why">{t('sim.tooLarge')}</p>}

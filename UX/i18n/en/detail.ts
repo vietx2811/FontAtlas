@@ -47,4 +47,5 @@ export const EN_DETAIL: Record<keyof typeof DETAIL_I18N, string> = {
   'sim.pageNav': 'Similar families pages',
   'sim.prevPage': 'Previous page',
   'sim.nextPage': 'Next page',
+  'det.glyphs': '{n} glyphs',
 };

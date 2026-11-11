@@ -26,7 +26,8 @@ pub fn get_settings(state: &AppState) -> Result<SettingsDto, CmdError> {
         Ok(SettingsDto {
             embed_enabled: u.embed_enabled()?,
             license_notice_ack: flag(u, SETTING_LICENSE_NOTICE_ACK, false)?,
-            ui_lang: u.setting(keys::UI_LANG)?.filter(|l| l == "vi" || l == "en").unwrap_or_else(|| "vi".into()),
+            // None = chưa chọn: giao diện theo ngôn ngữ hệ thống.
+            ui_lang: u.setting(keys::UI_LANG)?.filter(|l| l == "vi" || l == "en"),
             sample_text: u.setting(keys::SAMPLE_TEXT)?.unwrap_or_else(|| DEFAULT_SAMPLE.into()),
             project_vi_default: flag(u, keys::PROJECT_VI_DEFAULT, true)?,
             keep_active_on_exit: u.setting(SETTING_ACTIVATION_KEEP)?.as_deref() == Some("1"),
