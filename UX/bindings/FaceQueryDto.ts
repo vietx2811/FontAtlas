@@ -21,7 +21,7 @@ hard: Array<string>,
  */
 faceKeys: Array<FaceKeyDto> | null, 
 /**
- * Lọc theo class (OR trong nhóm): serif | sans | mono | script | blackletter | symbol | uncertain
+ * Lọc theo class (OR trong nhóm): serif | slab | sans | mono | script | handwriting | display | blackletter | symbol | uncertain
  * | unclassified (face chưa có hồ sơ phân tích trong Index — tách riêng khỏi uncertain).
  * Dùng phân loại hiệu lực (ghi đè của người dùng ưu tiên hơn tự động).
  */
@@ -31,7 +31,21 @@ classes: Array<string>,
  */
 subclasses: Array<string>, 
 /**
- * Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
+ * `true`: `classes`/`subclasses` khớp cả class PHỤ (hybrid, `ClassificationDto.secondary`) của phân loại tự động,
+ * không chỉ class chính. Face bị người dùng ghi đè không có class phụ. Mặc định `false` (chỉ class chính).
+ */
+includeSecondary: boolean, 
+/**
+ * `true`: chỉ giữ face có nhãn phân loại tự tin: độ tin cậy ≥ `CONF_MIN` (0.88). Face đã bị người dùng ghi đè
+ * luôn tính là tự tin; face `uncertain` (dưới ngưỡng) bị loại. Áp dụng cả khi `classes` rỗng.
+ */
+confidentOnly: boolean, 
+/**
+ * Ngưỡng độ tin cậy tuỳ ý 0–1 (nâng ngưỡng của `confidentOnly`, không hạ thấp). `null` = không đặt thêm.
+ */
+minConfidence: number | null, 
+/**
+ * Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative | reverse_contrast | high_contrast | monoline.
  */
 traits: Array<string>, 
 /**

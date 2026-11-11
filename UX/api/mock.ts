@@ -10,7 +10,7 @@ import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './moc
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
-  type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
+  type FamilyStyleDto, type SettingsDto, type SourceDto, type SystemTagGroupDto, type TagDto, type UiStateDto,
 } from './types';
 
 const WEIGHTS: Array<[string, number]> = [['Thin', 100], ['ExtraLight', 200], ['Light', 300], ['Regular', 400], ['Medium', 500], ['SemiBold', 600], ['Bold', 700], ['ExtraBold', 800], ['Black', 900]];
@@ -73,6 +73,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
   const classOver = new Map<string, { class: string; subclass: string | null }>();
   const effClass = (r: FaceRow) => classOver.get(keyOf(r)) ?? mockAutoClass(r.family);
+  // Ghi đè của người dùng = tin cậy tuyệt đối; còn lại dùng độ tin cậy tự động. Mock không có class phụ nên `includeSecondary` không đổi kết quả.
+  const mockConfidence = (r: FaceRow) => (classOver.has(keyOf(r)) ? 1 : mockAutoClass(r.family).class === 'uncertain' ? 0 : mockAutoClass(r.family).confidence);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
@@ -145,7 +147,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         usedBody.add(body.family);
         return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
       });
-      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null, langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
       return {
         describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
         query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
@@ -166,6 +168,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.license?.length || q.license.includes(r.licenseClass)) &&
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
         (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
+        (!(q.confidentOnly || q.minConfidence != null) || mockConfidence(r) >= Math.max(q.confidentOnly ? 0.88 : 0, q.minConfidence ?? 0)) &&
         (q.includeMissing || !r.missing) &&
         (!q.weightClass || matchesWeight(r, q.weightClass, q.varAxisMatch?.wght ?? true)) &&
         (!q.widthClass || matchesWidth(r, q.widthClass, q.varAxisMatch?.wdth ?? true)) &&
@@ -218,9 +221,10 @@ export function createMockApi(o: MockOptions = {}): Api {
       faces.forEach(f => c.faces.delete(keyOf(f)));
       act.collectionChanged(faces.map(f => [f, id] as [typeof f, number]), 'left_collection');
     },
+    systemTagCatalog: () => ok(MOCK_SYSTEM_TAGS),
     listTags: () => ok([...tags.values()].map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))),
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
-    async createTag(name) { const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
+    async createTag(name) { name = canonicalSystemTag(name); const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
     async tagFaces(id, faces) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); faces.forEach(f => t.faces.add(keyOf(f))); },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
@@ -435,6 +439,25 @@ function mockClassification(family: string, over?: { class: string; subclass: st
     // Cố ý có giá trị lạ như dữ liệu thật (vote 'usage', nguồn và trait chưa dịch) để UI không giả định tập khoá đóng.
     signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }, ...(/Abril|Pacifico/.test(family) ? [{ source: 'future_source', detail: 'x', vote: 'usage', weight: 0.1 }] : [])],
     traits: /Bebas/.test(family) ? ['fat_face'] : /Abril/.test(family) ? ['Fat face', 'Quirky_new_trait'] : [],
-    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
+    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null, secondary: null,
   };
+}
+
+// Danh mục tag hệ thống giống backend (fontatlas-core/system_tags.rs): phong cách, mood, mục đích dùng.
+const mkSys = (namespace: string, label: string, tags: [string, string][]): SystemTagGroupDto => ({ namespace, label, tags: tags.map(([key, l]) => ({ key, label: l, name: `${namespace}:${key}` })) });
+export const MOCK_SYSTEM_TAGS: SystemTagGroupDto[] = [
+  mkSys('style', 'Style', [['art_deco', 'Art Deco'], ['art_nouveau', 'Art Nouveau'], ['wood_type', 'Wood type'], ['western', 'Western'], ['retro_vintage', 'Retro / Vintage'], ['psychedelic', 'Psychedelic'], ['brutalist', 'Brutalist'], ['techno', 'Techno'], ['medieval', 'Medieval'], ['tuscan', 'Tuscan'], ['distressed', 'Distressed'], ['blobby', 'Blobby'], ['wacky', 'Wacky']]),
+  mkSys('mood', 'Mood', [['business', 'Business'], ['calm', 'Calm'], ['elegant', 'Elegant'], ['playful', 'Playful'], ['friendly_cute', 'Friendly / Cute'], ['loud_bold', 'Loud / Bold'], ['vintage_retro', 'Vintage / Retro'], ['futuristic_tech', 'Futuristic / Tech'], ['rugged', 'Rugged'], ['artistic', 'Artistic'], ['formal', 'Formal'], ['handmade', 'Handmade']]),
+  mkSys('use', 'Use', [['editorial', 'Editorial'], ['logo_branding', 'Logo / Branding'], ['packaging', 'Packaging'], ['signage', 'Signage']]),
+];
+/** Như backend `create_tag`: tiền tố dành riêng được chuẩn hoá và phải có trong danh mục; tên khác giữ nguyên. */
+function canonicalSystemTag(raw: string): string {
+  const name = raw.trim();
+  const i = name.indexOf(':');
+  if (i < 0) return name;
+  const g = MOCK_SYSTEM_TAGS.find(x => x.namespace === name.slice(0, i).trim().toLowerCase());
+  if (!g) return name;
+  const t = g.tags.find(x => x.key === name.slice(i + 1).trim().toLowerCase());
+  if (!t) throw new CmdError('invalid_arg', `tag hệ thống không có trong danh mục: ${name}`);
+  return t.name;
 }

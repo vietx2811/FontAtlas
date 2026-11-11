@@ -75,3 +75,16 @@ describe('mock api histogram', () => {
     expect(stats.find(s => s.axis === 'stem')!.count).toBe(stemAll.count);
   });
 });
+
+describe('taxonomy v2 query flags', () => {
+  it('confidentOnly drops uncertain/low-confidence faces; user override counts as confident; includeSecondary is accepted', async () => {
+    const api = createMockApi();
+    const all = (await api.queryFaces({ limit: 1000 })).total;
+    const conf = await api.queryFaces({ limit: 1000, confidentOnly: true });
+    expect(conf.total).toBeLessThanOrEqual(all);
+    expect((await api.queryFaces({ limit: 1000, confidentOnly: true, classes: ['uncertain'] })).total).toBe(0);
+    expect((await api.queryFaces({ limit: 1000, classes: ['serif'], includeSecondary: true })).total).toBeGreaterThanOrEqual(
+      (await api.queryFaces({ limit: 1000, classes: ['serif'] })).total,
+    );
+  });
+});

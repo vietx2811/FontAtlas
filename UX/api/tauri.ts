@@ -52,6 +52,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
     classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
+    includeSecondary: q.includeSecondary ?? false, confidentOnly: q.confidentOnly ?? false, minConfidence: q.minConfidence ?? null,
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
     weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
   };
@@ -101,6 +102,7 @@ export function createTauriApi(): Api {
     addToCollection: (id, faces) => none(call('add_to_collection', { id, faces })),
     removeFromCollection: (id, faces) => none(call('remove_from_collection', { id, faces })),
     listTags: () => call('list_tags'),
+    systemTagCatalog: () => call('system_tag_catalog'),
     tagsOf: face => call('tags_of', { face }),
     createTag: name => call('create_tag', { name }),
     tagFaces: (tagId, faces) => none(call('tag_faces', { tagId, faces })),

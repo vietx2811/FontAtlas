@@ -31,6 +31,10 @@ pub struct FaceMeta {
     /// Phân loại tự động (snake_case), chưa áp ghi đè của người dùng.
     pub auto_class: String,
     pub auto_subclass: Option<String>,
+    /// Độ tin cậy của phân loại tự động (0 khi `uncertain`).
+    pub auto_confidence: f32,
+    /// Class phụ tự động (hybrid): `(class, subclass)`.
+    pub auto_secondary: Option<(String, Option<String>)>,
     /// Tag hình thái tự động (stencil, rounded…).
     pub auto_traits: Vec<String>,
     /// name ID 5 (chuỗi phiên bản).
@@ -117,12 +121,14 @@ impl IndexBundle {
             let hash = a.key.hash_hex();
             let Some(p) = FaceProfile::from_json(&hash, a.key.face_index, &m, &v, &an) else { return };
             let status = v.get("status").and_then(Value::as_str).unwrap_or("");
-            let auto = fontatlas_core::classify::classify(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
+            let auto = fontatlas_core::classify::classify_v2(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
             meta.insert(
                 p.key.clone(),
                 FaceMeta {
                     auto_class: auto.class.snake().into(),
                     auto_subclass: auto.subclass,
+                    auto_confidence: auto.confidence,
+                    auto_secondary: auto.secondary.as_ref().map(|x| (x.class.snake().to_string(), x.subclass.clone())),
                     auto_traits: auto.traits.clone(),
                     version: m.get("version").and_then(Value::as_str).map(String::from),
                     face_id: a.face_id,

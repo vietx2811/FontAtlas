@@ -6,6 +6,7 @@ mod embeds;
 mod metrics;
 mod refstats;
 mod split;
+pub mod taxonomy_v2;
 
 pub use corpus::{Corpus, Origin};
 pub use csvio::{

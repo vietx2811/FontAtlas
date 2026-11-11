@@ -10,9 +10,15 @@ use serde_json::Value;
 #[serde(rename_all = "snake_case")]
 pub enum Class {
     Serif,
+    /// Taxonomy v2: slab tách khỏi Serif. Bộ phân loại tự động chưa phát ra (chỉ nhãn người dùng/ánh xạ cũ).
+    Slab,
     Sans,
     Mono,
     Script,
+    /// Taxonomy v2: chữ viết tay, không nối (tách khỏi Script nối).
+    Handwriting,
+    /// Taxonomy v2: Display cấu trúc (stencil/inline/shaded/pixel).
+    Display,
     Blackletter,
     Symbol,
     Uncertain,
@@ -22,6 +28,9 @@ impl Class {
     pub fn label(self) -> &'static str {
         match self {
             Class::Serif => "Serif",
+            Class::Slab => "Slab",
+            Class::Handwriting => "Handwriting",
+            Class::Display => "Display",
             Class::Sans => "Sans",
             Class::Mono => "Mono",
             Class::Script => "Script",
@@ -34,6 +43,9 @@ impl Class {
     pub fn parse(s: &str) -> Option<Class> {
         Some(match s.to_ascii_lowercase().as_str() {
             "serif" => Class::Serif,
+            "slab" => Class::Slab,
+            "handwriting" => Class::Handwriting,
+            "display" => Class::Display,
             "sans" => Class::Sans,
             "mono" => Class::Mono,
             "script" => Class::Script,
@@ -50,6 +62,9 @@ impl Class {
     pub fn snake(self) -> &'static str {
         match self {
             Class::Serif => "serif",
+            Class::Slab => "slab",
+            Class::Handwriting => "handwriting",
+            Class::Display => "display",
             Class::Sans => "sans",
             Class::Mono => "mono",
             Class::Script => "script",
@@ -60,14 +75,38 @@ impl Class {
     }
 }
 
-/// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng).
+/// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng). Bao gồm cả nhãn cũ (v1) để
+/// ghi đè đã lưu vẫn hợp lệ cho tới khi `migrate_legacy` ánh xạ chúng.
 pub fn subclasses_of(c: Class) -> &'static [&'static str] {
     match c {
-        Class::Serif => &["humanist_oldstyle", "transitional", "didone", "slab", "glyphic"],
-        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist"],
-        Class::Mono => &["serif_mono", "sans_mono"],
-        Class::Script => &["formal", "casual_brush", "handwritten"],
+        // `humanist_oldstyle` là tên v1 của `venetian_oldstyle` (giữ hợp lệ, migrate_legacy đổi sang tên mới)
+        Class::Serif => &["venetian_oldstyle", "humanist_oldstyle", "garalde", "transitional", "didone", "glyphic", "wedge", "slab"],
+        Class::Slab => &["clarendon", "egyptian", "humanist_slab", "typewriter"],
+        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist", "flared", "rounded", "squarish"],
+        Class::Mono => &["sans_mono", "serif_mono", "coding", "typewriter"],
+        Class::Script => &["formal_copperplate", "brush", "monoline_script", "signature", "upright_script", "calligraphic_unjoined", "formal", "casual_brush", "handwritten"],
+        Class::Handwriting => &["casual_print", "marker", "childlike"],
+        Class::Display => &["stencil", "inline_outline", "shaded_3d", "pixel_bitmap"],
         Class::Blackletter | Class::Symbol | Class::Uncertain => &[],
+    }
+}
+
+/// Ánh xạ nhãn v1 (class, subclass) sang taxonomy v2; không mất dữ liệu: nhãn lạ giữ nguyên class, bỏ subclass không hợp lệ.
+/// - Serif/`slab` → Slab (không subclass; người dùng/phân loại sau mới chọn clarendon/egyptian…)
+/// - Script/`handwritten` → Handwriting; Script/`casual_brush` → Script/`brush`; Script/`formal` → Script/`formal_copperplate`;
+///   Serif/`humanist_oldstyle` → Serif/`venetian_oldstyle`
+pub fn migrate_legacy(class: &str, subclass: Option<&str>) -> (String, Option<String>) {
+    let keep = |c: &str, s: Option<&str>| {
+        let valid = Class::parse(c).is_some_and(|k| s.is_none_or(|s| subclasses_of(k).contains(&s)));
+        (c.to_string(), s.filter(|_| valid).map(str::to_string))
+    };
+    match (class, subclass) {
+        ("serif", Some("slab")) => ("slab".into(), None),
+        ("script", Some("handwritten")) => ("handwriting".into(), None),
+        ("script", Some("casual_brush")) => ("script".into(), Some("brush".into())),
+        ("script", Some("formal")) => ("script".into(), Some("formal_copperplate".into())),
+        ("serif", Some("humanist_oldstyle")) => ("serif".into(), Some("venetian_oldstyle".into())),
+        (c, s) => keep(c, s),
     }
 }
 
@@ -102,8 +141,17 @@ pub struct Classification {
     /// Lớp tốt nhất máy đoán khi `class = Uncertain` vì độ tin cậy dưới `CONF_MIN` (để UI hiện "có lẽ là …").
     #[serde(default)]
     pub candidate: Option<Class>,
+    /// Taxonomy v2: class phụ (hybrid) chỉ để hiển thị/tìm kiếm; lọc/nhóm luôn theo `class`.
+    #[serde(default)]
+    pub secondary: Option<Secondary>,
     pub signals: Vec<Signal>,
     pub usage: Vec<Usage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Secondary {
+    pub class: Class,
+    pub subclass: Option<String>,
 }
 
 /// Đầu vào tối thiểu; dựng từ JSON đã lưu.
@@ -129,6 +177,8 @@ pub struct Metrics {
     pub serif_flare: Option<f32>,
     /// Cờ serif trên-trái của i/l/n ÷ thân (core ≥ 0.9.0).
     pub serif_head: Option<f32>,
+    /// Dày thân H ÷ dày thanh ngang H (< 1 = thanh ngang dày hơn thân: reverse contrast).
+    pub contrast_h: Option<f32>,
     pub contrast: Option<f32>,
     pub stress_abs: Option<f32>,
     pub slant_abs: Option<f32>,
@@ -190,6 +240,7 @@ impl ClassifyInput {
                 serif_foot: g("serif_foot"),
                 serif_flare: g("serif_flare"),
                 serif_head: g("serif_head"),
+                contrast_h: g("contrast_h"),
                 contrast: g("contrast"),
                 stress_abs: g("stress_deg").map(f32::abs),
                 slant_abs: g("slant_deg").map(f32::abs),
@@ -426,8 +477,124 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     let subclass = if class == Class::Uncertain { None } else { subclass_of(class, i, &nm) };
     let traits = traits_of(i, &nm);
     let usage = usage_of(candidate.unwrap_or(class), i, &v, &traits);
-    Classification { class, subclass, confidence, candidate, traits, signals: v.list, usage }
+    Classification { class, subclass, confidence, candidate, secondary: None, traits, signals: v.list, usage }
 }
+
+/// Taxonomy v2: tinh chỉnh kết quả `classify` sang 8 class + subclass mới. Hàm thuần, cùng đầu vào JSON đã lưu.
+/// Các luật đã tune/kiểm trên `docs/team/eval/taxonomy_v2_labels.csv` (xem `docs/team/plans/2026-11-11-taxonomy-v2.md`).
+pub fn classify_v2(i: &ClassifyInput) -> Classification {
+    let nm = Nm::new(&i.name);
+    let mut c = classify(i);
+    let m = &i.m;
+    let named = |k: &[&str]| kw(&nm, k);
+    let has = |t: &str| c.traits.iter().any(|x| x == t);
+    let sub = |x: &str| Some(x.to_string());
+    // --- Display cấu trúc (stencil/inline/pixel): class chính là Display, hình dáng gốc thành class phụ
+    if c.class != Class::Symbol {
+        let structural = if has("stencil") {
+            Some("stencil")
+        } else if has("pixel") {
+            Some("pixel_bitmap")
+        } else if has("inline_outline") {
+            Some("inline_outline")
+        } else {
+            None
+        };
+        if let Some(sb) = structural {
+            // cấu trúc đọc từ tên (stencil/inline/pixel) là bằng chứng rõ dù hình dáng gốc chưa chắc
+            let base = c.candidate.take().unwrap_or(c.class);
+            let base_sub = c.subclass.clone();
+            if base != Class::Uncertain {
+                c.secondary = Some(Secondary { class: base, subclass: base_sub });
+            }
+            c.confidence = c.confidence.max(0.9);
+            c.class = Class::Display;
+            c.subclass = sub(sb);
+            c.usage = usage_for(i, Class::Display);
+            return c;
+        }
+    }
+    match c.class {
+        Class::Serif => {
+            let slab = c.subclass.as_deref() == Some("slab");
+            if slab {
+                c.class = Class::Slab;
+                // Hai tập (egyptian/humanist_slab) không tách được bằng số đo hiện có (contrast, stress, terminal trùng nhau: eval 04
+                // humanist_slab 0/4): chỉ gán subclass khi tên nói rõ; còn lại để trống thay vì đoán.
+                c.subclass = if named(&["clarendon"]) {
+                    sub("clarendon")
+                } else if named(&["egyptian", "memphis", "rockwell"]) {
+                    sub("egyptian")
+                } else {
+                    None
+                };
+            } else if c.subclass.as_deref() == Some("humanist_oldstyle") {
+                c.subclass = sub(if m.stress_abs.is_some_and(|x| x >= 12.0) && m.contrast.is_some_and(|x| x < 2.6) { "garalde" } else { "venetian_oldstyle" });
+            }
+        }
+        Class::Script => {
+            let joined = m.connect.is_some_and(|x| x >= 0.5);
+            match c.subclass.as_deref() {
+                Some("handwritten") if !joined && !named(&["script"]) => {
+                    c.class = Class::Handwriting;
+                    c.subclass = sub(if named(&["marker", "brush"]) { "marker" } else { "casual_print" });
+                }
+                Some("handwritten") => c.subclass = sub(if m.slant_abs.is_some_and(|x| x < 5.0) { "upright_script" } else if m.contrast.is_some_and(|x| x < 1.3) { "monoline_script" } else { "brush" }),
+                Some("casual_brush") => c.subclass = sub("brush"),
+                Some("formal") => c.subclass = sub("formal_copperplate"),
+                _ => {}
+            }
+        }
+        Class::Sans => {
+            if has("rounded") {
+                c.subclass = sub("rounded");
+            }
+        }
+        Class::Mono => {
+            if named(&["courier", "typewriter"]) {
+                c.subclass = sub("typewriter");
+            } else if named(&["code", "coding", "console", "terminal"]) {
+                c.subclass = sub("coding");
+            }
+        }
+        _ => {}
+    }
+    // --- Usage tính lại từ class v2 cuối cùng (cùng hàm với ghi đè của người dùng)
+    c.usage = usage_for(i, c.candidate.unwrap_or(c.class));
+    // --- Class phụ (hybrid): chỉ để hiển thị/tìm kiếm
+    if c.secondary.is_none() {
+        let semi_serif = m.serif_head.is_some_and(|h| h >= SMALL_HEAD_STRONG) || m.serif_flare.is_some_and(|f| f >= SMALL_FOOT_FLARE);
+        if c.class == Class::Sans && semi_serif {
+            c.secondary = Some(Secondary { class: Class::Serif, subclass: None });
+        } else if c.class == Class::Mono && c.subclass.as_deref() == Some("typewriter") {
+            c.secondary = Some(Secondary { class: Class::Slab, subclass: None });
+        }
+    }
+    // --- Trait hình thái v2 từ số đo (độc lập với class)
+    // trait độc lập với class: chỉ loại Symbol (số đo không có nghĩa); Uncertain vẫn mang trait đo được
+    let measurable = c.class != Class::Symbol;
+    let mut add = |t: &str| {
+        if !c.traits.iter().any(|x| x == t) {
+            c.traits.push(t.to_string());
+        }
+    };
+    if matches!(c.class, Class::Serif | Class::Slab | Class::Sans | Class::Display) && m.contrast_h.is_some_and(|x| x < REVERSE_CONTRAST_H) {
+        add("reverse_contrast");
+    }
+    if measurable && c.class != Class::Script && m.contrast.is_some_and(|x| x >= HIGH_CONTRAST) {
+        add("high_contrast");
+    }
+    if measurable && m.contrast.is_some_and(|x| x <= MONOLINE_MAX) {
+        add("monoline");
+    }
+    c
+}
+
+/// Thanh ngang H dày hơn thân (`contrast_h` = thân ÷ thanh ngang) tới mức này: reverse contrast.
+const REVERSE_CONTRAST_H: f32 = 0.7;
+/// Tỉ lệ nét dày/mỏng của 'o' từ đây là high contrast; tới ngưỡng trên là monoline (nét đều).
+const HIGH_CONTRAST: f32 = 5.0;
+const MONOLINE_MAX: f32 = 1.08;
 
 /// Chọn class theo hình dáng: Symbol, Blackletter, Mono, Script cần đủ điểm; còn lại Serif/Sans. Display không phải class.
 /// Tổng điểm Script+Display tối thiểu để coi là font không dùng cho chữ văn bản.
@@ -667,8 +834,9 @@ fn usage_of(class: Class, i: &ClassifyInput, v: &Votes, traits: &[String]) -> Ve
     // Display là tag mục đích: Script/Blackletter, font có trait hình thái, hoặc đủ bằng chứng nổi bật
     let showy = !traits.is_empty() || v.display_ev() >= DISPLAY_MIN;
     match class {
-        Class::Script | Class::Blackletter => out.push(Usage::Display),
-        Class::Serif | Class::Sans | Class::Mono => {
+        // v2: Slab đi theo nhánh Serif, Handwriting theo Script, Display luôn là chữ trưng bày: cùng một nguồn cho auto và ghi đè
+        Class::Script | Class::Blackletter | Class::Handwriting | Class::Display => out.push(Usage::Display),
+        Class::Serif | Class::Slab | Class::Sans | Class::Mono => {
             let contrast = m.contrast.unwrap_or(1.5);
             if showy || contrast >= 4.0 || i.opsz_max.is_some_and(|o| o >= 72.0) {
                 out.push(Usage::Display);
@@ -676,7 +844,7 @@ fn usage_of(class: Class, i: &ClassifyInput, v: &Votes, traits: &[String]) -> Ve
             if !showy && contrast < 4.0 && m.x_height_em.is_none_or(|x| x >= 0.44) && m.spacing.is_none_or(|s| s >= 0.08) {
                 out.push(Usage::Text);
             }
-            if class != Class::Serif && contrast < 1.6 && m.x_height_em.is_some_and(|x| x >= 0.5) {
+            if !matches!(class, Class::Serif | Class::Slab) && contrast < 1.6 && m.x_height_em.is_some_and(|x| x >= 0.5) {
                 out.push(Usage::Ui);
             }
         }

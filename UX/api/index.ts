@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
   AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
-  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
+  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
 export * from './types';
@@ -42,6 +42,8 @@ export interface Api extends LibraryApi {
   addToCollection(id: number, faces: FaceKeyDto[]): Promise<void>;
   removeFromCollection(id: number, faces: FaceKeyDto[]): Promise<void>;
   listTags(): Promise<TagDto[]>;
+  /** Danh mục tag hệ thống (style/mood/use): chỉ là tag người dùng gán, không đo máy. Tên lưu `namespace:key`. */
+  systemTagCatalog(): Promise<SystemTagGroupDto[]>;
   tagsOf(face: FaceKeyDto): Promise<TagDto[]>;
   createTag(name: string): Promise<TagDto>;
   tagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;

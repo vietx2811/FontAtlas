@@ -89,6 +89,15 @@ fn favorites_collections_tags_roundtrip() {
     assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 1);
     library::untag_faces(&st, t.id, &[a]).unwrap();
     assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 0);
+    // tag hệ thống (style:/mood:/use:): chuẩn hoá, từ chối giá trị ngoài danh mục; namespace lạ là tag người dùng thường
+    let sys = library::create_tag(&st, " Mood: CALM ").unwrap();
+    assert_eq!(sys.name, "mood:calm");
+    assert_eq!(library::create_tag(&st, "mood:calm").unwrap().id, sys.id, "idempotent");
+    assert_eq!(library::create_tag(&st, "style:nope").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::create_tag(&st, "tet:2027").unwrap().name, "tet:2027");
+    let cat = library::system_tag_catalog();
+    assert_eq!(cat.iter().map(|g| g.namespace.as_str()).collect::<Vec<_>>(), ["style", "mood", "use"]);
+    assert!(cat.iter().flat_map(|g| &g.tags).any(|t| t.name == "style:art_deco" && t.label == "Art Deco"));
     library::delete_collection(&st, c.id).unwrap();
     assert!(library::list_collections(&st).unwrap().is_empty());
 }

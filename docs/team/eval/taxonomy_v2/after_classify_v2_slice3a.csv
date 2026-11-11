@@ -1,0 +1,225 @@
+family,class,subs,quality,pred_class,pred_sub,split
+Aboreto,sans,flared,Visual,uncertain,,test
+Akronim,display,shaded_3d,Gf,uncertain,,tune
+Albert Sans,sans,geometric,Gf,sans,geometric,tune
+Aldrich,sans,squarish,Gf,sans,humanist,test
+Alegreya Sans,sans,humanist,Gf,sans,humanist,tune
+Alegreya,serif,venetian_oldstyle,Gf,serif,garalde,test
+Aleo,slab,humanist_slab,Gf,slab,egyptian,test
+Alex Brush,script,formal_copperplate,Gf,script,brush,test
+Allerta Stencil,display,stencil,Gf,display,stencil,test
+Allura,script,formal_copperplate,Gf,script,upright_script,test
+Almendra,script,calligraphic_unjoined,Visual,serif,venetian_oldstyle,tune
+Andada Pro,slab,humanist_slab,Gf,slab,clarendon,tune
+Anonymous Pro,mono,sans_mono,Gf,mono,serif_mono,test
+Antic Slab,slab,egyptian,Gf,slab,egyptian,tune
+Arbutus Slab,slab,clarendon,Gf,slab,clarendon,tune
+Archivo,sans,grotesque,Gf,sans,grotesque,test
+Arvo,slab,egyptian,Gf,slab,egyptian,test
+Bai Jamjuree,sans,squarish,Gf,sans,grotesque,test
+Baloo 2,sans,rounded,Gf,sans,humanist,test
+Barlow,sans,grotesque,Gf,sans,grotesque,tune
+Baskervville,serif,transitional,Gf,serif,transitional,tune
+Be Vietnam Pro,sans,neo_grotesque,Gf,sans,geometric,test
+Bellefair,serif,glyphic,Visual,serif,garalde,tune
+Belleza,sans,flared,Visual,sans,humanist,tune
+Bellota,sans,,Visual,uncertain,,tune
+Berkshire Swash,script,upright_script,Weak,uncertain,,test
+Besley,slab,clarendon,Gf,serif,transitional,test
+Betania Patmos,script,upright_script,Weak,script,formal_copperplate,tune
+Birthstone,script,monoline_script,Visual,script,formal_copperplate,test
+Bitter,slab,humanist_slab,Weak,slab,egyptian,test
+Black Ops One,display,stencil,Gf,uncertain,,tune
+Blinker,sans,squarish,Gf,sans,humanist,test
+Bodoni Moda,serif,didone,Gf,serif,didone,test
+Borel,script,upright_script,Weak,script,formal_copperplate,tune
+Bree Serif,slab,humanist_slab,Gf,slab,egyptian,tune
+Bricolage Grotesque,sans,neo_grotesque,Gf,sans,grotesque,test
+Bungee Inline,display,inline_outline,Gf,display,inline_outline,test
+Bungee Shade,display,shaded_3d,Gf,uncertain,,tune
+Cabin,sans,humanist,Gf,sans,humanist,tune
+Cardo,serif,garalde,Gf,serif,venetian_oldstyle,tune
+Cascadia Code,mono,coding,Weak,mono,coding,test
+Caudex,serif,venetian_oldstyle,Gf,serif,didone,tune
+Caveat,handwriting,casual_print,Gf,handwriting,casual_print,tune
+Chilanka,handwriting,childlike,Weak,sans,geometric,test
+Cinzel Decorative,serif,glyphic,Visual,uncertain,,test
+Cinzel,serif,glyphic,Visual,serif,glyphic,tune
+Comfortaa,sans,rounded,Gf,sans,geometric,tune
+Cormorant Garamond,serif,garalde,Gf,serif,venetian_oldstyle,tune
+Courier Prime,mono,typewriter,Gf,mono,typewriter,test
+Covered By Your Grace,handwriting,marker,Weak,uncertain,,test
+Crete Round,slab,clarendon,Gf,slab,egyptian,tune
+Crimson Pro,serif,garalde,Gf,serif,venetian_oldstyle,test
+Cutive Mono,mono,typewriter,Gf,uncertain,,test
+DM Mono,mono,sans_mono,Gf,mono,sans_mono,tune
+Damion,script,brush,Visual,script,formal_copperplate,test
+Dancing Script,script,monoline_script,Visual,script,formal_copperplate,test
+Dongle,sans,rounded,Gf,uncertain,,test
+EB Garamond,serif,garalde,Gf,serif,venetian_oldstyle,tune
+Eagle Lake,script,calligraphic_unjoined,Visual,script,formal_copperplate,test
+Engagement,script,upright_script,Weak,script,formal_copperplate,tune
+Enriqueta,slab,humanist_slab,Gf,slab,clarendon,test
+Ephesis,script,signature,Weak,handwriting,casual_print,test
+Epunda Slab,slab,clarendon,Gf,uncertain,,tune
+Euphoria Script,script,monoline_script,Visual,script,upright_script,tune
+Ewert,display,shaded_3d,Gf,uncertain,,tune
+Exo 2,sans,squarish,Gf,sans,humanist,test
+Faculty Glyphic,sans,flared,Visual,serif,glyphic,test
+Fascinate Inline,display,inline_outline,Gf,display,inline_outline,test
+Federo,sans,flared,Visual,sans,humanist,test
+Fira Code,mono,coding,Weak,mono,coding,test
+Fira Sans,sans,humanist,Gf,sans,humanist,test
+Foldit,display,shaded_3d,Gf,sans,geometric,tune
+Forum,serif,glyphic,Visual,serif,venetian_oldstyle,test
+Fredoka,sans,rounded,Gf,sans,geometric,tune
+Fuggles,script,signature,Weak,script,brush,tune
+Fuzzy Bubbles,handwriting,casual_print,Gf,uncertain,,test
+GFS Didot,serif,didone,Gf,serif,venetian_oldstyle,test
+Gelasio,serif,transitional,Gf,serif,transitional,test
+Geostar,display,inline_outline,Gf,serif,transitional,test
+Germania One,blackletter,,Gf,blackletter,,tune
+Gloria Hallelujah,handwriting,casual_print,Gf,uncertain,,test
+Gochi Hand,handwriting,childlike,Weak,uncertain,,test
+Grandiflora One,slab,egyptian,Gf,slab,egyptian,test
+Great Vibes,script,formal_copperplate,Gf,script,formal_copperplate,test
+Grenze Gotisch,blackletter,,Gf,blackletter,,test
+Hanken Grotesk,sans,neo_grotesque,Gf,sans,geometric,test
+Headland One,serif,venetian_oldstyle,Gf,serif,garalde,tune
+Heebo,sans,grotesque,Gf,sans,grotesque,tune
+Hepta Slab,slab,egyptian,Gf,slab,egyptian,tune
+Honk,display,shaded_3d,Gf,uncertain,,tune
+IBM Plex Mono,mono,sans_mono,Gf,mono,sans_mono,tune
+IBM Plex Sans,sans,neo_grotesque,Gf,sans,neo_grotesque,test
+Inconsolata,mono,sans_mono,Gf,mono,sans_mono,test
+Indie Flower,handwriting,casual_print,Gf,handwriting,casual_print,tune
+Intel One Mono,mono,coding,Weak,mono,sans_mono,test
+Inter,sans,neo_grotesque,Gf,sans,neo_grotesque,test
+Italianno,script,formal_copperplate,Gf,script,formal_copperplate,tune
+Itim,handwriting,childlike,Weak,uncertain,,tune
+Jersey 10,display,pixel_bitmap,Gf,uncertain,,test
+JetBrains Mono,mono,sans_mono|coding,Gf,mono,sans_mono,tune
+Josefin Slab,slab,egyptian,Gf,slab,egyptian,tune
+Jost,sans,geometric,Gf,uncertain,,test
+Kalam,handwriting,casual_print,Gf,uncertain,,tune
+Kameron,slab,clarendon,Gf,slab,clarendon,tune
+Kaushan Script,script,brush,Visual,script,formal_copperplate,tune
+Kenia,display,stencil,Gf,uncertain,,test
+Kolker Brush,script,brush,Visual,script,brush,test
+Lato,sans,humanist,Gf,sans,humanist,test
+Leckerli One,script,brush,Visual,uncertain,,tune
+Lexend,sans,geometric,Gf,sans,geometric,test
+Libertinus Mono,mono,serif_mono,Gf,mono,serif_mono,test
+Libertinus Sans,sans,flared,Visual,sans,humanist,test
+Libre Baskerville,serif,transitional,Gf,serif,transitional,test
+Libre Bodoni,serif,didone,Gf,serif,didone,tune
+Libre Caslon Text,serif,garalde,Gf,serif,transitional,test
+Libre Franklin,sans,grotesque,Gf,sans,neo_grotesque,tune
+Linden Hill,serif,garalde,Gf,serif,venetian_oldstyle,tune
+Literata,serif,transitional,Gf,serif,venetian_oldstyle,tune
+Lora,serif,transitional,Gf,serif,transitional,test
+M PLUS Rounded 1c,sans,rounded,Gf,sans,rounded,test
+Macondo,script,calligraphic_unjoined,Visual,sans,geometric,test
+Manrope,sans,neo_grotesque,Gf,sans,grotesque,tune
+Marcellus SC,serif,glyphic,Visual,serif,glyphic,test
+Marcellus,serif,glyphic,Visual,serif,glyphic,test
+Mate,serif,venetian_oldstyle,Gf,serif,transitional,tune
+MedievalSharp,script,calligraphic_unjoined,Visual,uncertain,,test
+Merienda,script,monoline_script,Visual,uncertain,,tune
+Michroma,sans,squarish,Gf,sans,geometric,test
+Micro 5,display,pixel_bitmap,Gf,uncertain,,test
+Miltonian,display,inline_outline,Gf,uncertain,,test
+Monoton,display,inline_outline,Gf,uncertain,,tune
+Monsieur La Doulaise,script,formal_copperplate,Gf,script,formal_copperplate,test
+Montaga,serif,venetian_oldstyle,Gf,serif,garalde,tune
+Montagu Slab,slab,clarendon,Gf,slab,clarendon,tune
+Montserrat,sans,geometric,Gf,sans,geometric,test
+Mooli,sans,,Visual,uncertain,,tune
+Mr Dafoe,script,brush,Visual,script,brush,test
+Mr De Haviland,script,signature,Weak,script,brush,tune
+Mynerve,handwriting,casual_print,Gf,uncertain,,test
+Nabla,display,shaded_3d,Gf,uncertain,,tune
+Nanum Pen Script,handwriting,marker,Weak,uncertain,,tune
+Neuton,serif,venetian_oldstyle,Gf,uncertain,,tune
+New Rocker,blackletter,,Gf,uncertain,,tune
+Nothing You Could Do,handwriting,marker,Weak,handwriting,casual_print,test
+Noticia Text,slab,humanist_slab,Gf,serif,garalde,tune
+Noto Sans,sans,humanist,Gf,sans,humanist,tune
+Nunito,sans,rounded,Gf,sans,humanist,test
+Old Standard TT,serif,didone,Gf,serif,didone,test
+Open Sans,sans,humanist,Gf,sans,humanist,test
+Oranienbaum,serif,didone,Gf,serif,didone,tune
+Outfit,sans,geometric,Gf,sans,geometric,tune
+Ovo,serif,venetian_oldstyle,Gf,serif,garalde,test
+PT Sans,sans,humanist,Gf,sans,humanist,test
+PT Serif,serif,transitional,Gf,serif,transitional,tune
+Parisienne,script,formal_copperplate,Gf,script,formal_copperplate,test
+Patrick Hand,handwriting,casual_print,Gf,uncertain,,tune
+Pinyon Script,script,formal_copperplate,Gf,script,formal_copperplate,test
+Pirata One,blackletter,,Gf,uncertain,,tune
+Pixelify Sans,display,pixel_bitmap,Gf,display,pixel_bitmap,test
+Playfair Display,serif,didone,Gf,serif,didone,test
+Playwrite IT Moderna,script,upright_script,Weak,uncertain,,test
+Poppins,sans,geometric,Gf,sans,geometric,test
+Port Lligat Sans,sans,,Visual,uncertain,,test
+Prata,serif,didone,Gf,serif,didone,tune
+Press Start 2P,display,pixel_bitmap,Gf,uncertain,,test
+Public Sans,sans,grotesque,Gf,sans,grotesque,test
+Quicksand,sans,rounded,Gf,sans,geometric,tune
+Qwitcher Grypen,script,signature,Weak,script,formal_copperplate,tune
+Radley,serif,garalde,Gf,serif,venetian_oldstyle,tune
+Rajdhani,sans,squarish,Gf,sans,geometric,tune
+Raleway,sans,geometric,Gf,sans,geometric,test
+Rampart One,display,shaded_3d,Gf,uncertain,,tune
+Red Hat Mono,mono,sans_mono,Gf,mono,sans_mono,tune
+Reenie Beanie,handwriting,marker,Weak,handwriting,casual_print,tune
+Roboto Mono,mono,sans_mono,Gf,mono,sans_mono,test
+Roboto,sans,neo_grotesque,Gf,sans,grotesque,test
+Rokkitt,slab,egyptian,Gf,slab,egyptian,tune
+Rosarivo,serif,venetian_oldstyle,Gf,serif,venetian_oldstyle,tune
+Rufina,serif,didone,Gf,serif,didone,test
+Ruluko,sans,,Visual,uncertain,,test
+Sacramento,script,monoline_script,Visual,script,formal_copperplate,tune
+Saira,sans,squarish,Gf,sans,humanist,test
+Sanchez,slab,humanist_slab,Gf,slab,egyptian,test
+Schibsted Grotesk,sans,grotesque,Gf,sans,grotesque,tune
+Sedgwick Ave,handwriting,marker,Weak,script,brush,test
+Send Flowers,script,monoline_script,Visual,script,monoline_script,test
+Shadows Into Light,handwriting,casual_print,Gf,uncertain,,tune
+Short Stack,handwriting,childlike,Weak,uncertain,,test
+Silkscreen,display,pixel_bitmap,Gf,uncertain,,tune
+Sirin Stencil,display,stencil,Gf,sans,humanist,tune
+Solway,slab,humanist_slab,Gf,slab,egyptian,tune
+Sorts Mill Goudy,serif,garalde,Gf,serif,venetian_oldstyle,test
+Source Code Pro,mono,coding,Weak,mono,coding,test
+Source Sans 3,sans,humanist,Gf,sans,humanist,tune
+Source Serif 4,serif,transitional,Gf,serif,transitional,tune
+Space Grotesk,sans,grotesque,Gf,sans,geometric,tune
+Space Mono,mono,sans_mono,Gf,mono,sans_mono,tune
+Stardos Stencil,display,stencil,Gf,display,stencil,tune
+Stick No Bills,display,stencil,Gf,sans,geometric,test
+Sue Ellen Francisco,handwriting,marker,Weak,uncertain,,test
+Swanky and Moo Moo,handwriting,childlike,Weak,uncertain,,test
+Tangerine,script,formal_copperplate,Gf,uncertain,,tune
+Tenor Sans,sans,flared,Visual,sans,humanist,test
+Texturina,blackletter,,Gf,serif,,tune
+Tilt Prism,display,inline_outline,Gf,uncertain,,test
+Tinos,serif,transitional,Gf,serif,transitional,test
+Tiny5,display,pixel_bitmap,Gf,uncertain,,tune
+Train One,display,inline_outline,Gf,uncertain,,test
+Uncial Antiqua,script,calligraphic_unjoined,Visual,serif,didone,test
+UnifrakturCook,blackletter,,Gf,uncertain,,test
+UnifrakturMaguntia,blackletter,,Gf,uncertain,,test
+Urbanist,sans,geometric,Gf,sans,geometric,test
+VT323,display,pixel_bitmap,Gf,mono,sans_mono,test
+Varela Round,sans,rounded,Gf,sans,geometric,test
+Victor Mono,mono,coding,Weak,mono,sans_mono,tune
+Vujahday Script,script,signature,Weak,script,formal_copperplate,tune
+Wallpoet,display,stencil,Gf,sans,geometric,tune
+Waterfall,script,signature,Weak,script,brush,tune
+Whisper,script,monoline_script,Visual,script,formal_copperplate,tune
+WindSong,script,signature,Weak,script,formal_copperplate,tune
+Work Sans,sans,grotesque,Gf,sans,grotesque,test
+Xanh Mono,mono,serif_mono,Gf,mono,sans_mono,test
+Yesteryear,script,brush,Visual,script,upright_script,test
+Zilla Slab,slab,humanist_slab,Gf,slab,egyptian,test
