@@ -439,9 +439,9 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
 
-/// v8 (0.3.0 auto-activation): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
+/// v9 (0.3.0 auto-activation): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
 /// vì SQLite không sửa được CHECK) và nhật ký các lần app thiết kế hỏi font.
-pub(crate) const USER_V8: &str = r#"
+pub(crate) const USER_AUTO_ACTIVATION: &str = r#"
 ALTER TABLE activation_reasons RENAME TO activation_reasons_v7;
 CREATE TABLE activation_reasons (
   hash     BLOB NOT NULL REFERENCES activation_state(hash) ON DELETE CASCADE,
@@ -574,7 +574,7 @@ CREATE TABLE activation_replaced (
 CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_V8];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
@@ -631,11 +631,11 @@ pub fn create_user_v5_for_test(path: &Path) {
     }
     c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
 }
-/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (v7 = sau taxonomy v2), để kiểm migration lên v8.
+/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (v8 = sau duplicates), để kiểm migration lên v9.
 #[doc(hidden)]
-pub fn create_user_v7_for_test(path: &Path) {
+pub fn create_user_v8_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user v7");
-    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_V8).expect("v8 migration in list");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_AUTO_ACTIVATION).expect("auto-activation migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }

@@ -2,7 +2,7 @@ mod common;
 use common::*;
 use fontatlas_store::{
     ActivationReason, ActivationRow, ActivationScope, ActivationStatus, AutoApp, AutoLogEntry, DesiredState, Store,
-    USER_FILE, create_user_v7_for_test, AUTO_LOG_KEEP,
+    USER_FILE, create_user_v8_for_test, AUTO_LOG_KEEP,
 };
 
 fn row(hash: [u8; 32]) -> ActivationRow {
@@ -108,10 +108,10 @@ fn log_keeps_newest_and_orders_desc() {
 }
 
 #[test]
-fn user_v8_migrates_v7_keeping_reasons_and_backs_up() {
+fn user_v9_migrates_v8_keeping_reasons_and_backs_up() {
     let d = tmp();
     let user = d.path().join(USER_FILE);
-    create_user_v7_for_test(&user);
+    create_user_v8_for_test(&user);
     let hash = vec![9u8; 32];
     {
         let c = rusqlite::Connection::open(&user).unwrap();
@@ -126,9 +126,9 @@ fn user_v8_migrates_v7_keeping_reasons_and_backs_up() {
     let (mut s, rep) = Store::open(d.path()).unwrap();
     assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     let b = rep.user_backup.expect("có backup trước khi migrate");
-    assert!(b.file_name().unwrap().to_string_lossy().starts_with("user.v7."));
+    assert!(b.file_name().unwrap().to_string_lossy().starts_with("user.v8."));
     let bc = rusqlite::Connection::open(b).unwrap();
-    assert_eq!(bc.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)).unwrap(), 7);
+    assert_eq!(bc.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)).unwrap(), 8);
     assert_eq!(bc.query_row("SELECT count(*) FROM activation_reasons", [], |r| r.get::<_, i64>(0)).unwrap(), 2);
 
     let mut h = [0u8; 32];
