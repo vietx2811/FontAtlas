@@ -33,7 +33,8 @@ export function ViewOptions(): React.JSX.Element {
   const desc = eff.desc;
   const sortChanged = !isDefaultSort(sortPrefs) || !!sortPrefs.explicit;
   const changed = sortChanged || fields.length !== DEFAULT_CARD_FIELDS.length || DEFAULT_CARD_FIELDS.some(k => !fields.includes(k));
-  const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) requestAnimationFrame(() => btn.current?.focus()); }, []);
+  // Trả focus ĐỒNG BỘ (nút luôn còn trong DOM); rAF chỉ là dự phòng khi focus bị cướp lại ngay sau khi popover gỡ.
+  const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) { btn.current?.focus(); requestAnimationFrame(() => { if (document.activeElement !== btn.current) btn.current?.focus(); }); } }, []);
 
   // ⌘J: bật/tắt. Mở rồi thì luôn đóng qua close(true) (trả focus về nút). Đóng → mở chỉ khi không gõ chữ / IME / hộp thoại, Compare... (shortcutBlocked).
   const openRef = useRef(open); openRef.current = open;
