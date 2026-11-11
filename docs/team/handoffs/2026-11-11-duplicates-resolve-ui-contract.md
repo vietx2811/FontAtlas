@@ -33,8 +33,10 @@ Quyết định của Lead (2026-11-11): mặc định **Ẩn** (không đụng 
 ### Gửi `resolve_apply`
 ```ts
 { items: [{ kind, key, keeperPath, loserPaths, memberPaths }], action: 'hide' | 'trash',
-  explicitTrashPaths?: string[], mode?: 'chosen' | 'all_safe' }   // mode mặc định 'chosen'
+  explicitTrashPaths?: string[], mode?: 'chosen' | 'all_safe',    // mode mặc định 'chosen'
+  joinBatch?: string }                                            // batchId của request trước (xem dưới)
 ```
+- **`joinBatch`**: một thao tác của người dùng gồm nhiều request (vd Thùng rác nhóm A rồi chỉ-ẩn nhóm B) thì request sau gửi `joinBatch: <batchId của request đầu>` để mọi quyết định cùng một `batchId`; hoàn tác cả mẻ bằng `resolve_undo` một lần, không cần gom theo thời gian. Batch phải tồn tại, do phiên app này tạo và còn ít nhất một quyết định chưa hoàn tác; sai thì `resolve_apply` trả LỖI lệnh (không đổi gì) với `code`: `batch_not_found` | `batch_other_session` | `batch_undone`. Bỏ trống = mẻ mới.
 - **`memberPaths` bắt buộc ở `chosen`**: gửi lại nguyên văn `PlanItemDto.memberPaths` của kế hoạch người dùng đang xem. Nhóm hiện tại có tập đường dẫn khác (đã quét lại, có người xoá/thêm tệp) → `plan_stale`, không áp dụng; UI nên lấy lại `resolve_preview` rồi cho người dùng xem lại.
 - **`mode: 'all_safe'`** ("Giải quyết tất cả an toàn"): backend TÍNH LẠI quy tắc cho từng nhóm, chỉ áp dụng nhóm `autoSafe` và bỏ qua `keeperPath`/`loserPaths`/`memberPaths` UI gửi (chỉ cần `kind`+`key`). Nhóm đã không còn an toàn → `not_auto_safe`.
 - Người dùng bấm "Đổi bản giữ" (`chosen`) thì hoán đổi `keeperPath` với một đường dẫn trong nhóm. Một đường dẫn không thể vừa làm bản giữ vừa làm bản thua (trong cùng request hay với quyết định đã có): `keeper_conflict` / `keeper_is_hidden`.

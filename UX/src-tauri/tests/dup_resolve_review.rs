@@ -127,6 +127,7 @@ fn req(p: &ResolvePlanDto, action: ResolveActionDto) -> ResolveRequestDto {
         action,
         explicit_trash_paths: vec![],
         mode: ResolveModeDto::Chosen,
+        join_batch: None,
     }
 }
 
@@ -356,7 +357,7 @@ fn undo_of_a_chain_must_go_newest_first_but_a_batch_undo_orders_itself() {
     // 1) v2 giữ, v1 bị ẩn (v3 không đụng)
     let r1 = dup_resolve::resolve_apply(
         &st,
-        &ResolveRequestDto { items: vec![item("v2", &["v1"], all_members.clone())], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen },
+        &ResolveRequestDto { items: vec![item("v2", &["v1"], all_members.clone())], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
         &no_trash,
         10,
     )
@@ -366,7 +367,7 @@ fn undo_of_a_chain_must_go_newest_first_but_a_batch_undo_orders_itself() {
     let members2: Vec<String> = all_members.iter().filter(|m| !m.contains("/v1/")).cloned().collect();
     let r2 = dup_resolve::resolve_apply(
         &st,
-        &ResolveRequestDto { items: vec![item("v3", &["v2"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen },
+        &ResolveRequestDto { items: vec![item("v3", &["v2"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
         &no_trash,
         11,
     )
