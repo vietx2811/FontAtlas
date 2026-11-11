@@ -262,7 +262,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         keys: &[FaceKey],
         app: fontatlas_store::AutoApp,
     ) -> Result<ActivationReport, ActivationError> {
-        self.run(store, keys, ActivationReason::Auto(app), Scope::Session, true, ConflictPolicy::Ask, false, &mut |_| {})
+        self.run(store, keys, ActivationReason::Auto(app), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
     }
 
     pub fn activate_collection(

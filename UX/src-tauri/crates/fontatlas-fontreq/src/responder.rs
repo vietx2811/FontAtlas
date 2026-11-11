@@ -225,15 +225,22 @@ impl Responder {
                 None => {}
             }
         }
-        // Cùng key đang có việc nền (kể cả đã quá hạn của người hỏi trước): chờ chung, KHÔNG sinh thêm luồng.
-        let existing = self.running.lock().ok().and_then(|m| m.get(&key).cloned());
-        if let Some(sh) = existing {
-            return self.wait_shared(&sh, &key);
-        }
-        if self.inflight.fetch_add(1, Ordering::SeqCst) >= MAX_INFLIGHT {
-            self.inflight.fetch_sub(1, Ordering::SeqCst);
-            return Answer::Nothing;
-        }
+        // Kiểm "đã có việc cùng key" và đăng ký việc mới trong CÙNG MỘT lần khoá `running` (nếu không, hai request đến cùng lúc
+        // đều thấy trống và đều sinh luồng). Có việc cũ (kể cả đã quá hạn của người hỏi trước): chờ chung, KHÔNG sinh thêm luồng.
+        let shared = {
+            let Ok(mut m) = self.running.lock() else { return Answer::Nothing };
+            if let Some(sh) = m.get(&key).cloned() {
+                drop(m);
+                return self.wait_shared(&sh, &key);
+            }
+            if self.inflight.fetch_add(1, Ordering::SeqCst) >= MAX_INFLIGHT {
+                self.inflight.fetch_sub(1, Ordering::SeqCst);
+                return Answer::Nothing;
+            }
+            let sh = Arc::new(Shared { result: Mutex::new(None), done: Condvar::new() });
+            m.insert(key.clone(), sh.clone());
+            sh
+        };
         let app = self.namer.app_name(pid).unwrap_or_else(|| "other".into());
         let er = EnsureRequest {
             v: 1,
@@ -241,16 +248,6 @@ impl Responder {
             doc: None,
             fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone() }],
         };
-        let shared = Arc::new(Shared { result: Mutex::new(None), done: Condvar::new() });
-        match self.running.lock() {
-            Ok(mut m) => {
-                m.insert(key.clone(), shared.clone());
-            }
-            Err(_) => {
-                self.inflight.fetch_sub(1, Ordering::SeqCst);
-                return Answer::Nothing;
-            }
-        }
         // Việc chạy ở luồng phụ có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi VÀ hàng đợi của app khác.
         // Luồng phụ vẫn chạy nốt và ghi kết quả vào cache cho lần hỏi sau.
         let (ensure, cache, ttl, slow_ttl, k2) = (self.ensure.clone(), self.cache.clone(), self.ttl, self.slow_ttl, key.clone());

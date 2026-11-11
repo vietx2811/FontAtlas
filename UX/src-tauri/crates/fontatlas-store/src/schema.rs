@@ -439,7 +439,7 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
 
-/// v9 (0.3.0 auto-activation): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
+/// v10 (0.3.0 auto-activation; số do vị trí trong USER_MIGRATIONS, hiện sau USER_REPLACED = v9): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
 /// vì SQLite không sửa được CHECK) và nhật ký các lần app thiết kế hỏi font.
 pub(crate) const USER_AUTO_ACTIVATION: &str = r#"
 ALTER TABLE activation_reasons RENAME TO activation_reasons_v7;
@@ -631,9 +631,9 @@ pub fn create_user_v5_for_test(path: &Path) {
     }
     c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
 }
-/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (v8 = sau duplicates), để kiểm migration lên v9.
+/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (sau USER_REPLACED), để kiểm migration lên v10.
 #[doc(hidden)]
-pub fn create_user_v8_for_test(path: &Path) {
+pub fn create_user_pre_auto_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user v7");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_AUTO_ACTIVATION).expect("auto-activation migration in list");
     for m in &USER_MIGRATIONS[..n] {
