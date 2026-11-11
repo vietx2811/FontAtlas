@@ -92,6 +92,40 @@ impl From<&RescanStats> for RescanStatsDto {
     }
 }
 
+/// Hệ quả của việc gỡ nguồn — `removeSourcePreview` (trước khi xác nhận) và kết quả của `removeSource` (đã làm).
+/// Dữ liệu người dùng (Dự án, Collection, Tag, Yêu thích, ghi đè phân loại) KHÔNG bao giờ bị xoá khi gỡ nguồn:
+/// font chỉ có ở nguồn đó hiện `missing` trong Dự án, ẩn khỏi lưới, còn nguyên trong Collection/Tag; thêm lại nguồn thì khớp lại theo hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RemoveSourceReportDto {
+    /// Số vị trí file của nguồn bị bỏ khỏi thư viện.
+    pub removed_locations: u32,
+    /// Số face không còn vị trí nào (chỉ có ở nguồn này).
+    pub faces_left_without_location: u32,
+    /// Số Dự án chứa các face đó (face hiện `missing` trong Dự án, không bị xoá).
+    pub cases_affected: u32,
+    /// Số Collection chứa các face đó (giữ nguyên).
+    pub collections_affected: u32,
+    /// Số Tag đang gán cho các face đó (giữ nguyên).
+    pub tags_affected: u32,
+    /// Số font của nguồn đang bật; không tự tắt — người dùng tắt ở "Đang bật".
+    pub active_fonts: u32,
+}
+
+impl From<fontatlas_store::SourceRemovalReport> for RemoveSourceReportDto {
+    fn from(r: fontatlas_store::SourceRemovalReport) -> Self {
+        RemoveSourceReportDto {
+            removed_locations: r.removed_locations,
+            faces_left_without_location: r.faces_left_without_location,
+            cases_affected: r.cases_affected,
+            collections_affected: r.collections_affected,
+            tags_affected: r.tags_affected,
+            active_fonts: r.active_fonts,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]

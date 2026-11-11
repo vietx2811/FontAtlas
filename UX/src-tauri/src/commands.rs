@@ -58,7 +58,8 @@ macro_rules! command_list {
             async legacy_retry() -> Result<LegacyStateDto, CmdError>;
             async list_sources() -> Result<Vec<SourceDto>, CmdError>;
             async add_source(path: String) -> Result<SourceDto, CmdError>;
-            async remove_source(source_id: i64) -> Result<(), CmdError>;
+            async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
+            async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
@@ -541,8 +542,16 @@ pub async fn add_source(
 pub async fn remove_source(
     state: State<'_, Arc<AppState>>,
     source_id: i64,
-) -> Result<(), CmdError> {
+) -> Result<RemoveSourceReportDto, CmdError> {
     blocking(&state, move |s| sources::remove_source(s, source_id)).await
+}
+
+#[tauri::command]
+pub async fn remove_source_preview(
+    state: State<'_, Arc<AppState>>,
+    source_id: i64,
+) -> Result<RemoveSourceReportDto, CmdError> {
+    blocking(&state, move |s| sources::remove_source_preview(s, source_id)).await
 }
 
 #[tauri::command]

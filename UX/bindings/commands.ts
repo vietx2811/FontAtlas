@@ -96,7 +96,8 @@ export interface TauriCommandMap {
   legacy_retry: { args: Record<string, never>; result: LegacyStateDto };
   list_sources: { args: Record<string, never>; result: SourceDto[] };
   add_source: { args: { path: string }; result: SourceDto };
-  remove_source: { args: { sourceId: number }; result: null };
+  remove_source: { args: { sourceId: number }; result: RemoveSourceReportDto };
+  remove_source_preview: { args: { sourceId: number }; result: RemoveSourceReportDto };
   rescan_sources: { args: { sourceIds: number[] | null }; result: null };
   scan_pause: { args: Record<string, never>; result: null };
   scan_resume: { args: Record<string, never>; result: null };

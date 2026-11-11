@@ -241,7 +241,12 @@ export function createMockApi(o: MockOptions = {}): Api {
       simulateScan(s.id);
       return ok(s);
     },
-    async removeSource(id) { sources = sources.filter(s => s.id !== id); },
+    async removeSourcePreview(id) {
+      if (!sources.some(s => s.id === id)) throw new CmdError('not_found', 'source');
+      const n = countOf(id);
+      return { removedLocations: n, facesLeftWithoutLocation: n, casesAffected: 0, collectionsAffected: [...collections.values()].filter(c => rows.some(r => sourceOf(r) === id && c.faces.has(keyOf(r)))).length, tagsAffected: [...tags.values()].filter(t => rows.some(r => sourceOf(r) === id && t.faces.has(keyOf(r)))).length, activeFonts: 0 };
+    },
+    async removeSource(id) { const r = await this.removeSourcePreview(id); sources = sources.filter(s => s.id !== id); return r; },
     async rescanSources() {},
 
     async getFamilyStyles(family) {

@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use app_lib::dto::analysis::ClassificationOverrideDto;
 use app_lib::dto::library::*;
 use app_lib::services::activation::NoActivation;
-use app_lib::services::{boot, library, sources, system};
+use app_lib::services::{analysis, boot, cases, library, sources, system};
 use app_lib::state::{AppDirs, AppState};
 
 fn core_fixture(name: &str) -> PathBuf {
@@ -275,4 +276,69 @@ fn rename_and_delete_tag_follow_system_tag_rules() {
     assert_eq!(library::delete_tag(&st, t.id).unwrap(), 1, "số face đã bỏ thẻ");
     assert_eq!(library::list_tags(&st).unwrap().iter().map(|x| x.id).collect::<Vec<_>>(), [other.id]);
     assert_eq!(library::delete_tag(&st, t.id).unwrap_err().code, "not_found");
+}
+
+#[test]
+fn removing_a_source_keeps_all_user_data_and_reports_real_numbers() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let rows = all(&st).items;
+    let (a, b) = (key_of(&rows[0]), key_of(&rows[1]));
+
+    // dữ liệu người dùng quanh font `a`
+    library::set_favorite(&st, &a, true).unwrap();
+    let col = library::create_collection(&st, "Menu", None).unwrap();
+    library::add_to_collection(&st, col.id, std::slice::from_ref(&a)).unwrap();
+    let tag = library::create_tag(&st, "retro").unwrap();
+    library::tag_faces(&st, tag.id, &[a.clone(), b.clone()]).unwrap();
+    let case = cases::create_case(&st, Some("Dự án"), None, None).unwrap();
+    cases::add_to_case(&st, Some(case.id), std::slice::from_ref(&a), None).unwrap();
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: a.clone(), class: "serif".into(), subclass: None }).unwrap();
+
+    let src = sources::list_sources(&st).unwrap()[0].id;
+    let preview = sources::remove_source_preview(&st, src).unwrap();
+    assert_eq!(
+        (preview.removed_locations, preview.faces_left_without_location, preview.cases_affected, preview.collections_affected, preview.tags_affected),
+        (2, 2, 1, 1, 1),
+        "xem trước = số thật, không đổi gì"
+    );
+    assert_eq!(all(&st).total, 2, "xem trước không gỡ");
+
+    let done = sources::remove_source(&st, src).unwrap();
+    assert_eq!(done, preview, "báo cáo của lệnh gỡ khớp bản xem trước");
+    assert_eq!(all(&st).total, 0, "font rời lưới");
+
+    // dữ liệu người dùng GIỮ NGUYÊN
+    assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 2, "Tag vẫn gán cho 2 face");
+    assert_eq!(library::tags_of(&st, &a).unwrap()[0].name, "retro");
+    assert_eq!(library::list_collections(&st).unwrap()[0].item_count, 1);
+    let c = cases::get_case(&st, case.id).unwrap();
+    assert_eq!((c.faces.len(), c.faces[0].missing), (1, true), "Dự án giữ font, đánh dấu missing");
+    let overrides = st.with_store(|s| Ok(s.classification_overrides().unwrap())).unwrap();
+    assert_eq!(overrides.len(), 1, "ghi đè phân loại còn");
+
+    // thêm lại nguồn: khớp lại theo hash
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let back = library::query_faces(&st, &FaceQueryDto { favorites_only: true, ..Default::default() }).unwrap();
+    assert_eq!((back.total, back.items[0].hash_hex.clone()), (1, a.hash_hex.clone()), "yêu thích khớp lại");
+    assert_eq!(library::query_faces(&st, &FaceQueryDto { tag_ids: vec![tag.id], ..Default::default() }).unwrap().total, 2);
+    let c = cases::get_case(&st, case.id).unwrap();
+    assert!(!c.faces[0].missing, "Dự án hết missing khi font trở lại");
+}
+
+#[test]
+fn removing_a_source_keeps_faces_that_live_in_another_source() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    // nguồn thứ hai có cùng file (khác thư mục, cùng hash)
+    let other = d.path().join("Other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(dir.join("roboto.ttf"), other.join("roboto.ttf")).unwrap();
+    sources::add_source(&st, other.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let first = sources::list_sources(&st).unwrap().into_iter().find(|s| s.path.as_deref() == Some(dir.to_str().unwrap())).unwrap();
+    let r = sources::remove_source(&st, first.id).unwrap();
+    assert_eq!((r.removed_locations, r.faces_left_without_location, r.active_fonts), (1, 0, 0), "face còn ở nguồn kia");
+    assert_eq!(all(&st).total, 1);
 }

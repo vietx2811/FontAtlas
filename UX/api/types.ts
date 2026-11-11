@@ -3,7 +3,7 @@ export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisS
 import type {
   PreviewCacheInfoDto, ProblemDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
@@ -13,7 +13,7 @@ import type { FacePage, FaceQuery, FaceRow } from '../features/library-grid/type
 
 export type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,

@@ -99,7 +99,8 @@ export function createTauriApi(): Api {
     // Nguồn, quét
     listSources: () => call('list_sources'),
     addSource: path => call('add_source', { path }),
-    removeSource: sourceId => none(call('remove_source', { sourceId })),
+    removeSource: sourceId => call('remove_source', { sourceId }),
+    removeSourcePreview: sourceId => call('remove_source_preview', { sourceId }),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),
     scanStatus: () => call('scan_status'),
