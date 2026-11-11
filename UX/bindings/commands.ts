@@ -117,6 +117,8 @@ export interface TauriCommandMap {
   system_tag_catalog: { args: Record<string, never>; result: SystemTagGroupDto[] };
   tags_of: { args: { face: FaceKeyDto }; result: TagDto[] };
   create_tag: { args: { name: string }; result: TagDto };
+  rename_tag: { args: { id: number; name: string }; result: TagDto };
+  delete_tag: { args: { id: number }; result: number };
   tag_faces: { args: { tagId: number; faces: FaceKeyDto[] }; result: null };
   untag_faces: { args: { tagId: number; faces: FaceKeyDto[] }; result: null };
   list_problems: { args: Record<string, never>; result: ProblemDto[] };

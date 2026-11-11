@@ -117,6 +117,8 @@ export function createTauriApi(): Api {
     systemTagCatalog: () => call('system_tag_catalog'),
     tagsOf: face => call('tags_of', { face }),
     createTag: name => call('create_tag', { name }),
+    renameTag: (id, name) => call('rename_tag', { id, name }),
+    deleteTag: id => call('delete_tag', { id }),
     tagFaces: (tagId, faces) => none(call('tag_faces', { tagId, faces })),
     untagFaces: (tagId, faces) => none(call('untag_faces', { tagId, faces })),
     revealInFinder: face => none(call('reveal_in_finder', { face })),

@@ -268,6 +268,14 @@ export function createMockApi(o: MockOptions = {}): Api {
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
     async createTag(name) { name = canonicalSystemTag(name); const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
     async tagFaces(id, faces) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); faces.forEach(f => t.faces.add(keyOf(f))); },
+    async renameTag(id, name) {
+      const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag');
+      const n = canonicalSystemTag(name.trim()); if (!fold(n)) throw new CmdError('invalid_arg', 'empty tag name');
+      if ([...tags.values()].some(x => x.id !== id && fold(x.name) === fold(n))) throw new CmdError('conflict', 'tag name exists');
+      if (/^(style|mood|use):/.test(t.name) && !/^(style|mood|use):/.test(n)) throw new CmdError('invalid_arg', 'system tag');
+      t.name = n; return ok({ id, name: n, faceCount: t.faces.size });
+    },
+    async deleteTag(id) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); tags.delete(id); return t.faces.size; },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
     async revealLocation(path) { if (!rows.some(r => r.path === path) && !path.includes('/')) throw new CmdError('not_found', 'path'); },

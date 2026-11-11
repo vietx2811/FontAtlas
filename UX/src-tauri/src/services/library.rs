@@ -485,6 +485,37 @@ pub fn create_tag(state: &AppState, name: &str) -> Result<TagDto, CmdError> {
     })
 }
 
+/// Đổi tên Tag. Tiền tố dành riêng (`style:`/`mood:`/`use:`) theo luật `create_tag`: tên phải thuộc danh mục (lưu dạng
+/// chuẩn); Tag hệ thống không đổi thành tên thường (mất nghĩa). Trùng tên với Tag khác → `conflict`.
+pub fn rename_tag(state: &AppState, id: i64, name: &str) -> Result<TagDto, CmdError> {
+    use fontatlas_core::system_tags::{canonical_name, check_name};
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(CmdError::invalid_arg("tên tag trống"));
+    }
+    let canon;
+    let name = match check_name(name) {
+        Some(true) => {
+            canon = canonical_name(name).unwrap_or_else(|| name.to_string());
+            canon.as_str()
+        }
+        Some(false) => return Err(CmdError::invalid_arg(format!("tag hệ thống không có trong danh mục: {name}"))),
+        None => name,
+    };
+    state.with_user(|u| {
+        let current = u.tags()?.into_iter().find(|t| t.id == id).ok_or_else(|| CmdError::not_found(format!("tag #{id}")))?;
+        if check_name(&current.name) == Some(true) && check_name(name).is_none() {
+            return Err(CmdError::invalid_arg("không thể đổi Tag hệ thống thành tên thường"));
+        }
+        Ok(u.rename_tag(id, name)?.into())
+    })
+}
+
+/// Xoá Tag (Tag hệ thống xoá được: chỉ là lựa chọn của người dùng, tạo lại được). Trả số face đã bị bỏ thẻ.
+pub fn delete_tag(state: &AppState, id: i64) -> Result<u32, CmdError> {
+    state.with_user(|u| Ok(u.delete_tag(id)?))
+}
+
 pub fn tag_faces(state: &AppState, tag_id: i64, faces: &[FaceKeyDto]) -> Result<(), CmdError> {
     let keys = keys_of(faces)?;
     state.with_user(|u| Ok(u.tag_faces(tag_id, &keys).map(|_| ())?))

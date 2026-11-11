@@ -123,3 +123,37 @@ fn tags_dedupe_by_folded_name_and_keep_first_spelling() {
     assert_eq!(s.tags_of(&key(1, 1)).unwrap()[0].id, a);
     assert_eq!(s.untag_faces(a, &[key(1, 1)]).unwrap(), 1);
 }
+
+#[test]
+fn rename_tag_keeps_assignments_and_never_merges_silently() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let a = s.tag("Cổ điển").unwrap();
+    let b = s.tag("Hiện đại").unwrap();
+    s.tag_faces(a, &[key(1, 0), key(2, 0)]).unwrap();
+    let t = s.rename_tag(a, "  Retro ").unwrap();
+    assert_eq!((t.id, t.name.as_str(), t.face_count), (a, "Retro", 2), "giữ nguyên face_tags, trim tên");
+    assert_eq!(s.tags_of(&key(2, 0)).unwrap()[0].name, "Retro");
+    // đổi hoa/thường/dấu của chính nó hợp lệ
+    assert_eq!(s.rename_tag(b, "HIEN DAI").unwrap().name, "HIEN DAI");
+    // trùng tên (không phân biệt hoa/thường/dấu) với tag KHÁC → conflict, không đổi gì
+    assert_eq!(s.rename_tag(a, "hien dai").unwrap_err().code(), "conflict");
+    assert_eq!(s.tags().unwrap().iter().find(|t| t.id == a).unwrap().name, "Retro");
+    assert_eq!(s.rename_tag(a, "   ").unwrap_err().code(), "invalid_arg");
+    assert_eq!(s.rename_tag(999, "X").unwrap_err().code(), "not_found");
+}
+
+#[test]
+fn delete_tag_cascades_to_assignments_and_reports_the_count() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let a = s.tag("a").unwrap();
+    let b = s.tag("b").unwrap();
+    s.tag_faces(a, &[key(1, 0), key(1, 1), key(2, 0)]).unwrap();
+    s.tag_faces(b, &[key(1, 0)]).unwrap();
+    assert_eq!(s.delete_tag(a).unwrap(), 3, "số face bị bỏ thẻ");
+    assert_eq!(s.tags().unwrap().len(), 1);
+    assert_eq!(s.tags_of(&key(1, 0)).unwrap().iter().map(|t| t.id).collect::<Vec<_>>(), [b], "thẻ khác còn nguyên");
+    assert_eq!(s.delete_tag(a).unwrap_err().code(), "not_found");
+    assert_eq!(count(&s, "SELECT count(*) FROM u.face_tags WHERE tag_id NOT IN (SELECT tag_id FROM u.tags)"), 0, "không mồ côi");
+}

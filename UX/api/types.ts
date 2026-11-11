@@ -27,7 +27,7 @@ export type SimilarSource = SimilarSourceDto;
 
 /** Lỗi lệnh (6a: `CmdError {code, message, detail?}`); lệnh thật reject bằng object thường, lớp này gói lại để `instanceof` được. */
 export type CmdErrorCode =
-  | 'store_unavailable' | 'not_found' | 'not_comparable' | 'invalid_arg' | 'nested_source' | 'busy'
+  | 'store_unavailable' | 'not_found' | 'not_comparable' | 'invalid_arg' | 'conflict' | 'nested_source' | 'busy'
   | 'model_missing' | 'cancelled' | 'io' | 'insufficient_disk' | 'activation_unsupported' | 'internal';
 
 export class CmdError extends Error {

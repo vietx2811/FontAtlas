@@ -106,3 +106,20 @@ describe('familyGroups (R3)', () => {
     expect(new Set(groups.map(g => g.family)).size).toBe(groups.length);
   });
 });
+
+describe('renameTag / deleteTag (R6)', () => {
+  it('rename keeps assignments, conflicts on a duplicate, delete reports the face count', async () => {
+    const api = createMockApi();
+    const a = await api.createTag('retro'); const b = await api.createTag('vintage');
+    const face = (await api.queryFaces({ limit: 1 })).items[0];
+    await api.tagFaces(a.id, [face]);
+    expect(await api.renameTag(a.id, ' Nostalgia ')).toMatchObject({ id: a.id, name: 'Nostalgia', faceCount: 1 });
+    await expect(api.renameTag(a.id, 'VINTAGE')).rejects.toMatchObject({ code: 'conflict' });
+    await expect(api.renameTag(a.id, '  ')).rejects.toMatchObject({ code: 'invalid_arg' });
+    await expect(api.renameTag(9999, 'x')).rejects.toMatchObject({ code: 'not_found' });
+    expect(await api.deleteTag(a.id)).toBe(1);
+    expect((await api.listTags()).some(t => t.id === a.id)).toBe(false);
+    await expect(api.deleteTag(a.id)).rejects.toMatchObject({ code: 'not_found' });
+    expect((await api.listTags()).some(t => t.id === b.id)).toBe(true);
+  });
+});

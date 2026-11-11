@@ -47,6 +47,10 @@ export interface Api extends LibraryApi {
   systemTagCatalog(): Promise<SystemTagGroupDto[]>;
   tagsOf(face: FaceKeyDto): Promise<TagDto[]>;
   createTag(name: string): Promise<TagDto>;
+  /** R6: đổi tên Tag, giữ gán thẻ. Lỗi: `invalid_arg` (tên trống / tiền tố style:|mood:|use: ngoài danh mục / Tag hệ thống → tên thường), `conflict` (trùng Tag khác, không gộp ngầm), `not_found`. */
+  renameTag(id: number, name: string): Promise<TagDto>;
+  /** R6: xoá Tag + mọi gán thẻ; trả số face đã bị bỏ thẻ (để nêu trong xác nhận). Không đụng font/Collection/Dự án. */
+  deleteTag(id: number): Promise<number>;
   tagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   untagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   revealInFinder(face: FaceKeyDto): Promise<void>;

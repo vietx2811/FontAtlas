@@ -253,3 +253,26 @@ fn family_groups_follows_query_faces_order_and_filters() {
     assert_eq!(g.len(), 1);
     assert_eq!(g[0].family, "Roboto");
 }
+
+#[test]
+fn rename_and_delete_tag_follow_system_tag_rules() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _) = scanned(d.path(), &["roboto.ttf"]);
+    let a = key_of(&all(&st).items[0]);
+    let t = library::create_tag(&st, "retro").unwrap();
+    let other = library::create_tag(&st, "vintage").unwrap();
+    library::tag_faces(&st, t.id, std::slice::from_ref(&a)).unwrap();
+    assert_eq!(library::rename_tag(&st, t.id, "  Nostalgia ").unwrap().name, "Nostalgia");
+    assert_eq!(library::tags_of(&st, &a).unwrap()[0].name, "Nostalgia", "gán thẻ còn nguyên");
+    assert_eq!(library::rename_tag(&st, t.id, "VINTAGE").unwrap_err().code, "conflict");
+    assert_eq!(library::rename_tag(&st, t.id, " ").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::rename_tag(&st, 9999, "x").unwrap_err().code, "not_found");
+    // thường → tiền tố dành riêng: chỉ nhận tên trong danh mục, lưu dạng chuẩn
+    assert_eq!(library::rename_tag(&st, t.id, "style:nope").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::rename_tag(&st, t.id, "Mood: CALM").unwrap().name, "mood:calm");
+    // Tag hệ thống không đổi thành tên thường
+    assert_eq!(library::rename_tag(&st, t.id, "plain").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::delete_tag(&st, t.id).unwrap(), 1, "số face đã bỏ thẻ");
+    assert_eq!(library::list_tags(&st).unwrap().iter().map(|x| x.id).collect::<Vec<_>>(), [other.id]);
+    assert_eq!(library::delete_tag(&st, t.id).unwrap_err().code, "not_found");
+}

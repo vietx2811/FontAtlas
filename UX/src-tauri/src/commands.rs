@@ -79,6 +79,8 @@ macro_rules! command_list {
             async system_tag_catalog() -> Result<Vec<SystemTagGroupDto>, CmdError>;
             async tags_of(face: FaceKeyDto) -> Result<Vec<TagDto>, CmdError>;
             async create_tag(name: String) -> Result<TagDto, CmdError>;
+            async rename_tag(id: i64, name: String) -> Result<TagDto, CmdError>;
+            async delete_tag(id: i64) -> Result<u32, CmdError>;
             async tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async list_problems() -> Result<Vec<ProblemDto>, CmdError>;
@@ -320,6 +322,8 @@ cmd!(list_tags() -> Vec<TagDto> => |s| library::list_tags(s));
 cmd!(system_tag_catalog() -> Vec<SystemTagGroupDto> => |_s| Ok(library::system_tag_catalog()));
 cmd!(tags_of(face: FaceKeyDto) -> Vec<TagDto> => |s| library::tags_of(s, &face));
 cmd!(create_tag(name: String) -> TagDto => |s| library::create_tag(s, &name));
+cmd!(rename_tag(id: i64, name: String) -> TagDto => |s| library::rename_tag(s, id, &name));
+cmd!(delete_tag(id: i64) -> u32 => |s| library::delete_tag(s, id));
 cmd!(tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::tag_faces(s, tag_id, &faces));
 cmd!(untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::untag_faces(s, tag_id, &faces));
 cmd!(list_problems() -> Vec<ProblemDto> => |s| library::list_problems(s));
