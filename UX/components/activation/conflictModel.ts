@@ -2,7 +2,7 @@ import type { ConflictDto, FaceKeyDto, FaceRow } from '../../api';
 import { t } from '../../i18n';
 
 /** Một font cần xác nhận: tên family/kiểu đọc từ thư viện, và các bản trùng đang cài ở máy. */
-export type ConflictItem = { family: string; style: string; conflicts: ConflictDto[] };
+export type ConflictItem = { hashHex?: string; family: string; style: string; conflicts: ConflictDto[] };
 /** Gộp theo family: mỗi family một dòng ("BT Annam Neue · 8 kiểu"). */
 export type ConflictGroup = { family: string; styles: string[]; conflicts: ConflictDto[] };
 
@@ -19,9 +19,47 @@ export function ownerNote(c: Pick<ConflictDto, 'owner' | 'existingPath'>): strin
     case 'adobe_fonts': return t('act.owner.by', { app: 'Adobe Fonts' });
     case 'right_font': return t('act.owner.by', { app: 'RightFont' });
     case 'font_base': return t('act.owner.by', { app: 'FontBase' });
+    case 'typeface': return t('act.owner.by', { app: 'Typeface' });
+    case 'suitcase': return t('act.owner.by', { app: 'Suitcase / Connect' });
     case 'font_atlas': return t('act.owner.atlas');
     default: return t('act.owner.other');
   }
+}
+
+/** "Thay thế" theo ma trận — backend tính (đường dẫn đã canonical hoá); UI dùng nguyên, không tự đoán từ đường dẫn. */
+export type ReplaceTier = ConflictDto['replaceTier'];
+export const replaceTierOf = (c: Pick<ConflictDto, 'replaceTier'>): ReplaceTier => c.replaceTier;
+
+const APP_NAME: Partial<Record<ConflictDto['owner'], string>> = {
+  right_font: 'RightFont', font_base: 'FontBase', typeface: 'Typeface', adobe_fonts: 'Creative Cloud (Adobe Fonts)', suitcase: 'Suitcase / Connect',
+};
+
+export type ReplaceAdvice = { tier: ReplaceTier; apps: string[]; unknownApp: boolean; protectedPath: string | null };
+
+/** Gộp mọi xung đột của hộp thoại (cùng tập backend xét: KHÔNG bỏ sameFile): tier tệ nhất thắng (protected > guide > replace),
+ *  tên các app đã nhận diện, và có bản "app lạ" không. */
+export function replaceAdvice(items: readonly ConflictItem[]): ReplaceAdvice {
+  const all = items.flatMap(i => i.conflicts);
+  const rank: Record<ReplaceTier, number> = { replace: 0, guide: 1, protected: 2 };
+  let tier: ReplaceTier = 'replace';
+  const apps: string[] = [];
+  let unknownApp = false;
+  let protectedPath: string | null = null;
+  for (const c of all) {
+    const k = replaceTierOf(c);
+    if (rank[k] > rank[tier]) tier = k;
+    if (k === 'protected') protectedPath ??= c.existingPath;
+    const app = APP_NAME[c.owner];
+    if (app) { if (!apps.includes(app)) apps.push(app); } else if (c.owner === 'other') unknownApp = true;
+  }
+  return { tier, apps, unknownApp, protectedPath };
+}
+
+/** Xung đột người dùng đã thấy, gửi kèm "Thay bằng bản này": backend từ chối nếu tập này đã đổi (TOCTOU). */
+export function confirmedOf(items: readonly ConflictItem[]): { hashHex: string; existingPath: string }[] {
+  const out = new Map<string, { hashHex: string; existingPath: string }>();
+  for (const it of items) if (it.hashHex) for (const c of it.conflicts) out.set(`${it.hashHex}\n${c.existingPath}`, { hashHex: it.hashHex, existingPath: c.existingPath });
+  return [...out.values()];
 }
 
 export function groupByFamily(items: readonly ConflictItem[]): ConflictGroup[] {
@@ -49,6 +87,6 @@ export function toItems(rows: readonly FaceRow[], keys: readonly FaceKeyDto[], c
     const r = byKey.get(`${k.hashHex}:${k.faceIndex}`);
     const ps = conflicts[i]?.[0]?.postscriptName ?? '';
     const [fam, ...rest] = ps.split('-');
-    return { family: r?.family ?? (fam || k.hashHex.slice(0, 8)), style: r?.subfamily ?? (rest.join('-') || 'Regular'), conflicts: conflicts[i] ?? [] };
+    return { hashHex: k.hashHex, family: r?.family ?? (fam || k.hashHex.slice(0, 8)), style: r?.subfamily ?? (rest.join('-') || 'Regular'), conflicts: conflicts[i] ?? [] };
   });
 }

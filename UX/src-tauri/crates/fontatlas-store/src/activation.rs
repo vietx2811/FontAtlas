@@ -536,3 +536,89 @@ mod tests {
         );
     }
 }
+
+
+// ---- sổ khôi phục: bản cũ đã gỡ để thay bằng bản của Font Atlas (user.db) ----
+
+/// Một lần gỡ bản cũ, ghi lại để có nút "Khôi phục bản cũ" (cùng URL + scope).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewReplaced {
+    pub hash: [u8; 32],
+    pub old_path: String,
+    pub owner: String,
+    pub scopes: Vec<ActivationScope>,
+    pub postscript_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplacedRow {
+    pub id: i64,
+    pub hash: [u8; 32],
+    pub old_path: String,
+    pub owner: String,
+    pub scopes: Vec<ActivationScope>,
+    pub postscript_names: Vec<String>,
+    pub created_at: i64,
+    pub restored_at: Option<i64>,
+}
+
+fn replaced_from_row(r: &rusqlite::Row) -> rusqlite::Result<ReplacedRow> {
+    let hash: Vec<u8> = r.get(1)?;
+    let scopes: String = r.get(4)?;
+    let names: String = r.get(5)?;
+    Ok(ReplacedRow {
+        id: r.get(0)?,
+        hash: hash.try_into().unwrap_or([0; 32]),
+        old_path: r.get(2)?,
+        owner: r.get(3)?,
+        scopes: serde_json::from_str::<Vec<String>>(&scopes).unwrap_or_default().iter().filter_map(|s| ActivationScope::parse(s)).collect(),
+        postscript_names: serde_json::from_str(&names).unwrap_or_default(),
+        created_at: r.get(6)?,
+        restored_at: r.get(7)?,
+    })
+}
+
+const REPLACED_COLS: &str = "id, hash, old_path, owner, scopes, postscript_names, created_at, restored_at";
+
+impl Store {
+    pub fn add_replaced(&mut self, e: &NewReplaced) -> Result<i64, StoreError> {
+        let scopes: Vec<&str> = e.scopes.iter().map(|s| s.as_str()).collect();
+        self.conn.execute(
+            "INSERT INTO u.activation_replaced(hash, old_path, owner, scopes, postscript_names, created_at) VALUES (?1,?2,?3,?4,?5,?6)",
+            params![
+                &e.hash[..],
+                e.old_path,
+                e.owner,
+                serde_json::to_string(&scopes).unwrap_or_else(|_| "[]".into()),
+                serde_json::to_string(&e.postscript_names).unwrap_or_else(|_| "[]".into()),
+                now_ms()
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_replaced(&self, id: i64) -> Result<Option<ReplacedRow>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(&format!("SELECT {REPLACED_COLS} FROM u.activation_replaced WHERE id=?1"), [id], replaced_from_row)
+            .optional()?)
+    }
+
+    /// Các bản cũ đã gỡ mà chưa khôi phục, cũ nhất trước.
+    pub fn unrestored_replaced(&self) -> Result<Vec<ReplacedRow>, StoreError> {
+        let mut st = self
+            .conn
+            .prepare(&format!("SELECT {REPLACED_COLS} FROM u.activation_replaced WHERE restored_at IS NULL ORDER BY id"))?;
+        Ok(st.query_map([], replaced_from_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// true nếu vừa đánh dấu (chưa khôi phục trước đó).
+    pub fn mark_replaced_restored(&mut self, id: i64) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("UPDATE u.activation_replaced SET restored_at=?2 WHERE id=?1 AND restored_at IS NULL", params![id, now_ms()])? > 0)
+    }
+
+    /// Bỏ một dòng sổ (thay thế không thành công, đã trả lại bản cũ).
+    pub fn delete_replaced(&mut self, id: i64) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("DELETE FROM u.activation_replaced WHERE id=?1", [id])? > 0)
+    }
+}

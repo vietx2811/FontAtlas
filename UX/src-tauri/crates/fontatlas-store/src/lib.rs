@@ -19,7 +19,7 @@ mod schema;
 mod user;
 
 pub use activation::{
-    ActivationReason, ActivationRow, ActivationScope, ActivationStatus, DesiredState, FaceName, FileLocation, FileTarget,
+    ActivationReason, ActivationRow, ActivationScope, ActivationStatus, DesiredState, FaceName, FileLocation, FileTarget, NewReplaced, ReplacedRow,
     PrunedReasons,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };
@@ -38,5 +38,5 @@ pub use langs::{LangCount, LangPending, LangProgress, LangRow};
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;
 pub use pairs::{NewPair, SavedPair};
-pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test};
+pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test, create_user_pre_replaced_for_test};
 pub use user::{Collection, Source, SourceKind, Tag};

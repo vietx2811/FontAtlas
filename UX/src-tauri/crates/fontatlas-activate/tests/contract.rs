@@ -30,6 +30,8 @@ fn result(i: u8, outcome: FileOutcome) -> FileResult {
         requested_faces: vec![0],
         extra_faces: if i == 1 { vec![1, 2] } else { vec![] },
         outcome,
+        replaced: vec![],
+            warning: None,
     }
 }
 
@@ -41,6 +43,7 @@ fn activation_report_json_matches_contract_fixture() {
             .into(),
         owner: Owner::RightFont,
         same_file: false,
+        replace_tier: fontatlas_activate::ReplaceTier::Replace,
     };
     let outcomes = vec![
         FileOutcome::Ready,

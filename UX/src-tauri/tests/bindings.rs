@@ -718,12 +718,15 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         requested_faces: vec![0],
         extra_faces: if i == 1 { vec![1, 2] } else { vec![] },
         outcome: o,
+        replaced: vec![],
+        warning: None,
     };
     let conflict = fa::Conflict {
         postscript_name: "LibreBaskerville-Regular".into(),
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf".into(),
         owner: fa::Owner::RightFont,
         same_file: false,
+        replace_tier: fa::ReplaceTier::Replace,
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

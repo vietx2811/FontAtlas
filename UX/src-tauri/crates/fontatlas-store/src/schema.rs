@@ -530,13 +530,40 @@ CREATE TABLE dup_link_moves (
 CREATE INDEX dup_link_moves_res ON dup_link_moves(resolution_id);
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE];
+/// Sổ "bản cũ đã gỡ để thay bằng bản của Font Atlas" (nhánh feat/replace-activation). Số phiên bản do vị trí trong
+/// `USER_MIGRATIONS` quyết định; khi merge cạnh migration của nhánh khác chỉ cần đổi thứ tự mục trong danh sách.
+pub(crate) const USER_REPLACED: &str = r#"
+CREATE TABLE activation_replaced (
+  id          INTEGER PRIMARY KEY,
+  hash        BLOB NOT NULL CHECK (length(hash) = 32),   -- font của Font Atlas đã thay thế
+  old_path    TEXT NOT NULL,                              -- URL canonical của bản đã gỡ
+  owner       TEXT NOT NULL,                              -- đoán theo đường dẫn: right_font, font_base, ...
+  scopes      TEXT NOT NULL,                              -- JSON ["persistent","session"]: scope mà lệnh gỡ trả OK
+  postscript_names TEXT NOT NULL DEFAULT '[]',
+  created_at  INTEGER NOT NULL,
+  restored_at INTEGER
+);
+CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
 pub fn create_user_pre_taxonomy_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user pre-taxonomy");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_TAXONOMY_V2).expect("taxonomy migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+
+/// Chỉ cho test: user.db ngay TRƯỚC migration sổ "thay thế" (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_replaced_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-replaced");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_REPLACED).expect("replaced migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }
