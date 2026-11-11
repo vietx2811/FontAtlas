@@ -124,6 +124,10 @@ fn row(id: i64, h: u8, family: &str, sub: &str, w: u16, italic: bool) -> FaceRow
         on_cloud_only: false,
         is_favorite: id == 1,
         added_at: 1_700_000_000_000 + id,
+        release_year: if id % 3 == 0 { None } else { Some(2010 + id as u16) },
+        release_year_source: if id % 3 == 0 { None } else { Some("copyright".into()) },
+        file_created_at: Some(1_600_000_000_000 + id),
+        file_created_source: Some("disk".into()),
     }
 }
 
@@ -506,7 +510,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
             v(&SettingsDto {
                 embed_enabled: true,
                 license_notice_ack: false,
-                ui_lang: "vi".into(),
+                ui_lang: None,
                 sample_text: "Phở bò Hà Nội".into(),
                 project_vi_default: true,
                 keep_active_on_exit: false,
@@ -718,12 +722,15 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         requested_faces: vec![0],
         extra_faces: if i == 1 { vec![1, 2] } else { vec![] },
         outcome: o,
+        replaced: vec![],
+        warning: None,
     };
     let conflict = fa::Conflict {
         postscript_name: "LibreBaskerville-Regular".into(),
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf".into(),
         owner: fa::Owner::RightFont,
         same_file: false,
+        replace_tier: fa::ReplaceTier::Replace,
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

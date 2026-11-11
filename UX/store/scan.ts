@@ -3,6 +3,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api } from '../api';
 import { openPrivacySettings } from '../privacy';
 import { useNoticeStore } from './notices';
+import { t } from '../i18n';
 
 export const BUMP_THROTTLE_MS = 1500;
 
@@ -49,12 +50,12 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
       if (d?.source === 'app' && d.op === 'opendir' && (d.reason === 'timeout' || d.reason === 'permission_denied')) {
         // Không đọc được thư mục vì chưa có quyền: font đã quét giữ nguyên, chỉ đánh dấu nguồn cần quyền.
         set(s => ({ access: { ...s.access, [e.sourceId]: d.reason === 'timeout' ? 'timeout' : 'denied' } }));
-        void api.listSources().then(list => list.find(x => x.id === e.sourceId)?.name ?? 'nguồn này', () => 'nguồn này').then(name =>
+        void api.listSources().then(list => list.find(x => x.id === e.sourceId)?.name ?? t('scan.thisSource'), () => t('scan.thisSource')).then(name =>
           useNoticeStore.getState().push({
-            kind: 'error', text: `Không đọc được “${name}”: cần quyền truy cập thư mục này.`,
-            action: { label: 'Cấp quyền', run: () => { void openPrivacySettings(); } },
+            kind: 'error', text: t('scan.noAccess', { name }),
+            action: { label: t('scan.grant'), run: () => { void openPrivacySettings(); } },
           }));
-      } else useNoticeStore.getState().push({ kind: 'error', text: `Quét nguồn lỗi (${e.error.code}): ${e.error.message}` });
+      } else useNoticeStore.getState().push({ kind: 'error', text: t('scan.fail', { code: e.error.code, msg: e.error.message }) });
     } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (Date.now() - last > 200) bumpNow(); } // `finished` vừa tải lại rồi
   });
   try {

@@ -27,7 +27,8 @@ fn split(reasons: &[ActivationReason]) -> (bool, Vec<i64>) {
         .iter()
         .filter_map(|r| match r {
             ActivationReason::Collection(id) => Some(*id),
-            ActivationReason::Manual => None,
+            // Auto không giữ font trước người dùng: không tính vào "collection còn giữ".
+            ActivationReason::Manual | ActivationReason::Auto(_) => None,
         })
         .collect();
     (manual, colls)
@@ -133,7 +134,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         what: Lift,
     ) -> Result<FileResult, ActivationError> {
         let mut res =
-            FileResult { hash_hex: hex(&hash), path: None, requested_faces, extra_faces: vec![], outcome: FileOutcome::Busy };
+            FileResult { hash_hex: hex(&hash), path: None, requested_faces, extra_faces: vec![], outcome: FileOutcome::Busy, replaced: vec![], warning: None };
         let Some(_guard) = self.take(hash) else { return Ok(res) };
         let (row, target) = {
             let s = relock(store);
@@ -164,6 +165,8 @@ impl<E: ActivationEngine> ActivationService<E> {
         let left = relock(store).with_tx(|tx| {
             let left: Vec<ActivationReason> = match what {
                 Lift::Manual(DeactivatePolicy::Ask) => {
+                    // Người dùng tắt tay thì thắng lý do `auto:*` (app sẽ hỏi lại nếu còn cần).
+                    tx.execute("DELETE FROM u.activation_reasons WHERE hash=?1 AND reason GLOB 'auto:*'", [&hash[..]])?;
                     fontatlas_store::remove_activation_reason_tx(tx, &hash, ActivationReason::Manual)?
                 }
                 Lift::Collection(id) => {
@@ -262,6 +265,8 @@ impl<E: ActivationEngine> ActivationService<E> {
                     code: "scope_unsettled".into(),
                     message: "font chưa đăng ký ổn định nên chưa đổi được phạm vi; hãy tắt rồi bật lại".into(),
                 },
+                replaced: vec![],
+            warning: None,
             });
         }
         let rows: Vec<ActivationRow> =
@@ -273,6 +278,8 @@ impl<E: ActivationEngine> ActivationService<E> {
                 requested_faces: vec![],
                 extra_faces: vec![],
                 outcome: FileOutcome::Busy,
+                replaced: vec![],
+            warning: None,
             };
             let Some(_guard) = self.take(row.hash) else {
                 rep.push(res);

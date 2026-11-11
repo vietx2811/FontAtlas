@@ -1,8 +1,9 @@
 import type { DuplicateGroupDto } from '../../api';
+import { localeTag } from '../../i18n';
 
-const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3, useGrouping: false });
+const nf = { format: (r: number): string => new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 3, useGrouping: false }).format(r) };
 export const revisionText = (r: number | null): string => (r === null || !Number.isFinite(r) ? '—' : nf.format(r));
-export const dateText = (sec: number | null): string => (sec === null || !Number.isFinite(sec) ? '—' : new Date(sec * 1000).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+export const dateText = (sec: number | null): string => (sec === null || !Number.isFinite(sec) ? '—' : new Date(sec * 1000).toLocaleDateString(localeTag(), { day: '2-digit', month: '2-digit', year: 'numeric' }));
 
 const graphemes = (s: string): string[] => {
   const seg = (Intl as { Segmenter?: new (l?: string, o?: object) => { segment(s: string): Iterable<{ segment: string }> } }).Segmenter;

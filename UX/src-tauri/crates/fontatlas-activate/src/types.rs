@@ -35,8 +35,29 @@ pub enum Owner {
     AdobeFonts,
     RightFont,
     FontBase,
+    /// Đoán theo đường dẫn có thành phần `Typeface`.
+    Typeface,
+    /// Extensis Connect / Suitcase Fusion — đoán theo đường dẫn.
+    Suitcase,
     FontAtlas,
     Other,
+}
+
+impl Owner {
+    /// Chuỗi snake_case ổn định (giống serde), ghi vào sổ khôi phục.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Owner::System => "system",
+            Owner::UserInstalled => "user_installed",
+            Owner::AdobeFonts => "adobe_fonts",
+            Owner::RightFont => "right_font",
+            Owner::FontBase => "font_base",
+            Owner::Typeface => "typeface",
+            Owner::Suitcase => "suitcase",
+            Owner::FontAtlas => "font_atlas",
+            Owner::Other => "other",
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -86,6 +107,8 @@ pub enum ConflictPolicy {
     #[default]
     Ask,
     Proceed,
+    /// "Tắt bản cũ và bật bản này": gỡ các bản đăng ký xung đột (nếu ma trận cho phép) rồi bật bản của Font Atlas.
+    Replace,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -97,6 +120,8 @@ pub struct Conflict {
     /// Nội dung file đang cài GIỐNG HỆT file trong thư viện (cùng kích thước, từng byte): font đã dùng được rồi,
     /// không cần hỏi. Chỉ khác phiên bản/khác file mới là xung đột thật.
     pub same_file: bool,
+    /// Ma trận "Thay thế" cho bản này, tính ở backend trên đường dẫn đã canonical hoá (UI dùng nguyên, không tự đoán).
+    pub replace_tier: ReplaceTier,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -132,6 +157,53 @@ pub struct FileResult {
     /// Face khác của cùng file (TTC) cũng được kích hoạt / tắt theo.
     pub extra_faces: Vec<u32>,
     pub outcome: FileOutcome,
+    /// Bản cũ đã gỡ để thay thế (policy `Replace`); mỗi mục có `id` để "Khôi phục bản cũ".
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replaced: Vec<ReplacedFont>,
+    /// Đã làm xong việc được yêu cầu nhưng có điều người dùng cần biết (vd `replace_not_effective`: font của ta đã bật
+    /// nhưng bản khác vẫn đang cung cấp cùng tên). Kết quả vẫn là `Activated`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacedFont {
+    pub id: i64,
+    pub path: String,
+    pub owner: Owner,
+    /// Scope mà lệnh gỡ trả OK (khôi phục đăng ký lại đúng các scope này).
+    pub scopes: Vec<fontatlas_store::ActivationScope>,
+}
+
+/// Ma trận "Thay thế" (xem docs/team/research/2026-11-11-replace-activation.md §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplaceTier {
+    /// Gỡ được qua CoreText và có thể khôi phục.
+    Replace,
+    /// Chỉ hướng dẫn người dùng tắt trong app đó (Adobe, Connect/Suitcase).
+    Guide,
+    /// Không bao giờ đụng: /System, /Library/Fonts, ~/Library/Fonts.
+    Protected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestoreOutcome {
+    Restored,
+    AlreadyRestored,
+    /// File bản cũ không còn: giữ nguyên sổ để thử lại khi ổ cắm lại.
+    MissingFile,
+    /// File bản cũ nằm trên ổ cloud và chưa tải về: không đăng ký (sẽ treo / tải ngầm); giữ sổ.
+    NotDownloaded,
+}
+
+/// Xung đột mà người dùng đã thấy và đồng ý thay: (hash file của thư viện, đường dẫn bản đang cài).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmedConflict {
+    pub hash: [u8; 32],
+    pub existing_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]

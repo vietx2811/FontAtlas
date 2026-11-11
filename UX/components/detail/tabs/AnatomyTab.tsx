@@ -10,16 +10,16 @@ import { Tooltip } from '../../ui/Tooltip';
 import { NoteMark } from '../../ui/noteMark';
 export { AXIS_META } from './measurements';
 
-const CATEGORY_TEXT: Record<string, Record<string, string>> = {
-  a_storeys: { '1': 'a một tầng', '2': 'a hai tầng' }, g_storeys: { '1': 'g một tầng', '2': 'g hai tầng' },
-  serif_foot: { sans: 'không chân', serif: 'có chân', uncertain: 'chưa rõ phân loại' },
-};
-const REASONS: Record<string, string> = {
-  no_latin_lowercase: 'thiếu chữ thường Latin', missing_glyph: 'thiếu glyph cần đo', no_outlines: 'không có đường nét', low_contrast: 'tương phản quá thấp để đo', degenerate: 'đường nét không đủ để đo',
-};
+const categoryText = (key: string, value: string): string | undefined => ({
+  a_storeys: { '1': t('anat.a1'), '2': t('anat.a2') }, g_storeys: { '1': t('anat.g1'), '2': t('anat.g2') },
+  serif_foot: { sans: t('anat.sf.sans'), serif: t('anat.sf.serif'), uncertain: t('anat.sf.uncertain') },
+} as Record<string, Record<string, string>>)[key]?.[value];
+const reasonText = (r: string): string | undefined => ({
+  no_latin_lowercase: t('anat.r.no_latin_lowercase'), missing_glyph: t('anat.r.missing_glyph'), no_outlines: t('anat.r.no_outlines'), low_contrast: t('anat.r.low_contrast'), degenerate: t('anat.r.degenerate'),
+} as Record<string, string>)[r];
 
 export function percentileWord(p: number): string {
-  return p < .2 ? 'rất thấp' : p < .4 ? 'thấp' : p < .6 ? 'trung bình' : p < .8 ? 'cao' : 'rất cao';
+  return p < .2 ? t('anat.p.vlow') : p < .4 ? t('anat.p.low') : p < .6 ? t('anat.p.mid') : p < .8 ? t('anat.p.high') : t('anat.p.vhigh');
 }
 
 export type GuideLine = { id: 'cap' | 'x' | 'baseline'; y: number };
@@ -33,18 +33,18 @@ export function glyphLines(axes: AxisReadingDto[], size: number, baseline: numbe
   out.push({ id: 'baseline', y: baseline });
   return out;
 }
-const LINE_LABEL = { cap: 'cap', x: 'x', baseline: 'nền' } as const;
+const lineLabel = (id: 'cap' | 'x' | 'baseline'): string => (id === 'baseline' ? t('anat.line.base') : id);
 
 function AxisRow({ a }: { a: AxisReadingDto }): React.JSX.Element {
   const meta = AXIS_META[a.key] ?? { label: a.key };
   const failed = a.quality === 'failed';
   const numeric = !failed && !['a_storeys', 'g_storeys'].includes(a.key) && a.rawValue !== null && Number.isFinite(a.rawValue);
-  const category = CATEGORY_TEXT[a.key]?.[String(a.value)];
+  const category = categoryText(a.key, String(a.value));
   const estimated = a.quality === 'estimated';
   const missing = !numeric && !category;
   const noRaw = a.key === 'serif_foot' && !numeric && !failed;
   const pct = !failed && !missing && a.percentile !== null ? `P${Math.round(a.percentile * 100)} · ${percentileWord(a.percentile)}` : null;
-  const noteText = failed ? REASONS[a.reason ?? ''] ?? a.reason ?? t('anat.reasonUnknown')
+  const noteText = failed ? reasonText(a.reason ?? '') ?? a.reason ?? t('anat.reasonUnknown')
     : [missing ? t('anat.noData') : noRaw ? t('anat.noRaw') : estimated ? t('anat.estimated') : category && numeric ? category : null, pct && `${pct} (${t('anat.percentileTip')})`].filter(Boolean).join(' · ');
   return (
     <Tooltip label={[a.method, a.rawValue === null ? null : t('anat.rawValue', { v: a.rawValue })].filter(Boolean).join(' · ')}>
@@ -87,7 +87,7 @@ export function AnatomyTab({ detail, family }: { detail: FaceDetailDto; family: 
         {lines.map(l => (
           <g key={l.id}>
             <line data-testid="guide-line" data-line={l.id} x1="6" x2="294" y1={l.y} y2={l.y} stroke="var(--accent)" strokeWidth="0.8" strokeDasharray={l.id === 'baseline' ? undefined : '3 3'} />
-            <text x="294" y={l.y - 3} textAnchor="end" fontSize="8" fill="var(--muted)" fontFamily="var(--font-ui)">{LINE_LABEL[l.id]}</text>
+            <text x="294" y={l.y - 3} textAnchor="end" fontSize="8" fill="var(--muted)" fontFamily="var(--font-ui)">{lineLabel(l.id)}</text>
           </g>
         ))}
         <text data-testid="hxg-text" x="14" y={BASE} fontSize={SIZE} fill="var(--fg)" style={hxgStyle(family)}>Hxg</text>

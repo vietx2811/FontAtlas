@@ -92,6 +92,40 @@ impl From<&RescanStats> for RescanStatsDto {
     }
 }
 
+/// Hệ quả của việc gỡ nguồn — `removeSourcePreview` (trước khi xác nhận) và kết quả của `removeSource` (đã làm).
+/// Dữ liệu người dùng (Dự án, Collection, Tag, Yêu thích, ghi đè phân loại) KHÔNG bao giờ bị xoá khi gỡ nguồn:
+/// font chỉ có ở nguồn đó hiện `missing` trong Dự án, ẩn khỏi lưới, còn nguyên trong Collection/Tag; thêm lại nguồn thì khớp lại theo hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RemoveSourceReportDto {
+    /// Số vị trí file của nguồn bị bỏ khỏi thư viện.
+    pub removed_locations: u32,
+    /// Số face không còn vị trí nào (chỉ có ở nguồn này).
+    pub faces_left_without_location: u32,
+    /// Số Dự án chứa các face đó (face hiện `missing` trong Dự án, không bị xoá).
+    pub cases_affected: u32,
+    /// Số Collection chứa các face đó (giữ nguyên).
+    pub collections_affected: u32,
+    /// Số Tag đang gán cho các face đó (giữ nguyên).
+    pub tags_affected: u32,
+    /// Số font của nguồn đang bật; không tự tắt — người dùng tắt ở "Đang bật".
+    pub active_fonts: u32,
+}
+
+impl From<fontatlas_store::SourceRemovalReport> for RemoveSourceReportDto {
+    fn from(r: fontatlas_store::SourceRemovalReport) -> Self {
+        RemoveSourceReportDto {
+            removed_locations: r.removed_locations,
+            faces_left_without_location: r.faces_left_without_location,
+            cases_affected: r.cases_affected,
+            collections_affected: r.collections_affected,
+            tags_affected: r.tags_affected,
+            active_fonts: r.active_fonts,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
@@ -190,6 +224,18 @@ pub struct FaceRowDto {
     pub is_favorite: bool,
     #[ts(type = "number")]
     pub added_at: i64,
+    /// Năm phát hành ƯỚC LƯỢNG (độ tin cậy trung bình-thấp): năm trong dòng copyright, nếu không có thì `head.created`,
+    /// rồi `head.modified`; giá trị rõ ràng sai (0, 1904, tương lai) bị bỏ. `null` = không rõ hoặc bản phân tích cũ chưa
+    /// có dữ liệu (analyzer < core-0.8.0, có sau khi phân tích lại).
+    pub release_year: Option<u16>,
+    /// `copyright` | `head_created` | `head_modified`; `null` khi `releaseYear` là `null`.
+    pub release_year_source: Option<String>,
+    /// Ngày tạo file sớm nhất (ms từ epoch) trong các vị trí còn thấy; `null` = không đọc được / chưa quét lại.
+    /// Độ tin cậy thấp làm "ngày font ra đời": sao chép/đồng bộ đặt lại ngày.
+    #[ts(type = "number | null")]
+    pub file_created_at: Option<i64>,
+    /// `disk` | `cloud_sync` (file trên ổ cloud: có thể là lúc đồng bộ); `null` khi `fileCreatedAt` là `null`.
+    pub file_created_source: Option<String>,
     /// Chỉ báo ngôn ngữ trên thẻ, theo `FaceQueryDto.badgeLang` (mặc định `vie`). `null` khi mã ngôn ngữ lạ.
     /// `viMissing` giữ nguyên cho tương thích; giao diện dùng `langBadge` thay chỉ báo `−N`.
     pub lang_badge: Option<LangBadgeDto>,
@@ -219,6 +265,10 @@ impl From<FaceRow> for FaceRowDto {
             on_cloud_only: r.on_cloud_only,
             is_favorite: r.is_favorite,
             added_at: r.added_at,
+            release_year: r.release_year,
+            release_year_source: r.release_year_source,
+            file_created_at: r.file_created_at,
+            file_created_source: r.file_created_source,
             lang_badge,
         }
     }
@@ -254,6 +304,10 @@ pub enum SortKeyDto {
     Family,
     Weight,
     Added,
+    /// Năm phát hành ước lượng; không rõ luôn cuối bất kể chiều.
+    Released,
+    /// Ngày tạo file sớm nhất; không đọc được luôn cuối bất kể chiều.
+    FileCreated,
     Match,
 }
 
@@ -264,6 +318,8 @@ impl From<SortKeyDto> for SortKey {
             SortKeyDto::Family => SortKey::Family,
             SortKeyDto::Weight => SortKey::Weight,
             SortKeyDto::Added => SortKey::Added,
+            SortKeyDto::Released => SortKey::Released,
+            SortKeyDto::FileCreated => SortKey::FileCreated,
             SortKeyDto::Match => SortKey::Match,
         }
     }
@@ -361,6 +417,11 @@ pub struct FaceQueryDto {
     pub width_class: Option<[u16; 2]>,
     /// Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
     pub var_axis_match: VarAxisMatchDto,
+    /// `true`: `queryFaces` xếp theo NHÓM family (mỗi family liền nhau; thứ tự nhóm theo `sort`/`descending`:
+    /// family → tên, weight/added/released/file_created → kiểu nhẹ nhất|cũ nhất khi tăng, nặng nhất|mới nhất khi giảm,
+    /// match → điểm cao nhất; không có giá trị → cuối). Trong nhóm: Weight tăng → thẳng trước nghiêng → tên.
+    /// `familyGroups` với cùng truy vấn trả khoảng `[start, start+count)` của từng nhóm trong thứ tự này.
+    pub group_by_family: bool,
 }
 
 /// Bật/tắt khớp theo dải trục Variable. `wdth` (%) quy về class theo bảng OS/2.
@@ -375,6 +436,28 @@ pub struct VarAxisMatchDto {
 impl Default for VarAxisMatchDto {
     fn default() -> Self {
         VarAxisMatchDto { wght: true, wdth: true }
+    }
+}
+
+/// Một nhóm family trong kết quả `familyGroups` (xem `FaceQueryDto.groupByFamily`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct FamilyGroupDto {
+    pub family: String,
+    /// Vị trí face đầu của nhóm trong thứ tự `queryFaces` (`groupByFamily = true`): khớp `offset` của `pagedFaces`.
+    pub start: u32,
+    /// Số face của family trong truy vấn.
+    pub count: u32,
+    /// Số kiểu khớp bộ lọc (= `count`).
+    pub match_count: u32,
+    /// Tổng số kiểu của family trong thư viện, không áp bộ lọc — chip "matchCount/styleTotal kiểu".
+    pub style_total: u32,
+}
+
+impl From<fontatlas_store::FamilyGroup> for FamilyGroupDto {
+    fn from(g: fontatlas_store::FamilyGroup) -> Self {
+        FamilyGroupDto { family: g.family, start: g.start, count: g.count, match_count: g.match_count, style_total: g.style_total }
     }
 }
 

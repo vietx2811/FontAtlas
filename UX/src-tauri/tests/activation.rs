@@ -288,3 +288,37 @@ fn gdi_engine_returns_unsupported() {
     let c = library::create_collection(&st, "A", None).unwrap();
     library::delete_collection(&st, c.id).unwrap();
 }
+
+#[test]
+fn activate_case_uses_the_normal_flow_and_skips_missing_fonts() {
+    use app_lib::services::cases;
+    let d = tempfile::tempdir().unwrap();
+    // một bản "Roboto-Regular" KHÁC nội dung đã có trên máy ⇒ xung đột tên PostScript (cần xác nhận)
+    let other = d.path().join("OtherSoftware");
+    std::fs::create_dir_all(&other).unwrap();
+    let imposter = other.join("roboto.ttf");
+    std::fs::copy(fixture("open_sans.ttf"), &imposter).unwrap();
+    let eng = Arc::new(FakeEngine::new().with_system_font("Roboto-Regular", &imposter));
+    let (st, faces, _) = library3(d.path(), &eng);
+    let gone = FaceKeyDto { hash_hex: "ab".repeat(32), face_index: 0 };
+    let case = cases::create_case(&st, Some("Dự án"), None, None).unwrap();
+    let mut all = faces.clone();
+    all.push(gone.clone());
+    cases::add_to_case(&st, Some(case.id), &all, None).unwrap();
+
+    let first = activation::activate_case(&st, case.id, None, false, &mut noop).unwrap();
+    assert_eq!(first.skipped_missing, vec![gone.clone()], "font missing không gửi xuống engine, không tính là lỗi");
+    assert_eq!((first.report.changed, first.report.needs_confirmation, first.report.failed), (2, 1, 0), "dừng ở xung đột như activate_faces");
+    assert_eq!(eng.registrations().len(), 2, "font xung đột chưa bật");
+
+    let again = activation::activate_case(&st, case.id, None, true, &mut noop).unwrap();
+    assert_eq!((again.report.needs_confirmation, again.report.failed), (0, 0));
+    assert_eq!(again.skipped_missing, vec![gone]);
+    assert_eq!(eng.registrations().len(), 3, "proceed=true bật cả font xung đột");
+
+    // Dự án chỉ có font missing: báo cáo rỗng, không lỗi
+    let empty = cases::create_case(&st, Some("Rỗng"), None, None).unwrap();
+    cases::add_to_case(&st, Some(empty.id), &[FaceKeyDto { hash_hex: "cd".repeat(32), face_index: 0 }], None).unwrap();
+    let r = activation::activate_case(&st, empty.id, None, false, &mut noop).unwrap();
+    assert_eq!((r.report.results.len(), r.skipped_missing.len()), (0, 1));
+}

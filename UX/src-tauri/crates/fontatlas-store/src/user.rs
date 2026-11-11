@@ -290,6 +290,48 @@ impl Store {
         Ok(n)
     }
 
+    /// Đổi tên Tag giữ nguyên `face_tags`. `name` đã trim; rỗng → `Invalid`; trùng (theo `vi_fold`) với Tag KHÁC →
+    /// `Conflict` (không gộp ngầm); đổi hoa/thường/dấu của chính nó hợp lệ; id lạ → `NotFound`.
+    pub fn rename_tag(&mut self, id: i64, name: &str) -> Result<Tag, StoreError> {
+        // NFC trước khi trim/gập/lưu: "Phở" gõ rời dấu và dựng sẵn là cùng một tên
+        let name: String = name.nfc().collect::<String>().trim().to_string();
+        let name = name.as_str();
+        let key = vi_fold(name);
+        if key.is_empty() {
+            return Err(StoreError::Invalid("tên tag trống".into()));
+        }
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        // id lạ ⇒ not_found TRƯỚC khi xét trùng tên (không báo conflict cho thẻ không tồn tại)
+        let exists: bool = tx.query_row("SELECT EXISTS (SELECT 1 FROM u.tags WHERE tag_id=?1)", [id], |r| r.get(0))?;
+        if !exists {
+            return Err(StoreError::NotFound(format!("tag #{id}")));
+        }
+        let other: Option<i64> =
+            tx.query_row("SELECT tag_id FROM u.tags WHERE name_key=?1 AND tag_id<>?2", params![key, id], |r| r.get(0)).optional()?;
+        if other.is_some() {
+            return Err(StoreError::Conflict(format!("đã có tag \"{name}\"")));
+        }
+        let n = tx.execute("UPDATE u.tags SET name=?2, name_key=?3 WHERE tag_id=?1", params![id, name, key])?;
+        if n == 0 {
+            return Err(StoreError::NotFound(format!("tag #{id}")));
+        }
+        let face_count = tx.query_row("SELECT count(*) FROM u.face_tags WHERE tag_id=?1", [id], |r| r.get(0))?;
+        tx.commit()?;
+        Ok(Tag { id, name: name.to_string(), face_count })
+    }
+
+    /// Xoá Tag và mọi gán thẻ của nó (không đụng font/Collection/Dự án). Trả số face bị bỏ thẻ; id lạ → `NotFound`.
+    pub fn delete_tag(&mut self, id: i64) -> Result<u32, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let n: u32 = tx.query_row("SELECT count(*) FROM u.face_tags WHERE tag_id=?1", [id], |r| r.get(0))?;
+        tx.execute("DELETE FROM u.face_tags WHERE tag_id=?1", [id])?;
+        if tx.execute("DELETE FROM u.tags WHERE tag_id=?1", [id])? == 0 {
+            return Err(StoreError::NotFound(format!("tag #{id}")));
+        }
+        tx.commit()?;
+        Ok(n)
+    }
+
     pub fn tags(&self) -> Result<Vec<Tag>, StoreError> {
         let mut st = self.conn.prepare(
             "SELECT t.tag_id, t.name, (SELECT count(*) FROM u.face_tags ft WHERE ft.tag_id = t.tag_id)

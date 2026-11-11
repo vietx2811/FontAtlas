@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest ExtensionBundleId="com.fontatlas.autoactivate" ExtensionBundleVersion="@VERSION@" Version="8.0" ExtensionBundleName="FontAtlas Auto-activation"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="com.fontatlas.autoactivate" Version="@VERSION@">
+      <HostList><Host Name="ILST" Port="8092"/></HostList>
+    </Extension>
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList><Host Name="ILST" Version="[23.0,99.9]"/></HostList>
+    <LocaleList><Locale Code="All"/></LocaleList>
+    <RequiredRuntimeList><RequiredRuntime Name="CSXS" Version="9.0"/></RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.fontatlas.autoactivate">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./jsx/host.jsx</ScriptPath>
+          <CEFCommandLine><Parameter>--mixed-context</Parameter></CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>false</AutoVisible>
+          <StartOn>
+            <Event>applicationActivate</Event>
+            <Event>com.adobe.csxs.events.ApplicationActivate</Event>
+            <Event>ApplicationInitialized</Event>
+            <Event>com.adobe.csxs.events.ApplicationInitialized</Event>
+          </StartOn>
+        </Lifecycle>
+        <UI><Type>Custom</Type><Menu>FontAtlas</Menu><Geometry><Size><Height>100</Height><Width>200</Width></Size></Geometry></UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

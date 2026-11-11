@@ -102,6 +102,8 @@ impl ActivationStatus {
 pub enum ActivationReason {
     Manual,
     Collection(i64),
+    /// Font tự bật khi một app thiết kế hỏi (broker / helper). Luôn scope session.
+    Auto(crate::auto::AutoApp),
 }
 
 impl ActivationReason {
@@ -109,11 +111,15 @@ impl ActivationReason {
         match self {
             ActivationReason::Manual => "manual".into(),
             ActivationReason::Collection(id) => format!("collection:{id}"),
+            ActivationReason::Auto(app) => format!("auto:{}", app.slug()),
         }
     }
     pub fn parse_db(s: &str) -> Option<ActivationReason> {
         if s == "manual" {
             return Some(ActivationReason::Manual);
+        }
+        if let Some(app) = s.strip_prefix("auto:") {
+            return crate::auto::AutoApp::from_slug(app).map(ActivationReason::Auto);
         }
         let id = s.strip_prefix("collection:")?;
         if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
@@ -137,6 +143,12 @@ impl Serialize for ActivationReason {
                 let mut st = s.serialize_struct("ActivationReason", 2)?;
                 st.serialize_field("kind", "collection")?;
                 st.serialize_field("collectionId", id)?;
+                st.end()
+            }
+            ActivationReason::Auto(app) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "auto")?;
+                st.serialize_field("app", app.slug())?;
                 st.end()
             }
         }
@@ -412,8 +424,10 @@ impl Store {
             return Ok(None);
         };
         let mut st = self.conn.prepare(
-            "SELECT path, missing FROM main.file_locations WHERE file_id=?1
-             ORDER BY missing, last_seen_at DESC, path",
+            // vị trí đã ẩn bởi "giải quyết trùng lặp" KHÔNG được liệt kê: activation không bao giờ chọn / mở chúng
+            "SELECT l.path, l.missing FROM main.file_locations l WHERE l.file_id=?1
+               AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
+             ORDER BY l.missing, l.last_seen_at DESC, l.path",
         )?;
         let locations = st
             .query_map([file_id], |r| {
@@ -532,5 +546,91 @@ mod tests {
             left,
             ["library.v1.5.db", "notes.txt", "user.v1.1002.db", "user.v1.1003.db", "user.v1.1004.db", "user.v1.1005.db", "user.v1.1006.db"]
         );
+    }
+}
+
+
+// ---- sổ khôi phục: bản cũ đã gỡ để thay bằng bản của Font Atlas (user.db) ----
+
+/// Một lần gỡ bản cũ, ghi lại để có nút "Khôi phục bản cũ" (cùng URL + scope).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewReplaced {
+    pub hash: [u8; 32],
+    pub old_path: String,
+    pub owner: String,
+    pub scopes: Vec<ActivationScope>,
+    pub postscript_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplacedRow {
+    pub id: i64,
+    pub hash: [u8; 32],
+    pub old_path: String,
+    pub owner: String,
+    pub scopes: Vec<ActivationScope>,
+    pub postscript_names: Vec<String>,
+    pub created_at: i64,
+    pub restored_at: Option<i64>,
+}
+
+fn replaced_from_row(r: &rusqlite::Row) -> rusqlite::Result<ReplacedRow> {
+    let hash: Vec<u8> = r.get(1)?;
+    let scopes: String = r.get(4)?;
+    let names: String = r.get(5)?;
+    Ok(ReplacedRow {
+        id: r.get(0)?,
+        hash: hash.try_into().unwrap_or([0; 32]),
+        old_path: r.get(2)?,
+        owner: r.get(3)?,
+        scopes: serde_json::from_str::<Vec<String>>(&scopes).unwrap_or_default().iter().filter_map(|s| ActivationScope::parse(s)).collect(),
+        postscript_names: serde_json::from_str(&names).unwrap_or_default(),
+        created_at: r.get(6)?,
+        restored_at: r.get(7)?,
+    })
+}
+
+const REPLACED_COLS: &str = "id, hash, old_path, owner, scopes, postscript_names, created_at, restored_at";
+
+impl Store {
+    pub fn add_replaced(&mut self, e: &NewReplaced) -> Result<i64, StoreError> {
+        let scopes: Vec<&str> = e.scopes.iter().map(|s| s.as_str()).collect();
+        self.conn.execute(
+            "INSERT INTO u.activation_replaced(hash, old_path, owner, scopes, postscript_names, created_at) VALUES (?1,?2,?3,?4,?5,?6)",
+            params![
+                &e.hash[..],
+                e.old_path,
+                e.owner,
+                serde_json::to_string(&scopes).unwrap_or_else(|_| "[]".into()),
+                serde_json::to_string(&e.postscript_names).unwrap_or_else(|_| "[]".into()),
+                now_ms()
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_replaced(&self, id: i64) -> Result<Option<ReplacedRow>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(&format!("SELECT {REPLACED_COLS} FROM u.activation_replaced WHERE id=?1"), [id], replaced_from_row)
+            .optional()?)
+    }
+
+    /// Các bản cũ đã gỡ mà chưa khôi phục, cũ nhất trước.
+    pub fn unrestored_replaced(&self) -> Result<Vec<ReplacedRow>, StoreError> {
+        let mut st = self
+            .conn
+            .prepare(&format!("SELECT {REPLACED_COLS} FROM u.activation_replaced WHERE restored_at IS NULL ORDER BY id"))?;
+        Ok(st.query_map([], replaced_from_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// true nếu vừa đánh dấu (chưa khôi phục trước đó).
+    pub fn mark_replaced_restored(&mut self, id: i64) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("UPDATE u.activation_replaced SET restored_at=?2 WHERE id=?1 AND restored_at IS NULL", params![id, now_ms()])? > 0)
+    }
+
+    /// Bỏ một dòng sổ (thay thế không thành công, đã trả lại bản cũ).
+    pub fn delete_replaced(&mut self, id: i64) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("DELETE FROM u.activation_replaced WHERE id=?1", [id])? > 0)
     }
 }

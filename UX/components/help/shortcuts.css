@@ -1,0 +1,8 @@
+.fa-modal.fa-tips { width: min(720px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 48px)); overflow-y: auto; gap: 12px; }
+.fa-tips-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.fa-tips-grid li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md, 10px); background: var(--card); align-content: start; }
+.fa-tips-grid .keys { display: flex; gap: 3px; }
+.fa-tips-grid kbd { font: 500 11px/1 "JetBrains Mono", ui-monospace, monospace; min-width: 20px; height: 20px; padding: 0 5px; display: inline-grid; place-items: center; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); color: var(--fg); }
+.fa-tips-grid b { font-size: 13px; font-weight: 600; color: var(--fg); }
+.fa-tips-grid .d { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.fa-tips-grid .fa-tip-link { justify-self: start; margin-top: 2px; padding: 0; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--accent-ink, var(--accent)); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

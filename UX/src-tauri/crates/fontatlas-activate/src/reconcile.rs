@@ -73,6 +73,8 @@ impl<E: ActivationEngine> ActivationService<E> {
                 requested_faces: vec![],
                 extra_faces: vec![],
                 outcome: FileOutcome::Busy,
+                replaced: vec![],
+            warning: None,
             };
             if let Some(_guard) = self.take(hash) {
                 // Đọc lại SAU khi giữ guard: snapshot có thể đã cũ (thao tác khác vừa đổi dòng này).

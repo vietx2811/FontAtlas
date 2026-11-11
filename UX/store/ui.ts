@@ -1,4 +1,6 @@
 // UI state của app (Plan 6b §3). Lọc không chạy ở client: view/tag/query/viOnly → GridQuery → query_faces.
+import { defaultSample, isDefaultSample } from '../i18n/sample';
+import { subscribeLocale } from '../i18n/locale';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, FaceKeyDto, UiStateDto } from '../api';
 import type { ComboRoleDto, OwnerDto } from '../bindings';
@@ -16,7 +18,7 @@ export const SAMPLE_MAX = 72;
 export const COMPARE_MAX = 8;
 export const COMPARE_MIN = 2;
 export const OVERLAY_MAX = 4;
-export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
+export { defaultSample };
 
 export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };
@@ -66,6 +68,9 @@ export interface UiState {
   deskReturn: DeskState | null;
   /** Cách sắp xếp thư viện (toàn cục); lưu ở setting `ui.sort`. Gần đây / Đang bật khoá thứ tự. */
   sort: SortPrefs;
+  /** Nhóm Family đang thu gọn (R3), theo tên family; chỉ trong phiên, mở hết khi truy vấn đổi (`groupScope` = khoá truy vấn đã áp dụng). Nằm ở store để không mất khi Library dựng lại sau quét. */
+  groupCollapsed: ReadonlySet<string>;
+  groupScope: string;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
   /** Tăng khi dữ liệu thư viện đổi từ nơi khác (thêm vào dự án, gắn thẻ…): thanh bên nạp lại số đếm/danh sách. */
@@ -101,6 +106,11 @@ export interface UiActions {
   clearRecent(): void;
   setSortBy(by: SortField): void;
   setSortDesc(desc: boolean): void;
+  /** Nhóm theo Family (R3): bật/tắt; lưu cùng `ui.sort`. */
+  setGroupByFamily(on: boolean): void;
+  setGroupCollapsed(family: string, collapse: boolean): void;
+  /** Truy vấn khác khoá đã nhớ → mở hết các nhóm; cùng khoá → giữ nguyên (dựng lại không làm mất trạng thái). */
+  syncGroupScope(key: string): void;
   resetSort(): void;
   /** Quay lại phiên so sánh đang giữ (sidebar). */
   resumeCompare(): void;
@@ -149,6 +159,7 @@ export function toGridQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly' | 'rece
   const so = s.sort && effectiveSort(s.sort, !!s.query.trim());
   if (so && so.by === 'match') q.sort = 'match';
   else if (so && (so.explicit || !isDefaultSort(so))) { q.sort = so.by; q.descending = so.desc; }
+  if (s.sort?.group) q.groupByFamily = true; // R3: các font cùng family liền nhau; tiêu đề nhóm lấy từ familyGroups
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
@@ -190,7 +201,7 @@ export function createUiStore(): UiStore {
   const initial = fromDto(DEFAULT_UI_STATE);
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
-    filters: {}, familyScope: null, view: 'all', query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT, sort: { ...DEFAULT_SORT },
+    filters: {}, familyScope: null, view: 'all', query: '', viOnly: false, sample: defaultSample(), sort: { ...DEFAULT_SORT }, groupCollapsed: new Set(), groupScope: '',
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, deskReturn: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
@@ -220,8 +231,11 @@ export function createUiStore(): UiStore {
       const f = faces.slice(0, COMPARE_MAX);
       set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, deskReturn: get().desk, settingsOpen: false });
     },
-    setSortBy: by => set({ sort: { by, desc: defaultDesc(by), explicit: true } }),
+    setSortBy: by => set(s => ({ sort: { by, desc: defaultDesc(by), explicit: true, ...(s.sort.group ? { group: true } : {}) } })),
     setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc, explicit: true } })),
+    setGroupByFamily: on => set(s => ({ sort: on ? { ...s.sort, group: true } : (({ group: _g, ...rest }) => rest)(s.sort) })),
+    setGroupCollapsed: (family, collapse) => set(s => { if (s.groupCollapsed.has(family) === collapse) return s; const n = new Set(s.groupCollapsed); if (collapse) n.add(family); else n.delete(family); return { groupCollapsed: n }; }),
+    syncGroupScope: key => set(s => (s.groupScope === key ? s : { groupScope: key, groupCollapsed: s.groupCollapsed.size ? new Set() : s.groupCollapsed })),
     resetSort: () => set({ sort: { ...DEFAULT_SORT } }),
     closeCompareSession: () => set({ compare: null, compareSession: null }),
     clearRecent: () => set({ recentViews: [] }),
@@ -341,3 +355,6 @@ export function createUiStore(): UiStore {
 }
 
 export const useUiStore = createUiStore();
+
+// Chữ mẫu còn là mặc định → đổi theo ngôn ngữ giao diện (lúc khởi động / khi người dùng đổi ngôn ngữ). Chữ người dùng đã gõ không bao giờ bị ghi đè.
+subscribeLocale(() => { const s = useUiStore.getState().sample; if (isDefaultSample(s) && s !== defaultSample()) useUiStore.setState({ sample: defaultSample() }); });

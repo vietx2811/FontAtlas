@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Api, LangListDto, FaceQuery } from '../../api';
-import { t } from '../../i18n';
+import { t, useLocale } from '../../i18n';
 import { useUiStore } from '../../store/ui';
 import { langName } from './langNames';
 import { TermTip } from '../ui/terms';
@@ -40,8 +40,9 @@ export function LangPicker({ api, query, refreshKey }: { api: Api; query: FaceQu
     const cur = levelOf(code); const others = (langs ?? []).filter(l => l.code !== code);
     set(cur === null ? [...others, { code, level: 'full' }] : cur === 'full' ? [...others, { code, level: 'near' }] : others);
   };
+  const locale = useLocale();
   const needle = search.trim().toLowerCase();
-  const items = useMemo(() => [...(list?.items ?? [])].sort((a, b) => langRank(a) - langRank(b) || langName(a).localeCompare(langName(b))).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle]);
+  const items = useMemo(() => [...(list?.items ?? [])].sort((a, b) => langRank(a) - langRank(b) || langName(a).localeCompare(langName(b))).filter(i => !needle || [i.nameEn, i.autonym, i.code, langName(i)].some(s => s.toLowerCase().includes(needle))), [list, needle, locale]);
   // Ngôn ngữ đang chọn nhưng không còn face nào khớp vẫn hiện để bỏ chọn được.
   const ghosts = (langs ?? []).filter(l => !list?.items.some(i => i.code === l.code));
 

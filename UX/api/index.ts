@@ -2,10 +2,11 @@
 // Cài đặt thật: api/tauri.ts (invoke + Channel). Cài đặt giả: api/mock.ts (dev không có Tauri, Vitest).
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
+import { t } from '../i18n';
 import type {
-  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
-  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, CaseActivationDto,
+  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto,
 } from './types';
 
 export * from './types';
@@ -25,7 +26,14 @@ export interface Api extends LibraryApi {
   listSources(): Promise<SourceDto[]>;
   /** Ném CmdError('nested_source', …, { existingId, existingPath }) khi nằm trong/chứa nguồn có sẵn. */
   addSource(path: string): Promise<SourceDto>;
-  removeSource(sourceId: number): Promise<void>;
+  /**
+   * Gỡ nguồn. Trả số liệu đã làm. KHÔNG xoá dữ liệu người dùng: Dự án/Collection/Tag/Yêu thích/ghi đè phân loại giữ nguyên
+   * (font chỉ có ở nguồn này hiện `missing` trong Dự án, ẩn khỏi lưới; thêm lại nguồn thì khớp lại theo hash).
+   * Font đang bật không tự tắt (`activeFonts` để cảnh báo).
+   */
+  removeSource(sourceId: number): Promise<RemoveSourceReportDto>;
+  /** Số liệu thật cho câu xác nhận gỡ nguồn — chỉ đọc. */
+  removeSourcePreview(sourceId: number): Promise<RemoveSourceReportDto>;
   rescanSources(sourceIds?: number[]): Promise<void>;
   scanPause(): Promise<void>;
   scanResume(): Promise<void>;
@@ -46,6 +54,10 @@ export interface Api extends LibraryApi {
   systemTagCatalog(): Promise<SystemTagGroupDto[]>;
   tagsOf(face: FaceKeyDto): Promise<TagDto[]>;
   createTag(name: string): Promise<TagDto>;
+  /** R6: đổi tên Tag, giữ gán thẻ. Lỗi: `invalid_arg` (tên trống / tiền tố style:|mood:|use: ngoài danh mục / Tag hệ thống → tên thường), `conflict` (trùng Tag khác, không gộp ngầm), `not_found`. */
+  renameTag(id: number, name: string): Promise<TagDto>;
+  /** R6: xoá Tag + mọi gán thẻ; trả số face đã bị bỏ thẻ (để nêu trong xác nhận). Không đụng font/Collection/Dự án. */
+  deleteTag(id: number): Promise<number>;
   tagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   untagFaces(tagId: number, faces: FaceKeyDto[]): Promise<void>;
   revealInFinder(face: FaceKeyDto): Promise<void>;
@@ -59,6 +71,8 @@ export interface Api extends LibraryApi {
   getFace(face: FaceKeyDto, lang: 'vi' | 'en'): Promise<FaceDetailDto>;
   similar(face: FaceKeyDto, opts?: SimilarQuery): Promise<SimilarHitDto[]>;
   similarFamilies(face: FaceKeyDto, opts?: SimilarQuery, q?: FaceQuery): Promise<SimilarFamilyPageDto>;
+  /** R3: các nhóm family của truy vấn, đúng thứ tự `queryFaces({ ...q, groupByFamily: true })`: `[start, start+count)` là offset của nhóm. */
+  familyGroups(q?: FaceQuery): Promise<FamilyGroupDto[]>;
   axisStats(q?: FaceQuery): Promise<AxisStatsDto[]>;
   // Font Desk (0.3.0): Case + Combo
   createCase(name?: string, brief?: BriefDto, settings?: CaseSettingsDto): Promise<CaseDto>;
@@ -105,6 +119,20 @@ export interface Api extends LibraryApi {
   /** Số nhóm trùng theo loại (cùng tệp / phiên bản / định dạng); tôn trọng bộ lọc `q`. */
   duplicateSummary(q?: FaceQuery): Promise<DuplicateSummaryDto>;
   duplicateGroups(q?: FaceQuery): Promise<DuplicateGroupDto[]>;
+  /** Kế hoạch giải quyết (không đổi gì): bản giữ, bản thua, lý do, đủ điều kiện Thùng rác. `q` = bộ lọc của trang. */
+  resolvePreview(scope: ResolveScopeDto, q?: FaceQuery): Promise<ResolvePlanDto>;
+  /** Áp dụng: từng bản thua độc lập, thành công một phần là bình thường (`done` + `failed`). */
+  resolveApply(req: ResolveRequestDto): Promise<ResolveResultDto>;
+  /** Hoàn tác các quyết định (mới nhất trước). `needsRescan` sau khi đưa tệp từ Thùng rác về. */
+  resolveUndo(ids: number[]): Promise<ResolveResultDto>;
+  resolveList(includeUndone: boolean): Promise<ResolutionDto[]>;
+  duplicateIgnore(kind: DuplicateKindDto, key: string): Promise<void>;
+  duplicateUnignore(kind: DuplicateKindDto, key: string): Promise<void>;
+  duplicateIgnored(): Promise<IgnoredGroupDto[]>;
+  /** Id nguồn, ưu tiên giữ bản nhất đứng đầu. */
+  sourcePriority(): Promise<number[]>;
+  /** Gửi toàn bộ danh sách sau khi kéo-thả; trả thứ tự đầy đủ mới. */
+  setSourcePriority(ids: number[]): Promise<number[]>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */
@@ -121,6 +149,15 @@ export interface Api extends LibraryApi {
   getSettings(): Promise<SettingsDto>;
   setSettings(patch: Partial<SettingsDto>): Promise<SettingsDto>;
   // Model và hàng đợi embed
+  // Bật font tự động (0.3.0): trạng thái từng app, công tắc chung, cài/gỡ panel/script Adobe, nhật ký.
+  autoStatus(): Promise<AutoStatusDto>;
+  autoSetEnabled(on: boolean): Promise<AutoStatusDto>;
+  autoInstall(target: AutoTargetDto): Promise<AutoStatusDto>;
+  autoRemove(target: AutoTargetDto): Promise<AutoStatusDto>;
+  /** Xoá khoá ký riêng của máy (chỉ khi panel Illustrator đã gỡ); bản cô lập từ chối. */
+  autoForgetKey(): Promise<AutoStatusDto>;
+  autoProbe(): Promise<AutoStatusDto>;
+  autoLog(limit?: number): Promise<AutoLogDto[]>;
   modelStatus(): Promise<ModelStatusDto>;
   /** Trả ngay khi bắt đầu; tiến độ, Ready, Paused, Failed qua `onEvent`. */
   modelDownload(onEvent: (e: ModelEvent) => void): Promise<void>;
@@ -137,8 +174,20 @@ export interface Api extends LibraryApi {
   activationState(): Promise<ActivationStateDto[]>;
   activationPreflight(faces: FaceKeyDto[]): Promise<ActivationReportDto>;
   activationActivate(faces: FaceKeyDto[], opts?: ActivateOptions): Promise<ActivationReportDto>;
+  /** "Tắt bản cũ và bật bản này": gỡ các bản xung đột (nếu ma trận cho phép) rồi bật bản của Font Atlas. Mỗi kết quả có `replaced` (id để khôi phục). */
+  /** `confirmed` = xung đột người dùng đã thấy; backend từ chối (`replace_conflicts_changed`) nếu tập này đã đổi. */
+  activationReplace(faces: FaceKeyDto[], confirmed: ConfirmedConflictDto[], opts?: Pick<ActivateOptions, 'scope' | 'onProgress'>): Promise<ActivationReportDto>;
+  /** Các bản cũ đã gỡ và chưa khôi phục (Cài đặt → Kích hoạt). */
+  activationListReplaced(): Promise<ReplacedEntryDto[]>;
+  /** "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope) và tắt bản của Font Atlas. */
+  activationRestoreReplaced(id: number): Promise<RestoreOutcomeDto>;
   activationDeactivate(faces: FaceKeyDto[], opts?: DeactivateOptions): Promise<ActivationReportDto>;
   activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
+  /**
+   * "Bật tất cả" của một Dự án: font không `missing` đi qua đúng luồng `activationActivate` (xung đột → `needsConfirmation`,
+   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Kích hoạt thủ công, không gắn lý do "dự án".
+   */
+  activationActivateCase(caseId: number, opts?: ActivateOptions): Promise<CaseActivationDto>;
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;
@@ -152,6 +201,6 @@ export interface Api extends LibraryApi {
 let current: Api | null = null;
 export function setApi(api: Api): void { current = api; }
 export function getApi(): Api {
-  if (!current) throw new Error('Api chưa được cài: gọi setApi() trước khi render');
+  if (!current) throw new Error(t('api.notInstalled'));
   return current;
 }

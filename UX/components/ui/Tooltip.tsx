@@ -40,11 +40,26 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
   const trigger = useRef<HTMLElement | null>(null);
   const tip = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const hide = useCallback(() => { clearTimeout(timer.current); timer.current = undefined; setOpen(false); }, []);
+  // Thế hệ hover: mỗi lần đóng tăng lên, nên timer mở của lần hover cũ (nếu chạy trễ) không bao giờ mở lại tooltip.
+  const gen = useRef(0);
+  const hide = useCallback(() => {
+    gen.current += 1;
+    clearTimeout(timer.current); timer.current = undefined;
+    // Gỡ ngữ nghĩa NGAY, không đợi React commit: phần tử (nếu còn một nhịp) không mang role/id và bị ẩn khỏi cây truy cập.
+    const el = tip.current;
+    if (el) { el.removeAttribute('role'); el.removeAttribute('id'); el.setAttribute('aria-hidden', 'true'); }
+    const t = trigger.current;
+    if (t && el) {
+      const rest = (t.getAttribute('aria-describedby') ?? '').split(/\s+/).filter((x) => x && x !== el.dataset.tipId);
+      if (rest.length) t.setAttribute('aria-describedby', rest.join(' ')); else t.removeAttribute('aria-describedby');
+    }
+    setOpen(false);
+  }, []);
   // Đọc props qua ref lúc mở: tooltip đang chờ không dùng nhãn/trạng thái cũ, và các callback bên dưới ổn định.
   const live = useRef({ label, disabled, onlyIfTruncated });
   live.current = { label, disabled, onlyIfTruncated };
-  const reveal = useCallback(() => {
+  const reveal = useCallback((g?: number) => {
+    if (g !== undefined && g !== gen.current) return;
     const { label: l, disabled: d, onlyIfTruncated: cut } = live.current;
     if (d || l === null || l === undefined || l === '' || l === false) return;
     if (cut && !isTruncated(trigger.current)) return;
@@ -52,7 +67,7 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
     closeCurrent = hide;
     setOpen(true);
   }, [hide]);
-  const schedule = useCallback(() => { clearTimeout(timer.current); timer.current = setTimeout(reveal, delay); }, [reveal, delay]);
+  const schedule = useCallback(() => { clearTimeout(timer.current); const g = gen.current; timer.current = setTimeout(() => reveal(g), delay); }, [reveal, delay]);
 
   useEffect(() => () => { clearTimeout(timer.current); if (closeCurrent === hide) closeCurrent = null; }, [hide]);
   useEffect(() => { if (disabled && open) hide(); }, [disabled, open, hide]);
@@ -112,7 +127,7 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
     <>
       {cloned}
       {open && createPortal(
-        <div ref={tip} id={id} role="tooltip" className="fa-tip" style={{ visibility: 'hidden' }}>
+        <div ref={tip} id={id} data-tip-id={id} role="tooltip" className="fa-tip" style={{ visibility: 'hidden' }}>
           <span>{label}</span>
           {shortcut && <kbd>{shortcut}</kbd>}
         </div>,

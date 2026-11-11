@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use fontatlas_activate::{
     ActivationEngine, ActivationError, ActivationReport, ActivationService, Availability, ActivationStateDto as CoreState, ConflictPolicy,
-    DeactivatePolicy, Progress, ReconcileReport, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
+    DeactivatePolicy, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
 };
 use fontatlas_store::{FaceKey, Store};
 
@@ -55,6 +55,19 @@ pub trait ActivationApi: Send + Sync {
     fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
+    fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
+    /// "Thay bằng bản này" chỉ trên các xung đột đã xác nhận.
+    fn replace_faces(
+        &self,
+        s: &Mutex<Store>,
+        keys: &[FaceKey],
+        scope: Option<Scope>,
+        confirmed: &[fontatlas_activate::ConfirmedConflict],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError>;
+    /// Broker: bật font vì app thiết kế vừa hỏi (lý do `auto:<app>`, scope session).
+    fn activate_auto(&self, s: &Mutex<Store>, keys: &[FaceKey], app: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError>;
 }
 
 impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
@@ -117,6 +130,22 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
     }
+    fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
+        ActivationService::restore_replaced(self, s, id)
+    }
+    fn replace_faces(
+        &self,
+        s: &Mutex<Store>,
+        keys: &[FaceKey],
+        scope: Option<Scope>,
+        confirmed: &[fontatlas_activate::ConfirmedConflict],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::replace_faces(self, s, keys, scope, confirmed, progress)
+    }
+    fn activate_auto(&self, s: &Mutex<Store>, keys: &[FaceKey], app: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError> {
+        ActivationService::activate_auto(self, s, keys, app)
+    }
 }
 
 /// Trước khi có engine (hoặc ở test không cần kích hoạt): mọi thao tác ghi trả `Unsupported`.
@@ -161,6 +190,15 @@ impl ActivationApi for NoActivation {
     }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
+    }
+    fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn replace_faces(&self, _: &Mutex<Store>, _: &[FaceKey], _: Option<Scope>, _: &[fontatlas_activate::ConfirmedConflict], _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn activate_auto(&self, _: &Mutex<Store>, _: &[FaceKey], _: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
     }
 }
 
@@ -252,6 +290,76 @@ pub fn activate(
     let keys = keys_of(faces)?;
     let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
     Ok(finish(state, r))
+}
+
+/// "Tắt bản cũ và bật bản này": như `activate` nhưng gỡ các bản xung đột theo ma trận (xem fontatlas-activate).
+pub fn replace(
+    state: &AppState,
+    faces: &[FaceKeyDto],
+    scope: Option<ScopeDto>,
+    confirmed: &[ConfirmedConflictDto],
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let confirmed = confirmed
+        .iter()
+        .map(|c| Ok(fontatlas_activate::ConfirmedConflict { hash: FaceKey::from_hex(&c.hash_hex, 0).map_err(|e| CmdError::invalid_arg(e.to_string()))?.hash, existing_path: c.existing_path.clone() }))
+        .collect::<Result<Vec<_>, CmdError>>()?;
+    let r = state.activation.replace_faces(state.store()?, &keys, scope.map(Into::into), &confirmed, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
+
+/// Các bản cũ đã gỡ và chưa khôi phục (Cài đặt → Kích hoạt).
+pub fn list_replaced(state: &AppState) -> Result<Vec<ReplacedEntryDto>, CmdError> {
+    state.with_store(|s| {
+        Ok(s.unrestored_replaced()?
+            .into_iter()
+            .map(|r| ReplacedEntryDto {
+                id: r.id,
+                hash_hex: r.hash.iter().map(|b| format!("{b:02x}")).collect(),
+                path: r.old_path,
+                owner: r.owner,
+                scopes: r.scopes.into_iter().map(Into::into).collect(),
+                postscript_names: r.postscript_names,
+                created_at: r.created_at,
+            })
+            .collect())
+    })
+}
+
+/// "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope) và tắt bản của Font Atlas đã thay nó.
+pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, CmdError> {
+    writable(state)?;
+    // hash của font Atlas đã thay: để giao diện cập nhật chấm bật/tắt của nó
+    let hash_hex = state.with_store(|s| Ok(s.get_replaced(id)?.map(|r| r.hash.iter().map(|b| format!("{b:02x}")).collect::<String>())))?;
+    let out = state.activation.restore_replaced(state.store()?, id)?;
+    if let (RestoreOutcome::Restored, Some(h)) = (out, hash_hex) {
+        state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![h] });
+    }
+    Ok(out.into())
+}
+
+/// "Bật tất cả" theo Dự án: font KHÔNG `missing` của Case đi qua đúng luồng `activate` (xung đột tên family/PostScript,
+/// tải trước file cloud, báo cáo theo file); font `missing` không gửi xuống engine mà liệt kê ở `skipped_missing`.
+/// Kích hoạt kiểu thủ công (không gắn lý do "dự án": tắt Dự án không tự tắt font).
+pub fn activate_case(
+    state: &AppState,
+    case_id: i64,
+    scope: Option<ScopeDto>,
+    proceed: bool,
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<CaseActivationDto, CmdError> {
+    writable(state)?;
+    let case = crate::services::cases::get_case(state, case_id)?;
+    let (present, gone): (Vec<_>, Vec<_>) = case.faces.into_iter().partition(|f| !f.missing);
+    let keys: Vec<FaceKeyDto> = present.into_iter().map(|f| f.key).collect();
+    let report = if keys.is_empty() {
+        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0 }
+    } else {
+        activate(state, &keys, scope, proceed, progress)?
+    };
+    Ok(CaseActivationDto { report, skipped_missing: gone.into_iter().map(|f| f.key).collect() })
 }
 
 pub fn activate_collection(

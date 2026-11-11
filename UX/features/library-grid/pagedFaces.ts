@@ -6,7 +6,8 @@ import type { FaceRow, GridQuery } from './types';
 export const PAGE_SIZE = 200;
 export const SEARCH_DEBOUNCE_MS = 150;
 
-export type PagedSnapshot = { total: number | null; version: number; error: string | null };
+/** `query`/`queryKey`: truy vấn mà `total` và các trang thuộc về (đã áp dụng, không phải prop mới nhất đang chờ debounce); chỉ mục nhóm chỉ ghép khi khớp. */
+export type PagedSnapshot = { total: number | null; version: number; error: string | null; query: GridQuery | null; queryKey: string };
 
 const restKey = (q: GridQuery) => { const { text: _, ...rest } = q; return JSON.stringify(rest); };
 
@@ -20,11 +21,12 @@ export class PagedFaces {
   private failed = new Set<number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
-  private snap: PagedSnapshot = { total: null, version: 0, error: null };
+  private snap: PagedSnapshot;
   private lastRange: [number, number] = [0, 0];
 
   constructor(private api: Pick<LibraryApi, 'queryFaces'>, query: GridQuery) {
     this.query = query;
+    this.snap = { total: null, version: 0, error: null, query, queryKey: JSON.stringify(query) };
     this.fetchPage(0);
   }
 
@@ -45,6 +47,7 @@ export class PagedFaces {
 
   private apply(q: GridQuery) {
     this.query = q;
+    this.snap = { ...this.snap, query: q, queryKey: JSON.stringify(q) };
     this.epoch++;
     this.pages.clear();
     this.inflight.clear();
@@ -110,7 +113,7 @@ export class PagedFaces {
   }
 }
 
-const EMPTY: PagedSnapshot = { total: null, version: 0, error: null };
+const EMPTY: PagedSnapshot = { total: null, version: 0, error: null, query: null, queryKey: '' };
 const noopSubscribe = () => () => {};
 
 export function usePagedFaces(api: LibraryApi, query: GridQuery): { paged: PagedFaces | null; snap: PagedSnapshot } {

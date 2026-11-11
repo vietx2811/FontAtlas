@@ -237,8 +237,8 @@ fn settings_roundtrip_and_validation() {
     let st = state_with(d.path(), deps(manifest_for(&src, "http://127.0.0.1:1/x"), 0, u64::MAX));
     let s = settings::get_settings(&st).unwrap();
     assert_eq!(
-        (s.embed_enabled, s.license_notice_ack, s.ui_lang.as_str(), s.sample_text.as_str(), s.project_vi_default, s.keep_active_on_exit, s.rescan_on_launch),
-        (true, false, "vi", settings::DEFAULT_SAMPLE, true, false, true)
+        (s.embed_enabled, s.license_notice_ack, s.ui_lang.as_deref(), s.sample_text.as_str(), s.project_vi_default, s.keep_active_on_exit, s.rescan_on_launch),
+        (true, false, None, settings::DEFAULT_SAMPLE, true, false, true)
     );
     let long = format!("  {}  ", "Đ".repeat(100));
     let nfd = "Ho\u{0302}\u{0300}";
@@ -253,12 +253,12 @@ fn settings_roundtrip_and_validation() {
     };
     let s = settings::set_settings(&st, p).unwrap();
     assert!(s.license_notice_ack && s.keep_active_on_exit && !s.project_vi_default && !s.rescan_on_launch);
-    assert_eq!((s.ui_lang.as_str(), s.sample_text.chars().count()), ("en", 64));
+    assert_eq!((s.ui_lang.as_deref(), s.sample_text.chars().count()), (Some("en"), 64));
     let s = settings::set_settings(&st, SettingsPatchDto { sample_text: Some(nfd.into()), ..Default::default() }).unwrap();
     assert_eq!(s.sample_text, "Hồ", "chuẩn hoá NFC");
     let bad = settings::set_settings(&st, SettingsPatchDto { ui_lang: Some("fr".into()), ..Default::default() }).unwrap_err();
     assert_eq!(bad.code, "invalid_arg");
-    assert_eq!(settings::get_settings(&st).unwrap().ui_lang, "en");
+    assert_eq!(settings::get_settings(&st).unwrap().ui_lang.as_deref(), Some("en"));
 }
 
 // ---- tải model qua HTTP giả ----

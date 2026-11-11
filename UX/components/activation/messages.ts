@@ -1,5 +1,5 @@
 import type { AutoDeactivatedDto, FileOutcomeDto, ReconcileReportDto } from '../../api';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 
 export type Msg = { kind: 'info' | 'error'; text: string };
 
@@ -9,6 +9,14 @@ export function describeOutcome(o: FileOutcomeDto): Msg | null {
     case 'failed':
       if (o.code === 'file_changed') return { kind: 'error', text: t('act.msg.changed') };
       if (o.code === 'scope_unsettled') return { kind: 'error', text: t('act.msg.scope_unsettled') };
+      if (o.code === 'replace_protected') return { kind: 'error', text: t('act.replace.protected') };
+      if (o.code === 'replace_guide_only') return { kind: 'error', text: t('act.msg.replaceGuide') };
+      if (o.code === 'replace_conflicts_changed') return { kind: 'error', text: t('act.msg.replaceChanged') };
+      if (o.code === 'replace_rollback_failed') return { kind: 'error', text: t('act.msg.replaceRollbackFailed') };
+      if (o.code === 'replace_not_effective') return { kind: 'error', text: t('act.msg.replaceNotEffective') };
+      if (o.code === 'replace_own_held') return { kind: 'error', text: t('act.msg.replaceOwnHeld') };
+      if (o.code === 'replace_own_not_found') return { kind: 'error', text: t('act.msg.replaceOwnNotFound') };
+      if (o.code === 'replace_not_registered') return { kind: 'error', text: t('act.msg.replaceNotRegistered') };
       if (o.code === 'cloud_timeout') return { kind: 'error', text: t('act.msg.cloudTimeout') };
       if (o.code === 'cloud_download_failed') return { kind: 'error', text: t('act.msg.cloudFailed', { message: o.message }) };
       if (o.code === 'cloud_stub') return { kind: 'error', text: t('act.msg.cloudStub') };
@@ -32,13 +40,13 @@ export function reconcileNotices(r: ReconcileReportDto): Msg[] {
   const out: Msg[] = [];
   for (const [cause, n] of group(r.autoDeactivated)) {
     const known = (CAUSES as readonly string[]).includes(cause);
-    out.push({ kind: 'info', text: known ? t('act.rec.auto', { n, cause: t(`act.rec.${cause as (typeof CAUSES)[number]}`) }) : t('act.rec.autoUnknown', { n, cause }) });
+    out.push({ kind: 'info', text: known ? tn('act.rec.auto', { n, cause: t(`act.rec.${cause as (typeof CAUSES)[number]}`) }) : tn('act.rec.autoUnknown', { n, cause }) });
   }
-  if (r.autoDeactivateFailed.length) out.push({ kind: 'error', text: t('act.rec.autoFailed', { n: r.autoDeactivateFailed.length }) });
+  if (r.autoDeactivateFailed.length) out.push({ kind: 'error', text: tn('act.rec.autoFailed', { n: r.autoDeactivateFailed.length }) });
   const parts = [
-    r.reregistered > 0 && t('act.rec.rereg', { n: r.reregistered }),
-    r.missing > 0 && t('act.rec.missing', { n: r.missing }),
-    r.notDownloaded > 0 && t('act.rec.icloud', { n: r.notDownloaded }),
+    r.reregistered > 0 && tn('act.rec.rereg', { n: r.reregistered }),
+    r.missing > 0 && tn('act.rec.missing', { n: r.missing }),
+    r.notDownloaded > 0 && tn('act.rec.icloud', { n: r.notDownloaded }),
   ].filter(Boolean) as string[];
   if (parts.length) out.push({ kind: 'info', text: parts.join(' ') });
   return out;

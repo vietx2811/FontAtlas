@@ -72,6 +72,20 @@ pub struct AppState {
     pub embed: EmbedSupervisor,
     pub langs: crate::services::langs::LangSupervisor,
     pub preview: OnceLock<Arc<crate::services::preview::Service>>,
+    /// Máy chủ broker localhost (None khi chưa mở hoặc đã tắt).
+    pub broker: Mutex<Option<fontatlas_broker::Server>>,
+    /// Nguồn font request của hệ thống (Photoshop/AE hỏi font còn thiếu). Giữ để đóng khi thoát; chỉ macOS có.
+    pub fontreq: Mutex<Option<Box<dyn std::any::Any + Send>>>,
+    /// Mã lỗi lần mở nguồn font request gần nhất (`refused` / `timeout` / `thread`); `None` khi đang chạy hoặc chưa thử.
+    /// Luồng thử lại định kỳ (services/fontreq) xoá nó khi mở được.
+    pub fontreq_error: Mutex<Option<String>>,
+    /// Tên probe tự kiểm sức khoẻ mà nguồn font request đã nhận (xem services/fontreq::probe). Tối đa vài mục gần nhất.
+    pub fontreq_seen: Mutex<Vec<String>>,
+    /// Báo luồng thử lại dừng (thoát app).
+    pub fontreq_stop: std::sync::atomic::AtomicBool,
+    /// Chỉ app thật (lib.rs `run`) bật: cho phép đăng ký thứ có phạm vi CẢ phiên đăng nhập (nguồn font request). Test và
+    /// công cụ dựng `AppState` thì để tắt.
+    pub system_hooks: std::sync::atomic::AtomicBool,
 }
 
 impl AppState {
@@ -96,6 +110,12 @@ impl AppState {
             embed: EmbedSupervisor::default(),
             langs: Default::default(),
             preview: OnceLock::new(),
+            broker: Mutex::new(None),
+            fontreq: Mutex::new(None),
+            fontreq_error: Mutex::new(None),
+            fontreq_seen: Mutex::new(Vec::new()),
+            fontreq_stop: std::sync::atomic::AtomicBool::new(false),
+            system_hooks: std::sync::atomic::AtomicBool::new(false),
         })
     }
 

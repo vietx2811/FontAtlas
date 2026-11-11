@@ -3,19 +3,21 @@ export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisS
 import type {
   PreviewCacheInfoDto, ProblemDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyStyleDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
-  SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto,
+  SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
 } from '../bindings';
 import type { FacePage, FaceQuery, FaceRow } from '../features/library-grid/types';
 
 export type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyStyleDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
-  SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow,
+  SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
 };
 export type { PreviewCacheInfoDto, ProblemDto };
 export type ModelState = ModelStatusDto['state'];
@@ -25,7 +27,7 @@ export type SimilarSource = SimilarSourceDto;
 
 /** Lỗi lệnh (6a: `CmdError {code, message, detail?}`); lệnh thật reject bằng object thường, lớp này gói lại để `instanceof` được. */
 export type CmdErrorCode =
-  | 'store_unavailable' | 'not_found' | 'not_comparable' | 'invalid_arg' | 'nested_source' | 'busy'
+  | 'store_unavailable' | 'not_found' | 'not_comparable' | 'invalid_arg' | 'conflict' | 'nested_source' | 'busy'
   | 'model_missing' | 'cancelled' | 'io' | 'insufficient_disk' | 'activation_unsupported' | 'internal';
 
 export class CmdError extends Error {
@@ -46,4 +48,4 @@ export type Unsubscribe = () => void;
 export type { CompareDto, CompareFace, CompareMetric, CompareMetricKey } from './compare';
 export type { PairComboDto } from '../bindings/PairComboDto';
 export type PairTheseOpts = { projectVi?: boolean; maxCombos?: number };
-export type { DuplicateGroupDto, DuplicateKindDto, DuplicateMemberDto, DuplicateSummaryDto } from '../bindings';
+export type { DuplicateGroupDto, DuplicateKindDto, DuplicateMemberDto, DuplicateSummaryDto, IgnoredGroupDto, PlanItemDto, PlanMemberDto, ResolveActionDto, ResolveFailureDto, ResolveItemDto, ResolveModeDto, ResolvePlanDto, ResolveReasonDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, ResolutionDto, TrashEligibilityDto } from '../bindings';

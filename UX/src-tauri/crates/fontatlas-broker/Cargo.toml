@@ -1,0 +1,18 @@
+[package]
+name = "fontatlas-broker"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Activation broker: máy chủ localhost cho helper/panel/script của app thiết kế xin bật font của thư viện"
+
+[dependencies]
+fontatlas-activate = { path = "../fontatlas-activate" }
+fontatlas-store = { path = "../fontatlas-store" }
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+
+[dev-dependencies]
+fontatlas-core = { path = "../fontatlas-core" }
+tempfile = "3.27"

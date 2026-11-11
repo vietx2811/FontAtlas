@@ -21,6 +21,14 @@ struct FakeState {
     blocked: bool,
     fail_unregister: Option<EngineError>,
     hook: Option<CallHook>,
+    /// `register(path, _)` luôn lỗi (giả ổ/app chặn đăng ký lại bản cũ).
+    fail_path: HashSet<PathBuf>,
+    /// `register(_, scope)` luôn lỗi ở scope này.
+    fail_scope: Vec<Scope>,
+    /// Sau `unregister(path, _)` thành công, đăng ký lại ngay (giả app quản lý bật lại bản của nó).
+    revive: HashSet<PathBuf>,
+    /// `unregister(path, _)` luôn lỗi (giả app chặn việc gỡ bản này).
+    fail_unregister_path: HashSet<PathBuf>,
 }
 
 type CallHook = Arc<dyn Fn(&str, &Path) + Send + Sync>;
@@ -64,6 +72,33 @@ impl FakeEngine {
     /// một thao tác khác vào giữa một vòng lặp của service. `f` tự chống đệ quy nếu cần.
     pub fn on_call(&self, f: impl Fn(&str, &Path) + Send + Sync + 'static) {
         self.st().hook = Some(Arc::new(f));
+    }
+
+    /// Mọi `register` của `path` lỗi cho tới khi `allow_register_of`.
+    pub fn fail_register_of(&self, path: &Path) {
+        self.st().fail_path.insert(path.to_path_buf());
+    }
+
+    pub fn allow_register_of(&self, path: &Path) {
+        self.st().fail_path.remove(path);
+    }
+
+    pub fn fail_register_in(&self, scope: Scope) {
+        self.st().fail_scope.push(scope);
+    }
+
+    pub fn allow_register_in(&self, scope: Scope) {
+        self.st().fail_scope.retain(|s| *s != scope);
+    }
+
+    /// Mọi `unregister` của `path` lỗi.
+    pub fn fail_unregister_of(&self, path: &Path) {
+        self.st().fail_unregister_path.insert(path.to_path_buf());
+    }
+
+    /// Gỡ `path` xong thì nó tự đăng ký lại (app khác bật lại).
+    pub fn revive_after_unregister(&self, path: &Path) {
+        self.st().revive.insert(path.to_path_buf());
     }
 
     /// Lần `register(path)` kế tiếp panic trước khi ghi nhận — giả app crash (một lần).
@@ -118,6 +153,9 @@ impl ActivationEngine for FakeEngine {
         if let Some(e) = st.fail_next.take() {
             return Err(e);
         }
+        if st.fail_path.contains(path) || st.fail_scope.contains(&scope) {
+            return Err(EngineError::Rejected { code: 9, message: "chặn đăng ký (test)".into() });
+        }
         if st.regs.iter().any(|(p, s)| p == path && *s == scope) {
             return Err(EngineError::AlreadyRegistered);
         }
@@ -134,9 +172,18 @@ impl ActivationEngine for FakeEngine {
         if let Some(e) = st.fail_unregister.take() {
             return Err(e);
         }
+        if st.fail_unregister_path.contains(path) {
+            return Err(EngineError::Rejected { code: 8, message: "chặn gỡ đăng ký (test)".into() });
+        }
         let before = st.regs.len();
         st.regs.retain(|(p, s)| !(p == path && *s == scope));
-        if st.regs.len() == before { Err(EngineError::NotRegistered) } else { Ok(()) }
+        if st.regs.len() == before {
+            return Err(EngineError::NotRegistered);
+        }
+        if st.revive.contains(path) {
+            st.regs.push((path.to_path_buf(), scope));
+        }
+        Ok(())
     }
 
     fn available_postscript_names(&self) -> Result<HashSet<String>, EngineError> {

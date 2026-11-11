@@ -7,18 +7,28 @@ import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
+import { t, getLocale, hasKey } from '../i18n';
 
 /** Đọc Blob thành ArrayBuffer (jsdom và WebView cũ chưa có Blob.arrayBuffer: dùng FileReader). */
 const blobBuffer = (b: Blob): Promise<ArrayBuffer> => (typeof b.arrayBuffer === 'function' ? b.arrayBuffer() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as ArrayBuffer); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); }));
+
+/**
+ * Backend viết thông báo lỗi bằng tiếng Việt (chi tiết kỹ thuật cho nhật ký). Giao diện tiếng Anh thay bằng câu theo `code`; tiếng Việt giữ nguyên câu gốc.
+ */
+export function localizeCmdMessage(code: string, message: string): string {
+  if (getLocale() === 'vi') return message;
+  const key = `err.${code}`;
+  return hasKey(key) ? t(key) : t('err.generic', { code });
+}
 
 /** Lệnh Tauri reject bằng object `{code, message, detail}` (CmdError của 6a); gói lại thành lớp để `instanceof` được. */
 export function toCmdError(e: unknown): CmdError {
   if (e instanceof CmdError) return e;
   if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
     const x = e as { code: string; message: string; detail?: unknown };
-    return new CmdError(x.code, x.message, x.detail ?? undefined);
+    return new CmdError(x.code, localizeCmdMessage(x.code, x.message), x.detail ?? undefined);
   }
-  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? 'lỗi không rõ');
+  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? t('api.unknownError'));
 }
 
 type Args<K extends CommandName> = TauriCommandMap[K]['args'];
@@ -55,6 +65,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeSecondary: q.includeSecondary ?? false, confidentOnly: q.confidentOnly ?? false, minConfidence: q.minConfidence ?? null,
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
     weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
+    groupByFamily: q.groupByFamily ?? false,
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -74,6 +85,7 @@ export function createTauriApi(): Api {
   return {
     // Xem trước và lưới
     queryFaces: async q => parseFacePage(await call('query_faces', { q: toFaceQueryDto(q) })),
+    familyGroups: (q = {}) => call('family_groups', { q: toFaceQueryDto(q) }),
     previewInfo: () => call('preview_info'),
     bumpGeneration: () => call('preview_bump_generation'),
     previewUrl, fontUrl,
@@ -87,7 +99,8 @@ export function createTauriApi(): Api {
     // Nguồn, quét
     listSources: () => call('list_sources'),
     addSource: path => call('add_source', { path }),
-    removeSource: sourceId => none(call('remove_source', { sourceId })),
+    removeSource: sourceId => call('remove_source', { sourceId }),
+    removeSourcePreview: sourceId => call('remove_source_preview', { sourceId }),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),
     scanStatus: () => call('scan_status'),
@@ -105,6 +118,8 @@ export function createTauriApi(): Api {
     systemTagCatalog: () => call('system_tag_catalog'),
     tagsOf: face => call('tags_of', { face }),
     createTag: name => call('create_tag', { name }),
+    renameTag: (id, name) => call('rename_tag', { id, name }),
+    deleteTag: id => call('delete_tag', { id }),
     tagFaces: (tagId, faces) => none(call('tag_faces', { tagId, faces })),
     untagFaces: (tagId, faces) => none(call('untag_faces', { tagId, faces })),
     revealInFinder: face => none(call('reveal_in_finder', { face })),
@@ -132,17 +147,17 @@ export function createTauriApi(): Api {
     reorderCombos: (caseId, ids) => none(call('reorder_combos', { caseId, ids })),
     setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
     createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
-    caseCompare: (caseId, comboIds, lang = 'vi') => call('case_compare', { caseId, comboIds, lang }),
+    caseCompare: (caseId, comboIds, lang = getLocale()) => call('case_compare', { caseId, comboIds, lang }),
     briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),
     axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
-      return fromWire(await call('compare_faces', { faces, opts: { lang: 'vi' } }));
+      return fromWire(await call('compare_faces', { faces, opts: { lang: getLocale() } }));
     },
     async pairThese(faces, o = {}) {
       if (faces.length < 2 || faces.length > 4) throw new Error(`pair these needs 2–4 faces, got ${faces.length}`);
-      return call('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: 'vi', maxCombos: o.maxCombos ?? 3 } });
+      return call('pair_these', { faces, opts: { projectVi: o.projectVi ?? true, lang: getLocale(), maxCombos: o.maxCombos ?? 3 } });
     },
     async savePng(png, suggestedName) {
       // Backend mở hộp thoại Lưu (lọc .png), kiểm PNG magic và ≤ 32 MB, rồi ghi file; trả đường dẫn hoặc null nếu huỷ.
@@ -154,6 +169,15 @@ export function createTauriApi(): Api {
     missingChars: (face, chars) => call('missing_chars', { face, chars }),
     duplicateSummary: (q = {}) => call('duplicate_summary', { q: toFaceQueryDto(q) }),
     duplicateGroups: (q = {}) => call('duplicate_groups', { q: toFaceQueryDto(q) }),
+    resolvePreview: (scope, q = {}) => call('resolve_preview', { scope, q: toFaceQueryDto(q) }),
+    resolveApply: req => call('resolve_apply', { req }),
+    resolveUndo: ids => call('resolve_undo', { ids }),
+    resolveList: includeUndone => call('resolve_list', { includeUndone }),
+    duplicateIgnore: (kind, key) => none(call('duplicate_ignore', { kind, key })),
+    duplicateUnignore: (kind, key) => none(call('duplicate_unignore', { kind, key })),
+    duplicateIgnored: () => call('duplicate_ignored'),
+    sourcePriority: () => call('source_priority'),
+    setSourcePriority: ids => call('set_source_priority', { ids }),
     classFacets: (q = {}) => call('class_facets', { q: toFaceQueryDto(q) }),
     setClassificationOverride: over => none(call('set_classification_override', { over })),
     clearClassificationOverride: face => none(call('clear_classification_override', { face })),
@@ -170,6 +194,13 @@ export function createTauriApi(): Api {
     getSettings: () => call('get_settings'),
     setSettings: patch => call('set_settings', { patch: settingsPatch(patch) }),
     // Model, embed
+    autoStatus: () => call('auto_status'),
+    autoSetEnabled: on => call('auto_set_enabled', { on }),
+    autoInstall: target => call('auto_install', { target }),
+    autoRemove: target => call('auto_remove', { target }),
+    autoForgetKey: () => call('auto_forget_key'),
+    autoProbe: () => call('auto_probe'),
+    autoLog: limit => call('auto_log', { limit: limit ?? null }),
     modelStatus: () => call('model_status'),
     modelDownload: onEvent => none(call('model_download', { onEvent: channel(onEvent).ch })),
     modelCancel: () => none(call('model_cancel')),
@@ -183,8 +214,12 @@ export function createTauriApi(): Api {
     activationState: () => call('activation_state'),
     activationPreflight: faces => call('activation_preflight', { faces }),
     activationActivate: (faces, o = {}) => call('activation_activate', { faces, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
+    activationReplace: (faces, confirmed, o = {}) => call('activation_replace', { faces, scope: o.scope ?? null, confirmed, onProgress: channel(o.onProgress).ch }),
+    activationListReplaced: () => call('activation_list_replaced'),
+    activationRestoreReplaced: id => call('activation_restore_replaced', { id }),
     activationDeactivate: (faces, o = {}) => call('activation_deactivate', { faces, force: o.force ?? false, onProgress: channel(o.onProgress).ch }),
     activationActivateCollection: (collectionId, o = {}) => call('activation_activate_collection', { collectionId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
+    activationActivateCase: (caseId, o = {}) => call('activation_activate_case', { caseId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),

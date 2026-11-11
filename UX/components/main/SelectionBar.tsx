@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type { FaceRow } from '../../features/library-grid/types';
 import { clearSelection, useFavoriteStore } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
-import { t } from '../../i18n';
+import { t, formatNumber } from '../../i18n';
 import { useFaceActions } from '../faces/FaceActions';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
@@ -22,7 +22,7 @@ export function SelectionBar({ rows }: { rows: readonly FaceRow[] }): React.JSX.
   const allActive = usable.length > 0 && usable.every(r => active.has(r.hashHex) || available.has(r.hashHex));
   return (
     <div className="fa-selbar" role="toolbar" aria-label={t('sel.group')}>
-      <span className="fa-selbar-n" data-testid="selection-count">{t('sel.count', { n: rows.length.toLocaleString('vi-VN') })}</span>
+      <span className="fa-selbar-n" data-testid="selection-count">{t('sel.count', { n: formatNumber(rows.length) })}</span>
       <span className="fa-selbar-sep" aria-hidden />
       <Tooltip label={t(allFav ? 'sel.unfav.tip' : 'sel.fav.tip')}>
         <button type="button" onClick={() => void actions.setFavorite(rows, !allFav)}><Icon name="star" size={15} />{t(allFav ? 'sel.unfav' : 'sel.fav')}</button>

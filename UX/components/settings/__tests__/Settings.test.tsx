@@ -25,9 +25,9 @@ describe('Settings', () => {
 
   it('has the groups of spec 5 in a left column and shows one group at a time', async () => {
     await mount();
-    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp']);
+    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp']);
     const nav = screen.getByRole('navigation', { name: 'Nhóm cài đặt' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(8);
+    expect(within(nav).getAllByRole('button')).toHaveLength(9);
     expect(within(nav).getByRole('button', { name: 'Chung' }).getAttribute('aria-current')).toBe('true');
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Chung');
     await go('Giấy phép');
@@ -49,8 +49,14 @@ describe('Settings', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'English' }));
       await settle();
       expect(set).toHaveBeenLastCalledWith({ uiLang: 'en' });
-      fireEvent.click(screen.getByRole('radio', { name: 'Tối' }));
+      expect(document.documentElement.lang).toBe('en');
+      // Ngôn ngữ đổi ngay, không cần khởi động lại: nhãn đã sang tiếng Anh.
+      fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
       expect(document.documentElement.dataset.theme).toBe('dark');
+      fireEvent.click(screen.getByRole('radio', { name: 'Tiếng Việt' }));
+      await settle();
+      expect(set).toHaveBeenLastCalledWith({ uiLang: 'vi' });
+      expect(screen.getByRole('radio', { name: 'Tối' })).toBeTruthy();
       fireEvent.change(screen.getByRole('textbox', { name: 'Chữ mẫu mặc định' }), { target: { value: 'Bún chả' } });
       await settle();
       expect(set).toHaveBeenLastCalledWith({ sampleText: 'Bún chả' });
@@ -93,7 +99,9 @@ describe('Settings', () => {
       fireEvent.click(within(dlg).getByRole('button', { name: 'Huỷ' }));
       expect(await api.listSources()).toHaveLength(3);
       fireEvent.click(within(screen.getAllByTestId('source-row')[1]).getByRole('button', { name: 'Xoá nguồn' }));
-      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xoá khỏi thư viện' })); });
+      await settle();
+      expect(screen.getByTestId('rmsrc-facts')).toBeTruthy(); // số liệu thật từ bản xem trước
+      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Gỡ khỏi thư viện' })); });
       await settle();
       expect((await api.listSources()).map(s => s.id)).toEqual([1, 3]);
       expect(screen.getAllByTestId('source-row')).toHaveLength(2);
@@ -198,6 +206,23 @@ describe('Settings', () => {
   });
 
   describe('Kích hoạt font', () => {
+    it('lists the old copies that were replaced and not yet restored, with a Restore button that removes the row', async () => {
+      const api = createMockApi();
+      const f = (await api.queryFaces({ text: 'Oswald', limit: 5 })).items[0];
+      const key = { hashHex: f.hashHex, faceIndex: f.faceIndex };
+      const pre = await api.activationPreflight([key]);
+      const seen = pre.results.flatMap(r => (r.outcome.kind === 'needs_confirmation' ? r.outcome.conflicts.map(x => ({ hashHex: r.hashHex, existingPath: x.existingPath })) : []));
+      await api.activationReplace([key], seen);
+      await mount({}, api);
+      await go('Kích hoạt font');
+      const box = screen.getByTestId('replaced-list');
+      expect(within(box).getByText(/Oswald\.ttf/)).toBeTruthy();
+      await act(async () => { fireEvent.click(within(box).getByRole('button', { name: 'Khôi phục' })); });
+      await settle();
+      expect(within(screen.getByTestId('replaced-list')).queryByRole('button', { name: 'Khôi phục' })).toBeNull();
+      expect(within(screen.getByTestId('replaced-list')).getByText('Chưa có bản cũ nào bị thay.')).toBeTruthy();
+    });
+
     it('"when FontAtlas quits" is saved; other font managers are information only', async () => {
       const { api } = await mount();
       await go('Kích hoạt font');

@@ -23,6 +23,9 @@ pub enum StoreError {
     NotFound(String),
     #[error("tham số không hợp lệ: {0}")]
     Invalid(String),
+    /// Trùng với bản ghi khác của người dùng (vd đổi tên Tag sang tên đã có): không gộp ngầm.
+    #[error("trùng tên: {0}")]
+    Conflict(String),
     #[error("đường dẫn lồng với nguồn #{existing_id}")]
     NestedSource { existing_id: i64 },
 }
@@ -38,6 +41,7 @@ impl StoreError {
             StoreError::Legacy(_) => "legacy",
             StoreError::NotFound(_) => "not_found",
             StoreError::Invalid(_) => "invalid_arg",
+            StoreError::Conflict(_) => "conflict",
             StoreError::NestedSource { .. } => "nested_source",
         }
     }

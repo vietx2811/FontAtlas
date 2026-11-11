@@ -86,3 +86,7 @@
 .fa-side[data-collapsed="true"] .fa-cloud { display: none; }
 
 .fa-nav[data-context="true"], .fa-tag[data-context="true"] { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+
+/* Gỡ nguồn: danh sách hệ quả */
+.fa-rmsrc-list { margin: 8px 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--text-sm); }
+.fa-tag-input { width: 140px; margin: 0; }

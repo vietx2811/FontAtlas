@@ -2,11 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MenuAnchor } from './Menu';
 import './menu.css';
+import { t } from '../../i18n';
 
 type Props = { label: string; initial: string; submitLabel?: string; cancelLabel?: string; anchor: MenuAnchor; onSubmit(name: string): void; onCancel(): void };
 
 /** Hộp nhỏ nhập một tên (Dự án mới…, Thẻ mới…). Enter tạo, Esc huỷ, bấm ngoài huỷ. */
-export function NamePrompt({ label, initial, submitLabel = 'Tạo', cancelLabel = 'Huỷ', anchor, onSubmit, onCancel }: Props): React.JSX.Element {
+export function NamePrompt({ label, initial, submitLabel = t('np.create'), cancelLabel = t('np.cancel'), anchor, onSubmit, onCancel }: Props): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(initial);

@@ -10,6 +10,25 @@ export type FaceRowDto = { faceId: number, hashHex: string, faceIndex: number, f
  */
 onCloudOnly: boolean, isFavorite: boolean, addedAt: number, 
 /**
+ * Năm phát hành ƯỚC LƯỢNG (độ tin cậy trung bình-thấp): năm trong dòng copyright, nếu không có thì `head.created`,
+ * rồi `head.modified`; giá trị rõ ràng sai (0, 1904, tương lai) bị bỏ. `null` = không rõ hoặc bản phân tích cũ chưa
+ * có dữ liệu (analyzer < core-0.8.0, có sau khi phân tích lại).
+ */
+releaseYear: number | null, 
+/**
+ * `copyright` | `head_created` | `head_modified`; `null` khi `releaseYear` là `null`.
+ */
+releaseYearSource: string | null, 
+/**
+ * Ngày tạo file sớm nhất (ms từ epoch) trong các vị trí còn thấy; `null` = không đọc được / chưa quét lại.
+ * Độ tin cậy thấp làm "ngày font ra đời": sao chép/đồng bộ đặt lại ngày.
+ */
+fileCreatedAt: number | null, 
+/**
+ * `disk` | `cloud_sync` (file trên ổ cloud: có thể là lúc đồng bộ); `null` khi `fileCreatedAt` là `null`.
+ */
+fileCreatedSource: string | null, 
+/**
  * Chỉ báo ngôn ngữ trên thẻ, theo `FaceQueryDto.badgeLang` (mặc định `vie`). `null` khi mã ngôn ngữ lạ.
  * `viMissing` giữ nguyên cho tương thích; giao diện dùng `langBadge` thay chỉ báo `−N`.
  */

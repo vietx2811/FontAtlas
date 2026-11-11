@@ -8,19 +8,20 @@ import { Illustration } from './Illustrations';
 import { ScanBlocks } from './ScanBlocks';
 import { Outro, OUTRO_MS } from './Outro';
 import { usePrefersReducedMotion } from './blueprint';
-import { t } from '../../i18n';
+import { chooseLocale, formatNumber, t, useLocale } from '../../i18n';
 import { isSplashOpen } from '../splash/splashState';
 import { pickFoldersWithDialog } from '../sidebar/useDropPaths';
 import './onboarding.css';
 import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
+import { ShortcutsOverlay } from '../help/ShortcutsOverlay';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
   /** false: không có outro (test, QA). Giảm chuyển động của hệ thống cũng tắt nó. Phần mở đầu là Splash của App, không nằm ở đây. */ animated?: boolean; outroMs?: number };
 type Phase = 'steps' | 'outro';
 const MB = 1024 * 1024;
-const kindOf = (p: string | null) => (!p ? 'trong máy' : p.startsWith('/Volumes/') ? 'ổ ngoài' : /iCloud|Mobile Documents/.test(p) ? 'iCloud' : 'trong máy');
+const kindOf = (p: string | null) => t(!p ? 'onb.kind.local' : p.startsWith('/Volumes/') ? 'onb.kind.external' : /iCloud|Mobile Documents/.test(p) ? 'onb.kind.icloud' : 'onb.kind.local');
 
 export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialog, onDone, animated = true, outroMs = OUTRO_MS }: Props): React.JSX.Element | null {
   const reduced = usePrefersReducedMotion();
@@ -73,7 +74,7 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
     return () => document.removeEventListener('keydown', on);
   }, [phase]);
 
-  if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? `Không tải được hướng dẫn: ${loadError}` : "Đang mở hướng dẫn…"}</p>{loadError && <button type="button" onClick={() => location.reload()}>Thử lại</button>}</main></div>;
+  if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? t('onb.loadFail', { msg: loadError }) : t('onb.loading')}</p>{loadError && <button type="button" onClick={() => location.reload()}>{t('onb.retry')}</button>}</main></div>;
   if (phase === 'outro') return <div className="fa-onb" ref={root} data-phase="outro"><Outro ms={hold ? 1e9 : outroMs} onDone={onDone} /></div>;
   const steps = visibleSteps(state);
   // Số chấm cố định suốt hướng dẫn: bước quét (o4) luôn có chấm, kể cả trước khi thêm nguồn,
@@ -87,14 +88,11 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   return (
     <div className="fa-onb" ref={root} data-step={step}>
       <header className="fa-onb-top">
-        {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>Quay lại</button> : <span />}
+        {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>{t('onb.back')}</button> : <span />}
         <div className="fa-onb-dots" role="group" aria-label={t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}>
           {dots.map((d, i) => <i key={d} data-on={i <= idx} data-now={i === idx} aria-hidden />)}
         </div>
-        <div className="fa-onb-meta" aria-hidden>
-          <span className="fa-onb-stepno">{t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}</span>
-          <span className="fa-onb-keys"><kbd>←</kbd> {t('onb.keys.back')} · <kbd>→</kbd> {t('onb.keys.next')}{step === 'o1' && <> · <kbd>Esc</kbd> {t('onb.keys.skip')}</>}</span>
-        </div>
+        <span />
       </header>
       <span id="onb-keys-desc" className="sr-only">{t('onb.keys.aria')}</span>
       <main className="fa-onb-body" aria-describedby="onb-keys-desc">
@@ -120,21 +118,21 @@ const Actions = ({ children }: { children: React.ReactNode }) => <div className=
 const Primary = ({ safe, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { safe?: boolean }) => <button type="button" className="primary" data-keynav={safe ? '' : undefined} {...p} />;
 
 function O1({ api, next, finish }: Ctx) {
-  const [lang, setLang] = useState<'vi' | 'en'>('vi');
+  const lang = useLocale();
   const [theme, setTheme] = useState<ThemeMode>('system');
   return (
     <>
-      <h1>Chào mừng đến với Font Atlas</h1>
-      <p>Phân tích giải phẫu font, tìm font tương tự và ghép cặp có giải thích theo từng trục.</p>
-      <fieldset className="fa-onb-field"><legend>Ngôn ngữ</legend>
+      <h1>{t('onb.o1.title')}</h1>
+      <p>{t('onb.o1.intro')}</p>
+      <fieldset className="fa-onb-field"><legend>{t('onb.o1.lang')}</legend>
         {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, label]) => (
-          <label key={v}><input type="radio" name="lang" checked={lang === v} onChange={() => { setLang(v); void api.setSettings({ uiLang: v }); }} />{label}</label>))}
+          <label key={v}><input type="radio" name="lang" checked={lang === v} onChange={() => { chooseLocale(v); void api.setSettings({ uiLang: v }); }} />{label}</label>))}
       </fieldset>
-      <fieldset className="fa-onb-field"><legend>Giao diện</legend>
-        {([['system', 'Theo hệ thống'], ['light', 'Sáng'], ['dark', 'Tối']] as const).map(([v, label]) => (
+      <fieldset className="fa-onb-field"><legend>{t('onb.o1.theme')}</legend>
+        {([['system', t('onb.theme.system')], ['light', t('onb.theme.light')], ['dark', t('onb.theme.dark')]] as const).map(([v, label]) => (
           <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{label}</label>))}
       </fieldset>
-      <Actions><button type="button" data-skip onClick={() => void finish(true)}>Bỏ qua hướng dẫn</button><Primary safe onClick={() => void next()}>Bắt đầu</Primary></Actions>
+      <Actions><button type="button" data-skip onClick={() => void finish(true)}>{t('onb.skip')}</button><Primary safe onClick={() => void next()}>{t('onb.start')}</Primary></Actions>
     </>
   );
 }
@@ -145,15 +143,15 @@ function O2({ api, state, reload, next }: Ctx) {
   const p = l.preview;
   return (
     <>
-      <h1>Dữ liệu từ phiên bản trước</h1>
-      <p>Tìm thấy dữ liệu từ phiên bản trước.</p>
-      {p && <p className="fa-onb-count">{p.sources} nguồn · {p.favorites} yêu thích · {p.collections} collection · {p.tags} thẻ</p>}
-      {l.imported && <p role="status">Đã chuyển {l.imported.fonts} font, {l.imported.collections} collection.</p>}
-      {l.error && <p role="alert">Không chuyển được: {l.error.message}</p>}
+      <h1>{t('onb.o2.title')}</h1>
+      <p>{t('onb.o2.intro')}</p>
+      {p && <p className="fa-onb-count">{t('onb.o2.counts', { sources: p.sources, favorites: p.favorites, collections: p.collections, tags: p.tags })}</p>}
+      {l.imported && <p role="status">{t('onb.o2.imported', { fonts: l.imported.fonts, collections: l.imported.collections })}</p>}
+      {l.error && <p role="alert">{t('onb.o2.failed', { msg: l.error.message })}</p>}
       <Actions>
-        <button type="button" onClick={() => void next()}>Bỏ qua</button>
-        {l.imported ? <Primary onClick={() => void next()}>Tiếp tục</Primary>
-          : <Primary disabled={busy} onClick={async () => { setBusy(true); try { await api.legacyImport(); } finally { setBusy(false); await reload(); } }}>Chuyển dữ liệu</Primary>}
+        <button type="button" onClick={() => void next()}>{t('onb.skipStep')}</button>
+        {l.imported ? <Primary onClick={() => void next()}>{t('onb.continue')}</Primary>
+          : <Primary disabled={busy} onClick={async () => { setBusy(true); try { await api.legacyImport(); } finally { setBusy(false); await reload(); } }}>{t('onb.o2.import')}</Primary>}
       </Actions>
     </>
   );
@@ -165,12 +163,12 @@ function sourceError(error: unknown, path?: string): string {
     if (error.code === 'nested_source') {
       const d = error.detail;
       const existing = typeof d === 'object' && d !== null && 'existingPath' in d && typeof d.existingPath === 'string' ? d.existingPath : null;
-      if (existing === path) return 'Thư mục này đã có trong thư viện.';
-      if (existing && path && existing.startsWith(`${path.replace(/\/$/, '')}/`)) return `Thư mục này chứa nguồn đã có: ${existing}. Giữ nguyên nguồn cũ.`;
-      return 'Thư mục này đã nằm trong nguồn có sẵn. Giữ nguyên nguồn cũ.';
+      if (existing === path) return t('onb.src.dup');
+      if (existing && path && existing.startsWith(`${path.replace(/\/$/, '')}/`)) return t('onb.src.contains', { path: existing });
+      return t('onb.src.nested');
     }
-    if (error.code === 'busy') return 'Nguồn đang quét. Hãy đợi quét xong rồi thử lại.';
-    if (error.code === 'io') return `Không truy cập được thư mục. Kiểm tra quyền đọc hoặc kết nối ổ đĩa. ${error.message}`;
+    if (error.code === 'busy') return t('onb.src.busy');
+    if (error.code === 'io') return t('onb.src.io', { msg: error.message });
   }
   return error instanceof Error ? error.message : String(error);
 }
@@ -208,8 +206,8 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
       if (e.type === 'finished' || e.type === 'failed') setScanning(ids => ids.filter(id => id !== e.sourceId));
       if (e.type === 'idle') setScanning([]);
       if (e.type === 'finished' || e.type === 'idle') void refresh().catch(err => { if (!dead) setLoadError(sourceError(err)); });
-    }).then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([`Không theo dõi được tiến độ: ${sourceError(e)}`]); });
-    api.scanStatus().then(s => { if (!dead && !eventSeen) setScanning([...s.queued, ...(s.currentSourceId === null ? [] : [s.currentSourceId])]); }).catch(e => { if (!dead) setMessages([`Không đọc được trạng thái quét: ${sourceError(e)}`]); });
+    }).then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([t('onb.o3.trackFail', { msg: sourceError(e) })]); });
+    api.scanStatus().then(s => { if (!dead && !eventSeen) setScanning([...s.queued, ...(s.currentSourceId === null ? [] : [s.currentSourceId])]); }).catch(e => { if (!dead) setMessages([t('onb.o3.statusFail', { msg: sourceError(e) })]); });
     return () => { dead = true; alive.current = false; off?.(); };
   }, [api, load, refresh]);
   const run = async (job: () => Promise<void>) => {
@@ -234,29 +232,29 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
   });
   return (
     <>
-      <h1>Thư mục font</h1>
-      <p>Chọn một hoặc nhiều thư mục. Font được quét tự động.</p>
-      <ul className="fa-onb-sources" aria-label="Nguồn font" aria-busy={loading || busy}>
+      <h1>{t('onb.o3.title')}</h1>
+      <p>{t('onb.o3.intro')}</p>
+      <ul className="fa-onb-sources" aria-label={t('onb.o3.list')} aria-busy={loading || busy}>
         {sources.map(s => {
           const active = s.scanning || scanning.includes(s.id);
           return <li key={s.id}>
             <div className="fa-onb-source-info"><strong>{s.name}</strong><Tooltip label={s.path ?? s.name} onlyIfTruncated><span className="path">{s.path ?? s.name}</span></Tooltip>
-              <span className="kind">{kindOf(s.path)} · {!s.available ? 'Không truy cập được' : active ? 'Đang quét / chờ quét' : `${s.faceCount.toLocaleString('vi-VN')} font`}</span>
+              <span className="kind">{kindOf(s.path)} · {!s.available ? t('onb.o3.unavailable') : active ? t('onb.o3.scanning') : t('onb.o3.faces', { n: formatNumber(s.faceCount) })}</span>
             </div>
-            <Tooltip label={active ? 'Đợi quét xong để xóa nguồn' : 'Gỡ nguồn khỏi thư viện'}><button type="button" aria-disabled={busy || active || undefined} aria-label={`Xoá ${s.name}`} onClick={() => { if (!busy && !active) void run(async () => { await api.removeSource(s.id); await refresh(); }); }}>Xoá</button></Tooltip>
+            <Tooltip label={active ? t('onb.o3.removeWait') : t('onb.o3.removeTip')}><button type="button" aria-disabled={busy || active || undefined} aria-label={t('onb.o3.removeAria', { name: s.name })} onClick={() => { if (!busy && !active) void run(async () => { await api.removeSource(s.id); await refresh(); }); }}>{t('onb.o3.remove')}</button></Tooltip>
           </li>;
         })}
-        {sources.length === 0 && <li className="empty">{loading ? 'Đang tải nguồn…' : loadError ? 'Chưa tải được danh sách nguồn.' : 'Chưa có thư mục nào.'}</li>}
+        {sources.length === 0 && <li className="empty">{loading ? t('onb.o3.loadingList') : loadError ? t('onb.o3.listFail') : t('onb.o3.empty')}</li>}
       </ul>
-      {loadError && <div className="fa-onb-feedback" role="alert">Không tải được nguồn: {loadError} <button type="button" disabled={busy || loading} onClick={() => void load()}>Thử lại</button></div>}
+      {loadError && <div className="fa-onb-feedback" role="alert">{t('onb.o3.loadFail', { msg: loadError })} <button type="button" disabled={busy || loading} onClick={() => void load()}>{t('onb.retry')}</button></div>}
       {messages.length > 0 && <ul className="fa-onb-feedback" role="alert">{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>}
-      {busy && <p role="status">Đang cập nhật thư mục…</p>}
+      {busy && <p role="status">{t('onb.o3.updating')}</p>}
       <div className="fa-onb-suggest">
-        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add()}>+ Thêm thư mục</button>
-        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add(['/Library/Fonts'])}>Font hệ thống</button>
+        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add()}>{t('onb.o3.add')}</button>
+        <button type="button" disabled={busy || loading || !!loadError} onClick={() => void add(['/Library/Fonts'])}>{t('onb.o3.system')}</button>
       </div>
-      {sources.some(s => s.path?.startsWith('/Volumes/')) && <p className="fa-onb-note">Ổ ngoài cần được kết nối để xem và dùng font.</p>}
-      <Actions><button type="button" disabled={busy} onClick={() => void next()}>Để sau</button><Primary safe disabled={busy || loading || !!loadError || sources.length === 0} onClick={() => void next()}>Tiếp tục</Primary></Actions>
+      {sources.some(s => s.path?.startsWith('/Volumes/')) && <p className="fa-onb-note">{t('onb.o3.external')}</p>}
+      <Actions><button type="button" disabled={busy} onClick={() => void next()}>{t('onb.later')}</button><Primary safe disabled={busy || loading || !!loadError || sources.length === 0} onClick={() => void next()}>{t('onb.continue')}</Primary></Actions>
     </>
   );
 }
@@ -278,14 +276,14 @@ function O4({ api, next, stage }: Ctx) {
     void api.scanStatus().then(s => { if (!dead) setSt(p => (s.running ? { ...p, scanning: true } : p.scanning ? p : { scanning: false, progress: 1, done: true })); });
     return () => { dead = true; off?.(); };
   }, [api]);
-  const text = stats.finished ? `Đã tìm ${stats.seen} file · đã phân tích ${stats.analyzed} font · ${stats.failed} file có vấn đề` : `Đã tìm ${seen} file · đã phân tích ${written} font`;
+  const text = stats.finished ? t('onb.o4.summaryDone', { seen: stats.seen, analyzed: stats.analyzed, failed: stats.failed }) : t('onb.o4.summary', { seen, written });
   return (
     <>
       {stage && createPortal(<ScanBlocks seed={seed} scanning={st.scanning} progress={st.progress} done={st.done} />, stage)}
-      <h1>{st.done ? 'Quét xong' : 'Đang quét thư viện'}</h1>
+      <h1>{st.done ? t('onb.o4.done') : t('onb.o4.running')}</h1>
       <p className="sr-only" data-testid="scan-summary" aria-live="polite">{text}</p>
-      {!st.done && <p className="fa-onb-note">Quét vẫn chạy nền nếu bạn đi tiếp.</p>}
-      <Actions><Primary safe onClick={() => void next()}>Tiếp tục</Primary></Actions>
+      {!st.done && <p className="fa-onb-note">{t('onb.o4.note')}</p>}
+      <Actions><Primary safe onClick={() => void next()}>{t('onb.continue')}</Primary></Actions>
     </>
   );
 }
@@ -293,9 +291,9 @@ function O4({ api, next, stage }: Ctx) {
 function O5({ api, reload, next }: Ctx) {
   return (
     <>
-      <h1>Giấy phép và trách nhiệm</h1>
-      <p>Font Atlas phân tích mọi font bạn thêm, kể cả font thương mại. Bạn tự chịu trách nhiệm về giấy phép. Dữ liệu không rời khỏi máy.</p>
-      <Actions><Primary onClick={async () => { await api.setSettings({ licenseNoticeAck: true }); await reload(); await next(); }}>Đã hiểu</Primary></Actions>
+      <h1>{t('onb.o5.title')}</h1>
+      <p>{t('onb.o5.body')}</p>
+      <Actions><Primary onClick={async () => { await api.setSettings({ licenseNoticeAck: true }); await reload(); await next(); }}>{t('onb.o5.ack')}</Primary></Actions>
     </>
   );
 }
@@ -319,21 +317,21 @@ function O6({ api, next }: Ctx) {
   const mins = info ? estimateAnalysisMinutes(info.faces) : 0;
   return (
     <>
-      <h1>Phân tích hình ảnh (tuỳ chọn)</h1>
-      <p>So sánh hình dáng chữ bằng model ảnh để Similar sát với mắt nhìn hơn. Không bật vẫn dùng được số đo.</p>
+      <h1>{t('onb.o6.title')}</h1>
+      <p>{t('onb.o6.intro')}</p>
       <ul className="fa-onb-list">
-        <li>~371 MB, tải một lần từ Hugging Face (SigLIP 2, Apache-2.0). Chạy trên máy.</li>
-        {info && <li>{info.faces > 0 ? `${info.faces.toLocaleString('vi-VN')} font · khoảng ${mins} phút · ` : ''}còn trống {Math.round(info.free / (1024 * MB))} GB</li>}
+        <li>{t('onb.o6.size')}</li>
+        {info && <li>{info.faces > 0 ? t('onb.o6.faces', { n: formatNumber(info.faces), mins }) : ''}{t('onb.o6.free', { gb: Math.round(info.free / (1024 * MB)) })}</li>}
       </ul>
-      {short > 0 && <p role="alert">Cần thêm {Math.ceil(short / MB)} MB trống.</p>}
-      {initError && <p role="alert">Không đọc được trạng thái model.</p>}
-      {showDownload && <p role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{ui.text ?? (model?.state === 'ready' ? 'Model đã sẵn sàng' : 'Phân tích hình ảnh đang tắt')}</p>}
+      {short > 0 && <p role="alert">{t('onb.o6.short', { mb: Math.ceil(short / MB) })}</p>}
+      {initError && <p role="alert">{t('onb.o6.initFail')}</p>}
+      {showDownload && <p role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{ui.text ?? (model?.state === 'ready' ? t('onb.o6.ready') : t('onb.o6.off'))}</p>}
       <ModelDetails detail={ui.detail ?? initError ?? undefined} />
       <Actions>
-        {!showDownload && <><button type="button" onClick={async () => { await api.setSettings({ embedEnabled: false }); await next(); }}>Không dùng</button>
-        <button type="button" onClick={async () => { await api.setSettings({ embedEnabled: true }); await next(); }}>Để sau</button>
-        <Primary disabled={short > 0 || !info || busy || !!initError} onClick={async () => { setStarted(true); setBusy(true); try { await store.getState().enable(api); } finally { setBusy(false); } }}>Tải ngay</Primary></>}
-        {showDownload && <>{ui.actions.map(a => <button key={a.label} type="button" disabled={busy} onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}<Primary onClick={() => void next()}>Tiếp tục</Primary></>}
+        {!showDownload && <><button type="button" onClick={async () => { await api.setSettings({ embedEnabled: false }); await next(); }}>{t('onb.o6.no')}</button>
+        <button type="button" onClick={async () => { await api.setSettings({ embedEnabled: true }); await next(); }}>{t('onb.later')}</button>
+        <Primary disabled={short > 0 || !info || busy || !!initError} onClick={async () => { setStarted(true); setBusy(true); try { await store.getState().enable(api); } finally { setBusy(false); } }}>{t('onb.o6.download')}</Primary></>}
+        {showDownload && <>{ui.actions.map(a => <button key={a.label} type="button" disabled={busy} onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}<Primary onClick={() => void next()}>{t('onb.continue')}</Primary></>}
       </Actions>
     </>
   );
@@ -343,30 +341,33 @@ function O7({ api, state, next }: Ctx) {
   const [keep, setKeep] = useState(state.keepActiveOnExit);
   const managers = state.fontManagers.filter(m => m.installed);
   if (!state.activationSupported) {
-    return (<><h1>Kích hoạt font cho app thiết kế</h1><p>Sắp có trên Windows.</p><Actions><Primary onClick={() => void next()}>Tiếp tục</Primary></Actions></>);
+    return (<><h1>{t('onb.o7.title')}</h1><p>{t('onb.o7.soon')}</p><Actions><Primary onClick={() => void next()}>{t('onb.continue')}</Primary></Actions></>);
   }
   return (
     <>
-      <h1>Kích hoạt font cho app thiết kế</h1>
-      <p>Dùng font trong Photoshop, Figma… mà không cần cài vào hệ thống.</p>
-      <fieldset className="fa-onb-field"><legend>Khi thoát Font Atlas</legend>
-        <label><input type="radio" name="keep" checked={!keep} onChange={() => setKeep(false)} />Tắt các font đã kích hoạt <small>Mở lại app sẽ tự bật lại.</small></label>
-        <label><input type="radio" name="keep" checked={keep} onChange={() => setKeep(true)} />Giữ font hoạt động <small>Cho tới khi bạn tắt trong Font Atlas.</small></label>
+      <h1>{t('onb.o7.title')}</h1>
+      <p>{t('onb.o7.intro')}</p>
+      <fieldset className="fa-onb-field"><legend>{t('onb.o7.exit')}</legend>
+        <label><input type="radio" name="keep" checked={!keep} onChange={() => setKeep(false)} />{t('onb.o7.exitOff')} <small>{t('onb.o7.exitOffNote')}</small></label>
+        <label><input type="radio" name="keep" checked={keep} onChange={() => setKeep(true)} />{t('onb.o7.exitKeep')} <small>{t('onb.o7.exitKeepNote')}</small></label>
       </fieldset>
       {managers.length > 0 && (
-        <p className="fa-onb-warn">⚠ Phát hiện {managers.map(m => m.name).join(', ')}. Đừng kích hoạt cùng một font ở hai app.</p>)}
-      <Actions><button type="button" onClick={() => void next()}>Để sau</button><Primary onClick={async () => { await api.activationSetKeep(keep); await next(); }}>Bật kích hoạt font</Primary></Actions>
+        <p className="fa-onb-warn">{t('onb.o7.warn', { names: managers.map(m => m.name).join(', ') })}</p>)}
+      <Actions><button type="button" onClick={() => void next()}>{t('onb.later')}</button><Primary onClick={async () => { await api.activationSetKeep(keep); await next(); }}>{t('onb.o7.enable')}</Primary></Actions>
     </>
   );
 }
 
 function End({ finish }: Ctx) {
+  // Trước màn kết: bảng phím tắt & tính năng chính. Esc, bấm nền hay nút đều vào thư viện (bỏ qua được).
+  const [tips, setTips] = useState(() => import.meta.env.DEV && new URLSearchParams(location.hash.replace(/^#/, '')).get('tips') === '1'); // tips=1: chỉ cho ảnh chụp/QA dev
   return (
     <>
-      <h1>Xong</h1>
-      <p>Thư viện của bạn đang được phân tích. Vài gợi ý để bắt đầu:</p>
-      <ul className="fa-onb-list"><li>Mở một font để xem giải phẫu.</li><li>Thử ghép cặp hai font.</li><li>Đổi chữ mẫu ở thanh dưới cùng.</li></ul>
-      <Actions><Primary safe onClick={() => void finish()}>Vào thư viện</Primary></Actions>
+      {tips && <ShortcutsOverlay primary={t('tips.start')} onClose={() => void finish()} />}
+      <h1>{t('onb.end.title')}</h1>
+      <p>{t('onb.end.intro')}</p>
+      <ul className="fa-onb-list"><li>{t('onb.end.tip1')}</li><li>{t('onb.end.tip2')}</li><li>{t('onb.end.tip3')}</li></ul>
+      <Actions><Primary safe onClick={() => setTips(true)}>{t('onb.end.enter')}</Primary></Actions>
     </>
   );
 }

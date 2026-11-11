@@ -108,6 +108,60 @@ describe('mock activation (Plan 7 contract)', () => {
   });
 });
 
+/** Xung đột như hộp thoại đã hiển thị (từ preflight). */
+const seen = async (api: ReturnType<typeof createMockApi>, r: Parameters<typeof key>[0]) =>
+  (await api.activationPreflight([key(r)])).results.flatMap(x => (x.outcome.kind === 'needs_confirmation' ? x.outcome.conflicts.map(c => ({ hashHex: x.hashHex, existingPath: c.existingPath })) : []));
+
+describe('mock replace / restore (tắt bản cũ và bật bản này)', () => {
+  it('a RightFont clash is replaced: ours becomes active, the removed copy is reported with its scope, restore puts it back once', async () => {
+    const api = createMockApi();
+    const r = await rowOf(api, 'Oswald');
+    const ask = await api.activationActivate([key(r)]);
+    expect(ask.results[0].outcome.kind).toBe('needs_confirmation');
+    const rep = await api.activationReplace([key(r)], await seen(api, r));
+    expect(rep.results[0].outcome.kind).toBe('activated');
+    const rf = rep.results[0].replaced!;
+    expect(rf).toHaveLength(1);
+    expect(rf[0]).toMatchObject({ owner: 'right_font', scopes: ['persistent'] });
+    expect((await api.activationState()).map(s => s.hashHex)).toContain(r.hashHex);
+    expect(await api.activationRestoreReplaced(rf[0].id)).toBe('restored');
+    expect((await api.activationState()).map(s => s.hashHex)).not.toContain(r.hashHex);
+    expect(await api.activationRestoreReplaced(rf[0].id)).toBe('already_restored');
+    await expect(api.activationRestoreReplaced(99999)).rejects.toMatchObject({ code: 'activation_not_found' });
+  });
+
+  it('system and user font folders are never touched: replace fails with replace_protected', async () => {
+    const api = createMockApi();
+    const sys = await rowOf(api, 'Roboto');
+    const out = (await api.activationReplace([key(sys)], await seen(api, sys))).results[0].outcome;
+    expect(out).toMatchObject({ kind: 'failed', code: 'replace_protected' });
+    expect((await api.activationState())).toHaveLength(0);
+  });
+
+  it('a stale confirmation is refused with replace_conflicts_changed and nothing changes; the journal lists what was replaced', async () => {
+    const api = createMockApi();
+    const r = await rowOf(api, 'Oswald');
+    const stale = await api.activationReplace([key(r)], [{ hashHex: r.hashHex, existingPath: '/khong/co.ttf' }]);
+    expect(stale.results[0].outcome).toMatchObject({ kind: 'failed', code: 'replace_conflicts_changed' });
+    expect(await api.activationState()).toHaveLength(0);
+    expect(await api.activationListReplaced()).toHaveLength(0);
+    const rep = await api.activationReplace([key(r)], await seen(api, r));
+    const list = await api.activationListReplaced();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: rep.results[0].replaced![0].id, hashHex: r.hashHex, owner: 'right_font' });
+    await api.activationRestoreReplaced(list[0].id);
+    expect(await api.activationListReplaced()).toHaveLength(0);
+  });
+
+  it('with nothing to replace it simply activates and reports no replaced copies', async () => {
+    const api = createMockApi();
+    const r = await rowOf(api, 'Inter');
+    const rep = await api.activationReplace([key(r)], await seen(api, r));
+    expect(rep.results[0].outcome.kind).toBe('activated');
+    expect(rep.results[0].replaced ?? []).toHaveLength(0);
+  });
+});
+
 describe('mock model: redownload while downloading is busy', () => {
   it('rejects with CmdError busy and keeps downloading', async () => {
     const api = createMockApi();
@@ -147,5 +201,20 @@ describe('mock boot / onboarding / scan', () => {
     expect(seen).toContain('facesAdded');
     expect(seen.slice(-2)).toEqual(['finished', 'idle']);
     vi.useRealTimers();
+  });
+});
+
+describe('activationActivateCase', () => {
+  it('goes through the normal flow (conflict asks first) and lists missing fonts as skipped', async () => {
+    const api = createMockApi();
+    const inter = await rowOf(api, 'Inter'); const roboto = await rowOf(api, 'Roboto');
+    const c = await api.createCase('Dự án');
+    await api.addToCase(c.id, [key(inter), key(roboto), { hashHex: 'ab'.repeat(32), faceIndex: 0 }]);
+    const first = await api.activationActivateCase(c.id);
+    expect(first.skippedMissing).toEqual([{ hashHex: 'ab'.repeat(32), faceIndex: 0 }]);
+    expect(first.report.needsConfirmation).toBe(1);
+    expect(first.report.changed).toBe(1);
+    const again = await api.activationActivateCase(c.id, { proceed: true });
+    expect(again.report.needsConfirmation).toBe(0);
   });
 });

@@ -6,7 +6,7 @@ export type FaceQuery = {
   text?: string; vi?: 'full' | 'supported'; license?: string[];
   variable?: boolean; italic?: boolean; sourceIds?: number[];
   favoritesOnly?: boolean; collectionId?: number; tagIds?: number[];
-  includeMissing?: boolean; sort?: 'family' | 'weight' | 'added' | 'match';
+  includeMissing?: boolean; sort?: 'family' | 'weight' | 'added' | 'released' | 'file_created' | 'match';
   descending?: boolean; offset?: number; limit?: number;
   /** 6a (b2cc0fd): chỉ các face này, ≤ 2000; sort='match' giữ thứ tự đưa vào. Dùng cho "Gần đây"/"Đang bật". */
   faceKeys?: Array<{ hashHex: string; faceIndex: number }>;
@@ -20,6 +20,8 @@ export type FaceQuery = {
   langs?: LangFilterDto[]; langMode?: 'all' | 'any'; badgeLang?: string;
   /** 0.3.0 (advanced filters): usWeightClass 100–900 / usWidthClass 1–9, khoảng đóng. `varAxisMatch` (mặc định bật cả hai): font Variable khớp khi dải trục wght/wdth giao khoảng. */
   weightClass?: [number, number]; widthClass?: [number, number]; varAxisMatch?: { wght: boolean; wdth: boolean };
+  /** 0.3.0 (R3): true = `queryFaces` xếp theo nhóm family (mỗi family liền nhau, thứ tự nhóm theo `sort`/`descending`); `familyGroups(q)` trả khoảng của từng nhóm. */
+  groupByFamily?: boolean;
 };
 
 export type FaceRow = {
@@ -32,6 +34,10 @@ export type FaceRow = {
   /** Chỉ còn placeholder trên ổ cloud (OneDrive/iCloud…): chưa tải về máy. */
   onCloudOnly: boolean;
   isFavorite: boolean; addedAt: number;
+  /** R2: năm phát hành ƯỚC LƯỢNG (copyright > head.created > head.modified; độ tin cậy trung bình-thấp); null = không rõ. */
+  releaseYear: number | null; /** 'copyright' | 'head_created' | 'head_modified' */ releaseYearSource: string | null;
+  /** R2: ngày tạo file sớm nhất (ms); độ tin cậy thấp. `cloud_sync` = file ổ cloud, có thể là lúc đồng bộ. */
+  fileCreatedAt: number | null; /** 'disk' | 'cloud_sync' */ fileCreatedSource: string | null;
   /** Chỉ báo ngôn ngữ trên thẻ (thay −N); null khi mã ngôn ngữ lạ. */
   langBadge: LangBadgeDto | null;
 };
@@ -51,6 +57,7 @@ const ROW_SCHEMA: Record<keyof FaceRow, Kind> = {
   supportsVi: 'boolean', viMissing: 'number', licenseClass: 'string',
   path: 'string|null', fileSize: 'number', missing: 'boolean', onCloudOnly: 'boolean',
   isFavorite: 'boolean', addedAt: 'number', langBadge: 'object|null',
+  releaseYear: 'number|null', releaseYearSource: 'string|null', fileCreatedAt: 'number|null', fileCreatedSource: 'string|null',
 };
 
 function matches(v: unknown, kind: Kind): boolean {

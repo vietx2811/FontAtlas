@@ -31,7 +31,7 @@ describe('query_faces', () => {
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'auto', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null,
       langs: [], langMode: 'all', badgeLang: null,
-      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
+      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true }, groupByFamily: false,
     });
   });
 
@@ -173,6 +173,14 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     const ch = last().args.onProgress as { onmessage(m: unknown): void };
     ch.onmessage({ done: 1, total: 2, hashHex: 'h' });
     expect(onProgress).toHaveBeenCalledWith({ done: 1, total: 2, hashHex: 'h' });
+    const confirmed = [{ hashHex: 'h', existingPath: '/x/a.ttf' }];
+    await api.activationReplace(faces, confirmed, { scope: 'persistent', onProgress });
+    expect(last().cmd).toBe('activation_replace');
+    expect(last().args).toMatchObject({ faces, scope: 'persistent', confirmed });
+    await api.activationListReplaced();
+    expect(last().cmd).toBe('activation_list_replaced');
+    await api.activationRestoreReplaced(42);
+    expect(last()).toEqual({ cmd: 'activation_restore_replaced', args: { id: 42 } });
     await api.activationDeactivate(faces, { force: true });
     expect(last().args).toMatchObject({ faces, force: true });
     await api.activationActivateCollection(7, { scope: 'persistent' });
@@ -289,5 +297,57 @@ describe('taxonomy v2 query flags', () => {
     expect([d.includeSecondary, d.confidentOnly, d.minConfidence]).toEqual([true, true, 0.9]);
     const e = toFaceQueryDto({});
     expect([e.includeSecondary, e.confidentOnly, e.minConfidence]).toEqual([false, false, null]);
+  });
+});
+
+describe('duplicates resolve', () => {
+  it('maps the nine commands with their exact argument names', async () => {
+    const q = { text: 'inter' };
+    await createTauriApi().resolvePreview({ type: 'all_safe' }, q);
+    expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'all_safe' }, q: toFaceQueryDto(q) } });
+    await createTauriApi().resolvePreview({ type: 'group', kind: 'versions', key: 'K' });
+    expect(last()).toEqual({ cmd: 'resolve_preview', args: { scope: { type: 'group', kind: 'versions', key: 'K' }, q: toFaceQueryDto({}) } });
+    const req = { items: [{ kind: 'same_file' as const, key: 'k', keeperPath: '/a', loserPaths: ['/b'], memberPaths: ['/a', '/b'] }], action: 'trash' as const, explicitTrashPaths: ['/b'], mode: 'chosen' as const, joinBatch: 'b1' };
+    await createTauriApi().resolveApply(req);
+    expect(last()).toEqual({ cmd: 'resolve_apply', args: { req } });
+    await createTauriApi().resolveUndo([3, 2]);
+    expect(last()).toEqual({ cmd: 'resolve_undo', args: { ids: [3, 2] } });
+    await createTauriApi().resolveList(true);
+    expect(last()).toEqual({ cmd: 'resolve_list', args: { includeUndone: true } });
+    await createTauriApi().duplicateIgnore('formats', 'k');
+    expect(last()).toEqual({ cmd: 'duplicate_ignore', args: { kind: 'formats', key: 'k' } });
+    await createTauriApi().duplicateUnignore('formats', 'k');
+    expect(last()).toEqual({ cmd: 'duplicate_unignore', args: { kind: 'formats', key: 'k' } });
+    await createTauriApi().duplicateIgnored();
+    expect(last().cmd).toBe('duplicate_ignored');
+    await createTauriApi().sourcePriority();
+    expect(last().cmd).toBe('source_priority');
+    await createTauriApi().setSourcePriority([2, 1]);
+    expect(last()).toEqual({ cmd: 'set_source_priority', args: { ids: [2, 1] } });
+  });
+});
+
+describe('R3/R6/R7 + activate-case commands', () => {
+  it('maps to the right commands and argument names', async () => {
+    const api = createTauriApi();
+    await api.familyGroups({ sort: 'released', groupByFamily: true });
+    expect(last().cmd).toBe('family_groups');
+    expect(last().args.q).toMatchObject({ sort: 'released', groupByFamily: true });
+    await api.renameTag(3, 'Retro');
+    expect(last()).toEqual({ cmd: 'rename_tag', args: { id: 3, name: 'Retro' } });
+    await api.deleteTag(3);
+    expect(last()).toEqual({ cmd: 'delete_tag', args: { id: 3 } });
+    await api.removeSourcePreview(7);
+    expect(last()).toEqual({ cmd: 'remove_source_preview', args: { sourceId: 7 } });
+    await api.removeSource(7);
+    expect(last()).toEqual({ cmd: 'remove_source', args: { sourceId: 7 } });
+    await api.activationActivateCase(5, { proceed: true });
+    expect(last().cmd).toBe('activation_activate_case');
+    expect(last().args).toMatchObject({ caseId: 5, scope: null, proceed: true });
+  });
+
+  it('a duplicate tag name surfaces as CmdError conflict', async () => {
+    reply = () => ({ __reject: { code: 'conflict', message: 'trùng tên', detail: null } });
+    await expect(createTauriApi().renameTag(1, 'x')).rejects.toMatchObject({ code: 'conflict' });
   });
 });

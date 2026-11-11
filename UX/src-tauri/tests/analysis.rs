@@ -814,3 +814,46 @@ fn effective_class_is_consistent_across_detail_filter_facets_and_index() {
     let sum = |v: &[ClassFacetDto]| v.iter().map(|f| f.count).sum::<u32>();
     assert!(sum(&with) >= sum(&facets));
 }
+
+/// `family_groups` dùng đúng bộ lọc/scope của `query_faces` (class, confidentOnly, includeSecondary, tagIds, faceKeys + match).
+#[test]
+fn family_groups_agree_with_query_faces_under_every_scope_filter() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let roboto = find(&st, "Roboto");
+    let tag = library::create_tag(&st, "nhóm").unwrap();
+    library::tag_faces(&st, tag.id, &[key(&roboto)]).unwrap();
+    let all_keys: Vec<FaceKeyDto> = library::query_faces(&st, &FaceQueryDto { limit: 500, ..Default::default() })
+        .unwrap()
+        .items
+        .iter()
+        .rev() // thứ tự đưa vào ≠ thứ tự tên: sort "match" phải theo thứ tự này
+        .map(key)
+        .collect();
+    let cases: Vec<(&str, FaceQueryDto)> = vec![
+        ("tagIds", FaceQueryDto { tag_ids: vec![tag.id], ..Default::default() }),
+        ("classes", FaceQueryDto { classes: vec!["serif".into(), "sans".into()], ..Default::default() }),
+        ("classes+includeSecondary", FaceQueryDto { classes: vec!["serif".into()], include_secondary: true, ..Default::default() }),
+        ("confidentOnly", FaceQueryDto { confident_only: true, ..Default::default() }),
+        ("confidentOnly+classes", FaceQueryDto { confident_only: true, classes: vec!["sans".into()], include_secondary: true, ..Default::default() }),
+        ("match+faceKeys", FaceQueryDto { sort: SortKeyDto::Match, face_keys: Some(all_keys.clone()), ..Default::default() }),
+        ("match+faceKeys+classes", FaceQueryDto { sort: SortKeyDto::Match, face_keys: Some(all_keys), classes: vec!["sans".into(), "serif".into()], ..Default::default() }),
+    ];
+    for (name, base) in cases {
+        for desc in [false, true] {
+            let q = FaceQueryDto { group_by_family: true, descending: desc, limit: 500, ..base.clone() };
+            let page = library::query_faces(&st, &q).unwrap();
+            let groups = library::family_groups(&st, &q).unwrap();
+            assert_eq!(groups.iter().map(|g| u64::from(g.count)).sum::<u64>(), page.total, "{name} desc={desc}");
+            let mut next = 0;
+            for g in &groups {
+                assert_eq!(g.start, next, "{name} desc={desc}: liên tục");
+                assert!(page.items[g.start as usize..(g.start + g.count) as usize].iter().all(|r| r.family == g.family), "{name}: nhóm đúng family");
+                assert!(g.style_total >= g.match_count, "{name}");
+                next += g.count;
+            }
+            let fams: std::collections::HashSet<_> = groups.iter().map(|g| &g.family).collect();
+            assert_eq!(fams.len(), groups.len(), "{name}: không xé family");
+        }
+    }
+}

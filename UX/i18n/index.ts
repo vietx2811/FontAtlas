@@ -3,23 +3,28 @@ import { TERM_GLOSS } from './terms';
 import { COMPARE_V2 } from './compareV2';
 import { ACTIVATION_I18N } from './activation';
 import { CLOUD_I18N } from './cloud';
+import { REPLACE_I18N } from './replace';
 import { ONBOARDING_I18N } from './onboarding';
 import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
 import { DESK_I18N } from './desk';
 import { VIEW_I18N } from './view';
+import { DUP_I18N } from './dup';
+import { AUTO_I18N } from './auto';
+import { LIBRARY_I18N } from './library';
+import { ERR_I18N } from './err';
+import { SETTINGS_I18N } from './settings';
+import { DETAIL_I18N } from './detail';
+import { UI_I18N } from './ui';
+import { FACES_I18N } from './faces';
+import { SIDEBAR_I18N } from './sidebar';
+import { getLocale } from './locale';
+import { en } from './en';
+import { EN_ONE } from './en/plural';
+export { EN_ONE };
+export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, hasChosenThisSession, formatNumber, formatDate, localeTag, type Locale } from './locale';
 
-const vi = {
-  ...TERM_GLOSS,
-  ...COMPARE_V2,
-  ...ACTIVATION_I18N,
-  ...CLOUD_I18N,
-  ...FILTER_I18N,
-  ...FILTER_I18N_2,
-  ...FILTER_I18N_3,
-  ...FILTER_I18N_4,
-  ...DESK_I18N,
-  ...VIEW_I18N,
-  ...ONBOARDING_I18N,
+/** Khoá khai báo trực tiếp ở đây (các nhóm còn lại nằm trong file riêng). */
+export const MAIN_I18N = {
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
@@ -68,11 +73,6 @@ const vi = {
   'pair.clash.global': 'Quá giống nhau', 'pair.clash.skeleton': 'Cùng nét, khác khung',
   'pair.block.vi.heading': 'Tiêu đề thiếu {n} ký tự tiếng Việt', 'pair.block.vi.body': 'Nội dung thiếu {n} ký tự tiếng Việt',
   'pair.legend': '● hoà hợp · ◐ tương phản · ◆ va chạm · ○ chưa chắc · ◑ gợi ý độ đậm', 'pair.cut': 'Pair these tối đa 4 font — đang lấy 4 font đầu trong {n}.',
-  'dup.title': 'Trùng lặp', 'dup.loading': 'Đang tìm font trùng…', 'dup.error': 'Không đọc được danh sách trùng: {msg}', 'dup.retry': 'Thử lại', 'dup.empty': 'Không có font trùng',
-  'dup.kind.same_file': 'Same file', 'dup.kind.same_file.gloss': 'cùng tệp, nhiều đường dẫn', 'dup.kind.versions': 'Versions', 'dup.kind.versions.gloss': 'nhiều phiên bản của một font',
-  'dup.kind.formats': 'Formats', 'dup.kind.formats.gloss': 'cùng font, khác định dạng',
-  'dup.newest': 'Mới nhất', 'dup.newestUnknown': 'Không xác định được bản mới nhất', 'dup.reveal': 'Hiện trong Finder', 'dup.revealFail': 'Không mở được Finder: {msg}', 'dup.open': 'Mở chi tiết', 'dup.revision': 'rev {n}',
-  'dup.count': '{n} nhóm', 'dup.members': '{n} bản', 'dup.note': 'Chỉ để xem: app không xoá hay di chuyển file của bạn.',
   'compare.title': 'Compare', 'compare.back': 'Quay lại thư viện', 'compare.sameSize': 'Same size', 'compare.matchXh': 'Match x-height',
   'compare.sameSize.gloss': 'cùng cỡ chữ', 'compare.matchXh.gloss': 'cùng chiều cao chữ thường', 'compare.overlay': 'Overlay', 'compare.overlay.gloss': 'chồng glyph, chung baseline',
   'compare.png': 'PNG', 'compare.pdf': 'PDF', 'compare.pdfSoon': 'PDF chưa có', 'compare.pngFail': 'Không xuất được PNG: {msg}',
@@ -86,8 +86,44 @@ const vi = {
   'compare.m.slant_deg': 'slant I/T', 'compare.m.slant_deg.gloss': 'độ nghiêng (I, T)', 'compare.m.stress_deg': 'stress', 'compare.m.stress_deg.gloss': 'trục nhấn',
   'compare.m.aperture': 'aperture', 'compare.m.aperture.gloss': 'độ mở', 'compare.m.serif_foot': 'serif foot', 'compare.m.serif_foot.gloss': 'chân serif',
 } as const;
+
+export const vi = {
+  ...TERM_GLOSS,
+  ...COMPARE_V2,
+  ...ACTIVATION_I18N,
+  ...CLOUD_I18N,
+  ...FILTER_I18N,
+  ...FILTER_I18N_2,
+  ...FILTER_I18N_3,
+  ...FILTER_I18N_4,
+  ...DESK_I18N,
+  ...VIEW_I18N,
+  ...ERR_I18N,
+  ...SETTINGS_I18N,
+  ...DETAIL_I18N,
+  ...UI_I18N,
+  ...FACES_I18N,
+  ...SIDEBAR_I18N,
+  ...ONBOARDING_I18N,
+  ...DUP_I18N,
+  ...REPLACE_I18N,
+  ...AUTO_I18N,
+  ...LIBRARY_I18N,
+  ...MAIN_I18N,
+} as const;
 export type I18nKey = keyof typeof vi;
 /** Khoá có trong từ điển hay không (dùng cho khoá ghép động như `class.${x}`). */
 export const hasKey = (key: string): key is I18nKey => Object.prototype.hasOwnProperty.call(vi, key);
 /** Thiếu khoá thì trả chính khoá thay vì ném lỗi: dữ liệu thật có thể mang giá trị mới (vote, trait…) mà UI chưa dịch. */
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => ((vi as Record<string, string>)[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+const warned = new Set<string>();
+const lookup = (key: string): string | undefined => {
+  const hit = (getLocale() === 'en' ? en[key as I18nKey] : undefined) ?? (vi as Record<string, string>)[key];
+  if (hit === undefined && import.meta.env?.DEV && !warned.has(key)) { warned.add(key); console.warn(`[i18n] missing key: ${key}`); } // khoá ghép động (class.${x}…) thiếu bản dịch
+  return hit;
+};
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => (lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+/** Như `t()` nhưng chọn dạng số ít tiếng Anh khi `vars.n` = 1 (tiếng Việt giữ một dạng). Khoá phải có trong EN_ONE, nếu không dùng dạng thường. */
+export const tn = (key: I18nKey, vars: Record<string, string | number> = {}): string => {
+  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return EN_ONE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+  return t(key, vars);
+};

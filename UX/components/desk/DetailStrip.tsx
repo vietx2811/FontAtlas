@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { buildCompare, COMPARE_METRICS, type CompareFace, type CompareMetric } from '../../api/compare';
 import type { FaceDetailDto, FaceRowDto } from '../../bindings';
-import { t } from '../../i18n';
+import { t, getLocale, tn } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { NoteMark } from '../ui/noteMark';
@@ -25,7 +25,7 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
     for (const [f, k] of [[inUse, ik], [trial, tk]] as const) {
       if (!f || !k || cache.current.has(k) || pending.current.has(k)) continue;
       pending.current.add(k); failed.current.delete(k);
-      api.getFace(f, 'vi').then((d: FaceDetailDto) => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
+      api.getFace(f, getLocale()).then((d: FaceDetailDto) => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
         pending.current.delete(k);
         if (cf !== undefined) cache.current.set(k, cf); else failed.current.add(k);
         if (mounted.current) bump(n => n + 1);
@@ -48,7 +48,7 @@ function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | nul
         <div className="fa-dstrip-meta">
           {face?.designer && <span>{face.designer}</span>}
           {face?.license && <span>{face.license}</span>}
-          {vi && <span data-vi={vi.supports && vi.missing === 0 ? 'ok' : 'warn'}>{vi.supports && vi.missing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: vi.missing })}</span>}
+          {vi && <span data-vi={vi.supports && vi.missing === 0 ? 'ok' : 'warn'}>{vi.supports && vi.missing === 0 ? t('strip.viOk') : tn('strip.viMissing', { n: vi.missing })}</span>}
           {vi?.stackedMarksOverflow && <NoteMark inline kind="warn" text={t('compare.viWarn')} />}
         </div>
       </> : <p className="fa-dstrip-empty">{tone === 'try' ? t('strip.tryHint') : t('desk.roleEmpty')}</p>}

@@ -94,6 +94,10 @@ impl Store {
             "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
              PRAGMA main.synchronous=NORMAL; PRAGMA u.synchronous=NORMAL;",
         )?;
+        // library v5: điền năm phát hành cho face chưa tính từ bản phân tích đã lưu (không đọc file)
+        if let Err(e) = crate::release::backfill(&conn) {
+            eprintln!("release_year backfill: {e}");
+        }
         Ok((Store { conn, dir: dir.to_path_buf() }, rep))
     }
 

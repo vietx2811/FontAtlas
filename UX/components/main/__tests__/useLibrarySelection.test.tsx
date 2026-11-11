@@ -23,9 +23,9 @@ function fakeApi(order: () => FaceRow[], hook?: (q: { offset?: number; limit?: n
   };
   return api as unknown as Api & typeof api;
 }
-function setup(api: Api, query: GridQuery = {}) {
+function setup(api: Api, query: GridQuery = {}, hidden?: { current: ReadonlyArray<[number, number]> }) {
   const container = { current: null as HTMLElement | null };
-  return renderHook(({ q }: { q: GridQuery }) => useLibrarySelection(api, q, 'scope', container), { initialProps: { q: query } });
+  return renderHook(({ q }: { q: GridQuery }) => useLibrarySelection(api, q, 'scope', container, hidden), { initialProps: { q: query } });
 }
 
 describe('useLibrarySelection: ranges', () => {
@@ -127,3 +127,27 @@ describe('useLibrarySelection: ranges', () => {
     expect(faceKey(rows[1])).toBeTruthy();
   });
 });
+describe('useLibrarySelection: collapsed Family groups (R3)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useSelectionStore.getState().clear(); useNoticeStore.setState({ notices: [] }); });
+  const rows = Array.from({ length: 12 }, (_, i) => makeRow(i));
+
+  it('a Shift range skips the fonts of a collapsed group but keeps the anchor and the clicked card', async () => {
+    const hidden = { current: [[4, 7]] as ReadonlyArray<[number, number]> }; // nhóm thu gọn: chỉ số 4–7
+    const { result } = setup(fakeApi(() => rows), {}, hidden);
+    act(() => result.current.pick(rows[1], 1, { meta: false, shift: false }));
+    act(() => result.current.pick(rows[10], 10, { meta: false, shift: true }));
+    await flush();
+    expect(keysOf().sort()).toEqual([1, 2, 3, 8, 9, 10].map(i => rowKey(rows[i])).sort());
+  });
+  it('Select all skips collapsed groups; with nothing collapsed it takes everything', async () => {
+    const hidden = { current: [[0, 2]] as ReadonlyArray<[number, number]> };
+    const { result } = setup(fakeApi(() => rows), {}, hidden);
+    await act(async () => { await result.current.selectAll(); });
+    expect(keysOf()).toHaveLength(9);
+    expect(keysOf()).not.toContain(rowKey(rows[0]));
+    hidden.current = [];
+    await act(async () => { await result.current.selectAll(); });
+    expect(keysOf()).toHaveLength(12);
+  });
+});
+

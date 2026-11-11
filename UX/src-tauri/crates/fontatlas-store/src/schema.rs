@@ -419,7 +419,27 @@ pub(crate) const LIBRARY_V4: &str = r#"
 ALTER TABLE file_locations ADD COLUMN cloud_only INTEGER NOT NULL DEFAULT 0;
 "#;
 
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4];
+/// Library v5 (Library view options R2): năm phát hành ước lượng và ngày tạo file.
+/// - `faces.release_year`/`release_year_src`: `release_year_src` = `copyright|head_created|head_modified|none`; NULL = chưa tính
+///   (bản phân tích cũ chưa có `extras`) và được điền ở lần mở sau / khi phân tích lại. Backfill chạy ở Rust (`release::backfill`).
+/// - `file_locations.created_ns` (birth time) và `created_src` (`disk` | `cloud_sync`): NULL tới lần quét kế tiếp.
+pub(crate) const LIBRARY_V5: &str = r#"
+ALTER TABLE faces ADD COLUMN release_year INTEGER;
+ALTER TABLE faces ADD COLUMN release_year_src TEXT;
+ALTER TABLE file_locations ADD COLUMN created_ns INTEGER;
+ALTER TABLE file_locations ADD COLUMN created_src TEXT;
+CREATE INDEX faces_release ON faces(release_year);
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4, LIBRARY_V5];
+/// Chỉ cho test: library.db ở v4 (trước năm phát hành/ngày tạo file).
+#[doc(hidden)]
+pub fn create_library_v4_for_test(c: &Connection) {
+    for m in [LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4] {
+        c.execute_batch(m).expect("LIBRARY_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 4;").expect("user_version");
+}
 /// Chỉ cho test: library.db ở v3 (trước cờ cloud_only).
 pub fn create_library_v3_for_test(c: &Connection) {
     c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
@@ -438,6 +458,34 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
+
+/// v10 (0.3.0 auto-activation; số do vị trí trong USER_MIGRATIONS, hiện sau USER_REPLACED = v9): lý do `auto:<app>` (CHECK của `activation_reasons` nới ra, dựng lại bảng
+/// vì SQLite không sửa được CHECK) và nhật ký các lần app thiết kế hỏi font.
+pub(crate) const USER_AUTO_ACTIVATION: &str = r#"
+ALTER TABLE activation_reasons RENAME TO activation_reasons_v7;
+CREATE TABLE activation_reasons (
+  hash     BLOB NOT NULL REFERENCES activation_state(hash) ON DELETE CASCADE,
+  reason   TEXT NOT NULL CHECK (reason = 'manual'
+           OR (reason GLOB 'collection:[0-9]*' AND reason NOT GLOB 'collection:*[^0-9]*')
+           OR (reason GLOB 'auto:[a-z]*' AND reason NOT GLOB 'auto:*[^a-z]*')),
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, reason)
+) WITHOUT ROWID;
+INSERT INTO activation_reasons (hash, reason, added_at) SELECT hash, reason, added_at FROM activation_reasons_v7;
+DROP TABLE activation_reasons_v7;
+DROP INDEX IF EXISTS activation_reasons_reason;
+CREATE INDEX activation_reasons_reason ON activation_reasons(reason);
+CREATE TABLE auto_activation_log (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  at        INTEGER NOT NULL,
+  app       TEXT NOT NULL,
+  doc       TEXT,
+  requested TEXT NOT NULL,             -- PostScript name hoặc "family / style" như app gửi
+  outcome   TEXT NOT NULL,             -- activated | already_active | available | missing | conflict | failed
+  hash      BLOB
+);
+"#;
+
 
 /// Taxonomy v2 (Font Desk 0.3.x): ghi đè phân loại của người dùng chuyển sang 8 class mới.
 /// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định (không hard-code ở đâu khác): nếu nhánh khác lấy cùng số
@@ -479,13 +527,91 @@ DROP TABLE classification_overrides;
 ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2];
+
+/// Giải quyết trùng lặp (0.3.0): sổ quyết định THEO VỊ TRÍ TỆP (`loser_path`), không theo hash — hai đường dẫn cùng nội dung
+/// (`same_file`) chung hash nên ẩn theo hash sẽ ẩn cả bản giữ. Một face bị ẩn khi MỌI vị trí còn thấy của nó đều nằm trong sổ.
+/// `dup_link_moves` ghi những gì đã chuyển từ bản thua sang bản giữ để hoàn tác đúng từng dòng (không đụng dữ liệu có sẵn).
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định.
+pub(crate) const USER_DUP_RESOLVE: &str = r#"
+CREATE TABLE dup_resolutions (
+  id          INTEGER PRIMARY KEY,
+  batch_id    TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('same_file','versions','formats')),
+  group_key   TEXT NOT NULL,
+  keeper_hash BLOB NOT NULL CHECK (length(keeper_hash) = 32),
+  keeper_face INTEGER NOT NULL,
+  keeper_path TEXT NOT NULL,
+  loser_hash  BLOB NOT NULL CHECK (length(loser_hash) = 32),
+  loser_face  INTEGER NOT NULL,
+  loser_path  TEXT NOT NULL,
+  action      TEXT NOT NULL CHECK (action IN ('hide','trash')),
+  trash_path  TEXT,
+  reason      TEXT NOT NULL,
+  was_active  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  undone_at   INTEGER,
+  -- ghi sổ TRƯỚC khi đụng tệp / activation: pending = đang làm dở (đã ẩn); done = xong
+  status      TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('pending','done')),
+  -- phạm vi activation của bản thua trước khi tắt (session|persistent), để hoàn tác bật lại đúng
+  loser_scope TEXT CHECK (loser_scope IN ('session','persistent')),
+  -- ta đã bật bản giữ giúp người dùng (nó chưa bật trước đó): hoàn tác tắt lại
+  keeper_activated INTEGER NOT NULL DEFAULT 0
+);
+-- nhóm người dùng chọn "Bỏ qua": nhớ theo (loại, khoá nhóm), có thể bỏ qua → hiện lại
+CREATE TABLE dup_ignored (
+  kind       TEXT NOT NULL CHECK (kind IN ('same_file','versions','formats')),
+  group_key  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (kind, group_key)
+) WITHOUT ROWID;
+-- thứ tự nguồn ưu tiên giữ bản trùng (nhỏ = ưu tiên hơn); NULL = chưa sắp, xếp sau theo thứ tự tạo
+ALTER TABLE sources ADD COLUMN priority INTEGER;
+CREATE UNIQUE INDEX dup_resolutions_live ON dup_resolutions(loser_path) WHERE undone_at IS NULL;
+CREATE INDEX dup_resolutions_batch ON dup_resolutions(batch_id);
+CREATE TABLE dup_link_moves (
+  resolution_id INTEGER NOT NULL REFERENCES dup_resolutions ON DELETE CASCADE,
+  tbl           TEXT NOT NULL CHECK (tbl IN ('favorites','collection_items','face_tags','case_faces','pairs','combo_slots')),
+  op            TEXT NOT NULL CHECK (op IN ('insert','update')),
+  ref_id        INTEGER NOT NULL DEFAULT 0,
+  side          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX dup_link_moves_res ON dup_link_moves(resolution_id);
+"#;
+
+/// Sổ "bản cũ đã gỡ để thay bằng bản của Font Atlas" (nhánh feat/replace-activation). Số phiên bản do vị trí trong
+/// `USER_MIGRATIONS` quyết định; khi merge cạnh migration của nhánh khác chỉ cần đổi thứ tự mục trong danh sách.
+pub(crate) const USER_REPLACED: &str = r#"
+CREATE TABLE activation_replaced (
+  id          INTEGER PRIMARY KEY,
+  hash        BLOB NOT NULL CHECK (length(hash) = 32),   -- font của Font Atlas đã thay thế
+  old_path    TEXT NOT NULL,                              -- URL canonical của bản đã gỡ
+  owner       TEXT NOT NULL,                              -- đoán theo đường dẫn: right_font, font_base, ...
+  scopes      TEXT NOT NULL,                              -- JSON ["persistent","session"]: scope mà lệnh gỡ trả OK
+  postscript_names TEXT NOT NULL DEFAULT '[]',
+  created_at  INTEGER NOT NULL,
+  restored_at INTEGER
+);
+CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
 pub fn create_user_pre_taxonomy_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user pre-taxonomy");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_TAXONOMY_V2).expect("taxonomy migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+
+/// Chỉ cho test: user.db ngay TRƯỚC migration sổ "thay thế" (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_replaced_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-replaced");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_REPLACED).expect("replaced migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }
@@ -524,6 +650,16 @@ pub fn create_user_v5_for_test(path: &Path) {
         c.execute_batch(m).expect("USER_Vn");
     }
     c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
+}
+/// Chỉ cho test: user.db ngay TRƯỚC migration auto-activation (sau USER_REPLACED), để kiểm migration lên v10.
+#[doc(hidden)]
+pub fn create_user_pre_auto_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v7");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_AUTO_ACTIVATION).expect("auto-activation migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
 }
 /// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
 #[doc(hidden)]

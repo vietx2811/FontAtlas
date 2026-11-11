@@ -227,7 +227,7 @@ fn perf_axis_histogram_20k_faces() {
                     }
                     IngestItem {
                         source_id: 1,
-                        file: ScannedFile { path: format!("/perf/{i}.ttf").into(), size: 1, mtime_ns: 1 },
+                        file: ScannedFile { path: format!("/perf/{i}.ttf").into(), size: 1, mtime_ns: 1, created_ns: None },
                         hash: h,
                         analysis: Analysis::Report(r),
                     }

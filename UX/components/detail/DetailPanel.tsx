@@ -16,10 +16,10 @@ import { loaderFor, useFontFamily } from './useFontFamily';
 import { FaceTitle } from '../ui/FaceTitle';
 import { Tooltip } from '../ui/Tooltip';
 import { NoteMark } from '../ui/noteMark';
-import { t } from '../../i18n';
+import { t, tn, formatNumber } from '../../i18n';
 import './detail.css';
 
-const TABS: Array<[PanelTab, string, string]> = [['spec', 'Specimen', 'Aa'], ['vi', 'Tiếng Việt', 'Ặ'], ['anat', 'Giải phẫu', '⌖'], ['sim', 'Tương tự', '◎'], ['pair', 'Ghép cặp', '∞']];
+const tabs = (): Array<[PanelTab, string, string]> => [['spec', t('det.specimen'), 'Aa'], ['vi', t('det.vietnamese'), 'Ặ'], ['anat', t('det.anatomy'), '⌖'], ['sim', t('det.similar'), '◎'], ['pair', t('det.pairing'), '∞']];
 const FORMAT: Record<string, string> = { glyf: 'TTF', cff: 'OTF', cff2: 'OTF', none: '' };
 
 export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
@@ -45,16 +45,16 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
   const bodyCss: React.CSSProperties = {
     fontFamily: family ? `"${family}", var(--font-ui)` : undefined, fontWeight: chosen?.weight ?? undefined, fontStyle: chosen?.italic ? 'italic' : undefined,
   };
-  const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), `${detail.file.numGlyphs.toLocaleString('vi-VN')} glyph`].filter(Boolean).join(' · ') : '';
+  const fmt = detail ? [detail.classification ?? '', `${detail.row.isVariable ? 'Variable ' : ''}${FORMAT[detail.file.outline] ?? ''}`.trim(), tn('det.glyphs', { n: formatNumber(detail.file.numGlyphs) })].filter(Boolean).join(' · ') : '';
 
   return (
-    <aside ref={panel} className="fa-panel" aria-label="Chi tiết font">
+    <aside ref={panel} className="fa-panel" aria-label={t('det.panel')}>
       {error ? (
-        <div role="alert" className="fa-panel-error">Không đọc được font này: {error} <button type="button" onClick={retry}>Thử lại</button></div>
+        <div role="alert" className="fa-panel-error">{t('det.readFail', { msg: error })} <button type="button" onClick={retry}>{t('det.retry')}</button></div>
       ) : (
         <div className="fa-p-head">
           <div className="fa-p-row">
-            <Tooltip label="Đóng chi tiết"><button type="button" className="fa-panel-close" aria-label="Đóng chi tiết" onClick={() => useUiStore.getState().select(null)}>×</button></Tooltip>
+            <Tooltip label={t('det.close')}><button type="button" className="fa-panel-close" aria-label={t('det.close')} onClick={() => useUiStore.getState().select(null)}>×</button></Tooltip>
             <Tooltip label={detail?.row.family} onlyIfTruncated>
               <FaceTitle as="h2" api={api} face={detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null} className="fa-p-name">{detail?.row.family ?? ''}</FaceTitle>
             </Tooltip>
@@ -67,7 +67,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
         </div>
       )}
       <div className="fa-tabs" role="tablist">
-        {TABS.map(([id, name, glyph]) => (
+        {tabs().map(([id, name, glyph]) => (
           <Tooltip key={id} label={name}><button type="button" role="tab" aria-label={name} aria-selected={tab === id} onClick={() => setPanelTab(id)}><span className="g">{glyph}</span></button></Tooltip>
         ))}
       </div>

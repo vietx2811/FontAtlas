@@ -191,16 +191,85 @@ fn icloud_placeholder(p: &Path) -> Option<PathBuf> {
     Some(p.with_file_name(format!(".{name}.icloud")))
 }
 
+/// Canonical của `p`; nếu `p` chưa tồn tại thì canonical phần tổ tiên còn tồn tại rồi nối phần còn lại.
+fn canonical_lossy(p: &Path) -> PathBuf {
+    if let Ok(c) = std::fs::canonicalize(p) {
+        return c;
+    }
+    let mut rest: Vec<std::ffi::OsString> = vec![];
+    let mut cur = p.to_path_buf();
+    while let Some(name) = cur.file_name().map(|n| n.to_os_string()) {
+        rest.push(name);
+        cur.pop();
+        if let Ok(mut c) = std::fs::canonicalize(&cur) {
+            c.extend(rest.iter().rev());
+            return c;
+        }
+    }
+    p.to_path_buf()
+}
+
+/// Các thành phần đường dẫn đã canonical hoá, viết thường (APFS không phân biệt hoa/thường), bỏ gốc `/`,
+/// bỏ tiền tố firmlink `/System/Volumes/Data` và `/Volumes/<tên ổ>`.
+fn norm_components(path: &Path) -> Vec<String> {
+    let mut c: Vec<String> = canonical_lossy(path)
+        .components()
+        .filter(|c| !matches!(c, std::path::Component::RootDir))
+        .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+        .collect();
+    if c.starts_with(&["system".into(), "volumes".into(), "data".into()]) {
+        c.drain(..3);
+    }
+    if c.len() > 2 && c[0] == "volumes" {
+        c.drain(..2);
+    }
+    c
+}
+
+/// Đường dẫn nằm trong các thư mục font mà hệ điều hành bật theo thư mục: /System/Library, /Library/Fonts,
+/// /Network/Library/Fonts và ~/Library/Fonts (của mọi người dùng, kể cả khi đi qua symlink, firmlink hay khác hoa/thường).
+pub fn in_protected_font_dir(path: &Path, home: &Path) -> bool {
+    let c = norm_components(path);
+    let s = |v: &[&str]| c.len() >= v.len() && c.iter().zip(v).all(|(a, b)| a == b);
+    if s(&["system", "library"]) || s(&["library", "fonts"]) || s(&["network", "library", "fonts"]) {
+        return true;
+    }
+    if c.len() >= 4 && c[0] == "users" && c[2] == "library" && c[3] == "fonts" {
+        return true;
+    }
+    let mut h = norm_components(home);
+    if h.is_empty() {
+        return false;
+    }
+    h.extend(["library".to_string(), "fonts".to_string()]);
+    c.starts_with(&h)
+}
+
+/// Ma trận "Thay thế" theo chủ sở hữu + đường dẫn (xem docs/team/research/2026-11-11-replace-activation.md §3).
+/// Đường dẫn trong 3 thư mục font LUÔN bị bảo vệ, bất kể phân loại: hệ điều hành bật chúng theo thư mục (không gỡ
+/// được qua API) và cách duy nhất là xoá/di chuyển file — Font Atlas không bao giờ làm. So sánh trên đường dẫn đã
+/// canonical hoá (symlink, firmlink, hoa/thường) VÀ trên đường dẫn thô; cái nào chặt hơn thắng.
+pub fn replace_tier(owner: Owner, path: &Path, home: &Path) -> crate::types::ReplaceTier {
+    use crate::types::ReplaceTier::*;
+    if in_protected_font_dir(path, home) || matches!(owner, Owner::System | Owner::UserInstalled) {
+        return Protected;
+    }
+    match owner {
+        Owner::AdobeFonts | Owner::Suitcase => Guide,
+        _ => Replace,
+    }
+}
+
 /// Đoán ai đang cung cấp font ở `path`. Khớp đầu tiên thắng; UI ghi "có thể là …".
 pub fn classify_owner(path: &Path, home: &Path, ours: &HashSet<PathBuf>) -> Owner {
-    if ours.contains(path) {
+    if ours.contains(path) || ours.contains(&canonical_lossy(path)) {
         return Owner::FontAtlas;
     }
-    if path.starts_with("/System/Library") || path.starts_with("/Library/Fonts") {
-        return Owner::System;
-    }
-    if path.starts_with(home.join("Library/Fonts")) {
-        return Owner::UserInstalled;
+    if in_protected_font_dir(path, home) {
+        let c = norm_components(path);
+        let is_user = (c.len() >= 4 && c[0] == "users" && c[2] == "library" && c[3] == "fonts")
+            || { let mut h = norm_components(home); h.extend(["library".to_string(), "fonts".to_string()]); c.starts_with(&h) };
+        return if is_user { Owner::UserInstalled } else { Owner::System };
     }
     let comps: Vec<String> = path.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
     if comps.windows(4).any(|w| w[0] == "Adobe" && w[1] == "CoreSync" && w[2] == "plugins" && w[3] == "livetype") {
@@ -211,6 +280,12 @@ pub fn classify_owner(path: &Path, home: &Path, ours: &HashSet<PathBuf>) -> Owne
     }
     if comps.iter().any(|c| c.eq_ignore_ascii_case("FontBase")) {
         return Owner::FontBase;
+    }
+    if comps.iter().any(|c| c.eq_ignore_ascii_case("Typeface")) {
+        return Owner::Typeface;
+    }
+    if comps.iter().any(|c| c.eq_ignore_ascii_case("Extensis") || c.to_lowercase().contains("suitcase")) {
+        return Owner::Suitcase;
     }
     Owner::Other
 }
@@ -374,6 +449,7 @@ mod tests {
             ("/lib/mine.ttf", Owner::FontAtlas),
             ("/System/Library/Fonts/Helvetica.ttc", Owner::System),
             ("/Library/Fonts/Arial.ttf", Owner::System),
+            ("/Network/Library/Fonts/Shared.otf", Owner::System),
             ("/Users/u/Library/Fonts/Inter.ttf", Owner::UserInstalled),
             ("/Users/u/Library/Application Support/Adobe/CoreSync/plugins/livetype/.r/.123.otf", Owner::AdobeFonts),
             (

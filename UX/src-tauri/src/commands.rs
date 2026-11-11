@@ -10,8 +10,10 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::activation::*;
+use crate::dto::auto::*;
 use crate::dto::analysis::*;
 use crate::dto::cases::*;
+use crate::dto::dup_resolve::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use crate::dto::langs::*;
 use crate::dto::library::*;
@@ -21,7 +23,8 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, brief, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
+    activation, analysis, auto, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
+    preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -55,7 +58,8 @@ macro_rules! command_list {
             async legacy_retry() -> Result<LegacyStateDto, CmdError>;
             async list_sources() -> Result<Vec<SourceDto>, CmdError>;
             async add_source(path: String) -> Result<SourceDto, CmdError>;
-            async remove_source(source_id: i64) -> Result<(), CmdError>;
+            async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
+            async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
@@ -63,6 +67,7 @@ macro_rules! command_list {
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
             async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
+            async family_groups(q: FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError>;
             async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
             async set_favorite(face: FaceKeyDto, on: bool) -> Result<(), CmdError>;
             async list_collections() -> Result<Vec<CollectionDto>, CmdError>;
@@ -75,6 +80,8 @@ macro_rules! command_list {
             async system_tag_catalog() -> Result<Vec<SystemTagGroupDto>, CmdError>;
             async tags_of(face: FaceKeyDto) -> Result<Vec<TagDto>, CmdError>;
             async create_tag(name: String) -> Result<TagDto, CmdError>;
+            async rename_tag(id: i64, name: String) -> Result<TagDto, CmdError>;
+            async delete_tag(id: i64) -> Result<u32, CmdError>;
             async tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async list_problems() -> Result<Vec<ProblemDto>, CmdError>;
@@ -98,6 +105,15 @@ macro_rules! command_list {
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
+            async resolve_preview(scope: ResolveScopeDto, q: FaceQueryDto) -> Result<ResolvePlanDto, CmdError>;
+            async resolve_apply(req: ResolveRequestDto) -> Result<ResolveResultDto, CmdError>;
+            async resolve_undo(ids: Vec<i64>) -> Result<ResolveResultDto, CmdError>;
+            async resolve_list(include_undone: bool) -> Result<Vec<ResolutionDto>, CmdError>;
+            async duplicate_ignore(kind: DuplicateKindDto, key: String) -> Result<(), CmdError>;
+            async duplicate_unignore(kind: DuplicateKindDto, key: String) -> Result<(), CmdError>;
+            async duplicate_ignored() -> Result<Vec<IgnoredGroupDto>, CmdError>;
+            async source_priority() -> Result<Vec<i64>, CmdError>;
+            async set_source_priority(ids: Vec<i64>) -> Result<Vec<i64>, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
             async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
             async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
@@ -144,6 +160,10 @@ macro_rules! command_list {
             async activation_state() -> Result<Vec<ActivationStateDto>, CmdError>;
             async activation_preflight(faces: Vec<FaceKeyDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_list_replaced() -> Result<Vec<ReplacedEntryDto>, CmdError>;
+            async activation_restore_replaced(id: i64) -> Result<RestoreOutcomeDto, CmdError>;
+            async activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<CaseActivationDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
@@ -159,6 +179,13 @@ macro_rules! command_list {
             async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
             async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
+            async auto_status() -> Result<AutoStatusDto, CmdError>;
+            async auto_set_enabled(on: bool) -> Result<AutoStatusDto, CmdError>;
+            async auto_install(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
+            async auto_remove(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
+            async auto_log(limit: Option<u32>) -> Result<Vec<AutoLogDto>, CmdError>;
+            async auto_forget_key() -> Result<AutoStatusDto, CmdError>;
+            async auto_probe() -> Result<AutoStatusDto, CmdError>;
         }
     };
 }
@@ -284,6 +311,7 @@ macro_rules! cmd {
 }
 
 cmd!(query_faces(q: FaceQueryDto) -> FacePageDto => |s| library::query_faces(s, &q));
+cmd!(family_groups(q: FaceQueryDto) -> Vec<FamilyGroupDto> => |s| library::family_groups(s, &q));
 cmd!(get_family_styles(family: String) -> Vec<FamilyStyleDto> => |s| library::get_family_styles(s, &family));
 cmd!(set_favorite(face: FaceKeyDto, on: bool) -> () => |s| library::set_favorite(s, &face, on));
 cmd!(list_collections() -> Vec<CollectionDto> => |s| library::list_collections(s));
@@ -296,6 +324,8 @@ cmd!(list_tags() -> Vec<TagDto> => |s| library::list_tags(s));
 cmd!(system_tag_catalog() -> Vec<SystemTagGroupDto> => |_s| Ok(library::system_tag_catalog()));
 cmd!(tags_of(face: FaceKeyDto) -> Vec<TagDto> => |s| library::tags_of(s, &face));
 cmd!(create_tag(name: String) -> TagDto => |s| library::create_tag(s, &name));
+cmd!(rename_tag(id: i64, name: String) -> TagDto => |s| library::rename_tag(s, id, &name));
+cmd!(delete_tag(id: i64) -> u32 => |s| library::delete_tag(s, id));
 cmd!(tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::tag_faces(s, tag_id, &faces));
 cmd!(untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::untag_faces(s, tag_id, &faces));
 cmd!(list_problems() -> Vec<ProblemDto> => |s| library::list_problems(s));
@@ -304,6 +334,13 @@ cmd!(reveal_in_finder(face: FaceKeyDto) -> () => |s| system::reveal_in_finder(s,
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
 }));
 cmd!(backup_user_db() -> String => |s| system::backup_user_db(s));
+cmd!(auto_status() -> AutoStatusDto => |s| auto::status(s));
+cmd!(auto_set_enabled(on: bool) -> AutoStatusDto => |s| auto::set_enabled(s, on));
+cmd!(auto_install(target: AutoTargetDto) -> AutoStatusDto => |s| auto::install(s, target));
+cmd!(auto_remove(target: AutoTargetDto) -> AutoStatusDto => |s| auto::remove(s, target));
+cmd!(auto_log(limit: Option<u32>) -> Vec<AutoLogDto> => |s| auto::log(s, limit));
+cmd!(auto_forget_key() -> AutoStatusDto => |s| auto::forget_key(s));
+cmd!(auto_probe() -> AutoStatusDto => |s| auto::probe(s));
 cmd!(disk_free(target: String) -> u64 => |s| system::disk_free(s, &target));
 cmd!(get_ui_state() -> UiStateDto => |s| system::get_ui_state(s));
 cmd!(set_ui_state(state: UiStateDto) -> () => |s| system::set_ui_state(s, &state));
@@ -324,6 +361,15 @@ cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s
 cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
 cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));
 cmd!(duplicate_summary(q: FaceQueryDto) -> DuplicateSummaryDto => |s| duplicates::duplicate_summary(s, &q));
+cmd!(resolve_preview(scope: ResolveScopeDto, q: FaceQueryDto) -> ResolvePlanDto => |s| dup_resolve::resolve_preview(s, &scope, &q));
+cmd!(resolve_apply(req: ResolveRequestDto) -> ResolveResultDto => |s| dup_resolve::resolve_apply(s, &req, &crate::trash::trash_item, dup_resolve::now_ms()));
+cmd!(resolve_undo(ids: Vec<i64>) -> ResolveResultDto => |s| dup_resolve::resolve_undo(s, &ids, dup_resolve::now_ms()));
+cmd!(resolve_list(include_undone: bool) -> Vec<ResolutionDto> => |s| dup_resolve::resolve_list(s, include_undone));
+cmd!(duplicate_ignore(kind: DuplicateKindDto, key: String) -> () => |s| duplicates::duplicate_ignore(s, kind, &key, dup_resolve::now_ms()));
+cmd!(duplicate_unignore(kind: DuplicateKindDto, key: String) -> () => |s| duplicates::duplicate_unignore(s, kind, &key));
+cmd!(duplicate_ignored() -> Vec<IgnoredGroupDto> => |s| duplicates::duplicate_ignored(s));
+cmd!(source_priority() -> Vec<i64> => |s| dup_resolve::source_priority(s));
+cmd!(set_source_priority(ids: Vec<i64>) -> Vec<i64> => |s| dup_resolve::set_source_priority(s, &ids));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
 cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));
@@ -424,6 +470,18 @@ cmd!(activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, procee
         let _ = on_progress.send(p);
     })
 });
+cmd!(activation_list_replaced() -> Vec<ReplacedEntryDto> => |s| activation::list_replaced(s));
+cmd!(activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::replace(s, &faces, scope, &confirmed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_restore_replaced(id: i64) -> RestoreOutcomeDto => |s| activation::restore_replaced(s, id));
+cmd!(activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> CaseActivationDto => |s| {
+    activation::activate_case(s, case_id, scope, proceed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::activate_collection(s, collection_id, scope, proceed, &mut |p| {
         let _ = on_progress.send(p);
@@ -490,8 +548,16 @@ pub async fn add_source(
 pub async fn remove_source(
     state: State<'_, Arc<AppState>>,
     source_id: i64,
-) -> Result<(), CmdError> {
+) -> Result<RemoveSourceReportDto, CmdError> {
     blocking(&state, move |s| sources::remove_source(s, source_id)).await
+}
+
+#[tauri::command]
+pub async fn remove_source_preview(
+    state: State<'_, Arc<AppState>>,
+    source_id: i64,
+) -> Result<RemoveSourceReportDto, CmdError> {
+    blocking(&state, move |s| sources::remove_source_preview(s, source_id)).await
 }
 
 #[tauri::command]

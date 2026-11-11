@@ -9,6 +9,8 @@
   const log = async (step, ok, detail) => { n++; if (!ok && consoleErrors.length) detail = { detail, consoleErrors: consoleErrors.splice(0, 3) }; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wait = async (fn, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; };
+  // Ngôn ngữ giao diện cố định cho cả lượt QA (mặc định vi; QA_LANG=en cho lượt chụp ảnh tiếng Anh). Không phụ thuộc ngôn ngữ của máy.
+  await wait(() => window.__faLocale, 20000); window.__faLocale?.('__QA_LANG__'); await sleep(500);
   // Bộ lọc nay là sheet Advanced (nút data-testid=advanced-open); đóng bằng nút × của sheet.
   const openAdv = async () => { if (!document.querySelector('[data-testid=advanced-sheet]')) document.querySelector('[data-testid=advanced-open]')?.click(); return await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000); };
   const closeAdv = async () => { document.querySelector('.fa-adv-close')?.click(); await wait(() => !document.querySelector('[data-testid=advanced-sheet]'), 5000); };
@@ -25,7 +27,7 @@
   // khi máy quá tải; tooltip hiện sau 450 ms nhưng timer bị trì hoãn khi máy bận), rồi chờ tooltip đóng hẳn trước khi sang thuật ngữ kế.
   // Không nới điều kiện: vẫn yêu cầu gloss không rỗng; thẻ của thuật ngữ KHÁC (tooltip trước chưa đóng) không được tính.
   const termCheck = async sel => {
-    const terms = [...new Set([...document.querySelectorAll(sel)].map(e => e.dataset.term))]; const bad = []; let art = 0; const n = terms.length;
+    const terms = [...new Set([...document.querySelectorAll(sel)].map(e => e.dataset.term))]; const bad = [], artMissing = []; let art = 0; const n = terms.length;
     const card = term => [...document.querySelectorAll('[role=tooltip] [data-term-card]')].find(c => c.dataset.termCard === term);
     // Phần tử tra lại SỐNG mỗi lần (màn có thể vẽ lại khi dữ liệu về muộn): sự kiện gửi vào nút đã bị gỡ khỏi DOM sẽ không tới React.
     const live = term => [...document.querySelectorAll(sel)].find(e => e.dataset.term === term);
@@ -35,12 +37,17 @@
       if (!el) { bad.push(term + ' (nhãn biến mất)'); continue; }
       fire(el, 'pointerover');
       const c = await wait(() => { const x = card(term); return x && x.querySelector('.fa-term-gloss')?.textContent.trim() ? x : null; }, 20000);
-      if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
+      if (!c) bad.push(term + ' [giai đoạn: mở — thẻ/chú giải không hiện]');
+      else {
+        // Hình minh hoạ vẽ/nạp muộn trên máy tải: đợi tối đa 3 s trước khi đo (thiếu hình sau 3 s vẫn tính là không có hình).
+        const withArt = await wait(() => card(term)?.querySelector('svg.fa-term-art'), 3000);
+        if (withArt) art++; else artMissing.push(term);
+      }
       el = live(term) ?? el; fire(el, 'pointerout');
-      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
-      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
+      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 2000);
+      if (!closed) bad.push(term + ' [giai đoạn: đóng — tooltip không đóng sau 2 s; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
     }
-    return { n, bad, art };
+    return { n, bad, art, artMissing };
   };
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
@@ -92,6 +99,18 @@
         const go = await wait(() => btn('Tiếp tục'));
         go?.click(); await sleep(800); continue;
       }
+      if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
+        // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
+        const vb = document.querySelector('.fa-stage svg.fa-bp')?.getAttribute('viewBox');
+        const bw = document.querySelector('.fa-stage svg.fa-bp') ? getComputedStyle(document.querySelector('.fa-stage svg.fa-bp')).borderTopWidth : null;
+        btn('Vào thư viện')?.click();
+        const dlg = await wait(() => document.querySelector('[role=dialog] .fa-tips-grid'), 8000);
+        await sleep(300); await snap('onb-tips');
+        const cards = dlg ? dlg.querySelectorAll('[data-testid=tip-card]').length : 0;
+        const dots = document.querySelectorAll('.fa-onb-dots i').length;
+        await log('onb-tips-overlay', !!dlg && cards >= 8 && vb === '0 0 480 480' && bw === '0px' && dots >= 6 && !document.querySelector('.fa-onb-keys, .fa-onb-stepno, .fa-legend'), { cards, vb, bw, dots, legend: !!document.querySelector('.fa-legend') });
+        continue;
+      }
       const order = /Kích hoạt/.test(h1) ? ['Để sau', 'Tiếp tục'] : ['Đã hiểu', 'Không dùng', 'Bỏ qua', 'Tiếp tục', 'Bắt đầu', 'Vào thư viện'];
       // Intro (nút "Bỏ qua") và outro (~1,5 s, không có nút) là màn chuyển động: outro kết thúc thì .fa-onb biến mất, thoát vòng lặp.
       const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);
@@ -113,7 +132,7 @@
     document.querySelector('[role=tab][aria-label="Giải phẫu"]')?.click();
     const rows = await wait(() => { const r = [...document.querySelectorAll('[data-testid=axis-row]')]; return r.length ? r : null; }, 30000);
     const texts = (rows ?? []).map(r => r.textContent.replace(/\s+/g, ' ').trim());
-    const numeric = texts.filter(t => /\d+,\d+\s*(em|°|×)|\d+\s*°/.test(t));
+    const numeric = texts.filter(t => /\d+[.,]\d+\s*(em|°|×)|\d+\s*°/.test(t));
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
     // Đường kẻ Hxg phải trùng chữ: đo cap của 'H' bằng canvas với đúng font đang vẽ, so với đường cap trong SVG (±1 đơn vị viewBox).
@@ -228,10 +247,10 @@
         const marks = [...document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]')];
         const after = total();
         const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
-        await log('lang-filter-narrows-and-badges', !!row && /đủ$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
+        await log('lang-filter-narrows-and-badges', !!row && /(đủ|full)$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
         await openAdv();
         // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
-        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/chưa chọn$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
+        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/(chưa chọn|not selected)$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
         await closeAdv(); await sleep(400);
         // Số đếm cập nhật bất đồng bộ sau khi bỏ nhóm lọc: đợi tới khi về đúng giá trị (tối đa 8 giây) thay vì đọc ngay sau một lần sleep cố định.
         const langCleared = await wait(() => !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, 8000);
@@ -252,14 +271,14 @@
       const th1 = document.documentElement.dataset.theme;
       for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('active-filters-popover-' + th); }
       if (th1) document.documentElement.dataset.theme = th1; else delete document.documentElement.dataset.theme;
-      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
+      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /(Xoá tất cả|Clear all)/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
       key(document, { key: 'Escape' }); await sleep(300);
       const withFilter = total();
       sinput?.focus(); key(sinput, { key: 'Backspace' });
       const selected = !!(await wait(() => document.querySelector('.fa-fsum-seg[data-selected=true]'), 5000)); // chọn nhóm cuối: đợi trạng thái thay vì sleep cố định
       key(sinput, { key: 'Backspace' });
       await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
-      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
+      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim())), 5000);
       await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
       undoBtn?.click(); await sleep(900);
       await log('toast-undo-restores', !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, { total: total(), withFilter });
@@ -271,6 +290,24 @@
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));
     await snap('settings');
+    // Theme tối qua radio trong Cài đặt (đường thật: applyTheme + theme cửa sổ native cho lớp kính sidebar), không đặt data-theme bằng JS.
+    {
+      const radioOf = re => [...document.querySelectorAll('[data-testid=settings] input[type=radio][name=theme]')].find(r => re.test(r.closest('label')?.textContent ?? ''));
+      radioOf(/^(Tối|Dark)$/)?.click(); await sleep(900);
+      await snap('settings-dark-real');
+      const darkApplied = document.documentElement.dataset.theme === 'dark';
+      radioOf(/^(Sáng|Light)$/)?.click(); await sleep(700);
+      await log('settings-theme-radio-dark', darkApplied && document.documentElement.dataset.theme === 'light', { darkApplied, after: document.documentElement.dataset.theme });
+    }
+    // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
+    {
+      [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Bật font tự động|Auto-activation)/.test(b.textContent))?.click();
+      await wait(() => document.querySelectorAll('[data-testid=auto-app]').length === 6, 15000);
+      const ids = [...document.querySelectorAll('[data-testid=auto-app]')].map(x => x.dataset.app).join(',');
+      await sleep(300);
+      for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('auto-activation-' + th); }
+      await log('auto-activation-page', ids === 'photoshop,aftereffects,illustrator,indesign,incopy,affinity' && !!document.querySelector('[data-testid=auto-switch]') && !!document.querySelector('[data-testid=auto-log], [data-testid=auto-log-empty]') && !document.querySelector('[data-testid=auto-error]'), { ids, error: document.querySelector('[data-testid=auto-error]')?.textContent ?? null });
+    }
     const nav = [...document.querySelectorAll('[aria-label="Thanh bên"] button, nav button, aside button')].find(b => b.textContent.includes('Tất cả'));
     nav?.click();
     const left = await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);
@@ -503,7 +540,7 @@
     await log('compare-esc-ime-stays-open', !!document.querySelector('.cmp-tbl') && document.activeElement === ed, { open: !!document.querySelector('.cmp-tbl') });
     ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(200); // Esc thường trong ô: chỉ blur, màn vẫn mở
     await log('compare-esc-in-field-blurs', document.activeElement !== ed && !!document.querySelector('.cmp-tbl'), {});
-    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Phở bò Hà Nội'); await sleep(300);
+    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Chữ Việt đẹp — Ấn tượng'); await sleep(300);
     // H7: hàng Vietnamese có TermTip "Stacked diacritics" + chữ "dấu chồng"; ký tự dấu chồng được đánh dấu
     const viHead = document.querySelector('[data-row="specimen.vi"]');
     await log('compare-vi-row', /Vietnamese/.test(viHead?.querySelector('b')?.textContent ?? '') && viHead?.querySelector('[data-term="vi_marks"]')?.textContent === 'Stacked diacritics' && /dấu chồng/.test(viHead?.textContent ?? '') && document.querySelectorAll('.cmp-vi [data-stacked="true"]').length >= 5, { head: viHead?.textContent, stacked: document.querySelectorAll('.cmp-vi [data-stacked="true"]').length });
@@ -645,8 +682,8 @@
     let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('.fa-class-opt input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
-    const boxes = [...(grp?.querySelectorAll('.fa-class-opt input[type=checkbox]') ?? [])].filter(b => !b.closest('.fa-sub-opts')); // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
+    await wait(() => grp?.querySelectorAll('[data-testid^="class-facet-"]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
+    const boxes = [...(grp?.querySelectorAll('[data-testid^="class-facet-"]') ?? [])]; // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
     const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
@@ -661,8 +698,9 @@
     await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
     await wait(() => countNow() === total0, 8000); // số đếm làm mới bất đồng bộ sau khi bỏ nhóm lọc
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
-    // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
+    // Trùng lặp: mục sidebar khớp duplicate_summary thật; trang mới: thẻ hai bản cạnh nhau cùng dòng mẫu, câu thường, Giải quyết (Ẩn, không đụng tệp) → Đã giải quyết → Hoàn tác
     const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
+    const waitA = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch (e) {} await sleep(200); } return null; };
     const dsum = await inv('duplicate_summary', { q: dq });
     const dupBtn = () => [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(x => /Trùng lặp/.test(x.textContent));
     await wait(() => (dsum.total > 0) === !!dupBtn(), 8000);
@@ -671,16 +709,127 @@
       dupBtn().click();
       await wait(() => document.querySelector('.dup [data-testid=dup-group]'), 20000);
       await sleep(400); await snap('duplicates-view');
-      const dgroups = document.querySelectorAll('[data-testid=dup-group]').length;
-      const dmembers = document.querySelectorAll('[data-testid=dup-member]').length;
+      const dplan = await inv('resolve_preview', { scope: { type: 'all' }, q: dq });
+      const cards = [...document.querySelectorAll('[data-testid=dup-group]')];
       const dbtn = [...document.querySelectorAll('.dup button')].map(x => x.textContent.trim());
       const risky = dbtn.filter(x => /xoá|xóa|delete|di chuyển|move|gộp/i.test(x));
-      const openBtn = [...document.querySelectorAll('.dup button')].find(x => x.textContent.trim() === 'Mở chi tiết');
+      const sides = cards.map(c => [...c.querySelectorAll('[data-testid=dup-spec]')].map(x => x.textContent));
+      const sameSample = sides.every(x => x.length >= 2 && x.every(y => y === x[0] && /Việt Nam/.test(y)));
+      const rawCodes = /same_content_tidiest|preferred_source|preferred_format|newer_version|newest_unknown|collection_file|may_reflow|chosen_by_user/.test(document.querySelector('.dup')?.textContent ?? '');
+      const summary = document.querySelector('[data-testid=dup-summary]')?.textContent ?? '';
+      const detailHidden = !document.querySelector('.dup [data-testid=dup-detail]');
+      cards[0]?.querySelector('button[aria-expanded]')?.click();
+      const detailShown = await wait(() => cards[0]?.querySelector('[data-testid=dup-detail]'), 3000);
+      const openBtn = [...cards[0].querySelectorAll('button')].find(x => x.textContent.trim() === 'Mở chi tiết');
       openBtn?.click();
       const panel = await wait(() => document.querySelector('aside.fa-panel h2'), 15000);
-      await log('duplicates-view', dgroups === dsum.total && dmembers >= 2 && risky.length === 0 && !!panel && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { dgroups, dmembers, risky, panel: panel?.textContent });
+      await log('duplicates-view', cards.length === dplan.items.length && cards.length === dsum.total && sameSample && !rawCodes && risky.length === 0 && detailHidden && !!detailShown && !!panel && summary.includes(`${dsum.total} nhóm`) && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { cards: cards.length, plan: dplan.items.length, total: dsum.total, sides, sameSample, rawCodes, risky, detailHidden, shown: !!detailShown, panel: panel?.textContent, summary });
+      // Giải quyết nhóm đầu bằng Ẩn (mặc định): không đụng tệp, nhóm biến mất, "Đã giải quyết" có dòng, Hoàn tác đưa nhóm về.
+      const rev0 = await inv('resolve_list', { includeUndone: false });
+      const firstCard = () => document.querySelector('.dup [data-testid=dup-group]');
+      [...firstCard().querySelectorAll('button')].find(x => x.textContent.trim() === 'Giải quyết')?.click();
+      const dlg = await wait(() => document.querySelector('[role=dialog] [data-testid=pv-summary]'), 10000);
+      await sleep(300); await snap('duplicates-preview');
+      const hideDefault = document.querySelector('[role=dialog] input[name=dup-act]')?.checked === true;
+      document.querySelector('[data-testid=pv-confirm]')?.click();
+      const gone = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total - 1, 15000);
+      await wait(() => !document.querySelector('[role=dialog]'), 8000);
+      const rev1 = await inv('resolve_list', { includeUndone: false });
+      await log('duplicates-resolve-hide', !!dlg && hideDefault && !!gone && rev1.length === rev0.length + 1 && rev1[0].action === 'hide', { hideDefault, before: rev0.length, after: rev1.length, action: rev1[0]?.action });
+      [...document.querySelectorAll('.dup [role=tab]')].find(x => /Đã giải quyết/.test(x.textContent))?.click();
+      const row = await wait(() => document.querySelector('[data-testid=dup-res-row]'), 10000);
+      await sleep(300); await snap('duplicates-resolved');
+      [...(row?.querySelectorAll('button') ?? [])].find(x => x.textContent.trim() === 'Hoàn tác')?.click();
+      const back = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total, 15000);
+      await log('duplicates-undo', !!row && !!back && (await inv('resolve_list', { includeUndone: false })).length === rev0.length, { restored: !!back });
+      [...document.querySelectorAll('.dup [role=tab]')].find(x => /Cần xử lý/.test(x.textContent))?.click();
     } else {
       await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
+    }
+    // Thứ tự ưu tiên nguồn (Cài đặt → Thư viện): hàng khớp source_priority; nút ↓ đổi thứ tự thật rồi ↑ trả lại
+    {
+      const srcsNow = await inv('list_sources', {});
+      if (srcsNow.length >= 2) {
+        document.querySelector('button[aria-label="Cài đặt"]')?.click();
+        await wait(() => document.querySelector('[data-testid=settings]'));
+        [...document.querySelectorAll('.fa-set-nav button')].find(b => /Thư viện/.test(b.textContent))?.click();
+        const box = await wait(() => document.querySelector('[data-testid=source-priority]'), 8000);
+        const order0 = await inv('source_priority', {});
+        const rowsN = () => [...document.querySelectorAll('[data-testid=prio-row] strong')].map(x => x.textContent);
+        const nameOf = id => srcsNow.find(s => s.id === id)?.name;
+        const match0 = JSON.stringify(rowsN()) === JSON.stringify(order0.map(nameOf));
+        await sleep(200); await snap('source-priority');
+        document.querySelector('[data-testid=prio-row] .mv button:nth-child(2)')?.click();
+        const moved = await waitA(async () => { const o = await inv('source_priority', {}); return o[0] === order0[1] && o[1] === order0[0]; }, 8000);
+        document.querySelector('[data-testid=prio-row]:nth-child(2) .mv button:nth-child(1)')?.click();
+        const restored = await waitA(async () => JSON.stringify(await inv('source_priority', {})) === JSON.stringify(order0), 8000);
+        await log('source-priority', !!box && match0 && !!moved && !!restored, { rows: rowsN(), order0, match0, moved: !!moved, restored: !!restored });
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+        await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);
+      } else {
+        await log('source-priority', true, 'ít hơn 2 nguồn trong fixture QA: khối thứ tự ưu tiên ẩn đúng');
+      }
+    }
+    // Nhóm theo Family (R3): ⌥G bật → tiêu đề nhóm khớp family_groups, số hàng khớp, ←/→ thu gọn/mở, ⌥G tắt lại
+    {
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+      await wait(() => cells().length > 0, 10000);
+      document.activeElement?.blur?.();
+      const gq = { ...dq, groupByFamily: true, limit: 100 };
+      const fg = await inv('family_groups', { q: gq });
+      const totalQ = (await inv('query_faces', { q: { ...dq, limit: 1 } })).total;
+      const sumCount = fg.reduce((a, g) => a + g.count, 0);
+      const altG = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', code: 'KeyG', altKey: true, bubbles: true, cancelable: true }));
+      altG();
+      const head0 = await waitA(() => document.querySelector('[data-testid=group-head]'), 15000);
+      await sleep(500); await snap('family-groups');
+      const grid = document.querySelector('[role=grid]');
+      const colsN = Number(grid?.getAttribute('aria-colcount')) || 1;
+      const expectRows = fg.length + fg.reduce((a, g) => a + Math.ceil(g.count / colsN), 0);
+      const rowsNow = Number(grid?.getAttribute('aria-rowcount'));
+      const label0 = document.querySelector('[data-testid=group-count]')?.textContent ?? '';
+      const g0 = fg[0];
+      const wantLabel = g0 && g0.matchCount < g0.styleTotal ? `${g0.matchCount}/${g0.styleTotal} kiểu` : `${g0?.styleTotal} kiểu`;
+      const topOf = el => el?.getBoundingClientRect().top;
+      const headsNow = () => [...document.querySelectorAll('[data-testid=group-head]')];
+      const gap0 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
+      headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+      await waitA(() => headsNow()[0]?.getAttribute('aria-expanded') === 'false', 5000);
+      await sleep(300);
+      const gap1 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
+      const collapsedOk = headsNow()[0]?.getAttribute('aria-expanded') === 'false' && (gap0 === null || gap1 === null || (gap1 < gap0 && Math.abs(gap1 - 32) <= 1));
+      headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      const reopened = await waitA(() => headsNow()[0]?.getAttribute('aria-expanded') === 'true', 5000);
+      altG();
+      const off = await waitA(() => !document.querySelector('[data-testid=group-head]') && !document.querySelector('[role=grid]')?.dataset.grouped, 8000);
+      await log('family-groups', !!head0 && sumCount === totalQ && fg.length > 0 && rowsNow === expectRows && label0 === wantLabel && collapsedOk && !!reopened && !!off, { groups: fg.length, sumCount, totalQ, colsN, expectRows, rowsNow, label0, wantLabel, gap0, gap1, collapsedOk, reopened: !!reopened, off: !!off });
+    }
+    // Gỡ nguồn: menu chuột phải → hộp xem trước có số liệu khớp remove_source_preview; Huỷ không gỡ gì
+    {
+      const srcs2 = await inv('list_sources', {});
+      const target = srcs2.find(x => x.available) ?? srcs2[0];
+      // đúng mục nguồn: theo title (đường dẫn) hoặc tên đứng đầu rồi tới số đếm — KHÔNG dùng includes (tên nguồn có thể chỉ một chữ cái)
+      const srcBtns = [...document.querySelectorAll('[aria-label="Thanh bên"] button')];
+      const item = target && (srcBtns.find(b => target.path && b.getAttribute('title') === target.path) ?? srcBtns.find(b => b.textContent.startsWith(target.name) && /^\d*$/.test(b.textContent.slice(target.name.length).replace(/\D.*$/, ''))));
+      if (item) {
+        const prev = await inv('remove_source_preview', { sourceId: target.id });
+        const r = item.getBoundingClientRect();
+        item.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 10, clientY: r.top + 5 }));
+        const mi = await waitA(() => [...document.querySelectorAll('[role=menuitem]')].find(x => /Gỡ nguồn/.test(x.textContent)), 5000);
+        mi?.click();
+        const facts = await waitA(() => document.querySelector('[data-testid=rmsrc-facts]'), 8000);
+        await sleep(300); await snap('remove-source-preview');
+        const locText = facts?.querySelector('[data-fact=locations]')?.textContent ?? '';
+        const locOk = locText.includes(`${prev.removedLocations} vị trí`);
+        const noDelete = /không xoá file font nào/.test(document.querySelector('[data-testid=rmsrc]')?.textContent ?? '');
+        document.querySelector('[data-testid=rmsrc-cancel]')?.click();
+        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); // không để menu mở chặn ⌘A của bước sau
+        const closed = await waitA(() => !document.querySelector('[data-testid=rmsrc]'), 5000);
+        const after = await inv('list_sources', {});
+        await log('remove-source-preview', !!facts && locOk && noDelete && !!closed && after.length === srcs2.length && after.some(x => x.id === target.id), { target: target.name, prev, locText, locOk, noDelete, closed: !!closed, before: srcs2.length, after: after.length });
+      } else {
+        await log('remove-source-preview', true, 'không có nguồn trong fixture QA');
+      }
     }
     // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
     // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).
@@ -694,7 +843,8 @@
       await wait(() => countNow2() >= base + 12, 120000);
       await sleep(800);
       const total = countNow2();
-      document.querySelector('[data-testid=library-grid-scroller]')?.focus?.();
+      // Hộp thoại Gỡ nguồn (bước trước) trả focus về nút nguồn ở thanh bên: ⌘A chỉ chạy khi focus ở thư viện hoặc ngoài mọi vùng, nên bỏ focus như người dùng bấm ra vùng trống.
+      (document.activeElement instanceof HTMLElement) && document.activeElement.blur();
       const gridTop = () => document.querySelector('[role=grid]')?.getBoundingClientRect().top;
       // chọn 3 font (cmd-click) để đo vị trí lưới; sau đó chọn tất cả: tag nổi hiện mà lưới KHÔNG đổi chỗ.
       const c3 = cells(); c3[0].click(); c3[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); c3[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
@@ -706,7 +856,7 @@
       const topAll = gridTop(); const tag = document.querySelector('[data-testid=narrow-tag]');
       const tagBox = tag?.getBoundingClientRect(); const wrapBox = tag?.closest('.fa-act-wrap')?.getBoundingClientRect(); const gb = document.querySelector('[role=grid]')?.getBoundingClientRect();
       await snap('narrow-tag');
-      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
+      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, total, sel: document.querySelector('[data-testid=selection-count]')?.textContent, blockers: [...document.querySelectorAll('[role=menu],[role=dialog],[role=alertdialog]')].map(e => e.getAttribute('role') + ':' + (e.getAttribute('aria-label') ?? e.className)), active: document.activeElement?.tagName + '.' + document.activeElement?.className, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
       tag?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); tag?.focus();
       const pop = await wait(() => document.querySelector('[data-testid=narrow-pop]'), 4000);
       await log('narrow-pop-has-action', !!pop && !!btn('Chỉ lấy 4 đầu', pop) && Math.abs(gridTop() - top3) <= 1, { pop: pop?.textContent });
@@ -730,7 +880,7 @@
       await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
       const radios = [...(dlg?.querySelectorAll('input[type=radio]') ?? [])];
       const rs = radios.map(r => { const cs = getComputedStyle(r), af = getComputedStyle(r, '::after'); return { appearance: cs.appearance, w: cs.width, bw: cs.borderTopWidth, br: cs.borderTopLeftRadius, dot: af.width, checked: r.checked }; });
-      await log('conflict-radio-ring-and-dot', rs.length === 2 && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1 && x.dot === '8px'), { rs });
+      await log('conflict-radio-ring-and-dot', (rs.length === 2 || rs.length === 3) && rs.every(x => x.appearance === 'none' && x.w === '16px' && parseFloat(x.bw) >= 1 && x.dot === '8px'), { rs });
       const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
       const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
       await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
@@ -811,6 +961,39 @@
         pressOn(deskEl(), '['); await sleep(500);
         const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
         await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
+        document.querySelector('[data-testid=mode-combos]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=cc-col]').length >= 2, 10000);
+        await sleep(400);
+        const ccCols = document.querySelectorAll('[data-testid=cc-col]').length;
+        await log('desk-compare-combos', ccCols === 2 && document.querySelector('[data-testid=cc-col]')?.dataset.base === 'true' && document.querySelectorAll('[data-testid=cc-rel]').length === 2, { ccCols });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-combos-' + th); }
+        document.querySelector('[data-testid=mode-fonts]')?.click();
+        await wait(() => !!document.querySelector('[data-testid=font-compare]'), 8000);
+        await sleep(500);
+        await log('desk-compare-fonts', !!document.querySelector('[data-testid=font-compare]') && document.querySelectorAll('tr[data-metric]').length >= 4 && !!document.querySelector('[data-testid=fc-sort]'), { cols: document.querySelectorAll('[data-testid=fc-col]').length });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-fonts-' + th); }
+        document.querySelector('[data-testid=fc-view-pages]')?.click(); await sleep(400);
+        await log('desk-compare-fonts-pages', !document.querySelector('tr[data-metric]'), {});
+        // Đặt vào vai từ Compare Font: ứng viên đầu thành MỐC (cột đầu), không còn lặp ở cột khác.
+        {
+          // Cần ít nhất một cột ứng viên: chờ gợi ý (≤5s); không có thì thêm từ thư viện bằng ô "Thêm cột" (font fixture khác mốc).
+          await wait(() => document.querySelectorAll('[data-testid=fc-col]').length >= 2, 5000);
+          if (document.querySelectorAll('[data-testid=fc-col]').length < 2) {
+            const sel = document.querySelector('[data-testid=fc-add]');
+            await wait(() => sel && sel.options.length > 1 && !sel.disabled, 8000);
+            if (sel && sel.options.length > 1) { sel.value = sel.options[1].value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+            await wait(() => document.querySelectorAll('[data-testid=fc-col]').length >= 2, 5000);
+          }
+          const placeBtn = document.querySelector('[data-testid=fc-place]');
+          const pname = placeBtn?.closest('th')?.querySelector('.fa-cc-title')?.textContent?.trim() ?? '';
+          {
+          placeBtn?.click();
+          await wait(() => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && (f.querySelector('.fa-cc-title')?.textContent ?? '').includes(pname); }, 8000);
+          const titles = [...document.querySelectorAll('[data-testid=fc-col] .fa-cc-title')].map(x => x.textContent.replace(/\s*·\s*mốc$/, '').trim());
+          await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && titles[0] === pname && new Set(titles).size === titles.length, { pname, titles: titles.length, first: titles[0] });
+          }
+        }
+        document.querySelector('[data-testid=mode-pairing]')?.click(); await sleep(400);
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
         pressOn(deskEl(), 'Escape');
         await wait(() => !deskEl(), 8000);
@@ -852,12 +1035,17 @@
         const r = nav.getBoundingClientRect();
         nav.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 10 }));
         await wait(() => !!document.querySelector('[role=menu]'), 5000);
+        await wait(() => nav.dataset.context === 'true', 3000);
         const opened = !!document.querySelector('[role=menu]') && nav.dataset.context === 'true';
+        const menuLabel = document.querySelector('[role=menu]')?.getAttribute('aria-label') ?? null;
         await snap('sidebar-context-menu');
-        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-        await sleep(300);
+        (document.querySelector('[role=menu]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        // Đóng menu và trả focus xảy ra bất đồng bộ (máy tải nặng có thể trễ): chờ điều kiện, không đọc ngay.
+        const closed = !!(await wait(() => !document.querySelector('[role=menu]'), 3000));
+        const focused = !!(await wait(() => document.activeElement === nav, 3000));
+        const sameView = !!(await wait(() => document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent === viewBefore, 3000));
         const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
-        await log('sidebar-context-menu', opened && !document.querySelector('[role=menu]') && viewBefore === viewAfter && document.activeElement === nav, { viewBefore, viewAfter });
+        await log('sidebar-context-menu', opened && closed && sameView && focused, { opened, closed, focused, sameView, menuLabel, viewBefore, viewAfter, context: nav.dataset.context ?? null, active: document.activeElement?.tagName + '.' + (document.activeElement?.className ?? '') });
       } else await log('sidebar-context-menu', false, 'no Gần đây item');
     }
 

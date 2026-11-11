@@ -12,6 +12,7 @@ import { Sidebar, SidebarToggle } from './components/sidebar/Sidebar';
 import { WindowShell } from './components/shell/WindowShell';
 import { SettingsOverlay } from './components/settings/SettingsOverlay';
 import { SettingsShortcut } from './components/settings/SettingsShortcut';
+import { ShortcutsHelp } from './components/help/ShortcutsHelp';
 import { BootGate } from './components/boot/BootGate';
 import { Splash } from './components/splash/Splash';
 import { readSplashEnabled } from './components/splash/splashState';
@@ -23,6 +24,7 @@ import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
 import { hydrateCardFields } from './store/cardFields';
+import { t } from './i18n';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
     state = { hasError: false };
@@ -33,10 +35,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         return (
             <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--background)]">
                 <div className="max-w-md w-full bg-[var(--card)] p-8 rounded-2xl border border-[var(--border)] shadow-xl">
-                    <h2 className="text-xl font-bold text-[var(--foreground)] mb-2">Lỗi giao diện</h2>
-                    <p className="text-[var(--muted)] text-sm mb-6">Giao diện vừa gặp sự cố. Dữ liệu của bạn không bị ảnh hưởng.</p>
+                    <h2 className="text-xl font-bold text-[var(--foreground)] mb-2">{t('app.errTitle')}</h2>
+                    <p className="text-[var(--muted)] text-sm mb-6">{t('app.errBody')}</p>
                     <button onClick={() => window.location.reload()} className="w-full py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg font-bold hover:opacity-90 transition-all text-[11px]">
-                        Khởi động lại
+                        {t('app.restart')}
                     </button>
                 </div>
             </div>
@@ -124,6 +126,7 @@ const App: React.FC = () => {
             <div style={{ display: 'contents' }} inert={splash} aria-hidden={splash || undefined}>
                 <NoticeStack />
                 <SettingsShortcut />
+                <ShortcutsHelp />
                 <BootGate api={api}><Library_ api={api} /></BootGate>
             </div>
         </ErrorBoundary>

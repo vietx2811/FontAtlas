@@ -83,7 +83,8 @@
             "postscriptName": "LibreBaskerville-Regular",
             "existingPath": "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf",
             "owner": "right_font",
-            "sameFile": false
+            "sameFile": false,
+            "replaceTier": "replace"
           }
         ]
       }
