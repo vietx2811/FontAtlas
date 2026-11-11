@@ -1449,14 +1449,17 @@ mod review_tests {
 
     struct BlockingResolver {
         started: Arc<AtomicBool>,
+        finished: Arc<AtomicBool>,
     }
     impl reqwest::dns::Resolve for BlockingResolver {
         fn resolve(&self, _: reqwest::dns::Name) -> reqwest::dns::Resolving {
             let started = self.started.clone();
+            let finished = self.finished.clone();
             Box::pin(async move {
                 tokio::task::spawn_blocking(move || {
                     started.store(true, Ordering::SeqCst);
-                    std::thread::sleep(Duration::from_secs(2));
+                    std::thread::sleep(Duration::from_secs(3));
+                    finished.store(true, Ordering::SeqCst);
                 })
                 .await
                 .unwrap();
@@ -1465,36 +1468,38 @@ mod review_tests {
         }
     }
     #[test]
-    fn cancelling_slow_blocking_dns_releases_model_worker_and_lock_under_one_second() {
+    fn cancelling_slow_blocking_dns_releases_model_worker_and_lock_before_resolver_finishes() {
         let d = tempfile::tempdir().unwrap();
         let mut m = bundled_manifest();
         m.source.url = "http://fontatlas-dns-fixture.invalid/model".into();
         let started = Arc::new(AtomicBool::new(false));
+        let finished = Arc::new(AtomicBool::new(false));
         let cancel = Arc::new(AtomicBool::new(false));
         let mut st = ModelStore::new(d.path().into(), m);
         st.dns_resolver = Some(Arc::new(BlockingResolver {
             started: started.clone(),
+            finished: finished.clone(),
         }));
         let c = cancel.clone();
-        // Measure from the moment of cancellation, not from start: under parallel builds the
-        // resolver can take >1 s just to start, which made this test flaky.
-        let cancelled_at = Arc::new(std::sync::Mutex::new(None::<Instant>));
-        let ca = cancelled_at.clone();
+        // No wall-clock threshold: a loaded machine can stall any thread for >1 s. The property
+        // is ordering - ensure_resumable must return (and free the lock) while the blocking
+        // getaddrinfo is still running, i.e. before `finished` is set.
         let watcher = std::thread::spawn(move || {
             let t = Instant::now();
             while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(10) {
                 std::thread::sleep(Duration::from_millis(5));
             }
             assert!(started.load(Ordering::SeqCst));
-            *ca.lock().unwrap() = Some(Instant::now());
             c.store(true, Ordering::SeqCst);
         });
         let result = st.ensure_resumable(&|_| {}, &cancel);
-        let returned = Instant::now();
+        let resolver_done_at_return = finished.load(Ordering::SeqCst);
         watcher.join().unwrap();
         assert!(matches!(result, Err(EmbedError::Cancelled)));
-        let since_cancel = returned.duration_since(cancelled_at.lock().unwrap().expect("cancelled"));
-        assert!(since_cancel < Duration::from_secs(1), "{since_cancel:?}");
+        assert!(
+            !resolver_done_at_return,
+            "cancel waited for the blocking resolver instead of returning early"
+        );
         let lock = OpenOptions::new()
             .write(true)
             .open(st.path(".lock"))
