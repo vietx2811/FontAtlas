@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI chạy trên máy Mac của dự án, thay cho GitHub Actions.
 #
-#   bash tools/ci/local_ci.sh [ref] [--no-qa]
+#   bash tools/ci/local_ci.sh [ref] [--no-qa] [--no-wait] [--priority]
+#   bash tools/ci/local_ci.sh --status
 #
 # - ref mặc định là dev/mvp. Kiểm đúng commit đã commit (checkout sạch trong ~/.fontatlas-ci/worktree),
 #   không bao giờ kiểm cây đang sửa dở.
@@ -9,35 +10,88 @@
 #   clippy -D warnings, QA trên app native thật (bản debug, dữ liệu tạm).
 # - Kết quả: ~/.fontatlas-ci/runs/<sha>/ (log từng bước + summary.json) và git note ở refs/notes/ci.
 #   Hook pre-push (tools/ci/install_hook.sh) đọc note này để chặn push dev/mvp và main chưa xanh.
+# - Hàng đợi FIFO (mặc định --wait): mỗi lần chạy lấy một vé ~/.fontatlas-ci/queue/<Q|P><thời gian>-<pid>-<ref>, chỉ chạy khi vé đứng đầu
+#   và khoá rảnh. Vé của tiến trình đã chết tự bị dọn. --no-wait: gặp khoá bận thì thoát mã 3 (hành vi cũ). --status: in hàng đợi.
+#   --priority (chỉ Lead, cần FONTATLAS_CI_PRIORITY=1) xếp vé đứng trước mọi vé thường.
 # - Không đụng thư viện thật: QA dùng FONTATLAS_DATA_DIR tạm, chỉ chạy bản debug.
 set -uo pipefail
 
-REF="dev/mvp"; QA=1
+REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0
 for a in "$@"; do
   case "$a" in
     --no-qa) QA=0 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    --wait) WAIT=1 ;;
+    --no-wait) WAIT=0 ;;
+    --priority) PRIO=1 ;;
+    --status) STATUS=1 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) REF="$a" ;;
   esac
 done
 
-REPO="$(git rev-parse --path-format=absolute --git-common-dir)" || exit 2
 CI="${FONTATLAS_CI_HOME:-$HOME/.fontatlas-ci}"
+LOCK="$CI/lock"; QUEUE="$CI/queue"
+mkdir -p "$CI/runs" "$QUEUE"
+
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+ticket_pid() { local b="${1##*/}"; b="${b#*-}"; echo "${b%%-*}"; }   # <Q|P><thời gian>-<pid>-<ref>
+# Dọn vé của tiến trình đã chết và khoá mồ côi (pid trong khoá không còn sống).
+reap() {
+  local t
+  for t in "$QUEUE"/*; do [ -e "$t" ] || continue; alive "$(ticket_pid "$t")" || rm -f "$t"; done
+  if [ -d "$LOCK" ]; then
+    local lp; lp="$(cat "$LOCK/pid" 2>/dev/null)"
+    [ -n "$lp" ] && ! alive "$lp" && rm -rf "$LOCK"
+  fi
+}
+queue_list() { ls -1 "$QUEUE" 2>/dev/null | LC_ALL=C sort; }
+
+if [ $STATUS = 1 ]; then
+  reap
+  if [ -d "$LOCK" ]; then echo "đang chạy: pid $(cat "$LOCK/pid" 2>/dev/null || echo ?)"; else echo "khoá rảnh"; fi
+  n=0
+  while read -r t; do [ -n "$t" ] || continue; n=$((n+1)); printf '%2d. %s  (pid %s)\n' "$n" "$t" "$(ticket_pid "$t")"; done < <(queue_list)
+  [ $n -eq 0 ] && echo "hàng đợi trống"
+  exit 0
+fi
+
+REPO="$(git rev-parse --path-format=absolute --git-common-dir)" || exit 2
 WT="$CI/worktree"
-mkdir -p "$CI/runs"
 
 SHA="$(git --git-dir="$REPO" rev-parse --verify "$REF^{commit}")" || { echo "không tìm thấy ref: $REF"; exit 2; }
 TREE="$(git --git-dir="$REPO" rev-parse "$SHA^{tree}")"
 SHORT="${SHA:0:9}"
 
-# Một lần chạy một lúc: target/ và node_modules dùng chung.
-LOCK="$CI/lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
-  echo "CI đang chạy (khoá $LOCK, pid $(cat "$LOCK/pid" 2>/dev/null || echo ?)). Nếu chắc không còn lần chạy nào: rmdir/rm -r $LOCK"
-  exit 3
+# Một lần chạy một lúc: target/ và node_modules dùng chung. Hàng đợi FIFO giữ thứ tự giữa các lần chạy.
+if [ $PRIO = 1 ] && [ "${FONTATLAS_CI_PRIORITY:-}" != 1 ]; then echo "--priority chỉ dành cho Lead (đặt FONTATLAS_CI_PRIORITY=1)"; exit 2; fi
+TICKET=""
+cleanup() { [ -n "$TICKET" ] && rm -f "$TICKET"; if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi; }
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+if [ $WAIT = 1 ]; then
+  KIND=Q; [ $PRIO = 1 ] && KIND=P
+  NOW="$(python3 -c 'import time; print("%020d" % time.time_ns())')"
+  TICKET="$QUEUE/$KIND$NOW-$$-$(printf %s "$REF" | tr -c 'A-Za-z0-9._' '_')"
+  : > "$TICKET"
+  shown=""
+  while :; do
+    reap
+    head="$(queue_list | head -n1)"
+    if [ "$QUEUE/$head" = "$TICKET" ] && mkdir "$LOCK" 2>/dev/null; then break; fi
+    pos="$(queue_list | grep -n -F -x "${TICKET##*/}" | cut -d: -f1)"
+    [ "$pos" != "$shown" ] && { echo "chờ CI: vị trí ${pos:-?} trong hàng đợi (xem: bash tools/ci/local_ci.sh --status)"; shown="$pos"; }
+    sleep 3
+  done
+  rm -f "$TICKET"; TICKET=""
+else
+  reap
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    echo "CI đang chạy (khoá $LOCK, pid $(cat "$LOCK/pid" 2>/dev/null || echo ?)). Dùng --wait để xếp hàng."
+    exit 3
+  fi
 fi
 echo $$ > "$LOCK/pid"
-trap 'rm -rf "$LOCK"' EXIT
+[ -n "${FONTATLAS_CI_TEST_HOLD:-}" ] && { echo "đã có khoá"; sleep "$FONTATLAS_CI_TEST_HOLD"; exit 0; }   # chỉ cho tools/ci/test_queue.sh
 
 # Worktree riêng, giữ lại giữa các lần chạy để target/ còn nóng.
 if [ ! -e "$WT/.git" ]; then
