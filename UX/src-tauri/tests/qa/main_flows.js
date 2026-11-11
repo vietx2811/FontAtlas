@@ -835,7 +835,7 @@
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('view-options-' + th); }
         document.querySelector('[data-testid=view-reset]')?.click();
         await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
-        (document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        (document.activeElement && document.querySelector('[data-testid=view-pop]')?.contains(document.activeElement) ? document.activeElement : document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         await sleep(300);
         await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]'), { before, after, h0, h1, popOpen: !!document.querySelector('[data-testid=view-pop]') });
         await wait(() => document.activeElement === vb(), 2000).catch(() => {});

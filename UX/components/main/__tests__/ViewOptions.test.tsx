@@ -60,10 +60,10 @@ describe('ViewOptions', () => {
     const box = (k: string) => document.querySelector<HTMLInputElement>(`[data-field=${k}] input`)!;
     expect(box('format').checked).toBe(true); expect(box('lang').checked).toBe(true);
     expect(box('license').checked).toBe(false); expect(box('variable').checked).toBe(false);
-    expect((screen.getByTestId('view-reset') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('view-reset').getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(box('license'));
     expect(useCardFields.getState().fields).toEqual(['format', 'lang', 'license']);
-    expect((screen.getByTestId('view-reset') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('view-reset').getAttribute('aria-disabled')).toBe('false');
     fireEvent.click(screen.getByTestId('view-reset'));
     expect(useCardFields.getState().fields).toEqual([...DEFAULT_CARD_FIELDS]);
   });
@@ -81,6 +81,19 @@ describe('ViewOptions', () => {
     fireEvent.click(screen.getByTestId('view-open'));
     fireEvent.pointerDown(document.body);
     expect(screen.queryByTestId('view-pop')).toBeNull();
+  });
+
+  it('after clicking Đặt lại the focus stays in the popover (button is aria-disabled, not disabled), so Esc still closes and returns focus', async () => {
+    render(<ViewOptions />);
+    fireEvent.click(screen.getByTestId('view-open'));
+    fireEvent.click(document.querySelector<HTMLInputElement>('[data-field=license] input')!);
+    const reset = screen.getByTestId('view-reset'); reset.focus();
+    fireEvent.click(reset);
+    expect(reset.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(reset);
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' }); await settle(30);
+    expect(screen.queryByTestId('view-pop')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId('view-open'));
   });
 
   it('⌘J is ignored while typing in an input and while another dialog is open', () => {

@@ -86,7 +86,7 @@ export function ViewOptions(): React.JSX.Element {
       </Tooltip>
       {open && createPortal(
         <div ref={pop} className="fa-viewpop" role="dialog" aria-label={t('view.title')} data-testid="view-pop" tabIndex={-1} onKeyDown={onPopKey} onBlur={onPopBlur} style={pos ? { right: pos.right, top: pos.top } : undefined}>
-          <header><h2 tabIndex={-1}>{t('view.title')}</h2><button type="button" data-testid="view-reset" disabled={!changed} onClick={() => { reset(); resetSort(); }}>{t('view.reset')}</button></header>
+          <header><h2 tabIndex={-1}>{t('view.title')}</h2><button type="button" data-testid="view-reset" aria-disabled={!changed} onClick={() => { if (changed) { reset(); resetSort(); } }}>{t('view.reset')}</button></header>
           <fieldset data-testid="view-sort" aria-describedby={locked ? 'view-sort-lock' : undefined} aria-disabled={locked || undefined}>
             <legend>{t('view.sort')}</legend>
             {locked ? <p id="view-sort-lock" className="fa-viewpop-lock" data-testid="view-sort-locked">{t(view === 'recent' ? 'view.sort.locked.recent' : 'view.sort.locked.active')}</p> : <>
