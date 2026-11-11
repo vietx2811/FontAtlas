@@ -444,6 +444,33 @@ describe('Sidebar', () => {
       fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
       expect(screen.getByText('Tên thẻ không được để trống.')).toBeTruthy();
     });
+    it('NFC: the decomposed spelling of the same name is not a rename (no API call); a real rename is sent in NFC', async () => {
+      const { api } = await seed();
+      await api.createTag('Phở'); useUiStore.getState().bumpLibrary(false); await settle();
+      const spy = vi.spyOn(api, 'renameTag');
+      await openMenu('Phở');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      fireEvent.change(screen.getByTestId('tag-rename'), { target: { value: 'Pho\u031b\u0309' } }); // NFD của "Phở"
+      fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
+      expect(spy).not.toHaveBeenCalled();
+      await openMenu('Phở');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      fireEvent.change(screen.getByTestId('tag-rename'), { target: { value: 'Cafe\u0301' } }); // NFD của "Café"
+      fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][1]).toBe('Café');
+    });
+    it('system tags (style:/mood:/use:) have no Đổi tên / Xoá and F2 does nothing', async () => {
+      const { api } = await seed();
+      const sysName = (await api.systemTagCatalog())[0].tags[0].name;
+      await api.createTag(sysName); useUiStore.getState().bumpLibrary(false); await settle();
+      await openMenu(sysName);
+      expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual([expect.stringMatching(/Lọc theo thẻ này/)]);
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      const chip = screen.getByRole('button', { name: sysName });
+      chip.focus(); fireEvent.keyDown(chip, { key: 'F2' }); await settle();
+      expect(screen.queryByTestId('tag-rename')).toBeNull();
+    });
     it('Xoá thẻ… asks first, names how many fonts lose the tag, and cancel keeps it; confirm deletes and clears the tag filter', async () => {
       const { api, a } = await seed();
       const rows = (await api.queryFaces({ limit: 3 })).items;

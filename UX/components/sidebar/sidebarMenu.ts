@@ -43,9 +43,9 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
     ];
     case 'tag': return [
       { id: 'filter', label: t('smenu.filterTag'), onSelect: c.filterByTag },
-      { id: 'rename', label: t('smenu.rename'), hint: 'F2', onSelect: c.renameTag },
-      sep,
-      { id: 'delete', label: t('smenu.deleteTag'), danger: true, onSelect: c.deleteTag },
+      // Tag hệ thống: không có Đổi tên / Xoá (ẩn hẳn, không phải xám)
+      ...(c.renameTag ? [{ id: 'rename', label: t('smenu.rename'), hint: 'F2', onSelect: c.renameTag }] : []),
+      ...(c.deleteTag ? [sep, { id: 'delete', label: t('smenu.deleteTag'), danger: true, onSelect: c.deleteTag }] : []),
     ];
     case 'recent': return [open(c), sep, { id: 'clear', label: t('smenu.clearRecent'), danger: true, disabled: !c.recentCount, reason: t('smenu.empty'), onSelect: c.clearRecent }];
     case 'active': return [open(c), sep, { id: 'off', label: t('smenu.deactivateAllN', { n: c.activeCount ?? 0 }), disabled: !c.activeCount, reason: t('smenu.empty'), onSelect: c.deactivateAll }];

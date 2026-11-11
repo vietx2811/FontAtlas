@@ -57,4 +57,5 @@ export const LIBRARY_EN: Record<keyof typeof LIBRARY_I18N, string> = {
   'group.styles': '{n} styles',
   'group.styles.of': '{m}/{n} styles',
   'group.styles.tip': 'Number of styles in this family: matching the filters / total in the library.',
+  'smenu.tag.fail': 'Could not rename the tag: {msg}',
 };

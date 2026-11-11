@@ -30,6 +30,8 @@ type Ctx = { kind: SidebarMenuKind; id: number | null; name: string; anchor: Men
 type Confirm = { title: string; body: string; ok: string; run(): Promise<void> | void };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
+/** Tag hệ thống (style:/mood:/use:): do danh mục sở hữu, không đổi tên/xoá từ thanh bên. */
+const isSystemTag = (name: string): boolean => /^(style|mood|use):/.test(name);
 const tl = t; // `t` bị che bởi tham số Thẻ trong vòng lặp
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -167,8 +169,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   /** Enter / blur: rỗng hoặc lỗi → báo và giữ ô (không mất tên đã gõ); trùng tên → báo rõ, không gộp ngầm. */
   const commitTagRename = async (tg: TagDto, raw: string, input: HTMLInputElement, via: 'enter' | 'blur') => {
     if (tagRenameBusy.current) return;
-    const name = raw.trim();
-    if (name === tg.name) { endTagRename(tg.id, via === 'enter'); return; }
+    const name = raw.normalize('NFC').trim(); // cùng dạng với tên lưu (NFC): gõ "Phở" ở dạng tổ hợp không bị coi là đổi tên
+    if (name === tg.name.normalize('NFC')) { endTagRename(tg.id, via === 'enter'); return; }
     if (!name) {
       if (via === 'blur') { endTagRename(tg.id, false); return; }
       setNotice({ text: t('smenu.tag.empty') }); input.focus(); return;
@@ -177,7 +179,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     try { await api.renameTag(tg.id, name); await refresh(); endTagRename(tg.id, via === 'enter'); }
     catch (e) {
       const code = e instanceof CmdError ? e.code : '';
-      setNotice({ text: code === 'conflict' ? t('smenu.tag.conflict', { name }) : code === 'invalid_arg' ? t('smenu.tag.invalid') : code === 'not_found' ? t('smenu.tag.gone') : `Không đổi được tên thẻ: ${(e as Error)?.message ?? e}` });
+      setNotice({ text: code === 'conflict' ? t('smenu.tag.conflict', { name }) : code === 'invalid_arg' ? t('smenu.tag.invalid') : code === 'not_found' ? t('smenu.tag.gone') : t('smenu.tag.fail', { msg: (e as Error)?.message ?? String(e) }) });
       if (code === 'not_found') { endTagRename(tg.id, false); await refresh().catch(() => undefined); } else if (via === 'enter') input.focus(); else endTagRename(tg.id, false);
     } finally { tagRenameBusy.current = false; }
   };
@@ -228,8 +230,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
       remove: () => { if (col) setConfirm({ title: t('smenu.delCol.title', { name: col.name }), body: t('smenu.delCol.body'), ok: t('smenu.delCol.ok'), run: () => removeCollection(col.id).catch(warn) }); },
       filterByTag: () => setTag(String(c.id)),
-      renameTag: () => { if (tg) setRenamingTag(tg.id); },
-      deleteTag: () => { if (tg) setConfirm({ title: t('smenu.delTag.title', { name: tg.name }), body: t('smenu.delTag.body', { n: tg.faceCount }), ok: t('smenu.delTag.ok'), run: () => removeTag(tg).catch(warn) }); },
+      renameTag: tg && !isSystemTag(tg.name) ? () => setRenamingTag(tg.id) : undefined,
+      deleteTag: tg && isSystemTag(tg.name) ? undefined : () => { if (tg) setConfirm({ title: t('smenu.delTag.title', { name: tg.name }), body: t('smenu.delTag.body', { n: tg.faceCount }), ok: t('smenu.delTag.ok'), run: () => removeTag(tg).catch(warn) }); },
       recentCount, clearRecent: () => setConfirm({ title: t('smenu.clearRecent.title'), body: t('smenu.clearRecent.body'), ok: t('smenu.clearRecent.ok'), run: () => useUiStore.getState().clearRecent() }),
       activeCount, closeSession: () => useUiStore.getState().closeCompareSession(),
     });
@@ -304,7 +306,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
               : (
               <button key={t.id} data-tag-id={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
                 onContextMenu={e => { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); }}
-                onKeyDown={e => { if (e.key === 'F2') { e.preventDefault(); setRenamingTag(t.id); } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
+                onKeyDown={e => { if (e.key === 'F2' && !isSystemTag(t.name)) { e.preventDefault(); setRenamingTag(t.id); } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
             ))}
           </div>
         </NavSection>

@@ -55,4 +55,5 @@ export const LIBRARY_I18N = {
   'group.styles': '{n} kiểu',
   'group.styles.of': '{m}/{n} kiểu',
   'group.styles.tip': 'Số kiểu (style) của family này: khớp bộ lọc / tổng trong thư viện.',
+  'smenu.tag.fail': 'Không đổi được tên thẻ: {msg}',
 } as const;
