@@ -1475,7 +1475,10 @@ mod review_tests {
         let started = Arc::new(AtomicBool::new(false));
         let finished = Arc::new(AtomicBool::new(false));
         let cancel = Arc::new(AtomicBool::new(false));
-        let mut st = ModelStore::new(d.path().into(), m);
+        // Generous connect timeout: on a loaded CI machine the request must not time out before
+        // the blocking resolver task is scheduled (then `started` would never flip).
+        let mut st =
+            ModelStore::new(d.path().into(), m).with_read_timeout_for_test(Duration::from_secs(120));
         st.dns_resolver = Some(Arc::new(BlockingResolver {
             started: started.clone(),
             finished: finished.clone(),
@@ -1486,7 +1489,7 @@ mod review_tests {
         // getaddrinfo is still running, i.e. before `finished` is set.
         let watcher = std::thread::spawn(move || {
             let t = Instant::now();
-            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(10) {
+            while !started.load(Ordering::SeqCst) && t.elapsed() < Duration::from_secs(120) {
                 std::thread::sleep(Duration::from_millis(5));
             }
             assert!(started.load(Ordering::SeqCst));
