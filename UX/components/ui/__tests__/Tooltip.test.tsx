@@ -132,4 +132,26 @@ describe('Tooltip', () => {
     expect(other).toHaveBeenCalledTimes(1);         // Esc tiếp theo đi tiếp như thường
     document.removeEventListener('keydown', other);
   });
+  it('drops role/aria-describedby synchronously when closing, even if React has not committed yet', async () => {
+    render(<Tooltip label="Đóng"><button type="button">x</button></Tooltip>);
+    const btn = screen.getByRole('button');
+    fireEvent.pointerEnter(btn); await advance(TOOLTIP_DELAY_MS + 10);
+    const el = tip()!; expect(el).not.toBeNull();
+    // Gọi hide() ngoài act(): DOM cũ vẫn còn một nhịp nhưng đã mất ngữ nghĩa.
+    btn.dispatchEvent(new MouseEvent('pointerout', { bubbles: true }));
+    expect(el.getAttribute('role')).toBeNull();
+    expect(el.getAttribute('aria-hidden')).toBe('true');
+    expect(btn).not.toHaveAttribute('aria-describedby');
+    await act(async () => {});
+    expect(tip()).toBeNull();
+  });
+
+  it('a stale open timer from a previous hover never reopens it', async () => {
+    render(<Tooltip label="A"><button type="button">a</button></Tooltip>);
+    const btn = screen.getByRole('button');
+    fireEvent.pointerEnter(btn); await advance(TOOLTIP_DELAY_MS - 20);
+    fireEvent.pointerLeave(btn);
+    await advance(2000);
+    expect(tip()).toBeNull();
+  });
 });
