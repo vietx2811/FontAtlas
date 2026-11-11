@@ -5,6 +5,9 @@ import type { ActivationEvent } from './ActivationEvent';
 import type { ActivationReportDto } from './ActivationReportDto';
 import type { ActivationStateDto } from './ActivationStateDto';
 import type { AddToCaseDto } from './AddToCaseDto';
+import type { AutoLogDto } from './AutoLogDto';
+import type { AutoStatusDto } from './AutoStatusDto';
+import type { AutoTargetDto } from './AutoTargetDto';
 import type { AvailabilityDto } from './AvailabilityDto';
 import type { AxisHistogramDto } from './AxisHistogramDto';
 import type { AxisStatsDto } from './AxisStatsDto';
@@ -208,6 +211,13 @@ export interface TauriCommandMap {
   preview_cache_info: { args: Record<string, never>; result: PreviewCacheInfoDto };
   clear_preview_cache: { args: Record<string, never>; result: null };
   activation_caps: { args: Record<string, never>; result: ActivationCapsDto };
+  auto_status: { args: Record<string, never>; result: AutoStatusDto };
+  auto_set_enabled: { args: { on: boolean }; result: AutoStatusDto };
+  auto_install: { args: { target: AutoTargetDto }; result: AutoStatusDto };
+  auto_remove: { args: { target: AutoTargetDto }; result: AutoStatusDto };
+  auto_log: { args: { limit: number | null }; result: AutoLogDto[] };
+  auto_forget_key: { args: Record<string, never>; result: AutoStatusDto };
+  auto_probe: { args: Record<string, never>; result: AutoStatusDto };
 }
 
 export type CommandName = keyof TauriCommandMap;

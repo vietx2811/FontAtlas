@@ -66,6 +66,8 @@ pub trait ActivationApi: Send + Sync {
         confirmed: &[fontatlas_activate::ConfirmedConflict],
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError>;
+    /// Broker: bật font vì app thiết kế vừa hỏi (lý do `auto:<app>`, scope session).
+    fn activate_auto(&self, s: &Mutex<Store>, keys: &[FaceKey], app: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError>;
 }
 
 impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
@@ -141,6 +143,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     ) -> Result<ActivationReport, ActivationError> {
         ActivationService::replace_faces(self, s, keys, scope, confirmed, progress)
     }
+    fn activate_auto(&self, s: &Mutex<Store>, keys: &[FaceKey], app: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError> {
+        ActivationService::activate_auto(self, s, keys, app)
+    }
 }
 
 /// Trước khi có engine (hoặc ở test không cần kích hoạt): mọi thao tác ghi trả `Unsupported`.
@@ -190,6 +195,9 @@ impl ActivationApi for NoActivation {
         Err(ActivationError::Unsupported)
     }
     fn replace_faces(&self, _: &Mutex<Store>, _: &[FaceKey], _: Option<Scope>, _: &[fontatlas_activate::ConfirmedConflict], _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn activate_auto(&self, _: &Mutex<Store>, _: &[FaceKey], _: fontatlas_store::AutoApp) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
 }

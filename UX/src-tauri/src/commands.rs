@@ -10,6 +10,7 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::activation::*;
+use crate::dto::auto::*;
 use crate::dto::analysis::*;
 use crate::dto::cases::*;
 use crate::dto::dup_resolve::*;
@@ -22,7 +23,8 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs, preview,
+    activation, analysis, auto, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
+    preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -172,6 +174,13 @@ macro_rules! command_list {
             async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
             async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
+            async auto_status() -> Result<AutoStatusDto, CmdError>;
+            async auto_set_enabled(on: bool) -> Result<AutoStatusDto, CmdError>;
+            async auto_install(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
+            async auto_remove(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
+            async auto_log(limit: Option<u32>) -> Result<Vec<AutoLogDto>, CmdError>;
+            async auto_forget_key() -> Result<AutoStatusDto, CmdError>;
+            async auto_probe() -> Result<AutoStatusDto, CmdError>;
         }
     };
 }
@@ -317,6 +326,13 @@ cmd!(reveal_in_finder(face: FaceKeyDto) -> () => |s| system::reveal_in_finder(s,
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
 }));
 cmd!(backup_user_db() -> String => |s| system::backup_user_db(s));
+cmd!(auto_status() -> AutoStatusDto => |s| auto::status(s));
+cmd!(auto_set_enabled(on: bool) -> AutoStatusDto => |s| auto::set_enabled(s, on));
+cmd!(auto_install(target: AutoTargetDto) -> AutoStatusDto => |s| auto::install(s, target));
+cmd!(auto_remove(target: AutoTargetDto) -> AutoStatusDto => |s| auto::remove(s, target));
+cmd!(auto_log(limit: Option<u32>) -> Vec<AutoLogDto> => |s| auto::log(s, limit));
+cmd!(auto_forget_key() -> AutoStatusDto => |s| auto::forget_key(s));
+cmd!(auto_probe() -> AutoStatusDto => |s| auto::probe(s));
 cmd!(disk_free(target: String) -> u64 => |s| system::disk_free(s, &target));
 cmd!(get_ui_state() -> UiStateDto => |s| system::get_ui_state(s));
 cmd!(set_ui_state(state: UiStateDto) -> () => |s| system::set_ui_state(s, &state));
