@@ -39,6 +39,7 @@ fn res(w: &W, loser: &FaceKey, loser_path: &str, action: &str) -> NewResolution 
         trash_path: None,
         reason: r#"{"code":"newer"}"#.into(),
         was_active: false,
+        loser_scope: None,
     }
 }
 
@@ -52,11 +53,44 @@ fn hiding_a_copy_keeps_the_face_visible_through_its_other_path() {
     assert_eq!(total(&w.s), 2, "A vẫn hiện nhờ /f/A.ttf");
     let rows = w.s.duplicate_rows().unwrap();
     assert!(rows.iter().all(|r| r.path != "/g/A.ttf"), "đường dẫn đã ẩn không còn trong nhóm trùng");
-    // activation không chọn đường dẫn đã ẩn: nó được báo như missing và xếp sau
+    // activation không thấy đường dẫn đã ẩn (không chỉ xếp sau): `locate` duyệt MỌI vị trí nên phải vắng hẳn
     let t = w.s.file_target(&w.a.hash).unwrap().unwrap();
-    let g = t.locations.iter().find(|l| l.path.to_string_lossy() == "/g/A.ttf").unwrap();
-    assert!(g.missing);
-    assert!(!t.locations.iter().find(|l| l.path.to_string_lossy() == "/f/A.ttf").unwrap().missing);
+    let paths: Vec<String> = t.locations.iter().map(|l| l.path.to_string_lossy().into_owned()).collect();
+    assert_eq!(paths, vec!["/f/A.ttf".to_string()]);
+}
+
+/// Review #2: mọi nơi đọc "đường dẫn của face" đều bỏ vị trí đã ẩn — dù nó có location_id nhỏ nhất.
+#[test]
+fn every_path_reader_skips_hidden_locations() {
+    let mut w = setup();
+    // thứ tự chèn: /f/A.ttf trước, /g/A.ttf sau → ẩn /f/A.ttf (vị trí "đầu tiên") để bản còn lại phải là /g/A.ttf
+    let mut r = res(&w, &w.a.clone(), "/f/A.ttf", "hide");
+    r.kind = "same_file".into();
+    r.keeper_path = "/g/A.ttf".into();
+    w.s.apply_resolutions("b1", &[r], 10).unwrap();
+    assert_eq!(w.s.face_path(&w.a).unwrap().unwrap().to_string_lossy(), "/g/A.ttf");
+    assert_eq!(w.s.face_read_path(&w.a).unwrap().unwrap().to_string_lossy(), "/g/A.ttf");
+    let row = w.s.query_faces(&FaceQuery::default()).unwrap().items.into_iter().find(|r| r.hash_hex == w.a.hash_hex()).unwrap();
+    assert_eq!(row.path.as_deref(), Some("/g/A.ttf"), "FaceRow.path không lấy vị trí đã ẩn");
+    assert!(w.s.has_location("/g/A.ttf").unwrap() && !w.s.has_location("/f/A.ttf").unwrap());
+
+    // ẩn nốt bản B (khác hash) → không còn đường dẫn nào cho B ở mọi nơi
+    let mut hide_b = res(&w, &w.b.clone(), "/f/B.ttf", "hide");
+    hide_b.keeper_path = "/g/A.ttf".into(); // /f/A.ttf đã bị ẩn ở trên nên không thể là bản giữ
+    w.s.apply_resolutions("b2", &[hide_b], 11).unwrap();
+    assert!(w.s.face_path(&w.b).unwrap().is_none());
+    assert!(w.s.face_read_path(&w.b).unwrap().is_none());
+    assert!(w.s.face_local_path(&w.b).unwrap().is_none());
+    assert!(w.s.file_target(&w.b.hash).unwrap().unwrap().locations.is_empty(), "activation không có chỗ nào để bật B");
+    // Worker nhúng / ngôn ngữ chạy trên kết nối CHỈ-library (không thấy sổ u.*): với tệp đã vào Thùng rác, cờ missing là
+    // thứ chúng thấy. Sau khi đánh dấu, job nhúng của A phải dùng vị trí còn lại.
+    assert!(w.s.set_location_missing("/f/A.ttf", true).unwrap());
+    w.s.enqueue_embeddings("v1").unwrap();
+    let jobs = w.s.claim_embedding_batch("v1", 10).unwrap();
+    let a_job = jobs.iter().find(|j| j.key == w.a).expect("A vẫn được nhúng");
+    assert_eq!(a_job.path.to_string_lossy(), "/g/A.ttf", "nhúng từ vị trí chưa missing");
+    assert!(!w.s.set_location_missing("/f/A.ttf", true).unwrap(), "đã missing rồi: không đổi");
+    assert!(w.s.set_location_missing("/f/A.ttf", false).unwrap(), "hoàn tác đưa về có mặt");
 }
 
 #[test]
@@ -190,6 +224,104 @@ fn source_priority_defaults_to_creation_order_and_can_be_reordered() {
     assert_eq!(w.s.source_priority().unwrap(), vec![third, first, second, fourth], "nguồn mới xếp cuối");
     assert!(w.s.set_source_priority(&[third, 99_999]).is_err(), "nguồn không tồn tại");
     assert_eq!(w.s.source_priority().unwrap(), vec![third, first, second, fourth], "lỗi thì không đổi gì");
+}
+
+fn three() -> (W, FaceKey) {
+    // thêm bản C (cùng family, khác nội dung) để dựng chuỗi A→B→C
+    let mut w = setup();
+    let src = w.s.sources().unwrap()[0].id;
+    let rc = fake_report(&report("roboto.ttf"), "c", "Dup");
+    w.s.ingest(vec![item(src, "/f/C.ttf", &rc)], 2).unwrap();
+    let c = FaceKey { hash: hash_of(&rc), face_index: 0 };
+    (w, c)
+}
+
+fn res_between(keeper: &FaceKey, kp: &str, loser: &FaceKey, lp: &str) -> NewResolution {
+    NewResolution {
+        kind: "versions".into(),
+        group_key: "dup".into(),
+        keeper: *keeper,
+        keeper_path: kp.into(),
+        loser: *loser,
+        loser_path: lp.into(),
+        action: "hide".into(),
+        trash_path: None,
+        reason: "{}".into(),
+        was_active: false,
+        loser_scope: None,
+    }
+}
+
+/// Review #4: bản giữ đang bị ẩn bởi quyết định sống không thể làm bản giữ của quyết định khác.
+#[test]
+fn a_hidden_face_cannot_become_a_keeper() {
+    let (mut w, c) = three();
+    w.s.apply_resolutions("b1", &[res_between(&w.a, "/f/A.ttf", &w.b, "/f/B.ttf")], 10).unwrap();
+    // C giữ, nhưng dùng B (đã ẩn) làm bản giữ → từ chối
+    assert!(w.s.apply_resolutions("b2", &[res_between(&w.b, "/f/B.ttf", &c, "/f/C.ttf")], 11).is_err());
+}
+
+/// Review #8: chuỗi A→B→C — không hoàn tác quyết định cũ trước quyết định mới phụ thuộc vào nó.
+#[test]
+fn undo_is_blocked_while_a_newer_resolution_depends_on_the_keeper() {
+    let (mut w, c) = three();
+    // r1: B bị ẩn, giữ A.  r2: A bị ẩn, giữ C  (A, bản giữ của r1, thành bản thua của r2)
+    let r1 = w.s.apply_resolutions("b1", &[res_between(&w.a, "/f/A.ttf", &w.b, "/f/B.ttf")], 10).unwrap()[0];
+    let r2 = w.s.apply_resolutions("b2", &[res_between(&c, "/f/C.ttf", &w.a, "/f/A.ttf")], 11).unwrap()[0];
+    assert_eq!(w.s.newer_dependents(r1).unwrap(), vec![r2]);
+    assert!(w.s.undo_resolution(r1, 20).is_err(), "r2 phụ thuộc bản giữ của r1");
+    assert_eq!(w.s.resolutions(true).unwrap().len(), 2, "lỗi thì không đổi gì");
+    // hoàn tác theo thứ tự ngược thì được
+    w.s.undo_resolution(r2, 21).unwrap();
+    w.s.undo_resolution(r1, 22).unwrap();
+    assert_eq!(total(&w.s), 3);
+}
+
+/// Review #8: undo chỉ xoá liên kết do CHÍNH lần giải quyết tạo; người dùng xoá rồi tạo lại sau đó thì giữ nguyên.
+#[test]
+fn undo_keeps_a_link_the_user_recreated_after_resolving() {
+    let mut w = setup();
+    let (a, b) = (w.a, w.b);
+    w.s.set_favorite(&b, true).unwrap();
+    let id = w.s.apply_resolutions("b1", &[res(&w, &b, "/f/B.ttf", "hide")], 1000).unwrap()[0];
+    assert!(w.s.favorites().unwrap().contains(&a));
+    // người dùng bỏ yêu thích A rồi tự bấm lại (dấu thời gian khác)
+    w.s.set_favorite(&a, false).unwrap();
+    w.s.set_favorite(&a, true).unwrap();
+    w.s.undo_resolution(id, 2000).unwrap();
+    assert!(w.s.favorites().unwrap().contains(&a), "yêu thích do người dùng tạo lại không bị xoá nhầm");
+}
+
+/// Review #8: không tạo cặp tự trỏ (a == b) khi cả hai phía là bản thua và bản giữ.
+#[test]
+fn a_pair_of_the_loser_and_the_keeper_is_not_turned_into_a_self_pair() {
+    let mut w = setup();
+    let (a, b) = (w.a, w.b);
+    let pid = w
+        .s
+        .save_pair(&NewPair { a, a_role: "heading".into(), b, b_role: "body".into(), mode: None, preset: None, sample_text: None, collection_id: None, note: None })
+        .unwrap();
+    w.s.apply_resolutions("b1", &[res(&w, &b, "/f/B.ttf", "hide")], 10).unwrap();
+    let p = w.s.pairs(None).unwrap().into_iter().find(|p| p.id == pid).unwrap();
+    assert_eq!((p.a, p.b), (a, b), "cặp (A,B) giữ nguyên, không thành (A,A)");
+}
+
+/// Review #9: pha 1 ghi sổ pending (đã ẩn) trước khi đụng tệp; complete mới đánh dấu xong; abort = undo.
+#[test]
+fn a_pending_resolution_already_hides_and_can_be_completed_or_aborted() {
+    let mut w = setup();
+    let id = w.s.begin_resolution("b1", &res(&w, &w.b.clone(), "/f/B.ttf", "hide"), 10).unwrap();
+    assert_eq!(total(&w.s), 1, "pending đã ẩn");
+    let p = w.s.pending_resolutions().unwrap();
+    assert_eq!((p.len(), p[0].id, p[0].status.as_str()), (1, id, "pending"));
+    w.s.complete_resolution(id, Some("/trash/B.ttf")).unwrap();
+    assert!(w.s.pending_resolutions().unwrap().is_empty());
+    assert_eq!(w.s.resolution(id).unwrap().trash_path.as_deref(), Some("/trash/B.ttf"));
+    // một pending khác bị huỷ → trở lại như chưa làm gì
+    let id2 = w.s.begin_resolution("b2", &res(&w, &w.a.clone(), "/g/A.ttf", "hide"), 11).unwrap();
+    w.s.undo_resolution(id2, 12).unwrap();
+    assert!(w.s.pending_resolutions().unwrap().is_empty());
+    assert!(w.s.is_hidden_path("/f/B.ttf").unwrap() && !w.s.is_hidden_path("/g/A.ttf").unwrap());
 }
 
 #[test]

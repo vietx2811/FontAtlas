@@ -11,7 +11,7 @@ use crate::dto::library::FaceKeyDto;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
-pub struct ReasonDto {
+pub struct ResolveReasonDto {
     pub code: String,
     #[ts(type = "Record<string, string>")]
     pub args: BTreeMap<String, String>,
@@ -81,13 +81,15 @@ pub struct PlanItemDto {
     pub keeper: PlanMemberDto,
     pub losers: Vec<PlanMemberDto>,
     /// Vì sao giữ bản này ("Bản mới hơn: 2.137 so với 2.001").
-    pub reason: ReasonDto,
+    pub reason: ResolveReasonDto,
     /// Tự động an toàn: có trong "Giải quyết tất cả an toàn".
     pub auto_safe: bool,
     /// Vì sao máy KHÔNG tự quyết (khi `autoSafe` = false).
-    pub review: Option<ReasonDto>,
+    pub review: Option<ResolveReasonDto>,
     /// Lưu ý không chặn (vd `may_reflow`).
-    pub warnings: Vec<ReasonDto>,
+    pub warnings: Vec<ResolveReasonDto>,
+    /// Mọi đường dẫn của nhóm lúc lập kế hoạch: gửi lại nguyên văn vào `ResolveItemDto.memberPaths` để backend phát hiện kế hoạch cũ.
+    pub member_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -124,6 +126,23 @@ pub struct ResolveItemDto {
     pub key: String,
     pub keeper_path: String,
     pub loser_paths: Vec<String>,
+    /// Mọi đường dẫn của nhóm lúc UI hiển thị (keeper + losers + bản người dùng không đụng tới). Lệch với nhóm hiện tại
+    /// → `plan_stale`, không áp dụng. Bắt buộc ở chế độ `chosen`; bỏ qua ở `all_safe`.
+    #[serde(default)]
+    pub member_paths: Vec<String>,
+}
+
+/// Ai quyết định bản giữ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum ResolveModeDto {
+    /// Dùng đúng `keeperPath`/`loserPaths` UI gửi (sau kiểm tra lại).
+    #[default]
+    Chosen,
+    /// "Giải quyết tất cả an toàn": backend TÍNH LẠI quy tắc cho từng nhóm và chỉ áp dụng nhóm `autoSafe`;
+    /// `keeperPath`/`loserPaths` của UI bị bỏ qua (chỉ `kind`+`key` được dùng).
+    AllSafe,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
@@ -135,6 +154,8 @@ pub struct ResolveRequestDto {
     /// Với `trash`: các tệp người dùng đã chọn rõ để chuyển dù nằm ở nơi cần xác nhận riêng (vd ~/Library/Fonts).
     #[serde(default)]
     pub explicit_trash_paths: Vec<String>,
+    #[serde(default)]
+    pub mode: ResolveModeDto,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -153,7 +174,7 @@ pub struct ResolutionDto {
     pub action: ResolveActionDto,
     /// Tệp đang nằm ở đâu trong Thùng rác (chỉ khi `trash`).
     pub trash_path: Option<String>,
-    pub reason: ReasonDto,
+    pub reason: ResolveReasonDto,
     pub was_active: bool,
     #[ts(type = "number")]
     pub created_at: i64,
@@ -164,6 +185,10 @@ pub struct ResolutionDto {
     /// Tên hiển thị của bản thua, để liệt kê trong "Đã giải quyết".
     pub family: Option<String>,
     pub style: Option<String>,
+    /// `pending` = đang làm dở (đã ẩn, chưa xong; tự dọn ở lần gọi tiếp theo) · `done`.
+    pub status: String,
+    /// Ta đã bật bản giữ giúp người dùng (hoàn tác sẽ tắt lại).
+    pub keeper_activated: bool,
     /// Có thể hoàn tác (chưa hoàn tác; nếu `trash` thì tệp vẫn còn trong Thùng rác).
     pub can_undo: bool,
 }
@@ -173,8 +198,12 @@ pub struct ResolutionDto {
 #[ts(export, rename_all = "camelCase")]
 pub struct ResolveFailureDto {
     pub path: String,
-    /// keeper_missing | keeper_not_in_group | loser_not_in_group | not_allowed | collection_file | active_copy_in_use |
-    /// trash_failed | not_found | already_undone | path_occupied | trash_emptied | db_error
+    /// Thất bại hẳn (không đổi gì): plan_stale | not_auto_safe | keeper_missing | keeper_not_local | keeper_changed |
+    /// keeper_not_in_group | keeper_is_hidden | keeper_conflict | loser_not_in_group | not_allowed | collection_file |
+    /// active_copy_in_use | file_changed | deactivate_failed | trash_failed | not_found | already_undone | path_occupied |
+    /// trash_emptied | trash_mismatch | newer_resolution_depends | db_error.
+    /// Thành công một phần (quyết định ĐÃ ghi, cần chú ý): rollback_failed | reactivate_failed | keeper_activation_failed |
+    /// keeper_deactivate_failed.
     pub code: String,
     /// Chẩn đoán thô, KHÔNG dịch, không hiện thẳng cho người dùng (UI dịch theo `code`): lỗi hệ điều hành / DB cho
     /// `trash_failed`, `db_error`; với `not_allowed` là lý do chặn (`managed_source` | `system_path` | `collection_file` |

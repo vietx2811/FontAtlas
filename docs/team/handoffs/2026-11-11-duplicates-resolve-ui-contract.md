@@ -27,25 +27,31 @@ Quyết định của Lead (2026-11-11): mặc định **Ẩn** (không đụng 
 
 ### `PlanMemberDto`
 `face`, `family`, `style`, `path`, `format`, `version`, `revision`, `modified`, `numGlyphs`, `fileSize`, `viMissing`, `isVariable`, `sourceId`, `sourceName`, `sourceKind`, `active`, `trash: TrashEligibilityDto`.
-- `trash.allowed = false` → ẩn nút/tuỳ chọn Thùng rác cho bản này, hiện lý do từ `trash.blocked`: `managed_source` (nguồn hệ thống / Google / Adobe / community), `system_path` (/System, /Library), `collection_file` (tệp TTC/OTC), `missing_file`.
+- `trash.allowed = false` → ẩn nút/tuỳ chọn Thùng rác cho bản này, hiện lý do từ `trash.blocked`: `managed_source` (nguồn hệ thống / Google / Adobe / community), `system_path` (/System, /Library), `outside_source` (không nằm dưới gốc nguồn sau khi canonicalize), `symlink`, `collection_file` (tệp TTC/OTC), `missing_file`.
 - `trash.needsExplicit = true` (vd `~/Library/Fonts`) → chỉ cho phép khi người dùng tick RIÊNG tệp đó trong hộp xác nhận, rồi gửi đường dẫn trong `explicitTrashPaths`.
 
 ### Gửi `resolve_apply`
 ```ts
-{ items: [{ kind, key, keeperPath, loserPaths }], action: 'hide' | 'trash', explicitTrashPaths?: string[] }
+{ items: [{ kind, key, keeperPath, loserPaths, memberPaths }], action: 'hide' | 'trash',
+  explicitTrashPaths?: string[], mode?: 'chosen' | 'all_safe' }   // mode mặc định 'chosen'
 ```
-- Lấy `keeperPath`/`loserPaths` từ kế hoạch. Người dùng bấm "Đổi bản giữ" thì hoán đổi `keeperPath` với một đường dẫn trong nhóm; backend **kiểm tra lại** nhóm tại thời điểm áp dụng (nhóm có thể đã đổi) nên không cần tin kế hoạch cũ.
-- Mỗi nhóm giữ ít nhất 1 bản; bản giữ phải còn trên đĩa.
+- **`memberPaths` bắt buộc ở `chosen`**: gửi lại nguyên văn `PlanItemDto.memberPaths` của kế hoạch người dùng đang xem. Nhóm hiện tại có tập đường dẫn khác (đã quét lại, có người xoá/thêm tệp) → `plan_stale`, không áp dụng; UI nên lấy lại `resolve_preview` rồi cho người dùng xem lại.
+- **`mode: 'all_safe'`** ("Giải quyết tất cả an toàn"): backend TÍNH LẠI quy tắc cho từng nhóm, chỉ áp dụng nhóm `autoSafe` và bỏ qua `keeperPath`/`loserPaths`/`memberPaths` UI gửi (chỉ cần `kind`+`key`). Nhóm đã không còn an toàn → `not_auto_safe`.
+- Người dùng bấm "Đổi bản giữ" (`chosen`) thì hoán đổi `keeperPath` với một đường dẫn trong nhóm. Một đường dẫn không thể vừa làm bản giữ vừa làm bản thua (trong cùng request hay với quyết định đã có): `keeper_conflict` / `keeper_is_hidden`.
+- Mỗi nhóm giữ ít nhất 1 bản. Bản giữ phải còn trên đĩa, đọc được ngay trên máy (không phải placeholder cloud: `keeper_not_local`) và vẫn là tệp đã quét (`keeper_changed`; với `trash` còn kiểm hash).
+- Với `trash`, bản thua phải còn đúng là tệp đã quét (kích thước, mtime và hash; sai → `file_changed`); đường dẫn được canonicalize và phải nằm dưới gốc của nguồn (`outside_source`), không phải symlink (`symlink`), không dưới /System, /Library.
 - Luôn hiện hộp xác nhận cho `trash`: liệt kê TỪNG tệp (tên + thư mục rút gọn + dung lượng), tổng dung lượng, câu "Tệp vào Thùng rác của máy, bạn lấy lại được. Font có thể là bản bạn đã mua." Không có "nhớ lựa chọn".
 
 ### `ResolveResultDto`
 `batchId`, `done: ResolutionDto[]`, `failed: ResolveFailureDto[]`, `needsRescan`.
-- `failed[].code`: `keeper_missing`, `keeper_not_in_group`, `loser_not_in_group`, `not_allowed`, `collection_file`, `active_copy_in_use`, `trash_failed`, `not_found`, `already_undone`, `path_occupied`, `trash_emptied`, `db_error`. App có cả vi và en: backend KHÔNG trả câu, UI dịch theo `code` (key `dup.fail.<code>`) kèm tên font; `detail` chỉ là chẩn đoán thô không dịch (lỗi hệ điều hành/DB, hoặc lý do chặn của `not_allowed`: `managed_source`, `system_path`, `collection_file`, `missing_file`, `needs_explicit`), để trong "Chi tiết". Toàn bộ chuỗi hiển thị (lý do, lỗi, tên loại) dịch ở UI; hiển thị thành công một phần ("Đã xử lý 12 nhóm, 1 nhóm chưa làm được").
+- **Thành công một phần là bình thường**: mỗi BẢN THUA được xử lý độc lập (`done` + `failed` cùng có thể khác rỗng). Thứ tự cho mỗi bản thua: kiểm tra → ghi sổ `pending` (đã ẩn) → tắt font đang bật → chuyển Thùng rác → `done` → bật bản giữ. Bước nào lỗi thì đảo các bước trước; lỗi lúc đảo được báo riêng (`rollback_failed`, `reactivate_failed`), không bị nuốt. Sự cố giữa chừng (app tắt) để lại dòng `pending` (`ResolutionDto.status`); lần gọi `resolve_apply`/`resolve_undo`/`resolve_list` kế tiếp tự dọn: `hide` thì hoàn tất, `trash` mà tệp còn ở chỗ cũ thì huỷ, tệp đã đi mà không biết đâu thì hoàn tất không có `trashPath` (không hoàn tác tự động được).
+- `failed[].code` — **thất bại hẳn** (không đổi gì): `plan_stale`, `not_auto_safe`, `keeper_missing`, `keeper_not_local`, `keeper_changed`, `keeper_not_in_group`, `keeper_is_hidden`, `keeper_conflict`, `loser_not_in_group`, `not_allowed`, `collection_file`, `active_copy_in_use`, `file_changed`, `deactivate_failed`, `trash_failed`, `not_found`, `already_undone`, `path_occupied`, `trash_emptied`, `trash_mismatch`, `newer_resolution_depends`, `db_error`. **Thành công một phần** (quyết định ĐÃ ghi, cần chú ý): `rollback_failed`, `reactivate_failed`, `keeper_activation_failed`, `keeper_deactivate_failed`. App có cả vi và en: backend KHÔNG trả câu, UI dịch theo `code` (key `dup.fail.<code>`) kèm tên font; `detail` chỉ là chẩn đoán thô không dịch (lỗi hệ điều hành/DB, hoặc lý do chặn của `not_allowed`: `managed_source`, `system_path`, `collection_file`, `missing_file`, `needs_explicit`), để trong "Chi tiết". Toàn bộ chuỗi hiển thị (lý do, lỗi, tên loại) dịch ở UI; hiển thị thành công một phần ("Đã xử lý 12 nhóm, 1 nhóm chưa làm được").
 - `needsRescan = true` sau hoàn tác một tệp từ Thùng rác: gọi `rescan_sources(null)` để thư viện thấy tệp đã về.
 - Sau mọi `resolve_apply`/`resolve_undo` có `done` không rỗng: tăng `libraryRev` (như các thao tác đổi thư viện khác) để tải lại danh sách, lưới và sidebar "Trùng lặp N".
 
 ### `ResolutionDto` (một dòng trong "Đã giải quyết")
-`id`, `batchId`, `kind`, `groupKey`, `keeper`/`keeperPath`, `loser`/`loserPath`, `action`, `trashPath`, `reason`, `wasActive`, `createdAt`, `undoneAt`, `linksMoved`, `family`, `style`, `canUndo`.
+`id`, `batchId`, `kind`, `groupKey`, `keeper`/`keeperPath`, `loser`/`loserPath`, `action`, `trashPath`, `reason`, `wasActive`, `keeperActivated`, `status` (`pending` | `done`), `createdAt`, `undoneAt`, `linksMoved`, `family`, `style`, `canUndo`.
+- **Hoàn tác theo thứ tự ngược**: hoàn tác riêng một quyết định cũ khi còn quyết định mới hơn dùng bản giữ của nó làm bản thua (chuỗi A→B→C) → `newer_resolution_depends`; hãy hoàn tác cả mẻ (`resolve_undo` tự xếp mới nhất trước). Hoàn tác tệp Thùng rác kiểm hash trước khi đưa về (`trash_mismatch` nếu là tệp khác), và khôi phục activation (bật lại bản cũ cùng phạm vi, tắt bản giữ nếu CHÍNH ta đã bật, `keeperActivated`).
 - `canUndo = false` khi tệp không còn trong Thùng rác (người dùng đã dọn): hiện "Tệp đã bị dọn khỏi Thùng rác, không khôi phục được" thay vì nút Khôi phục.
 - Gom theo `batchId` để toast "Đã ẩn 38 bản" hoàn tác cả mẻ (`resolve_undo(batch.map(r => r.id))`).
 
@@ -72,6 +78,7 @@ UI dựng câu thường từ `code` + `args` (i18n key `dup.reason.<code>`). M�
 | `newest_unknown` | "Không biết bản nào mới hơn" |
 | `newer_has_fewer_glyphs` | "Bản mới hơn nhưng có ít ký tự hơn" |
 | `preferred_source_is_worse` | "Thư mục ưu tiên đang giữ bản cũ hơn / kém đầy đủ hơn" |
+| `keeper_less_complete_vi` | "Bản định giữ thiếu chữ tiếng Việt hơn bản kia" |
 | `variable_vs_static` | "Một bản là font biến thiên (variable), bản kia là font tĩnh" |
 | `different_license` | "Hai bản có giấy phép khác nhau" |
 | `collection_file` | "Một bản là tệp nhiều font (TTC/OTC); ẩn nó sẽ ẩn cả các font khác trong tệp" |

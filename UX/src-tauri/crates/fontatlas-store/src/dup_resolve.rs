@@ -25,8 +25,10 @@ pub struct NewResolution {
     pub trash_path: Option<String>,
     /// JSON `{code, args}` để UI dựng câu lý do.
     pub reason: String,
-    /// Bản thua đang bật trước khi ẩn (lớp ứng dụng đã tắt nó).
+    /// Bản thua đang bật trước khi ẩn (lớp ứng dụng tắt nó SAU khi sổ đã ghi).
     pub was_active: bool,
+    /// Phạm vi activation của bản thua trước khi tắt (session | persistent), để hoàn tác bật lại đúng.
+    pub loser_scope: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,11 +49,17 @@ pub struct ResolutionRow {
     pub undone_at: Option<i64>,
     /// Số liên kết đã chuyển sang bản giữ (yêu thích, collection, tag, Case, cặp, slot).
     pub links_moved: u32,
+    /// pending = ghi sổ rồi nhưng chưa xong (đã ẩn); done = xong.
+    pub status: String,
+    pub loser_scope: Option<String>,
+    /// Ta đã bật bản giữ giúp người dùng; hoàn tác tắt lại.
+    pub keeper_activated: bool,
 }
 
 const COLS: &str = "id,batch_id,kind,group_key,keeper_hash,keeper_face,keeper_path,loser_hash,loser_face,loser_path,\
                     action,trash_path,reason,was_active,created_at,undone_at,\
-                    (SELECT count(*) FROM u.dup_link_moves m WHERE m.resolution_id = dup_resolutions.id)";
+                    (SELECT count(*) FROM u.dup_link_moves m WHERE m.resolution_id = dup_resolutions.id),\
+                    status,loser_scope,keeper_activated";
 
 fn row_of(r: &Row) -> Result<ResolutionRow, StoreError> {
     Ok(ResolutionRow {
@@ -70,6 +78,9 @@ fn row_of(r: &Row) -> Result<ResolutionRow, StoreError> {
         created_at: r.get(14)?,
         undone_at: r.get(15)?,
         links_moved: r.get::<_, i64>(16)? as u32,
+        status: r.get(17)?,
+        loser_scope: r.get(18)?,
+        keeper_activated: r.get::<_, i64>(19)? != 0,
     })
 }
 
@@ -133,12 +144,26 @@ fn move_links(c: &Connection, id: i64, keeper: &FaceKey, loser: &FaceKey, now: i
             journal(c, id, "case_faces", "insert", case, "")?;
         }
     }
-    for (side, hc, fc) in [("a", "a_hash", "a_face"), ("b", "b_hash", "b_face")] {
-        let mut st = c.prepare(&format!("SELECT pair_id FROM u.pairs WHERE {hc}=?1 AND {fc}=?2"))?;
-        let ps = st.query_map(params![lh, lf], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
-        for p in ps {
-            c.execute(&format!("UPDATE u.pairs SET {hc}=?1, {fc}=?2 WHERE pair_id=?3"), params![kh, kf, p])?;
-            journal(c, id, "pairs", "update", p, side)?;
+    // Cặp: chỉ cặp (bản thua, bản giữ) mới tránh đổi trỏ — đổi sẽ tạo cặp tự trỏ (A,A). Cặp đã tự trỏ ở bản thua
+    // (B,B) thì chuyển cả hai phía. Quyết định theo trạng thái cặp TRƯỚC khi sửa.
+    let mut st = c.prepare(
+        "SELECT pair_id, a_hash=?1 AND a_face=?2, b_hash=?1 AND b_face=?2, a_hash=?3 AND a_face=?4, b_hash=?3 AND b_face=?4
+         FROM u.pairs WHERE (a_hash=?1 AND a_face=?2) OR (b_hash=?1 AND b_face=?2)",
+    )?;
+    let pairs = st
+        .query_map(params![lh, lf, kh, kf], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, bool>(1)?, r.get::<_, bool>(2)?, r.get::<_, bool>(3)?, r.get::<_, bool>(4)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (p, a_loser, b_loser, a_keeper, b_keeper) in pairs {
+        if (a_loser && b_keeper) || (b_loser && a_keeper) {
+            continue;
+        }
+        for (on, side, hc, fc) in [(a_loser, "a", "a_hash", "a_face"), (b_loser, "b", "b_hash", "b_face")] {
+            if on {
+                c.execute(&format!("UPDATE u.pairs SET {hc}=?1, {fc}=?2 WHERE pair_id=?3"), params![kh, kf, p])?;
+                journal(c, id, "pairs", "update", p, side)?;
+            }
         }
     }
     let mut st = c.prepare("SELECT combo_id, role FROM u.combo_slots WHERE hash=?1 AND face_index=?2")?;
@@ -165,20 +190,28 @@ fn revert_links(c: &Connection, r: &ResolutionRow) -> Result<(), StoreError> {
         .collect::<rusqlite::Result<Vec<_>>>()?;
     for (tbl, op, ref_id, side) in moves {
         match (tbl.as_str(), op.as_str()) {
+            // chỉ xoá dòng do CHÍNH lần này tạo: dấu thời gian trùng `created_at` của quyết định. Người dùng xoá rồi
+            // tạo lại dòng đó về sau sẽ có dấu thời gian khác → được giữ nguyên.
             ("favorites", "insert") => {
-                c.execute("DELETE FROM u.favorites WHERE hash=?1 AND face_index=?2", params![kh, kf])?;
+                c.execute("DELETE FROM u.favorites WHERE hash=?1 AND face_index=?2 AND created_at=?3", params![kh, kf, r.created_at])?;
             }
             ("collection_items", "insert") => {
                 c.execute(
-                    "DELETE FROM u.collection_items WHERE collection_id=?1 AND hash=?2 AND face_index=?3",
-                    params![ref_id, kh, kf],
+                    "DELETE FROM u.collection_items WHERE collection_id=?1 AND hash=?2 AND face_index=?3 AND added_at=?4",
+                    params![ref_id, kh, kf, r.created_at],
                 )?;
             }
             ("face_tags", "insert") => {
-                c.execute("DELETE FROM u.face_tags WHERE tag_id=?1 AND hash=?2 AND face_index=?3", params![ref_id, kh, kf])?;
+                c.execute(
+                    "DELETE FROM u.face_tags WHERE tag_id=?1 AND hash=?2 AND face_index=?3 AND added_at=?4",
+                    params![ref_id, kh, kf, r.created_at],
+                )?;
             }
             ("case_faces", "insert") => {
-                c.execute("DELETE FROM u.case_faces WHERE case_id=?1 AND hash=?2 AND face_index=?3", params![ref_id, kh, kf])?;
+                c.execute(
+                    "DELETE FROM u.case_faces WHERE case_id=?1 AND hash=?2 AND face_index=?3 AND added_at=?4",
+                    params![ref_id, kh, kf, r.created_at],
+                )?;
             }
             ("pairs", "update") => {
                 let (hc, fc) = if side == "a" { ("a_hash", "a_face") } else { ("b_hash", "b_face") };
@@ -199,6 +232,49 @@ fn revert_links(c: &Connection, r: &ResolutionRow) -> Result<(), StoreError> {
     Ok(())
 }
 
+fn begin_in(tx: &Connection, batch_id: &str, it: &NewResolution, now: i64) -> Result<i64, StoreError> {
+    if it.keeper_path == it.loser_path {
+        return Err(StoreError::Invalid("bản giữ và bản thua trùng đường dẫn".into()));
+    }
+    if !matches!(it.action.as_str(), "hide" | "trash") {
+        return Err(StoreError::Invalid(format!("action không hợp lệ: {}", it.action)));
+    }
+    // bản giữ không được là bản đã bị ẩn bởi một quyết định sống
+    let keeper_hidden: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM u.dup_resolutions WHERE loser_path=?1 AND undone_at IS NULL)",
+        [&it.keeper_path],
+        |r| r.get(0),
+    )?;
+    if keeper_hidden {
+        return Err(StoreError::Invalid("bản giữ đang bị ẩn bởi một quyết định khác".into()));
+    }
+    tx.execute(
+        "INSERT INTO u.dup_resolutions(batch_id,kind,group_key,keeper_hash,keeper_face,keeper_path,
+            loser_hash,loser_face,loser_path,action,trash_path,reason,was_active,created_at,status,loser_scope)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'pending',?15)",
+        params![
+            batch_id,
+            it.kind,
+            it.group_key,
+            &it.keeper.hash[..],
+            it.keeper.face_index as i64,
+            it.keeper_path,
+            &it.loser.hash[..],
+            it.loser.face_index as i64,
+            it.loser_path,
+            it.action,
+            it.trash_path,
+            it.reason,
+            it.was_active as i64,
+            now,
+            it.loser_scope
+        ],
+    )?;
+    let id = tx.last_insert_rowid();
+    move_links(tx, id, &it.keeper, &it.loser, now)?;
+    Ok(id)
+}
+
 /// Số liệu của một thành viên nhóm trùng cần cho quy tắc chọn bản giữ (không có trong `FaceRow`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberInfo {
@@ -206,6 +282,9 @@ pub struct MemberInfo {
     pub num_glyphs: Option<u32>,
     /// Số face trong tệp (> 1 = TTC/OTC).
     pub num_faces: u32,
+    /// Kích thước / mtime (ns) đã ghi lúc quét: dùng để biết tệp trên đĩa còn là tệp đã quét.
+    pub size: u64,
+    pub mtime_ns: i64,
 }
 
 impl Store {
@@ -214,7 +293,7 @@ impl Store {
         Ok(self
             .conn
             .query_row(
-                "SELECT l.source_id, f.num_glyphs, fi.num_faces
+                "SELECT l.source_id, f.num_glyphs, fi.num_faces, l.size, l.mtime_ns
                  FROM files fi
                  JOIN faces f ON f.file_id = fi.file_id AND f.face_index = ?2
                  JOIN file_locations l ON l.file_id = fi.file_id AND l.path = ?3
@@ -225,6 +304,8 @@ impl Store {
                         source_id: r.get(0)?,
                         num_glyphs: r.get::<_, Option<i64>>(1)?.map(|n| n as u32),
                         num_faces: r.get::<_, i64>(2)? as u32,
+                        size: r.get::<_, i64>(3)?.max(0) as u64,
+                        mtime_ns: r.get(4)?,
                     })
                 },
             )
@@ -291,40 +372,71 @@ impl Store {
         self.with_tx(|tx| {
             let mut ids = Vec::with_capacity(items.len());
             for it in items {
-                if it.keeper_path == it.loser_path {
-                    return Err(StoreError::Invalid("bản giữ và bản thua trùng đường dẫn".into()));
-                }
-                tx.execute(
-                    "INSERT INTO u.dup_resolutions(batch_id,kind,group_key,keeper_hash,keeper_face,keeper_path,
-                        loser_hash,loser_face,loser_path,action,trash_path,reason,was_active,created_at)
-                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
-                    params![
-                        batch_id,
-                        it.kind,
-                        it.group_key,
-                        &it.keeper.hash[..],
-                        it.keeper.face_index as i64,
-                        it.keeper_path,
-                        &it.loser.hash[..],
-                        it.loser.face_index as i64,
-                        it.loser_path,
-                        it.action,
-                        it.trash_path,
-                        it.reason,
-                        it.was_active as i64,
-                        now
-                    ],
-                )?;
-                let id = tx.last_insert_rowid();
-                move_links(tx, id, &it.keeper, &it.loser, now)?;
+                let id = begin_in(tx, batch_id, it, now)?;
+                tx.execute("UPDATE u.dup_resolutions SET status='done' WHERE id=?1", [id])?;
                 ids.push(id);
             }
             Ok(ids)
         })
     }
 
+    /// Pha 1 của giải quyết: ghi sổ ở trạng thái `pending` và chuyển liên kết, MỘT transaction. Từ lúc này vị trí thua
+    /// đã bị ẩn; mọi thay đổi ngoài sổ (tắt font, chuyển Thùng rác) làm SAU lệnh này, nên sổ luôn đủ để khôi phục.
+    pub fn begin_resolution(&mut self, batch_id: &str, it: &NewResolution, now: i64) -> Result<i64, StoreError> {
+        self.with_tx(|tx| begin_in(tx, batch_id, it, now))
+    }
+
+    /// Pha 2: đánh dấu xong; `trash_path` là nơi tệp nằm trong Thùng rác (chỉ khi action = trash).
+    pub fn complete_resolution(&mut self, id: i64, trash_path: Option<&str>) -> Result<(), StoreError> {
+        let n = self.conn.execute(
+            "UPDATE u.dup_resolutions SET status='done', trash_path=COALESCE(?2, trash_path) WHERE id=?1 AND undone_at IS NULL",
+            params![id, trash_path],
+        )?;
+        if n == 0 {
+            return Err(StoreError::NotFound(format!("quyết định #{id} đang sống")));
+        }
+        Ok(())
+    }
+
+    /// Ghi nhận ta đã bật bản giữ (để hoàn tác tắt lại).
+    pub fn set_keeper_activated(&mut self, id: i64, on: bool) -> Result<(), StoreError> {
+        self.conn.execute("UPDATE u.dup_resolutions SET keeper_activated=?2 WHERE id=?1", params![id, on as i64])?;
+        Ok(())
+    }
+
+    /// Quyết định sống, MỚI HƠN `id`, mà bản thua chính là bản giữ của `id` (chuỗi A→B→C): hoàn tác `id` trước chúng là sai.
+    pub fn newer_dependents(&self, id: i64) -> Result<Vec<i64>, StoreError> {
+        let mut st = self.conn.prepare(
+            "SELECT n.id FROM u.dup_resolutions n JOIN u.dup_resolutions r ON r.id = ?1
+             WHERE n.undone_at IS NULL AND n.id > r.id AND n.loser_path = r.keeper_path ORDER BY n.id",
+        )?;
+        Ok(st.query_map([id], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Quyết định đang `pending` (còn làm dở): sau sự cố giữa chừng.
+    pub fn pending_resolutions(&self) -> Result<Vec<ResolutionRow>, StoreError> {
+        Ok(self.resolutions(true)?.into_iter().filter(|r| r.status == "pending").collect())
+    }
+
+    /// Đánh dấu một vị trí missing / có mặt NGAY (không chờ quét lại). Các worker chạy trên kết nối chỉ-library (nhúng, ngôn
+    /// ngữ, quét) không thấy sổ `u.dup_resolutions` nên không biết vị trí đã ẩn; với tệp đã chuyển vào Thùng rác, cờ này
+    /// là cách để chúng bỏ qua vị trí đó (và quét lại sau cũng đồng ý).
+    pub fn set_location_missing(&mut self, path: &str, missing: bool) -> Result<bool, StoreError> {
+        Ok(self.conn.execute("UPDATE main.file_locations SET missing=?2 WHERE path=?1 AND missing<>?2", params![path, missing as i64])? > 0)
+    }
+
+    /// `path` đang là bản thua của một quyết định sống (đã ẩn)?
+    pub fn is_hidden_path(&self, path: &str) -> Result<bool, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT 1 FROM u.dup_resolutions WHERE loser_path=?1 AND undone_at IS NULL", [path], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
     /// Hoàn tác một quyết định: gỡ liên kết đã chuyển, bỏ ẩn. File trong Thùng rác do lớp ứng dụng đưa về TRƯỚC khi gọi.
-    /// Trả dòng đã hoàn tác (có `undone_at`). `Invalid` nếu đã hoàn tác rồi, `NotFound` nếu không có id.
+    /// Trả dòng đã hoàn tác (có `undone_at`). `Invalid` nếu đã hoàn tác rồi hoặc còn quyết định mới hơn phụ thuộc
+    /// (hoàn tác theo thứ tự ngược: mới nhất trước); `NotFound` nếu không có id.
     pub fn undo_resolution(&mut self, id: i64, now: i64) -> Result<ResolutionRow, StoreError> {
         self.with_tx(|tx| {
             let mut r = tx
@@ -334,6 +446,14 @@ impl Store {
                 .ok_or_else(|| StoreError::NotFound(format!("quyết định #{id}")))?;
             if r.undone_at.is_some() {
                 return Err(StoreError::Invalid(format!("quyết định #{id} đã hoàn tác")));
+            }
+            let dep: i64 = tx.query_row(
+                "SELECT count(*) FROM u.dup_resolutions n WHERE n.undone_at IS NULL AND n.id > ?1 AND n.loser_path = ?2",
+                params![id, r.keeper_path],
+                |x| x.get(0),
+            )?;
+            if dep > 0 {
+                return Err(StoreError::Invalid(format!("quyết định #{id}: còn quyết định mới hơn dùng bản giữ làm bản thua")));
             }
             revert_links(tx, &r)?;
             tx.execute("UPDATE u.dup_resolutions SET undone_at=?2 WHERE id=?1", params![id, now])?;

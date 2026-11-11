@@ -2,8 +2,12 @@
 
 export type ResolveFailureDto = { path: string, 
 /**
- * keeper_missing | keeper_not_in_group | loser_not_in_group | not_allowed | collection_file | active_copy_in_use |
- * trash_failed | not_found | already_undone | path_occupied | trash_emptied | db_error
+ * Thất bại hẳn (không đổi gì): plan_stale | not_auto_safe | keeper_missing | keeper_not_local | keeper_changed |
+ * keeper_not_in_group | keeper_is_hidden | keeper_conflict | loser_not_in_group | not_allowed | collection_file |
+ * active_copy_in_use | file_changed | deactivate_failed | trash_failed | not_found | already_undone | path_occupied |
+ * trash_emptied | trash_mismatch | newer_resolution_depends | db_error.
+ * Thành công một phần (quyết định ĐÃ ghi, cần chú ý): rollback_failed | reactivate_failed | keeper_activation_failed |
+ * keeper_deactivate_failed.
  */
 code: string, 
 /**

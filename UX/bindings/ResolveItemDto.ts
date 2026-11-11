@@ -4,4 +4,9 @@ import type { DuplicateKindDto } from "./DuplicateKindDto";
 /**
  * Một nhóm cần giải quyết: người dùng có thể đổi `keeperPath`.
  */
-export type ResolveItemDto = { kind: DuplicateKindDto, key: string, keeperPath: string, loserPaths: Array<string>, };
+export type ResolveItemDto = { kind: DuplicateKindDto, key: string, keeperPath: string, loserPaths: Array<string>, 
+/**
+ * Mọi đường dẫn của nhóm lúc UI hiển thị (keeper + losers + bản người dùng không đụng tới). Lệch với nhóm hiện tại
+ * → `plan_stale`, không áp dụng. Bắt buộc ở chế độ `chosen`; bỏ qua ở `all_safe`.
+ */
+memberPaths: Array<string>, };

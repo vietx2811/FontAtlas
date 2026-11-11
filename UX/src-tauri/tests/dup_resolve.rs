@@ -79,10 +79,17 @@ fn req(plan: &ResolvePlanDto, action: ResolveActionDto) -> ResolveRequestDto {
         items: plan
             .items
             .iter()
-            .map(|i| ResolveItemDto { kind: i.kind, key: i.key.clone(), keeper_path: i.keeper.path.clone(), loser_paths: i.losers.iter().map(|l| l.path.clone()).collect() })
+            .map(|i| ResolveItemDto {
+                kind: i.kind,
+                key: i.key.clone(),
+                keeper_path: i.keeper.path.clone(),
+                loser_paths: i.losers.iter().map(|l| l.path.clone()).collect(),
+                member_paths: i.member_paths.clone(),
+            })
             .collect(),
         action,
         explicit_trash_paths: vec![],
+        mode: ResolveModeDto::Chosen,
     }
 }
 
@@ -226,9 +233,10 @@ fn apply_revalidates_and_refuses_unsafe_requests() {
     let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
     let it = &plan.items[0];
     let mk = |keeper: &str, losers: Vec<String>| ResolveRequestDto {
-        items: vec![ResolveItemDto { kind: it.kind, key: it.key.clone(), keeper_path: keeper.into(), loser_paths: losers }],
+        items: vec![ResolveItemDto { kind: it.kind, key: it.key.clone(), keeper_path: keeper.into(), loser_paths: losers, member_paths: it.member_paths.clone() }],
         action: ResolveActionDto::Hide,
         explicit_trash_paths: vec![],
+        mode: ResolveModeDto::Chosen,
     };
     // bản giữ không thuộc nhóm / bản thua trùng bản giữ / bản thua lạ
     let r = dup_resolve::resolve_apply(&st, &mk("/khong/co.ttf", vec![it.losers[0].path.clone()]), &no_trash, 1).unwrap();

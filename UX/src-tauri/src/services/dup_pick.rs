@@ -84,16 +84,6 @@ fn looks_like_copy(p: &str) -> bool {
     name.contains(" copy") || name.contains(" (") && name.contains(')') || name.contains("-copy") || name.contains("_copy")
 }
 
-fn only<T: PartialEq>(best: &[usize], f: impl Fn(usize) -> T, pick: impl Fn(&T, &T) -> bool) -> Option<usize> {
-    // Trả chỉ số duy nhất đứng đầu theo `pick(a, b)` = "a tốt hơn b"; None nếu có từ hai bản ngang nhau ở đỉnh.
-    let top = best.iter().copied().fold(None::<usize>, |acc, i| match acc {
-        None => Some(i),
-        Some(j) => Some(if pick(&f(i), &f(j)) { i } else { j }),
-    })?;
-    let ties = best.iter().filter(|&&i| i != top && !pick(&f(top), &f(i))).count();
-    (ties == 0).then_some(top)
-}
-
 pub fn pick_keeper(kind: DuplicateKindDto, newest_known: bool, cands: &[Cand]) -> Option<Decision> {
     if cands.len() < 2 {
         return None;
@@ -109,6 +99,10 @@ pub fn pick_keeper(kind: DuplicateKindDto, newest_known: bool, cands: &[Cand]) -
             review = Some(Reason::new("collection_file"));
         }
         if kind != DuplicateKindDto::SameFile {
+            // bất biến: không bao giờ tự động giữ bản thiếu chữ Việt nhiều hơn một bản bị bỏ
+            if review.is_none() && losers.iter().any(|&i| cands[i].vi_missing < cands[keeper].vi_missing) {
+                review = Some(Reason::new("keeper_less_complete_vi"));
+            }
             let lic: std::collections::BTreeSet<&str> = cands.iter().map(|c| c.license.as_str()).collect();
             if review.is_none() && lic.len() > 1 {
                 review = Some(Reason::new("different_license"));
@@ -144,58 +138,67 @@ pub fn pick_keeper(kind: DuplicateKindDto, newest_known: bool, cands: &[Cand]) -
         }
         return finish(k, Reason::new("preferred_source"), review, warnings);
     }
-    let pool = at_best.clone();
+    let mut pool = at_best.clone();
 
-    // 2. không mất chữ Việt
+    // Mỗi tiêu chí THU HẸP pool về những bản tốt nhất; bản đã bị loại ở một bước không bao giờ quay lại được chọn ở bước sau.
+    // `keep_best` trả Some(bản duy nhất) khi còn đúng một, và luôn cập nhật `pool`; `narrowed` = có bản bị loại thật.
+    fn keep_best<K: PartialOrd + Copy>(pool: &mut Vec<usize>, key: impl Fn(usize) -> K) -> (bool, Option<usize>) {
+        let best = pool.iter().map(|&i| key(i)).fold(None::<K>, |a, k| match a {
+            Some(b) if b >= k => Some(b),
+            _ => Some(k),
+        });
+        let before = pool.len();
+        if let Some(b) = best {
+            pool.retain(|&i| key(i) >= b);
+        }
+        (pool.len() < before, (pool.len() == 1).then(|| pool[0]))
+    }
+
+    // 2. không mất chữ Việt: ít ký tự thiếu nhất thắng (nhỏ hơn tốt hơn → khoá âm)
     if kind != DuplicateKindDto::SameFile {
-        let min_missing = pool.iter().map(|&i| cands[i].vi_missing).min().unwrap_or(0);
         let max_missing = pool.iter().map(|&i| cands[i].vi_missing).max().unwrap_or(0);
-        if min_missing != max_missing {
-            let top: Vec<usize> = pool.iter().copied().filter(|&i| cands[i].vi_missing == min_missing).collect();
-            if top.len() == 1 {
-                let r = Reason::new("more_complete_vi").with("missing", max_missing - min_missing);
-                return finish(top[0], r, None, warnings);
-            }
+        let (narrowed, only_one) = keep_best(&mut pool, |i| -(cands[i].vi_missing as i64));
+        if let (true, Some(k)) = (narrowed, only_one) {
+            let r = Reason::new("more_complete_vi").with("missing", max_missing - cands[k].vi_missing);
+            return finish(k, r, review, warnings);
         }
     }
 
-    // 3. version cao hơn (chỉ khi phân biệt được rõ)
-    if kind == DuplicateKindDto::Versions
-        && newest_known
-        && let Some(k) = pool.iter().copied().find(|&i| cands[i].is_newest)
-    {
-        let fewer = pool.iter().any(|&i| i != k && matches!((cands[k].num_glyphs, cands[i].num_glyphs), (Some(a), Some(b)) if (a as f64) < (b as f64) * 0.98));
-        let r = Reason::new("newer_version")
-            .with("keep", cands[k].version.clone().unwrap_or_default())
-            .with("other", pool.iter().filter(|&&i| i != k).filter_map(|&i| cands[i].version.clone()).next().unwrap_or_default());
-        let rv = fewer.then(|| Reason::new("newer_has_fewer_glyphs"));
-        return finish(k, r, rv, warnings);
-    }
-    if kind == DuplicateKindDto::Versions && !newest_known {
-        review = Some(Reason::new("newest_unknown"));
+    // 3. version cao hơn: trong pool phải có ĐÚNG MỘT bản is_newest; nhiều bản đều is_newest = không phân biệt được
+    if kind == DuplicateKindDto::Versions {
+        let newest: Vec<usize> = pool.iter().copied().filter(|&i| cands[i].is_newest).collect();
+        if newest_known && newest.len() == 1 {
+            let k = newest[0];
+            let fewer = pool.iter().any(|&i| i != k && matches!((cands[k].num_glyphs, cands[i].num_glyphs), (Some(a), Some(b)) if (a as f64) < (b as f64) * 0.98));
+            let r = Reason::new("newer_version")
+                .with("keep", cands[k].version.clone().unwrap_or_default())
+                .with("other", pool.iter().filter(|&&i| i != k).filter_map(|&i| cands[i].version.clone()).next().unwrap_or_default());
+            let rv = fewer.then(|| Reason::new("newer_has_fewer_glyphs"));
+            return finish(k, r, rv, warnings);
+        }
+        if !newest_known || newest.len() > 1 {
+            review = Some(Reason::new("newest_unknown"));
+        }
     }
 
     // 4. định dạng
-    // bản được chọn phải thực sự hơn (không phải tất cả cùng hạng)
-    if kind != DuplicateKindDto::SameFile
-        && let Some(k) = only(&pool, |i| format_rank(&cands[i].format), |a, b| a > b)
-        && pool.iter().any(|&i| i != k && format_rank(&cands[i].format) < format_rank(&cands[k].format))
-    {
-        let r = Reason::new("preferred_format").with("format", cands[k].format.to_uppercase());
-        return finish(k, r, review, warnings);
+    if kind != DuplicateKindDto::SameFile {
+        let (narrowed, only_one) = keep_best(&mut pool, |i| format_rank(&cands[i].format));
+        if let (true, Some(k)) = (narrowed, only_one) {
+            let r = Reason::new("preferred_format").with("format", cands[k].format.to_uppercase());
+            return finish(k, r, review, warnings);
+        }
     }
 
-    // 5. đầy đủ hơn
+    // 5. đầy đủ hơn: số glyph, rồi dung lượng
     if kind != DuplicateKindDto::SameFile {
-        if let Some(k) = only(&pool, |i| cands[i].num_glyphs.unwrap_or(0), |a, b| a > b)
-            && pool.iter().any(|&i| i != k && cands[i].num_glyphs.unwrap_or(0) < cands[k].num_glyphs.unwrap_or(0))
-        {
+        let (narrowed, only_one) = keep_best(&mut pool, |i| cands[i].num_glyphs.unwrap_or(0));
+        if let (true, Some(k)) = (narrowed, only_one) {
             let r = Reason::new("more_glyphs").with("glyphs", cands[k].num_glyphs.unwrap_or(0));
             return finish(k, r, review, warnings);
         }
-        if let Some(k) = only(&pool, |i| cands[i].file_size, |a, b| a > b)
-            && pool.iter().any(|&i| i != k && cands[i].file_size < cands[k].file_size)
-        {
+        let (narrowed, only_one) = keep_best(&mut pool, |i| cands[i].file_size);
+        if let (true, Some(k)) = (narrowed, only_one) {
             return finish(k, Reason::new("larger_file"), review, warnings);
         }
     } else {
@@ -367,6 +370,56 @@ mod tests {
         let d = pick_keeper(Formats, false, &[b, e]).unwrap();
         assert!(!d.auto_safe);
         assert_eq!(d.reason.code, "tie");
+    }
+
+    /// Review #1: hai bản đủ chữ Việt hoà nhau, bản thứ ba thiếu chữ nhưng là OTF — không được chọn bản thiếu chữ.
+    #[test]
+    fn a_font_missing_vietnamese_never_wins_a_later_step_when_two_complete_ones_tie() {
+        let a = c("/f/A.ttf", "ttf");
+        let mut b = c("/f/B.ttf", "ttf");
+        b.file_size = 90;
+        let mut o = c("/f/C.otf", "otf");
+        o.vi_missing = 5;
+        o.file_size = 200;
+        let d = pick_keeper(Formats, false, &[a, b, o]).unwrap();
+        assert_ne!(d.keeper, 2, "OTF thiếu chữ Việt không được thắng ở bước định dạng/dung lượng");
+        assert_eq!(d.keeper, 0, "giữa hai bản đủ chữ: dung lượng lớn hơn");
+        assert_eq!(d.reason.code, "larger_file");
+    }
+
+    #[test]
+    fn auto_safe_never_keeps_a_font_with_more_missing_vietnamese_than_a_loser() {
+        // nguồn ưu tiên chọn bản thiếu chữ (không phải same_file) → phải xem lại, không tự động
+        let mut a = c("/lib/A.ttf", "ttf");
+        a.vi_missing = 7;
+        let mut b = c("/dl/A.ttf", "ttf");
+        b.source_rank = 1;
+        let d = pick_keeper(Formats, false, &[a, b]).unwrap();
+        assert!(!d.auto_safe);
+    }
+
+    #[test]
+    fn several_newest_flags_mean_the_newest_is_unknown() {
+        let mut a = c("/f/A1.ttf", "ttf");
+        a.is_newest = true;
+        let mut b = c("/f/A2.ttf", "ttf");
+        b.is_newest = true;
+        let d = pick_keeper(Versions, true, &[a, b]).unwrap();
+        assert!(!d.auto_safe, "không có đúng một bản mới nhất → không tự quyết");
+    }
+
+    #[test]
+    fn the_newest_must_survive_the_vietnamese_step_to_win_on_version() {
+        // bản mới nhất thiếu chữ Việt, bản cũ đủ → giữ bản cũ đủ chữ, không phải bản mới
+        let mut old = c("/f/A1.ttf", "ttf");
+        old.version = Some("Version 1".into());
+        let mut new = c("/f/A2.ttf", "ttf");
+        new.version = Some("Version 2".into());
+        new.is_newest = true;
+        new.vi_missing = 3;
+        let d = pick_keeper(Versions, true, &[old, new]).unwrap();
+        assert_eq!(d.keeper, 0);
+        assert_eq!(d.reason.code, "more_complete_vi");
     }
 
     #[test]

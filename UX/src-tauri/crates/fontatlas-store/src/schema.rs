@@ -501,7 +501,13 @@ CREATE TABLE dup_resolutions (
   reason      TEXT NOT NULL,
   was_active  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
-  undone_at   INTEGER
+  undone_at   INTEGER,
+  -- ghi sổ TRƯỚC khi đụng tệp / activation: pending = đang làm dở (đã ẩn); done = xong
+  status      TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('pending','done')),
+  -- phạm vi activation của bản thua trước khi tắt (session|persistent), để hoàn tác bật lại đúng
+  loser_scope TEXT CHECK (loser_scope IN ('session','persistent')),
+  -- ta đã bật bản giữ giúp người dùng (nó chưa bật trước đó): hoàn tác tắt lại
+  keeper_activated INTEGER NOT NULL DEFAULT 0
 );
 -- nhóm người dùng chọn "Bỏ qua": nhớ theo (loại, khoá nhóm), có thể bỏ qua → hiện lại
 CREATE TABLE dup_ignored (

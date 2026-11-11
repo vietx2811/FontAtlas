@@ -487,6 +487,8 @@ impl Store {
             |r| r.get(0),
         )?;
         let (order, order_params) = order_by(q, scoped);
+        // đường dẫn / trạng thái missing / cloud của hàng KHÔNG tính vị trí đã ẩn (trừ khi chủ ý lấy cả bản đã ẩn)
+        let nh = if q.include_hidden { String::new() } else { format!(" AND NOT {HIDDEN_LOC}") };
         let limit = match q.limit {
             0 => DEFAULT_LIMIT,
             n => n.min(MAX_LIMIT),
@@ -495,13 +497,13 @@ impl Store {
             "SELECT f.face_id, fi.hash, f.face_index, f.family_name, f.subfamily, f.full_name, f.weight_class,
                     f.width_class, f.is_italic, f.is_variable, f.vi_status, f.supports_vi, f.vi_missing,
                     f.license_class,
-                    (SELECT l.path FROM file_locations l WHERE l.file_id = f.file_id
+                    (SELECT l.path FROM file_locations l WHERE l.file_id = f.file_id{nh}
                       ORDER BY l.missing, l.location_id LIMIT 1),
-                    NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0),
+                    NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0{nh}),
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
                     fi.first_seen_at, fi.size,
-                    (EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 1)
-                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0))
+                    (EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 1{nh})
+                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0{nh}))
              FROM {from}
              WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset

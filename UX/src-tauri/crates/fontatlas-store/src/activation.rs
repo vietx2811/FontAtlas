@@ -412,10 +412,10 @@ impl Store {
             return Ok(None);
         };
         let mut st = self.conn.prepare(
-            "SELECT path, missing OR EXISTS (SELECT 1 FROM u.dup_resolutions dr
-                                              WHERE dr.loser_path = main.file_locations.path AND dr.undone_at IS NULL) AS gone
-             FROM main.file_locations WHERE file_id=?1
-             ORDER BY gone, last_seen_at DESC, path",
+            // vị trí đã ẩn bởi "giải quyết trùng lặp" KHÔNG được liệt kê: activation không bao giờ chọn / mở chúng
+            "SELECT l.path, l.missing FROM main.file_locations l WHERE l.file_id=?1
+               AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
+             ORDER BY l.missing, l.last_seen_at DESC, l.path",
         )?;
         let locations = st
             .query_map([file_id], |r| {

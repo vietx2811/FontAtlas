@@ -42,7 +42,8 @@ pub struct StoredAnalysis {
 const LATEST: &str = "
 SELECT f.face_id, fi.hash, f.face_index, a.metadata_json, a.vietnamese_json, a.anatomy_json,
        a.analyzer_version, fi.container, fi.size, f.file_id,
-       NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)
+       NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0
+                   AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL))
 FROM faces f
 JOIN files fi ON fi.file_id = f.file_id
 JOIN analyses a ON a.hash = fi.hash AND a.face_index = f.face_index AND a.source = 'local'
@@ -234,7 +235,9 @@ impl Store {
             .conn
             .query_row(
                 "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
-                 WHERE fi.hash = ?1 AND l.missing = 0 ORDER BY l.cloud_only, l.location_id LIMIT 1",
+                 WHERE fi.hash = ?1 AND l.missing = 0
+                   AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
+                 ORDER BY l.cloud_only, l.location_id LIMIT 1",
                 [&key.hash[..]],
                 |r| r.get(0),
             )
