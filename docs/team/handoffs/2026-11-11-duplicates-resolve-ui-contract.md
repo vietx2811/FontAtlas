@@ -40,7 +40,7 @@ Quyết định của Lead (2026-11-11): mặc định **Ẩn** (không đụng 
 
 ### `ResolveResultDto`
 `batchId`, `done: ResolutionDto[]`, `failed: ResolveFailureDto[]`, `needsRescan`.
-- `failed[].code`: `keeper_missing`, `keeper_not_in_group`, `loser_not_in_group`, `not_allowed`, `collection_file`, `active_copy_in_use`, `trash_failed`, `not_found`, `already_undone`, `path_occupied`, `trash_emptied`, `db_error`. Hiện `message` (tiếng Việt, từ backend) kèm tên font; hiển thị thành công một phần ("Đã xử lý 12 nhóm, 1 nhóm chưa làm được").
+- `failed[].code`: `keeper_missing`, `keeper_not_in_group`, `loser_not_in_group`, `not_allowed`, `collection_file`, `active_copy_in_use`, `trash_failed`, `not_found`, `already_undone`, `path_occupied`, `trash_emptied`, `db_error`. App có cả vi và en: backend KHÔNG trả câu, UI dịch theo `code` (key `dup.fail.<code>`) kèm tên font; `detail` chỉ là chẩn đoán thô không dịch (lỗi hệ điều hành/DB, hoặc lý do chặn của `not_allowed`: `managed_source`, `system_path`, `collection_file`, `missing_file`, `needs_explicit`), để trong "Chi tiết". Toàn bộ chuỗi hiển thị (lý do, lỗi, tên loại) dịch ở UI; hiển thị thành công một phần ("Đã xử lý 12 nhóm, 1 nhóm chưa làm được").
 - `needsRescan = true` sau hoàn tác một tệp từ Thùng rác: gọi `rescan_sources(null)` để thư viện thấy tệp đã về.
 - Sau mọi `resolve_apply`/`resolve_undo` có `done` không rỗng: tăng `libraryRev` (như các thao tác đổi thư viện khác) để tải lại danh sách, lưới và sidebar "Trùng lặp N".
 

@@ -180,8 +180,11 @@ pub fn resolve_preview(state: &AppState, scope: &ResolveScopeDto, q: &FaceQueryD
     Ok(plan)
 }
 
-fn fail(path: &str, code: &str, message: impl Into<String>) -> ResolveFailureDto {
-    ResolveFailureDto { path: path.into(), code: code.into(), message: message.into() }
+/// Backend không trả câu cho người dùng (app có vi + en, UI dịch theo `code`). `note` chỉ được giữ làm chẩn đoán thô
+/// cho vài mã; các mã khác bỏ nó.
+fn fail(path: &str, code: &str, note: impl Into<String>) -> ResolveFailureDto {
+    let detail = matches!(code, "trash_failed" | "db_error" | "not_allowed").then(|| note.into());
+    ResolveFailureDto { path: path.into(), code: code.into(), detail }
 }
 
 fn to_dto(r: &ResolutionRow, name: Option<(String, Option<String>)>, trash_still_there: bool) -> ResolutionDto {
@@ -291,7 +294,7 @@ pub fn resolve_apply(
             if do_trash {
                 let t = trash_eligibility(lp, loser.source.as_ref().map(|s| s.kind.as_str()).unwrap_or(""), loser.cand.num_faces, Path::new(lp).is_file(), ctx.home.as_deref());
                 if !t.allowed || (t.needs_explicit && !req.explicit_trash_paths.contains(lp)) {
-                    failed.push(fail(lp, "not_allowed", t.blocked.unwrap_or_else(|| "cần chọn rõ tệp này".into())));
+                    failed.push(fail(lp, "not_allowed", t.blocked.unwrap_or_else(|| "needs_explicit".into())));
                     continue;
                 }
             }
