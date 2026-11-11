@@ -6,3 +6,11 @@
 .fa-viewpop fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 2px; }
 .fa-viewpop legend { padding: 0; margin-bottom: 4px; font-size: var(--text-2xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .fa-viewpop label { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: var(--text-sm); cursor: pointer; }
+
+.fa-viewpop fieldset + fieldset { margin-top: 10px; }
+.fa-viewpop select { width: 100%; font-size: var(--text-sm); }
+.fa-viewpop-dir { display: flex; gap: 4px; margin-top: 6px; }
+.fa-viewpop-dir button { flex: 1; padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--muted); }
+.fa-viewpop-dir button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; border-color: transparent; }
+.fa-viewpop-src, .fa-viewpop-lock { margin: 6px 0 0; font-size: var(--text-xs); color: var(--muted); }
+.fa-viewpop fieldset[aria-disabled="true"] { opacity: .7; }

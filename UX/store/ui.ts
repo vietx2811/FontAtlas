@@ -8,6 +8,7 @@ import type { GridQuery, FaceQuery } from '../features/library-grid/types';
 export const PERSIST_DEBOUNCE_MS = 400;
 export const RECENT_MAX = 200;
 export const RECENT_DEBOUNCE_MS = 1000;
+import { DEFAULT_SORT, SORT_KEY, defaultDesc, isDefaultSort, parseSort, serializeSort, type SortField, type SortPrefs } from './sortPrefs';
 export const RECENT_KEY = 'ui.recent_views'; // 6a: ^ui\.[a-z0-9_.-]{1,60}$ (không chữ hoa)
 const FACE_KEYS_MAX = 2000;
 export const SAMPLE_MIN = 18;
@@ -64,6 +65,8 @@ export interface UiState {
   desk: DeskState | null;
   /** Desk đang mở lúc vào Compare: đóng Compare thì quay về đúng chỗ. */
   deskReturn: DeskState | null;
+  /** Cách sắp xếp thư viện (toàn cục); lưu ở setting `ui.sort`. Gần đây / Đang bật khoá thứ tự. */
+  sort: SortPrefs;
   /** Mới nhất trước, ≤ 200; lưu ở setting `ui.recent_views`. */
   recentViews: readonly RecentView[];
   /** Tăng khi dữ liệu thư viện đổi từ nơi khác (thêm vào dự án, gắn thẻ…): thanh bên nạp lại số đếm/danh sách. */
@@ -94,6 +97,9 @@ export interface UiActions {
   setSettingsOpen(on: boolean): void;
   openCompare(faces: FaceKeyDto[]): void;
   closeCompare(): void;
+  setSortBy(by: SortField): void;
+  setSortDesc(desc: boolean): void;
+  resetSort(): void;
   /** Quay lại phiên so sánh đang giữ (sidebar). */
   resumeCompare(): void;
   addCompareFace(f: FaceKeyDto): boolean;
@@ -135,8 +141,11 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viO
 }
 
 /** Gần đây/Đang bật/family giới hạn library bằng faceKeys; discovery dùng toMetadataQuery. */
-export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope'>>): GridQuery {
+export function toGridQuery(s: Pick<UiState, 'view' | 'tag' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope' | 'sort'>>): GridQuery {
   const q = toMetadataQuery(s);
+  // Sắp xếp của người dùng; 'match' chỉ khi đang có chữ tìm. Gần đây / Đang bật ghi đè bên dưới (thứ tự đưa vào).
+  const so = s.sort;
+  if (so && !isDefaultSort(so) && (so.by !== 'match' || !!s.query.trim())) { q.sort = so.by; q.descending = so.desc; }
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
@@ -173,7 +182,7 @@ export function createUiStore(): UiStore {
   const initial = fromDto(DEFAULT_UI_STATE);
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
-    filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT,
+    filters: {}, familyScope: null, view: 'all', tag: null, query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT, sort: { ...DEFAULT_SORT },
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, deskReturn: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
@@ -201,6 +210,9 @@ export function createUiStore(): UiStore {
       const f = faces.slice(0, COMPARE_MAX);
       set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, deskReturn: get().desk, settingsOpen: false });
     },
+    setSortBy: by => set({ sort: { by, desc: defaultDesc(by) } }),
+    setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc } })),
+    resetSort: () => set({ sort: { ...DEFAULT_SORT } }),
     closeCompare: () => set(s => ({ compare: null, desk: s.deskReturn, deskReturn: null })),
     resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, desk: null, settingsOpen: false } : s)),
     addCompareFace: f => {
@@ -270,11 +282,24 @@ export function createUiStore(): UiStore {
         const parsed = JSON.parse((await api.getSetting(RECENT_KEY)) ?? '[]');
         set({ recentViews: Array.isArray(parsed) ? parsed.filter((r: RecentView) => typeof r?.face === 'string' && typeof r?.at === 'number').slice(0, RECENT_MAX) : [] });
       } catch { set({ recentViews: [] }); }
+      try { set({ sort: parseSort(await api.getSetting(SORT_KEY)) }); } catch { set({ sort: { ...DEFAULT_SORT } }); }
+      let sortWritten = serializeSort(get().sort);
+      let sortTimer: ReturnType<typeof setTimeout> | undefined;
       let recentWritten = JSON.stringify(get().recentViews);
       let recentTimer: ReturnType<typeof setTimeout> | undefined;
       let written = JSON.stringify(toDto(get()));
       let timer: ReturnType<typeof setTimeout> | undefined;
       const unsub = store.subscribe(() => {
+        const sjson = serializeSort(get().sort);
+        if (sjson !== sortWritten) {
+          clearTimeout(sortTimer);
+          sortTimer = setTimeout(() => {
+            const now = serializeSort(get().sort);
+            if (now === sortWritten) return;
+            sortWritten = now;
+            api.setSetting(SORT_KEY, now).catch(e => console.warn('set_setting failed', e));
+          }, PERSIST_DEBOUNCE_MS);
+        }
         const rjson = JSON.stringify(get().recentViews);
         if (rjson !== recentWritten) {
           clearTimeout(recentTimer);
@@ -294,7 +319,7 @@ export function createUiStore(): UiStore {
           api.setUiState(dto).catch(e => console.warn('set_ui_state failed', e));
         }, PERSIST_DEBOUNCE_MS);
       });
-      stop = () => { unsub(); clearTimeout(timer); clearTimeout(recentTimer); };
+      stop = () => { unsub(); clearTimeout(timer); clearTimeout(recentTimer); clearTimeout(sortTimer); };
     },
   }));
   return store;

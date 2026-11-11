@@ -60,12 +60,13 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
       .catch(e => console.warn('set_favorite failed', e));
   }, [api]);
   // "Gần đây": chọn/mở font đẩy nó lên đầu danh sách, nhưng thứ tự trên lưới đứng yên cho tới khi rời view (hoặc mở lại thư viện).
+  const sort = useUiStore(s => s.sort);
   const inRecent = view === 'recent';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const frozenRecents = useMemo(() => recentViews, [inRecent]);
-  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews: frozenRecents, active, filters, familyScope }), [view, tag, query, viOnly, frozenRecents, active, filters, familyScope]);
+  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, tag, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
-  const scopeKey = useMemo(() => JSON.stringify([view, tag, query, viOnly, filters, familyScope?.name ?? null]), [view, tag, query, viOnly, filters, familyScope]);
+  const scopeKey = useMemo(() => JSON.stringify([view, tag, query, viOnly, filters, familyScope?.name ?? null, sort]), [view, tag, query, viOnly, filters, familyScope, sort]);
   const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap);
   const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     const st = useSelectionStore.getState();

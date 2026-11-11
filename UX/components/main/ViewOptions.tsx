@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t, type I18nKey } from '../../i18n';
+import { SORT_FIELDS, defaultDesc, isDefaultSort, type SortField } from '../../store/sortPrefs';
+import { useUiStore } from '../../store/ui';
 import { CARD_FIELD_ORDER, DEFAULT_CARD_FIELDS, useCardFields, type CardField } from '../../store/cardFields';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
@@ -18,7 +20,18 @@ export function ViewOptions(): React.JSX.Element {
   const fields = useCardFields(s => s.fields);
   const toggle = useCardFields(s => s.toggle);
   const reset = useCardFields(s => s.reset);
-  const changed = fields.length !== DEFAULT_CARD_FIELDS.length || DEFAULT_CARD_FIELDS.some(k => !fields.includes(k));
+  const sortPrefs = useUiStore(s => s.sort);
+  const view = useUiStore(s => s.view);
+  const hasQuery = useUiStore(s => s.query.trim().length > 0);
+  const setSortBy = useUiStore(s => s.setSortBy);
+  const setSortDesc = useUiStore(s => s.setSortDesc);
+  const resetSort = useUiStore(s => s.resetSort);
+  const locked = view === 'recent' || view === 'active';
+  // 'match' chỉ có nghĩa khi đang tìm; không có chữ tìm thì hiện như mặc định.
+  const by: SortField = sortPrefs.by === 'match' && !hasQuery ? 'family' : sortPrefs.by;
+  const desc = sortPrefs.by === 'match' && !hasQuery ? defaultDesc('family') : sortPrefs.desc;
+  const sortChanged = !isDefaultSort(sortPrefs);
+  const changed = sortChanged || fields.length !== DEFAULT_CARD_FIELDS.length || DEFAULT_CARD_FIELDS.some(k => !fields.includes(k));
   const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) requestAnimationFrame(() => btn.current?.focus()); }, []);
 
   useEffect(() => {
@@ -53,7 +66,21 @@ export function ViewOptions(): React.JSX.Element {
       </Tooltip>
       {open && createPortal(
         <div ref={pop} className="fa-viewpop" role="dialog" aria-label={t('view.title')} data-testid="view-pop" style={pos ? { right: pos.right, top: pos.top } : undefined}>
-          <header><h2 tabIndex={-1}>{t('view.title')}</h2><button type="button" data-testid="view-reset" disabled={!changed} onClick={reset}>{t('view.reset')}</button></header>
+          <header><h2 tabIndex={-1}>{t('view.title')}</h2><button type="button" data-testid="view-reset" disabled={!changed} onClick={() => { reset(); resetSort(); }}>{t('view.reset')}</button></header>
+          <fieldset data-testid="view-sort" aria-describedby={locked ? 'view-sort-lock' : undefined} aria-disabled={locked || undefined}>
+            <legend>{t('view.sort')}</legend>
+            {locked ? <p id="view-sort-lock" className="fa-viewpop-lock" data-testid="view-sort-locked">{t(view === 'recent' ? 'view.sort.locked.recent' : 'view.sort.locked.active')}</p> : <>
+              <select data-testid="view-sort-by" aria-label={t('view.sort')} value={by} onChange={e => setSortBy(e.target.value as SortField)}>
+                {SORT_FIELDS.filter(f => f !== 'match' || hasQuery).map(f => <option key={f} value={f}>{t(`view.sort.${f}` as I18nKey)}</option>)}
+              </select>
+              <div className="fa-viewpop-dir" role="radiogroup" aria-label={t('view.sort.dir')}>
+                {([false, true] as const).map(d => (
+                  <button key={String(d)} type="button" role="radio" aria-checked={desc === d} data-testid={d ? 'view-sort-desc' : 'view-sort-asc'} onClick={() => setSortDesc(d)}>{t(`view.sort.${by}.${d ? 'desc' : 'asc'}` as I18nKey)}</button>
+                ))}
+              </div>
+              <p className="fa-viewpop-src">{t(`view.sort.src.${by}` as I18nKey)}</p>
+            </>}
+          </fieldset>
           <fieldset>
             <legend>{t('view.info')}</legend>
             {CARD_FIELD_ORDER.map(k => (
