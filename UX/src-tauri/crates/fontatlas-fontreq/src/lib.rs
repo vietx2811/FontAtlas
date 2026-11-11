@@ -6,9 +6,10 @@
 //! - [`Responder`] (mọi nền tảng, test được): lọc tên nội bộ, ánh xạ pid → app, hỏi broker (`ensure`), nhớ "không có" ít giây.
 //! - `mac` (chỉ macOS): đăng ký nguồn runloop trên một luồng riêng và đổi [`Answer`] thành `CFArray<CFURL>`.
 mod responder;
-pub use responder::{Answer, AppNamer, Request, Responder, app_label_from_exe_path, is_internal_name, ANSWER_DEADLINE, NEGATIVE_TTL};
+pub use fontatlas_broker::is_internal_name;
+pub use responder::{Answer, AppNamer, Request, Responder, app_label_from_exe_path, ANSWER_DEADLINE, LATE_RESULT_TTL, MAX_INFLIGHT, NEGATIVE_TTL, SLOW_TTL};
 
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
-pub use mac::{FontRequestSource, Observer, PidAppNamer, StartError, exe_path_of_pid};
+pub use mac::{FontRequestSource, Observer, PidAppNamer, StartError, exe_path_of_pid, last_returned_retain_count};

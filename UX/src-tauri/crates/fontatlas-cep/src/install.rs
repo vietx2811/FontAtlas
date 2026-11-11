@@ -85,6 +85,7 @@ impl PanelInstaller {
         let files = self.files();
         let sig = sign_package(&files, &id)?;
         std::fs::create_dir_all(&self.extensions_dir)?;
+        self.sweep_leftovers();
         let tmp = self.extensions_dir.join(format!(".{BUNDLE_ID}.tmp-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         for (p, data) in &files {
@@ -96,15 +97,60 @@ impl PanelInstaller {
         }
         std::fs::create_dir_all(tmp.join("META-INF"))?;
         std::fs::write(tmp.join("META-INF/signatures.xml"), sig)?;
+        // Thay nguyên tử: đưa bản cũ sang chỗ tạm TRƯỚC, đặt bản mới vào, xoá bản cũ sau cùng. Lỗi giữa chừng thì trả bản cũ về,
+        // không bao giờ để Illustrator thấy một thư mục panel thiếu/dở.
+        let old = self.extensions_dir.join(format!(".{BUNDLE_ID}.old-{}", std::process::id()));
         if existed {
-            std::fs::remove_dir_all(&dir)?;
+            std::fs::rename(&dir, &old)?;
         }
-        std::fs::rename(&tmp, &dir)?;
+        if let Err(e) = std::fs::rename(&tmp, &dir) {
+            if existed {
+                let _ = std::fs::rename(&old, &dir);
+            }
+            let _ = std::fs::remove_dir_all(&tmp);
+            return Err(e.into());
+        }
+        if existed {
+            let _ = std::fs::remove_dir_all(&old);
+        }
         Ok(InstallReport { dir, replaced: existed, restart_illustrator: true })
+    }
+
+    /// Dọn thư mục tạm (`.com.fontatlas.autoactivate.tmp-<pid>` / `.old-<pid>`) do lần cài bị ngắt để lại. Chỉ đụng đúng tên của ta.
+    fn sweep_leftovers(&self) {
+        let Ok(rd) = std::fs::read_dir(&self.extensions_dir) else { return };
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            if n.starts_with(&format!(".{BUNDLE_ID}.tmp-")) || n.starts_with(&format!(".{BUNDLE_ID}.old-")) {
+                let _ = std::fs::remove_dir_all(e.path());
+            }
+        }
+    }
+
+    /// Khoá ký của máy này đang được giữ ở `state_dir` (để cài lại không phải sinh khoá mới).
+    pub fn key_present(&self) -> bool {
+        self.state_dir.join("signing.pem").is_file()
+    }
+
+    /// Xoá khoá + chứng chỉ ký. Từ chối khi panel còn cài (nó sẽ thành `Stale` vì chữ ký không còn khoá để kiểm): gỡ panel trước.
+    pub fn forget_key(&self) -> Result<bool, InstallError> {
+        if self.panel_dir().exists() {
+            return Err(InstallError::Io(std::io::Error::other("gỡ panel trước khi xoá khoá ký")));
+        }
+        let mut any = false;
+        for f in ["signing.pem", "signing.cert.der"] {
+            match std::fs::remove_file(self.state_dir.join(f)) {
+                Ok(()) => any = true,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(any)
     }
 
     /// Gỡ panel. `Ok(false)` nếu không có gì để gỡ. Không bao giờ xoá thư mục không phải của Font Atlas.
     pub fn remove(&self) -> Result<bool, InstallError> {
+        self.sweep_leftovers();
         let dir = self.panel_dir();
         if !dir.exists() {
             return Ok(false);

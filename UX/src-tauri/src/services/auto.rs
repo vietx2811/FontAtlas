@@ -16,6 +16,7 @@ pub struct Inputs {
     pub enabled: bool,
     pub broker_running: bool,
     pub font_request_running: bool,
+    pub signing_key_present: bool,
     /// Bản chạy với thư mục dữ liệu riêng: nguồn font request cố ý không mở.
     pub isolated: bool,
     /// Tên các app có trong `/Applications` (vd "Adobe Photoshop 2026").
@@ -146,6 +147,7 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
         enabled: i.enabled,
         broker_running: i.broker_running,
         font_request_running: i.font_request_running,
+        signing_key_present: i.signing_key_present,
         apps,
         other_managers: i
             .managers
@@ -210,8 +212,10 @@ pub fn status(state: &AppState) -> Result<AutoStatusDto, CmdError> {
         });
     let inputs = Inputs {
         enabled: auto_enabled(store),
-        broker_running: crate::services::broker::port(state).is_some(),
+        // ping thật: worker chết thì cổng vẫn mở nhưng không ai trả lời
+        broker_running: crate::services::broker::healthy(state),
         font_request_running: state.fontreq.lock().map(|g| g.is_some()).unwrap_or(false),
+        signing_key_present: crate::services::cep::key_present(state),
         isolated: !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst)
             || (std::env::var_os("FONTATLAS_DATA_DIR").is_some() && std::env::var_os("FONTATLAS_FONTREQ").is_none()),
         installed_apps: installed_app_names(),
@@ -229,7 +233,27 @@ pub fn set_enabled(state: &AppState, on: bool) -> Result<AutoStatusDto, CmdError
     status(state)
 }
 
+/// Cài/xoá khoá ghi vào HOME THẬT của người dùng (thư mục Adobe). Bản chạy cô lập (QA/test/`FONTATLAS_DATA_DIR`) dùng dữ liệu
+/// tạm nhưng vẫn trỏ vào HOME thật, nên không được phép làm việc đó.
+fn require_real_app(state: &AppState) -> Result<(), CmdError> {
+    if is_isolated(state) {
+        return Err(CmdError::new("isolated_build", "bản chạy với dữ liệu riêng (QA/test) không được cài vào thư mục Adobe thật"));
+    }
+    Ok(())
+}
+
+fn is_isolated(state: &AppState) -> bool {
+    !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst) || std::env::var_os("FONTATLAS_DATA_DIR").is_some()
+}
+
+pub fn forget_key(state: &AppState) -> Result<AutoStatusDto, CmdError> {
+    require_real_app(state)?;
+    crate::services::cep::forget_key(state).map_err(|e| CmdError::new("io", e.to_string()))?;
+    status(state)
+}
+
 pub fn install(state: &AppState, target: AutoTargetDto) -> Result<AutoStatusDto, CmdError> {
+    require_real_app(state)?;
     match target {
         AutoTargetDto::Illustrator => {
             crate::services::cep::install(state).map_err(|e| CmdError::new("io", e.to_string()))?;
@@ -245,6 +269,7 @@ pub fn install(state: &AppState, target: AutoTargetDto) -> Result<AutoStatusDto,
 }
 
 pub fn remove(state: &AppState, target: AutoTargetDto) -> Result<AutoStatusDto, CmdError> {
+    require_real_app(state)?;
     match target {
         AutoTargetDto::Illustrator => {
             crate::services::cep::remove(state).map_err(|e| CmdError::new("io", e.to_string()))?;

@@ -21,3 +21,12 @@ pub fn install(state: &AppState) -> Result<InstallReport, InstallError> {
 pub fn remove(state: &AppState) -> Result<bool, InstallError> {
     installer(state).ok_or_else(|| InstallError::Io(std::io::Error::other("không có thư mục HOME")))?.remove()
 }
+
+/// Khoá ký của máy này đang được giữ không (để Settings nói rõ và có nút xoá).
+pub fn key_present(state: &AppState) -> bool {
+    installer(state).is_some_and(|i| i.key_present())
+}
+
+pub fn forget_key(state: &AppState) -> Result<bool, InstallError> {
+    installer(state).ok_or_else(|| InstallError::Io(std::io::Error::other("không có thư mục HOME")))?.forget_key()
+}

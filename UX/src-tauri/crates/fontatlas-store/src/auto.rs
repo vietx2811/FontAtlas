@@ -133,6 +133,11 @@ impl Store {
         rows.into_iter().map(|(b, i)| Ok(FaceKey { hash: hash_from_blob(b)?, face_index: i })).collect()
     }
 
+    /// Lúc file này lần đầu được thấy (ms): "mới nhất" khi nhiều bản cùng tên.
+    pub fn file_first_seen(&self, hash: &[u8; 32]) -> Result<i64, StoreError> {
+        Ok(self.conn.query_row("SELECT first_seen_at FROM main.files WHERE hash=?1", [&hash[..]], |r| r.get(0)).optional()?.unwrap_or(0))
+    }
+
     /// Face theo family + style. Family so sau `vi_fold`; style so sau khi gọn (rỗng = "Regular").
     /// Chỉ trả khi khớp đúng cả hai: không đoán gần đúng, vì bật nhầm font còn tệ hơn báo thiếu.
     pub fn faces_by_family_style(&self, family: &str, style: &str) -> Result<Vec<FaceKey>, StoreError> {

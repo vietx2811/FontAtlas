@@ -40,7 +40,7 @@ pub fn backend(names: &[&str]) -> (Env, OwnedBackend<FakeEngine>) {
     backend_with(names, FakeEngine::new())
 }
 
-fn teach(engine: &FakeEngine, s: &Store) {
+pub fn teach(engine: &FakeEngine, s: &Store) {
     let hashes: Vec<Vec<u8>> = {
         let mut st = s.conn().prepare("SELECT hash FROM main.files").unwrap();
         st.query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap()

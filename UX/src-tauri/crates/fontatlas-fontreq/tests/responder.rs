@@ -54,6 +54,8 @@ fn internal_names_are_filtered_without_asking_the_library() {
     }
     let rg = rig(FontStatus::Activated, Some("/f.otf"));
     assert_eq!(rg.r.answer(4242, &ps("AdobeSansMM")), Answer::Nothing);
+    let fam = Request { ps: None, family: Some("AdobeSansMM".into()), style: Some("Regular".into()) };
+    assert_eq!(rg.r.answer(4242, &fam), Answer::Nothing, "family nội bộ cũng bị lọc");
     assert_eq!(rg.calls.load(Ordering::SeqCst), 0);
 }
 
@@ -105,13 +107,34 @@ fn missing_is_remembered_briefly_then_asked_again() {
 }
 
 #[test]
-fn temporary_failures_are_not_remembered() {
-    for st in [FontStatus::Busy, FontStatus::NotDownloaded, FontStatus::Failed, FontStatus::Unavailable, FontStatus::Conflict] {
+fn busy_and_not_downloaded_are_remembered_only_briefly_other_failures_not_at_all() {
+    for st in [FontStatus::Busy, FontStatus::NotDownloaded] {
+        let rg = rig(st, None);
+        assert_eq!(rg.r.answer(4242, &ps("T-Regular")), Answer::Nothing);
+        assert_eq!(rg.r.answer(4242, &ps("T-Regular")), Answer::Nothing);
+        assert_eq!(rg.calls.load(Ordering::SeqCst), 1, "{st:?}: trong SLOW_TTL không dồn request vào thư viện");
+    }
+    for st in [FontStatus::Failed, FontStatus::Unavailable, FontStatus::Conflict] {
         let rg = rig(st, None);
         assert_eq!(rg.r.answer(4242, &ps("T-Regular")), Answer::Nothing, "{st:?}");
         assert_eq!(rg.r.answer(4242, &ps("T-Regular")), Answer::Nothing);
         assert_eq!(rg.calls.load(Ordering::SeqCst), 2, "{st:?} phải được hỏi lại");
     }
+    // hết SLOW_TTL thì hỏi lại
+    let c = Arc::new(AtomicUsize::new(0));
+    let c2 = c.clone();
+    let r = Responder::new(
+        move |_q: &EnsureRequest| {
+            c2.fetch_add(1, Ordering::SeqCst);
+            Ok(resp(FontStatus::NotDownloaded, None))
+        },
+        || true,
+        |_: i32| None,
+    )
+    .with_slow_ttl(Duration::ZERO);
+    r.answer(1, &ps("X-Regular"));
+    r.answer(1, &ps("X-Regular"));
+    assert_eq!(c.load(Ordering::SeqCst), 2);
 }
 
 #[test]
@@ -162,11 +185,18 @@ fn app_label_comes_from_the_outermost_app_bundle() {
 }
 
 #[test]
-fn slow_or_panicking_backend_does_not_hold_the_asking_app() {
+fn slow_backend_returns_at_the_deadline_then_serves_the_late_result_next_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("late.ttf");
+    std::fs::write(&f, b"x").unwrap();
+    let fp = f.to_string_lossy().into_owned();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
     let slow = Responder::new(
-        |_q: &EnsureRequest| {
-            std::thread::sleep(Duration::from_millis(600));
-            Ok(resp(FontStatus::Activated, Some("/late.ttf")))
+        move |_q: &EnsureRequest| {
+            c2.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(500));
+            Ok(resp(FontStatus::Activated, Some(&fp)))
         },
         || true,
         |_: i32| None,
@@ -175,7 +205,78 @@ fn slow_or_panicking_backend_does_not_hold_the_asking_app() {
     let t = std::time::Instant::now();
     assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing);
     assert!(t.elapsed() < Duration::from_millis(400), "{:?}", t.elapsed());
+    // trong lúc việc nền còn chạy: trả rỗng NGAY (không xếp hàng thêm một lần chờ nữa)
+    let t = std::time::Instant::now();
+    assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing);
+    assert!(t.elapsed() < Duration::from_millis(50), "{:?}", t.elapsed());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    // việc nền xong → kết quả tốt đến muộn được dùng lại, không gọi lại thư viện
+    let t0 = std::time::Instant::now();
+    while slow.inflight() > 0 && t0.elapsed() < Duration::from_secs(5) {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Files(vec![f]));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
 
+#[test]
+fn panicking_backend_answers_nothing_and_releases_its_slot() {
     let boom = Responder::new(|_q: &EnsureRequest| -> Result<EnsureResponse, EnsureError> { panic!("lỗi giả") }, || true, |_: i32| None);
-    assert_eq!(boom.answer(1, &ps("Boom-Regular")), Answer::Nothing);
+    for i in 0..10 {
+        assert_eq!(boom.answer(1, &ps(&format!("Boom{i}-Regular"))), Answer::Nothing);
+    }
+    let t0 = std::time::Instant::now();
+    while boom.inflight() > 0 && t0.elapsed() < Duration::from_secs(2) {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(boom.inflight(), 0, "panic không làm kẹt chỗ việc nền");
+}
+
+#[test]
+fn flood_of_slow_unknown_names_is_capped_and_does_not_pile_up_threads() {
+    let gate = Arc::new(std::sync::Barrier::new(1));
+    let _ = gate;
+    let started = Arc::new(AtomicUsize::new(0));
+    let s2 = started.clone();
+    let r = Responder::new(
+        move |_q: &EnsureRequest| {
+            s2.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(400));
+            Ok(resp(FontStatus::Missing, None))
+        },
+        || true,
+        |_: i32| None,
+    )
+    .with_deadline(Duration::from_millis(20));
+    for i in 0..20 {
+        assert_eq!(r.answer(1, &ps(&format!("Name{i}-Regular"))), Answer::Nothing);
+    }
+    assert!(started.load(Ordering::SeqCst) <= fontatlas_fontreq::MAX_INFLIGHT, "{} việc nền", started.load(Ordering::SeqCst));
+}
+
+#[test]
+fn close_cuts_a_waiting_request_short() {
+    let r = Arc::new(
+        Responder::new(
+            |_q: &EnsureRequest| {
+                std::thread::sleep(Duration::from_secs(2));
+                Ok(resp(FontStatus::Missing, None))
+            },
+            || true,
+            |_: i32| None,
+        )
+        .with_deadline(Duration::from_secs(10)),
+    );
+    let r2 = r.clone();
+    let h = std::thread::spawn(move || {
+        let t = std::time::Instant::now();
+        let a = r2.answer(1, &ps("Wait-Regular"));
+        (a, t.elapsed())
+    });
+    std::thread::sleep(Duration::from_millis(150));
+    r.close();
+    let (a, took) = h.join().unwrap();
+    assert_eq!(a, Answer::Nothing);
+    assert!(took < Duration::from_millis(600), "{took:?}");
+    assert_eq!(r.answer(1, &ps("After-Regular")), Answer::Nothing, "đã đóng thì mọi request trả rỗng");
 }

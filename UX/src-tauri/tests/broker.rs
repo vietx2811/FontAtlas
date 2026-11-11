@@ -116,3 +116,15 @@ fn unsupported_platform_engine_does_not_open_a_listener() {
     assert_eq!(broker::port(&st), None);
     assert!(!d.path().join("data").join(BROKER_FILE).exists());
 }
+
+#[test]
+fn status_pings_the_broker_instead_of_trusting_that_a_port_is_open() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng) = booted(d.path());
+    assert!(broker::healthy(&st), "broker mở và trả lời ping");
+    let s = app_lib::services::auto::status(&st).unwrap();
+    assert!(s.broker_running);
+    on_exit(&st);
+    assert!(!broker::healthy(&st), "đã đóng → không còn khoẻ");
+    assert!(!app_lib::services::auto::status(&st).unwrap().broker_running);
+}

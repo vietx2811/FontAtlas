@@ -16,3 +16,4 @@ objc2-core-text = { version = "0.3", features = ["CTFontManager", "CTFontDescrip
 
 [dev-dependencies]
 fontatlas-core = { path = "../fontatlas-core" }
+tempfile = "3.27"

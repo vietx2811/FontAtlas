@@ -1827,6 +1827,7 @@ dependencies = [
  "libc",
  "objc2-core-foundation",
  "objc2-core-text",
+ "tempfile",
 ]
 
 [[package]]

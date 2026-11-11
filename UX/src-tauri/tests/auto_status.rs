@@ -18,6 +18,7 @@ fn base() -> Inputs {
         cep: Some(PanelStatus::NotInstalled),
         indesign: vec![],
         last_activity: HashMap::new(),
+        signing_key_present: false,
         managers: vec![("RightFont".into(), true), ("FontBase".into(), false)],
     }
 }
@@ -161,4 +162,26 @@ fn switch_and_log_through_the_real_state() {
     assert!(auto::set_enabled(&st, true).unwrap().enabled);
     assert!(auto::log(&st, None).unwrap().is_empty());
     assert!(auto::log(&st, Some(0)).unwrap().is_empty(), "giới hạn 0 được nâng lên 1, không lỗi");
+}
+
+#[test]
+fn isolated_builds_refuse_to_install_or_remove_into_the_real_home() {
+    use app_lib::services::{activation::NoActivation, auto, boot};
+    use app_lib::state::{AppDirs, AppState};
+    let d = tempfile::tempdir().unwrap();
+    let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(NoActivation));
+    boot::run_boot(&st);
+    for t in [AutoTargetDto::Illustrator, AutoTargetDto::Indesign] {
+        assert_eq!(auto::install(&st, t).unwrap_err().code, "isolated_build");
+        assert_eq!(auto::remove(&st, t).unwrap_err().code, "isolated_build");
+    }
+    assert_eq!(auto::forget_key(&st).unwrap_err().code, "isolated_build");
+}
+
+#[test]
+fn status_reports_whether_the_signing_key_is_kept() {
+    let mut i = base();
+    assert!(!build_status(&i).signing_key_present);
+    i.signing_key_present = true;
+    assert!(build_status(&i).signing_key_present);
 }

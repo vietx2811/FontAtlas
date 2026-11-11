@@ -2,7 +2,12 @@
 import type { AutoAppDto } from "./AutoAppDto";
 import type { OtherManagerDto } from "./OtherManagerDto";
 
-export type AutoStatusDto = { enabled: boolean, brokerRunning: boolean, fontRequestRunning: boolean, apps: Array<AutoAppDto>, 
+export type AutoStatusDto = { enabled: boolean, brokerRunning: boolean, fontRequestRunning: boolean, 
+/**
+ * Khoá ký panel Illustrator của máy này đang được giữ ở thư mục dữ liệu (`<data>/cep/signing.pem`, quyền 0600).
+ * Settings nên nói rõ điều này và cho nút **Xoá khoá** (`auto_forget_key`, chỉ khi panel đã gỡ).
+ */
+signingKeyPresent: boolean, apps: Array<AutoAppDto>, 
 /**
  * Trình quản lý font khác trên máy: có thể cùng phản ứng với tài liệu thiếu font.
  */

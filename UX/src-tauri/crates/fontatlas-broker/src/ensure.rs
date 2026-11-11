@@ -6,6 +6,7 @@ use fontatlas_activate::{ActivationEngine, ActivationError, ActivationReport, Ac
 use fontatlas_store::{AutoApp, AutoLogEntry, FaceKey, Store};
 use serde::{Deserialize, Serialize};
 
+use crate::filter::is_internal_name;
 use crate::server::Backend;
 use crate::{PROTOCOL_VERSION, SETTING_AUTO_ACTIVATION};
 
@@ -122,9 +123,9 @@ impl FontStatus {
 pub struct FontResult {
     pub name: String,
     pub status: FontStatus,
-    /// File font dùng được (chỉ khi `status` dùng được). Helper font request trả đường dẫn này cho hệ thống;
-    /// panel/script không cần.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// File font dùng được (chỉ khi `status` dùng được). Nguồn font request trả đường dẫn này cho hệ thống.
+    /// KHÔNG đi qua HTTP (`skip`): đường dẫn trên đĩa chỉ dành cho nguồn font request trong cùng tiến trình.
+    #[serde(skip)]
     pub path: Option<String>,
 }
 
@@ -194,6 +195,27 @@ fn lock(m: &Mutex<Store>) -> MutexGuard<'_, Store> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Nhiều bản khác nội dung (hash) cùng tên: ưu tiên bản ĐANG BẬT (người dùng/collection đã chọn), rồi bản thấy sau cùng
+/// (`first_seen_at` lớn nhất), rồi hash nhỏ nhất cho tất định. Font revision (head.fontRevision) chưa được lưu trong thư
+/// viện nên chưa dùng được. Trả (bản chọn, số bản khác nhau).
+fn pick(s: &Store, cands: Vec<FaceKey>, active: &std::collections::HashSet<[u8; 32]>) -> Result<(Option<FaceKey>, usize), EnsureError> {
+    let mut distinct: Vec<[u8; 32]> = cands.iter().map(|k| k.hash).collect();
+    distinct.sort();
+    distinct.dedup();
+    let mut best: Option<(bool, i64, FaceKey)> = None;
+    for k in cands {
+        let rank = (active.contains(&k.hash), s.file_first_seen(&k.hash).map_err(EnsureError::internal)?);
+        let better = match &best {
+            None => true,
+            Some((a, t, cur)) => (rank.0, rank.1) > (*a, *t) || ((rank.0, rank.1) == (*a, *t) && (k.hash, k.face_index) < (cur.hash, cur.face_index)),
+        };
+        if better {
+            best = Some((rank.0, rank.1, k));
+        }
+    }
+    Ok((best.map(|b| b.2), distinct.len()))
+}
+
 /// Lõi của broker: không biết gì về HTTP.
 pub fn ensure_in_library(
     service: &dyn AutoActivator,
@@ -203,23 +225,31 @@ pub fn ensure_in_library(
     req.validate().map_err(EnsureError::BadRequest)?;
     let app = AutoApp::parse_lenient(&req.app);
 
-    // 1. Tên → face của thư viện (một lần khoá store).
+    // 1. Tên → face của thư viện (một lần khoá store). Tên nội bộ bị bỏ; nhiều bản cùng tên thì chọn có quy tắc.
+    let mut ambiguous: Vec<(usize, usize)> = vec![]; // (chỉ số font trong yêu cầu, số bản khác nhau)
     let resolved: Vec<Option<FaceKey>> = {
         let s = lock(store);
+        let active: std::collections::HashSet<[u8; 32]> = s
+            .activation_rows()
+            .map_err(EnsureError::internal)?
+            .into_iter()
+            .filter(|r| r.state == fontatlas_store::DesiredState::Active)
+            .filter_map(|r| <[u8; 32]>::try_from(r.hash.as_slice()).ok())
+            .collect();
         let mut v = Vec::with_capacity(req.fonts.len());
-        for f in &req.fonts {
-            let mut hit = None;
-            if let Some(ps) = nonempty(&f.ps) {
-                hit = s.faces_by_postscript(ps).map_err(EnsureError::internal)?.into_iter().next();
+        for (idx, f) in req.fonts.iter().enumerate() {
+            let mut cands: Vec<FaceKey> = vec![];
+            if let Some(ps) = nonempty(&f.ps).filter(|p| !is_internal_name(p)) {
+                cands = s.faces_by_postscript(ps).map_err(EnsureError::internal)?;
             }
-            if hit.is_none() {
-                if let Some(fam) = nonempty(&f.family) {
-                    hit = s
-                        .faces_by_family_style(fam, nonempty(&f.style).unwrap_or(""))
-                        .map_err(EnsureError::internal)?
-                        .into_iter()
-                        .next();
+            if cands.is_empty() {
+                if let Some(fam) = nonempty(&f.family).filter(|p| !is_internal_name(p)) {
+                    cands = s.faces_by_family_style(fam, nonempty(&f.style).unwrap_or("")).map_err(EnsureError::internal)?;
                 }
+            }
+            let (hit, distinct) = pick(&s, cands, &active)?;
+            if distinct > 1 {
+                ambiguous.push((idx, distinct));
             }
             v.push(hit);
         }
@@ -245,7 +275,7 @@ pub fn ensure_in_library(
         }
     }
 
-    // 3. Gom kết quả theo thứ tự yêu cầu; ghi nhật ký.
+    // 3. Gom kết quả theo thứ tự yêu cầu; ghi nhật ký (tên nội bộ không vào nhật ký).
     let mut results = Vec::with_capacity(req.fonts.len());
     let mut logs: Vec<AutoLogEntry> = vec![];
     for (f, hit) in req.fonts.iter().zip(&resolved) {
@@ -259,8 +289,9 @@ pub fn ensure_in_library(
             }
         };
         let path = if status.usable() { path } else { None };
-        // Lặp lại vô ích (đã bật, đã có sẵn, yêu cầu rỗng) không vào nhật ký.
-        if !matches!(status, FontStatus::AlreadyActive | FontStatus::Available | FontStatus::Invalid) {
+        let internal = [&f.ps, &f.family].iter().filter_map(|x| nonempty(x)).all(is_internal_name);
+        // Lặp lại vô ích (đã bật, đã có sẵn, yêu cầu rỗng, tên nội bộ) không vào nhật ký.
+        if !internal && !matches!(status, FontStatus::AlreadyActive | FontStatus::Available | FontStatus::Invalid) {
             logs.push(AutoLogEntry {
                 app,
                 doc: req.doc.clone(),
@@ -270,6 +301,16 @@ pub fn ensure_in_library(
             });
         }
         results.push(FontResult { name, status, path });
+    }
+    for (idx, n) in &ambiguous {
+        let f = &req.fonts[*idx];
+        logs.push(AutoLogEntry {
+            app,
+            doc: req.doc.clone(),
+            requested: format!("{} ×{n}", f.label()),
+            outcome: "ambiguous".into(),
+            hash: resolved[*idx].as_ref().map(|k| k.hash),
+        });
     }
     if !logs.is_empty() {
         let mut s = lock(store);

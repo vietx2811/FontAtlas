@@ -1,4 +1,5 @@
-//! Máy chủ HTTP localhost. Mỗi yêu cầu qua đủ cổng: giới hạn tần suất → Host → Origin → route → token → thân.
+//! Máy chủ HTTP localhost. Mỗi yêu cầu qua đủ cổng: Host → Origin → token → giới hạn tần suất → route → thân.
+//! Yêu cầu CHƯA xác thực chỉ được trừ vào một xô nhỏ riêng, nên trang web/ứng dụng lạ không hút cạn xô của app thật.
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -35,11 +36,14 @@ pub struct ServerConfig {
     /// Xô token: dung lượng và số yêu cầu/giây.
     pub burst: u32,
     pub per_sec: u32,
+    /// Xô riêng cho yêu cầu chưa xác thực (sai/thiếu token, preflight): nhỏ để kẻ lạ không làm gì được ngoài việc tự nhận 429.
+    pub anon_burst: u32,
+    pub anon_per_sec: u32,
 }
 
 impl ServerConfig {
     pub fn new(dir: &Path) -> Self {
-        Self { dir: dir.to_path_buf(), extra_origins: vec![], burst: 60, per_sec: 30 }
+        Self { dir: dir.to_path_buf(), extra_origins: vec![], burst: 60, per_sec: 30, anon_burst: 20, anon_per_sec: 5 }
     }
 }
 
@@ -56,6 +60,7 @@ struct Shared {
     port: u16,
     backend: Arc<dyn Backend>,
     bucket: TokenBucket,
+    anon: TokenBucket,
     extra_origins: Vec<String>,
 }
 
@@ -71,6 +76,7 @@ impl Server {
             port: addr.port(),
             backend,
             bucket: TokenBucket::new(cfg.burst, cfg.per_sec),
+            anon: TokenBucket::new(cfg.anon_burst, cfg.anon_per_sec),
             extra_origins: cfg.extra_origins,
         });
         let http = Arc::new(http);
@@ -98,6 +104,31 @@ impl Server {
 
     pub fn token(&self) -> &str {
         &self.token
+    }
+
+    /// Có đang trả lời không (GET /v1/ping qua socket thật, hạn 1,5 s)? 200 hoặc 503 (đang tắt bằng công tắc) đều là "sống".
+    /// Dùng cho trạng thái Settings: số luồng còn sống không đáng tin nếu có worker chết.
+    pub fn probe(&self) -> bool {
+        use std::io::Write;
+        let t = Duration::from_millis(1500);
+        let Ok(mut s) = std::net::TcpStream::connect_timeout(&self.addr, t) else { return false };
+        let _ = s.set_read_timeout(Some(t));
+        let _ = s.set_write_timeout(Some(t));
+        let port = self.addr.port();
+        let q = format!("GET /v1/ping HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {}\r\nConnection: close\r\n\r\n", self.token);
+        if s.write_all(q.as_bytes()).is_err() {
+            return false;
+        }
+        let mut head = [0u8; 16];
+        let mut got = 0;
+        while got < head.len() {
+            match std::io::Read::read(&mut s, &mut head[got..]) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => got += n,
+            }
+        }
+        let line = String::from_utf8_lossy(&head[..got]);
+        line.starts_with("HTTP/1.1 200") || line.starts_with("HTTP/1.1 503")
     }
 
     /// Dừng nhận yêu cầu và xoá `broker.json` của mình.
@@ -183,16 +214,19 @@ fn send(req: Request, r: Reply) {
 }
 
 fn handle(sh: &Shared, mut req: Request) {
-    let reply = route(sh, &mut req);
+    // Một panic trong backend không được giết worker (4 worker chết dần thì UI vẫn báo "đang chạy").
+    let reply = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| route(sh, &mut req)))
+        .unwrap_or_else(|_| Reply::err(500, "internal", "lỗi nội bộ"));
     send(req, reply);
 }
 
+fn rate_limited() -> Reply {
+    let mut r = Reply::err(429, "rate_limited", "quá nhiều yêu cầu, thử lại sau");
+    r.retry_after = true;
+    r
+}
+
 fn route(sh: &Shared, req: &mut Request) -> Reply {
-    if !sh.bucket.try_take() {
-        let mut r = Reply::err(429, "rate_limited", "quá nhiều yêu cầu, thử lại sau");
-        r.retry_after = true;
-        return r;
-    }
     // DNS rebinding: trang web lạ trỏ tên miền của nó về 127.0.0.1 sẽ mang Host của nó.
     if !get_header(req, "Host").is_some_and(|h| host_ok(&h, sh.port)) {
         return Reply::err(403, "bad_host", "Host không hợp lệ");
@@ -211,11 +245,23 @@ fn route(sh: &Shared, req: &mut Request) -> Reply {
 
 fn dispatch(sh: &Shared, req: &mut Request, has_origin: bool) -> Reply {
     let path = req.url().split('?').next().unwrap_or("").to_string();
-    // Preflight của trình duyệt/CEP (Authorization khiến XHR chéo origin phải hỏi trước). Không cần token.
+    // Preflight của trình duyệt/CEP (Authorization khiến XHR chéo origin phải hỏi trước). Không cần token, nên đi xô riêng.
     if *req.method() == Method::Options {
+        if !sh.anon.try_take() {
+            return rate_limited();
+        }
         let mut r = Reply::json(204, String::new());
         r.preflight = true;
         return if has_origin { r } else { Reply::err(400, "bad_request", "không phải preflight") };
+    }
+    // Token TRƯỚC mọi thứ khác: yêu cầu không có token đúng không đụng tới xô của app thật.
+    let auth = get_header(req, "Authorization").unwrap_or_default();
+    let given = auth.strip_prefix("Bearer ").unwrap_or("");
+    if !ct_eq(given.as_bytes(), sh.token.as_bytes()) {
+        return if sh.anon.try_take() { Reply::err(401, "unauthorized", "thiếu hoặc sai token") } else { rate_limited() };
+    }
+    if !sh.bucket.try_take() {
+        return rate_limited();
     }
     let known = matches!(path.as_str(), "/v1/ping" | "/v1/ensure");
     if !known {
@@ -224,11 +270,6 @@ fn dispatch(sh: &Shared, req: &mut Request, has_origin: bool) -> Reply {
     let want = if path == "/v1/ping" { Method::Get } else { Method::Post };
     if *req.method() != want {
         return Reply::err(405, "method_not_allowed", "sai phương thức");
-    }
-    let auth = get_header(req, "Authorization").unwrap_or_default();
-    let given = auth.strip_prefix("Bearer ").unwrap_or("");
-    if !ct_eq(given.as_bytes(), sh.token.as_bytes()) {
-        return Reply::err(401, "unauthorized", "thiếu hoặc sai token");
     }
     if !sh.backend.enabled() {
         return Reply::err(503, "disabled", "tự bật font đang tắt trong Font Atlas");

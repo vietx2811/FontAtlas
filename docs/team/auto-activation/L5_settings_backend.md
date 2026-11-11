@@ -12,13 +12,16 @@ Nhánh `feat/auto-activation`. Dịch vụ `services/auto.rs`, DTO `dto/auto.rs`
 | `auto_set_enabled` | `on: bool` | `AutoStatusDto` | Công tắc chung. Tắt: broker trả 503, nguồn font request trả rỗng, panel/script nằm im; không gỡ gì. Có hiệu lực ngay. |
 | `auto_install` | `target: "illustrator" \| "indesign"` | `AutoStatusDto` | Illustrator: ký + chép panel CEP. `indesign`: chép script vào MỌI phiên bản InDesign và InCopy đã chạy ít nhất một lần. Lỗi → `CmdError{code:"io"}`. |
 | `auto_remove` | `target` | `AutoStatusDto` | Gỡ sạch phần của Font Atlas; không đụng tệp/thư mục lạ. Không có gì để gỡ vẫn thành công. |
+| `auto_forget_key` | – | `AutoStatusDto` | Xoá khoá ký panel Illustrator của máy này (`signingKeyPresent` → false). Từ chối nếu panel còn cài (gỡ trước). |
 | `auto_log` | `limit?: u32` (mặc định 50, 1–500) | `AutoLogDto[]` mới nhất trước | Nhật ký "app nào hỏi font gì, kết quả". |
 
 Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc (nguồn font request nằm trong app).
 
 ### `AutoStatusDto`
 
-`{ enabled, brokerRunning, fontRequestRunning, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
+`{ enabled, brokerRunning, fontRequestRunning, signingKeyPresent, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
+
+`brokerRunning` là kết quả PING thật (không chỉ cổng còn mở). `signingKeyPresent`: Settings phải nói rõ "Font Atlas giữ một khoá ký riêng của máy này ở thư mục dữ liệu để cài lại panel Illustrator" và cho nút **Xoá khoá** (`auto_forget_key`) khi panel đã gỡ.
 
 `apps` luôn đủ 6 mục, thứ tự cố định: `photoshop, aftereffects, illustrator, indesign, incopy, affinity`. UI ẩn/làm mờ mục có `appInstalled=false`.
 
@@ -44,6 +47,9 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 `OtherManagerDto`: `{ name, installed, running }` cho RightFont, FontBase, Typeface, Suitcase Fusion, FontExplorer X. Khi có cái `running=true`: hiện ghi chú "<Tên> đang chạy: nó cũng phản ứng với tài liệu thiếu font, bạn có thể thấy hai hộp thoại" (spike 06-3 thấy RightFont và hộp Missing Fonts của Adobe cùng hiện). Chưa có logic tắt hộ.
 
 `AutoLogDto`: `{ id, atMs, app (slug), doc?, requested, outcome, hashHex? }`. `outcome`: `activated | missing | conflict | unavailable | not_downloaded | failed | busy`. Nhật ký giữ 500 dòng; không có `already_active`/`available` (xem L1). `hashHex` mở được font trong thư viện.
+
+### Bản cô lập
+`auto_install`, `auto_remove`, `auto_forget_key` từ chối với `CmdError{code:"isolated_build"}` khi app chạy với dữ liệu riêng (QA/test/`FONTATLAS_DATA_DIR`): các bản đó không được ghi vào thư mục Adobe/Preferences THẬT của người dùng.
 
 ### Điều UI KHÔNG được giả định
 - `auto_install(indesign)` có thể thành công với một phần phiên bản (chỉ các bản đã chạy); xem `state` sau đó, đừng tự coi là xong.

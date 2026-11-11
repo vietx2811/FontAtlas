@@ -255,3 +255,63 @@ fn token_is_random_per_start() {
     assert_ne!(a, b);
     assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
 }
+
+#[test]
+fn unauthenticated_flood_cannot_starve_the_real_client() {
+    let (_e, srv, _b) = start(&[LIBRE], 3);
+    let a = auth(&srv);
+    // trang web/ứng dụng lạ không có token: bị 401 rồi 429 theo xô RIÊNG của nó
+    let codes: Vec<u16> = (0..60).map(|_| raw(&srv, "GET", "/v1/ping", &[("Authorization", "Bearer sai")], "", None).status).collect();
+    assert_eq!(codes[0], 401);
+    assert!(codes.contains(&429), "xô chưa xác thực phải cạn: {codes:?}");
+    // preflight cũng đi xô đó
+    let _ = raw(&srv, "OPTIONS", "/v1/ensure", &[("Origin", "null")], "", None);
+    // app thật vẫn còn nguyên xô của nó (burst 3)
+    for i in 0..3 {
+        assert_eq!(raw(&srv, "GET", "/v1/ping", &[("Authorization", &a)], "", None).status, 200, "lần {i}");
+    }
+}
+
+#[test]
+fn bad_host_and_bad_origin_are_rejected_without_touching_any_bucket() {
+    let (_e, srv, _b) = start(&[LIBRE], 3);
+    let a = auth(&srv);
+    for _ in 0..40 {
+        assert_eq!(raw(&srv, "GET", "/v1/ping", &[("Authorization", &a)], "", Some("evil.example:80")).status, 403);
+        assert_eq!(raw(&srv, "GET", "/v1/ping", &[("Authorization", &a), ("Origin", "https://evil.example")], "", None).status, 403);
+    }
+    assert_eq!(raw(&srv, "GET", "/v1/ping", &[("Authorization", &a)], "", None).status, 200);
+}
+
+struct Boom;
+impl fontatlas_broker::Backend for Boom {
+    fn ensure(&self, _r: &fontatlas_broker::EnsureRequest) -> Result<fontatlas_broker::EnsureResponse, fontatlas_broker::EnsureError> {
+        panic!("backend giả hỏng");
+    }
+}
+
+#[test]
+fn a_panicking_backend_gives_500_and_never_kills_workers() {
+    let d = tempfile::tempdir().unwrap();
+    let mut cfg = ServerConfig::new(d.path());
+    cfg.burst = 1000;
+    cfg.per_sec = 1000;
+    let srv = Server::start(cfg, Arc::new(Boom)).unwrap();
+    // nhiều hơn số worker (4): nếu mỗi panic giết một worker thì các lần sau treo/ngắt kết nối
+    for i in 0..12 {
+        let r = post_ensure(&srv, ONE);
+        assert_eq!(r.status, 500, "lần {i}: {}", r.body);
+        assert!(r.body.contains("internal"));
+    }
+    let a = auth(&srv);
+    assert_eq!(raw(&srv, "GET", "/v1/ping", &[("Authorization", &a)], "", None).status, 200);
+    assert!(srv.probe(), "probe thấy broker còn sống");
+}
+
+#[test]
+fn probe_reports_alive_even_when_switched_off() {
+    let (_e, srv, b) = start(&[LIBRE], 100);
+    assert!(srv.probe());
+    b.store.lock().unwrap().set_setting(SETTING_AUTO_ACTIVATION, "0").unwrap();
+    assert!(srv.probe(), "503 vì công tắc tắt vẫn là còn sống");
+}

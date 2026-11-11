@@ -5,15 +5,19 @@
 
 (function () {
   var CFG = @BROKER_JSON_PATH@;                // đường dẫn broker.json của Font Atlas
-  var TIMEOUT_MS = 12000;                       // Font Atlas có thể đang tải file đám mây (tối đa ~8 s)
+  var TIMEOUT_MS = 3000;                        // không giữ InDesign quá 3 s; Font Atlas tải file đám mây chạy nốt ở nền, lần mở sau có ngay
 
   function readCfg() {
     try {
       var f = File(CFG);
       if (!f.exists) return null;
       f.encoding = "UTF-8"; f.open("r"); var s = f.read(); f.close();
-      var c = eval("(" + s + ")");
-      return c && c.port && c.token ? c : null;
+      // KHÔNG eval nội dung tệp: chỉ lấy hai trường đã kiểm dạng (cổng là số, token là 64 ký tự hex).
+      var pm = /"port"\s*:\s*(\d{1,5})\b/.exec(s), tm = /"token"\s*:\s*"([0-9a-f]{64})"/.exec(s);
+      if (!pm || !tm) return null;
+      var port = parseInt(pm[1], 10);
+      if (!(port >= 1 && port <= 65535)) return null;
+      return { port: port, token: tm[1] };
     } catch (e) { return null; }
   }
   function esc(s) { return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\u0000-\u001f]/g, " "); }

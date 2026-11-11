@@ -9,6 +9,7 @@
 //! thân `{"v":1,"app":"photoshop","doc":"a.psd","fonts":[{"ps":"X-Regular"},{"family":"X","style":"Bold"}]}`.
 mod config;
 mod ensure;
+mod filter;
 mod limit;
 mod server;
 
@@ -17,6 +18,7 @@ pub use ensure::{
     AutoActivator,
     EnsureError, EnsureRequest, EnsureResponse, FontReq, FontResult, FontStatus, MAX_FONTS, MAX_TEXT, OwnedBackend, auto_enabled, ensure_in_library,
 };
+pub use filter::is_internal_name;
 pub use limit::TokenBucket;
 pub use server::{Backend, Server, ServerConfig};
 

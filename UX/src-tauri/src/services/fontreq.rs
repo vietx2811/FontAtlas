@@ -29,7 +29,7 @@ pub fn start(state: &Arc<AppState>) {
     // Ghi thời gian trả lời: app hỏi chờ trong lúc này (Photoshop chờ bao lâu chưa đo; xem docs L2).
     let observer: Arc<Observer> = Arc::new(|pid, req, answer, took| {
         let name = req.ps.as_deref().or(req.family.as_deref()).unwrap_or("");
-        if took > Duration::from_secs(3) {
+        if took > Duration::from_secs(2) {
             log::warn!("font request pid {pid} \"{name}\" trả lời chậm: {took:?}");
         } else {
             log::debug!("font request pid {pid} \"{name}\" → {} ({took:?})", if matches!(answer, fontatlas_fontreq::Answer::Nothing) { "không có" } else { "file" });

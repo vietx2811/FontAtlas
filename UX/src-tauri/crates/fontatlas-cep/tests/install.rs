@@ -104,3 +104,42 @@ fn leftover_temp_dir_from_a_crashed_install_does_not_break_the_next_one() {
     i.install().unwrap();
     assert_eq!(i.status(), PanelStatus::Installed { version: "1".into() });
 }
+
+#[test]
+fn replacing_is_atomic_and_leftovers_from_crashed_installs_are_swept_on_install_and_remove() {
+    let e = env();
+    let i = inst(&e, "1");
+    i.install().unwrap();
+    // sót lại từ lần cài bị ngắt (cả tạm lẫn bản cũ), kể cả pid khác
+    for n in [format!(".{BUNDLE_ID}.tmp-99999"), format!(".{BUNDLE_ID}.old-99999")] {
+        std::fs::create_dir_all(e.ext.join(n).join("x")).unwrap();
+    }
+    let other = e.ext.join(".something-else");
+    std::fs::create_dir_all(&other).unwrap();
+    inst(&e, "2").install().unwrap();
+    let names: Vec<String> = std::fs::read_dir(&e.ext).unwrap().flatten().map(|x| x.file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(names.iter().filter(|n| n.contains("tmp-") || n.contains("old-")).count(), 0, "{names:?}");
+    assert!(other.exists(), "chỉ dọn đúng tên của ta");
+    // remove cũng dọn
+    std::fs::create_dir_all(e.ext.join(format!(".{BUNDLE_ID}.tmp-12345"))).unwrap();
+    i.remove().unwrap();
+    assert!(!e.ext.join(format!(".{BUNDLE_ID}.tmp-12345")).exists());
+}
+
+#[test]
+fn the_signing_key_is_kept_across_removal_and_can_be_forgotten_only_after_removing_the_panel() {
+    let e = env();
+    let i = inst(&e, "1");
+    assert!(!i.key_present());
+    i.install().unwrap();
+    assert!(i.key_present());
+    assert!(i.forget_key().is_err(), "panel còn cài → không xoá khoá");
+    i.remove().unwrap();
+    assert!(i.key_present(), "gỡ panel không xoá khoá");
+    assert!(i.forget_key().unwrap());
+    assert!(!i.key_present());
+    assert!(!i.forget_key().unwrap(), "xoá lần hai không lỗi");
+    // cài lại sinh khoá MỚI và vẫn hợp lệ
+    i.install().unwrap();
+    assert_eq!(i.status(), PanelStatus::Installed { version: "1".into() });
+}

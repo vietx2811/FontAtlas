@@ -65,7 +65,7 @@ fn ps_wins_then_falls_back_to_family_when_ps_unknown() {
 fn unknown_fonts_are_missing_and_logged_once() {
     let (_env, b) = backend(&[LIBRE]);
     for _ in 0..3 {
-        let r = b.ensure(&req("photoshop", vec![ps("AdobeSansMM"), ps("")])).unwrap();
+        let r = b.ensure(&req("photoshop", vec![ps("Nope-Regular"), ps("")])).unwrap();
         assert_eq!(status(&r, 0), FontStatus::Missing);
         assert_eq!(status(&r, 1), FontStatus::Invalid);
         assert_eq!(r.missing.len(), 2);
@@ -221,7 +221,74 @@ fn usable_results_carry_the_file_path_and_others_do_not() {
     let again = b.ensure(&req("photoshop", vec![ps(LIBRE_PS)])).unwrap();
     assert_eq!(status(&again, 0), FontStatus::AlreadyActive);
     assert!(again.results[0].path.is_some());
+    // đường dẫn trên đĩa KHÔNG ra HTTP
     let json = serde_json::to_value(&r).unwrap();
-    assert!(json["results"][0]["path"].is_string());
-    assert!(json["results"][1].get("path").is_none());
+    assert!(json["results"][0].get("path").is_none(), "{json}");
+}
+
+#[test]
+fn internal_names_are_ignored_for_ps_and_family_and_never_logged() {
+    let (_env, b) = backend(&[LIBRE]);
+    let fam = FontReq { family: Some("AdobeSansMM".into()), style: Some("Regular".into()), ..Default::default() };
+    let sys = FontReq { ps: Some(".SFNS-Regular".into()), ..Default::default() };
+    let r = b.ensure(&req("photoshop", vec![ps("AdobeSansMM"), fam, sys])).unwrap();
+    assert!(r.results.iter().all(|x| x.status == FontStatus::Missing));
+    assert!(b.store.lock().unwrap().recent_auto_log(10).unwrap().is_empty(), "tên nội bộ không làm đầy nhật ký");
+    assert!(b.service.engine().registrations().is_empty());
+    // ps nội bộ + family thật → vẫn tìm theo family
+    let mixed = FontReq { ps: Some("AdobeSansMM".into()), family: Some("Libre Baskerville".into()), style: Some("Regular".into()) };
+    assert_eq!(status(&b.ensure(&req("photoshop", vec![mixed])).unwrap(), 0), FontStatus::Activated);
+}
+
+fn add_variant(env: &Env, b: &fontatlas_broker::OwnedBackend<fontatlas_activate::FakeEngine>, name: &str, pad: usize) {
+    let mut bytes = std::fs::read(fixture(LIBRE)).unwrap();
+    bytes.extend(std::iter::repeat_n(0u8, pad)); // cùng tên font, khác hash
+    std::fs::write(env.fonts.join(name), bytes).unwrap();
+    let mut s = b.store.lock().unwrap();
+    let src = s.sources().unwrap()[0].id;
+    s.rescan_source(src).unwrap();
+    teach(b.service.engine(), &s);
+}
+
+fn newest_of(b: &fontatlas_broker::OwnedBackend<fontatlas_activate::FakeEngine>) -> fontatlas_store::FaceKey {
+    let s = b.store.lock().unwrap();
+    let mut v = s.faces_by_postscript(LIBRE_PS).unwrap();
+    v.sort_by_key(|k| (std::cmp::Reverse(s.file_first_seen(&k.hash).unwrap()), k.hash));
+    v[0]
+}
+
+#[test]
+fn several_versions_with_one_name_pick_the_newest_and_log_ambiguous_with_the_count() {
+    let (env, b) = backend(&[LIBRE]);
+    add_variant(&env, &b, "libre_v2.ttf", 4);
+    add_variant(&env, &b, "libre_v3.ttf", 8);
+    assert_eq!(b.store.lock().unwrap().faces_by_postscript(LIBRE_PS).unwrap().len(), 3);
+    let newest = newest_of(&b);
+    let r = b.ensure(&req("photoshop", vec![ps(LIBRE_PS)])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::Activated);
+    let rows = b.store.lock().unwrap().activation_rows().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].hash, newest.hash);
+    // hỏi lại → vẫn đúng bản đó (ổn định), nhật ký ghi `ambiguous ×3` đúng một lần (dedupe)
+    b.ensure(&req("photoshop", vec![ps(LIBRE_PS)])).unwrap();
+    let log = b.store.lock().unwrap().recent_auto_log(20).unwrap();
+    let amb: Vec<_> = log.iter().filter(|l| l.outcome == "ambiguous").collect();
+    assert_eq!(amb.len(), 1, "{log:?}");
+    assert_eq!(amb[0].requested, format!("{LIBRE_PS} ×3"));
+    assert_eq!(b.store.lock().unwrap().activation_rows().unwrap()[0].hash, newest.hash);
+}
+
+#[test]
+fn the_version_the_user_already_activated_wins_over_a_newer_one() {
+    let (env, b) = backend(&[LIBRE]);
+    let first = b.store.lock().unwrap().faces_by_postscript(LIBRE_PS).unwrap()[0];
+    add_variant(&env, &b, "libre_v2.ttf", 4);
+    add_variant(&env, &b, "libre_v3.ttf", 8);
+    assert_ne!(newest_of(&b).hash, first.hash, "bản đầu không phải bản mới nhất");
+    b.service.activate_faces(&b.store, &[first], Some(Scope::Persistent), Default::default(), &mut |_| {}).unwrap();
+    let r = b.ensure(&req("photoshop", vec![ps(LIBRE_PS)])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::AlreadyActive);
+    let rows = b.store.lock().unwrap().activation_rows().unwrap();
+    assert_eq!(rows.len(), 1, "không bật thêm bản thứ hai");
+    assert_eq!(rows[0].hash, first.hash);
 }

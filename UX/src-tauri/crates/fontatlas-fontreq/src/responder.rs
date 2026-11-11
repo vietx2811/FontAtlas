@@ -1,17 +1,28 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use fontatlas_broker::{EnsureError, EnsureRequest, EnsureResponse, FontReq};
+use fontatlas_broker::{EnsureError, EnsureRequest, EnsureResponse, FontReq, FontStatus, is_internal_name};
 
-/// Cùng một tên không có trong thư viện: trong ngần này giây trả rỗng ngay, không hỏi lại thư viện.
+/// Cùng một tên thư viện không có: trong ngần này giây trả rỗng ngay, không hỏi lại thư viện.
 /// (Photoshop hỏi lại mỗi lần dựng chữ; xem spike 06-1.)
 pub const NEGATIVE_TTL: Duration = Duration::from_secs(10);
 
-/// Hạn tối đa một request được giữ app hỏi chờ (lớn hơn `AUTO_DOWNLOAD_TIMEOUT` 8 s của tải file đám mây một chút).
-/// Quá hạn (khoá DB bị giữ, tải treo, ...) thì trả rỗng để app thiết kế không treo; việc bật vẫn chạy nốt ở nền.
-pub const ANSWER_DEADLINE: Duration = Duration::from_secs(10);
+/// Request chạy quá hạn (hoặc `busy`/`not_downloaded`): trả rỗng ngay trong ngần này giây để hàng đợi của MỌI app không bị
+/// giữ lại bởi cùng một tên chậm; việc vẫn chạy nốt ở nền và kết quả tốt được dùng lại ở lần hỏi sau.
+pub const SLOW_TTL: Duration = Duration::from_secs(3);
+
+/// Kết quả TỐT từ việc chạy nền (đến muộn) được nhớ ngần này giây để lần Photoshop hỏi lại trả ngay.
+pub const LATE_RESULT_TTL: Duration = Duration::from_secs(20);
+
+/// Hạn tối đa một request được giữ app hỏi (và cả hàng đợi: nguồn CoreText chỉ có MỘT luồng runloop, callback nào treo thì
+/// request của mọi app xếp sau nó). Ngắn hơn `AUTO_DOWNLOAD_TIMEOUT` (8 s) của tải file đám mây có chủ đích: tải vẫn chạy nốt ở nền.
+pub const ANSWER_DEADLINE: Duration = Duration::from_secs(3);
+
+/// Số việc nền chạy cùng lúc tối đa; hơn nữa thì trả rỗng ngay (chống một app hỏi dồn tên lạ làm đầy luồng).
+pub const MAX_INFLIGHT: usize = 4;
 
 /// Điều CoreText hỏi. `ps` là tên PostScript (Photoshop chỉ gửi cái này); family/style chỉ dùng khi app gửi.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -39,18 +50,6 @@ pub enum Answer {
     Files(Vec<PathBuf>),
 }
 
-/// Tên font nội bộ / hệ thống mà không bao giờ có trong thư viện của người dùng. Trả rỗng ngay, không chạm DB.
-/// - Adobe: `AdobeSansMM`, `AdobeSerifMM` (font thay thế nội bộ), `AdobeInvisFont`, `AdobeBlank`...
-/// - Tên bắt đầu bằng `.` là font hệ thống ẩn (`.SFNS-Regular`, `.AppleSystemUIFont`); `LastResort`; tên rỗng.
-pub fn is_internal_name(name: &str) -> bool {
-    let n = name.trim();
-    if n.is_empty() || n.starts_with('.') || n.chars().any(char::is_control) || n.len() > 512 {
-        return true;
-    }
-    let l = n.to_ascii_lowercase();
-    l.starts_with("adobesansmm") || l.starts_with("adobeserifmm") || l.starts_with("adobeinvis") || l.starts_with("adobeblank") || l == "lastresort"
-}
-
 /// "/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app/Contents/MacOS/Adobe Photoshop 2026" → "Adobe Photoshop 2026".
 /// Lấy thành phần `.app` NGOÀI CÙNG: đó là sản phẩm người dùng mở (helper lồng bên trong vẫn tính cho app mẹ).
 /// Trả `None` nếu đường dẫn không nằm trong gói `.app`.
@@ -71,13 +70,47 @@ impl<F: Fn(i32) -> Option<String> + Send + Sync> AppNamer for F {
 
 type Ensure = dyn Fn(&EnsureRequest) -> Result<EnsureResponse, EnsureError> + Send + Sync + 'static;
 
+#[derive(Clone)]
+enum Cached {
+    Nothing(Instant),
+    Files(PathBuf, Instant),
+}
+
 pub struct Responder {
     ensure: Arc<Ensure>,
     enabled: Box<dyn Fn() -> bool + Send + Sync>,
     namer: Box<dyn AppNamer>,
     ttl: Duration,
+    slow_ttl: Duration,
     deadline: Duration,
-    missing: Mutex<HashMap<String, Instant>>,
+    closed: Arc<AtomicBool>,
+    inflight: Arc<AtomicUsize>,
+    cache: Arc<Mutex<HashMap<String, Cached>>>,
+}
+
+/// Giảm đếm việc nền kể cả khi `ensure` panic.
+struct InflightGuard(Arc<AtomicUsize>);
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn put(cache: &Mutex<HashMap<String, Cached>>, key: String, v: Cached, overwrite: bool) {
+    if let Ok(mut m) = cache.lock() {
+        if m.len() > 512 {
+            let now = Instant::now();
+            m.retain(|_, c| match c {
+                Cached::Nothing(u) | Cached::Files(_, u) => *u > now,
+            });
+        }
+        let live = |c: &Cached| match c {
+            Cached::Nothing(u) | Cached::Files(_, u) => *u > Instant::now(),
+        };
+        if overwrite || !m.get(&key).is_some_and(live) {
+            m.insert(key, v);
+        }
+    }
 }
 
 impl Responder {
@@ -88,7 +121,17 @@ impl Responder {
         enabled: impl Fn() -> bool + Send + Sync + 'static,
         namer: impl AppNamer + 'static,
     ) -> Self {
-        Self { ensure: Arc::new(ensure), enabled: Box::new(enabled), namer: Box::new(namer), ttl: NEGATIVE_TTL, deadline: ANSWER_DEADLINE, missing: Mutex::new(HashMap::new()) }
+        Self {
+            ensure: Arc::new(ensure),
+            enabled: Box::new(enabled),
+            namer: Box::new(namer),
+            ttl: NEGATIVE_TTL,
+            slow_ttl: SLOW_TTL,
+            deadline: ANSWER_DEADLINE,
+            closed: Arc::new(AtomicBool::new(false)),
+            inflight: Arc::new(AtomicUsize::new(0)),
+            cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Chỉ cho test: đổi thời hạn nhớ "không có".
@@ -103,11 +146,28 @@ impl Responder {
         self
     }
 
+    /// Chỉ cho test: đổi thời hạn nhớ "chậm".
+    pub fn with_slow_ttl(mut self, ttl: Duration) -> Self {
+        self.slow_ttl = ttl;
+        self
+    }
+
+    /// Đang tắt (app thoát): mọi request trả rỗng ngay, không chờ việc nền.
+    pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+    }
+
+    /// Việc nền đang chạy (cho test).
+    pub fn inflight(&self) -> usize {
+        self.inflight.load(Ordering::SeqCst)
+    }
+
     pub fn answer(&self, pid: i32, req: &Request) -> Answer {
-        if !(self.enabled)() || !req.has_name() {
+        if self.closed.load(Ordering::SeqCst) || !(self.enabled)() || !req.has_name() {
             return Answer::Nothing;
         }
-        if req.ps.as_deref().is_some_and(is_internal_name) && req.family.is_none() {
+        // Mọi tên được hỏi đều là tên nội bộ/hệ thống → khỏi hỏi thư viện (lõi cũng lọc, đây chỉ là đường tắt rẻ).
+        if [&req.ps, &req.family].iter().filter_map(|x| x.as_deref()).all(is_internal_name) {
             return Answer::Nothing;
         }
         // Chính chúng ta hỏi chính chúng ta (vd xem trước font của app) thì không phải việc của nguồn này.
@@ -115,17 +175,19 @@ impl Responder {
             return Answer::Nothing;
         }
         let key = req.key();
-        if let Ok(mut m) = self.missing.lock() {
-            if let Some(at) = m.get(&key) {
-                if at.elapsed() < self.ttl {
-                    return Answer::Nothing;
+        if let Ok(mut m) = self.cache.lock() {
+            match m.get(&key).cloned() {
+                Some(Cached::Nothing(until)) if until > Instant::now() => return Answer::Nothing,
+                Some(Cached::Files(p, until)) if until > Instant::now() && p.exists() => return Answer::Files(vec![p]),
+                Some(_) => {
+                    m.remove(&key);
                 }
-                m.remove(&key);
+                None => {}
             }
-            if m.len() > 512 {
-                let ttl = self.ttl;
-                m.retain(|_, at| at.elapsed() < ttl);
-            }
+        }
+        if self.inflight.fetch_add(1, Ordering::SeqCst) >= MAX_INFLIGHT {
+            self.inflight.fetch_sub(1, Ordering::SeqCst);
+            return Answer::Nothing;
         }
         let app = self.namer.app_name(pid).unwrap_or_else(|| "other".into());
         let er = EnsureRequest {
@@ -134,30 +196,58 @@ impl Responder {
             doc: None,
             fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone() }],
         };
-        // Chạy ở luồng phụ để có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi.
+        // Việc chạy ở luồng phụ có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi VÀ hàng đợi của app khác.
+        // Luồng phụ vẫn chạy nốt và ghi kết quả vào cache cho lần hỏi sau.
         let (tx, rx) = mpsc::channel();
-        let ensure = self.ensure.clone();
+        let (ensure, cache, ttl, slow_ttl, k2) = (self.ensure.clone(), self.cache.clone(), self.ttl, self.slow_ttl, key.clone());
+        let guard = InflightGuard(self.inflight.clone());
         let spawned = std::thread::Builder::new().name("fontatlas-fontreq-ensure".into()).spawn(move || {
-            let _ = tx.send(ensure(&er));
+            let _g = guard;
+            let answer = classify(ensure(&er), &cache, &k2, ttl, slow_ttl);
+            let _ = tx.send(answer);
         });
         if spawned.is_err() {
+            self.inflight.fetch_sub(1, Ordering::SeqCst);
             return Answer::Nothing;
         }
-        let resp = match rx.recv_timeout(self.deadline) {
-            Ok(Ok(r)) => r,
-            _ => return Answer::Nothing,
-        };
-        let path = resp.results.first().filter(|r| r.status.usable()).and_then(|r| r.path.clone());
-        match path {
-            Some(p) => Answer::Files(vec![PathBuf::from(p)]),
-            None => {
-                // Chỉ nhớ "không có" khi thư viện thật sự không có; lỗi tạm (busy, failed, chưa tải xong) thì hỏi lại lần sau.
-                let definitive = resp.results.first().is_some_and(|r| r.status == fontatlas_broker::FontStatus::Missing);
-                if definitive && let Ok(mut m) = self.missing.lock() {
-                    m.insert(key, Instant::now());
+        // Chờ theo lát 50 ms để `close()` (app thoát) cắt ngang ngay thay vì chờ hết hạn.
+        let started = Instant::now();
+        loop {
+            match rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(a) => return a,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return Answer::Nothing,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if self.closed.load(Ordering::SeqCst) {
+                        return Answer::Nothing;
+                    }
+                    if started.elapsed() >= self.deadline {
+                        // chậm: lần sau trả rỗng ngay trong `slow_ttl`; nếu việc nền kịp xong thì kết quả tốt của nó thắng
+                        put(&self.cache, key, Cached::Nothing(Instant::now() + self.slow_ttl), false);
+                        return Answer::Nothing;
+                    }
                 }
-                Answer::Nothing
             }
         }
     }
+}
+
+/// Đổi kết quả của lõi thành câu trả lời + ghi cache thích hợp.
+fn classify(r: Result<EnsureResponse, EnsureError>, cache: &Mutex<HashMap<String, Cached>>, key: &str, ttl: Duration, slow_ttl: Duration) -> Answer {
+    let Ok(resp) = r else { return Answer::Nothing };
+    let Some(first) = resp.results.first() else { return Answer::Nothing };
+    if first.status.usable()
+        && let Some(p) = &first.path
+    {
+        let p = PathBuf::from(p);
+        put(cache, key.to_string(), Cached::Files(p.clone(), Instant::now() + LATE_RESULT_TTL), true);
+        return Answer::Files(vec![p]);
+    }
+    match first.status {
+        // thư viện thật sự không có: nhớ lâu
+        FontStatus::Missing => put(cache, key.to_string(), Cached::Nothing(Instant::now() + ttl), true),
+        // tạm thời (đang tải đám mây, bận): nhớ ngắn để không dồn request, rồi hỏi lại
+        FontStatus::NotDownloaded | FontStatus::Busy => put(cache, key.to_string(), Cached::Nothing(Instant::now() + slow_ttl), true),
+        _ => {}
+    }
+    Answer::Nothing
 }

@@ -30,10 +30,12 @@ Mọi yêu cầu cần `Authorization: Bearer <token>` (trừ `OPTIONS`).
  "found":["LibreBaskerville-Regular"],"missing":["Libre Baskerville / Bold"]}
 ```
 
+- Tên nội bộ/hệ thống (`AdobeSansMM`, `AdobeSerifMM`, `AdobeInvis*`, `AdobeBlank*`, `LastResort`, bắt đầu bằng `.`, rỗng, có ký tự điều khiển) bị bỏ ở lõi cho cả `ps` lẫn `family`: trả `missing`, KHÔNG vào nhật ký, không chạm DB.
+- Nhiều bản khác nội dung (hash) cùng tên: chọn bản ĐANG BẬT, rồi bản thấy sau cùng (`first_seen_at`), rồi hash nhỏ nhất (tất định); ghi thêm một dòng nhật ký `ambiguous` với `requested = "<tên> ×N"`. Font revision (`head.fontRevision`) chưa được lưu trong thư viện nên chưa dùng được (cần thêm cột + quét lại).
 - Khớp: `ps` đúng từng ký tự trước; không có thì `family` (gập dấu, không phân biệt hoa thường) + `style` (bỏ khoảng trắng/gạch, rỗng = Regular). Không đoán gần đúng.
 - `app`: nhận tên hiển thị hoặc bundle id; ánh xạ về `photoshop | aftereffects | illustrator | indesign | incopy | sketch | affinity | figma | other`.
 - `status`: `activated` (vừa bật) · `already_active` · `available` (máy đã có đúng file này do bên khác cung cấp) · `missing` (thư viện không có) · `conflict` (máy có font cùng tên nhưng KHÁC nội dung, không tự ghi đè) · `unavailable` (file mất / đã đổi) · `not_downloaded` (file placeholder OneDrive/iCloud chưa tải xong trong hạn chờ; tải vẫn chạy ngầm, hỏi lại sau) · `failed` · `busy` (hỏi lại sau) · `invalid` (yêu cầu rỗng).
-- `path` (tuỳ chọn, thêm sau): đường dẫn file font cho kết quả dùng được. Dành cho nguồn font request (L2, xem `L2_fontreq.md`); panel/script có thể bỏ qua.
+- Đường dẫn file font KHÔNG ra HTTP: `FontResult.path` chỉ có trong struct Rust (`#[serde(skip)]`) cho nguồn font request cùng tiến trình (L2). Panel/script chỉ biết tên và trạng thái.
 - `found` = `activated | already_active | available`. Phần còn lại vào `missing`; lý do ở `results`.
 - Giới hạn: ≤ 256 font, mỗi chuỗi ≤ 512 ký tự không có ký tự điều khiển, thân ≤ 128 KiB.
 
@@ -44,7 +46,8 @@ Mã lỗi HTTP: 400 (`bad_json`, `bad_request`) · 401 `unauthorized` · 403 `ba
 - Token 256 bit từ hệ điều hành, so sánh thời gian cố định.
 - Host phải là `127.0.0.1:<port>` hoặc `localhost:<port>` (chống DNS rebinding).
 - Origin: chỉ `null` và `file://` (panel CEP gửi `Origin: null`) và danh sách bổ sung do app cấu hình (mặc định rỗng). Trang web (`http(s)://…`, `chrome-extension://…`) bị 403 dù có token. `OPTIONS` preflight chỉ đáp cho origin được phép.
-- Giới hạn tần suất: xô 60 yêu cầu, nạp 30/giây, một xô cho cả server.
+- Thứ tự cổng: Host → Origin → token → giới hạn tần suất. Yêu cầu CHƯA xác thực (sai/thiếu token, preflight) chỉ trừ vào xô riêng nhỏ (20 yêu cầu, nạp 5/giây), nên trang web hay ứng dụng lạ không hút cạn xô của app thật (60 yêu cầu, nạp 30/giây). Host/Origin sai bị từ chối rẻ, không trừ xô nào.
+- Mỗi worker bọc `catch_unwind`: backend panic → 500 `internal`, worker sống tiếp. `Server::probe()` ping thật qua socket; Settings dùng nó để báo `brokerRunning` (cổng mở chưa đủ).
 - Xung đột (`conflict`) không bao giờ tự ghi đè: không có ai để hỏi lúc app thiết kế đang mở file.
 
 ## Dữ liệu

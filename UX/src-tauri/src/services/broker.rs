@@ -69,3 +69,8 @@ pub fn stop(state: &AppState) {
 pub fn port(state: &AppState) -> Option<u16> {
     state.broker.lock().ok()?.as_ref().map(|s| s.addr().port())
 }
+
+/// Broker thật sự trả lời không (ping qua socket). Cổng còn mở chưa đủ: worker có thể đã chết.
+pub fn healthy(state: &AppState) -> bool {
+    state.broker.lock().ok().and_then(|g| g.as_ref().map(|s| s.probe())).unwrap_or(false)
+}

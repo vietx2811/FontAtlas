@@ -47,26 +47,54 @@
       if (status !== 200 || !r) { log("broker " + status); return; }
       var again = r.results.some(function (x) { return x.status === "busy" || x.status === "not_downloaded" || x.status === "failed"; });
       var n = (retry[key] || 0) + 1;
-      if (again && n <= MAX_RETRY) { retry[key] = n; setTimeout(function () { delete last[key]; }, RETRY_MS); }
+      if (again && n <= MAX_RETRY) { retry[key] = n; setTimeout(function () { delete last[key]; trigger(true); }, RETRY_MS); }
       last[key] = sig;
       if (r.found && r.found.length) cs.evalScript("faRedraw()");
       log(doc.name + ": " + (r.found || []).length + " font bật, " + (r.missing || []).length + " chưa có");
     });
   }
 
-  function scan() {
-    cs.evalScript("faFonts()", function (res) {
-      var r = null; try { r = JSON.parse(res); } catch (e) {}
-      if (!r || !r.ok) return;
-      r.docs.forEach(handle);
+  // ---- quét ----
+  // Dựa vào SỰ KIỆN tài liệu; poll chỉ là dự phòng thưa (POLL_MS) và chỉ hỏi chữ ký rẻ `faSig()`: tài liệu không đổi thì
+  // không quét gì cả. Quét thật đi theo lát ngắn (SLICE_MS) để không giữ luồng chính của Illustrator.
+  var lastSig = null, scanning = false, again = false, timer = null;
+  var SLICE_MS = 700, POLL_MS = 20000;
+
+  function runScan(sig) {
+    scanning = true;
+    var reset = true;
+    (function step() {
+      cs.evalScript("faScan(" + reset + "," + SLICE_MS + ")", function (res) {
+        reset = false;
+        var r = null; try { r = JSON.parse(res); } catch (e) {}
+        if (!r || !r.ok) { scanning = false; return; }
+        if (!r.done) { setTimeout(step, 250); return; }        // nhả luồng chính giữa hai lát
+        lastSig = sig;
+        r.docs.forEach(handle);
+        scanning = false;
+        if (again) { again = false; trigger(true); }
+      });
+    })();
+  }
+
+  function trigger(force) {
+    if (scanning) { if (force) again = true; return; }
+    cs.evalScript("faSig()", function (sig) {
+      if (sig === "err" || (!force && sig === lastSig)) return;
+      runScan(sig);
     });
+  }
+
+  function onEvent() {                                          // gộp chuỗi sự kiện dồn dập (mở tài liệu bắn nhiều sự kiện)
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () { timer = null; trigger(true); }, 400);
   }
 
   ["documentAfterActivate", "documentCreated", "documentOpened", "com.adobe.csxs.events.documentAfterActivate",
    "com.adobe.csxs.events.ApplicationActivate", "applicationActivate"].forEach(function (n) {
-    try { cs.addEventListener(n, scan); } catch (e) {}
+    try { cs.addEventListener(n, onEvent); } catch (e) {}
   });
-  setInterval(scan, POLL_MS);
-  scan();
+  setInterval(function () { trigger(false); }, POLL_MS);
+  trigger(true);
   log("panel nền đã nạp");
 })();

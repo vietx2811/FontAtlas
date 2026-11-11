@@ -94,3 +94,28 @@ fn nothing_to_do_when_no_adobe_prefs() {
     let i = inst(d.path(), "/a/broker.json", "1");
     assert!(i.targets().is_empty() && i.install().is_empty() && i.remove().unwrap() == 0);
 }
+
+#[test]
+fn script_does_not_eval_the_config_and_keeps_the_socket_wait_short() {
+    let d = prefs();
+    let t = inst(d.path(), "/a/broker.json", "1").script_text();
+    assert!(!t.contains("eval("), "không eval nội dung broker.json");
+    assert!(t.contains("[0-9a-f]{64}") && t.contains("port >= 1 && port <= 65535"), "kiểm token và cổng");
+    let ms: u32 = t.lines().find(|l| l.contains("var TIMEOUT_MS")).and_then(|l| l.split('=').nth(1)).and_then(|r| r.split(';').next()).and_then(|n| n.trim().parse().ok()).unwrap();
+    assert!(ms <= 3000, "chờ socket {ms} ms");
+    assert!(t.contains("s.timeout = 2"));
+}
+
+#[test]
+fn rendered_script_is_valid_javascript_when_node_is_available() {
+    let Ok(v) = std::process::Command::new("node").arg("--version").output() else { return };
+    if !v.status.success() {
+        return;
+    }
+    let d = prefs();
+    let t = inst(d.path(), "/Users/a \"b\"/broker.json", "1").script_text().replace("#targetengine \"fontatlas\"", "");
+    let f = d.path().join("check.js");
+    std::fs::write(&f, t).unwrap();
+    let r = std::process::Command::new("node").arg("--check").arg(&f).output().unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+}

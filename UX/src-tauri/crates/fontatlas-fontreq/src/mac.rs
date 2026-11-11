@@ -3,7 +3,7 @@
 #![allow(deprecated)]
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::NonNull;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
@@ -40,7 +40,12 @@ pub type Observer = dyn Fn(i32, &Request, &Answer, Duration) + Send + Sync;
 pub struct FontRequestSource {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    done: mpsc::Receiver<()>,
+    responder: Arc<Responder>,
 }
+
+/// Chờ luồng nguồn dừng tối đa ngần này khi đóng; quá hạn thì bỏ rơi (detach). Một callback đang chạy không bao giờ giữ app thoát.
+const CLOSE_WAIT: Duration = Duration::from_secs(1);
 
 impl FontRequestSource {
     /// Đăng ký nguồn. Trả `Err` nếu hệ thống từ chối; khi đó app vẫn chạy, chỉ mất tự bật font cho Photoshop/AE.
@@ -48,12 +53,17 @@ impl FontRequestSource {
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
         let (tx, rx) = mpsc::channel::<bool>();
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+        let r2 = responder.clone();
         let thread = std::thread::Builder::new()
             .name("fontatlas-fontreq".into())
-            .spawn(move || run(responder, observer, stop2, tx))
+            .spawn(move || {
+                run(r2, observer, stop2, tx);
+                let _ = done_tx.send(());
+            })
             .map_err(StartError::Thread)?;
         match rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(true) => Ok(Self { stop, thread: Some(thread) }),
+            Ok(true) => Ok(Self { stop, thread: Some(thread), done: done_rx, responder }),
             _ => {
                 stop.store(true, Ordering::SeqCst);
                 let _ = thread.join();
@@ -65,9 +75,16 @@ impl FontRequestSource {
 
 impl Drop for FontRequestSource {
     fn drop(&mut self) {
+        // đóng responder trước: callback đang chờ việc nền sẽ trả rỗng trong ≤ 50 ms thay vì chờ hết hạn
+        self.responder.close();
         self.stop.store(true, Ordering::SeqCst);
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            match self.done.recv_timeout(CLOSE_WAIT) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = t.join();
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => drop(t), // detach: luồng tự thoát khi callback xong
+            }
         }
     }
 }
@@ -97,10 +114,21 @@ fn run(responder: Arc<Responder>, observer: Option<Arc<Observer>>, stop: Arc<Ato
     };
     rl.add_source(Some(&src), unsafe { kCFRunLoopDefaultMode });
     let _ = ready.send(true);
+    // Mỗi vòng chạy ≤ 0,25 s khi rỗi (kiểm cờ dừng); một callback đang chạy giữ vòng đó tới khi xong (≤ ANSWER_DEADLINE).
     while !stop.load(Ordering::SeqCst) {
         CFRunLoop::run_in_mode(unsafe { kCFRunLoopDefaultMode }, 0.25, false);
     }
+    // Ân hạn trước khi gỡ: đóng nguồn khi hệ thống còn một request đang chờ trả lời thì tiến trình hỏi font bị kẹt hàng chục giây
+    // (đã đo: >40 s). `Drop` đã `close()` responder nên callback đang chạy/đến muộn trả rỗng ngay; ta cứ phục vụ thêm một nhịp
+    // để các câu trả lời đó kịp về, rồi mới gỡ.
+    let grace = std::time::Instant::now() + Duration::from_millis(400);
+    while std::time::Instant::now() < grace {
+        CFRunLoop::run_in_mode(unsafe { kCFRunLoopDefaultMode }, 0.1, false);
+    }
     rl.remove_source(Some(&src), unsafe { kCFRunLoopDefaultMode });
+    // Huỷ hẳn nguồn (đóng cổng mach) để dịch vụ font của hệ thống biết nguồn đã chết, thay vì còn gửi request vào chỗ không
+    // ai trả lời (đã thấy: tiến trình hỏi font đứng hàng chục giây sau khi một nguồn trong cùng tiến trình bị đóng).
+    src.invalidate();
     drop(block);
 }
 
@@ -110,8 +138,25 @@ fn read_request(d: &CFDictionary) -> Request {
     unsafe { Request { ps: get(kCTFontNameAttribute), family: get(kCTFontFamilyNameAttribute), style: get(kCTFontStyleNameAttribute) } }
 }
 
+/// Mảng cuối cùng ta trả đi, giữ thêm MỘT tham chiếu để đo xem hệ thống có giải phóng phần "cho đi" không
+/// (xem [`last_returned_retain_count`]). Mỗi lần thay thì tham chiếu của mảng trước được nhả.
+static LAST_RETURNED: Mutex<Option<Probe>> = Mutex::new(None);
+
+/// CFArray bất biến (không có ai ghi) nên chia sẻ giữa luồng được; chỉ dùng để đếm retain.
+struct Probe(CFRetained<CFArray>);
+// SAFETY: CFArray bất biến, CFRetain/CFRelease an toàn đa luồng.
+unsafe impl Send for Probe {}
+
+/// Chỉ để đo/kiểm: retain count của mảng cuối cùng ta trả cho hệ thống. Ta tạo mảng (+1), giữ thêm một ref cho probe (+1),
+/// "cho đi" ref đầu (mem::forget). Nếu hệ thống TIÊU THỤ phần cho đi (release sau khi dùng) thì còn đúng 1 (ref của probe):
+/// không rò. Còn 2 nghĩa là hệ thống không release → mỗi request rò một mảng nhỏ (cần đổi sang trả mảng autorelease).
+pub fn last_returned_retain_count() -> Option<isize> {
+    LAST_RETURNED.lock().ok()?.as_ref().map(|a| a.0.retain_count() as isize)
+}
+
 /// Hợp đồng của hệ thống (libFontRegistry): mảng `CFURL` của file font; hệ thống cấp sandbox extension cho app hỏi.
 /// Mảng trả về được "cho đi" (+1) như spike 06-1; callback không có chỗ nào để giải phóng sau.
+/// Có rò hay không: đo bằng `last_returned_retain_count` trong tests/coretext_e2e.rs.
 fn to_cf_array(a: &Answer) -> NonNull<CFArray> {
     let arr: CFRetained<CFArray> = match a {
         Answer::Files(paths) => {
@@ -121,6 +166,9 @@ fn to_cf_array(a: &Answer) -> NonNull<CFArray> {
         Answer::Nothing => unsafe { CFRetained::cast_unchecked(CFArray::<CFString>::from_retained_objects(&[])) },
     };
     let p = NonNull::from(&*arr);
+    if let Ok(mut g) = LAST_RETURNED.lock() {
+        *g = Some(Probe(arr.clone()));
+    }
     std::mem::forget(arr);
     p
 }

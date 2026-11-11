@@ -91,6 +91,9 @@ pub struct AutoStatusDto {
     pub enabled: bool,
     pub broker_running: bool,
     pub font_request_running: bool,
+    /// Khoá ký panel Illustrator của máy này đang được giữ ở thư mục dữ liệu (`<data>/cep/signing.pem`, quyền 0600).
+    /// Settings nên nói rõ điều này và cho nút **Xoá khoá** (`auto_forget_key`, chỉ khi panel đã gỡ).
+    pub signing_key_present: bool,
     pub apps: Vec<AutoAppDto>,
     /// Trình quản lý font khác trên máy: có thể cùng phản ứng với tài liệu thiếu font.
     pub other_managers: Vec<OtherManagerDto>,
