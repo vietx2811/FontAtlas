@@ -120,7 +120,7 @@
     document.querySelector('[role=tab][aria-label="Giải phẫu"]')?.click();
     const rows = await wait(() => { const r = [...document.querySelectorAll('[data-testid=axis-row]')]; return r.length ? r : null; }, 30000);
     const texts = (rows ?? []).map(r => r.textContent.replace(/\s+/g, ' ').trim());
-    const numeric = texts.filter(t => /\d+,\d+\s*(em|°|×)|\d+\s*°/.test(t));
+    const numeric = texts.filter(t => /\d+[.,]\d+\s*(em|°|×)|\d+\s*°/.test(t));
     await snap('anatomy');
     await log('anatomy-numbers', numeric.length >= 5, { rows: texts.length, numeric: numeric.length, sample: texts.slice(0, 8) });
     // Đường kẻ Hxg phải trùng chữ: đo cap của 'H' bằng canvas với đúng font đang vẽ, so với đường cap trong SVG (±1 đơn vị viewBox).
@@ -235,10 +235,10 @@
         const marks = [...document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]')];
         const after = total();
         const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
-        await log('lang-filter-narrows-and-badges', !!row && /đủ$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
+        await log('lang-filter-narrows-and-badges', !!row && /(đủ|full)$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
         await openAdv();
         // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
-        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/chưa chọn$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
+        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/(chưa chọn|not selected)$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
         await closeAdv(); await sleep(400);
         // Số đếm cập nhật bất đồng bộ sau khi bỏ nhóm lọc: đợi tới khi về đúng giá trị (tối đa 8 giây) thay vì đọc ngay sau một lần sleep cố định.
         const langCleared = await wait(() => !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, 8000);
@@ -259,14 +259,14 @@
       const th1 = document.documentElement.dataset.theme;
       for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('active-filters-popover-' + th); }
       if (th1) document.documentElement.dataset.theme = th1; else delete document.documentElement.dataset.theme;
-      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /Xoá tất cả/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
+      await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /(Xoá tất cả|Clear all)/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
       key(document, { key: 'Escape' }); await sleep(300);
       const withFilter = total();
       sinput?.focus(); key(sinput, { key: 'Backspace' });
       const selected = !!(await wait(() => document.querySelector('.fa-fsum-seg[data-selected=true]'), 5000)); // chọn nhóm cuối: đợi trạng thái thay vì sleep cố định
       key(sinput, { key: 'Backspace' });
       await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
-      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => b.textContent.trim() === 'Hoàn tác'), 5000);
+      const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim())), 5000);
       await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
       undoBtn?.click(); await sleep(900);
       await log('toast-undo-restores', !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, { total: total(), withFilter });
@@ -280,7 +280,7 @@
     await snap('settings');
     // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
     {
-      [...document.querySelectorAll('.fa-set-nav button')].find(b => /Bật font tự động/.test(b.textContent))?.click();
+      [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Bật font tự động|Auto-activation)/.test(b.textContent))?.click();
       await wait(() => document.querySelectorAll('[data-testid=auto-app]').length === 6, 15000);
       const ids = [...document.querySelectorAll('[data-testid=auto-app]')].map(x => x.dataset.app).join(',');
       await sleep(300);
