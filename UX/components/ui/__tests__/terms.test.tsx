@@ -15,6 +15,16 @@ describe('glossary', () => {
     expect(termGloss(subclassTermKey('Old style'))).toBeTruthy();
     expect(termGloss(subclassTermKey('neo-grotesque'))).toBeTruthy();
   });
+  it('taxonomy v2: every class and every emitted/valid subclass has a name and a gloss; the new terms have an illustration', () => {
+    const classes = ['serif', 'slab', 'sans', 'mono', 'script', 'handwriting', 'display', 'blackletter', 'symbol', 'uncertain'];
+    const subs = ['venetian_oldstyle', 'garalde', 'transitional', 'didone', 'glyphic', 'wedge', 'clarendon', 'egyptian', 'humanist_slab', 'grotesque', 'neo_grotesque', 'geometric', 'humanist', 'rounded', 'flared', 'squarish', 'sans_mono', 'serif_mono', 'typewriter', 'coding', 'formal_copperplate', 'brush', 'monoline_script', 'upright_script', 'casual_print', 'marker', 'stencil', 'inline_outline', 'pixel_bitmap', 'shaded_3d'];
+    for (const c of classes) { expect(termGloss(classTermKey(c)), c).toBeTruthy(); expect(TERM_NAMES[classTermKey(c)], c).toBeTruthy(); }
+    for (const x of subs) { expect(termGloss(subclassTermKey(x)), x).toBeTruthy(); expect(TERM_NAMES[subclassTermKey(x)], x).toBeTruthy(); }
+    for (const k of ['class.slab', 'class.handwriting', 'class.display', 'sub.flared', 'sub.squarish', 'sub.venetian_oldstyle', 'sub.garalde', 'sub.monoline_script', 'sub.coding']) {
+      const { container, unmount } = render(<TermCard term={k} />);
+      expect(container.querySelector('svg.fa-term-art'), k).toBeTruthy(); unmount();
+    }
+  });
   it('maps backend keys to term keys and has an English name for each', () => {
     expect(termKey('x_height_em')).toBe('x_height');
     expect(termKey('slant_deg')).toBe('slant');

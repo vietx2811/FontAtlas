@@ -150,3 +150,23 @@ describe('Advanced funnel inside the search field', () => {
     expect(screen.getByTestId('advanced-open').getAttribute('aria-label')).toBe('Advanced, 2 bộ lọc đang bật');
   });
 });
+
+describe('AdvancedSheet · taxonomy v2 classes', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useAdvancedSheet.setState({ open: false }); });
+  it('lists Slab, Handwriting and Display as classes with a TermTip, and shows their subclasses once the class is chosen', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'classFacets').mockResolvedValue([
+      { class: 'slab', count: 4, subclasses: [] },
+      { class: 'handwriting', count: 3, subclasses: [{ subclass: 'marker', count: 2 }] },
+      { class: 'display', count: 5, subclasses: [{ subclass: 'stencil', count: 3 }, { subclass: 'pixel_bitmap', count: 2 }] },
+    ] as never);
+    useUiStore.setState({ filters: { classes: ['display'] } });
+    render(<AdvancedSheet api={api} onClose={() => {}} />); await settle();
+    const names = [...document.querySelectorAll('.fa-class-opt > label, .fa-class-opt label')].map(l => l.textContent);
+    expect(names.some(n => n?.startsWith('Slab'))).toBe(true);
+    expect(names.some(n => n?.startsWith('Handwriting'))).toBe(true);
+    expect(names.some(n => n?.startsWith('Display'))).toBe(true);
+    expect(names.some(n => n?.startsWith('Stencil'))).toBe(true);
+    expect(names.some(n => n?.startsWith('Pixel / bitmap'))).toBe(true);
+  });
+});

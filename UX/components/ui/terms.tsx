@@ -36,6 +36,17 @@ const ILLU: Record<string, ReactNode> = {
   overlay: <>{guide(44, false)}<path d="M30 44V10M52 44V10M30 27H52" opacity=".35" strokeWidth="3" /><path d="M36 44V10M58 44V10M36 28H58" className="acc" strokeWidth="3" /></>,
   vi_marks: <>{guide(44, false)}{guide(28)}<path d="M30 36a9 8 0 1 0 18 0a9 8 0 1 0-18 0M48 28V44" /><path d="M31 22L39 14L47 22M45 10L51 5" className="acc" /></>,
   activate: <><rect x="8" y="10" width="30" height="36" rx="3" strokeDasharray="3 3" opacity=".55" strokeWidth="1.2" /><path d="M16 36V20h8M16 28h6" /><path d="M44 28H62M56 22L62 28L56 34" className="acc" /><rect x="66" y="10" width="24" height="36" rx="3" /><path d="M71 18H85M71 24H85M71 30H80" opacity=".6" strokeWidth="1.2" /></>,
+  'class.serif': <>{guide(44, false)}<path d="M48 10V40M36 10H60M36 44H60" strokeWidth="2.2" /></>,
+  'class.sans': <>{guide(44, false)}<path d="M48 10V44" strokeWidth="6" /></>,
+  'class.slab': <>{guide(44, false)}<path d="M48 12V40" strokeWidth="6" /><path d="M34 10H62M34 44H62" strokeWidth="6" className="acc" /></>,
+  'class.handwriting': <>{guide(44, false)}<path d="M20 44C18 30 22 14 28 12C34 22 32 36 36 44M44 30C52 22 62 24 60 34C58 42 48 44 48 36M68 44C66 32 72 22 78 20" strokeWidth="2.6" /></>,
+  'class.display': <>{guide(44, false)}<path d="M30 26a18 18 0 0 1 14-17M52 9a18 18 0 0 1 14 17M66 30a18 18 0 0 1-14 14M44 44a18 18 0 0 1-14-14" strokeWidth="7" /><path d="M44 5V12M52 5V12M44 41V48M52 41V48" className="acc" /></>,
+  'sub.flared': <>{guide(44, false)}<path className="fill" d="M42 8H54L51.5 26L54 44H42L44.5 26Z" /></>,
+  'sub.squarish': <><rect x="30" y="10" width="36" height="34" rx="10" strokeWidth="5" /><path d="M30 6H66" className="acc" /></>,
+  'sub.venetian_oldstyle': <>{guide(44, false)}<path d="M66 31a17 14 0 1 0-4 9" strokeWidth="3.2" /><path d="M32 31L64 23" className="acc" strokeWidth="2.6" /></>,
+  'sub.garalde': <>{guide(44, false)}<path d="M66 33a17 14 0 1 0-4 9" strokeWidth="3.2" /><path d="M32 31H65" className="acc" strokeWidth="2.6" /></>,
+  'sub.monoline_script': <>{guide(44, false)}<path d="M12 40C24 6 32 6 32 24C32 42 42 42 50 28C58 14 64 44 84 22" strokeWidth="3" /><path d="M8 52H88" className="acc" strokeDasharray="2 4" /></>,
+  'sub.coding': <><rect x="34" y="8" width="28" height="36" rx="12" strokeWidth="3.2" /><path d="M40 38L56 14" className="acc" strokeWidth="2.6" /><path d="M10 50H86" strokeDasharray="2 4" opacity=".55" strokeWidth="1.2" /></>,
   baseline: <>{guide(44, false)}<path d="M30 44V16M30 26c4-4 14-4 14 5v13" /></>,
 };
 /** Thuật ngữ đã có hình riêng, hoặc dùng lại icon trục (24×24) phóng to. */
