@@ -38,6 +38,7 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         collection_id: q.collection_id,
         tag_ids: q.tag_ids.clone(),
         include_missing: q.include_missing,
+        include_hidden: false,
         sort: q.sort.into(),
         descending: q.descending,
         offset: q.offset,

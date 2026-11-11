@@ -3,6 +3,7 @@ pub mod access;
 pub mod activation;
 pub mod analysis;
 pub mod describe;
+pub mod dup_pick;
 pub mod duplicates;
 pub mod boot;
 pub mod brief;
