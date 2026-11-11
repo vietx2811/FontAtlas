@@ -154,6 +154,7 @@ impl Store {
              FROM faces f
              JOIN files fi ON fi.file_id = f.file_id
              JOIN file_locations l ON l.file_id = fi.file_id AND l.missing = 0
+             WHERE NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
              ORDER BY f.face_id, l.location_id",
         )?;
         let rows = st.query_map([], |r| {
@@ -183,7 +184,12 @@ impl Store {
     pub fn has_location(&self, path: &str) -> Result<bool, StoreError> {
         Ok(self
             .conn
-            .query_row("SELECT 1 FROM file_locations WHERE path = ?1 AND missing = 0 LIMIT 1", [path], |_| Ok(()))
+            .query_row(
+                "SELECT 1 FROM file_locations l WHERE l.path = ?1 AND l.missing = 0 AND NOT EXISTS
+                   (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL) LIMIT 1",
+                [path],
+                |_| Ok(()),
+            )
             .optional()?
             .is_some())
     }
@@ -194,7 +200,9 @@ impl Store {
             .conn
             .query_row(
                 "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
-                 WHERE fi.hash = ?1 AND l.missing = 0 ORDER BY l.location_id LIMIT 1",
+                 WHERE fi.hash = ?1 AND l.missing = 0
+                   AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
+                 ORDER BY l.location_id LIMIT 1",
                 [&key.hash[..]],
                 |r| r.get(0),
             )
@@ -209,7 +217,9 @@ impl Store {
             .conn
             .query_row(
                 "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
-                 WHERE fi.hash = ?1 AND l.missing = 0 AND l.cloud_only = 0 ORDER BY l.location_id LIMIT 1",
+                 WHERE fi.hash = ?1 AND l.missing = 0 AND l.cloud_only = 0
+                   AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)
+                 ORDER BY l.location_id LIMIT 1",
                 [&key.hash[..]],
                 |r| r.get(0),
             )

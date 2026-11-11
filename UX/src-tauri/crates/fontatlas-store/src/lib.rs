@@ -3,6 +3,7 @@ mod activation;
 mod cases;
 mod cloud;
 mod analysis;
+mod dup_resolve;
 mod embed;
 mod error;
 mod fold;
@@ -25,6 +26,7 @@ pub use activation::{
 pub use analysis::{DupRow, StoredAnalysis};
 pub use cases::{CaseFaceRow, CasePatch, CaseRow, CaseSummary, ComboPatch, ComboRow, MAX_CASE_FACES, MAX_COMBOS, NewCombo, PeekOutcome, ROLES, SlotRow, TRASH_DAYS};
 pub use cloud::{CloudProvider, cloud_provider_of};
+pub use dup_resolve::{NewResolution, ResolutionRow};
 pub use embed::{EmbedJob, EmbedReader, EnqueueStats, JobResult, SETTING_EMBED_ENABLED, SETTING_LICENSE_NOTICE_ACK};
 pub use error::StoreError;
 pub use fold::vi_fold;

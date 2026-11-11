@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::StoreError;
 use crate::fold::{TextMatch, text_match};
 use crate::ingest::{hash_from_blob, hex_of};
+use crate::dup_resolve::HIDDEN_LOC;
 use crate::open::Store;
 
 pub const DEFAULT_LIMIT: u32 = 100;
@@ -62,6 +63,8 @@ pub struct FaceQuery {
     pub collection_id: Option<i64>,
     pub tag_ids: Vec<i64>,
     pub include_missing: bool,
+    /// Gồm cả face đã bị ẩn bởi "giải quyết trùng lặp" (mặc định: không). Trang Trùng lặp / Đã giải quyết dùng true.
+    pub include_hidden: bool,
     pub sort: SortKey,
     pub descending: bool,
     pub offset: u32,
@@ -254,7 +257,14 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
         p.push(Value::Integer(t));
     }
     if !q.include_missing {
-        w.push("EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)".into());
+        let hid = if q.include_hidden { String::new() } else { format!(" AND NOT {HIDDEN_LOC}") };
+        w.push(format!("EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0{hid})"));
+    } else if !q.include_hidden {
+        // vẫn xét cả vị trí missing, nhưng face mà MỌI vị trí đều bị ẩn thì loại
+        w.push(format!(
+            "(NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND {HIDDEN_LOC}) \
+             OR EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND NOT {HIDDEN_LOC}))"
+        ));
     }
     if !q.langs.is_empty() {
         let one = |lf: &LangFilter, p: &mut Vec<Value>| {
