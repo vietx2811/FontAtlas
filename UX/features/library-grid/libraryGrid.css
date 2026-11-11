@@ -58,3 +58,13 @@ button.fa-state:focus-visible { outline: 2px solid var(--accent); outline-offset
 .fa-cell[data-layout="list"] .fa-star { top: 50%; margin-top: -11px; }
 /* Hàng thông tin thứ 2 (giấy phép, VAR): kéo sát hàng trên để vừa đúng CARD_ROW2_H (14 + 4 = 18 px), không tràn boxHeight. */
 .fa-meta2 { margin-top: -6px; min-height: 14px; flex: none; }
+
+/* Nhóm theo Family (R3) */
+.fa-grouprow { display: flex; align-items: center; }
+.fa-grouprow-cell { width: 100%; padding: 0 14px; }
+.fa-grouphead { display: flex; align-items: baseline; gap: 10px; width: 100%; height: 28px; padding: 0 4px; border-bottom: 1px solid var(--border); text-align: left; background: none; color: var(--fg); cursor: pointer; }
+.fa-grouphead:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; border-radius: 6px; }
+.fa-gh-chev { width: 12px; color: var(--muted); font-size: 11px; }
+.fa-gh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.fa-gh-count { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.fa-gh-count[data-filtered] { color: var(--accent-ink); }

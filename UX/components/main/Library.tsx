@@ -68,7 +68,9 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const gridQuery = useMemo(() => toGridQuery({ view, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
   const scopeKey = useMemo(() => JSON.stringify([view, query, viOnly, filters, familyScope?.name ?? null, locked ? null : gridQuery.sort ? [gridQuery.sort, gridQuery.descending ?? false] : null]), [view, query, viOnly, filters, familyScope, locked, gridQuery.sort, gridQuery.descending]);
-  const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap);
+  const hiddenRanges = useRef<ReadonlyArray<[number, number]>>([]);
+  const onHiddenRanges = useCallback((r: ReadonlyArray<[number, number]>) => { hiddenRanges.current = r; }, []);
+  const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap, hiddenRanges);
   const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     const st = useSelectionStore.getState();
     let target: FaceRow[];
@@ -93,7 +95,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
       <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
-        selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
+        selectedKeys={selection.keys} onPick={selection.pick} onHiddenRanges={onHiddenRanges} onContextMenu={onContextMenu ?? undefined} />
     </div>
   );
 }

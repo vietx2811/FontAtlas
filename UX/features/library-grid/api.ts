@@ -1,10 +1,13 @@
 // Hợp đồng IPC (Plan 6 cài bằng Tauri) + mock cho test và harness.
+import type { FamilyGroup } from './groupLayout';
 import { PX_BUCKETS, type FacePage, type FaceQuery, type FaceRow, type PxBucket } from './types';
 
 export type PreviewInfo = { rendererVersion: string; generation: number; buckets: number[] };
 
 export interface LibraryApi {
   queryFaces(q: FaceQuery): Promise<FacePage>;
+  /** R3: chỉ mục nhóm Family của truy vấn (khi `groupByFamily`); thiếu → lưới không nhóm. */
+  familyGroups?(q: FaceQuery): Promise<FamilyGroup[]>;
   previewInfo(): Promise<PreviewInfo>;
   bumpGeneration(): Promise<number>;
   previewUrl(row: Pick<FaceRow, 'hashHex' | 'faceIndex'>, o: { text: string; px: PxBucket; generation: number; rendererVersion: string }): string;
@@ -54,6 +57,19 @@ export function createMockLibraryApi(
       const offset = q.offset ?? 0;
       const limit = Math.min(q.limit || 100, 1000);
       return { total: hits.length, offset, items: hits.slice(offset, offset + limit) };
+    },
+    async familyGroups(q) {
+      const t = q.text ? fold(q.text) : '';
+      const hits = t ? sorted.filter(r => fold(r.family).includes(t)) : sorted;
+      const totals = new Map<string, number>();
+      for (const r of rows) totals.set(r.family, (totals.get(r.family) ?? 0) + 1);
+      const out: FamilyGroup[] = [];
+      hits.forEach((r, i) => {
+        const last = out[out.length - 1];
+        if (last && last.family === r.family) { last.count++; last.matchCount++; return; }
+        out.push({ family: r.family, start: i, count: 1, matchCount: 1, styleTotal: totals.get(r.family) ?? 1 });
+      });
+      return out;
     },
     async previewInfo() {
       return { rendererVersion: 'mock', generation, buckets: [...PX_BUCKETS] };

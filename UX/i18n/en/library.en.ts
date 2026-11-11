@@ -51,4 +51,10 @@ export const LIBRARY_EN: Record<keyof typeof LIBRARY_I18N, string> = {
   'smenu.activateAll': 'Activate all fonts',
   'smenu.activateAllN': 'Activate all ({n})',
   'smenu.activateAll.empty': 'The project has no fonts',
+  'view.group': 'Group',
+  'view.group.family': 'Group by Family',
+  'view.group.family.gloss': 'The styles of one family (Regular, Bold, Italic…) sit together under one heading; a family is never split in two places. Groups follow the chosen sort.',
+  'group.styles': '{n} styles',
+  'group.styles.of': '{m}/{n} styles',
+  'group.styles.tip': 'Number of styles in this family: matching the filters / total in the library.',
 };

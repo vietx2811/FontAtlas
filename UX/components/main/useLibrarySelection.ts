@@ -17,11 +17,13 @@ const say = (kind: 'info' | 'error', text: string) => void useNoticeStore.getSta
  * Đa chọn trên lưới: click = một, ⌘/Ctrl = bật tắt, Shift = dải theo index (lấy hàng còn thiếu từ backend),
  * ⌘A = cả truy vấn (≤ SELECT_MAX), Esc = bỏ chọn. Vùng chọn xoá khi `scopeKey` (view/truy vấn) đổi.
  */
-export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: string, container: React.RefObject<HTMLElement | null>) {
+export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: string, container: React.RefObject<HTMLElement | null>, hidden?: React.RefObject<ReadonlyArray<[number, number]>>) {
   const rows = useSelectionStore(s => s.rows);
   const keys = useMemo(() => new Set(rows.keys()) as ReadonlySet<string>, [rows]);
   const queryRef = useRef(gridQuery); queryRef.current = gridQuery;
   const token = useRef(0);
+  /** Face nằm trong nhóm Family đang thu gọn: không thấy trên lưới nên dải / chọn tất cả bỏ qua. */
+  const isHidden = (i: number) => !!hidden?.current?.some(([a, b]) => i >= a && i <= b);
 
   useEffect(() => { token.current++; useSelectionStore.getState().clear(); }, [scopeKey]);
   // Truy vấn đổi (kể cả thành viên Gần đây/Đang bật): mốc cũ không còn nghĩa.
@@ -81,6 +83,8 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
         }
         const list = await fetchRange(lo, hi);
         if (stale()) return;
+        const visible = list.filter((_, k) => !isHidden(lo + k));
+        list.length = 0; list.push(...visible);
         if (!list.some(r => rowKey(r) === key)) list.push(row); // thẻ vừa bấm luôn nằm trong vùng chọn
         const next = { key: anchor.key, index: aIdx };
         if (mods.meta) st.add(list, next); else st.replace(list, next);
@@ -106,7 +110,7 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
       const list = [...first.items];
       if (want > list.length) list.push(...await fetchRange(list.length, want - 1));
       if (token.current !== mine || useSelectionStore.getState().epoch !== epoch) return;
-      const picked = list.slice(0, want);
+      const picked = list.slice(0, want).filter((_, k) => !isHidden(k));
       useSelectionStore.getState().replace(picked, picked.length ? { key: rowKey(picked[0]), index: 0 } : null);
       if (first.total > SELECT_MAX) say('info', t('sel.firstN', { n: fmt(SELECT_MAX), total: fmt(first.total) }));
     } catch (e) { if (token.current === mine) say('error', t('sel.allFail', { msg: (e as Error)?.message ?? String(e) })); }

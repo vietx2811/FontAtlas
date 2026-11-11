@@ -101,6 +101,8 @@ export interface UiActions {
   clearRecent(): void;
   setSortBy(by: SortField): void;
   setSortDesc(desc: boolean): void;
+  /** Nhóm theo Family (R3): bật/tắt; lưu cùng `ui.sort`. */
+  setGroupByFamily(on: boolean): void;
   resetSort(): void;
   /** Quay lại phiên so sánh đang giữ (sidebar). */
   resumeCompare(): void;
@@ -149,6 +151,7 @@ export function toGridQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly' | 'rece
   const so = s.sort && effectiveSort(s.sort, !!s.query.trim());
   if (so && so.by === 'match') q.sort = 'match';
   else if (so && (so.explicit || !isDefaultSort(so))) { q.sort = so.by; q.descending = so.desc; }
+  if (s.sort?.group) q.groupByFamily = true; // R3: các font cùng family liền nhau; tiêu đề nhóm lấy từ familyGroups
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
@@ -220,8 +223,9 @@ export function createUiStore(): UiStore {
       const f = faces.slice(0, COMPARE_MAX);
       set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, deskReturn: get().desk, settingsOpen: false });
     },
-    setSortBy: by => set({ sort: { by, desc: defaultDesc(by), explicit: true } }),
+    setSortBy: by => set(s => ({ sort: { by, desc: defaultDesc(by), explicit: true, ...(s.sort.group ? { group: true } : {}) } })),
     setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc, explicit: true } })),
+    setGroupByFamily: on => set(s => ({ sort: on ? { ...s.sort, group: true } : (({ group: _g, ...rest }) => rest)(s.sort) })),
     resetSort: () => set({ sort: { ...DEFAULT_SORT } }),
     closeCompareSession: () => set({ compare: null, compareSession: null }),
     clearRecent: () => set({ recentViews: [] }),

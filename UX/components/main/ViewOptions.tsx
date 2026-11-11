@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t, type I18nKey } from '../../i18n';
-import { SORT_FIELDS, effectiveSort, isDefaultSort, type SortField } from '../../store/sortPrefs';
+import { SORT_FIELDS, effectiveSort, isDefaultPrefs, type SortField } from '../../store/sortPrefs';
 import { useUiStore } from '../../store/ui';
 import { CARD_FIELD_ORDER, DEFAULT_CARD_FIELDS, useCardFields, type CardField } from '../../store/cardFields';
 import { Icon } from '../sidebar/icons';
@@ -28,11 +28,13 @@ export function ViewOptions(): React.JSX.Element {
   const setSortBy = useUiStore(s => s.setSortBy);
   const setSortDesc = useUiStore(s => s.setSortDesc);
   const resetSort = useUiStore(s => s.resetSort);
+  const setGroup = useUiStore(s => s.setGroupByFamily);
+  const grouped = !!sortPrefs.group;
   const locked = view === 'recent' || view === 'active';
   const eff = effectiveSort(sortPrefs, hasQuery);
   const by: SortField = eff.by;
   const desc = eff.desc;
-  const sortChanged = !isDefaultSort(sortPrefs) || !!sortPrefs.explicit;
+  const sortChanged = !isDefaultPrefs(sortPrefs);
   const changed = sortChanged || fields.length !== DEFAULT_CARD_FIELDS.length || DEFAULT_CARD_FIELDS.some(k => !fields.includes(k));
   // Trả focus ĐỒNG BỘ (nút luôn còn trong DOM); rAF chỉ là dự phòng khi focus bị cướp lại ngay sau khi popover gỡ.
   const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) { btn.current?.focus(); requestAnimationFrame(() => { if (document.activeElement !== btn.current) btn.current?.focus(); }); } }, []);
@@ -49,6 +51,16 @@ export function ViewOptions(): React.JSX.Element {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [close]);
+  // ⌥G: bật/tắt nhóm theo Family (khi không gõ chữ / IME / hộp thoại).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || e.defaultPrevented || e.isComposing || e.repeat || e.code !== 'KeyG') return;
+      if (shortcutBlocked(e)) return;
+      e.preventDefault(); useUiStore.getState().setGroupByFamily(!useUiStore.getState().sort.group);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setPos({ right: Math.max(8, Math.round(window.innerWidth - r.right)), top: Math.round(r.bottom + 6) }); };
@@ -102,6 +114,14 @@ export function ViewOptions(): React.JSX.Element {
               </div>}
               <p className="fa-viewpop-src" data-testid="view-sort-src">{t(`view.sort.src.${by}` as I18nKey)}{(by === 'released' || by === 'file_created') && <> <NoteMark inline kind={by === 'file_created' ? 'warn' : 'info'} text={t(`view.sort.note.${by}` as I18nKey)} testId="view-sort-note" /></>}</p>
             </>}
+          </fieldset>
+          <fieldset data-testid="view-group">
+            <legend>{t('view.group')}</legend>
+            <label data-field="group-family">
+              <input type="checkbox" data-testid="view-group-family" checked={grouped} onChange={() => setGroup(!grouped)} />
+              <Tooltip label={t('view.group.family.gloss')}><span>{t('view.group.family')}</span></Tooltip>
+              <kbd className="fa-viewpop-key">⌥G</kbd>
+            </label>
           </fieldset>
           <fieldset>
             <legend>{t('view.info')}</legend>

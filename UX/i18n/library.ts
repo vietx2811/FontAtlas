@@ -49,4 +49,10 @@ export const LIBRARY_I18N = {
   'smenu.activateAll': 'Bật tất cả font',
   'smenu.activateAllN': 'Bật tất cả ({n})',
   'smenu.activateAll.empty': 'Dự án chưa có font',
+  'view.group': 'Nhóm',
+  'view.group.family': 'Nhóm theo Family',
+  'view.group.family.gloss': 'Các kiểu cùng một family (Regular, Bold, Italic…) đứng liền nhau dưới một tiêu đề; mỗi family không bị tách làm hai nơi. Thứ tự nhóm theo cách sắp xếp đang chọn.',
+  'group.styles': '{n} kiểu',
+  'group.styles.of': '{m}/{n} kiểu',
+  'group.styles.tip': 'Số kiểu (style) của family này: khớp bộ lọc / tổng trong thư viện.',
 } as const;

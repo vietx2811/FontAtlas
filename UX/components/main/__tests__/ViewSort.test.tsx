@@ -10,6 +10,13 @@ const q = () => { const s = useUiStore.getState(); return toGridQuery({ view: s.
 const settle = async (ms = 0) => { await act(async () => { await new Promise(r => setTimeout(r, ms)); }); };
 
 describe('sort prefs', () => {
+  it('group flag: parsed, serialized only when on, kept even when the field is unknown', () => {
+    expect(parseSort('{"v":1,"by":"added","desc":true,"group":true}')).toEqual({ by: 'added', desc: true, group: true });
+    expect(parseSort('{"v":1,"by":"ghost","group":true}')).toEqual({ ...DEFAULT_SORT, group: true });
+    expect(parseSort('{"v":1,"by":"added","group":"yes"}')).toEqual({ by: 'added', desc: true });
+    expect(JSON.parse(serializeSort({ by: 'weight', desc: false, group: true }))).toEqual({ v: 1, by: 'weight', desc: false, group: true });
+    expect(JSON.parse(serializeSort({ by: 'weight', desc: false }))).not.toHaveProperty('group');
+  });
   it('parse: valid, unknown field, garbage, match never restored', () => {
     expect(parseSort('{"v":1,"by":"added","desc":true}')).toEqual({ by: 'added', desc: true });
     expect(parseSort('{"v":1,"by":"weight"}')).toEqual({ by: 'weight', desc: false });
@@ -112,5 +119,31 @@ describe('sort in the View popover', () => {
     expect(n.getAttribute('aria-label')).toMatch(/đồng bộ đám mây/);
     fireEvent.change(screen.getByTestId('view-sort-by'), { target: { value: 'weight' } });
     expect(screen.queryByTestId('view-sort-note')).toBeNull();
+  });
+  it('Nhóm theo Family: checkbox in the popover, goes into the grid query, survives a sort change, and Đặt lại clears it', () => {
+    open();
+    const box = screen.getByTestId('view-group-family') as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(q().groupByFamily).toBeUndefined();
+    fireEvent.click(box);
+    expect(useUiStore.getState().sort.group).toBe(true);
+    expect(q().groupByFamily).toBe(true);
+    fireEvent.change(screen.getByTestId('view-sort-by'), { target: { value: 'weight' } });
+    expect(useUiStore.getState().sort).toMatchObject({ by: 'weight', group: true });
+    expect(q()).toMatchObject({ sort: 'weight', groupByFamily: true });
+    fireEvent.click(screen.getByTestId('view-reset'));
+    expect(useUiStore.getState().sort).toEqual(DEFAULT_SORT);
+    expect(q().groupByFamily).toBeUndefined();
+  });
+  it('⌥G toggles grouping from anywhere that is not a text field', () => {
+    render(<ViewOptions />);
+    fireEvent.keyDown(document.body, { key: 'g', code: 'KeyG', altKey: true });
+    expect(useUiStore.getState().sort.group).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'g', code: 'KeyG', altKey: true });
+    expect(useUiStore.getState().sort.group).toBeUndefined();
+    const input = document.createElement('input'); document.body.appendChild(input); input.focus();
+    fireEvent.keyDown(input, { key: 'g', code: 'KeyG', altKey: true });
+    expect(useUiStore.getState().sort.group).toBeUndefined(); // đang gõ chữ
+    input.remove();
   });
 });
