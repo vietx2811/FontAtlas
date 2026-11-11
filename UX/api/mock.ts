@@ -65,12 +65,14 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 }
 
 import { createMockCases } from './mockCases';
+import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
 import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
-export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
+export type MockOptions = { auto?: MockAutoOptions; latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
+  const auto = createMockAuto(o.auto);
   const rows = mockRows();
   const byKey = new Map(rows.map(r => [keyOf(r), r]));
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
@@ -421,6 +423,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async scanPause() {}, async scanResume() {}, async scanCancel() {},
     async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
     ...act,
+    ...auto,
   };
 }
 

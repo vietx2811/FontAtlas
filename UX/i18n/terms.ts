@@ -79,4 +79,5 @@ export const TERM_GLOSS = {
   'term.sub.pixel_bitmap.gloss': 'Pixel / bitmap: dựng từ ô vuông điểm ảnh.',
   'term.sub.shaded_3d.gloss': 'Shaded 3D: nét có bóng hoặc khối nổi 3D.',
   'term.hybrid.gloss': 'Hybrid: font mang đặc điểm của hai class (vd Display kiểu stencil nhưng nét sans). Bật "Gồm cả font lai" để khớp thêm các font có class phụ thuộc class đã chọn; số đếm cũng gồm font lai nên tổng có thể lớn hơn số font. Mỗi font vẫn thuộc đúng một class chính.',
+  'term.auto_activation.gloss': 'Auto-activation (bật font tự động): app thiết kế mở tài liệu thiếu font sẽ hỏi Font Atlas; Font Atlas tìm trong thư viện và bật font đó cho app. Khác "Kích hoạt font" thủ công ở chỗ bạn không phải làm gì.',
 } as const;

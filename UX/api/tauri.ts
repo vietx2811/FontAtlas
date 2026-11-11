@@ -179,6 +179,11 @@ export function createTauriApi(): Api {
     getSettings: () => call('get_settings'),
     setSettings: patch => call('set_settings', { patch: settingsPatch(patch) }),
     // Model, embed
+    autoStatus: () => call('auto_status'),
+    autoSetEnabled: on => call('auto_set_enabled', { on }),
+    autoInstall: target => call('auto_install', { target }),
+    autoRemove: target => call('auto_remove', { target }),
+    autoLog: limit => call('auto_log', { limit: limit ?? null }),
     modelStatus: () => call('model_status'),
     modelDownload: onEvent => none(call('model_download', { onEvent: channel(onEvent).ch })),
     modelCancel: () => none(call('model_cancel')),

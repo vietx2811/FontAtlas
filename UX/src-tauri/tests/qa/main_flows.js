@@ -276,6 +276,15 @@
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));
     await snap('settings');
+    // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
+    {
+      [...document.querySelectorAll('.fa-set-nav button')].find(b => /Bật font tự động/.test(b.textContent))?.click();
+      await wait(() => document.querySelectorAll('[data-testid=auto-app]').length === 6, 15000);
+      const ids = [...document.querySelectorAll('[data-testid=auto-app]')].map(x => x.dataset.app).join(',');
+      await sleep(300);
+      for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('auto-activation-' + th); }
+      await log('auto-activation-page', ids === 'photoshop,aftereffects,illustrator,indesign,incopy,affinity' && !!document.querySelector('[data-testid=auto-switch]') && !!document.querySelector('[data-testid=auto-log], [data-testid=auto-log-empty]') && !document.querySelector('[data-testid=auto-error]'), { ids, error: document.querySelector('[data-testid=auto-error]')?.textContent ?? null });
+    }
     const nav = [...document.querySelectorAll('[aria-label="Thanh bên"] button, nav button, aside button')].find(b => b.textContent.includes('Tất cả'));
     nav?.click();
     const left = await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);

@@ -54,3 +54,20 @@ button.danger { color: var(--warn); }
 .fa-set-prio .mv { display: flex; gap: 2px; }
 .fa-set-prio .mv button { width: 24px; height: 24px; border-radius: 6px; background: var(--surface-2); font-size: 12px; }
 .fa-set-prio .mv button[aria-disabled="true"] { opacity: .35; cursor: default; }
+.fa-auto-h { margin: 18px 0 6px; font-size: var(--text-sm); }
+.fa-auto-apps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fa-auto-app { display: grid; grid-template-columns: 1.1fr 1.3fr 1.6fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.fa-auto-app[data-missing] { opacity: .6; }
+.fa-auto-name, .fa-auto-state, .fa-auto-meta { display: grid; gap: 2px; min-width: 0; }
+.fa-auto small, .fa-auto-sub { color: var(--muted); font-size: var(--text-xs); }
+.fa-auto-sub { display: block; }
+.fa-auto-state[data-tone="ok"] > span:first-child { color: var(--accent-ink); font-weight: 600; }
+.fa-auto-state[data-tone="warn"] > span:first-child { color: var(--warn); font-weight: 600; }
+.fa-auto-actions { display: flex; gap: 6px; }
+.fa-auto-actions button { padding: 3px 10px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-size: var(--text-xs); }
+.fa-auto-actions button[aria-disabled="true"] { opacity: .45; cursor: default; }
+.fa-auto-restart { color: var(--warn); }
+.fa-auto-log { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.fa-auto-log th, .fa-auto-log td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.fa-auto-log th { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; }
+.fa-auto-err button { margin-left: 8px; }
