@@ -843,7 +843,8 @@
       await wait(() => countNow2() >= base + 12, 120000);
       await sleep(800);
       const total = countNow2();
-      document.querySelector('[data-testid=library-grid-scroller]')?.focus?.();
+      // Hộp thoại Gỡ nguồn (bước trước) trả focus về nút nguồn ở thanh bên: ⌘A chỉ chạy khi focus ở thư viện hoặc ngoài mọi vùng, nên bỏ focus như người dùng bấm ra vùng trống.
+      (document.activeElement instanceof HTMLElement) && document.activeElement.blur();
       const gridTop = () => document.querySelector('[role=grid]')?.getBoundingClientRect().top;
       // chọn 3 font (cmd-click) để đo vị trí lưới; sau đó chọn tất cả: tag nổi hiện mà lưới KHÔNG đổi chỗ.
       const c3 = cells(); c3[0].click(); c3[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); c3[2].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
@@ -855,7 +856,7 @@
       const topAll = gridTop(); const tag = document.querySelector('[data-testid=narrow-tag]');
       const tagBox = tag?.getBoundingClientRect(); const wrapBox = tag?.closest('.fa-act-wrap')?.getBoundingClientRect(); const gb = document.querySelector('[role=grid]')?.getBoundingClientRect();
       await snap('narrow-tag');
-      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
+      await log('narrow-tag-no-layout-shift', noTag3 && !!tag && /^\d+ · nên ≤ 4$/.test(tag.textContent.replace('!', '')) && Math.abs(topAll - top3) <= 1 && !!wrapBox && !document.querySelector('.fa-act-hint'), { top3, topAll, noTag3, total, sel: document.querySelector('[data-testid=selection-count]')?.textContent, blockers: [...document.querySelectorAll('[role=menu],[role=dialog],[role=alertdialog]')].map(e => e.getAttribute('role') + ':' + (e.getAttribute('aria-label') ?? e.className)), active: document.activeElement?.tagName + '.' + document.activeElement?.className, text: tag?.textContent, tagBottom: tagBox && Math.round(tagBox.bottom), gridTop: gb && Math.round(gb.top) });
       tag?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' })); tag?.focus();
       const pop = await wait(() => document.querySelector('[data-testid=narrow-pop]'), 4000);
       await log('narrow-pop-has-action', !!pop && !!btn('Chỉ lấy 4 đầu', pop) && Math.abs(gridTop() - top3) <= 1, { pop: pop?.textContent });
