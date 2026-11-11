@@ -113,8 +113,8 @@ describe('review fixes', () => {
   });
 
   it('the card badge follows the first language being filtered', () => {
-    expect(toMetadataQuery({ view: 'all', tag: null, query: '', viOnly: false, filters: { langs: [{ code: 'fra', level: 'full' }] } }).badgeLang).toBe('fra');
-    expect(toMetadataQuery({ view: 'all', tag: null, query: '', viOnly: false, filters: {} }).badgeLang).toBeUndefined();
+    expect(toMetadataQuery({ view: 'all', query: '', viOnly: false, filters: { langs: [{ code: 'fra', level: 'full' }] } }).badgeLang).toBe('fra');
+    expect(toMetadataQuery({ view: 'all', query: '', viOnly: false, filters: {} }).badgeLang).toBeUndefined();
   });
 
   it('useAxisHistograms stops reporting loading when it gets disabled', async () => {

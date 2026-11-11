@@ -12,7 +12,7 @@ import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
 import { libraryEmpty, type Empty } from '../zero/zeroStates';
 import { COMPOSER_INSET } from './SampleComposer';
-import { faceKey, toGridQuery, useUiStore } from '../../store/ui';
+import { faceKey, singleTagId, toGridQuery, useUiStore } from '../../store/ui';
 
 type Props = { api: Api; width?: number; height?: number };
 
@@ -21,7 +21,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const filters = useUiStore(s => s.filters);
   const familyScope = useUiStore(s => s.familyScope);
   const view = useUiStore(s => s.view);
-  const tag = useUiStore(s => s.tag);
+  const tag = useUiStore(s => { const id = singleTagId(s.filters); return id === null ? null : String(id); });
   const query = useUiStore(s => s.query);
   const viOnly = useUiStore(s => s.viOnly);
   const recentViews = useUiStore(s => s.recentViews);
@@ -60,12 +60,14 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
       .catch(e => console.warn('set_favorite failed', e));
   }, [api]);
   // "Gần đây": chọn/mở font đẩy nó lên đầu danh sách, nhưng thứ tự trên lưới đứng yên cho tới khi rời view (hoặc mở lại thư viện).
+  const sort = useUiStore(s => s.sort);
+  const locked = view === 'recent' || view === 'active'; // thứ tự khoá: đổi cách sắp xếp không được xoá vùng chọn
   const inRecent = view === 'recent';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const frozenRecents = useMemo(() => recentViews, [inRecent]);
-  const gridQuery = useMemo(() => toGridQuery({ view, tag, query, viOnly, recentViews: frozenRecents, active, filters, familyScope }), [view, tag, query, viOnly, frozenRecents, active, filters, familyScope]);
+  const gridQuery = useMemo(() => toGridQuery({ view, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
-  const scopeKey = useMemo(() => JSON.stringify([view, tag, query, viOnly, filters, familyScope?.name ?? null]), [view, tag, query, viOnly, filters, familyScope]);
+  const scopeKey = useMemo(() => JSON.stringify([view, query, viOnly, filters, familyScope?.name ?? null, locked ? null : gridQuery.sort ? [gridQuery.sort, gridQuery.descending ?? false] : null]), [view, query, viOnly, filters, familyScope, locked, gridQuery.sort, gridQuery.descending]);
   const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap);
   const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     const st = useSelectionStore.getState();

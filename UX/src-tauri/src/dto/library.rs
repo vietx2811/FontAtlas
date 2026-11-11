@@ -248,7 +248,9 @@ impl From<FacePage> for FacePageDto {
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
 pub enum SortKeyDto {
+    // Không chọn sort (mặc định): như `family` nhưng có chữ tìm thì vẫn xếp khớp đầu từ trước.
     #[default]
+    Auto,
     Family,
     Weight,
     Added,
@@ -258,6 +260,7 @@ pub enum SortKeyDto {
 impl From<SortKeyDto> for SortKey {
     fn from(s: SortKeyDto) -> Self {
         match s {
+            SortKeyDto::Auto => SortKey::Auto,
             SortKeyDto::Family => SortKey::Family,
             SortKeyDto::Weight => SortKey::Weight,
             SortKeyDto::Added => SortKey::Added,

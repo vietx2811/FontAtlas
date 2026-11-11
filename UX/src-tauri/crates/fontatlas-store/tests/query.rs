@@ -187,14 +187,44 @@ fn word_prefix_matches_rank_before_substring_matches() {
     let base = report("open_sans.ttf");
     // "adept" chứa "dep" giữa từ và đứng trước "dep sans" theo bảng chữ cái
     s.ingest(vec![item(1, "/lib/adept.ttf", &fake_report(&base, "adept", "Adept Grotesk"))], 11).unwrap();
+    // `Match` = thứ tự khớp (chiều không áp dụng): khớp đầu từ trước, kể cả khi `descending` bị gửi nhầm.
     for descending in [false, true] {
-        let got = fams(&s, &FaceQuery { text: Some("dep".into()), descending, ..Default::default() });
+        let got = fams(&s, &FaceQuery { text: Some("dep".into()), sort: SortKey::Match, descending, ..Default::default() });
         assert_eq!(got.first().map(String::as_str), Some("Đẹp Sans"), "desc={descending}: {got:?}");
         let pos = |f: &str| got.iter().position(|x| x == f).unwrap();
         assert!(pos("Đẹp Sans") < pos("Source Code Pro"));
         assert!(pos("Đẹp Sans") < pos("Adept Grotesk"));
     }
-    // trong nhóm chuỗi con vẫn theo sort người dùng chọn
-    let asc = fams(&s, &text("dep"));
+    // trong nhóm chuỗi con vẫn theo tên
+    let asc = fams(&s, &FaceQuery { text: Some("dep".into()), sort: SortKey::Match, ..Default::default() });
     assert!(asc.iter().position(|x| x == "Adept Grotesk") < asc.iter().position(|x| x == "Source Code Pro"));
+}
+
+#[test]
+fn explicit_sorts_are_pure_even_while_searching() {
+    let (_d, mut s) = seeded();
+    let base = report("open_sans.ttf");
+    s.ingest(vec![item(1, "/lib/adept.ttf", &fake_report(&base, "adept", "Adept Grotesk"))], 11).unwrap();
+    // Tên A→Z thuần: "Adept" (A) đứng trước "Đẹp Sans" dù "Đẹp" khớp đầu từ.
+    let by_name = fams(&s, &FaceQuery { text: Some("dep".into()), sort: SortKey::Family, ..Default::default() });
+    let pos = |v: &[String], f: &str| v.iter().position(|x| x == f).unwrap();
+    assert!(pos(&by_name, "Adept Grotesk") < pos(&by_name, "Đẹp Sans"), "{by_name:?}");
+    // Z→A đảo đúng: không có xếp hạng khớp chen vào.
+    let desc = fams(&s, &FaceQuery { text: Some("dep".into()), sort: SortKey::Family, descending: true, ..Default::default() });
+    let mut rev = by_name.clone(); rev.reverse();
+    assert_eq!(desc.len(), rev.len());
+    assert!(pos(&desc, "Đẹp Sans") < pos(&desc, "Adept Grotesk"), "{desc:?}");
+}
+
+#[test]
+fn absent_sort_with_text_keeps_the_original_prefix_rank() {
+    let (_d, mut s) = seeded();
+    let base = report("open_sans.ttf");
+    s.ingest(vec![item(1, "/lib/adept.ttf", &fake_report(&base, "adept", "Adept Grotesk"))], 11).unwrap();
+    // Không gửi sort (mặc định Auto): "Đẹp" khớp đầu từ vẫn đứng trước "Adept" dù Adept đứng trước theo bảng chữ cái, ở cả hai chiều.
+    for descending in [false, true] {
+        let got = fams(&s, &FaceQuery { text: Some("dep".into()), descending, ..Default::default() });
+        assert_eq!(FaceQuery::default().sort, SortKey::Auto);
+        assert_eq!(got.first().map(String::as_str), Some("Đẹp Sans"), "desc={descending}: {got:?}");
+    }
 }

@@ -140,6 +140,7 @@
     /* Tầng nền: panel (sidebar/panel/header) và float (menu, popover, modal); sáng = như cũ */
     --panel: var(--sheet);
     --float: var(--card);
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / .18);
     --faint: var(--muted);
     /* Sidebar chồng lên vibrancy: dùng màu đặc (không rgba) để không phụ thuộc cách WebView trộn alpha */
     --nav-hover: #EAEAED;
@@ -210,6 +211,7 @@
     --card: #131315;
     --panel: #1A1A1D;
     --float: #27272B;
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / .55);
     --fg: #FAFAFA;
     --muted: #A1A1AA;
     --faint: #85858F;
@@ -244,6 +246,8 @@
         --card: #131315;
         --panel: #1A1A1D;
         --float: #27272B;
+        --shadow-pop: 0 8px 24px rgb(0 0 0 / .55);
+    --shadow-pop: 0 8px 24px rgb(0 0 0 / .55);
         --fg: #FAFAFA;
         --muted: #A1A1AA;
         --faint: #85858F;

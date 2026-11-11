@@ -13,7 +13,7 @@ import { AXIS_META, numberText, unitText } from '../detail/tabs/measurements';
 export type Chip = { id: string; label: string; remove(f: LibraryFilters): LibraryFilters };
 
 /** Bộ lọc đang bật → danh sách chip (thứ tự cố định); mỗi chip tự biết cách gỡ chính nó. */
-export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view = 'all'): Chip[] {
+export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view = 'all', tags: ReadonlyArray<{ id: number; name: string }> = []): Chip[] {
   const forced = forcedFacets(view);
   const out: Chip[] = [];
   const drop = (k: keyof LibraryFilters) => (x: LibraryFilters) => { const { [k]: _, ...rest } = x; return rest; };
@@ -23,6 +23,8 @@ export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view =
   if (f.italic != null) out.push({ id: 'italic', label: t('filter.italic'), remove: drop('italic') });
   if (f.favoritesOnly && !forced.favorites) out.push({ id: 'favorites', label: t('filter.favorites'), remove: drop('favoritesOnly') });
   for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? `Nguồn ${id}`, remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
+  // Trang Trùng lặp không lọc theo thẻ: không hiện chip/đếm bộ lọc không có tác dụng.
+  for (const id of view === 'dups' ? [] : f.tagIds ?? []) out.push({ id: `tag:${id}`, label: t('filter.tag', { name: tags.find(x => x.id === id)?.name ?? '…' }), remove: x => { const next = (x.tagIds ?? []).filter(v => v !== id); const { tagIds: _, ...rest } = x; return next.length ? { ...rest, tagIds: next } : rest; } });
   for (const c of f.classes ?? []) out.push({ id: `class:${c}`, label: classLabel(c), remove: x => { const next = (x.classes ?? []).filter(v => v !== c); const { classes: _, ...rest } = x; return next.length ? { ...rest, classes: next } : rest; } });
   for (const c of f.subclasses ?? []) out.push({ id: `subclass:${c}`, label: subclassLabel(c), remove: x => { const next = (x.subclasses ?? []).filter(v => v !== c); const { subclasses: _, ...rest } = x; return next.length ? { ...rest, subclasses: next } : rest; } });
   if (f.weightClass) out.push({ id: 'weightClass', label: `Weight ${f.weightClass[0] === f.weightClass[1] ? weightName(f.weightClass[0]) : `${weightName(f.weightClass[0])}–${weightName(f.weightClass[1])}`}`, remove: x => { const { weightClass: _w, varAxisMatch: vm, ...rest } = x; return vm && x.widthClass ? { ...rest, varAxisMatch: vm } : rest; } });

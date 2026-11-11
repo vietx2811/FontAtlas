@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useNoticeStore } from '../../../store/notices';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar, SidebarToggle } from '../Sidebar';
@@ -56,7 +57,7 @@ describe('Sidebar', () => {
     await settle();
     act(() => useUiStore.getState().setSettingsOpen(true));
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).not.toBeNull();
+    expect(useUiStore.getState().filters.tagIds).toHaveLength(1);
     expect(useUiStore.getState().settingsOpen).toBe(false);
   });
 
@@ -87,7 +88,10 @@ describe('Sidebar', () => {
     await settle();
     useUiStore.getState().setView(`col:${c.id}`);
     fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn Cũ' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Xoá dự án' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Xoá dự án…' }));
+    await settle();
+    expect(screen.getByRole('button', { name: /^Cũ/ })).toBeTruthy(); // chưa xoá: đang hỏi xác nhận
+    fireEvent.click(screen.getByTestId('smenu-confirm'));
     await settle();
     expect(screen.queryByRole('button', { name: /^Cũ/ })).toBeNull();
     expect(useUiStore.getState().view).toBe('all');
@@ -99,9 +103,9 @@ describe('Sidebar', () => {
     render(<Sidebar api={api} pickFolder={async () => null} />);
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).toBe(String(t.id));
+    expect(useUiStore.getState().filters.tagIds).toEqual([t.id]);
     fireEvent.click(screen.getByRole('button', { name: 'serif' }));
-    expect(useUiStore.getState().tag).toBeNull();
+    expect(useUiStore.getState().filters.tagIds).toBeUndefined();
   });
 
   it('adds a font folder through the picker and switches to the new source', async () => {
@@ -294,5 +298,112 @@ describe('Sidebar', () => {
     expect(again.getAttribute('aria-current')).toBeNull();
     fireEvent.click(again);
     expect(useUiStore.getState().compare).toHaveLength(3);
+  });
+
+  describe('context menu (C6)', () => {
+    it('right click opens the menu of the item WITHOUT changing the view; the item is marked; Esc returns focus to it', async () => {
+      const api = createMockApi();
+      const c = await api.createCollection('Dự án A', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Dự án A/ });
+      fireEvent.contextMenu(item, { clientX: 20, clientY: 40 }); await settle();
+      expect(screen.getByRole('menu', { name: 'Menu Dự án A' })).toBeTruthy();
+      expect(item.getAttribute('data-context')).toBe('true');
+      expect(useUiStore.getState().view).toBe('all');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(item.getAttribute('data-context')).toBeNull();
+      void c;
+    });
+    it('keyboard: ContextMenu key opens it with the first item focused; F2 renames a collection inline', async () => {
+      const api = createMockApi();
+      await api.createCollection('Dự án B', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Dự án B/ });
+      item.focus(); fireEvent.keyDown(item, { key: 'F10', shiftKey: true }); await settle();
+      expect(document.activeElement?.textContent).toMatch(/Mở/);
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      fireEvent.keyDown(item, { key: 'F2' }); await settle();
+      expect(screen.getByRole('textbox', { name: 'Đổi tên dự án' })).toBeTruthy();
+    });
+    it('Gần đây: clear history asks first; Đang bật: Tắt tất cả is disabled with a reason when nothing is active; plain items (Tất cả) have no menu', async () => {
+      useUiStore.setState({ recentViews: [{ face: 'ab:0', at: 1 }] });
+      await mount();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Gần đây/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá lịch sử/ })); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(1);
+      fireEvent.click(screen.getByTestId('smenu-cancel')); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(1);
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Gần đây/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá lịch sử/ })); await settle();
+      fireEvent.click(screen.getByTestId('smenu-confirm')); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(0);
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Đang bật/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Tắt tất cả/ }).getAttribute('aria-disabled')).toBe('true');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      const prevented = !fireEvent.contextMenu(screen.getByRole('button', { name: /Tất cả/ }));
+      expect(prevented).toBe(false); // không chặn: menu hệ thống vẫn như cũ
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+    it('tag: Lọc theo thẻ này sets the tag', async () => {
+      const { api } = await mount();
+      const t = await api.createTag('serif');
+      useUiStore.getState().bumpLibrary(false); await settle();
+      fireEvent.contextMenu(await screen.findByRole('button', { name: 'serif' })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Lọc theo thẻ này' })); await settle();
+      expect(useUiStore.getState().filters.tagIds).toEqual([t.id]);
+    });
+  });
+
+  describe('review fixes', () => {
+    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, ...o });
+    it('Tắt tất cả reports failures and needs-confirmation instead of staying silent', async () => {
+      const { api } = await mount();
+      vi.spyOn(api, 'activationDeactivateAll').mockResolvedValue(report({ changed: 2, failed: 3, needsConfirmation: 1 }));
+      useNoticeStore.setState({ notices: [] });
+      useUiStore.setState({ active: new Map([['aa', [0]]]) });
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Đang bật/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Tắt tất cả/ })); await settle();
+      const text = useNoticeStore.getState().notices.map(n => n.text).join(' | ');
+      expect(text).toContain('Đã tắt 2 font, 3 lỗi');
+      expect(text).toContain('1 font cần bạn xác nhận');
+      expect(useNoticeStore.getState().notices[0].kind).toBe('error');
+    });
+    it('collection menu counts ACTIVE fonts: disabled with a reason when none are on', async () => {
+      const api = createMockApi();
+      const c = await api.createCollection('Dự án C', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Dự án C/ })); await settle(); await settle();
+      const item = screen.getByRole('menuitem', { name: /Tắt tất cả/ });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      void c;
+    });
+    it('rename: an API error keeps the box with the typed name and shows the error; empty is reported, not silent; success returns focus to the item', async () => {
+      const api = createMockApi();
+      await api.createCollection('Cũ', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Cũ/ });
+      fireEvent.keyDown(item, { key: 'F2' }); await settle();
+      let box = screen.getByRole('textbox', { name: 'Đổi tên dự án' }) as HTMLInputElement;
+      useNoticeStore.setState({ notices: [] });
+      vi.spyOn(api, 'renameCollection').mockRejectedValueOnce(new Error('db locked'));
+      fireEvent.change(box, { target: { value: 'Mới' } });
+      box.value = 'Mới'; fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      box = screen.getByRole('textbox', { name: 'Đổi tên dự án' }) as HTMLInputElement; // vẫn còn
+      expect(box.value).toBe('Mới');
+      expect(screen.getByRole('status').textContent).toContain('db locked');
+      box.value = '   '; fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      expect(screen.getByRole('status').textContent).toContain('không được để trống');
+      box.value = 'Mới'; fireEvent.keyDown(box, { key: 'Enter' }); await settle(); await settle();
+      expect(screen.queryByRole('textbox', { name: 'Đổi tên dự án' })).toBeNull();
+      expect(screen.getByRole('button', { name: /^Mới/ })).toBeTruthy();
+      await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Mới/ }));
+    });
+    it('a tag id that no longer exists is dropped from the filters when the tags load', async () => {
+      useUiStore.setState({ filters: { tagIds: [9999] } });
+      await mount(); await settle();
+      expect(useUiStore.getState().filters.tagIds).toBeUndefined();
+    });
   });
 });

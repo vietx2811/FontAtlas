@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { List, type RowComponentProps } from 'react-window';
+import { List, useListRef, type RowComponentProps } from 'react-window';
 import type { LibraryApi } from './api';
-import { DEFAULT_PREVIEW_MODE, FaceCell, type PickMods, type PreviewMode } from './FaceCell';
+import { CARD_ROW2_H, DEFAULT_PREVIEW_MODE, FaceCell, type PickMods, type PreviewMode } from './FaceCell';
+import { useCardFields } from '../../store/cardFields';
 import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from './fontFaceLoader';
 import { usePagedFaces, type PagedFaces } from './pagedFaces';
 import { PreviewBlobs } from './previewBlobs';
@@ -165,20 +166,31 @@ export function LibraryGrid({
     return () => { alive = false; if (pending.current === key) pending.current = null; };
   }, [api, applied, sampleText, px]);
 
+  const row2 = useCardFields(s => s.fields.includes('license') || s.fields.includes('variable'));
   let cols: number; let rowH: number; let boxHeight: number;
   if (fontSize) {
     const dispH = previewBox(px, fontSize).height;
     cols = layout === 'list' ? 1 : Math.max(1, Math.floor((size.width - 28) / (cellMinWidth(fontSize) + 8)));
-    boxHeight = Math.ceil(layout === 'list' ? Math.max(48, dispH + 20) : Math.max(132, dispH + 78));
+    boxHeight = Math.ceil(layout === 'list' ? Math.max(48, dispH + 20) : Math.max(132, dispH + 78) + (row2 ? CARD_ROW2_H : 0));
     rowH = boxHeight + 8;
   } else {
     const { width: cw, height: ch } = cssSize(px);
     cols = Math.max(1, Math.floor(size.width / (cw + 24)));
     rowH = ch + 64;
-    boxHeight = ch + 48;
+    boxHeight = ch + 48 + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
+    rowH = rowH + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
   }
   const total = snap.total ?? 0;
   const rowCount = Math.ceil(total / cols);
+  // Đổi chiều cao hàng (bật/tắt hàng thông tin thứ 2…) giữa lúc cuộn sâu: giữ hàng đầu đang thấy, không để vị trí nhảy.
+  const listRef = useListRef(null);
+  const topRow = useRef(0);
+  const lastRowH = useRef(rowH);
+  useLayoutEffect(() => {
+    if (lastRowH.current === rowH) return;
+    lastRowH.current = rowH;
+    if (topRow.current > 0) listRef.current?.scrollToRow({ index: Math.min(topRow.current, Math.max(0, rowCount - 1)), align: 'start' });
+  }, [rowH, rowCount, listRef]);
 
   return (
     <div ref={box} role="grid" data-layout={layout} aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
@@ -199,6 +211,7 @@ export function LibraryGrid({
       ) : (
         <List
           data-testid="library-grid-scroller"
+          listRef={listRef}
           rowComponent={Row}
           rowCount={rowCount + (bottomInset ? 1 : 0)}
           rowHeight={(i: number) => (i >= rowCount ? bottomInset : rowH)}
@@ -206,7 +219,7 @@ export function LibraryGrid({
           defaultHeight={size.height}
           style={{ height: '100%', width: '100%' }}
           rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive }}
-          onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
+          onRowsRendered={({ startIndex, stopIndex }) => { topRow.current = startIndex; paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1); }}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />
       )}

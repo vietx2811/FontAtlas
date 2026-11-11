@@ -144,7 +144,7 @@ describe('Library', () => {
       act(() => { useUiStore.getState().setQuery('zzzz'); useUiStore.getState().setViOnly(true); useUiStore.getState().setTag('3'); }); await settle();
       expect(zero().textContent).toContain('“zzzz”');
       fireEvent.click(within(zero()).getByRole('button', { name: 'Xoá bộ lọc' }));
-      expect(useUiStore.getState()).toMatchObject({ query: '', viOnly: false, tag: null });
+      expect(useUiStore.getState()).toMatchObject({ query: '', viOnly: false }); expect(useUiStore.getState().filters.tagIds).toBeUndefined();
     });
 
     it('favorites, recent and active show their one-liners', async () => {

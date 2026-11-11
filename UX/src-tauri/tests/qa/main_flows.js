@@ -818,6 +818,49 @@
       }
     }
 
+    // Hiển thị (A3): mở bằng nút, bật Giấy phép → thẻ có hàng 2, Đặt lại, Esc trả focus về nút.
+    {
+      const vb = () => document.querySelector('[data-testid=view-open]');
+      if (vb()) {
+        vb().click();
+        await wait(() => !!document.querySelector('[data-testid=view-pop]'), 5000);
+        const cellH = () => document.querySelector('[role=gridcell][data-face-id]')?.getBoundingClientRect().height ?? 0;
+        const h0 = cellH();
+        const before = document.querySelectorAll('[data-testid=face-meta2]').length;
+        document.querySelector('[data-field=license] input')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length > 0, 8000);
+        const after = document.querySelectorAll('[data-testid=face-meta2]').length;
+        await sleep(300);
+        const h1 = cellH();
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('view-options-' + th); }
+        document.querySelector('[data-testid=view-reset]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
+        (document.activeElement && document.querySelector('[data-testid=view-pop]')?.contains(document.activeElement) ? document.activeElement : document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]'), { before, after, h0, h1, popOpen: !!document.querySelector('[data-testid=view-pop]') });
+        await wait(() => document.activeElement === vb(), 1000);
+        await log('view-options-focus-returns', document.activeElement === vb(), { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
+        await log('view-options-row-height', h0 > 0 && Math.abs((h1 - h0) - 18) <= 2, { h0, h1 });
+      } else await log('view-options', false, 'no view-open button');
+    }
+
+    // Menu chuột phải Sidebar (C6): mở trên "Gần đây" không đổi view; Esc đóng và trả focus.
+    {
+      const nav = [...document.querySelectorAll('[data-testid=sidebar] .fa-nav')].find(b => /Gần đây/.test(b.textContent));
+      if (nav) {
+        const viewBefore = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        const r = nav.getBoundingClientRect();
+        nav.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 10 }));
+        await wait(() => !!document.querySelector('[role=menu]'), 5000);
+        const opened = !!document.querySelector('[role=menu]') && nav.dataset.context === 'true';
+        await snap('sidebar-context-menu');
+        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        await log('sidebar-context-menu', opened && !document.querySelector('[role=menu]') && viewBefore === viewAfter && document.activeElement === nav, { viewBefore, viewAfter });
+      } else await log('sidebar-context-menu', false, 'no Gần đây item');
+    }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

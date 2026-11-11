@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
+import type { ActivationReportDto } from '../../bindings';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
-import { useUiStore } from '../../store/ui';
+import { dropTags, singleTagId, useUiStore } from '../../store/ui';
+import { useTagsStore } from '../../store/tags';
+import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
@@ -13,11 +16,16 @@ import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
 import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
+import { Menu, type MenuAnchor } from '../ui/Menu';
+import { Modal } from '../Modal';
+import { CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
 import { NoteMark } from '../ui/noteMark';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; dups: number | null };
 type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
+type Ctx = { kind: SidebarMenuKind; id: number | null; name: string; anchor: MenuAnchor; el: HTMLElement; keyboard: boolean; colActive?: number };
+type Confirm = { title: string; body: string; ok: string; run(): Promise<void> | void };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
@@ -38,7 +46,7 @@ export function SidebarToggle(): React.JSX.Element {
 
 export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings }: Props): React.JSX.Element {
   const view = useUiStore(s => s.view);
-  const tag = useUiStore(s => s.tag);
+  const tag = useUiStore(s => { const id = singleTagId(s.filters); return id === null ? null : String(id); });
   const open = useUiStore(s => s.openSections);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
@@ -63,7 +71,10 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [nested, setNested] = useState<Nested | null>(null);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
-  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [ctx, setCtx] = useState<Ctx | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const recentCount = useUiStore(s => s.recentViews.length);
+  const scanningNow = useScanStore(s => s.scanning);
 
   const refresh = useCallback(async () => {
     const [s, c, t, all, star, dup] = await Promise.all([
@@ -71,7 +82,10 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
       api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
     ]);
-    setSources(s); setCols(c); setTags(t);
+    setSources(s); setCols(c); setTags(t); useTagsStore.getState().set(t);
+    // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
+    const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
+    if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
     setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
@@ -119,12 +133,70 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     await refresh();
     setView(`col:${c.id}`);
   };
-  const rename = async (id: number, name: string) => { setRenaming(null); if (name.trim()) { await api.renameCollection(id, name.trim()); await refresh(); } };
-  const remove = async (id: number) => {
-    setMenuFor(null);
+  const focusNav = (navId: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-nav-id="${navId}"]`)?.focus());
+  const renameBusy = useRef(false);
+  const endRename = (id: number, refocus: boolean) => { setRenaming(null); if (refocus) focusNav(`col:${id}`); };
+  /** Enter / blur: rỗng → báo và giữ ô; lỗi → báo và giữ ô (không mất tên đã gõ); xong → trả focus về mục. */
+  const commitRename = async (c: CollectionDto, raw: string, input: HTMLInputElement, via: 'enter' | 'blur') => {
+    if (renameBusy.current) return;
+    const name = raw.trim();
+    if (name === c.name) { endRename(c.id, via === 'enter'); return; }
+    if (!name) {
+      if (via === 'blur') { endRename(c.id, false); return; }
+      setNotice({ text: t('smenu.rename.empty') }); input.focus(); return;
+    }
+    renameBusy.current = true;
+    try { await api.renameCollection(c.id, name); await refresh(); endRename(c.id, via === 'enter'); }
+    catch (e) { warn(e); if (via === 'enter') input.focus(); }
+    finally { renameBusy.current = false; }
+  };
+  const removeCollection = async (id: number) => {
     await api.deleteCollection(id);
-    if (view === `col:${id}`) setView('all');
+    if (useUiStore.getState().view === `col:${id}`) setView('all');
     await refresh();
+  };
+  const at = (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }): MenuAnchor => (e.keyboard ? { rect: e.el.getBoundingClientRect() } : { x: e.x, y: e.y });
+  const openCtx = (kind: SidebarMenuKind, id: number | null, name: string) => (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
+    setCtx({ kind, id, name, anchor: at(e), el: e.el, keyboard: e.keyboard });
+    // Dự án: đếm font ĐANG BẬT (không phải số font trong dự án) cho nhãn, ngưỡng xác nhận và trạng thái của "Tắt tất cả".
+    if (kind === 'collection' && id !== null) {
+      void api.queryFaces({ collectionId: id, limit: 20000 }).then(p => {
+        const on = useUiStore.getState().active;
+        const n = new Set(p.items.filter(r => on.has(r.hashHex)).map(r => r.hashHex)).size;
+        setCtx(cur => (cur && cur.kind === 'collection' && cur.id === id ? { ...cur, colActive: n } : cur));
+      }, () => undefined);
+    }
+  };
+  const warn = (e: unknown) => setNotice({ text: `Không thực hiện được: ${(e as Error)?.message ?? e}` });
+  /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
+  const reportOff = (rep: ActivationReportDto) => {
+    const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
+    const parts = [failed ? t('smenu.off.doneErr', { n: rep.changed, m: failed }) : t('smenu.off.done', { n: rep.changed })];
+    if (kept) parts.push(t('smenu.off.kept', { k: kept }));
+    if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
+    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
+  };
+  const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
+    const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
+    if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: t('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
+  };
+  const menuEntries = (c: Ctx) => {
+    const col = c.kind === 'collection' ? cols.find(x => x.id === c.id) : undefined;
+    const src = c.kind === 'source' ? sources.find(x => x.id === c.id) : undefined;
+    const goView = (v: string) => () => setView(v as never);
+    return buildSidebarMenu(c.kind, {
+      open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
+      sourceAvailable: src?.available, hasPath: !!src?.path, scanning: scanningNow,
+      reveal: () => { if (src?.path) api.revealLocation(src.path).catch(warn); },
+      rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
+      rename: () => { if (col) setRenaming(col.id); },
+      colActive: c.colActive,
+      deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
+      remove: () => { if (col) setConfirm({ title: t('smenu.delCol.title', { name: col.name }), body: t('smenu.delCol.body'), ok: t('smenu.delCol.ok'), run: () => removeCollection(col.id).catch(warn) }); },
+      filterByTag: () => setTag(String(c.id)),
+      recentCount, clearRecent: () => setConfirm({ title: t('smenu.clearRecent.title'), body: t('smenu.clearRecent.body'), ok: t('smenu.clearRecent.ok'), run: () => useUiStore.getState().clearRecent() }),
+      activeCount, closeSession: () => useUiStore.getState().closeCompareSession(),
+    });
   };
 
   const [dark, setDark] = useState(false);
@@ -149,10 +221,10 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="plus" label="Thêm font" onClick={onAddFont} />
         <NavItem icon="all" label="Tất cả" count={counts.all} current={cur('all')} onClick={() => setView('all')} />
         <NavItem icon="star" label="Yêu thích" count={counts.star} current={cur('star')} onClick={() => setView('star')} />
-        <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} />
-        <NavItem icon="power" label="Đang bật" count={activeCount} current={cur('active')} onClick={() => setView('active')} />
+        <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, 'Gần đây')} context={ctx?.kind === 'recent'} />
+        <NavItem icon="power" label="Đang bật" count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, 'Đang bật')} context={ctx?.kind === 'active'} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
-        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} />}
+        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} />}
 
         {notice && (
           <div className="fa-notice" role="status">
@@ -167,21 +239,17 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
             onKeyDown={e => { if (e.key === 'Enter') void createCollection(e.currentTarget.value); if (e.key === 'Escape') setAdding(false); }} onBlur={() => setAdding(false)} />}
           {cols.map(c => renaming === c.id
             ? <input key={c.id} className="fa-inline-input" aria-label="Đổi tên dự án" autoFocus defaultValue={c.name}
-                onKeyDown={e => { if (e.key === 'Enter') void rename(c.id, e.currentTarget.value); if (e.key === 'Escape') setRenaming(null); }} onBlur={() => setRenaming(null)} />
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitRename(c, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(c.id, true); } }} onBlur={e => void commitRename(c, e.currentTarget.value, e.currentTarget, 'blur')} />
             : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
-                more={<>
-                  <Tooltip label={`Tuỳ chọn ${c.name}`}><button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={menuFor === c.id} onClick={() => setMenuFor(menuFor === c.id ? null : c.id)}><Icon name="more" size={16} /></button></Tooltip>
-                  {menuFor === c.id && <div role="menu" className="fa-menu">
-                    <button role="menuitem" type="button" onClick={() => { setMenuFor(null); setRenaming(c.id); }}>Đổi tên</button>
-                    <button role="menuitem" type="button" onClick={() => void remove(c.id)}>Xoá dự án</button>
-                  </div>}
-                </>} />)}
+navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
+                more={<Tooltip label={`Tuỳ chọn ${c.name}`}><button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
+                  onClick={e => { const el = e.currentTarget; openCtx('collection', c.id, c.name)({ x: 0, y: 0, keyboard: true, el }); }}><Icon name="more" size={14} /></button></Tooltip>} />)}
         </NavSection>
 
         <NavSection title="Nguồn" open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
-              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)}
+              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
               sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
                 ? <>
                     {notDownloadedOf(s, cloud) > 0 && <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip>}
@@ -194,7 +262,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavSection title="Thẻ" open={open.tag} onToggle={() => toggleSection('tag')}>
           <div className="fa-tags">
             {tags.map(t => (
-              <button key={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
+              <button key={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
+                onContextMenu={e => { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); }}
+                onKeyDown={e => { if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
             ))}
           </div>
         </NavSection>
@@ -208,6 +278,16 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         </div>
       </div>
     </nav>
+    {ctx && <Menu entries={menuEntries(ctx)} anchor={ctx.anchor} label={t('smenu.menuOf', { name: ctx.name })} focusFirst={ctx.keyboard} returnFocus={ctx.el} onClose={() => setCtx(null)} />}
+    {confirm && (
+      <Modal title={confirm.title} onClose={() => setConfirm(null)}>
+        <p>{confirm.body}</p>
+        <div className="fa-modal-actions">
+          <button type="button" data-testid="smenu-cancel" onClick={() => setConfirm(null)}>{t('smenu.cancel')}</button>
+          <button type="button" className="primary" data-testid="smenu-confirm" onClick={() => { const c = confirm; setConfirm(null); void Promise.resolve(c.run()); }}>{confirm.ok}</button>
+        </div>
+      </Modal>
+    )}
     </>
   );
 }

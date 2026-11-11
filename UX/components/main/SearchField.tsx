@@ -10,6 +10,7 @@ import { groupFilters, restoreChanged, type Group, type GroupId } from '../filte
 import type { LibraryFilters } from '../../store/ui';
 import { useFilterHistory } from '../filter/useFilterHistory';
 import { useSourcesStore } from '../../store/sources';
+import { useTagsStore } from '../../store/tags';
 import { AdvancedFunnel } from '../filter/AdvancedFilters';
 
 export const SEARCH_DEBOUNCE_MS = 120;
@@ -23,7 +24,8 @@ export function SearchField(): React.JSX.Element {
   const setFilters = useUiStore(s => s.setFilters);
   const view = useUiStore(s => s.view);
   const sources = useSourcesStore(s => s.sources);
-  const groups = groupFilters(filters, sources, view);
+  const tags = useTagsStore(s => s.tags);
+  const groups = groupFilters(filters, sources, view, tags);
   useFilterHistory();
   const [popOpen, setPopOpen] = useState(false);
   const [selGroup, setSelGroup] = useState<GroupId | null>(null);
