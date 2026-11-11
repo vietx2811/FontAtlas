@@ -20,6 +20,8 @@ export type FaceQuery = {
   langs?: LangFilterDto[]; langMode?: 'all' | 'any'; badgeLang?: string;
   /** 0.3.0 (advanced filters): usWeightClass 100–900 / usWidthClass 1–9, khoảng đóng. `varAxisMatch` (mặc định bật cả hai): font Variable khớp khi dải trục wght/wdth giao khoảng. */
   weightClass?: [number, number]; widthClass?: [number, number]; varAxisMatch?: { wght: boolean; wdth: boolean };
+  /** 0.3.0 (R3): true = `queryFaces` xếp theo nhóm family (mỗi family liền nhau, thứ tự nhóm theo `sort`/`descending`); `familyGroups(q)` trả khoảng của từng nhóm. */
+  groupByFamily?: boolean;
 };
 
 export type FaceRow = {
