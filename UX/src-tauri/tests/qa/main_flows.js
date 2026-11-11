@@ -25,7 +25,7 @@
   // khi máy quá tải; tooltip hiện sau 450 ms nhưng timer bị trì hoãn khi máy bận), rồi chờ tooltip đóng hẳn trước khi sang thuật ngữ kế.
   // Không nới điều kiện: vẫn yêu cầu gloss không rỗng; thẻ của thuật ngữ KHÁC (tooltip trước chưa đóng) không được tính.
   const termCheck = async sel => {
-    const terms = [...new Set([...document.querySelectorAll(sel)].map(e => e.dataset.term))]; const bad = []; let art = 0; const n = terms.length;
+    const terms = [...new Set([...document.querySelectorAll(sel)].map(e => e.dataset.term))]; const bad = [], artMissing = []; let art = 0; const n = terms.length;
     const card = term => [...document.querySelectorAll('[role=tooltip] [data-term-card]')].find(c => c.dataset.termCard === term);
     // Phần tử tra lại SỐNG mỗi lần (màn có thể vẽ lại khi dữ liệu về muộn): sự kiện gửi vào nút đã bị gỡ khỏi DOM sẽ không tới React.
     const live = term => [...document.querySelectorAll(sel)].find(e => e.dataset.term === term);
@@ -35,12 +35,17 @@
       if (!el) { bad.push(term + ' (nhãn biến mất)'); continue; }
       fire(el, 'pointerover');
       const c = await wait(() => { const x = card(term); return x && x.querySelector('.fa-term-gloss')?.textContent.trim() ? x : null; }, 20000);
-      if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
+      if (!c) bad.push(term + ' [giai đoạn: mở — thẻ/chú giải không hiện]');
+      else {
+        // Hình minh hoạ vẽ/nạp muộn trên máy tải: đợi tối đa 3 s trước khi đo (thiếu hình sau 3 s vẫn tính là không có hình).
+        const withArt = await wait(() => card(term)?.querySelector('svg.fa-term-art'), 3000);
+        if (withArt) art++; else artMissing.push(term);
+      }
       el = live(term) ?? el; fire(el, 'pointerout');
-      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
-      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
+      const closed = await wait(() => !document.querySelector('[role=tooltip]'), 2000);
+      if (!closed) bad.push(term + ' [giai đoạn: đóng — tooltip không đóng sau 2 s; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
     }
-    return { n, bad, art };
+    return { n, bad, art, artMissing };
   };
   try {
     // Chặn hộp thoại chọn thư mục gốc: trả đường dẫn QA (luồng React/IPC còn lại là thật).
