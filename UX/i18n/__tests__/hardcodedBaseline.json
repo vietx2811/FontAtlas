@@ -1,7 +1,4 @@
 {
- "components/FontActionPanel.tsx": 1,
- "components/PairedFontCard.tsx": 8,
- "components/PairingTab.tsx": 15,
  "components/onboarding/Onboarding.tsx": 105,
  "components/onboarding/ScanBlocks.tsx": 3,
  "components/onboarding/blueprint.tsx": 1
