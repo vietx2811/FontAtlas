@@ -923,10 +923,16 @@ fn parallel_cancel_and_timeout_drop_stalled_body_and_resume_exact_prefix() {
         let st = store(&d, m.clone()).with_read_timeout_for_test(Duration::from_millis(350));
         let cancel = Arc::new(AtomicBool::new(false));
         let watcher = if cancel_it {
-            let (cancel, active) = (cancel.clone(), s.active.clone());
+            let (cancel, active, finished) = (cancel.clone(), s.active.clone(), s.finished.clone());
+            let head_end = m.source.vision_offset as usize + (4 << 20);
             Some(std::thread::spawn(move || {
+                // Cancel only once the first 4 MiB vision chunk has been fully served and the
+                // parallel workers are running; a fixed short sleep raced on a loaded CI machine.
                 let t = std::time::Instant::now();
-                while active.load(Ordering::SeqCst) < 3 && t.elapsed() < Duration::from_secs(3) {
+                while t.elapsed() < Duration::from_secs(30)
+                    && !(active.load(Ordering::SeqCst) >= 3
+                        && finished.lock().unwrap().iter().any(|&(_, b)| b + 1 == head_end))
+                {
                     std::thread::sleep(Duration::from_millis(2));
                 }
                 std::thread::sleep(Duration::from_millis(75));
