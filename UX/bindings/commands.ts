@@ -65,6 +65,7 @@ import type { ResolvePlanDto } from './ResolvePlanDto';
 import type { ResolveRequestDto } from './ResolveRequestDto';
 import type { ResolveResultDto } from './ResolveResultDto';
 import type { ResolveScopeDto } from './ResolveScopeDto';
+import type { RestoreOutcomeDto } from './RestoreOutcomeDto';
 import type { SavedPairDto } from './SavedPairDto';
 import type { ScanEvent } from './ScanEvent';
 import type { ScanStatusDto } from './ScanStatusDto';
@@ -187,6 +188,8 @@ export interface TauriCommandMap {
   activation_state: { args: Record<string, never>; result: ActivationStateDto[] };
   activation_preflight: { args: { faces: FaceKeyDto[] }; result: ActivationReportDto };
   activation_activate: { args: { faces: FaceKeyDto[]; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
+  activation_replace: { args: { faces: FaceKeyDto[]; scope: ScopeDto | null; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
+  activation_restore_replaced: { args: { id: number }; result: RestoreOutcomeDto };
   activation_activate_collection: { args: { collectionId: number; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate: { args: { faces: FaceKeyDto[]; force: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };

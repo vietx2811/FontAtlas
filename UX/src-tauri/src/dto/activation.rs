@@ -140,6 +140,8 @@ pub enum OwnerDto {
     AdobeFonts,
     RightFont,
     FontBase,
+    Typeface,
+    Suitcase,
     FontAtlas,
     Other,
 }
@@ -152,6 +154,8 @@ impl From<fa::Owner> for OwnerDto {
             fa::Owner::AdobeFonts => Self::AdobeFonts,
             fa::Owner::RightFont => Self::RightFont,
             fa::Owner::FontBase => Self::FontBase,
+            fa::Owner::Typeface => Self::Typeface,
+            fa::Owner::Suitcase => Self::Suitcase,
             fa::Owner::FontAtlas => Self::FontAtlas,
             fa::Owner::Other => Self::Other,
         }
@@ -249,6 +253,40 @@ pub struct FileResultDto {
     pub requested_faces: Vec<u32>,
     pub extra_faces: Vec<u32>,
     pub outcome: FileOutcomeDto,
+    /// Bản cũ đã gỡ để thay thế (chỉ khi dùng `activation_replace`); mỗi mục có `id` cho "Khôi phục bản cũ".
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replaced: Vec<ReplacedFontDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ReplacedFontDto {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub path: String,
+    pub owner: OwnerDto,
+    /// Scope mà bản cũ đã được đăng ký (khôi phục đăng ký lại đúng các scope này).
+    pub scopes: Vec<ScopeDto>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum RestoreOutcomeDto {
+    Restored,
+    AlreadyRestored,
+    MissingFile,
+}
+
+impl From<fa::RestoreOutcome> for RestoreOutcomeDto {
+    fn from(o: fa::RestoreOutcome) -> Self {
+        match o {
+            fa::RestoreOutcome::Restored => Self::Restored,
+            fa::RestoreOutcome::AlreadyRestored => Self::AlreadyRestored,
+            fa::RestoreOutcome::MissingFile => Self::MissingFile,
+        }
+    }
 }
 
 impl From<&fa::FileResult> for FileResultDto {
@@ -259,6 +297,11 @@ impl From<&fa::FileResult> for FileResultDto {
             requested_faces: r.requested_faces.clone(),
             extra_faces: r.extra_faces.clone(),
             outcome: (&r.outcome).into(),
+            replaced: r
+                .replaced
+                .iter()
+                .map(|x| ReplacedFontDto { id: x.id, path: x.path.clone(), owner: x.owner.into(), scopes: x.scopes.iter().map(|s| (*s).into()).collect() })
+                .collect(),
         }
     }
 }

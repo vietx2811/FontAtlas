@@ -19,7 +19,7 @@ mod schema;
 mod user;
 
 pub use activation::{
-    ActivationReason, ActivationRow, ActivationScope, ActivationStatus, DesiredState, FaceName, FileLocation, FileTarget,
+    ActivationReason, ActivationRow, ActivationScope, ActivationStatus, DesiredState, FaceName, FileLocation, FileTarget, NewReplaced, ReplacedRow,
     PrunedReasons,
     add_activation_reason_tx, put_activation_tx, remove_activation_reason_tx,
 };

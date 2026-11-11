@@ -191,6 +191,21 @@ fn icloud_placeholder(p: &Path) -> Option<PathBuf> {
     Some(p.with_file_name(format!(".{name}.icloud")))
 }
 
+/// Ma trận "Thay thế" theo chủ sở hữu + đường dẫn (xem docs/team/research/2026-11-11-replace-activation.md §3).
+/// Đường dẫn trong 3 thư mục font LUÔN bị bảo vệ, bất kể phân loại: hệ điều hành bật chúng theo thư mục (không gỡ
+/// được qua API) và cách duy nhất là xoá/di chuyển file — Font Atlas không bao giờ làm.
+pub fn replace_tier(owner: Owner, path: &Path, home: &Path) -> crate::types::ReplaceTier {
+    use crate::types::ReplaceTier::*;
+    let in_font_dir = path.starts_with("/System/Library") || path.starts_with("/Library/Fonts") || path.starts_with(home.join("Library/Fonts"));
+    if in_font_dir || matches!(owner, Owner::System | Owner::UserInstalled) {
+        return Protected;
+    }
+    match owner {
+        Owner::AdobeFonts | Owner::Suitcase => Guide,
+        _ => Replace,
+    }
+}
+
 /// Đoán ai đang cung cấp font ở `path`. Khớp đầu tiên thắng; UI ghi "có thể là …".
 pub fn classify_owner(path: &Path, home: &Path, ours: &HashSet<PathBuf>) -> Owner {
     if ours.contains(path) {
@@ -211,6 +226,12 @@ pub fn classify_owner(path: &Path, home: &Path, ours: &HashSet<PathBuf>) -> Owne
     }
     if comps.iter().any(|c| c.eq_ignore_ascii_case("FontBase")) {
         return Owner::FontBase;
+    }
+    if comps.iter().any(|c| c.eq_ignore_ascii_case("Typeface")) {
+        return Owner::Typeface;
+    }
+    if comps.iter().any(|c| c.eq_ignore_ascii_case("Extensis") || c.to_lowercase().contains("suitcase")) {
+        return Owner::Suitcase;
     }
     Owner::Other
 }

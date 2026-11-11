@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use fontatlas_activate::{
     ActivationEngine, ActivationError, ActivationReport, ActivationService, Availability, ActivationStateDto as CoreState, ConflictPolicy,
-    DeactivatePolicy, Progress, ReconcileReport, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
+    DeactivatePolicy, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
 };
 use fontatlas_store::{FaceKey, Store};
 
@@ -55,6 +55,8 @@ pub trait ActivationApi: Send + Sync {
     fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
+    fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
 }
 
 impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
@@ -117,6 +119,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
     }
+    fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
+        ActivationService::restore_replaced(self, s, id)
+    }
 }
 
 /// Trước khi có engine (hoặc ở test không cần kích hoạt): mọi thao tác ghi trả `Unsupported`.
@@ -161,6 +166,9 @@ impl ActivationApi for NoActivation {
     }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
+    }
+    fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
+        Err(ActivationError::Unsupported)
     }
 }
 
@@ -252,6 +260,33 @@ pub fn activate(
     let keys = keys_of(faces)?;
     let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
     Ok(finish(state, r))
+}
+
+/// "Tắt bản cũ và bật bản này": như `activate` nhưng gỡ các bản xung đột theo ma trận (xem fontatlas-activate).
+pub fn replace(
+    state: &AppState,
+    faces: &[FaceKeyDto],
+    scope: Option<ScopeDto>,
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), ConflictPolicy::Replace, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
+
+/// "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope) và tắt bản của Font Atlas đã thay nó.
+pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, CmdError> {
+    writable(state)?;
+    // hash của font Atlas đã thay: để giao diện cập nhật chấm bật/tắt của nó
+    let hash_hex = state.with_store(|s| Ok(s.get_replaced(id)?.map(|r| r.hash.iter().map(|b| format!("{b:02x}")).collect::<String>())))?;
+    let out = state.activation.restore_replaced(state.store()?, id)?;
+    if out == RestoreOutcome::Restored {
+        if let Some(h) = hash_hex {
+            state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![h] });
+        }
+    }
+    Ok(out.into())
 }
 
 pub fn activate_collection(

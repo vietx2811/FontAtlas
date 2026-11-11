@@ -718,6 +718,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         requested_faces: vec![0],
         extra_faces: if i == 1 { vec![1, 2] } else { vec![] },
         outcome: o,
+        replaced: vec![],
     };
     let conflict = fa::Conflict {
         postscript_name: "LibreBaskerville-Regular".into(),

@@ -17,12 +17,12 @@ pub use engine::{ActivationEngine, Scope};
 pub use fake::FakeEngine;
 #[cfg(target_os = "macos")]
 pub use mac::MacCoreTextEngine;
-pub use paths::{CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, ensure_local_holding, probe_file};
+pub use paths::{replace_tier, CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, ensure_local_holding, probe_file};
 pub use reconcile::{AutoDeactivated, ReconcileReport};
 pub use service::{ActivationService, Availability};
 pub use types::{
     ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, DeactivatePolicy, ENGINE_VERSION, EngineError, FileOutcome, FileResult,
-    Owner, Progress, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED,
+    Owner, Progress, ReplaceTier, ReplacedFont, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED,
 };
 pub use windows::WindowsGdiEngine;
 
