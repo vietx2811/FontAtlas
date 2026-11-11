@@ -35,10 +35,16 @@ export const BUNDLED_POOL: readonly PoolFont[] = [
 export const SAFE_FONT_DIRS = /^(\/System\/Library\/Fonts\/|\/Library\/Fonts\/|\/Users\/[^/]+\/Library\/Fonts\/)/;
 export const isSafeFontPath = (path: string): boolean => SAFE_FONT_DIRS.test(path) && !path.includes('/../');
 
-type Cand = Pick<FaceRow, 'family' | 'faceIndex' | 'fileSize' | 'path' | 'missing'>;
-/** Dùng được cho splash: có file trên đĩa (không mất; chỉ ở thư mục font hệ thống/người dùng), face 0 (TTC face ≥ 1 không nạp được bằng FontFace), không quá lớn. */
+type Cand = Pick<FaceRow, 'family' | 'faceIndex' | 'fileSize' | 'path' | 'missing'> & { onCloudOnly?: boolean };
+/**
+ * Dùng được cho splash: có file trên đĩa (không mất), face 0 (TTC face ≥ 1 không nạp được bằng FontFace), không quá lớn.
+ * Cờ `onCloudOnly` (backend, feat/cloud-fonts): true = chưa tải về (dataless) → KHÔNG BAO GIỜ dùng (đọc file sẽ kích hoạt tải);
+ * false = file đã có thật trên đĩa → dùng được dù nằm ở thư mục đám mây đã tải. Thiếu cờ (undefined) → dự phòng: chỉ thư mục font hệ thống/người dùng.
+ */
 export function isSplashCandidate(r: Cand, maxBytes = MAX_FONT_BYTES): boolean {
-  return !!r.path && !r.missing && r.faceIndex === 0 && r.fileSize > 0 && r.fileSize <= maxBytes && isSafeFontPath(r.path);
+  if (!r.path || r.missing || r.faceIndex !== 0 || r.fileSize <= 0 || r.fileSize > maxBytes) return false;
+  if (r.onCloudOnly === true) return false;
+  return r.onCloudOnly === false ? !r.path.includes('/../') : isSafeFontPath(r.path);
 }
 
 /** Tối đa `max` face, mỗi family một lần, xáo ngẫu nhiên (rand ∈ [0,1)). */

@@ -57,6 +57,14 @@ describe('random font candidates (library)', () => {
     expect(isSplashCandidate(row({ path: '/Users/me/Library/CloudStorage/OneDrive-X/A.otf' }))).toBe(false);
     expect(isSplashCandidate(row({ path: '/Users/me/Desktop/A.otf' }))).toBe(false);
   });
+  it('uses the onCloudOnly flag when present: dataless never; already-downloaded cloud fonts allowed; no flag falls back to the folder allowlist', () => {
+    const cloud = '/Users/me/Library/CloudStorage/OneDrive-X/A.otf';
+    expect(isSplashCandidate(row({ path: cloud, onCloudOnly: true }))).toBe(false);
+    expect(isSplashCandidate(row({ path: '/Library/Fonts/A.otf', onCloudOnly: true }))).toBe(false);
+    expect(isSplashCandidate(row({ path: cloud, onCloudOnly: false }))).toBe(true);
+    expect(isSplashCandidate(row({ path: '/Users/me/Library/../Secret/A.otf', onCloudOnly: false }))).toBe(false);
+    expect(isSplashCandidate(row({ path: cloud }))).toBe(false);
+  });
   it('picks at most 14 faces, one per family, only candidates, shuffled but deterministic for a seed', () => {
     const rows = Array.from({ length: 60 }, (_, i) => row({ family: `F${i % 30}`, path: i % 5 === 0 ? '/Users/me/Library/CloudStorage/x/a.otf' : `/Library/Fonts/${i}.otf`, faceIndex: i % 7 === 0 ? 1 : 0, missing: i % 11 === 0 }));
     const a = pickFonts(rows, seeded(3)); const b = pickFonts(rows, seeded(3)); const c = pickFonts(rows, seeded(4));
