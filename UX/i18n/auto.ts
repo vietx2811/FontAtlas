@@ -2,7 +2,7 @@
 export const AUTO_I18N = {
   'auto.group': 'Bật font tự động',
   'auto.intro': 'Mở tài liệu thiếu font trong app thiết kế, Font Atlas tìm font còn thiếu trong thư viện và bật cho app đó.',
-  'auto.switch': 'Bật font tự động', 'auto.switch.sub': 'Tắt thì Font Atlas không trả lời app nào. Không gỡ gì khỏi máy.',
+  'auto.switch': 'Bật', 'auto.switch.aria': 'Bật font tự động', 'auto.switch.sub': 'Tắt thì Font Atlas không trả lời app nào. Không gỡ gì khỏi máy.',
   'auto.loadFail': 'Không đọc được trạng thái: {msg}', 'auto.retry': 'Thử lại', 'auto.opFail': 'Không thực hiện được: {msg}',
   'auto.apps': 'App thiết kế',
   'auto.state.off': 'Tắt', 'auto.state.ready': 'Sẵn sàng', 'auto.state.needs_install': 'Chưa cài', 'auto.state.stale': 'Cần cài lại',

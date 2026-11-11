@@ -6,7 +6,7 @@
 export const AUTO_EN = {
   'auto.group': 'Auto-activation',
   'auto.intro': 'When you open a document with missing fonts in a design app, Font Atlas finds the missing fonts in your library and turns them on for that app.',
-  'auto.switch': 'Auto-activation', 'auto.switch.sub': 'When off, Font Atlas does not answer any app. Nothing is removed from your Mac.',
+  'auto.switch': 'Turn on', 'auto.switch.aria': 'Turn on auto-activation', 'auto.switch.sub': 'When off, Font Atlas does not answer any app. Nothing is removed from your Mac.',
   'auto.loadFail': 'Could not read the status: {msg}', 'auto.retry': 'Try again', 'auto.opFail': 'Could not do that: {msg}',
   'auto.apps': 'Design apps',
   'auto.state.off': 'Off', 'auto.state.ready': 'Ready', 'auto.state.needs_install': 'Not installed', 'auto.state.stale': 'Reinstall needed',

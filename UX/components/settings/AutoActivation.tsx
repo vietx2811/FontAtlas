@@ -3,6 +3,7 @@ import type { Api, AutoAppDto, AutoLogDto, AutoStatusDto, AutoTargetDto } from '
 import { hasKey, t, type I18nKey } from '../../i18n';
 import { Modal } from '../Modal';
 import { NoteMark } from '../ui/noteMark';
+import { Tooltip } from '../ui/Tooltip';
 import { TermTip } from '../ui/terms';
 
 /** Trạng thái app đổi ngoài tầm nhìn của Font Atlas (app chạy/tắt) và không có sự kiện đẩy: đọc lại định kỳ khi trang đang mở. */
@@ -43,11 +44,13 @@ function AppRow({ app, busy, isolated, onAsk }: { app: AutoAppDto; busy: boolean
         {!app.appInstalled && <small data-testid="auto-notinstalled">{t('auto.notInstalled', { app: app.label })}</small>}
       </div>
       <div className="fa-auto-state" data-tone={stateTone}>
-        <span data-testid="auto-state">{stateText}</span>
-        {foreign && <NoteMark inline kind="warn" text={t('auto.foreign.tip')} />}
-        {state === 'isolated_build' && <NoteMark inline kind="info" text={t('auto.isolated.tip')} />}
-        {state === 'error' && app.detail && <NoteMark inline kind="warn" text={app.detail} />}
-        {state === 'stale' && app.detail && <NoteMark inline kind="info" text={app.detail} />}
+        <div className="fa-auto-statehead">
+          <span data-testid="auto-state">{stateText}</span>
+          {foreign && <NoteMark inline kind="warn" text={t('auto.foreign.tip')} />}
+          {state === 'isolated_build' && <NoteMark inline kind="info" text={t('auto.isolated.tip')} />}
+          {state === 'error' && app.detail && <NoteMark inline kind="warn" text={app.detail} />}
+          {state === 'stale' && app.detail && <NoteMark inline kind="info" text={app.detail} />}
+        </div>
         <small className="fa-auto-last" data-testid="auto-last">{last !== null ? t('auto.lastActivity', { when: whenText(last) }) : t('auto.never')}</small>
       </div>
       <div className="fa-auto-meta">
@@ -58,9 +61,10 @@ function AppRow({ app, busy, isolated, onAsk }: { app: AutoAppDto; busy: boolean
       <div className="fa-auto-actions">
         {app.installable && target && (
           <>
-            <button type="button" data-testid="auto-install" aria-disabled={installDisabled || undefined} aria-describedby={installDisabled && why ? whyId : undefined}
-              onClick={() => { if (!installDisabled) onAsk({ kind: 'install', app }); }}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button>
-            {app.installed && <button type="button" data-testid="auto-remove" aria-disabled={removeDisabled || undefined} aria-describedby={removeDisabled && why ? whyId : undefined} onClick={() => { if (!removeDisabled) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button>}
+            {installDisabled && why ? <Tooltip label={why}><button type="button" data-testid="auto-install" aria-disabled={installDisabled || undefined} aria-describedby={installDisabled && why ? whyId : undefined}
+              onClick={() => { if (!installDisabled) onAsk({ kind: 'install', app }); }}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button></Tooltip> : <button type="button" data-testid="auto-install" aria-disabled={installDisabled || undefined} aria-describedby={installDisabled && why ? whyId : undefined}
+              onClick={() => { if (!installDisabled) onAsk({ kind: 'install', app }); }}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button>}
+            {app.installed && (removeDisabled && why ? <Tooltip label={why}><button type="button" data-testid="auto-remove" aria-disabled={removeDisabled || undefined} aria-describedby={removeDisabled && why ? whyId : undefined} onClick={() => { if (!removeDisabled) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button></Tooltip> : <button type="button" data-testid="auto-remove" aria-disabled={removeDisabled || undefined} aria-describedby={removeDisabled && why ? whyId : undefined} onClick={() => { if (!removeDisabled) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button>)}
             {why && <span id={whyId} className="fa-sr-only">{why}</span>}
           </>
         )}
@@ -159,7 +163,7 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
         <>
           <div className="fa-set-row">
             <span>{t('auto.switch')}<small className="fa-auto-sub">{t('auto.switch.sub')}</small></span>
-            <button type="button" role="switch" className="fa-switch" data-testid="auto-switch" aria-checked={status.enabled} aria-label={t('auto.switch')} aria-disabled={busy || undefined}
+            <button type="button" role="switch" className="fa-switch" data-testid="auto-switch" aria-checked={status.enabled} aria-label={t('auto.switch.aria')} aria-disabled={busy || undefined}
               onClick={() => { if (!busy) void run(() => api.autoSetEnabled(!status.enabled), t(status.enabled ? 'auto.live.off' : 'auto.live.on')); }} />
           </div>
           {status.isolatedBuild && <p className="fa-set-note" data-testid="auto-isolated"><NoteMark inline kind="info" text={t('auto.isolatedBuild.why')} /> {t('auto.isolatedBuild.short')}</p>}

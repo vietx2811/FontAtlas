@@ -28,5 +28,6 @@
 .fa-count { color: var(--muted); font-size: var(--text-2xs); }
 
 .fa-class-switches { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: grid; gap: 4px; }
+.fa-class-switches label { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--text-sm); }
 .fa-class-need { color: var(--muted); font-size: var(--text-xs); }
 .fa-class-switches label[data-disabled] { opacity: .55; }
