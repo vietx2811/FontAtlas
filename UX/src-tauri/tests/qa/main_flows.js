@@ -811,6 +811,39 @@
         pressOn(deskEl(), '['); await sleep(500);
         const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
         await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
+        document.querySelector('[data-testid=mode-combos]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=cc-col]').length >= 2, 10000);
+        await sleep(400);
+        const ccCols = document.querySelectorAll('[data-testid=cc-col]').length;
+        await log('desk-compare-combos', ccCols === 2 && document.querySelector('[data-testid=cc-col]')?.dataset.base === 'true' && document.querySelectorAll('[data-testid=cc-rel]').length === 2, { ccCols });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-combos-' + th); }
+        document.querySelector('[data-testid=mode-fonts]')?.click();
+        await wait(() => !!document.querySelector('[data-testid=font-compare]'), 8000);
+        await sleep(500);
+        await log('desk-compare-fonts', !!document.querySelector('[data-testid=font-compare]') && document.querySelectorAll('tr[data-metric]').length >= 4 && !!document.querySelector('[data-testid=fc-sort]'), { cols: document.querySelectorAll('[data-testid=fc-col]').length });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-fonts-' + th); }
+        document.querySelector('[data-testid=fc-view-pages]')?.click(); await sleep(400);
+        await log('desk-compare-fonts-pages', !document.querySelector('tr[data-metric]'), {});
+        // Đặt vào vai từ Compare Font: ứng viên đầu thành MỐC (cột đầu), không còn lặp ở cột khác.
+        {
+          // Cần ít nhất một cột ứng viên: chờ gợi ý (≤5s); không có thì thêm từ thư viện bằng ô "Thêm cột" (font fixture khác mốc).
+          await wait(() => document.querySelectorAll('[data-testid=fc-col]').length >= 2, 5000);
+          if (document.querySelectorAll('[data-testid=fc-col]').length < 2) {
+            const sel = document.querySelector('[data-testid=fc-add]');
+            await wait(() => sel && sel.options.length > 1 && !sel.disabled, 8000);
+            if (sel && sel.options.length > 1) { sel.value = sel.options[1].value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+            await wait(() => document.querySelectorAll('[data-testid=fc-col]').length >= 2, 5000);
+          }
+          const placeBtn = document.querySelector('[data-testid=fc-place]');
+          const pname = placeBtn?.closest('th')?.querySelector('.fa-cc-title')?.textContent?.trim() ?? '';
+          {
+          placeBtn?.click();
+          await wait(() => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && (f.querySelector('.fa-cc-title')?.textContent ?? '').includes(pname); }, 8000);
+          const titles = [...document.querySelectorAll('[data-testid=fc-col] .fa-cc-title')].map(x => x.textContent.replace(/\s*·\s*mốc$/, '').trim());
+          await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && titles[0] === pname && new Set(titles).size === titles.length, { pname, titles: titles.length, first: titles[0] });
+          }
+        }
+        document.querySelector('[data-testid=mode-pairing]')?.click(); await sleep(400);
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
         pressOn(deskEl(), 'Escape');
         await wait(() => !deskEl(), 8000);

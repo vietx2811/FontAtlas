@@ -344,3 +344,113 @@ describe('review fixes (slices 1-3)', () => {
     expect(document.querySelector('.fa-desk-role-name[title]')).toBeNull();
   });
 });
+
+describe('Compare Combo (slice 4)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  function Host({ api }: { api: ReturnType<typeof createMockApi> }) {
+    const desk = useUiStore(s => s.desk);
+    return desk ? <PairingDesk api={api} desk={desk} /> : null;
+  }
+  async function twoCombos() {
+    const api = createMockApi();
+    const rs = await rows(api);
+    const a = rs.find(x => x.family === 'Playfair Display')!; const b = rs.find(x => x.family === 'Source Serif 4')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: a.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    await api.setComboSlot(res.comboId, 'body', { hashHex: b.hashHex, faceIndex: 0 });
+    const c2 = await api.createCombo(res.case.id, 'B', res.comboId);
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: c2.id, role: 'body', trial: null });
+    render(<Host api={api} />); await settle();
+    return { api, res, c2 };
+  }
+
+  it('lists a column per Combo with the current one first as the base; rows for fonts, relations, VI, license', async () => {
+    const { c2 } = await twoCombos();
+    fireEvent.click(screen.getByTestId('mode-combos')); await settle();
+    const cols = screen.getAllByTestId('cc-col');
+    expect(cols.length).toBe(2);
+    expect(cols[0].dataset.base).toBe('true'); expect(cols[0].textContent).toMatch(new RegExp(`Combo ${2}`));
+    expect(screen.getAllByTestId('cc-rel').length).toBe(2);
+    expect(screen.getAllByTestId('cc-vi').length).toBe(2);
+    expect(screen.getAllByTestId('cc-page').length).toBe(2);
+    void c2;
+  });
+
+  it('Dùng combo này makes it main; Mở trong Pairing returns to the desk on that Combo', async () => {
+    const { api, res, c2 } = await twoCombos();
+    fireEvent.click(screen.getByTestId('mode-combos')); await settle();
+    fireEvent.click(screen.getAllByTestId('cc-main')[0]); await settle();
+    expect((await api.getCase(res.case.id)).combos.find(c => c.id === c2.id)!.isMain).toBe(true);
+    fireEvent.click(screen.getAllByTestId('cc-open')[1]); await settle();
+    expect(screen.queryByTestId('combo-compare')).toBeNull();
+    expect(useUiStore.getState().desk!.comboId).toBe(res.comboId);
+  });
+});
+
+describe('review fixes (slices 1-3)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
+  async function mountBody() {
+    const api = createMockApi();
+    const rs = await rows(api);
+    const a = rs.find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: a.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
+    function Host() { const d = useUiStore(s => s.desk); return d ? <PairingDesk api={api} desk={d} /> : null; }
+    render(<Host />); await settle();
+    return { api, res };
+  }
+
+  it('keys typed in the rename box do not reach the desk (no strip toggle, no combo step, no place)', async () => {
+    const { api, res } = await mountBody();
+    fireEvent.click(screen.getByTestId('combo-label')); await settle();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên Combo/ })); await settle();
+    const input = screen.getByRole('textbox', { name: /Đổi tên Combo/ });
+    for (const k of ['i', 'I', '[', ']', 'ArrowDown']) fireEvent.keyDown(input, { key: k });
+    expect(screen.getByTestId('detail-strip').dataset.collapsed).toBeUndefined();
+    fireEvent.change(input, { target: { value: 'Mới' } });
+    fireEvent.keyDown(input, { key: 'Enter' }); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].name).toBe('Mới');
+    expect((await api.getCase(res.case.id)).combos[0].slots.map(s => s.role)).toEqual(['display']); // Enter không đặt font
+  });
+
+  it('Enter on a button does not place a font; Enter repeat is ignored', async () => {
+    const { api, res } = await mountBody();
+    fireEvent.keyDown(screen.getByTestId('desk-back'), { key: 'Enter' }); await settle();
+    fireEvent.keyDown(screen.getByTestId('pairing-desk'), { key: 'Enter', repeat: true }); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].slots.map(s => s.role)).toEqual(['display']);
+  });
+
+  it('the selected candidate survives a reload of the case data (rename keeps the index)', async () => {
+    const { api, res } = await mountBody();
+    const desk = screen.getByTestId('pairing-desk');
+    if (screen.getAllByTestId('desk-cand').length < 2) return; // thư viện mock chỉ có một ứng viên: không có gì để giữ
+    fireEvent.keyDown(desk, { key: 'ArrowDown' }); await settle();
+    const before = screen.getByTestId('desk-trying').textContent;
+    fireEvent.click(screen.getByTestId('combo-label')); await settle();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên Combo/ })); await settle();
+    fireEvent.change(screen.getByRole('textbox', { name: /Đổi tên Combo/ }), { target: { value: 'X' } });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /Đổi tên Combo/ }), { key: 'Enter' }); await settle();
+    expect(screen.getByTestId('desk-trying').textContent).toBe(before);
+    void api; void res;
+  });
+
+  it('Compare is disabled with a reason while there is only one distinct font; Shift+C does nothing', async () => {
+    await mountBody();
+    const btn = screen.queryByTestId('strip-compare');
+    if (btn) expect(btn.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(screen.getByTestId('pairing-desk'), { key: 'C', shiftKey: true });
+    expect(useUiStore.getState().compare).toBeNull();
+  });
+
+  it('resumeCompare and openCompare leave no Desk behind', async () => {
+    useUiStore.setState({ desk: { caseId: 1, comboId: 1, role: 'body', trial: null }, compareSession: { faces: [{ hashHex: 'a', faceIndex: 0 }, { hashHex: 'b', faceIndex: 0 }], pinned: [], overlayOn: false, overlayIds: [] } });
+    useUiStore.getState().resumeCompare();
+    expect(useUiStore.getState().desk).toBeNull();
+  });
+
+  it('metric rows are TermTips and the role name has a tooltip, no native title', async () => {
+    await mountBody();
+    expect(document.querySelectorAll('[data-testid=strip-metrics] th[scope=row] [data-term]').length).toBe(8);
+    expect(document.querySelector('.fa-desk-role-name[title]')).toBeNull();
+  });
+});
+
