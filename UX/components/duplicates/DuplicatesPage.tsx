@@ -5,6 +5,7 @@ import { dropTags, toMetadataQuery, useUiStore } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
 import { useNoticeStore } from '../../store/notices';
 import { ZeroState } from '../zero/ZeroState';
+import { Tooltip } from '../ui/Tooltip';
 import { itemId, memberName, viewOf } from './dupPlan';
 import { GroupCard, kindGloss, kindLabel } from './GroupCard';
 import { IgnoredTab } from './IgnoredTab';
@@ -106,7 +107,7 @@ export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
           {plan && items.length > 0 && (
             <div className="dup-summary">
               <p data-testid="dup-summary">{t('dup.head', { n: items.length })} {safe.length > 0 && review.length > 0 ? t('dup.head.split', { safe: safe.length, review: review.length }) : safe.length > 0 ? t('dup.head.allSafe', { safe: safe.length }) : t('dup.head.allReview', { review: review.length })}</p>
-              {safe.length > 0 && <button type="button" className="primary" title={t('dup.resolveAllSafe.tip')} data-testid="resolve-all-safe" onClick={() => setDialog({ type: 'all_safe' })}>{t('dup.resolveAllSafe', { n: safe.length })}</button>}
+              {safe.length > 0 && <Tooltip label={t('dup.resolveAllSafe.tip')}><button type="button" className="primary" data-testid="resolve-all-safe" onClick={() => setDialog({ type: 'all_safe' })}>{t('dup.resolveAllSafe', { n: safe.length })}</button></Tooltip>}
             </div>
           )}
           {review.length > 0 && (

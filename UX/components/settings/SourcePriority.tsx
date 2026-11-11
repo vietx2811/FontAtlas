@@ -66,7 +66,7 @@ export function SourcePriority({ api, sources }: { api: Api; sources: SourceDto[
         {shown.map((id, i) => (
           <li key={id} data-testid="prio-row" data-dragging={drag?.id === id}>
             <span className="pos">{t('dup.prio.pos', { n: i + 1 })}</span>
-            <button type="button" className="grip" aria-label={t('dup.prio.drag', { name: name(id) })} title={t('dup.prio.drag', { name: name(id) })} onPointerDown={onDown(id)} onKeyDown={onKey(id)}>⋮⋮</button>
+            <button type="button" className="grip" aria-label={t('dup.prio.drag', { name: name(id) })} onPointerDown={onDown(id)} onKeyDown={onKey(id)}>⋮⋮</button>
             <strong>{name(id)}</strong>
             <span className="mv">
               <button type="button" aria-label={t('dup.prio.up', { name: name(id) })} aria-disabled={i === 0} onClick={() => move(id, i - 1)}>↑</button>

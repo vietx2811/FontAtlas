@@ -661,8 +661,9 @@
     await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
     await wait(() => countNow() === total0, 8000); // số đếm làm mới bất đồng bộ sau khi bỏ nhóm lọc
     await log('class-filter-removed', countNow() === total0, { total0, now: countNow() });
-    // Trùng lặp: mục sidebar khớp duplicate_summary thật; vào mục thấy nhóm "Cùng tệp", chỉ có hành động xem
+    // Trùng lặp: mục sidebar khớp duplicate_summary thật; trang mới: thẻ hai bản cạnh nhau cùng dòng mẫu, câu thường, Giải quyết (Ẩn, không đụng tệp) → Đã giải quyết → Hoàn tác
     const dq = { text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
+    const waitA = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch (e) {} await sleep(200); } return null; };
     const dsum = await inv('duplicate_summary', { q: dq });
     const dupBtn = () => [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(x => /Trùng lặp/.test(x.textContent));
     await wait(() => (dsum.total > 0) === !!dupBtn(), 8000);
@@ -671,16 +672,66 @@
       dupBtn().click();
       await wait(() => document.querySelector('.dup [data-testid=dup-group]'), 20000);
       await sleep(400); await snap('duplicates-view');
-      const dgroups = document.querySelectorAll('[data-testid=dup-group]').length;
-      const dmembers = document.querySelectorAll('[data-testid=dup-member]').length;
+      const dplan = await inv('resolve_preview', { scope: { type: 'all' }, q: dq });
+      const cards = [...document.querySelectorAll('[data-testid=dup-group]')];
       const dbtn = [...document.querySelectorAll('.dup button')].map(x => x.textContent.trim());
       const risky = dbtn.filter(x => /xoá|xóa|delete|di chuyển|move|gộp/i.test(x));
-      const openBtn = [...document.querySelectorAll('.dup button')].find(x => x.textContent.trim() === 'Mở chi tiết');
+      const sides = cards.map(c => [...c.querySelectorAll('[data-testid=dup-spec]')].map(x => x.textContent));
+      const sameSample = sides.every(x => x.length >= 2 && x.every(y => y === x[0] && /Việt Nam/.test(y)));
+      const rawCodes = /same_content_tidiest|preferred_source|preferred_format|newer_version|newest_unknown|collection_file|may_reflow|chosen_by_user/.test(document.querySelector('.dup')?.textContent ?? '');
+      const summary = document.querySelector('[data-testid=dup-summary]')?.textContent ?? '';
+      const detailHidden = !document.querySelector('.dup [data-testid=dup-detail]');
+      cards[0]?.querySelector('button[aria-expanded]')?.click();
+      const detailShown = await wait(() => cards[0]?.querySelector('[data-testid=dup-detail]'), 3000);
+      const openBtn = [...cards[0].querySelectorAll('button')].find(x => x.textContent.trim() === 'Mở chi tiết');
       openBtn?.click();
       const panel = await wait(() => document.querySelector('aside.fa-panel h2'), 15000);
-      await log('duplicates-view', dgroups === dsum.total && dmembers >= 2 && risky.length === 0 && !!panel && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { dgroups, dmembers, risky, panel: panel?.textContent });
+      await log('duplicates-view', cards.length === dplan.items.length && cards.length === dsum.total && sameSample && !rawCodes && risky.length === 0 && detailHidden && !!detailShown && !!panel && summary.includes(`${dsum.total} nhóm`) && !/Lỗi giao diện/.test(document.body.textContent ?? ''), { cards: cards.length, plan: dplan.items.length, total: dsum.total, sides, sameSample, rawCodes, risky, detailHidden, shown: !!detailShown, panel: panel?.textContent, summary });
+      // Giải quyết nhóm đầu bằng Ẩn (mặc định): không đụng tệp, nhóm biến mất, "Đã giải quyết" có dòng, Hoàn tác đưa nhóm về.
+      const rev0 = await inv('resolve_list', { includeUndone: false });
+      const firstCard = () => document.querySelector('.dup [data-testid=dup-group]');
+      [...firstCard().querySelectorAll('button')].find(x => x.textContent.trim() === 'Giải quyết')?.click();
+      const dlg = await wait(() => document.querySelector('[role=dialog] [data-testid=pv-summary]'), 10000);
+      await sleep(300); await snap('duplicates-preview');
+      const hideDefault = document.querySelector('[role=dialog] input[name=dup-act]')?.checked === true;
+      document.querySelector('[data-testid=pv-confirm]')?.click();
+      const gone = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total - 1, 15000);
+      await wait(() => !document.querySelector('[role=dialog]'), 8000);
+      const rev1 = await inv('resolve_list', { includeUndone: false });
+      await log('duplicates-resolve-hide', !!dlg && hideDefault && !!gone && rev1.length === rev0.length + 1 && rev1[0].action === 'hide', { hideDefault, before: rev0.length, after: rev1.length, action: rev1[0]?.action });
+      [...document.querySelectorAll('.dup [role=tab]')].find(x => /Đã giải quyết/.test(x.textContent))?.click();
+      const row = await wait(() => document.querySelector('[data-testid=dup-res-row]'), 10000);
+      await sleep(300); await snap('duplicates-resolved');
+      [...(row?.querySelectorAll('button') ?? [])].find(x => x.textContent.trim() === 'Hoàn tác')?.click();
+      const back = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total, 15000);
+      await log('duplicates-undo', !!row && !!back && (await inv('resolve_list', { includeUndone: false })).length === rev0.length, { restored: !!back });
+      [...document.querySelectorAll('.dup [role=tab]')].find(x => /Cần xử lý/.test(x.textContent))?.click();
     } else {
       await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
+    }
+    // Thứ tự ưu tiên nguồn (Cài đặt → Thư viện): hàng khớp source_priority; nút ↓ đổi thứ tự thật rồi ↑ trả lại
+    {
+      const srcsNow = await inv('list_sources', {});
+      if (srcsNow.length >= 2) {
+        document.querySelector('button[aria-label="Cài đặt"]')?.click();
+        await wait(() => document.querySelector('[data-testid=settings]'));
+        [...document.querySelectorAll('.fa-set-nav button')].find(b => /Thư viện/.test(b.textContent))?.click();
+        const box = await wait(() => document.querySelector('[data-testid=source-priority]'), 8000);
+        const order0 = await inv('source_priority', {});
+        const rowsN = () => [...document.querySelectorAll('[data-testid=prio-row] strong')].map(x => x.textContent);
+        const nameOf = id => srcsNow.find(s => s.id === id)?.name;
+        const match0 = JSON.stringify(rowsN()) === JSON.stringify(order0.map(nameOf));
+        await sleep(200); await snap('source-priority');
+        document.querySelector('[data-testid=prio-row] .mv button:nth-child(2)')?.click();
+        const moved = await waitA(async () => { const o = await inv('source_priority', {}); return o[0] === order0[1] && o[1] === order0[0]; }, 8000);
+        document.querySelector('[data-testid=prio-row]:nth-child(2) .mv button:nth-child(1)')?.click();
+        const restored = await waitA(async () => JSON.stringify(await inv('source_priority', {})) === JSON.stringify(order0), 8000);
+        await log('source-priority', !!box && match0 && !!moved && !!restored, { rows: rowsN(), order0, match0, moved: !!moved, restored: !!restored });
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+        await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);
+      } else {
+        await log('source-priority', true, 'ít hơn 2 nguồn trong fixture QA: khối thứ tự ưu tiên ẩn đúng');
+      }
     }
     // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
     // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).

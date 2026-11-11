@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Api, PlanItemDto, PlanMemberDto } from '../../api';
 import { t } from '../../i18n';
 import { NoteMark } from '../ui/noteMark';
+import { Tooltip } from '../ui/Tooltip';
 import { TermTip } from '../ui/terms';
 import { useNoticeStore } from '../../store/notices';
 import { faceKey, useUiStore } from '../../store/ui';
@@ -27,7 +28,7 @@ function Details({ api, m, showVersion }: { api: Api; m: PlanMemberDto; showVers
   const reveal = async () => { try { await api.revealLocation(m.path); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.revealFail', { msg: e instanceof Error ? e.message : String(e) }) }); } };
   type Row = { k: string; v: React.ReactNode; term?: string };
   const rows: Row[] = [
-    { k: t('dup.d.path'), v: <span className="dup-path" title={m.path}>{p.head && <span className="dup-head">{p.head}</span>}<span className="dup-tail">{p.tail}</span></span> },
+    { k: t('dup.d.path'), v: <Tooltip label={m.path}><span className="dup-path" tabIndex={0}>{p.head && <span className="dup-head">{p.head}</span>}<span className="dup-tail">{p.tail}</span></span></Tooltip> },
     { k: t('dup.d.source'), v: m.sourceName },
     { k: t('dup.d.format'), v: <FormatChip format={m.format} /> },
     ...(showVersion ? [{ k: t('dup.d.version'), v: m.version ?? '—' }, { k: t('dup.d.revision'), v: m.revision !== null ? revisionText(m.revision) : '—', term: 'revision' }, { k: t('dup.d.modified'), v: dateText(m.modified) }] : []),
@@ -52,13 +53,13 @@ function Side({ api, m, role, active, onKeep, note, canKeep, depth }: { api: Api
     <div className={`dup-side ${role}`} data-testid={`dup-side-${role}`}>
       <div className="dup-side-h">
         <span className={`dup-role ${role}`}>{role === 'keep' ? t('dup.keep') : t('dup.hideLabel')}</span>
-        <b className="dup-name" title={m.path}>{memberName(m)}</b>
+        <Tooltip label={m.path} onlyIfTruncated><b className="dup-name">{memberName(m)}</b></Tooltip>
         <FormatChip format={m.format} />
         {m.isVariable && <TermTip term="variable_font"><span className="dup-fmt" tabIndex={0}>{t('dup.d.variable')}</span></TermTip>}
         {m.viMissing > 0 && <NoteMark text={t('dup.d.viMissing', { n: m.viMissing })} inline />}
       </div>
       <Specimen api={api} m={m} active={active} />
-      <div className="dup-where" title={m.path}>{m.sourceName} · <span className="dup-tail">{splitPath(m.path, depth).tail}</span></div>
+      <Tooltip label={m.path} onlyIfTruncated><div className="dup-where">{m.sourceName} · <span className="dup-tail">{splitPath(m.path, depth).tail}</span></div></Tooltip>
       {note}
       {role === 'hide' && canKeep && onKeep && <button type="button" className="dup-linkbtn" onClick={onKeep}>{t('dup.swap.to')}</button>}
     </div>

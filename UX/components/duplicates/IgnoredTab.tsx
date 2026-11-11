@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Api, IgnoredGroupDto } from '../../api';
 import { t } from '../../i18n';
+import { Tooltip } from '../ui/Tooltip';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { kindLabel } from './GroupCard';
@@ -36,7 +37,7 @@ export function IgnoredTab({ api }: { api: Api }): React.JSX.Element {
             <span className="dup-muted">{t('dup.ign.at', { d: new Date(g.ignoredAt * 1000).toLocaleDateString('vi-VN') })}</span>
             <button type="button" onClick={() => void restore(g)}>{t('dup.ign.show')}</button>
           </header>
-          <ul className="dup-paths">{g.group.faces.map((f, i) => <li key={i} className="dup-path" title={f.path ?? undefined}>{f.path ? splitPath(f.path, 2).tail : '—'}</li>)}</ul>
+          <ul className="dup-paths">{g.group.faces.map((f, i) => <li key={i} className="dup-path">{f.path ? <Tooltip label={f.path}><span tabIndex={0}>{splitPath(f.path, 2).tail}</span></Tooltip> : '—'}</li>)}</ul>
         </article>
       ))}
     </div>

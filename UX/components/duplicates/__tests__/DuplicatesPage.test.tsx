@@ -74,6 +74,13 @@ describe('DuplicatesPage: reading the page', () => {
     expect(g.textContent).toContain('Khoá nhóm');
   });
 
+  it('uses the app tooltip, never a native title attribute; every control has an accessible name; no button is natively disabled', async () => {
+    await mount();
+    click(within(cardOf(/Be Vietnam Pro Regular/)).getByRole('button', { name: 'Chi tiết' }));
+    expect(document.querySelectorAll('.dup [title]')).toHaveLength(0);
+    for (const b of document.querySelectorAll('.dup button')) { expect((b.textContent ?? '').trim() || b.getAttribute('aria-label'), b.outerHTML).toBeTruthy(); expect(b.hasAttribute('disabled')).toBe(false); }
+  });
+
   it('shows an empty state when nothing is duplicated, and an error with retry', async () => {
     const api = createMockApi();
     vi.spyOn(api, 'resolvePreview').mockResolvedValueOnce({ items: [], needsReview: 0, keepCount: 0, hideCount: 0, reclaimableBytes: 0 });
