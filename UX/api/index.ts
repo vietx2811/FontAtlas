@@ -4,7 +4,7 @@ import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
@@ -105,6 +105,20 @@ export interface Api extends LibraryApi {
   /** Số nhóm trùng theo loại (cùng tệp / phiên bản / định dạng); tôn trọng bộ lọc `q`. */
   duplicateSummary(q?: FaceQuery): Promise<DuplicateSummaryDto>;
   duplicateGroups(q?: FaceQuery): Promise<DuplicateGroupDto[]>;
+  /** Kế hoạch giải quyết (không đổi gì): bản giữ, bản thua, lý do, đủ điều kiện Thùng rác. `q` = bộ lọc của trang. */
+  resolvePreview(scope: ResolveScopeDto, q?: FaceQuery): Promise<ResolvePlanDto>;
+  /** Áp dụng: từng bản thua độc lập, thành công một phần là bình thường (`done` + `failed`). */
+  resolveApply(req: ResolveRequestDto): Promise<ResolveResultDto>;
+  /** Hoàn tác các quyết định (mới nhất trước). `needsRescan` sau khi đưa tệp từ Thùng rác về. */
+  resolveUndo(ids: number[]): Promise<ResolveResultDto>;
+  resolveList(includeUndone: boolean): Promise<ResolutionDto[]>;
+  duplicateIgnore(kind: DuplicateKindDto, key: string): Promise<void>;
+  duplicateUnignore(kind: DuplicateKindDto, key: string): Promise<void>;
+  duplicateIgnored(): Promise<IgnoredGroupDto[]>;
+  /** Id nguồn, ưu tiên giữ bản nhất đứng đầu. */
+  sourcePriority(): Promise<number[]>;
+  /** Gửi toàn bộ danh sách sau khi kéo-thả; trả thứ tự đầy đủ mới. */
+  setSourcePriority(ids: number[]): Promise<number[]>;
   pairCandidates(face: FaceKeyDto, opts: PairOptsDto): Promise<PairCandidateDto[]>;
   // Dữ liệu và hệ thống
   /** Sao lưu user.db; trả đường dẫn bản sao. */

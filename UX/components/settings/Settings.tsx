@@ -10,6 +10,7 @@ import { t } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
+import { SourcePriority } from './SourcePriority';
 import { Modal } from '../Modal';
 import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
@@ -135,6 +136,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
           </li>
         ))}
       </ul>
+      <SourcePriority api={api} sources={sources} />
       <Switch label="Quét lại khi mở app" on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
       <Switch label={t('cloud.switch')} on={s.cloudPreviewDownload} onChange={v => void patch({ cloudPreviewDownload: v })} />
       <p className="fa-set-note">{t('cloud.switch.note')}</p>
