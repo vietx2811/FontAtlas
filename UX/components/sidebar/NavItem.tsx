@@ -5,17 +5,25 @@ import { Tooltip } from '../ui/Tooltip';
 
 type Props = {
   icon?: IconName; swatch?: string | null; label: string; count?: number | null; current?: boolean;
-  unavailable?: boolean; title?: string; kbd?: string; onClick(): void; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
+  unavailable?: boolean; title?: string; kbd?: string; onClick(): void;
+  /** Chuột phải, phím Menu hoặc ⇧F10; `rect` có khi mở bằng bàn phím. Không có → không chặn menu hệ thống. */
+  onContextMenu?(at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void; onRename?(): void; /** Mục đang được menu nhắm tới. */ context?: boolean; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
 };
 
-export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub }: Props): React.JSX.Element {
+export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub, onContextMenu, onRename, context }: Props): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   return (
     <div className="fa-nav-wrap">
       {/* Thanh bên thu gọn chỉ còn icon → luôn có tooltip; khi mở rộng chỉ hiện nếu có chú thích riêng (đường dẫn, trạng thái). */}
       <Tooltip label={title ?? label} disabled={!collapsed && title === undefined}>
       <button type="button" className={`fa-nav${unavailable ? ' fa-ejected' : ''}`} aria-current={current ? 'true' : undefined}
-        data-unavailable={unavailable ? 'true' : undefined} aria-label={count != null ? `${label} ${count}` : label} onClick={onClick}>
+        data-unavailable={unavailable ? 'true' : undefined} aria-label={count != null ? `${label} ${count}` : label} onClick={onClick}
+        data-context={context ? 'true' : undefined}
+        onContextMenu={onContextMenu ? e => { e.preventDefault(); onContextMenu({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); } : undefined}
+        onKeyDown={e => {
+          if (onContextMenu && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); onContextMenu({ x: r.left + 24, y: r.bottom - 4, keyboard: true, el: e.currentTarget }); }
+          else if (onRename && e.key === 'F2') { e.preventDefault(); onRename(); }
+        }}>
         {swatch !== undefined && <span className="fa-swatch" style={{ background: swatch ?? 'var(--muted)' }} aria-hidden />}
         {icon && <Icon name={icon} />}
         <span className="fa-lbl">{label}</span>

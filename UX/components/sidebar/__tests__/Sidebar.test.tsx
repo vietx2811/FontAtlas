@@ -87,7 +87,10 @@ describe('Sidebar', () => {
     await settle();
     useUiStore.getState().setView(`col:${c.id}`);
     fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn Cũ' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Xoá dự án' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Xoá dự án…' }));
+    await settle();
+    expect(screen.getByRole('button', { name: /^Cũ/ })).toBeTruthy(); // chưa xoá: đang hỏi xác nhận
+    fireEvent.click(screen.getByTestId('smenu-confirm'));
     await settle();
     expect(screen.queryByRole('button', { name: /^Cũ/ })).toBeNull();
     expect(useUiStore.getState().view).toBe('all');
@@ -294,5 +297,60 @@ describe('Sidebar', () => {
     expect(again.getAttribute('aria-current')).toBeNull();
     fireEvent.click(again);
     expect(useUiStore.getState().compare).toHaveLength(3);
+  });
+
+  describe('context menu (C6)', () => {
+    it('right click opens the menu of the item WITHOUT changing the view; the item is marked; Esc returns focus to it', async () => {
+      const api = createMockApi();
+      const c = await api.createCollection('Dự án A', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Dự án A/ });
+      fireEvent.contextMenu(item, { clientX: 20, clientY: 40 }); await settle();
+      expect(screen.getByRole('menu', { name: 'Menu Dự án A' })).toBeTruthy();
+      expect(item.getAttribute('data-context')).toBe('true');
+      expect(useUiStore.getState().view).toBe('all');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(item.getAttribute('data-context')).toBeNull();
+      void c;
+    });
+    it('keyboard: ContextMenu key opens it with the first item focused; F2 renames a collection inline', async () => {
+      const api = createMockApi();
+      await api.createCollection('Dự án B', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Dự án B/ });
+      item.focus(); fireEvent.keyDown(item, { key: 'F10', shiftKey: true }); await settle();
+      expect(document.activeElement?.textContent).toMatch(/Mở/);
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      fireEvent.keyDown(item, { key: 'F2' }); await settle();
+      expect(screen.getByRole('textbox', { name: 'Đổi tên dự án' })).toBeTruthy();
+    });
+    it('Gần đây: clear history asks first; Đang bật: Tắt tất cả is disabled with a reason when nothing is active; plain items (Tất cả) have no menu', async () => {
+      useUiStore.setState({ recentViews: [{ face: 'ab:0', at: 1 }] });
+      await mount();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Gần đây/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá lịch sử/ })); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(1);
+      fireEvent.click(screen.getByTestId('smenu-cancel')); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(1);
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Gần đây/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá lịch sử/ })); await settle();
+      fireEvent.click(screen.getByTestId('smenu-confirm')); await settle();
+      expect(useUiStore.getState().recentViews).toHaveLength(0);
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Đang bật/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Tắt tất cả/ }).getAttribute('aria-disabled')).toBe('true');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      const prevented = !fireEvent.contextMenu(screen.getByRole('button', { name: /Tất cả/ }));
+      expect(prevented).toBe(false); // không chặn: menu hệ thống vẫn như cũ
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+    it('tag: Lọc theo thẻ này sets the tag', async () => {
+      const { api } = await mount();
+      const t = await api.createTag('serif');
+      useUiStore.getState().bumpLibrary(false); await settle();
+      fireEvent.contextMenu(await screen.findByRole('button', { name: 'serif' })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Lọc theo thẻ này' })); await settle();
+      expect(useUiStore.getState().tag).toBe(String(t.id));
+    });
   });
 });

@@ -13,4 +13,11 @@ export const VIEW_I18N = {
   'view.sort.src.family': 'Theo tên font; trong một family xếp Weight tăng dần.', 'view.sort.src.added': 'Lúc Font Atlas lần đầu thấy font. Lần quét đầu cả thư viện cùng giờ, nên hữu ích nhất cho font thêm sau.',
   'view.sort.src.weight': 'Theo usWeightClass trong bảng OS/2 của font.', 'view.sort.src.match': 'Độ liên quan với chữ đang tìm.',
   'view.sort.locked.recent': 'Thứ tự theo lần mở gần nhất', 'view.sort.locked.active': 'Thứ tự theo lần bật',
+  'smenu.open': 'Mở', 'smenu.reveal': 'Hiện trong Finder', 'smenu.reveal.off': 'Nguồn chưa kết nối', 'smenu.rescan': 'Quét lại', 'smenu.rescan.busy': 'Đang quét',
+  'smenu.rename': 'Đổi tên', 'smenu.deactivateAll': 'Tắt tất cả font', 'smenu.deactivateAllN': 'Tắt tất cả ({n})', 'smenu.empty': 'Không có gì để làm',
+  'smenu.deleteCollection': 'Xoá dự án…', 'smenu.filterTag': 'Lọc theo thẻ này', 'smenu.clearRecent': 'Xoá lịch sử "Gần đây"…', 'smenu.resume': 'Tiếp tục', 'smenu.closeSession': 'Đóng phiên so sánh',
+  'smenu.menuOf': 'Menu {name}', 'smenu.cancel': 'Huỷ',
+  'smenu.delCol.title': 'Xoá dự án «{name}»?', 'smenu.delCol.body': 'Chỉ xoá dự án; các font vẫn còn trong thư viện. Không hoàn tác được.', 'smenu.delCol.ok': 'Xoá dự án',
+  'smenu.clearRecent.title': 'Xoá lịch sử "Gần đây"?', 'smenu.clearRecent.body': 'Danh sách font đã mở gần đây sẽ trống. Font không bị xoá.', 'smenu.clearRecent.ok': 'Xoá lịch sử',
+  'smenu.off.title': 'Tắt {n} font?', 'smenu.off.body': 'Font Atlas sẽ tắt các font đang bật. Chương trình đang dùng font nào có thể phải mở lại.', 'smenu.off.ok': 'Tắt font',
 } as const;

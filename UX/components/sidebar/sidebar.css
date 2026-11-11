@@ -22,9 +22,6 @@
 .fa-nav-wrap:hover .fa-more, .fa-more[aria-expanded="true"] { display: grid; }
 .fa-nav-wrap:hover .fa-n { visibility: hidden; }
 .fa-more:hover { background: var(--chrome-active); color: var(--fg); }
-.fa-menu { position: absolute; right: 4px; top: 32px; z-index: 40; min-width: 140px; padding: 4px; border-radius: 10px; background: var(--float); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); display: flex; flex-direction: column; }
-.fa-menu button { text-align: left; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-.fa-menu button:hover { background: var(--chrome-hover); }
 
 .fa-sec { margin-top: 14px; }
 .fa-sec-row { position: relative; }
@@ -87,3 +84,5 @@
 .fa-scan-cloud { margin-left: 4px; }
 .fa-scan { flex-wrap: wrap; }
 .fa-side[data-collapsed="true"] .fa-cloud { display: none; }
+
+.fa-nav[data-context="true"], .fa-tag[data-context="true"] { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }

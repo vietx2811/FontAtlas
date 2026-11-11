@@ -97,6 +97,9 @@ export interface UiActions {
   setSettingsOpen(on: boolean): void;
   openCompare(faces: FaceKeyDto[]): void;
   closeCompare(): void;
+  /** Đóng và quên phiên so sánh (menu Sidebar: Đóng phiên so sánh). */
+  closeCompareSession(): void;
+  clearRecent(): void;
   setSortBy(by: SortField): void;
   setSortDesc(desc: boolean): void;
   resetSort(): void;
@@ -213,6 +216,8 @@ export function createUiStore(): UiStore {
     setSortBy: by => set({ sort: { by, desc: defaultDesc(by) } }),
     setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc } })),
     resetSort: () => set({ sort: { ...DEFAULT_SORT } }),
+    closeCompareSession: () => set({ compare: null, compareSession: null }),
+    clearRecent: () => set({ recentViews: [] }),
     closeCompare: () => set(s => ({ compare: null, desk: s.deskReturn, deskReturn: null })),
     resumeCompare: () => set(s => (s.compareSession ? { compare: s.compareSession.faces, pairThese: null, desk: null, settingsOpen: false } : s)),
     addCompareFace: f => {

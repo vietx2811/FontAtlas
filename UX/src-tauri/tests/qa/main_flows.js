@@ -837,6 +837,23 @@
       } else await log('view-options', false, 'no view-open button');
     }
 
+    // Menu chuột phải Sidebar (C6): mở trên "Gần đây" không đổi view; Esc đóng và trả focus.
+    {
+      const nav = [...document.querySelectorAll('[data-testid=sidebar] .fa-nav')].find(b => /Gần đây/.test(b.textContent));
+      if (nav) {
+        const viewBefore = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        const r = nav.getBoundingClientRect();
+        nav.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 10 }));
+        await wait(() => !!document.querySelector('[role=menu]'), 5000);
+        const opened = !!document.querySelector('[role=menu]') && nav.dataset.context === 'true';
+        await snap('sidebar-context-menu');
+        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
+        await log('sidebar-context-menu', opened && !document.querySelector('[role=menu]') && viewBefore === viewAfter && document.activeElement === nav, { viewBefore, viewAfter });
+      } else await log('sidebar-context-menu', false, 'no Gần đây item');
+    }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();
