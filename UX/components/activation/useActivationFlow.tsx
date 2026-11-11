@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Api, ActivationReportDto, ConflictDto, FaceKeyDto, FileOutcomeDto, FileResultDto } from '../../api';
 import { t } from '../../i18n';
 import { refreshActivation } from '../../store/activationSync';
@@ -58,22 +58,25 @@ export function useActivationFlow(api: Api): ActivationFlow {
     await refresh();
   }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Đang bật hàng loạt cho Case/Dự án nào: bấm đôi không gửi hai lần. */
+  const busy = useRef(new Set<string>());
+  const once = async (key: string, fn: () => Promise<void>) => { if (busy.current.has(key)) return; busy.current.add(key); try { await fn(); } finally { busy.current.delete(key); } };
   const uniq = (rep: ActivationReportDto) => new Set(rep.results.map(r => r.hashHex)).size;
   /** "Bật tất cả" của một Case: cùng luồng xung đột; font `missing` được nêu riêng, không tính là lỗi. */
-  const activateCase = useCallback(async (caseId: number) => {
+  const activateCase = useCallback((caseId: number) => once(`case:${caseId}`, async () => {
     try {
       const r = await api.activationActivateCase(caseId);
       await afterActivate(r.report, uniq(r.report));
       if (r.skippedMissing.length) push({ kind: 'info', text: t('act.case.missing', { n: r.skippedMissing.length }) });
     } catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); }
     await refresh();
-  }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
   /** "Bật tất cả" của một Dự án (collection). */
-  const activateCollection = useCallback(async (collectionId: number) => {
+  const activateCollection = useCallback((collectionId: number) => once(`col:${collectionId}`, async () => {
     try { const rep = await api.activationActivateCollection(collectionId); await afterActivate(rep, uniq(rep)); }
     catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); }
     await refresh();
-  }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Đổi phạm vi của font ĐANG bật (không tắt giữa chừng). */
   const setScope = useCallback(async (faces: FaceKeyDto[], scope: 'session' | 'persistent') => {

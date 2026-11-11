@@ -61,4 +61,7 @@ export const LIBRARY_EN: Record<keyof typeof LIBRARY_I18N, string> = {
   'group.deselected': 'Deselected {n} fonts in the collapsed group.',
   'group.selectAll.skip': 'Selected {n} visible fonts; skipped {skipped} fonts in collapsed groups.',
   'group.selectAll.capSkip': 'Selected the first {max} of {total} visible fonts (skipped {skipped} fonts in collapsed groups).',
+  'rmsrc.changed': 'The numbers just changed (the library is being scanned or updated). Check the new numbers, then press Remove from library again.',
+  'rmsrc.scanning': 'Scanning: these numbers may still change.',
+  'rmsrc.scanning.tip': 'Font Atlas is scanning the library. When you press Remove, the numbers are worked out again; if they differ, the new numbers are shown first.',
 };

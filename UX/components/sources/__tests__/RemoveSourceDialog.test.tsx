@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { CmdError } from '../../../api';
 import { RemoveSourceDialog } from '../RemoveSourceDialog';
+import { useScanStore } from '../../../store/scan';
 
 const settle = async () => { for (let i = 0; i < 5; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 afterEach(cleanup);
@@ -68,5 +69,29 @@ describe('RemoveSourceDialog', () => {
     expect(screen.getByTestId('rmsrc-error').textContent).toContain('Không gỡ được nguồn: db locked');
     expect(onRemoved).not.toHaveBeenCalled();
     expect(screen.getByTestId('rmsrc')).toBeTruthy();
+  });
+  it('numbers that changed between opening and confirming: nothing is removed, the new numbers are shown, a second confirm removes', async () => {
+    const api = createMockApi();
+    const source = (await api.listSources())[0];
+    const prev = vi.spyOn(api, 'removeSourcePreview').mockResolvedValue(report());
+    const rem = vi.spyOn(api, 'removeSource').mockResolvedValue(report({ removedLocations: 30 }));
+    const onRemoved = vi.fn();
+    render(<RemoveSourceDialog api={api} source={source} onClose={() => {}} onRemoved={onRemoved} />); await settle();
+    prev.mockResolvedValue(report({ removedLocations: 30 })); // đang quét: thêm vị trí
+    fireEvent.click(screen.getByTestId('rmsrc-confirm')); await settle();
+    expect(rem).not.toHaveBeenCalled();
+    expect(screen.getByTestId('rmsrc-error').textContent).toContain('Số liệu vừa thay đổi');
+    expect(screen.getByTestId('rmsrc').querySelector('[data-fact="locations"]')?.textContent).toContain('30 vị trí');
+    fireEvent.click(screen.getByTestId('rmsrc-confirm')); await settle();
+    expect(rem).toHaveBeenCalledTimes(1);
+    expect(onRemoved).toHaveBeenCalled();
+  });
+  it('while a scan runs the dialog says the numbers may still change', async () => {
+    useScanStore.setState({ scanning: true });
+    await setup();
+    expect(screen.getByTestId('rmsrc-scanning')).toBeTruthy();
+    cleanup(); useScanStore.setState({ scanning: false });
+    await setup();
+    expect(screen.queryByTestId('rmsrc-scanning')).toBeNull();
   });
 });

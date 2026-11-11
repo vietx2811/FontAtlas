@@ -4,6 +4,7 @@ import type { RemoveSourceReportDto } from '../../bindings';
 import { t } from '../../i18n';
 import { Modal } from '../Modal';
 import { NoteMark } from '../ui/noteMark';
+import { useScanStore } from '../../store/scan';
 
 type Props = { api: Api; source: SourceDto; onClose(): void; onRemoved(report: RemoveSourceReportDto): void };
 
@@ -14,6 +15,7 @@ export function RemoveSourceDialog({ api, source, onClose, onRemoved }: Props): 
   const [report, setReport] = useState<RemoveSourceReportDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const scanning = useScanStore(s => s.scanning);
   const running = useRef(false);
   const seq = useRef(0);
   const alive = useRef(true);
@@ -29,7 +31,12 @@ export function RemoveSourceDialog({ api, source, onClose, onRemoved }: Props): 
   const go = async () => {
     if (running.current || !report) return;
     running.current = true; setBusy(true); setError(null);
-    try { const r = await api.removeSource(source.id); onRemoved(r); }
+    try {
+      // Số liệu đã xem có thể cũ (đang quét, hoặc thư viện đổi từ lúc mở hộp): lấy lại; khác → cho xem số mới rồi bấm lại, không gỡ theo số cũ.
+      const fresh = await api.removeSourcePreview(source.id);
+      if (JSON.stringify(fresh) !== JSON.stringify(report)) { if (alive.current) { setReport(fresh); setError(t('rmsrc.changed')); } return; }
+      const r = await api.removeSource(source.id); onRemoved(r);
+    }
     catch (e) { if (alive.current) setError(t('rmsrc.fail', { msg: msg(e) })); }
     finally { running.current = false; if (alive.current) setBusy(false); }
   };
@@ -39,6 +46,7 @@ export function RemoveSourceDialog({ api, source, onClose, onRemoved }: Props): 
       <div data-testid="rmsrc">
         <p>{t('rmsrc.keepFiles')}</p>
         {!report && !error && <p role="status" data-testid="rmsrc-loading">{t('rmsrc.loading')}</p>}
+        {scanning && <p className="fa-set-note" data-testid="rmsrc-scanning"><NoteMark inline kind="warn" text={t('rmsrc.scanning.tip')} /> {t('rmsrc.scanning')}</p>}
         {report && (
           <ul className="fa-rmsrc-list" data-testid="rmsrc-facts">
             <li data-fact="locations">{t('rmsrc.locations', { n: report.removedLocations })}</li>

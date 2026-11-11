@@ -59,4 +59,7 @@ export const LIBRARY_I18N = {
   'group.deselected': 'Đã bỏ chọn {n} font trong nhóm thu gọn.',
   'group.selectAll.skip': 'Đã chọn {n} font đang thấy; bỏ qua {skipped} font trong nhóm thu gọn.',
   'group.selectAll.capSkip': 'Đã chọn {max} font đầu tiên trong {total} font đang thấy (bỏ qua {skipped} font trong nhóm thu gọn).',
+  'rmsrc.changed': 'Số liệu vừa thay đổi (thư viện đang được quét hoặc cập nhật). Xem lại số mới rồi bấm Gỡ khỏi thư viện lần nữa.',
+  'rmsrc.scanning': 'Đang quét: các con số có thể còn đổi.',
+  'rmsrc.scanning.tip': 'Font Atlas đang quét thư viện. Khi bạn bấm Gỡ, các con số được tính lại; nếu khác thì sẽ hiện số mới để bạn xem trước.',
 } as const;

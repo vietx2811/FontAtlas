@@ -370,6 +370,22 @@ describe('Sidebar', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /Bật tất cả/ })); await settle();
       expect(spy).toHaveBeenCalledWith(col.id);
     });
+    it('a double click on Bật tất cả sends one request while the first is running', async () => {
+      const { api } = await mount();
+      const col = await api.createCollection('Kép', null);
+      const rows = (await api.queryFaces({ limit: 2 })).items;
+      await api.addToCollection(col.id, rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+      useUiStore.getState().bumpLibrary(false); await settle();
+      let release: () => void = () => {};
+      const real = api.activationActivateCollection.bind(api);
+      const spy = vi.spyOn(api, 'activationActivateCollection').mockImplementation(async (id, o) => { await new Promise<void>(r => { release = r; }); return real(id, o); });
+      for (let n = 0; n < 2; n++) {
+        fireEvent.contextMenu(screen.getByRole('button', { name: /^Kép/ })); await settle();
+        fireEvent.click(screen.getByRole('menuitem', { name: /Bật tất cả/ })); await settle();
+      }
+      expect(spy).toHaveBeenCalledTimes(1);
+      await act(async () => { release(); }); await settle();
+    });
     it('an empty project: the entry is disabled with a reason', async () => {
       const { api } = await mount();
       await api.createCollection('Rỗng', null); useUiStore.getState().bumpLibrary(false); await settle();
