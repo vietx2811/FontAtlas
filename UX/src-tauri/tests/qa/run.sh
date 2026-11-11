@@ -36,5 +36,5 @@ import sys, json
 fail = 0
 for line in sys.stdin:
     d = json.loads(line); fail += not d["ok"]
-    print("OK  " if d["ok"] else "FAIL", "%4ss" % d.get("t", "?"), d["step"], "" if d["ok"] else json.dumps(d["detail"], ensure_ascii=False)[:600])
+    print("OK  " if d["ok"] else "FAIL", "%4ss" % d.get("t", "?"), d["step"], "" if d["ok"] else json.dumps(d.get("detail"), ensure_ascii=False)[:600])
 sys.exit(1 if fail else 0)'

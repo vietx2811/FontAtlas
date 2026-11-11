@@ -7,7 +7,7 @@ import { createApi } from './api/select';
 import { applyDevBoot, applyDevPreset, devInitial } from './store/devPreset';
 import { StatusProvider } from './context/StatusContext';
 import { LocaleBoundary } from './i18n/LocaleBoundary';
-import { chooseLocale, initLocale } from './i18n';
+import { chooseLocale, initLocale, hasChosenThisSession } from './i18n';
 
 // Trong cửa sổ Tauri: lệnh thật (UX/bindings). Ngoài Tauri hoặc VITE_FA_API=mock: mock, kèm preset trạng thái cho dev/QA.
 const dev = import.meta.env.DEV;
@@ -37,8 +37,8 @@ const render = () => root.render(
 // Chờ tối đa LANG_WAIT_MS: backend chậm thì vẽ theo ngôn ngữ hệ thống, BootGate đọc lại `uiLang` khi backend sẵn sàng.
 const LANG_WAIT_MS = 300;
 const langReady = Promise.race([
-  api.getSettings().then(s => { initLocale(s.uiLang); }, () => { initLocale(null); }),
-  new Promise<void>(res => setTimeout(() => { initLocale(null); res(); }, LANG_WAIT_MS)),
+  api.getSettings().then(s => { if (!hasChosenThisSession()) initLocale(s.uiLang); }, () => { if (!hasChosenThisSession()) initLocale(null); }),
+  new Promise<void>(res => setTimeout(() => { if (!hasChosenThisSession()) initLocale(null); res(); }, LANG_WAIT_MS)),
 ]);
 if (dev) {
   void applyDevBoot(api, location.hash).catch(e => console.warn('dev boot', e)).then(() => langReady).finally(() => {
