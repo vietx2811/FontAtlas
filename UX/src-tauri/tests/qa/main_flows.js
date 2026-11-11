@@ -787,7 +787,9 @@
     {
       const srcs2 = await inv('list_sources', {});
       const target = srcs2.find(x => x.available) ?? srcs2[0];
-      const item = target && [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes(target.name));
+      // đúng mục nguồn: theo title (đường dẫn) hoặc tên đứng đầu rồi tới số đếm — KHÔNG dùng includes (tên nguồn có thể chỉ một chữ cái)
+      const srcBtns = [...document.querySelectorAll('[aria-label="Thanh bên"] button')];
+      const item = target && (srcBtns.find(b => target.path && b.getAttribute('title') === target.path) ?? srcBtns.find(b => b.textContent.startsWith(target.name) && /^\d*$/.test(b.textContent.slice(target.name.length).replace(/\D.*$/, ''))));
       if (item) {
         const prev = await inv('remove_source_preview', { sourceId: target.id });
         const r = item.getBoundingClientRect();
@@ -800,6 +802,7 @@
         const locOk = locText.includes(`${prev.removedLocations} vị trí`);
         const noDelete = /không xoá file font nào/.test(document.querySelector('[data-testid=rmsrc]')?.textContent ?? '');
         document.querySelector('[data-testid=rmsrc-cancel]')?.click();
+        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); // không để menu mở chặn ⌘A của bước sau
         const closed = await waitA(() => !document.querySelector('[data-testid=rmsrc]'), 5000);
         const after = await inv('list_sources', {});
         await log('remove-source-preview', !!facts && locOk && noDelete && !!closed && after.length === srcs2.length && after.some(x => x.id === target.id), { target: target.name, prev, locText, locOk, noDelete, closed: !!closed, before: srcs2.length, after: after.length });
