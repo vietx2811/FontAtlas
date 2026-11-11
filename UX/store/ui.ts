@@ -1,4 +1,6 @@
 // UI state của app (Plan 6b §3). Lọc không chạy ở client: view/tag/query/viOnly → GridQuery → query_faces.
+import { defaultSample, isDefaultSample } from '../i18n/sample';
+import { subscribeLocale } from '../i18n/locale';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, FaceKeyDto, UiStateDto } from '../api';
 import type { ComboRoleDto, OwnerDto } from '../bindings';
@@ -16,7 +18,7 @@ export const SAMPLE_MAX = 72;
 export const COMPARE_MAX = 8;
 export const COMPARE_MIN = 2;
 export const OVERLAY_MAX = 4;
-export const DEFAULT_SAMPLE_TEXT = 'Phở bò Hà Nội';
+export { defaultSample };
 
 export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };
@@ -199,7 +201,7 @@ export function createUiStore(): UiStore {
   const initial = fromDto(DEFAULT_UI_STATE);
   let stop: (() => void) | undefined;
   const store: UiStore = create<UiState & UiActions>()((set, get) => ({
-    filters: {}, familyScope: null, view: 'all', query: '', viOnly: false, sample: DEFAULT_SAMPLE_TEXT, sort: { ...DEFAULT_SORT }, groupCollapsed: new Set(), groupScope: '',
+    filters: {}, familyScope: null, view: 'all', query: '', viOnly: false, sample: defaultSample(), sort: { ...DEFAULT_SORT }, groupCollapsed: new Set(), groupScope: '',
     selectedId: null, style: null, panelTab: 'spec', active: new Map<string, readonly number[]>(), activeScope: new Map<string, 'session' | 'persistent'>(), available: new Map<string, { owner: OwnerDto; path: string }>(), recentViews: [], addFolderRequest: 0, settingsOpen: false, compare: null, compareSession: null, pairThese: null, desk: null, deskReturn: null, libraryRev: 0, gridRev: 0, ...initial,
 
     setFilters: filters => set({ filters, viOnly: filters.vi === 'full' }),
@@ -353,3 +355,6 @@ export function createUiStore(): UiStore {
 }
 
 export const useUiStore = createUiStore();
+
+// Chữ mẫu còn là mặc định → đổi theo ngôn ngữ giao diện (lúc khởi động / khi người dùng đổi ngôn ngữ). Chữ người dùng đã gõ không bao giờ bị ghi đè.
+subscribeLocale(() => { const s = useUiStore.getState().sample; if (isDefaultSample(s) && s !== defaultSample()) useUiStore.setState({ sample: defaultSample() }); });

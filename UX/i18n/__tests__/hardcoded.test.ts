@@ -22,8 +22,7 @@ const ALLOWED = new Set<string>([
   'components/settings/AutoActivation.tsx::Auto-activation', 'components/activation/ActivationDialogs.tsx::persistent scope', 'components/activation/ActivationDialogs.tsx::session scope', // thuật ngữ font giữ tiếng Anh, có TermTip + gloss
   'components/compare/CompareCells.tsx::Hxgă', 'components/compare/CompareCells.tsx::ỮẶỆỖỞ ươ',
   'components/detail/tabs/SpecimenTab.tsx::Hà Nội mùa thu, cây cơm nguội vàng, cây bàng lá đỏ, nằm kề bên nhau, phố xưa nhà cổ, mái ngói thâm nâu.',
-  'components/detail/tabs/SpecimenTab.tsx::Phở bò Hà Nội', 'components/detail/tabs/SpecimenTab.tsx::Đẹp như Hà Nội',
-  'components/detail/tabs/PairTab.tsx::Phở bò Hà Nội', 'components/pair/PairThesePage.tsx::Phở bò Hà Nội', 'store/ui.ts::Phở bò Hà Nội',
+  'components/detail/tabs/SpecimenTab.tsx::Đẹp như Hà Nội', 'i18n/sample.ts::Chữ Việt đẹp — Ấn tượng', 'i18n/sample.ts::Typeface · Chữ Việt', 'i18n/sample.ts::Phở bò Hà Nội',
   'components/main/Library.tsx::Ặa', 'features/library-grid/types.ts::Hamburgefonts Ăn phở',
   'components/main/SampleComposer.tsx::Ặẫ', 'components/main/SampleComposer.tsx::Ặẫỡự',
   'components/settings/Settings.tsx::Phở bò Hà Nội', 'components/settings/Settings.tsx::ẮẰẲẴẶ ẤẦẨẪẬ ƠỚỜỞỠỢ ƯỨỪỬỮỰ', 'components/settings/Settings.tsx::Cà phê sữa đá 35.000đ', 'components/settings/Settings.tsx::Hà Nội mùa thu, cây cơm nguội vàng',

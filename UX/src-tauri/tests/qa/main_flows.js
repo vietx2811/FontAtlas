@@ -528,7 +528,7 @@
     await log('compare-esc-ime-stays-open', !!document.querySelector('.cmp-tbl') && document.activeElement === ed, { open: !!document.querySelector('.cmp-tbl') });
     ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(200); // Esc thường trong ô: chỉ blur, màn vẫn mở
     await log('compare-esc-in-field-blurs', document.activeElement !== ed && !!document.querySelector('.cmp-tbl'), {});
-    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Phở bò Hà Nội'); await sleep(300);
+    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Chữ Việt đẹp — Ấn tượng'); await sleep(300);
     // H7: hàng Vietnamese có TermTip "Stacked diacritics" + chữ "dấu chồng"; ký tự dấu chồng được đánh dấu
     const viHead = document.querySelector('[data-row="specimen.vi"]');
     await log('compare-vi-row', /Vietnamese/.test(viHead?.querySelector('b')?.textContent ?? '') && viHead?.querySelector('[data-term="vi_marks"]')?.textContent === 'Stacked diacritics' && /dấu chồng/.test(viHead?.textContent ?? '') && document.querySelectorAll('.cmp-vi [data-stacked="true"]').length >= 5, { head: viHead?.textContent, stacked: document.querySelectorAll('.cmp-vi [data-stacked="true"]').length });

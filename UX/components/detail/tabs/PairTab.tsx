@@ -1,3 +1,4 @@
+import { defaultSample } from '../../../i18n/sample';
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole, PeekOpenResultDto } from '../../../api';
@@ -103,7 +104,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
             <button type="button" aria-label={t('pt.next')} disabled={idx >= cands.length - 1} onClick={() => setIdx(i => Math.min(cands.length - 1, i + 1))}>▶</button>
           </div>
           <div className="fa-pair-card" {...faceMenuProps(faceActions, [cand.row])}>
-            <div className="fa-pair-heading" data-testid="pair-heading" style={{ ...headCss, fontSize: 26, lineHeight: 1.2 }}>{sample.trim() || 'Phở bò Hà Nội'}</div>
+            <div className="fa-pair-heading" data-testid="pair-heading" style={{ ...headCss, fontSize: 26, lineHeight: 1.2 }}>{sample.trim() || defaultSample()}</div>
             <p className="fa-pair-body" data-testid="pair-body" style={{ ...bodyCss, fontSize: 14, lineHeight: 1.55, margin: 0 }}>{PARAGRAPH}</p>
           </div>
           <p className="fa-pair-name" {...faceMenuProps(faceActions, [cand.row])}>

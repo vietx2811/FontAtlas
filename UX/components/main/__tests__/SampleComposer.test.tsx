@@ -9,7 +9,7 @@ describe('SampleComposer', () => {
 
   it('starts from the default sample and size 34', () => {
     render(<SampleComposer />);
-    expect((screen.getByRole('textbox', { name: 'Chữ mẫu' }) as HTMLInputElement).value).toBe('Phở bò Hà Nội');
+    expect((screen.getByRole('textbox', { name: 'Chữ mẫu' }) as HTMLInputElement).value).toBe('Chữ Việt đẹp — Ấn tượng');
     expect((screen.getByRole('slider', { name: 'Cỡ chữ mẫu' }) as HTMLInputElement).value).toBe('34');
   });
 
