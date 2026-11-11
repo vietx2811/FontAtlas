@@ -139,7 +139,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
       </header>
       {error && <p role="alert" className="fa-adv-err">{t('adv.error', { msg: error })} <button type="button" onClick={retry}>{t('adv.retry')}</button></p>}
       <Masonry>
-        <section className="fa-adv-card" role="group" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length}><h3>{t('adv.class')}</h3>
+        <section className="fa-adv-card" role="group" aria-label={t('adv.class')} data-weight={60 + 31 * classRows.length + 60}><h3>{t('adv.class')}</h3>
           {classRows.map(f => (
             <div key={f.class} className="fa-class-opt">
               <TermTip term={classTermKey(f.class)}>
@@ -152,6 +152,10 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
               </div>}
             </div>
           ))}
+          <div className="fa-class-switches">
+            <TermTip term="hybrid"><label title={t('filter.hybrid.tip')}><input type="checkbox" data-testid="adv-hybrid" checked={filters.includeSecondary === true} onChange={e => patch({ includeSecondary: e.target.checked ? true : undefined })} />{t('filter.hybrid')}</label></TermTip>
+            <label title={t('filter.confident.tip')}><input type="checkbox" data-testid="adv-confident" checked={filters.confidentOnly === true} onChange={e => patch({ confidentOnly: e.target.checked ? true : undefined })} />{t('filter.confident')}</label>
+          </div>
         </section>
         <section className="fa-adv-card" aria-label={t('adv.style')} data-weight={100}><h3>{t('adv.style')}</h3>
           <label title={t('filter.variable.gloss')}><input type="checkbox" checked={filters.variable === true} onChange={e => patch({ variable: e.target.checked ? true : undefined })} />{t('filter.variable')}</label>

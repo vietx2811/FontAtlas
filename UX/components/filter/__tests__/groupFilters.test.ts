@@ -32,3 +32,13 @@ describe('groupFilters', () => {
     expect(groupFilters({ favoritesOnly: true }, [], 'all').map(x => x.id)).toEqual(['library']);
   });
 });
+
+describe('class switches', () => {
+  it('hybrid and confident-only are chips of the class group (so the funnel counts and the summary names them) and remove cleanly', () => {
+    const f = { classes: ['display'], includeSecondary: true, confidentOnly: true };
+    const g = groupFilters(f).find(x => x.id === 'class')!;
+    expect(g.chips.map(c => c.label)).toEqual(['Display', 'Gồm cả font lai', 'Chỉ nhãn chắc chắn']);
+    expect(g.remove(f)).toEqual({});
+    expect(g.chips[1].remove(f)).toEqual({ classes: ['display'], confidentOnly: true });
+  });
+});

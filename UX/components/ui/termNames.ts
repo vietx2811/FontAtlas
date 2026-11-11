@@ -7,6 +7,7 @@ export const TERM_NAMES: Record<string, string> = {
   g_storeys: 'g storeys', weight_class: 'Weight', width_class: 'Width', overlay: 'Overlay', activate: 'Active', vi_marks: 'Stacked diacritics', baseline: 'baseline', classification: 'Classification',
   'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain',
   'sub.old_style': 'Old style', 'sub.transitional': 'Transitional', 'sub.didone': 'Didone', 'sub.slab': 'Slab', 'sub.geometric': 'Geometric', 'sub.humanist': 'Humanist', 'sub.grotesque': 'Grotesque', 'sub.neo_grotesque': 'Neo-grotesque',
+  hybrid: 'Hybrid',
   'class.slab': 'Slab',
   'class.handwriting': 'Handwriting',
   'class.display': 'Display',

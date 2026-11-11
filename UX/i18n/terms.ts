@@ -71,4 +71,5 @@ export const TERM_GLOSS = {
   'term.sub.inline_outline.gloss': 'Inline / outline: nét có đường viền hoặc rãnh sáng chạy dọc bên trong.',
   'term.sub.pixel_bitmap.gloss': 'Pixel / bitmap: dựng từ ô vuông điểm ảnh.',
   'term.sub.shaded_3d.gloss': 'Shaded 3D: nét có bóng hoặc khối nổi 3D.',
+  'term.hybrid.gloss': 'Hybrid: font mang đặc điểm của hai class (vd Display kiểu stencil nhưng nét sans). Class chính dùng để lọc và nhóm; class phụ chỉ để hiển thị và tìm.',
 } as const;

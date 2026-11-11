@@ -170,3 +170,19 @@ describe('AdvancedSheet · taxonomy v2 classes', () => {
     expect(names.some(n => n?.startsWith('Pixel / bitmap'))).toBe(true);
   });
 });
+
+describe('AdvancedSheet · class switches (D1)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useAdvancedSheet.setState({ open: false }); });
+  it('"Gồm cả font lai" and "Chỉ nhãn chắc chắn" write includeSecondary / confidentOnly, show as class-group chips, and clear again', async () => {
+    render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
+    const hybrid = screen.getByTestId('adv-hybrid') as HTMLInputElement; const conf = screen.getByTestId('adv-confident') as HTMLInputElement;
+    expect(hybrid.checked).toBe(false); expect(conf.checked).toBe(false);
+    fireEvent.click(hybrid); fireEvent.click(conf);
+    expect(filters()).toMatchObject({ includeSecondary: true, confidentOnly: true });
+    await settle();
+    expect((screen.getByTestId('adv-hybrid') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByTestId('adv-hybrid')); fireEvent.click(screen.getByTestId('adv-confident'));
+    expect(filters().includeSecondary).toBeUndefined(); expect(filters().confidentOnly).toBeUndefined();
+    expect(Object.keys(filters())).not.toContain('includeSecondary');
+  });
+});

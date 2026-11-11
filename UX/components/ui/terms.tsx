@@ -47,6 +47,7 @@ const ILLU: Record<string, ReactNode> = {
   'sub.garalde': <>{guide(44, false)}<path d="M66 33a17 14 0 1 0-4 9" strokeWidth="3.2" /><path d="M32 31H65" className="acc" strokeWidth="2.6" /></>,
   'sub.monoline_script': <>{guide(44, false)}<path d="M12 40C24 6 32 6 32 24C32 42 42 42 50 28C58 14 64 44 84 22" strokeWidth="3" /><path d="M8 52H88" className="acc" strokeDasharray="2 4" /></>,
   'sub.coding': <><rect x="34" y="8" width="28" height="36" rx="12" strokeWidth="3.2" /><path d="M40 38L56 14" className="acc" strokeWidth="2.6" /><path d="M10 50H86" strokeDasharray="2 4" opacity=".55" strokeWidth="1.2" /></>,
+  hybrid: <><circle cx="38" cy="26" r="16" /><circle cx="58" cy="26" r="16" className="acc" /></>,
   baseline: <>{guide(44, false)}<path d="M30 44V16M30 26c4-4 14-4 14 5v13" /></>,
 };
 /** Thuật ngữ đã có hình riêng, hoặc dùng lại icon trục (24×24) phóng to. */
