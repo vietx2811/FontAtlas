@@ -12,6 +12,51 @@ pub struct Years {
     pub copyright: Option<u16>,
 }
 
+/// Nguồn của năm phát hành ước lượng (xem `release_year`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseYearSource {
+    Copyright,
+    HeadCreated,
+    HeadModified,
+}
+
+impl ReleaseYearSource {
+    /// snake_case dùng trong DB/DTO: `copyright` | `head_created` | `head_modified`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReleaseYearSource::Copyright => "copyright",
+            ReleaseYearSource::HeadCreated => "head_created",
+            ReleaseYearSource::HeadModified => "head_modified",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "copyright" => Some(ReleaseYearSource::Copyright),
+            "head_created" => Some(ReleaseYearSource::HeadCreated),
+            "head_modified" => Some(ReleaseYearSource::HeadModified),
+            _ => None,
+        }
+    }
+}
+
+/// Font số hoá không thể có `head.created/modified` trước năm này: 0/1904 (epoch Mac) và các giá trị đặt bừa bị loại.
+const MIN_HEAD_YEAR: u16 = 1985;
+/// Năm trong dòng copyright có thể xa hơn (font số hoá lại từ kiểu chữ cũ), nhưng vẫn phải là năm có nghĩa.
+const MIN_COPYRIGHT_YEAR: u16 = 1900;
+
+/// Năm phát hành ước lượng: năm copyright > `head.created` > `head.modified`. Giá trị ngoài khoảng hợp lệ
+/// (trước 1985 với head, trước 1900 với copyright, hoặc sau `now_year + 1`) bị bỏ và xét nguồn kế tiếp.
+/// `None` khi không có nguồn hợp lệ. Độ tin cậy trung bình-thấp: copyright thường là năm xuất bản đầu, còn
+/// `head.created` nhiều khi theo lúc build.
+pub fn release_year(y: &Years, now_year: u16) -> Option<(u16, ReleaseYearSource)> {
+    let ok = |v: Option<u16>, min: u16| v.filter(|v| (min..=now_year.saturating_add(1)).contains(v));
+    ok(y.copyright, MIN_COPYRIGHT_YEAR)
+        .map(|v| (v, ReleaseYearSource::Copyright))
+        .or_else(|| ok(y.created, MIN_HEAD_YEAR).map(|v| (v, ReleaseYearSource::HeadCreated)))
+        .or_else(|| ok(y.modified, MIN_HEAD_YEAR).map(|v| (v, ReleaseYearSource::HeadModified)))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StylisticSet {
     pub tag: String,
@@ -425,5 +470,50 @@ pub(crate) fn compute(font: &FontRef, features: &[String], copyright: Option<&st
         style: style_structure(font, name_hint),
         embedding: decode_fs_type(fs),
         license_kind: license_kind(license.0, license.1).into(),
+    }
+}
+
+#[cfg(test)]
+mod release_year_tests {
+    use super::*;
+
+    fn y(created: Option<u16>, modified: Option<u16>, copyright: Option<u16>) -> Years {
+        Years { created, modified, copyright }
+    }
+    const NOW: u16 = 2026;
+
+    #[test]
+    fn copyright_wins_then_created_then_modified() {
+        assert_eq!(release_year(&y(Some(2015), Some(2020), Some(2012)), NOW), Some((2012, ReleaseYearSource::Copyright)));
+        assert_eq!(release_year(&y(Some(2015), Some(2020), None), NOW), Some((2015, ReleaseYearSource::HeadCreated)));
+        assert_eq!(release_year(&y(None, Some(2020), None), NOW), Some((2020, ReleaseYearSource::HeadModified)));
+        assert_eq!(release_year(&y(None, None, None), NOW), None);
+    }
+
+    #[test]
+    fn garbage_values_fall_through_to_the_next_source() {
+        // 0, 1904 (epoch Mac), tương lai xa: coi như không có
+        assert_eq!(release_year(&y(Some(1904), Some(2019), None), NOW), Some((2019, ReleaseYearSource::HeadModified)));
+        assert_eq!(release_year(&y(Some(0), Some(0), None), NOW), None);
+        assert_eq!(release_year(&y(Some(2099), None, Some(1899)), NOW), None);
+        assert_eq!(release_year(&y(Some(2018), None, Some(2099)), NOW), Some((2018, ReleaseYearSource::HeadCreated)));
+        // năm sau `now` 1 năm vẫn hợp lệ (font ra trước phát hành), 2 năm thì không
+        assert_eq!(release_year(&y(None, None, Some(2027)), NOW), Some((2027, ReleaseYearSource::Copyright)));
+        assert_eq!(release_year(&y(None, None, Some(2028)), NOW), None);
+    }
+
+    #[test]
+    fn old_copyright_years_are_allowed_but_old_head_years_are_not() {
+        assert_eq!(release_year(&y(None, None, Some(1923)), NOW), Some((1923, ReleaseYearSource::Copyright)));
+        assert_eq!(release_year(&y(Some(1923), None, None), NOW), None);
+        assert_eq!(release_year(&y(Some(1985), None, None), NOW), Some((1985, ReleaseYearSource::HeadCreated)));
+    }
+
+    #[test]
+    fn source_names_round_trip() {
+        for s in [ReleaseYearSource::Copyright, ReleaseYearSource::HeadCreated, ReleaseYearSource::HeadModified] {
+            assert_eq!(ReleaseYearSource::parse(s.as_str()), Some(s));
+        }
+        assert_eq!(ReleaseYearSource::parse("nope"), None);
     }
 }
