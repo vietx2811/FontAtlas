@@ -15,10 +15,11 @@ import { SourcePriority } from './SourcePriority';
 import { Modal } from '../Modal';
 import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
+import { AutoActivation } from './AutoActivation';
 
 export const SETTINGS_GROUPS = [
   { id: 'general', label: 'Chung' }, { id: 'library', label: 'Thư viện và nguồn' }, { id: 'vision', label: 'Phân tích hình ảnh' },
-  { id: 'activation', label: 'Kích hoạt font' }, { id: 'license', label: 'Giấy phép' }, { id: 'data', label: 'Dữ liệu' },
+  { id: 'activation', label: 'Kích hoạt font' }, { id: 'auto', label: 'Bật font tự động' }, { id: 'license', label: 'Giấy phép' }, { id: 'data', label: 'Dữ liệu' },
   { id: 'shortcuts', label: 'Phím tắt' }, { id: 'help', label: 'Trợ giúp' },
 ] as const;
 type GroupId = typeof SETTINGS_GROUPS[number]['id'];
@@ -73,6 +74,7 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
         {s && group === 'library' && <Library api={api} s={s} patch={patch} />}
         {s && group === 'vision' && <Vision api={api} s={s} patch={patch} store={modelStore} />}
         {s && group === 'activation' && <Activation api={api} s={s} patch={patch} />}
+        {group === 'auto' && <AutoActivation api={api} />}
         {group === 'license' && (
           <div className="fa-set-text">
             <p>Bạn tự chịu trách nhiệm tuân thủ giấy phép font của mình.</p>

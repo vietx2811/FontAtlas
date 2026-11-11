@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
   AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
-  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe,
+  ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto,
 } from './types';
 
 export * from './types';
@@ -135,6 +135,15 @@ export interface Api extends LibraryApi {
   getSettings(): Promise<SettingsDto>;
   setSettings(patch: Partial<SettingsDto>): Promise<SettingsDto>;
   // Model và hàng đợi embed
+  // Bật font tự động (0.3.0): trạng thái từng app, công tắc chung, cài/gỡ panel/script Adobe, nhật ký.
+  autoStatus(): Promise<AutoStatusDto>;
+  autoSetEnabled(on: boolean): Promise<AutoStatusDto>;
+  autoInstall(target: AutoTargetDto): Promise<AutoStatusDto>;
+  autoRemove(target: AutoTargetDto): Promise<AutoStatusDto>;
+  /** Xoá khoá ký riêng của máy (chỉ khi panel Illustrator đã gỡ); bản cô lập từ chối. */
+  autoForgetKey(): Promise<AutoStatusDto>;
+  autoProbe(): Promise<AutoStatusDto>;
+  autoLog(limit?: number): Promise<AutoLogDto[]>;
   modelStatus(): Promise<ModelStatusDto>;
   /** Trả ngay khi bắt đầu; tiến độ, Ready, Paused, Failed qua `onEvent`. */
   modelDownload(onEvent: (e: ModelEvent) => void): Promise<void>;

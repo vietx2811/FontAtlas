@@ -9,6 +9,7 @@ import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filt
 import { DESK_I18N } from './desk';
 import { VIEW_I18N } from './view';
 import { DUP_I18N } from './dup';
+import { AUTO_I18N } from './auto';
 
 const vi = {
   ...TERM_GLOSS,
@@ -22,6 +23,7 @@ const vi = {
   ...FILTER_I18N_4,
   ...DESK_I18N,
   ...VIEW_I18N,
+  ...AUTO_I18N,
   ...ONBOARDING_I18N,
   ...DUP_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',

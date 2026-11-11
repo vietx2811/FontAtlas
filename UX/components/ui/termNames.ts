@@ -10,6 +10,7 @@ export const TERM_NAMES: Record<string, string> = {
   'sub.old_style': 'Old style', 'sub.transitional': 'Transitional', 'sub.didone': 'Didone', 'sub.slab': 'Slab', 'sub.geometric': 'Geometric', 'sub.humanist': 'Humanist', 'sub.grotesque': 'Grotesque', 'sub.neo_grotesque': 'Neo-grotesque',
   hybrid: 'Hybrid',
   variable_font: 'Variable', static_font: 'Static', font_collection: 'TTC / OTC', opentype: 'OpenType (OTF)', truetype: 'TrueType (TTF)', revision: 'Revision', glyph: 'Glyph',
+  auto_activation: 'Auto-activation',
   'class.slab': 'Slab',
   'class.handwriting': 'Handwriting',
   'class.display': 'Display',
