@@ -24,3 +24,30 @@ export const REPLACE_I18N = {
   'term.scope_session.gloss': 'Font chỉ bật trong phiên đăng nhập hiện tại; đăng xuất hoặc khởi động lại máy là mất.',
   'term.scope_persistent.gloss': 'Font vẫn bật sau khi khởi động lại máy, cho tới khi bị gỡ đăng ký.',
 } as const;
+
+/** English twin of REPLACE_I18N — same keys, same {placeholders}. Wire into the en catalog from feat/i18n-en. */
+export const REPLACE_I18N_EN: Record<keyof typeof REPLACE_I18N, string> = {
+  'act.replace.option': 'Replace with this one',
+  'act.replace.option.gloss': 'turn the old one off, then turn on the Font Atlas copy',
+  'act.replace.warn': '{app} may turn its copy back on; turn it off in {app} to keep this lasting.',
+  'act.replace.warn.other': 'Another app turned the old copy on and may turn it back on; Font Atlas cannot tell which app.',
+  'act.replace.strong': 'I understand: the old copy is turned off right away (it can be restored later).',
+  'act.replace.scope.pre': 'Font Atlas removes the old copy from both ',
+  'act.replace.scope.mid': ' and ',
+  'act.replace.scope.post': ', and records it so you can restore it.',
+  'act.replace.guide': 'How to turn it off in {app}',
+  'act.replace.guide.body': 'Open {app}, turn this font off, then come back and press Retry.',
+  'act.replace.guideOnly': '{app} manages this font, so Font Atlas cannot turn it off for you. Turn the font off in {app}, then press Retry.',
+  'act.replace.retry': 'Retry',
+  'act.replace.protected': 'This font is in a system or user font folder, so Font Atlas will not turn it off or move it.',
+  'act.replace.reveal': 'Show in Finder',
+  'act.replace.done': 'Turned off the old copy from {app} and turned on the Font Atlas copy.',
+  'act.replace.undo': 'Restore the old copy',
+  'act.replace.restored': 'Restored the old copy and turned off the Font Atlas copy.',
+  'act.replace.restoreMissing': 'The old copy’s file was not found (drive unplugged?). Plug it back in and try restoring again.',
+  'act.replace.app.other': 'another app',
+  'act.msg.replaceGuide': 'Another app manages this font, so Font Atlas cannot turn it off for you. Turn it off in that app, then try again.',
+  'act.msg.replaceNotRegistered': 'The old copy was not registered through the system by an app, so Font Atlas cannot turn it off. Turn it off in that app, then try again.',
+  'term.scope_session.gloss': 'The font stays on only for the current login session; logging out or restarting turns it off.',
+  'term.scope_persistent.gloss': 'The font stays on after a restart, until it is unregistered.',
+};
