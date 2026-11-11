@@ -6,8 +6,9 @@ import type { GridQuery } from './types';
  * Chỉ mục nhóm Family của truy vấn hiện tại (R3). Chỉ nạp khi `enabled`; truy vấn đổi → bỏ kết quả cũ ngay (không dựng bố cục
  * bằng nhóm của truy vấn khác). Lỗi → `error`, lưới rơi về dạng phẳng.
  */
-export function useFamilyGroups(api: { familyGroups?(q: GridQuery): Promise<FamilyGroup[]> }, query: GridQuery, enabled: boolean, rev = 0): { groups: FamilyGroup[] | null; error: string | null } {
+export function useFamilyGroups(api: { familyGroups?(q: GridQuery): Promise<FamilyGroup[]> }, query: GridQuery, enabled: boolean, rev = 0): { groups: FamilyGroup[] | null; error: string | null; queryKey: string } {
   const [state, setState] = useState<{ key: string; groups: FamilyGroup[] | null; error: string | null }>({ key: '', groups: null, error: null });
+  const queryKey = JSON.stringify(query);
   const key = enabled ? `${rev}\0${JSON.stringify(query)}` : '';
   const seq = useRef(0);
   const queryRef = useRef(query); queryRef.current = query;
@@ -20,5 +21,5 @@ export function useFamilyGroups(api: { familyGroups?(q: GridQuery): Promise<Fami
     );
     return () => { seq.current++; };
   }, [api, enabled, key]); // eslint-disable-line react-hooks/exhaustive-deps
-  return state.key === key ? { groups: state.groups, error: state.error } : { groups: null, error: null };
+  return state.key === key ? { groups: state.groups, error: state.error, queryKey } : { groups: null, error: null, queryKey: '' };
 }

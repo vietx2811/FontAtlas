@@ -194,9 +194,11 @@ export function LibraryGrid({
   }
   const total = snap.total ?? 0;
   // Nhóm theo Family (R3): chỉ dùng khi chỉ mục nhóm phủ đúng toàn bộ kết quả; chưa có/lệch/lỗi → lưới phẳng.
-  const wantGroups = !!query.groupByFamily;
-  const fam = useFamilyGroups(api, query, wantGroups);
-  const groups = wantGroups && groupsCover(fam.groups, snap.total) ? fam.groups : null;
+  // Theo truy vấn mà các trang đang thuộc về (snap.query), không theo prop mới nhất: chỉ mục nhóm và các trang luôn cùng một truy vấn.
+  const pagedQuery = snap.query;
+  const wantGroups = !!pagedQuery?.groupByFamily;
+  const fam = useFamilyGroups(api, pagedQuery ?? query, wantGroups);
+  const groups = wantGroups && fam.queryKey === snap.queryKey && groupsCover(fam.groups, snap.total) ? fam.groups : null;
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const queryKey = JSON.stringify(query);
   useEffect(() => { setCollapsed(new Set()); }, [queryKey]); // thu gọn chỉ trong phiên: đổi view / truy vấn → mở hết

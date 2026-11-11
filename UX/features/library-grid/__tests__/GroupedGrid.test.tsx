@@ -74,6 +74,26 @@ describe('grid grouped by Family (R3)', () => {
     fireEvent.click(heads()[0]); fireEvent.click(heads()[2]); await settle();
     expect(onHiddenRanges).toHaveBeenLastCalledWith([]);
   });
+  it('same total, new sort: stale group index is never combined with pages of another query (flat until both match, then new order)', async () => {
+    const api = createMockLibraryApi(data);
+    const realQ = api.queryFaces.bind(api); const realG = api.familyGroups!.bind(api);
+    api.queryFaces = async q => { const all = (await realQ({ ...q, offset: 0, limit: 1000 })).items; const arr = q.descending ? [...all].reverse() : all; const off = q.offset ?? 0; return { total: arr.length, offset: off, items: arr.slice(off, off + (q.limit ?? 100)) }; };
+    let release: (() => void) | null = null;
+    api.familyGroups = async q => {
+      const g = await realG(q);
+      if (!q.descending) return g;
+      await new Promise<void>(r => { release = r; }); // chỉ mục của truy vấn mới về chậm
+      let at = 0; return [...g].reverse().map(x => { const o = { ...x, start: at }; at += x.count; return o; });
+    };
+    const m = await mount({}, api);
+    expect(heads().map(h => h.dataset.family)).toEqual(['Alpha', 'Beta', 'Gamma']);
+    await m.rerenderWith({ query: { groupByFamily: true, sort: 'family', descending: true } });
+    expect(heads()).toHaveLength(0);                 // truy vấn mới, chỉ mục chưa về → phẳng, không dùng nhóm cũ
+    expect(screen.getByRole('grid').dataset.grouped).toBeUndefined();
+    await act(async () => { release?.(); }); await settle();
+    expect(heads().map(h => h.dataset.family)).toEqual(['Gamma', 'Beta', 'Alpha']);
+    expect(names()).toHaveLength(10);
+  });
   it('the count says "m/N kiểu" when filters hide some styles of the family', async () => {
     const api = createMockLibraryApi(data);
     const real = api.familyGroups!.bind(api);
