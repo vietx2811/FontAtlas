@@ -749,6 +749,64 @@
         await log('source-priority', true, 'ít hơn 2 nguồn trong fixture QA: khối thứ tự ưu tiên ẩn đúng');
       }
     }
+    // Nhóm theo Family (R3): ⌥G bật → tiêu đề nhóm khớp family_groups, số hàng khớp, ←/→ thu gọn/mở, ⌥G tắt lại
+    {
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
+      await wait(() => cells().length > 0, 10000);
+      document.activeElement?.blur?.();
+      const gq = { ...dq, groupByFamily: true, limit: 100 };
+      const fg = await inv('family_groups', { q: gq });
+      const totalQ = (await inv('query_faces', { q: { ...dq, limit: 1 } })).total;
+      const sumCount = fg.reduce((a, g) => a + g.count, 0);
+      const altG = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', code: 'KeyG', altKey: true, bubbles: true, cancelable: true }));
+      altG();
+      const head0 = await waitA(() => document.querySelector('[data-testid=group-head]'), 15000);
+      await sleep(500); await snap('family-groups');
+      const grid = document.querySelector('[role=grid]');
+      const colsN = Number(grid?.getAttribute('aria-colcount')) || 1;
+      const expectRows = fg.length + fg.reduce((a, g) => a + Math.ceil(g.count / colsN), 0);
+      const rowsNow = Number(grid?.getAttribute('aria-rowcount'));
+      const label0 = document.querySelector('[data-testid=group-count]')?.textContent ?? '';
+      const g0 = fg[0];
+      const wantLabel = g0 && g0.matchCount < g0.styleTotal ? `${g0.matchCount}/${g0.styleTotal} kiểu` : `${g0?.styleTotal} kiểu`;
+      const topOf = el => el?.getBoundingClientRect().top;
+      const headsNow = () => [...document.querySelectorAll('[data-testid=group-head]')];
+      const gap0 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
+      headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+      await waitA(() => headsNow()[0]?.getAttribute('aria-expanded') === 'false', 5000);
+      await sleep(300);
+      const gap1 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
+      const collapsedOk = headsNow()[0]?.getAttribute('aria-expanded') === 'false' && (gap0 === null || gap1 === null || (gap1 < gap0 && Math.abs(gap1 - 32) <= 1));
+      headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      const reopened = await waitA(() => headsNow()[0]?.getAttribute('aria-expanded') === 'true', 5000);
+      altG();
+      const off = await waitA(() => !document.querySelector('[data-testid=group-head]') && !document.querySelector('[role=grid]')?.dataset.grouped, 8000);
+      await log('family-groups', !!head0 && sumCount === totalQ && fg.length > 0 && rowsNow === expectRows && label0 === wantLabel && collapsedOk && !!reopened && !!off, { groups: fg.length, sumCount, totalQ, colsN, expectRows, rowsNow, label0, wantLabel, gap0, gap1, collapsedOk, reopened: !!reopened, off: !!off });
+    }
+    // Gỡ nguồn: menu chuột phải → hộp xem trước có số liệu khớp remove_source_preview; Huỷ không gỡ gì
+    {
+      const srcs2 = await inv('list_sources', {});
+      const target = srcs2.find(x => x.available) ?? srcs2[0];
+      const item = target && [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes(target.name));
+      if (item) {
+        const prev = await inv('remove_source_preview', { sourceId: target.id });
+        const r = item.getBoundingClientRect();
+        item.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 10, clientY: r.top + 5 }));
+        const mi = await waitA(() => [...document.querySelectorAll('[role=menuitem]')].find(x => /Gỡ nguồn/.test(x.textContent)), 5000);
+        mi?.click();
+        const facts = await waitA(() => document.querySelector('[data-testid=rmsrc-facts]'), 8000);
+        await sleep(300); await snap('remove-source-preview');
+        const locText = facts?.querySelector('[data-fact=locations]')?.textContent ?? '';
+        const locOk = locText.includes(`${prev.removedLocations} vị trí`);
+        const noDelete = /không xoá file font nào/.test(document.querySelector('[data-testid=rmsrc]')?.textContent ?? '');
+        document.querySelector('[data-testid=rmsrc-cancel]')?.click();
+        const closed = await waitA(() => !document.querySelector('[data-testid=rmsrc]'), 5000);
+        const after = await inv('list_sources', {});
+        await log('remove-source-preview', !!facts && locOk && noDelete && !!closed && after.length === srcs2.length && after.some(x => x.id === target.id), { target: target.name, prev, locText, locOk, noDelete, closed: !!closed, before: srcs2.length, after: after.length });
+      } else {
+        await log('remove-source-preview', true, 'không có nguồn trong fixture QA');
+      }
+    }
     // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
     // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).
     {
