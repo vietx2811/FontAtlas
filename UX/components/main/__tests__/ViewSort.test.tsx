@@ -29,16 +29,25 @@ describe('sort in the grid query', () => {
     useUiStore.getState().setSortBy('weight');
     expect(q()).toMatchObject({ sort: 'weight', descending: false });
   });
-  it('match applies only while searching; Gần đây and Đang bật keep their insertion order', () => {
-    useUiStore.getState().setSortBy('match');
-    expect(q().sort).toBeUndefined();
+  it('while searching the default is Khớp (relevance); an explicit Tên/Ngày/Weight is a pure field sort; Khớp has no direction', () => {
     useUiStore.setState({ query: 'inter' });
-    expect(q().sort).toBe('match');
+    expect(q()).toMatchObject({ sort: 'match' });
+    expect(q().descending).toBeUndefined();
+    useUiStore.getState().setSortBy('family'); // tường minh, dù đúng mặc định
+    expect(q()).toMatchObject({ sort: 'family', descending: false });
+    useUiStore.getState().setSortBy('match');
+    expect(q().sort).toBe('match'); expect(q().descending).toBeUndefined();
+    useUiStore.getState().setQuery('');
+    expect(useUiStore.getState().sort).toEqual(DEFAULT_SORT); // xoá chữ tìm: Khớp tự về mặc định
+    expect(q().sort).toBeUndefined();
+  });
+  it('Gần đây and Đang bật keep their insertion order (scoped match) whatever the sort', () => {
     useUiStore.setState({ view: 'recent', query: '' }); useUiStore.getState().setSortBy('weight');
-    expect(q().sort).toBe('match'); // thứ tự đưa vào, không phải Weight
+    expect(q().sort).toBe('match');
     useUiStore.setState({ view: 'active' });
     expect(q().sort).toBe('match');
   });
+
   it('persists through hydrate: reads ui.sort and writes changes back', async () => {
     const api = createMockApi();
     await api.setSetting(SORT_KEY, serializeSort({ by: 'weight', desc: true }));
@@ -59,7 +68,7 @@ describe('sort in the View popover', () => {
     expect([...sel.options].map(o => o.value)).toEqual(['family', 'added', 'weight']); // chưa tìm: không có "Khớp"
     expect(screen.getByTestId('view-sort-asc').textContent).toBe('A → Z');
     fireEvent.change(sel, { target: { value: 'added' } });
-    expect(useUiStore.getState().sort).toEqual({ by: 'added', desc: true });
+    expect(useUiStore.getState().sort).toEqual({ by: 'added', desc: true, explicit: true });
     expect(screen.getByTestId('view-sort-desc').getAttribute('aria-checked')).toBe('true');
     expect(screen.getByTestId('view-sort-asc').textContent).toBe('Cũ → Mới');
     fireEvent.click(screen.getByTestId('view-sort-asc'));
@@ -68,10 +77,15 @@ describe('sort in the View popover', () => {
     fireEvent.click(screen.getByTestId('view-reset'));
     expect(useUiStore.getState().sort).toEqual(DEFAULT_SORT);
   });
-  it('offers "Khớp" only while searching', () => {
+  it('offers "Khớp" only while searching, selected by default, with no direction buttons', () => {
     useUiStore.setState({ query: 'inter' });
     open();
-    expect([...(screen.getByTestId('view-sort-by') as HTMLSelectElement).options].map(o => o.value)).toContain('match');
+    const sel = screen.getByTestId('view-sort-by') as HTMLSelectElement;
+    expect([...sel.options].map(o => o.value)).toContain('match');
+    expect(sel.value).toBe('match');
+    expect(screen.queryByTestId('view-sort-asc')).toBeNull();
+    fireEvent.change(sel, { target: { value: 'family' } });
+    expect(screen.getByTestId('view-sort-asc')).toBeTruthy();
   });
   it('Gần đây / Đang bật: sorting is locked with the reason, not offered', () => {
     useUiStore.setState({ view: 'recent' });

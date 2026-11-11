@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t, type I18nKey } from '../../i18n';
-import { SORT_FIELDS, defaultDesc, isDefaultSort, type SortField } from '../../store/sortPrefs';
+import { SORT_FIELDS, effectiveSort, isDefaultSort, type SortField } from '../../store/sortPrefs';
 import { useUiStore } from '../../store/ui';
 import { CARD_FIELD_ORDER, DEFAULT_CARD_FIELDS, useCardFields, type CardField } from '../../store/cardFields';
 import { Icon } from '../sidebar/icons';
@@ -28,10 +28,10 @@ export function ViewOptions(): React.JSX.Element {
   const setSortDesc = useUiStore(s => s.setSortDesc);
   const resetSort = useUiStore(s => s.resetSort);
   const locked = view === 'recent' || view === 'active';
-  // 'match' chỉ có nghĩa khi đang tìm; không có chữ tìm thì hiện như mặc định.
-  const by: SortField = sortPrefs.by === 'match' && !hasQuery ? 'family' : sortPrefs.by;
-  const desc = sortPrefs.by === 'match' && !hasQuery ? defaultDesc('family') : sortPrefs.desc;
-  const sortChanged = !isDefaultSort(sortPrefs);
+  const eff = effectiveSort(sortPrefs, hasQuery);
+  const by: SortField = eff.by;
+  const desc = eff.desc;
+  const sortChanged = !isDefaultSort(sortPrefs) || !!sortPrefs.explicit;
   const changed = sortChanged || fields.length !== DEFAULT_CARD_FIELDS.length || DEFAULT_CARD_FIELDS.some(k => !fields.includes(k));
   const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) requestAnimationFrame(() => btn.current?.focus()); }, []);
 
@@ -93,11 +93,11 @@ export function ViewOptions(): React.JSX.Element {
               <select data-testid="view-sort-by" aria-label={t('view.sort')} value={by} onChange={e => setSortBy(e.target.value as SortField)}>
                 {SORT_FIELDS.filter(f => f !== 'match' || hasQuery).map(f => <option key={f} value={f}>{t(`view.sort.${f}` as I18nKey)}</option>)}
               </select>
-              <div className="fa-viewpop-dir" role="radiogroup" aria-label={t('view.sort.dir')}>
+              {by !== 'match' && <div className="fa-viewpop-dir" role="radiogroup" aria-label={t('view.sort.dir')}>
                 {([false, true] as const).map(d => (
                   <button key={String(d)} type="button" role="radio" aria-checked={desc === d} data-testid={d ? 'view-sort-desc' : 'view-sort-asc'} onClick={() => setSortDesc(d)}>{t(`view.sort.${by}.${d ? 'desc' : 'asc'}` as I18nKey)}</button>
                 ))}
-              </div>
+              </div>}
               <p className="fa-viewpop-src">{t(`view.sort.src.${by}` as I18nKey)}</p>
             </>}
           </fieldset>

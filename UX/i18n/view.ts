@@ -16,6 +16,8 @@ export const VIEW_I18N = {
   'smenu.open': 'Mở', 'smenu.reveal': 'Hiện trong Finder', 'smenu.reveal.off': 'Nguồn chưa kết nối', 'smenu.rescan': 'Quét lại', 'smenu.rescan.busy': 'Đang quét',
   'smenu.rename': 'Đổi tên', 'smenu.deactivateAll': 'Tắt tất cả font', 'smenu.deactivateAllN': 'Tắt tất cả ({n})', 'smenu.empty': 'Không có gì để làm',
   'smenu.deleteCollection': 'Xoá dự án…', 'smenu.filterTag': 'Lọc theo thẻ này', 'smenu.clearRecent': 'Xoá lịch sử "Gần đây"…', 'smenu.resume': 'Tiếp tục', 'smenu.closeSession': 'Đóng phiên so sánh',
+  'smenu.rename.empty': 'Tên dự án không được để trống.', 'smenu.noneActive': 'Không có font nào đang bật',
+  'smenu.off.done': 'Đã tắt {n} font', 'smenu.off.doneErr': 'Đã tắt {n} font, {m} lỗi', 'smenu.off.kept': '{k} font vẫn bật vì còn được giữ bởi dự án khác hoặc bật thủ công', 'smenu.off.confirm': '{c} font cần bạn xác nhận: hãy tắt từng font',
   'smenu.menuOf': 'Menu {name}', 'smenu.cancel': 'Huỷ',
   'smenu.delCol.title': 'Xoá dự án «{name}»?', 'smenu.delCol.body': 'Chỉ xoá dự án; các font vẫn còn trong thư viện. Không hoàn tác được.', 'smenu.delCol.ok': 'Xoá dự án',
   'smenu.clearRecent.title': 'Xoá lịch sử "Gần đây"?', 'smenu.clearRecent.body': 'Danh sách font đã mở gần đây sẽ trống. Font không bị xoá.', 'smenu.clearRecent.ok': 'Xoá lịch sử',

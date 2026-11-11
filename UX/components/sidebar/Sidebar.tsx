@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
+import type { ActivationReportDto } from '../../bindings';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
-import { singleTagId, useUiStore } from '../../store/ui';
+import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
+import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
@@ -22,7 +24,7 @@ import { NoteMark } from '../ui/noteMark';
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; dups: number | null };
 type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
-type Ctx = { kind: SidebarMenuKind; id: number | null; name: string; anchor: MenuAnchor; el: HTMLElement; keyboard: boolean };
+type Ctx = { kind: SidebarMenuKind; id: number | null; name: string; anchor: MenuAnchor; el: HTMLElement; keyboard: boolean; colActive?: number };
 type Confirm = { title: string; body: string; ok: string; run(): Promise<void> | void };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
@@ -81,6 +83,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
     ]);
     setSources(s); setCols(c); setTags(t); useTagsStore.getState().set(t);
+    // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
+    const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
+    if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
     setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
@@ -128,17 +133,51 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     await refresh();
     setView(`col:${c.id}`);
   };
-  const rename = async (id: number, name: string) => { setRenaming(null); if (name.trim()) { await api.renameCollection(id, name.trim()); await refresh(); } };
+  const focusNav = (navId: string) => requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-nav-id="${navId}"]`)?.focus());
+  const renameBusy = useRef(false);
+  const endRename = (id: number, refocus: boolean) => { setRenaming(null); if (refocus) focusNav(`col:${id}`); };
+  /** Enter / blur: rỗng → báo và giữ ô; lỗi → báo và giữ ô (không mất tên đã gõ); xong → trả focus về mục. */
+  const commitRename = async (c: CollectionDto, raw: string, input: HTMLInputElement, via: 'enter' | 'blur') => {
+    if (renameBusy.current) return;
+    const name = raw.trim();
+    if (name === c.name) { endRename(c.id, via === 'enter'); return; }
+    if (!name) {
+      if (via === 'blur') { endRename(c.id, false); return; }
+      setNotice({ text: t('smenu.rename.empty') }); input.focus(); return;
+    }
+    renameBusy.current = true;
+    try { await api.renameCollection(c.id, name); await refresh(); endRename(c.id, via === 'enter'); }
+    catch (e) { warn(e); if (via === 'enter') input.focus(); }
+    finally { renameBusy.current = false; }
+  };
   const removeCollection = async (id: number) => {
     await api.deleteCollection(id);
     if (useUiStore.getState().view === `col:${id}`) setView('all');
     await refresh();
   };
   const at = (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }): MenuAnchor => (e.keyboard ? { rect: e.el.getBoundingClientRect() } : { x: e.x, y: e.y });
-  const openCtx = (kind: SidebarMenuKind, id: number | null, name: string) => (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => setCtx({ kind, id, name, anchor: at(e), el: e.el, keyboard: e.keyboard });
+  const openCtx = (kind: SidebarMenuKind, id: number | null, name: string) => (e: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
+    setCtx({ kind, id, name, anchor: at(e), el: e.el, keyboard: e.keyboard });
+    // Dự án: đếm font ĐANG BẬT (không phải số font trong dự án) cho nhãn, ngưỡng xác nhận và trạng thái của "Tắt tất cả".
+    if (kind === 'collection' && id !== null) {
+      void api.queryFaces({ collectionId: id, limit: 20000 }).then(p => {
+        const on = useUiStore.getState().active;
+        const n = new Set(p.items.filter(r => on.has(r.hashHex)).map(r => r.hashHex)).size;
+        setCtx(cur => (cur && cur.kind === 'collection' && cur.id === id ? { ...cur, colActive: n } : cur));
+      }, () => undefined);
+    }
+  };
   const warn = (e: unknown) => setNotice({ text: `Không thực hiện được: ${(e as Error)?.message ?? e}` });
-  const deactivate = (n: number, run: () => Promise<unknown>) => {
-    const go = async () => { try { await run(); await useUiStore.getState().refreshActive(api); } catch (e) { warn(e); } };
+  /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
+  const reportOff = (rep: ActivationReportDto) => {
+    const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
+    const parts = [failed ? t('smenu.off.doneErr', { n: rep.changed, m: failed }) : t('smenu.off.done', { n: rep.changed })];
+    if (kept) parts.push(t('smenu.off.kept', { k: kept }));
+    if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
+    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
+  };
+  const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
+    const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
     if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: t('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
   };
   const menuEntries = (c: Ctx) => {
@@ -151,8 +190,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       reveal: () => { if (src?.path) api.revealLocation(src.path).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
       rename: () => { if (col) setRenaming(col.id); },
-      hasItems: !!col && col.itemCount > 0,
-      deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(col.itemCount, () => api.activationDeactivateCollection(col.id)); },
+      colActive: c.colActive,
+      deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
       remove: () => { if (col) setConfirm({ title: t('smenu.delCol.title', { name: col.name }), body: t('smenu.delCol.body'), ok: t('smenu.delCol.ok'), run: () => removeCollection(col.id).catch(warn) }); },
       filterByTag: () => setTag(String(c.id)),
       recentCount, clearRecent: () => setConfirm({ title: t('smenu.clearRecent.title'), body: t('smenu.clearRecent.body'), ok: t('smenu.clearRecent.ok'), run: () => useUiStore.getState().clearRecent() }),
@@ -200,9 +239,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
             onKeyDown={e => { if (e.key === 'Enter') void createCollection(e.currentTarget.value); if (e.key === 'Escape') setAdding(false); }} onBlur={() => setAdding(false)} />}
           {cols.map(c => renaming === c.id
             ? <input key={c.id} className="fa-inline-input" aria-label="Đổi tên dự án" autoFocus defaultValue={c.name}
-                onKeyDown={e => { if (e.key === 'Enter') void rename(c.id, e.currentTarget.value); if (e.key === 'Escape') setRenaming(null); }} onBlur={() => setRenaming(null)} />
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitRename(c, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(c.id, true); } }} onBlur={e => void commitRename(c, e.currentTarget.value, e.currentTarget, 'blur')} />
             : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
-onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
+navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
                 more={<Tooltip label={`Tuỳ chọn ${c.name}`}><button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
                   onClick={e => { const el = e.currentTarget; openCtx('collection', c.id, c.name)({ x: 0, y: 0, keyboard: true, el }); }}><Icon name="more" size={14} /></button></Tooltip>} />)}
         </NavSection>

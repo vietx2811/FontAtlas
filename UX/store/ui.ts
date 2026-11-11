@@ -8,7 +8,7 @@ import type { GridQuery, FaceQuery } from '../features/library-grid/types';
 export const PERSIST_DEBOUNCE_MS = 400;
 export const RECENT_MAX = 200;
 export const RECENT_DEBOUNCE_MS = 1000;
-import { DEFAULT_SORT, SORT_KEY, defaultDesc, isDefaultSort, parseSort, serializeSort, type SortField, type SortPrefs } from './sortPrefs';
+import { DEFAULT_SORT, SORT_KEY, defaultDesc, effectiveSort, isDefaultSort, parseSort, serializeSort, type SortField, type SortPrefs } from './sortPrefs';
 export const RECENT_KEY = 'ui.recent_views'; // 6a: ^ui\.[a-z0-9_.-]{1,60}$ (không chữ hoa)
 const FACE_KEYS_MAX = 2000;
 export const SAMPLE_MIN = 18;
@@ -145,8 +145,10 @@ export function toMetadataQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly'> & 
 export function toGridQuery(s: Pick<UiState, 'view' | 'query' | 'viOnly' | 'recentViews' | 'active'> & Partial<Pick<UiState, 'filters' | 'familyScope' | 'sort'>>): GridQuery {
   const q = toMetadataQuery(s);
   // Sắp xếp của người dùng; 'match' chỉ khi đang có chữ tìm. Gần đây / Đang bật ghi đè bên dưới (thứ tự đưa vào).
-  const so = s.sort;
-  if (so && !isDefaultSort(so) && (so.by !== 'match' || !!s.query.trim())) { q.sort = so.by; q.descending = so.desc; }
+  // Khớp chỉ khi đang tìm (mặc định lúc tìm); Tên/Ngày/Weight tường minh xếp thuần theo trường. Match không có chiều.
+  const so = s.sort && effectiveSort(s.sort, !!s.query.trim());
+  if (so && so.by === 'match') q.sort = 'match';
+  else if (so && (so.explicit || !isDefaultSort(so))) { q.sort = so.by; q.descending = so.desc; }
   if (s.view === 'recent') {
     q.faceKeys = s.recentViews.slice(0, FACE_KEYS_MAX).map(r => parseFaceKey(r.face));
     q.sort = 'match';
@@ -196,7 +198,8 @@ export function createUiStore(): UiStore {
     setView: v => set({ view: v, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null }),
     // Mục "Thẻ" ở thanh bên đặt tagIds = [id] (thay mọi thẻ đang chọn); bấm lại thẻ đang là thẻ duy nhất thì bỏ.
     setTag: t => set(s => ({ filters: t === null ? dropTags(s.filters) : { ...s.filters, tagIds: [Number(t)] }, familyScope: null, settingsOpen: false, compare: null, pairThese: null, desk: null })),
-    setQuery: q => set({ query: q, familyScope: null }),
+    // Xoá hết chữ tìm: Khớp không còn nghĩa → về mặc định (không để sort treo ở Khớp).
+    setQuery: q => set(s => ({ query: q, familyScope: null, ...(!q.trim() && s.sort.by === 'match' ? { sort: { ...DEFAULT_SORT } } : {}) })),
     setViOnly: on => set(s => { const { vi: _vi, ...rest } = s.filters; return { viOnly: on, filters: on ? { ...rest, vi: 'full' } : rest }; }),
     setLayout: l => set({ layout: l }),
     setSample: s => set({ sample: s }),
@@ -217,8 +220,8 @@ export function createUiStore(): UiStore {
       const f = faces.slice(0, COMPARE_MAX);
       set({ compare: f, compareSession: { faces: f, pinned: [], overlayOn: false, overlayIds: [] }, pairThese: null, desk: null, deskReturn: get().desk, settingsOpen: false });
     },
-    setSortBy: by => set({ sort: { by, desc: defaultDesc(by) } }),
-    setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc } })),
+    setSortBy: by => set({ sort: { by, desc: defaultDesc(by), explicit: true } }),
+    setSortDesc: desc => set(s => ({ sort: { ...s.sort, desc, explicit: true } })),
     resetSort: () => set({ sort: { ...DEFAULT_SORT } }),
     closeCompareSession: () => set({ compare: null, compareSession: null }),
     clearRecent: () => set({ recentViews: [] }),

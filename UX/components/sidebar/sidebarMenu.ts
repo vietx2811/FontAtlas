@@ -9,7 +9,7 @@ export type SidebarMenuCtx = {
   /** Nguồn */
   sourceAvailable?: boolean; hasPath?: boolean; scanning?: boolean; reveal?(): void; rescan?(): void;
   /** Dự án */
-  rename?(): void; deactivateAll?(): void; hasItems?: boolean; remove?(): void;
+  rename?(): void; deactivateAll?(): void; /** Số font ĐANG BẬT trong dự án; chưa biết (đang đếm) → undefined. */ colActive?: number; remove?(): void;
   /** Thẻ */
   filterByTag?(): void;
   /** Gần đây */
@@ -34,7 +34,7 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
     case 'collection': return [
       open(c),
       { id: 'rename', label: t('smenu.rename'), hint: 'F2', onSelect: c.rename },
-      { id: 'deactivate', label: t('smenu.deactivateAll'), disabled: !c.hasItems, reason: t('smenu.empty'), onSelect: c.deactivateAll },
+      { id: 'deactivate', label: c.colActive === undefined ? t('smenu.deactivateAll') : t('smenu.deactivateAllN', { n: c.colActive }), disabled: c.colActive === 0, reason: t('smenu.noneActive'), onSelect: c.deactivateAll },
       sep,
       { id: 'delete', label: t('smenu.deleteCollection'), danger: true, onSelect: c.remove },
     ];

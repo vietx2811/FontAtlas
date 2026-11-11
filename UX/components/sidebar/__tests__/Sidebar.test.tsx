@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { useNoticeStore } from '../../../store/notices';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Sidebar, SidebarToggle } from '../Sidebar';
@@ -351,6 +352,58 @@ describe('Sidebar', () => {
       fireEvent.contextMenu(await screen.findByRole('button', { name: 'serif' })); await settle();
       fireEvent.click(screen.getByRole('menuitem', { name: 'Lọc theo thẻ này' })); await settle();
       expect(useUiStore.getState().filters.tagIds).toEqual([t.id]);
+    });
+  });
+
+  describe('review fixes', () => {
+    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, ...o });
+    it('Tắt tất cả reports failures and needs-confirmation instead of staying silent', async () => {
+      const { api } = await mount();
+      vi.spyOn(api, 'activationDeactivateAll').mockResolvedValue(report({ changed: 2, failed: 3, needsConfirmation: 1 }));
+      useNoticeStore.setState({ notices: [] });
+      useUiStore.setState({ active: new Map([['aa', [0]]]) });
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Đang bật/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Tắt tất cả/ })); await settle();
+      const text = useNoticeStore.getState().notices.map(n => n.text).join(' | ');
+      expect(text).toContain('Đã tắt 2 font, 3 lỗi');
+      expect(text).toContain('1 font cần bạn xác nhận');
+      expect(useNoticeStore.getState().notices[0].kind).toBe('error');
+    });
+    it('collection menu counts ACTIVE fonts: disabled with a reason when none are on', async () => {
+      const api = createMockApi();
+      const c = await api.createCollection('Dự án C', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Dự án C/ })); await settle(); await settle();
+      const item = screen.getByRole('menuitem', { name: /Tắt tất cả/ });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      void c;
+    });
+    it('rename: an API error keeps the box with the typed name and shows the error; empty is reported, not silent; success returns focus to the item', async () => {
+      const api = createMockApi();
+      await api.createCollection('Cũ', null);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      const item = screen.getByRole('button', { name: /^Cũ/ });
+      fireEvent.keyDown(item, { key: 'F2' }); await settle();
+      let box = screen.getByRole('textbox', { name: 'Đổi tên dự án' }) as HTMLInputElement;
+      useNoticeStore.setState({ notices: [] });
+      vi.spyOn(api, 'renameCollection').mockRejectedValueOnce(new Error('db locked'));
+      fireEvent.change(box, { target: { value: 'Mới' } });
+      box.value = 'Mới'; fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      box = screen.getByRole('textbox', { name: 'Đổi tên dự án' }) as HTMLInputElement; // vẫn còn
+      expect(box.value).toBe('Mới');
+      expect(screen.getByRole('status').textContent).toContain('db locked');
+      box.value = '   '; fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      expect(screen.getByRole('status').textContent).toContain('không được để trống');
+      box.value = 'Mới'; fireEvent.keyDown(box, { key: 'Enter' }); await settle(); await settle();
+      expect(screen.queryByRole('textbox', { name: 'Đổi tên dự án' })).toBeNull();
+      expect(screen.getByRole('button', { name: /^Mới/ })).toBeTruthy();
+      await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Mới/ }));
+    });
+    it('a tag id that no longer exists is dropped from the filters when the tags load', async () => {
+      useUiStore.setState({ filters: { tagIds: [9999] } });
+      await mount(); await settle();
+      expect(useUiStore.getState().filters.tagIds).toBeUndefined();
     });
   });
 });

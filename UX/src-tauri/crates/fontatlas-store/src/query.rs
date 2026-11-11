@@ -18,7 +18,7 @@ pub enum SortKey {
     Family,
     Weight,
     Added,
-    /// Điểm khớp trong scope (cao trước); không có scope thì như Family.
+    /// Điểm khớp trong scope (cao trước); không có scope: khớp đầu từ trước, rồi theo tên (chiều không áp dụng).
     Match,
 }
 
@@ -276,11 +276,11 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     (w.join(" AND "), p)
 }
 
-/// Khớp đầu từ đứng trước khớp chuỗi con, rồi mới tới sort người dùng chọn. Trả kèm tham số.
+/// `Match` (không scope): khớp đầu từ đứng trước khớp chuỗi con, rồi theo tên. Sort tường minh (Tên/Ngày/Weight) xếp THUẦN
+/// theo trường, không xếp hạng khớp. `Match` có scope (Gần đây / Đang bật) giữ thứ tự đưa vào. Trả kèm tham số.
 fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
     let rank = match q.text.as_deref().and_then(text_match) {
-        _ if q.sort == SortKey::Match => None,
-        Some(TextMatch::Fts { start, word, .. }) => Some((
+        Some(TextMatch::Fts { start, word, .. }) if q.sort == SortKey::Match && !scoped => Some((
             "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
                 .to_string(),
             vec![Value::Text(start), Value::Text(word)],
