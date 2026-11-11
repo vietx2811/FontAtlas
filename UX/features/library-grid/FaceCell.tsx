@@ -194,8 +194,8 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         : state === 'error'
           ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(CLOUD_ERR_KEY[errCode] ?? 'cloud.errFailed')} />
           : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
-      <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
-        <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
+      <Tooltip label={favorite ? t('cell.unfavTip') : t('cell.favTip')}>
+        <button type="button" className="fa-star" aria-label={t('cell.favTip')} aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>
           <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden fill={favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" /></svg>
         </button>
@@ -205,7 +205,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
           // Rust vẽ ở px trên canvas 2× → cỡ hiển thị px/2 css px, khớp ảnh preview (plan ghi nhầm px·3/4).
           <span data-live style={{ fontFamily: `"${live}"`, fontSize: fontSize ?? px / 2, lineHeight: `${ch}px`, whiteSpace: 'nowrap' }}>{text}</span>
         ) : state === 'error' ? (
-          <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
+          <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>{t('cell.noPreview')}</span>
         ) : mode === 'mask' ? (
           shown
             ? <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
@@ -220,7 +220,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         <Tooltip label={name} onlyIfTruncated>
           <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
         </Tooltip>
-        {format && fields.includes('format') && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
+        {format && fields.includes('format') && <Tooltip label={t('cell.format', { format })}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
         {fields.includes('lang') && <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />}
         {layout === 'list' && extras}
       </div>

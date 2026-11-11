@@ -10,12 +10,14 @@ import { faceMenuProps, useFaceActions } from '../../faces/FaceActions';
 import { FaceTitle } from '../../ui/FaceTitle';
 import { Tooltip } from '../../ui/Tooltip';
 import { AXIS_META } from './AnatomyTab';
+import { t, formatNumber } from '../../../i18n';
 
-export const SOURCE_BADGE: Record<SimilarSource, string> = { axes: 'Số đo', axes_and_image: 'Số đo + Hình ảnh', image: 'Hình ảnh' };
+// Getter: chuỗi theo ngôn ngữ hiện tại tại thời điểm đọc.
+export const SOURCE_BADGE: Record<SimilarSource, string> = { get axes() { return t('sim.badge.axes'); }, get axes_and_image() { return t('sim.badge.both'); }, get image() { return t('sim.badge.image'); } };
 export const SOURCE_TIP: Record<SimilarSource, string> = {
-  axes: 'So sánh theo số đo giải phẫu chữ (chiều cao x, nét, tương phản…)',
-  axes_and_image: 'So sánh theo số đo giải phẫu và hình dáng chữ',
-  image: 'So sánh theo hình dáng chữ',
+  get axes() { return t('sim.tip.axes'); },
+  get axes_and_image() { return t('sim.tip.both'); },
+  get image() { return t('sim.tip.image'); },
 };
 const names = (keys: string[]): string => keys.map(k => (AXIS_META[k]?.label ?? k).toLowerCase()).join(', ');
 
@@ -32,18 +34,18 @@ function ImageStrip({ api, store }: { api: Api; store: ModelStore }): React.JSX.
 
   let body: React.ReactNode = null; let actions: React.ReactNode = null;
   if (ui.code === 'E2' || ui.code === 'E3') {
-    body = `${ui.text}. Kết quả hiện chỉ dựa trên số đo.`;
+    body = t('sim.strip.measureOnly', { text: ui.text ?? '' });
     actions = ui.actions.map(a => <button key={a.label} type="button" onClick={() => act(a.id)}>{a.label}</button>);
   }
-  else if (ui.code === 'E8' || ui.code === 'E9') body = `${ui.code === 'E9' ? 'Phân tích hình ảnh tạm dừng' : 'Đang phân tích hình ảnh'} ${ui.text!.match(/(\d[\d.]*\/\d[\d.]*)/)![1]} — kết quả sẽ đầy đủ hơn khi xong`;
+  else if (ui.code === 'E8' || ui.code === 'E9') body = t(ui.code === 'E9' ? 'sim.strip.pausedProgress' : 'sim.strip.progress', { n: ui.text!.match(/(\d[\d.,]*\/\d[\d.,]*)/)![1] });
   else if (ui.severity === 'error') {
     body = ui.text;
     actions = ui.actions.map(a => <button key={a.label} type="button" onClick={() => act(a.id)}>{a.label}</button>);
   } else if (!ui.imageReady && !off) {
-    body = `Kết quả chỉ dựa trên số đo giải phẫu. Bật phân tích hình ảnh để so cả hình dáng chữ (~371 MB).`;
+    body = t('sim.strip.hint');
     actions = <>
-      <button type="button" onClick={() => void store.getState().enable(api)}>{embedEnabled ? 'Tải model' : 'Bật'}</button>
-      <button type="button" onClick={() => { setOff(true); void api.setSetting(HINT_OFF, '1'); }}>Không hiện lại</button>
+      <button type="button" onClick={() => void store.getState().enable(api)}>{embedEnabled ? t('sim.strip.downloadModel') : t('sim.strip.enable')}</button>
+      <button type="button" onClick={() => { setOff(true); void api.setSetting(HINT_OFF, '1'); }}>{t('sim.strip.dismiss')}</button>
     </>;
   }
   if (body === null) return null;
@@ -101,8 +103,8 @@ export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; d
       const styles = await api.getFamilyStyles(family);
       if (!live.current || scopeRef.current !== openingScope) return;
       const faces = [...new Map(styles.map(s => [faceKey(s.face), s.face])).values()];
-      if (!faces.length) throw new Error('Family chưa có kiểu font khả dụng.');
-      if (faces.length > 2000) throw new Error('Family có hơn 2.000 kiểu; hãy mở font đại diện.');
+      if (!faces.length) throw new Error(t('sim.famEmpty'));
+      if (faces.length > 2000) throw new Error(t('faces.famTooBig'));
       state.openFamily({ name: family, faces });
     } catch (e) { if (live.current && scopeRef.current === openingScope) setFamilyError(e instanceof Error ? e.message : String(e)); }
     finally { familyLock.current = false; if (live.current) setOpeningFamily(null); }
@@ -111,28 +113,28 @@ export function SimilarTab({ api, detail, store = useModelStore }: { api: Api; d
   return <>
     <ImageStrip api={api} store={store} />
     {familyError && <p role="alert" className="fa-soon">{familyError}</p>}
-    {openingFamily && <p role="status" className="fa-soon">Đang mở family…</p>}
-    {loading ? <p role="status" className="fa-soon">Đang tìm family tương tự…</p>
-      : error ? <div role="alert" className="fa-panel-error">Không tìm được family tương tự: {error} <button type="button" onClick={() => setRetry(n => n + 1)}>Thử lại</button></div>
-      : !page?.items.length ? <ZeroState compact glyph="ơ" text="Không có family tương tự khớp bộ lọc và dữ liệu hiện có" action={{ id: 'clear', label: 'Xem toàn thư viện' }} onAction={() => { state.setView('all'); state.setQuery(''); state.setViOnly(false); state.setFilters({}); }} />
+    {openingFamily && <p role="status" className="fa-soon">{t('sim.opening')}</p>}
+    {loading ? <p role="status" className="fa-soon">{t('sim.finding')}</p>
+      : error ? <div role="alert" className="fa-panel-error">{t('sim.findFail', { msg: error })} <button type="button" onClick={() => setRetry(n => n + 1)}>{t('det.retry')}</button></div>
+      : !page?.items.length ? <ZeroState compact glyph="ơ" text={t('sim.none')} action={{ id: 'clear', label: t('sim.viewAll') }} onAction={() => { state.setView('all'); state.setQuery(''); state.setViOnly(false); state.setFilters({}); }} />
       : <>
-        <p className="fa-soon">{page.total.toLocaleString('vi-VN')} family · mỗi family một font đại diện</p>
+        <p className="fa-soon">{t('sim.summary', { n: formatNumber(page.total) })}</p>
         <ul className="fa-sim">{page.items.map(group => {
           const h = group.representative;
           const tooLarge = group.faces.length > 2000 || group.count > 2000;
           return <li key={group.family} data-testid="similar-hit" className="fa-sim-hit" {...faceMenuProps(faceActions, [h.row])}>
             <FaceTitle as="strong" api={api} face={h.row} className="fa-sim-name">{group.family}</FaceTitle>
             <Tooltip label={SOURCE_TIP[h.source]}><span className="fa-badge" data-testid="source-badge">{SOURCE_BADGE[h.source]}</span></Tooltip>
-            <p className="fa-sim-style">{h.row.subfamily ?? 'Kiểu đại diện'} · {group.count.toLocaleString('vi-VN')} kiểu</p>
-            <p className="fa-sim-why">{h.same.length ? `Giống: ${names(h.same)}` : 'Chưa có trục giống để giải thích'}{h.differ.length ? ` · Khác: ${names(h.differ)}` : ''}</p>
-            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>Mở font</button><Tooltip label="Family vượt giới hạn 2.000 kiểu của truy vấn thư viện" disabled={!tooLarge}><button type="button" aria-disabled={tooLarge || openingFamily !== null || undefined} onClick={() => { if (!tooLarge && openingFamily === null) void openFamily(group.family); }}>Xem family</button></Tooltip></div>
-            {tooLarge && <p className="fa-sim-why">Hơn 2.000 kiểu; hãy mở font đại diện để xem family.</p>}
+            <p className="fa-sim-style">{h.row.subfamily ?? t('sim.repStyle')} · {t('sim.styles', { n: formatNumber(group.count) })}</p>
+            <p className="fa-sim-why">{h.same.length ? t('sim.same', { names: names(h.same) }) : t('sim.noAxes')}{h.differ.length ? t('sim.differ', { names: names(h.differ) }) : ''}</p>
+            <div className="fa-sim-actions"><button type="button" onClick={() => open(faceKey(h.face))}>{t('sim.openFont')}</button><Tooltip label={t('sim.tooLargeTip')} disabled={!tooLarge}><button type="button" aria-disabled={tooLarge || openingFamily !== null || undefined} onClick={() => { if (!tooLarge && openingFamily === null) void openFamily(group.family); }}>{t('sim.viewFamily')}</button></Tooltip></div>
+            {tooLarge && <p className="fa-sim-why">{t('sim.tooLarge')}</p>}
           </li>;
         })}</ul>
-        <nav className="fa-pair-nav" aria-label="Trang family tương tự">
-          <button type="button" aria-label="Trang trước" disabled={page.offset === 0} onClick={() => go(Math.max(0, page.offset - PAGE_SIZE))}>‹</button>
+        <nav className="fa-pair-nav" aria-label={t('sim.pageNav')}>
+          <button type="button" aria-label={t('sim.prevPage')} disabled={page.offset === 0} onClick={() => go(Math.max(0, page.offset - PAGE_SIZE))}>‹</button>
           <span>{page.offset + 1}–{page.offset + page.items.length} / {page.total}</span>
-          <button type="button" aria-label="Trang sau" disabled={page.offset + page.items.length >= page.total} onClick={() => go(page.offset + PAGE_SIZE)}>›</button>
+          <button type="button" aria-label={t('sim.nextPage')} disabled={page.offset + page.items.length >= page.total} onClick={() => go(page.offset + PAGE_SIZE)}>›</button>
         </nav>
       </>}
   </>;

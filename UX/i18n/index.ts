@@ -9,10 +9,18 @@ import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filt
 import { DESK_I18N } from './desk';
 import { VIEW_I18N } from './view';
 import { DUP_I18N } from './dup';
+<<<<<<< HEAD
 import { AUTO_I18N } from './auto';
+=======
+import { SETTINGS_I18N } from './settings';
+import { DETAIL_I18N } from './detail';
+import { UI_I18N } from './ui';
+import { FACES_I18N } from './faces';
+import { SIDEBAR_I18N } from './sidebar';
+>>>>>>> 1d6bb03e (feat(i18n): move hard-coded Vietnamese UI strings into i18n (sidebar, faces, main, grid, detail, settings, model, zero, boot))
 import { getLocale } from './locale';
 import { en } from './en';
-export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, formatNumber, formatDate, type Locale } from './locale';
+export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, formatNumber, formatDate, localeTag, type Locale } from './locale';
 
 export const vi = {
   ...TERM_GLOSS,
@@ -26,7 +34,15 @@ export const vi = {
   ...FILTER_I18N_4,
   ...DESK_I18N,
   ...VIEW_I18N,
+<<<<<<< HEAD
   ...AUTO_I18N,
+=======
+  ...SETTINGS_I18N,
+  ...DETAIL_I18N,
+  ...UI_I18N,
+  ...FACES_I18N,
+  ...SIDEBAR_I18N,
+>>>>>>> 1d6bb03e (feat(i18n): move hard-coded Vietnamese UI strings into i18n (sidebar, faces, main, grid, detail, settings, model, zero, boot))
   ...ONBOARDING_I18N,
   ...DUP_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',

@@ -77,10 +77,10 @@ export function StyleDropdown({ styles, value, onChange, loader = null, family }
 
   return (
     <div ref={root} className={`fa-dd${open ? ' open' : ''}${family ? ' has-act' : ''}`}>
-      <button ref={btn} type="button" className="fa-dd-btn" aria-label="Kiểu chữ" aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
+      <button ref={btn} type="button" className="fa-dd-btn" aria-label={t('dd.styleLabel')} aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
         onClick={() => (open ? close() : show())} onKeyDown={e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); show(); } }}>
         <span className="cur" style={current ? css(current) : undefined}>{current ? title(current, styleLabel(current)) : '—'}</span>
-        <span className="cnt">{flat.length} kiểu</span>
+        <span className="cnt">{t('dd.count', { n: flat.length })}</span>
         {!disabled && <span className="chev" aria-hidden />}
       </button>
       {family && (
@@ -91,7 +91,7 @@ export function StyleDropdown({ styles, value, onChange, loader = null, family }
         </Tooltip>
       )}
       {open && (
-        <ul ref={list} className="fa-dd-list" role="listbox" tabIndex={-1} aria-label="Kiểu chữ" aria-activedescendant={optId(active)} onKeyDown={onListKey}>
+        <ul ref={list} className="fa-dd-list" role="listbox" tabIndex={-1} aria-label={t('dd.styleLabel')} aria-activedescendant={optId(active)} onKeyDown={onListKey}>
           {romans.map(option)}
           {italics.length > 0 && romans.length > 0 && <li role="separator" className="sep" />}
           {italics.map(option)}

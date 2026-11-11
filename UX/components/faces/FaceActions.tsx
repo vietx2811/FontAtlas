@@ -10,6 +10,7 @@ import { Menu, type MenuAnchor } from '../ui/Menu';
 import { NamePrompt } from '../ui/NamePrompt';
 import { buildFaceMenu, faceName, projectEntries, type FaceMenuActions } from './faceMenuModel';
 import { fetchFamilyScope } from './familyScope';
+import { t, formatNumber } from '../../i18n';
 
 export type OpenOpts = { keyboard?: boolean; returnFocus?: HTMLElement | null };
 export interface FaceActionsApi {
@@ -28,7 +29,7 @@ export const useFaceActions = (): FaceActionsApi | null => useContext(Ctx);
 
 const CHUNK = 12;
 const keyOf = (r: FaceRow): FaceKeyDto => ({ hashHex: r.hashHex, faceIndex: r.faceIndex });
-const what = (rows: readonly FaceRow[]): string => (rows.length === 1 ? `«${faceName(rows[0])}»` : `${rows.length.toLocaleString('vi-VN')} font`);
+const what = (rows: readonly FaceRow[]): string => (rows.length === 1 ? `«${faceName(rows[0])}»` : t('faces.nFonts', { n: formatNumber(rows.length) }));
 const errText = (e: unknown): string => (e as { message?: string } | null)?.message ?? String(e);
 const say = (kind: 'info' | 'error', text: string): void => void useNoticeStore.getState().push({ kind, text });
 
@@ -39,7 +40,7 @@ async function copyText(text: string): Promise<void> {
   document.body.appendChild(ta); ta.select();
   const ok = document.execCommand('copy');
   ta.remove();
-  if (!ok) throw new Error('Không ghi được vào clipboard');
+  if (!ok) throw new Error(t('faces.clipboardFail'));
 }
 
 type MenuState = { kind: 'full' | 'projects'; rows: readonly FaceRow[]; anchor: MenuAnchor; opts: OpenOpts };
@@ -65,7 +66,7 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     setData(null);
     Promise.all([api.listCollections(), api.listTags()]).then(
       ([cols, tags]) => { if (alive) setData({ cols, tags }); },
-      e => { if (alive) { setData({ cols: [], tags: [] }); say('error', `Không tải được danh sách dự án/thẻ: ${errText(e)}`); } },
+      e => { if (alive) { setData({ cols: [], tags: [] }); say('error', t('faces.listFail', { msg: errText(e) })); } },
     );
     return () => { alive = false; };
   }, [menuRows, api]);
@@ -81,12 +82,12 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     }
     if (done.length) {
       useFavoriteStore.getState().set(done, on);
-      say('info', on ? `Đã thêm ${what(done)} vào Yêu thích` : `Đã bỏ ${what(done)} khỏi Yêu thích`);
+      say('info', on ? t('faces.favAdded', { what: what(done) }) : t('faces.favRemoved', { what: what(done) }));
       const reload = !on && useUiStore.getState().view === 'star';
       if (reload) dropFromSelection(done); // lưới sắp nạp lại và các thẻ này không còn trong truy vấn
       useUiStore.getState().bumpLibrary(reload);
     }
-    if (failed.length) say('error', `${failed.length} font không đổi được yêu thích: ${failed[0]}`);
+    if (failed.length) say('error', t('faces.favFailed', { n: failed.length, msg: failed[0] }));
   }, [api, isFavorite]);
 
   const setActive = useCallback(async (rows: readonly FaceRow[], on: boolean) => {
@@ -97,9 +98,9 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
   const addToProject = useCallback(async (rows: readonly FaceRow[], id: number, name: string) => {
     try {
       await api.addToCollection(id, rows.map(keyOf));
-      say('info', `Đã thêm ${what(rows)} vào «${name}»`);
+      say('info', t('faces.addedTo', { what: what(rows), name }));
       useUiStore.getState().bumpLibrary(false);
-    } catch (e) { say('error', `Không thêm được vào «${name}»: ${errText(e)}`); }
+    } catch (e) { say('error', t('faces.addFail', { name, msg: errText(e) })); }
   }, [api]);
 
   const actions: FaceMenuActions = useMemo(() => ({
@@ -117,23 +118,23 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     newProject: rows => setPrompt({ kind: 'project', rows, anchor: anchorRef.current }),
     tag: (rows, id, name) => {
       api.tagFaces(id, rows.map(keyOf)).then(
-        () => { say('info', `Đã gắn thẻ «${name}» cho ${what(rows)}`); useUiStore.getState().bumpLibrary(false); },
-        e => say('error', `Không gắn được thẻ «${name}»: ${errText(e)}`),
+        () => { say('info', t('faces.tagged', { name, what: what(rows) })); useUiStore.getState().bumpLibrary(false); },
+        e => say('error', t('faces.tagFail', { name, msg: errText(e) })),
       );
     },
     newTag: rows => setPrompt({ kind: 'tag', rows, anchor: anchorRef.current }),
     setActive: (rows, on) => void setActive(rows, on),
-    reveal: r => { api.revealInFinder(keyOf(r)).catch(e => say('error', `Không mở được Finder: ${errText(e)}`)); },
+    reveal: r => { api.revealInFinder(keyOf(r)).catch(e => say('error', t('faces.finderFail', { msg: errText(e) }))); },
     copyNames: rows => {
       copyText(rows.map(faceName).join('\n')).then(
-        () => say('info', rows.length === 1 ? 'Đã sao chép tên font' : `Đã sao chép tên ${rows.length.toLocaleString('vi-VN')} font`),
+        () => say('info', rows.length === 1 ? t('faces.copiedOne') : t('faces.copiedN', { n: formatNumber(rows.length) })),
         e => say('error', errText(e)),
       );
     },
     removeFromProject: (rows, id) => {
       api.removeFromCollection(id, rows.map(keyOf)).then(
-        () => { say('info', `Đã gỡ ${what(rows)} khỏi dự án`); useSelectionStore.getState().clear(); useUiStore.getState().bumpLibrary(true); },
-        e => say('error', `Không gỡ được khỏi dự án: ${errText(e)}`),
+        () => { say('info', t('faces.removed', { what: what(rows) })); useSelectionStore.getState().clear(); useUiStore.getState().bumpLibrary(true); },
+        e => say('error', t('faces.removeFail', { msg: errText(e) })),
       );
     },
   }), [api, setFavorite, setActive, addToProject]);
@@ -158,12 +159,12 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
         const c = await api.createCollection(name, null);
         await addToProject(p.rows, c.id, c.name);
       } else {
-        const t = await api.createTag(name);
-        await api.tagFaces(t.id, p.rows.map(keyOf));
-        say('info', `Đã gắn thẻ «${t.name}» cho ${what(p.rows)}`);
+        const tag = await api.createTag(name);
+        await api.tagFaces(tag.id, p.rows.map(keyOf));
+        say('info', t('faces.tagged', { name: tag.name, what: what(p.rows) }));
         useUiStore.getState().bumpLibrary(false);
       }
-    } catch (e) { say('error', `${p.kind === 'project' ? 'Không tạo được dự án' : 'Không tạo được thẻ'}: ${errText(e)}`); }
+    } catch (e) { say('error', t(p.kind === 'project' ? 'faces.createProjectFail' : 'faces.createTagFail', { msg: errText(e) })); }
   };
 
   const entries = menu && (() => {
@@ -179,9 +180,9 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
       {children}
       {menu && entries && (
         <Menu key={`${menu.kind}:${menu.rows.map(rowKey).join('|')}`} anchor={menu.anchor} focusFirst={menu.opts.keyboard} returnFocus={menu.opts.returnFocus}
-          label={menu.kind === 'projects' ? 'Thêm vào dự án' : 'Menu font'} onClose={() => setMenu(null)} entries={entries} />
+          label={menu.kind === 'projects' ? t('faces.addToProject') : t('faces.menuFont')} onClose={() => setMenu(null)} entries={entries} />
       )}
-      {prompt && <NamePrompt label={prompt.kind === 'project' ? 'Tên dự án' : 'Tên thẻ'} initial={prompt.kind === 'project' ? 'Dự án mới' : ''} anchor={prompt.anchor}
+      {prompt && <NamePrompt label={prompt.kind === 'project' ? t('faces.projectName') : t('faces.tagName')} initial={prompt.kind === 'project' ? t('faces.newProjectName') : ''} anchor={prompt.anchor}
         onSubmit={n => void submitPrompt(n)} onCancel={() => setPrompt(null)} />}
     </Ctx.Provider>
   );

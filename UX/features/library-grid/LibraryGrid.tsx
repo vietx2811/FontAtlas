@@ -7,6 +7,7 @@ import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from './fontFaceLoa
 import { usePagedFaces, type PagedFaces } from './pagedFaces';
 import { PreviewBlobs } from './previewBlobs';
 import { DEFAULT_SAMPLE, bucketFor, cellMinWidth, cssSize, previewBox, type FaceRow, type GridQuery, type PxBucket } from './types';
+import { t } from '../../i18n';
 
 export { HOVER_DELAY_MS, DEFAULT_PREVIEW_MODE, type CellState, type PickMods, type PreviewMode } from './FaceCell';
 
@@ -196,18 +197,18 @@ export function LibraryGrid({
     <div ref={box} role="grid" data-layout={layout} aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
       {previewError && (
         <div role="alert">
-          Không tải được preview: {previewError}{' '}
-          <button type="button" onClick={() => { setPreviewError(null); setInfoTry(n => n + 1); }}>Thử lại</button>
+          {t('grid.previewFail', { msg: previewError })}{' '}
+          <button type="button" onClick={() => { setPreviewError(null); setInfoTry(n => n + 1); }}>{t('grid.retry')}</button>
         </div>
       )}
       {snap.error && snap.total !== null && (
         // Lỗi ở một trang khi đã có dữ liệu: giữ lưới, cho thử lại.
-        <div role="alert">Lỗi tải thư viện: {snap.error} <button type="button" onClick={() => paged?.retry()}>Thử lại</button></div>
+        <div role="alert">{t('grid.loadFail', { msg: snap.error })} <button type="button" onClick={() => paged?.retry()}>{t('grid.retry')}</button></div>
       )}
       {snap.error && snap.total === null ? (
-        <div role="alert">Lỗi tải thư viện: {snap.error} <button type="button" onClick={() => paged?.retry()}>Thử lại</button></div>
+        <div role="alert">{t('grid.loadFail', { msg: snap.error })} <button type="button" onClick={() => paged?.retry()}>{t('grid.retry')}</button></div>
       ) : snap.total === 0 ? (
-        emptyState ?? <p>Không có font nào khớp</p>
+        emptyState ?? <p>{t('grid.noMatch')}</p>
       ) : (
         <List
           data-testid="library-grid-scroller"

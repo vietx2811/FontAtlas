@@ -4,6 +4,7 @@ import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import './modelProgress.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
+import { t } from '../../i18n';
 
 export const SR_THROTTLE_MS = 10_000;
 
@@ -49,7 +50,7 @@ export function ModelProgress({ api, store = useModelStore }: { api: Api; store?
         {ui.actions.map(a => (
           <button key={a.label} type="button" aria-label={a.label} onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>
         ))}
-        {ui.code === 'E1' && <Tooltip label="Đóng gợi ý"><button type="button" aria-label="Đóng gợi ý" onClick={() => store.getState().dismissE1()}>×</button></Tooltip>}
+        {ui.code === 'E1' && <Tooltip label={t('model.dismissHint')}><button type="button" aria-label={t('model.dismissHint')} onClick={() => store.getState().dismissE1()}>×</button></Tooltip>}
       </span>
       <ModelDetails detail={ui.detail} />
       {/* Vùng đọc màn hình: lỗi dùng assertive, tiến độ dùng polite (≤ 1 lần/10 s). */}

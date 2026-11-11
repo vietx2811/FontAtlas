@@ -3,7 +3,7 @@ import { Tooltip } from '../ui/Tooltip';
 import type { Api } from '../../api';
 import { useUiStore } from '../../store/ui';
 import type { CompareFace, CompareMetric } from '../../api/compare';
-import { hasKey, t } from '../../i18n';
+import { hasKey, t, localeTag } from '../../i18n';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontFamily } from '../detail/useFontFamily';
 import { classLabel, subclassLabel, traitLabel } from '../main/classLabels';
@@ -13,9 +13,9 @@ import { NoteMark } from '../ui/noteMark';
 import { graphemes, missingList, useMissingChars } from './glyphCoverage';
 import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
 
-export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
+export const SAMPLE_VI = 'ỮẶỆỖỞ ươ'; // i18n-ok: chữ mẫu
 export const PLACEHOLDER = 'Hxg';
-export const OVERLAY_TEXT = 'Hxgă';
+export const OVERLAY_TEXT = 'Hxgă'; // i18n-ok: chữ mẫu
 export const OVERLAY_SPACED = [...OVERLAY_TEXT].join(' ');
 
 /** Nạp font của một cột rồi đưa họ font cho phần vẽ (null khi chưa nạp: dùng font UI dự phòng). */
@@ -100,7 +100,7 @@ function OverlayLayerArt({ fam, style, scale, primary }: { fam: string | null; s
   );
 }
 
-const pct1 = (v: number) => new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, useGrouping: false }).format(v);
+const pct1 = (v: number) => new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 1, useGrouping: false }).format(v);
 /** Chữ cảnh báo tràn: % em vượt hhea.ascender (backend); thiếu thì lùi về đỉnh dấu chồng tính bằng em. */
 function overText(face: CompareFace): string {
   const { overAscenderPctEm: a, overCapPctEm: c, stackedMarksTopEm: em } = face.vi;

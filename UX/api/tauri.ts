@@ -7,6 +7,7 @@ import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
+import { t } from '../i18n';
 
 /** Đọc Blob thành ArrayBuffer (jsdom và WebView cũ chưa có Blob.arrayBuffer: dùng FileReader). */
 const blobBuffer = (b: Blob): Promise<ArrayBuffer> => (typeof b.arrayBuffer === 'function' ? b.arrayBuffer() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as ArrayBuffer); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); }));
@@ -18,7 +19,7 @@ export function toCmdError(e: unknown): CmdError {
     const x = e as { code: string; message: string; detail?: unknown };
     return new CmdError(x.code, x.message, x.detail ?? undefined);
   }
-  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? 'lỗi không rõ');
+  return new CmdError('internal', typeof e === 'string' ? e : (e as Error)?.message ?? t('api.unknownError'));
 }
 
 type Args<K extends CommandName> = TauriCommandMap[K]['args'];

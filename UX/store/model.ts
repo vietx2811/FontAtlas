@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api, EmbedStatusDto, ModelEvent, ModelStatusDto, ErrorInfoDto } from '../api';
 import { useNoticeStore } from './notices';
+import { t, formatNumber, formatDate, localeTag } from '../i18n';
 
 export type EState = 'E0' | 'E1' | 'E2' | 'E3' | 'E4' | 'E5' | 'E6' | 'E7' | 'E8' | 'E9' | 'E10' | 'E11';
 export type ModelAction = 'download' | 'stop' | 'retry' | 'redownload' | 'remove' | 'pause' | 'resume';
@@ -28,44 +29,46 @@ export function modelErrorText(error: ErrorInfoDto): string {
   if (error.code === 'http' && /\b429\b/.test(error.message)) {
     const match = /Retry-After\s*[:=]\s*(?:Some\(["']?([^"')]+)["']?\)|["']?([^;\n"']+))/i.exec(error.message);
     const retry = (match?.[1] ?? match?.[2] ?? '').trim();
-    if (/^\d+$/.test(retry)) return `Máy chủ đang giới hạn yêu cầu. Thử lại sau ${retry} giây.`;
+    if (/^\d+$/.test(retry)) return t('mdl.rate.sec', { n: retry });
     const at = Date.parse(retry);
-    if (Number.isFinite(at)) return `Máy chủ đang giới hạn yêu cầu. Thử lại lúc ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }).format(at)}.`;
-    return 'Máy chủ đang giới hạn yêu cầu. Hãy thử lại sau.';
+    if (Number.isFinite(at)) return t('mdl.rate.at', { at: formatDate(at, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) });
+    return t('mdl.rate.later');
   }
   const messages: Record<string, string> = {
-    http: 'Máy chủ tải model trả lỗi. Hãy thử lại sau.',
-    tls: 'Không xác thực được máy chủ tải. Kiểm tra mạng hoặc chứng chỉ proxy.',
-    http_redirect: 'Địa chỉ tải chuyển hướng không hợp lệ.',
-    http_config: 'Cấu hình tải model không hợp lệ.',
-    network: 'Kết nối tải model bị gián đoạn.',
-    io: 'Không đọc/ghi được tệp model. Kiểm tra ổ đĩa và quyền truy cập.',
-    checksum: 'Model tải về bị hỏng',
-    cancelled: 'Đã dừng tải model',
+    http: t('mdl.err.http'),
+    tls: t('mdl.err.tls'),
+    http_redirect: t('mdl.err.http_redirect'),
+    http_config: t('mdl.err.http_config'),
+    network: t('mdl.err.network'),
+    io: t('mdl.err.io'),
+    checksum: t('mdl.err.checksum'),
+    cancelled: t('mdl.err.cancelled'),
   };
-  return messages[error.code] ?? 'Không tải được model. Hãy thử lại.';
+  return messages[error.code] ?? t('mdl.err.generic');
 }
 
 export function explainModelError(e: unknown): string {
   const err = typeof e === 'object' && e !== null ? e as { code?: string; message?: string; detail?: { required?: number; free?: number } } : {};
-  if (err.code === 'busy') return 'Model đang tải: hãy dừng lần tải hiện tại trước khi tải lại.';
+  if (err.code === 'busy') return t('mdl.err.busy');
   if (err.code === 'insufficient_disk' && err.detail?.required != null) {
-    return `Không đủ chỗ trống: cần ${Math.round(err.detail.required / (1024 * 1024))} MB, còn ${Math.round((err.detail.free ?? 0) / (1024 * 1024))} MB.`;
+    return t('mdl.err.disk', { need: Math.round(err.detail.required / (1024 * 1024)), free: Math.round((err.detail.free ?? 0) / (1024 * 1024)) });
   }
   return modelErrorText({ code: err.code ?? 'unknown', message: err.message ?? '' });
 }
-export const fmtInt = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export const fmtInt = (n: number): string => formatNumber(Math.round(n));
 export function formatEta(ms: number | null): string {
   if (ms === null) return '';
-  if (ms < 60_000) return 'dưới 1 phút';
-  if (ms < 3600_000) return `~${Math.round(ms / 60_000)} phút`;
-  return `~${Math.round(ms / 3600_000)} giờ`;
+  if (ms < 60_000) return t('mdl.eta.lt1');
+  if (ms < 3600_000) return t('mdl.eta.min', { n: Math.round(ms / 60_000) });
+  return t('mdl.eta.hour', { n: Math.round(ms / 3600_000) });
 }
 const MB = 1024 * 1024;
+// Nhãn đọc lúc dùng (getter) để đổi ngôn ngữ có hiệu lực ngay.
+const act = <I extends ModelAction>(id: I, key: Parameters<typeof t>[0]) => ({ id, get label(): string { return t(key); } });
 const A = {
-  download: { id: 'download', label: 'Tải' }, resumeDl: { id: 'download', label: 'Tiếp tục tải' }, stop: { id: 'stop', label: 'Dừng' },
-  retryDl: { id: 'download', label: 'Thử lại' }, retry: { id: 'retry', label: 'Thử lại' }, redownload: { id: 'redownload', label: 'Thử lại' },
-  remove: { id: 'remove', label: 'Xoá model' }, pause: { id: 'pause', label: 'Tạm dừng' }, resume: { id: 'resume', label: 'Tiếp tục' },
+  download: act('download', 'mdl.a.download'), resumeDl: act('download', 'mdl.a.resumeDl'), stop: act('stop', 'mdl.a.stop'),
+  retryDl: act('download', 'mdl.a.retry'), retry: act('retry', 'mdl.a.retry'), redownload: act('redownload', 'mdl.a.retry'),
+  remove: act('remove', 'mdl.a.remove'), pause: act('pause', 'mdl.a.pause'), resume: act('resume', 'mdl.a.resume'),
 } as const satisfies Record<string, { id: ModelAction; label: string }>;
 
 export function deriveModelUi(i: ModelUiInput): ModelUi {
@@ -76,33 +79,33 @@ export function deriveModelUi(i: ModelUiInput): ModelUi {
   if (!i.embedEnabled && !transferState) return { ...base, code: 'E0', text: null };
   const err = m.lastError?.code;
   if (m.state === 'downloading') {
-    if (m.totalBytes > 0 && m.doneBytes >= m.totalBytes) return { ...base, code: 'E2', text: 'Đang kiểm tra tệp…', checking: true, actions: [A.stop] };
+    if (m.totalBytes > 0 && m.doneBytes >= m.totalBytes) return { ...base, code: 'E2', text: t('mdl.checking'), checking: true, actions: [A.stop] };
     const ratio = m.totalBytes > 0 ? Math.max(0, m.doneBytes / m.totalBytes) : null;
     const pct = ratio === null ? null : Math.min(99, Math.round(ratio * 100));
-    const speed = m.bytesPerSec > 0 && Number.isFinite(m.bytesPerSec) ? `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(m.bytesPerSec / 1_000_000)} MB/s` : '';
-    const text = [pct === null ? 'Đang tải model…' : `Đang tải model ${pct}%`, m.totalBytes > 0 ? `${Math.round(m.doneBytes / MB)}/${Math.round(m.totalBytes / MB)} MB` : '', speed, formatEta(m.etaMs)].filter(Boolean).join(' · ');
+    const speed = m.bytesPerSec > 0 && Number.isFinite(m.bytesPerSec) ? `${new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 1 }).format(m.bytesPerSec / 1_000_000)} MB/s` : '';
+    const text = [pct === null ? t('mdl.downloading') : t('mdl.downloadingPct', { pct }), m.totalBytes > 0 ? `${Math.round(m.doneBytes / MB)}/${Math.round(m.totalBytes / MB)} MB` : '', speed, formatEta(m.etaMs)].filter(Boolean).join(' · ');
     return { ...base, code: 'E2', text, actions: [A.stop], progress: ratio };
   }
   if (err === 'cancelled') return { ...base, code: 'E3', text: modelErrorText(m.lastError!), detail: m.lastError!.message, actions: [A.resumeDl] };
   if (m.state === 'checksum_mismatch' || err === 'checksum') return { ...base, code: 'E5', text: modelErrorText({ code: 'checksum', message: '' }), severity: 'error', actions: [A.redownload], detail: m.lastError?.message };
   if (m.lastError) return { ...base, code: 'E4', text: modelErrorText(m.lastError), severity: 'error', actions: [A.retryDl], detail: m.lastError.message };
-  if (m.state === 'paused') return { ...base, code: 'E3', text: 'Đã dừng tải model', actions: [A.resumeDl], progress: m.totalBytes > 0 ? m.doneBytes / m.totalBytes : null };
-  if (m.state === 'corrupt') return { ...base, code: 'E6', text: 'Model hình ảnh bị hỏng', severity: 'error', actions: [A.redownload, A.remove] };
-  if (m.state === 'missing') return { ...base, code: 'E1', text: i.e1Dismissed ? null : 'Chưa tải model hình ảnh', actions: [A.download] };
+  if (m.state === 'paused') return { ...base, code: 'E3', text: t('mdl.paused'), actions: [A.resumeDl], progress: m.totalBytes > 0 ? m.doneBytes / m.totalBytes : null };
+  if (m.state === 'corrupt') return { ...base, code: 'E6', text: t('mdl.corrupt'), severity: 'error', actions: [A.redownload, A.remove] };
+  if (m.state === 'missing') return { ...base, code: 'E1', text: i.e1Dismissed ? null : t('mdl.missing'), actions: [A.download] };
   if (m.state !== 'ready') return { ...base, code: 'E0', text: null };
 
   const ready = { ...base, imageReady: true };
-  if (e?.loadError) return { ...ready, code: 'E7', text: 'Không chạy được phân tích hình ảnh', severity: 'error', actions: [A.retry], detail: e.loadError };
+  if (e?.loadError) return { ...ready, code: 'E7', text: t('mdl.loadError'), severity: 'error', actions: [A.retry], detail: e.loadError };
   if (e && e.running) {
     const total = e.done + e.pending + e.failed;
-    if (e.paused) return { ...ready, code: 'E9', text: `Phân tích hình ảnh tạm dừng ${fmtInt(e.done)}/${fmtInt(total)}`, actions: [A.resume], progress: e.done / total };
+    if (e.paused) return { ...ready, code: 'E9', text: t('mdl.embPaused', { done: fmtInt(e.done), total: fmtInt(total) }), actions: [A.resume], progress: e.done / total };
     return {
-      ...ready, code: 'E8', text: `Phân tích hình ảnh ${fmtInt(e.done)}/${fmtInt(total)} · ${formatEta(e.etaMs)}`.replace(/ · $/, ''), actions: [A.pause], progress: e.done / total,
-      detail: e.device ? `Đang dùng: ${e.device === 'metal' ? 'Metal (GPU)' : 'CPU'}` : undefined,
+      ...ready, code: 'E8', text: t('mdl.emb', { done: fmtInt(e.done), total: fmtInt(total), eta: formatEta(e.etaMs) }).replace(/ · $/, ''), actions: [A.pause], progress: e.done / total,
+      detail: e.device ? t('mdl.embDevice', { device: e.device === 'metal' ? 'Metal (GPU)' : 'CPU' }) : undefined,
     };
   }
-  if (i.justFinished && e) return { ...ready, code: 'E10', text: `Đã phân tích hình ảnh ${fmtInt(e.done)} font` };
-  if (e && e.failed > 0) return { ...ready, code: 'E11', text: null, settingsText: `${fmtInt(e.failed)} font không phân tích được hình ảnh` };
+  if (i.justFinished && e) return { ...ready, code: 'E10', text: t('mdl.embDone', { n: fmtInt(e.done) }) };
+  if (e && e.failed > 0) return { ...ready, code: 'E11', text: null, settingsText: t('mdl.embFailed', { n: fmtInt(e.failed) }) };
   return { ...ready, code: 'E0', text: null };
 }
 

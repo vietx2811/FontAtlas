@@ -26,28 +26,28 @@ export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}
 
 export function libraryEmpty(c: EmptyCtx): Empty {
   const blocked = (id: number) => id in c.access;
-  const ACCESS: Empty = { kind: 'source-access', glyph: 'ụ', text: 'Cần quyền truy cập thư mục này', action: { id: 'grant', label: 'Cấp quyền' }, secondary: { id: 'rescan', label: 'Thử lại' } };
-  if (c.view.startsWith('src:') && blocked(Number(c.view.slice(4)))) return ACCESS;
-  if (c.view === 'all' && c.sources.length > 0 && c.sources.every(x => blocked(x.id) && x.faceCount === 0)) return ACCESS;
-  const CLOUD: Empty = { kind: 'source-cloud', glyph: 'ụ', text: 'Font đang ở đám mây, chưa tải về máy', action: { id: 'rescan', label: 'Quét lại' } };
-  if (c.scanning) return { kind: 'scanning', glyph: 'A', text: 'Đang quét, font sẽ hiện dần' };
+  const access = (): Empty => ({ kind: 'source-access', glyph: 'ụ', text: t('zero.access'), action: { id: 'grant', label: t('zero.grant') }, secondary: { id: 'rescan', label: t('zero.retry') } });
+  if (c.view.startsWith('src:') && blocked(Number(c.view.slice(4)))) return access();
+  if (c.view === 'all' && c.sources.length > 0 && c.sources.every(x => blocked(x.id) && x.faceCount === 0)) return access();
+  const cloud = (): Empty => ({ kind: 'source-cloud', glyph: 'ụ', text: t('zero.cloud'), action: { id: 'rescan', label: t('zero.rescan') } });
+  if (c.scanning) return { kind: 'scanning', glyph: 'A', text: t('zero.scanning') };
   if (c.view.startsWith('src:')) {
     const s = c.sources.find(x => `src:${x.id}` === c.view);
-    if (s && s.available && s.faceCount === 0 && notDownloadedOf(s, c.cloud) > 0) return CLOUD;
-    if (s && !s.available) return { kind: 'source-unplugged', glyph: 'ụ', text: 'Ổ chưa kết nối. Font vẫn nằm trong thư viện.', action: { id: 'rescan', label: 'Quét lại khi cắm' } };
-    if (s?.faceCount === 0) return { kind: 'source-empty', glyph: 'a', text: 'Nguồn này chưa có font', action: { id: 'rescan', label: 'Quét lại' } };
+    if (s && s.available && s.faceCount === 0 && notDownloadedOf(s, c.cloud) > 0) return cloud();
+    if (s && !s.available) return { kind: 'source-unplugged', glyph: 'ụ', text: t('zero.unplugged'), action: { id: 'rescan', label: t('zero.rescanPlugged') } };
+    if (s?.faceCount === 0) return { kind: 'source-empty', glyph: 'a', text: t('zero.srcEmpty'), action: { id: 'rescan', label: t('zero.rescan') } };
   }
-  if (c.sources.length === 0) return { kind: 'no-sources', glyph: 'A', text: 'Chưa có font. Kéo thư mục vào đây hoặc thêm thủ công.', action: { id: 'add-folder', label: 'Thêm thư mục font' } };
-  if (c.sources.length > 0 && c.sources.every(x => x.faceCount === 0 && notDownloadedOf(x, c.cloud) > 0)) return CLOUD;
-  if (c.sources.every(s => s.faceCount === 0)) return { kind: 'sources-empty', glyph: 'A', text: 'Các nguồn chưa có font nào', action: { id: 'rescan', label: 'Quét lại' } };
+  if (c.sources.length === 0) return { kind: 'no-sources', glyph: 'A', text: t('zero.noSources'), action: { id: 'add-folder', label: t('zero.addFolder') } };
+  if (c.sources.length > 0 && c.sources.every(x => x.faceCount === 0 && notDownloadedOf(x, c.cloud) > 0)) return cloud();
+  if (c.sources.every(s => s.faceCount === 0)) return { kind: 'sources-empty', glyph: 'A', text: t('zero.sourcesEmpty'), action: { id: 'rescan', label: t('zero.rescan') } };
   const q = c.query.trim();
-  if (q) return { kind: 'no-match', glyph: 'ở', text: `Không có font khớp “${q}”`, action: { id: 'clear-filters', label: 'Xoá bộ lọc' } };
-  if (c.viOnly) return { kind: 'no-match-vi', glyph: 'Ặ', text: 'Không có font nào đủ dấu tiếng Việt', action: { id: 'clear-filters', label: 'Bỏ lọc Ặ vi' } };
-  if (c.filtered) return { kind: 'no-match', glyph: 'ở', text: c.familyName ? `Không có kiểu font khớp bộ lọc trong ${c.familyName}` : 'Không có font khớp bộ lọc', action: { id: 'clear-filters', label: 'Xoá bộ lọc' } };
-  if (c.tag !== null) return { kind: 'tag-empty', glyph: 'a', text: 'Chưa có font gắn thẻ này', action: { id: 'clear-filters', label: 'Bỏ thẻ' } };
-  if (c.view === 'star') return { kind: 'favorites-empty', glyph: 'ẫ', text: 'Chưa có font yêu thích. Bấm ngôi sao trên thẻ.' };
-  if (c.view === 'recent') return { kind: 'recent-empty', glyph: 'ơ', text: 'Chưa mở font nào gần đây' };
-  if (c.view === 'active') return { kind: 'active-empty', glyph: 'Ư', text: 'Chưa bật font nào. Dùng công tắc trong panel chi tiết.' };
-  if (c.view.startsWith('col:')) return { kind: 'project-empty', glyph: 'đ', text: 'Dự án trống', action: { id: 'go-all', label: 'Thêm font' } };
-  return { kind: 'sources-empty', glyph: 'A', text: 'Các nguồn chưa có font nào', action: { id: 'rescan', label: 'Quét lại' } };
+  if (q) return { kind: 'no-match', glyph: 'ở', text: t('zero.noMatchQ', { q }), action: { id: 'clear-filters', label: t('zero.clearFilters') } };
+  if (c.viOnly) return { kind: 'no-match-vi', glyph: 'Ặ', text: t('zero.noMatchVi'), action: { id: 'clear-filters', label: t('zero.clearVi') } };
+  if (c.filtered) return { kind: 'no-match', glyph: 'ở', text: c.familyName ? t('zero.noMatchFam', { name: c.familyName }) : t('zero.noMatch'), action: { id: 'clear-filters', label: t('zero.clearFilters') } };
+  if (c.tag !== null) return { kind: 'tag-empty', glyph: 'a', text: t('zero.tagEmpty'), action: { id: 'clear-filters', label: t('zero.clearTag') } };
+  if (c.view === 'star') return { kind: 'favorites-empty', glyph: 'ẫ', text: t('zero.favEmpty') };
+  if (c.view === 'recent') return { kind: 'recent-empty', glyph: 'ơ', text: t('zero.recentEmpty') };
+  if (c.view === 'active') return { kind: 'active-empty', glyph: 'Ư', text: t('zero.activeEmpty') };
+  if (c.view.startsWith('col:')) return { kind: 'project-empty', glyph: 'đ', text: t('zero.projectEmpty'), action: { id: 'go-all', label: t('zero.addFonts') } };
+  return { kind: 'sources-empty', glyph: 'A', text: t('zero.sourcesEmpty'), action: { id: 'rescan', label: t('zero.rescan') } };
 }

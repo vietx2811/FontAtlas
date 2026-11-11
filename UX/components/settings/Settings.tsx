@@ -18,17 +18,17 @@ import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { AutoActivation } from './AutoActivation';
 
 export const SETTINGS_GROUPS = [
-  { id: 'general', label: 'Chung' }, { id: 'library', label: 'Thư viện và nguồn' }, { id: 'vision', label: 'Phân tích hình ảnh' },
-  { id: 'activation', label: 'Kích hoạt font' }, { id: 'auto', label: 'Bật font tự động' }, { id: 'license', label: 'Giấy phép' }, { id: 'data', label: 'Dữ liệu' },
-  { id: 'shortcuts', label: 'Phím tắt' }, { id: 'help', label: 'Trợ giúp' },
+  { id: 'general', get label() { return t('set.g.general'); } }, { id: 'library', get label() { return t('set.g.library'); } }, { id: 'vision', get label() { return t('set.g.vision'); } },
+  { id: 'activation', get label() { return t('set.g.activation'); } }, { id: 'auto', get label() { return t('auto.group'); } }, { id: 'license', get label() { return t('set.g.license'); } }, { id: 'data', get label() { return t('set.g.data'); } },
+  { id: 'shortcuts', get label() { return t('set.g.shortcuts'); } }, { id: 'help', get label() { return t('set.g.help'); } },
 ] as const;
 type GroupId = typeof SETTINGS_GROUPS[number]['id'];
 
-const SAMPLE_PRESETS: Array<[string, string]> = [
-  ['Tiêu đề F&B', 'Phở bò Hà Nội'], ['Chữ hoa chồng dấu', 'ẮẰẲẴẶ ẤẦẨẪẬ ƠỚỜỞỠỢ ƯỨỪỬỮỰ'], ['Thực đơn có giá', 'Cà phê sữa đá 35.000đ'],
-  ['Đoạn văn', 'Hà Nội mùa thu, cây cơm nguội vàng'], ['Số và ký hiệu', '0123456789 ₫ & @ % ?'],
+const samplePresets = (): Array<[string, string]> => [
+  [t('set.preset.fnb'), 'Phở bò Hà Nội'], [t('set.preset.marks'), 'ẮẰẲẴẶ ẤẦẨẪẬ ƠỚỜỞỠỢ ƯỨỪỬỮỰ'], [t('set.preset.menu'), 'Cà phê sữa đá 35.000đ'], // i18n-ok: chữ mẫu
+  [t('set.preset.para'), 'Hà Nội mùa thu, cây cơm nguội vàng'], [t('set.preset.numbers'), '0123456789 ₫ & @ % ?'], // i18n-ok: chữ mẫu
 ];
-const SHORTCUTS: Array<[string, string]> = [['⌘K', 'Tìm font'], ['⌘,', 'Mở Cài đặt'], ['Esc', 'Xoá ô tìm / đóng hộp thoại / thoát Cài đặt'], ['↑ ↓', 'Chọn kiểu trong danh sách kiểu chữ'], ['Enter', 'Chọn mục đang trỏ']];
+const shortcuts = (): Array<[string, string]> => [['⌘K', t('set.key.search')], ['⌘,', t('set.key.settings')], ['Esc', t('set.key.esc')], ['↑ ↓', t('set.key.style')], ['Enter', t('set.key.enter')]];
 const MB = 1024 * 1024;
 
 type Props = { api: Api; onClose(): void; onRerunOnboarding(): void; modelStore?: ModelStore };
@@ -63,13 +63,13 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
   const label = SETTINGS_GROUPS.find(g => g.id === group)!.label;
   return (
     <div className="fa-settings" data-testid="settings">
-      <nav className="fa-set-nav" aria-label="Nhóm cài đặt">
+      <nav className="fa-set-nav" aria-label={t('set.nav')}>
         {SETTINGS_GROUPS.map(g => (
           <button key={g.id} type="button" aria-current={group === g.id ? 'true' : undefined} onClick={() => setGroup(g.id)}>{g.label}</button>
         ))}
       </nav>
       <section className="fa-set-body">
-        <header><h2>{label}</h2><button type="button" className="fa-set-done" onClick={onClose}>Xong</button></header>
+        <header><h2>{label}</h2><button type="button" className="fa-set-done" onClick={onClose}>{t('set.done')}</button></header>
         {s && group === 'general' && <General api={api} s={s} patch={patch} />}
         {s && group === 'library' && <Library api={api} s={s} patch={patch} />}
         {s && group === 'vision' && <Vision api={api} s={s} patch={patch} store={modelStore} />}
@@ -77,13 +77,13 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
         {group === 'auto' && <AutoActivation api={api} />}
         {group === 'license' && (
           <div className="fa-set-text">
-            <p>Bạn tự chịu trách nhiệm tuân thủ giấy phép font của mình.</p>
-            <p>Font Atlas phân tích mọi font trong thư viện và không gửi font hay kết quả đi đâu.</p>
+            <p>{t('set.lic1')}</p>
+            <p>{t('set.lic2')}</p>
           </div>
         )}
         {group === 'data' && <Data api={api} />}
         {group === 'shortcuts' && (
-          <table className="fa-set-keys"><tbody>{SHORTCUTS.map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
+          <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
         )}
         {group === 'help' && <Help api={api} onRerun={onRerunOnboarding} />}
       </section>
@@ -102,18 +102,18 @@ function General({ api, s, patch }: { api: Api } & SubProps) {
   const apply = (t: string) => { setSample(t); void patch({ sampleText: t }); };
   return (
     <>
-      <fieldset className="fa-set-group"><legend>Ngôn ngữ giao diện</legend>
+      <fieldset className="fa-set-group"><legend>{t('set.uiLang')}</legend>
         {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, l]) => <label key={v}><input type="radio" name="lang" checked={locale === v} onChange={() => { chooseLocale(v); void patch({ uiLang: v }); }} />{l}</label>)}
       </fieldset>
-      <fieldset className="fa-set-group"><legend>Giao diện</legend>
-        {([['system', 'Theo hệ thống'], ['light', 'Sáng'], ['dark', 'Tối']] as const).map(([v, l]) => <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{l}</label>)}
+      <fieldset className="fa-set-group"><legend>{t('set.theme')}</legend>
+        {([['system', t('set.theme.system')], ['light', t('set.theme.light')], ['dark', t('set.theme.dark')]] as const).map(([v, l]) => <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{l}</label>)}
       </fieldset>
-      <div className="fa-set-group"><label htmlFor="set-sample">Chữ mẫu mặc định</label>
-        <input id="set-sample" type="text" aria-label="Chữ mẫu mặc định" defaultValue={s.sampleText} key={s.sampleText} onBlur={e => { if (e.target.value !== s.sampleText) apply(e.target.value); }} onChange={e => apply(e.target.value)} />
-        <div className="fa-set-presets">{SAMPLE_PRESETS.map(([n, t]) => <button key={n} type="button" onClick={() => apply(t)}>{n}</button>)}</div>
+      <div className="fa-set-group"><label htmlFor="set-sample">{t('set.sample')}</label>
+        <input id="set-sample" type="text" aria-label={t('set.sample')} defaultValue={s.sampleText} key={s.sampleText} onBlur={e => { if (e.target.value !== s.sampleText) apply(e.target.value); }} onChange={e => apply(e.target.value)} />
+        <div className="fa-set-presets">{samplePresets().map(([n, t]) => <button key={n} type="button" onClick={() => apply(t)}>{n}</button>)}</div>
       </div>
-      <Switch label="Dự án dùng tiếng Việt mặc định" on={s.projectViDefault} onChange={v => void patch({ projectViDefault: v })} />
-      <Switch label="Hiện splash khi mở app" on={splashOn} onChange={v => { setSplashOn(v); void writeSplashEnabled(api, v); }} />
+      <Switch label={t('set.projectVi')} on={s.projectViDefault} onChange={v => void patch({ projectViDefault: v })} />
+      <Switch label={t('set.splash')} on={splashOn} onChange={v => { setSplashOn(v); void writeSplashEnabled(api, v); }} />
     </>
   );
 }
@@ -125,23 +125,23 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   useEffect(() => { void refresh(); }, [refresh]);
   const access = useScanStore(x => x.access);
   const cloud = useScanStore(x => x.cloud);
-  const state = (x: SourceDto) => (x.id in access ? 'Cần quyền truy cập' : !x.available ? 'Không khả dụng' : x.scanning ? 'Đang quét' : 'Sẵn sàng');
+  const state = (x: SourceDto) => (x.id in access ? t('set.src.access') : !x.available ? t('set.src.unavail') : x.scanning ? t('set.src.scanning') : t('set.src.ready'));
   return (
     <>
-      <div className="fa-set-bar"><button type="button" onClick={() => useUiStore.getState().requestAddFolder()}>+ Thêm</button></div>
+      <div className="fa-set-bar"><button type="button" onClick={() => useUiStore.getState().requestAddFolder()}>{t('set.src.add')}</button></div>
       <ul className="fa-set-sources">
         {sources.map(x => (
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}{cloudHint(x) && <NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(x)!} />}</strong><span className="path">{x.path}</span></div>
-            <span className="meta">{x.faceCount} font · {state(x)}{notDownloadedOf(x, cloud) > 0 ? ` · ${notDownloadedOf(x, cloud)} chưa tải về` : ''}</span>
-            {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>Cấp quyền</button>}
-            <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? 'Thử lại' : 'Quét lại'}</button>
-            <button type="button" className="danger" onClick={() => setRemoving(x)}>Xoá nguồn</button>
+            <span className="meta">{t('set.src.meta', { n: x.faceCount, state: state(x) })}{notDownloadedOf(x, cloud) > 0 ? t('set.src.notDl', { n: notDownloadedOf(x, cloud) }) : ''}</span>
+            {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>{t('set.src.grant')}</button>}
+            <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? t('set.src.retry') : t('set.src.rescan')}</button>
+            <button type="button" className="danger" onClick={() => setRemoving(x)}>{t('set.src.remove')}</button>
           </li>
         ))}
       </ul>
       <SourcePriority api={api} sources={sources} />
-      <Switch label="Quét lại khi mở app" on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
+      <Switch label={t('set.rescanLaunch')} on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
       <Switch label={t('cloud.switch')} on={s.cloudPreviewDownload} onChange={v => void patch({ cloudPreviewDownload: v })} />
       <p className="fa-set-note">{t('cloud.switch.note')}</p>
       <p className="fa-set-note">
@@ -150,11 +150,11 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         <TermTip term="always_keep"><span data-term="always_keep" tabIndex={0} className="fa-termword">Always keep on this device</span></TermTip>
       </p>
       {removing && (
-        <Modal title={`Xoá nguồn “${removing.name}”?`} onClose={() => setRemoving(null)}>
-          <p>Chỉ gỡ khỏi thư viện, không xoá file font. Yêu thích, dự án và thẻ được giữ.</p>
+        <Modal title={t('set.rm.title', { name: removing.name })} onClose={() => setRemoving(null)}>
+          <p>{t('set.rm.body')}</p>
           <div className="fa-modal-actions">
-            <button type="button" onClick={() => setRemoving(null)}>Huỷ</button>
-            <button type="button" className="primary" onClick={async () => { const id = removing.id; setRemoving(null); await api.removeSource(id); await refresh(); }}>Xoá khỏi thư viện</button>
+            <button type="button" onClick={() => setRemoving(null)}>{t('set.cancel')}</button>
+            <button type="button" className="primary" onClick={async () => { const id = removing.id; setRemoving(null); await api.removeSource(id); await refresh(); }}>{t('set.rm.ok')}</button>
           </div>
         </Modal>
       )}
@@ -166,17 +166,17 @@ function Vision({ api, s, patch, store }: { api: Api; store: ModelStore } & SubP
   const ui = useModelUi(store);
   const embed = store(x => x.embed);
   const model = store(x => x.model);
-  const line = ui.text ?? (!s.embedEnabled ? 'Đã tắt: Similar và Ghép cặp dùng số đo.' : ui.imageReady ? 'Sẵn sàng' : 'Chưa có trạng thái');
+  const line = ui.text ?? (!s.embedEnabled ? t('set.vis.off') : ui.imageReady ? t('set.vis.ready') : t('set.vis.none'));
   return (
     <>
-      <Switch label="Bật phân tích hình ảnh" on={s.embedEnabled} onChange={async v => { await patch({ embedEnabled: v }); useModelStore.setState({ embedEnabled: v }); store.setState({ embedEnabled: v }); }} />
+      <Switch label={t('set.vis.enable')} on={s.embedEnabled} onChange={async v => { await patch({ embedEnabled: v }); useModelStore.setState({ embedEnabled: v }); store.setState({ embedEnabled: v }); }} />
       <div className="fa-set-group">
         <p data-testid="model-line" role={ui.severity === 'error' ? 'alert' : 'status'}><ModelSpinner ui={ui} />{line}</p>
         {ui.actions.length > 0 && <div className="fa-set-presets">{ui.actions.map(a => <button key={a.label} type="button" onClick={() => void store.getState().act(api, a.id)}>{a.label}</button>)}</div>}
         <ModelDetails detail={ui.detail} />
-        {model && model.state === 'missing' && s.embedEnabled && <p className="fa-set-note">Tải một lần khoảng {Math.round(model.totalBytes / MB)} MB, có kiểm tra checksum.</p>}
+        {model && model.state === 'missing' && s.embedEnabled && <p className="fa-set-note">{t('set.vis.once', { mb: Math.round(model.totalBytes / MB) })}</p>}
         {ui.settingsText && <p className="fa-set-note">{ui.settingsText}</p>}
-        {embed?.modelVersion && <p className="fa-set-note">Model: {embed.modelVersion}</p>}
+        {embed?.modelVersion && <p className="fa-set-note">{t('set.vis.model', { v: embed.modelVersion })}</p>}
       </div>
     </>
   );
@@ -189,14 +189,14 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
   const [replaced, setReplaced] = useState<ReplacedEntryDto[]>([]);
   const reloadReplaced = useCallback(() => api.activationListReplaced().then(setReplaced, () => setReplaced([])), [api]);
   useEffect(() => { void api.onboardingState().then(setOb); void reloadReplaced(); }, [api, reloadReplaced]);
-  if (ob && !ob.activationSupported) return <p className="fa-set-note">Kích hoạt font chưa có trên hệ điều hành này.</p>;
+  if (ob && !ob.activationSupported) return <p className="fa-set-note">{t('set.act.unsupported')}</p>;
   return (
     <>
-      <fieldset className="fa-set-group"><legend>Khi tắt Font Atlas</legend>
-        <label><input type="radio" name="keep" checked={!s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: false })} />Tắt luôn các font đã kích hoạt</label>
-        <label><input type="radio" name="keep" checked={s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: true })} />Giữ font hoạt động cả khi tắt Font Atlas</label>
+      <fieldset className="fa-set-group"><legend>{t('set.act.exit')}</legend>
+        <label><input type="radio" name="keep" checked={!s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: false })} />{t('set.act.deactAll')}</label>
+        <label><input type="radio" name="keep" checked={s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: true })} />{t('set.act.keep')}</label>
       </fieldset>
-      {ob?.fontManagers.filter(m => m.installed).map(m => <p key={m.name} className="fa-set-note">Phát hiện {m.name}{m.activeCount ? `: ~${m.activeCount} font đang kích hoạt` : ' đã cài trên máy'}. Chỉ là thông tin.</p>)}
+      {ob?.fontManagers.filter(m => m.installed).map(m => <p key={m.name} className="fa-set-note">{t('set.act.detected', { name: m.name, detail: m.activeCount ? t('set.act.detail.n', { n: m.activeCount }) : t('set.act.detail.installed') })}</p>)}
       <fieldset className="fa-set-group" data-testid="replaced-list"><legend>{t('set.replaced.title')}</legend>
         <p className="fa-set-note">{replaced.length ? t('set.replaced.note') : t('set.replaced.empty')}</p>
         {replaced.map(r => (
@@ -206,13 +206,13 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
           </div>
         ))}
       </fieldset>
-      <div className="fa-set-group"><button type="button" className="danger" disabled={active.size === 0} onClick={() => setConfirm(true)}>Tắt mọi font đã kích hoạt ({active.size})</button></div>
+      <div className="fa-set-group"><button type="button" className="danger" disabled={active.size === 0} onClick={() => setConfirm(true)}>{t('set.act.offAll', { n: active.size })}</button></div>
       {confirm && (
-        <Modal title="Tắt mọi font đã kích hoạt?" onClose={() => setConfirm(false)}>
-          <p>{active.size} font sẽ được tắt. Font vẫn nằm trong thư viện. Nên làm trước khi gỡ app.</p>
+        <Modal title={t('set.act.offTitle')} onClose={() => setConfirm(false)}>
+          <p>{t('set.act.offBody', { n: active.size })}</p>
           <div className="fa-modal-actions">
-            <button type="button" onClick={() => setConfirm(false)}>Huỷ</button>
-            <button type="button" className="primary" onClick={async () => { setConfirm(false); await api.activationDeactivateAll(); await useUiStore.getState().refreshActive(api); }}>Tắt tất cả</button>
+            <button type="button" onClick={() => setConfirm(false)}>{t('set.cancel')}</button>
+            <button type="button" className="primary" onClick={async () => { setConfirm(false); await api.activationDeactivateAll(); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
           </div>
         </Modal>
       )}
@@ -232,24 +232,24 @@ function Data({ api }: { api: Api }) {
   useEffect(() => { void load(); }, [load]);
   return (
     <>
-      <div className="fa-set-group"><span>Sao lưu dữ liệu người dùng</span>
-        <button type="button" onClick={async () => setBackup(await api.backupUserDb())}>Sao lưu ngay</button>
+      <div className="fa-set-group"><span>{t('set.data.backup')}</span>
+        <button type="button" onClick={async () => setBackup(await api.backupUserDb())}>{t('set.data.backupNow')}</button>
         {backup && <p className="fa-set-note" data-testid="backup-path">{backup}</p>}
-        <p className="fa-set-note">Gồm yêu thích, dự án, thẻ và trạng thái kích hoạt.</p>
+        <p className="fa-set-note">{t('set.data.backupNote')}</p>
       </div>
-      <div className="fa-set-group"><span>Bộ nhớ đệm preview</span>
-        <p className="fa-set-note" data-testid="cache-info">{cache ? `${Math.round(cache.bytes / MB)} MB · ${cache.entries} mục` : '…'}</p>
-        <button type="button" onClick={async () => { await api.clearPreviewCache(); await load(); }}>Xoá bộ nhớ đệm</button>
+      <div className="fa-set-group"><span>{t('set.data.cache')}</span>
+        <p className="fa-set-note" data-testid="cache-info">{cache ? t('set.data.cacheInfo', { mb: Math.round(cache.bytes / MB), n: cache.entries }) : '…'}</p>
+        <button type="button" onClick={async () => { await api.clearPreviewCache(); await load(); }}>{t('set.data.clearCache')}</button>
       </div>
-      <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? 'Không có font nào có vấn đề' : `${problems.length} font có vấn đề`}</span>
+      <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? t('set.data.noProblems') : t('set.data.problems', { n: problems.length })}</span>
         {problems.length > 0 && <>
           <ul className="fa-set-note">{problems.slice(0, 5).map(p => <li key={`${p.hashHex}${p.faceIndex}`}>{p.code}{p.path ? ` · ${p.path.split('/').pop()}` : ''}</li>)}</ul>
-          <button type="button" onClick={async () => { await api.retryProblems(); await load(); }}>Thử lại tất cả</button>
+          <button type="button" onClick={async () => { await api.retryProblems(); await load(); }}>{t('set.data.retryAll')}</button>
         </>}
       </div>
       {ob?.legacy.found && !ob.legacy.imported && (
-        <div className="fa-set-group"><span>Dữ liệu từ phiên bản trước</span>
-          <button type="button" onClick={async () => { await api.legacyImport(); await load(); }}>Nhập dữ liệu cũ</button></div>
+        <div className="fa-set-group"><span>{t('set.data.legacy')}</span>
+          <button type="button" onClick={async () => { await api.legacyImport(); await load(); }}>{t('set.data.import')}</button></div>
       )}
     </>
   );
@@ -264,10 +264,10 @@ function Help({ api, onRerun }: { api: Api; onRerun(): void }) {
   }, [api]);
   return (
     <>
-      <div className="fa-set-group"><button type="button" onClick={async () => { await api.setOnboardingStep('o1'); onRerun(); }}>Chạy lại hướng dẫn</button></div>
+      <div className="fa-set-group"><button type="button" onClick={async () => { await api.setOnboardingStep('o1'); onRerun(); }}>{t('set.help.rerun')}</button></div>
       <dl className="fa-set-about">
         <dt>Font Atlas</dt><dd>{version ?? '—'}</dd>
-        <dt>Model hình ảnh</dt><dd>{model ?? 'chưa có'}</dd>
+        <dt>{t('set.help.model')}</dt><dd>{model ?? t('set.help.none')}</dd>
       </dl>
     </>
   );

@@ -17,7 +17,7 @@ describe('locale tables', () => {
   });
   it('en values contain no Vietnamese diacritics outside the sample glyphs used as examples', () => {
     const VN = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
-    const ALLOWED = new Set(['onb.art.o1', 'onb.art.o2', 'onb.art.o5', 'onb.art.o6', 'onb.art.o7', 'term.vi_marks.gloss']); // mô tả chữ Việt minh hoạ
+    const ALLOWED = new Set(['onb.art.o1', 'onb.art.o2', 'onb.art.o5', 'onb.art.o6', 'onb.art.o7', 'term.vi_marks.gloss', 'zero.clearVi']); // mô tả chữ Việt minh hoạ
     for (const [k, v] of Object.entries(en)) if (!ALLOWED.has(k)) expect(VN.test(v), `${k}: ${v}`).toBe(false);
   });
 });

@@ -5,11 +5,12 @@ import type { FaceRow, GridQuery } from '../../features/library-grid/types';
 import { useNoticeStore } from '../../store/notices';
 import { SELECT_MAX, clearSelection, rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
+import { t, formatNumber } from '../../i18n';
 
 const CHUNK = 500;
 /** Tìm lại mốc Shift-click: quét tối đa chừng này hàng. */
 const LOCATE_MAX = 20_000;
-const fmt = (n: number) => n.toLocaleString('vi-VN');
+const fmt = (n: number) => formatNumber(n);
 const say = (kind: 'info' | 'error', text: string) => void useNoticeStore.getState().push({ kind, text });
 
 /**
@@ -76,7 +77,7 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
         if (hi - lo + 1 > SELECT_MAX) {
           // Dải quá lớn: giữ phần sát thẻ vừa bấm.
           if (index >= aIdx) lo = hi - SELECT_MAX + 1; else hi = lo + SELECT_MAX - 1;
-          say('info', `Chỉ chọn ${fmt(SELECT_MAX)} font mỗi lần`);
+          say('info', t('sel.maxPer', { n: fmt(SELECT_MAX) }));
         }
         const list = await fetchRange(lo, hi);
         if (stale()) return;
@@ -84,7 +85,7 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
         const next = { key: anchor.key, index: aIdx };
         if (mods.meta) st.add(list, next); else st.replace(list, next);
         useUiStore.getState().select(key);
-      })().catch(e => { if (!stale()) say('error', `Không chọn được dải font: ${(e as Error)?.message ?? e}`); });
+      })().catch(e => { if (!stale()) say('error', t('sel.rangeFail', { msg: (e as Error)?.message ?? String(e) })); });
       return;
     }
     if (mods.meta) {
@@ -107,8 +108,8 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
       if (token.current !== mine || useSelectionStore.getState().epoch !== epoch) return;
       const picked = list.slice(0, want);
       useSelectionStore.getState().replace(picked, picked.length ? { key: rowKey(picked[0]), index: 0 } : null);
-      if (first.total > SELECT_MAX) say('info', `Đã chọn ${fmt(SELECT_MAX)} font đầu tiên trong ${fmt(first.total)} font`);
-    } catch (e) { if (token.current === mine) say('error', `Không chọn được tất cả: ${(e as Error)?.message ?? e}`); }
+      if (first.total > SELECT_MAX) say('info', t('sel.firstN', { n: fmt(SELECT_MAX), total: fmt(first.total) }));
+    } catch (e) { if (token.current === mine) say('error', t('sel.allFail', { msg: (e as Error)?.message ?? String(e) })); }
   }, [api, fetchRange]);
 
   // ⌘A / Esc: chỉ khi không đang gõ chữ, không có menu/hộp thoại, và focus ở thư viện hoặc ngoài mọi vùng.

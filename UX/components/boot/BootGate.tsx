@@ -4,10 +4,9 @@ import { useNoticeStore } from '../../store/notices';
 import { needsOnboarding } from '../../store/onboarding';
 import { Onboarding } from '../onboarding/Onboarding';
 import './boot.css';
+import { t } from '../../i18n';
 
-const PHASE_TEXT: Record<string, string> = {
-  starting: 'Đang mở thư viện…', scanning: 'Đang quét các nguồn…', indexing: 'Đang dựng chỉ mục tìm kiếm…', activation: 'Đang đối soát các font đã kích hoạt…',
-};
+const phaseText = (phase: string): string => ({ starting: t('boot.starting'), scanning: t('boot.scanning'), indexing: t('boot.indexing'), activation: t('boot.activation') } as Record<string, string>)[phase] ?? t('boot.default');
 
 type Gate = { kind: 'loading'; phase: string } | { kind: 'failed'; code: string; message: string; backup: string | null } | { kind: 'onboarding' } | { kind: 'ready' };
 
@@ -17,14 +16,14 @@ export function BootGate({ api, children }: { api: Api; children: React.ReactNod
 
   useEffect(() => {
     let alive = true; let off: (() => void) | undefined; let announced = false;
-    const fail = (b: BootStatusDto | null, e?: Error) => alive && setGate({ kind: 'failed', code: b?.storeError?.code ?? 'internal', message: b?.storeError?.message ?? e?.message ?? 'không rõ lý do', backup: b?.userBackup ?? null });
+    const fail = (b: BootStatusDto | null, e?: Error) => alive && setGate({ kind: 'failed', code: b?.storeError?.code ?? 'internal', message: b?.storeError?.message ?? e?.message ?? t('boot.unknownReason'), backup: b?.userBackup ?? null });
     const advance = async (b: BootStatusDto) => {
       if (!alive) return;
       if (b.phase === 'failed') return fail(b);
       if (b.phase !== 'ready') { setGate({ kind: 'loading', phase: b.phase }); return; }
       if (b.libraryRecreated && !announced) {
         announced = true;
-        useNoticeStore.getState().push({ kind: 'info', text: 'Thư viện đã được tạo lại. Dữ liệu cá nhân (yêu thích, dự án, thẻ) còn nguyên; font sẽ được quét lại.' });
+        useNoticeStore.getState().push({ kind: 'info', text: t('boot.recreated') });
       }
       const ob = await api.onboardingState();
       if (alive) setGate(needsOnboarding(ob) ? { kind: 'onboarding' } : { kind: 'ready' });
@@ -47,12 +46,12 @@ export function BootGate({ api, children }: { api: Api; children: React.ReactNod
   if (gate.kind === 'failed') {
     return (
       <div className="fa-boot" role="alert">
-        <h1>Không mở được thư viện</h1>
+        <h1>{t('boot.failTitle')}</h1>
         <p><code>{gate.code}</code> · {gate.message}</p>
-        {gate.backup && <p>Bản sao dữ liệu cá nhân đã lưu ở <code>{gate.backup}</code>.</p>}
-        <button type="button" onClick={() => location.reload()}>Thử lại</button>
+        {gate.backup && <p>{t('boot.backup')} <code>{gate.backup}</code>.</p>}
+        <button type="button" onClick={() => location.reload()}>{t('boot.retry')}</button>
       </div>
     );
   }
-  return <div className="fa-boot" role="status"><p>{PHASE_TEXT[gate.phase] ?? 'Đang khởi động…'}</p></div>;
+  return <div className="fa-boot" role="status"><p>{phaseText(gate.phase)}</p></div>;
 }

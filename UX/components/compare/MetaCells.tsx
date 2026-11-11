@@ -1,10 +1,10 @@
 import type { CompareFace } from '../../api/compare';
-import { hasKey, t, type I18nKey } from '../../i18n';
+import { hasKey, t, type I18nKey, localeTag } from '../../i18n';
 import { NoteMark } from '../ui/noteMark';
 
 const tr = (key: string, fallback: string): string => (hasKey(key) ? t(key) : fallback);
 const range = (r: [number, number] | null | undefined): string | null => (r ? (r[0] === r[1] ? `${r[0]}` : `${r[0]}–${r[1]}`) : null);
-const nf = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
+const nf = (n: number) => new Intl.NumberFormat(localeTag()).format(n);
 const Empty = (): React.JSX.Element => <span className="cmp-meta-na">—<NoteMark inline kind="info" text={t('compare.noExtras')} /></span>;
 /** Font chưa phân tích lại theo analyzer mới: backend báo `extrasAvailable: false` (thiếu trường = có dữ liệu). */
 const stale = (face: CompareFace): boolean => (face.extras as { extrasAvailable?: boolean } | null)?.extrasAvailable === false;

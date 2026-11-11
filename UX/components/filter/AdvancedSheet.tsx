@@ -97,7 +97,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
   const [edge, setEdge] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
     // Sheet bắt đầu ngay dưới Top Bar (cao hơn khi có hàng family/chọn nhiều) và sát mép phải sidebar.
-    const measure = () => setEdge({ left: Math.round(document.querySelector('[aria-label="Thanh bên"]')?.getBoundingClientRect().right ?? 0), top: Math.round(document.querySelector('.fa-topbar')?.getBoundingClientRect().bottom ?? 0) });
+    const measure = () => setEdge({ left: Math.round(document.querySelector('[data-testid="sidebar"]')?.getBoundingClientRect().right ?? 0), top: Math.round(document.querySelector('.fa-topbar')?.getBoundingClientRect().bottom ?? 0) });
     measure(); window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);

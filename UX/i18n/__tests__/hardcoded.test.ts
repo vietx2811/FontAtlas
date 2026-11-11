@@ -31,7 +31,12 @@ export function stripComments(s: string): string {
   }
   return out;
 }
-export const vietnameseLines = (src: string): number => stripComments(src).split('\n').filter(l => VN.test(l)).length;
+/** Dòng nào có `i18n-ok` (chữ mẫu, dữ liệu, regex gập dấu…) là chủ ý, không phải chuỗi giao diện. */
+export const vietnameseLines = (src: string): number => {
+  const ok = new Set(src.split('\n').flatMap((l, i) => (l.includes('i18n-ok') ? [i] : [])));
+  // `glyph="ạ"` / `glyph: 'ụ'` là chữ minh hoạ trên trạng thái trống, không phải câu chữ.
+  return stripComments(src).replace(/glyph[:=]\s*\{?(['"`]).\1\}?/g, '').split('\n').filter((l, i) => VN.test(l) && !ok.has(i)).length;
+};
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -56,6 +61,7 @@ describe('no hard-coded Vietnamese in UI code', () => {
     expect(vietnameseLines('// Tiếng Việt\n/* Thư viện */\nconst a = 1;')).toBe(0);
     expect(vietnameseLines('const a = "Thư viện";')).toBe(1);
     expect(vietnameseLines('return <b>Cài đặt</b>; // ghi chú')).toBe(1);
+    expect(vietnameseLines('const s = "Ăn phở"; // i18n-ok: chữ mẫu')).toBe(0);
   });
   it('no file gains Vietnamese lines beyond its baseline (convert to t() and lower the baseline)', () => {
     const now = scan();

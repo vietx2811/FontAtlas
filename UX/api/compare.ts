@@ -2,6 +2,7 @@ import type { FaceExtrasDto } from '../bindings/FaceExtrasDto';
 import type { FamilyStructureDto } from '../bindings/FamilyStructureDto';
 import type { LicenseNoteDto } from '../bindings/LicenseNoteDto';
 import type { AxisReadingDto, ClassificationDto, FaceDetailDto, FaceKeyDto, FaceRowDto } from '../bindings';
+import { t } from '../i18n';
 
 /** Các số đo hiện trong Compare, theo thứ tự hàng. Khoá = `AxisReadingDto.key` canonical. */
 export const COMPARE_METRICS = ['x_height_em', 'cap_height_em', 'contrast', 'contrast_h', 'slant_deg', 'stress_deg', 'aperture', 'serif_foot'] as const;
@@ -63,6 +64,6 @@ export async function composeCompare(api: { getFace(f: FaceKeyDto, lang: 'vi' | 
   const settled = await Promise.allSettled(faces.map(f => api.getFace(f, 'vi')));
   const ok: FaceDetailDto[] = []; const failed: CompareDto['failed'] = [];
   settled.forEach((r, i) => { if (r.status === 'fulfilled') ok.push(r.value); else failed.push({ face: faces[i], reason: r.reason instanceof Error ? r.reason.message : String(r.reason) }); });
-  if (ok.length < COMPARE_MIN) throw new Error(failed[0]?.reason ?? 'không đọc được font');
+  if (ok.length < COMPARE_MIN) throw new Error(failed[0]?.reason ?? t('cmp.unreadable'));
   return buildCompare(ok, failed);
 }

@@ -32,7 +32,7 @@ export function makeFontUrl(toUrl: (fileName: string) => string): LibraryApi['fo
 
 export type MockApi = LibraryApi & { calls: FaceQuery[]; currentGeneration(): number };
 
-const fold = (s: string) => s.normalize('NFD').replace(/\p{Mn}/gu, '').replace(/đ/gi, 'd').toLowerCase();
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Mn}/gu, '').replace(/đ/gi, 'd').toLowerCase(); // i18n-ok: gập dấu tiếng Việt
 
 export function createMockLibraryApi(
   rows: FaceRow[],

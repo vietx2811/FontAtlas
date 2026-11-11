@@ -30,14 +30,14 @@ type Notice = { text: string; action?: { label: string; run(): void } };
 
 const prefersDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 
-export const CLOUD_TIP = 'File đang ở iCloud/OneDrive, chưa tải về máy nên chưa quét được. Trong Finder: bấm chuột phải › Tải về, rồi quét lại.';
+export const cloudTip = (): string => t('side.cloudTip');
 
 export function SidebarToggle(): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const toggle = useUiStore(s => s.toggleSidebar);
   return (
-    <Tooltip label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}>
-      <button type="button" className="fa-iconbtn" aria-pressed={collapsed} aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'} onClick={toggle}>
+    <Tooltip label={collapsed ? t('side.expand') : t('side.collapse')}>
+      <button type="button" className="fa-iconbtn" aria-pressed={collapsed} aria-label={collapsed ? t('side.expand') : t('side.collapse')} onClick={toggle}>
         <Icon name="panel" />
       </button>
     </Tooltip>
@@ -88,7 +88,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
     setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
-  useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
+  useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
 
   const addPath = useCallback(async (path: string) => {
     try {
@@ -101,18 +101,18 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         const d = (e.detail ?? {}) as { existingId?: number; existingPath?: string };
         const existing = (await api.listSources()).find(x => x.id === d.existingId);
         const norm = (p: string) => p.replace(/[\\/]+$/, '');
-        if (!existing?.path) setNotice({ text: 'Thư mục này đã nằm trong một nguồn có sẵn.' });
+        if (!existing?.path) setNotice({ text: t('side.nested') });
         else if (norm(path) === norm(existing.path)) {
-          setNotice({ text: `Đã có trong thư viện (nguồn «${existing.name}»).`, action: { label: 'Xem nguồn', run: () => { setView(`src:${existing.id}`); setNotice(null); } } });
+          setNotice({ text: t('side.exists', { name: existing.name }), action: { label: t('side.viewSource'), run: () => { setView(`src:${existing.id}`); setNotice(null); } } });
         } else setNested({ newPath: path, existing, nesting: norm(path).startsWith(`${norm(existing.path)}/`) ? 'inside' : 'contains' });
-      } else setNotice({ text: `Không thêm được: ${(e as Error).message}` });
+      } else setNotice({ text: t('side.addFail', { msg: (e as Error).message }) });
     }
   }, [api, refresh, sources, setView]);
 
   const replaceSource = async (n: Nested) => {
     setNested(null);
     try { await api.removeSource(n.existing.id); await addPath(n.newPath); }
-    catch (e) { setNotice({ text: `Không thay được nguồn: ${(e as Error).message}` }); }
+    catch (e) { setNotice({ text: t('side.replaceFail', { msg: (e as Error).message }) }); }
   };
   const onAddFont = async () => { const p = await pickFolder(); if (p) await addPath(p); };
   const lastAddRequest = useRef(addRequest);
@@ -122,7 +122,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     if (!first) return;
     if (!isFontFile(first)) { void addPath(first); return; }
     const dir = parentDir(first);
-    setNotice({ text: `Thêm cả thư mục «${dir.split(/[\\/]/).pop()}» chứa font này?`, action: { label: 'Thêm', run: () => { setNotice(null); void addPath(dir); } } });
+    setNotice({ text: t('side.addFolder', { dir: String(dir.split(/[\\/]/).pop()) }), action: { label: t('side.add'), run: () => { setNotice(null); void addPath(dir); } } });
   }, [addPath]);
   useDropPaths(onDrop);
 
@@ -167,7 +167,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       }, () => undefined);
     }
   };
-  const warn = (e: unknown) => setNotice({ text: `Không thực hiện được: ${(e as Error)?.message ?? e}` });
+  const warn = (e: unknown) => setNotice({ text: t('side.opFail', { msg: (e as Error)?.message ?? String(e) }) });
   /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
   const reportOff = (rep: ActivationReportDto) => {
     const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
@@ -216,13 +216,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     <>
     {nested && <NestedSourceDialog {...nested} onCancel={() => setNested(null)} onReplace={() => void replaceSource(nested)}
       onCreateCollection={name => { setNested(null); void createCollection(name); }} />}
-    <nav className="fa-side" data-testid="sidebar" data-collapsed={collapsed} aria-label="Thanh bên">
+    <nav className="fa-side" data-testid="sidebar" data-collapsed={collapsed} aria-label={t('side.nav')}>
       <div className="fa-side-scroll">
-        <NavItem icon="plus" label="Thêm font" onClick={onAddFont} />
-        <NavItem icon="all" label="Tất cả" count={counts.all} current={cur('all')} onClick={() => setView('all')} />
-        <NavItem icon="star" label="Yêu thích" count={counts.star} current={cur('star')} onClick={() => setView('star')} />
-        <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, 'Gần đây')} context={ctx?.kind === 'recent'} />
-        <NavItem icon="power" label="Đang bật" count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, 'Đang bật')} context={ctx?.kind === 'active'} />
+        <NavItem icon="plus" label={t('side.addFont')} onClick={onAddFont} />
+        <NavItem icon="all" label={t('side.all')} count={counts.all} current={cur('all')} onClick={() => setView('all')} />
+        <NavItem icon="star" label={t('side.favorites')} count={counts.star} current={cur('star')} onClick={() => setView('star')} />
+        <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />
+        <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
         {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} />}
 
@@ -230,36 +230,36 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
           <div className="fa-notice" role="status">
             <span>{notice.text}</span>
             {notice.action && <button type="button" onClick={notice.action.run}>{notice.action.label}</button>}
-            <button type="button" aria-label="Đóng thông báo" onClick={() => setNotice(null)}>×</button>
+            <button type="button" aria-label={t('side.dismiss')} onClick={() => setNotice(null)}>×</button>
           </div>
         )}
 
-        <NavSection title="Dự án" open={open.col} onToggle={() => toggleSection('col')} addLabel="Thêm dự án" onAdd={() => { if (!open.col) toggleSection('col'); setAdding(true); }}>
-          {adding && <input className="fa-inline-input" aria-label="Tên dự án" autoFocus placeholder="Tên dự án"
+        <NavSection title={t('side.projects')} open={open.col} onToggle={() => toggleSection('col')} addLabel={t('side.addProject')} onAdd={() => { if (!open.col) toggleSection('col'); setAdding(true); }}>
+          {adding && <input className="fa-inline-input" aria-label={t('side.projectName')} autoFocus placeholder={t('side.projectName')}
             onKeyDown={e => { if (e.key === 'Enter') void createCollection(e.currentTarget.value); if (e.key === 'Escape') setAdding(false); }} onBlur={() => setAdding(false)} />}
           {cols.map(c => renaming === c.id
-            ? <input key={c.id} className="fa-inline-input" aria-label="Đổi tên dự án" autoFocus defaultValue={c.name}
+            ? <input key={c.id} className="fa-inline-input" aria-label={t('side.renameProject')} autoFocus defaultValue={c.name}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitRename(c, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(c.id, true); } }} onBlur={e => void commitRename(c, e.currentTarget.value, e.currentTarget, 'blur')} />
             : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
 navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
-                more={<Tooltip label={`Tuỳ chọn ${c.name}`}><button type="button" className="fa-more" aria-label={`Tuỳ chọn ${c.name}`} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
+                more={<Tooltip label={t('side.options', { name: c.name })}><button type="button" className="fa-more" aria-label={t('side.options', { name: c.name })} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
                   onClick={e => { const el = e.currentTarget; openCtx('collection', c.id, c.name)({ x: 0, y: 0, keyboard: true, el }); }}><Icon name="more" size={14} /></button></Tooltip>} />)}
         </NavSection>
 
-        <NavSection title="Nguồn" open={open.src} onToggle={() => toggleSection('src')}>
+        <NavSection title={t('side.sources')} open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
-              title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
+              title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
               sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
                 ? <>
-                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip>}
+                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{t('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
                   </>
                 : undefined} />
           ))}
         </NavSection>
 
-        <NavSection title="Thẻ" open={open.tag} onToggle={() => toggleSection('tag')}>
+        <NavSection title={t('side.tags')} open={open.tag} onToggle={() => toggleSection('tag')}>
           <div className="fa-tags">
             {tags.map(t => (
               <button key={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
@@ -270,11 +270,11 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label="Đang quét"><span className="fa-scan-dot" aria-hidden />Đang quét{scanned > 0 ? ` · ${scanned} font` : ''}{cloudNow > 0 && <Tooltip label={CLOUD_TIP}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{cloudNow} font chưa tải về</span></Tooltip>}</div>}
+        {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? t('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{t('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
-          <Tooltip label={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}><button type="button" className="fa-iconbtn" aria-label="Giao diện sáng/tối" aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>
-          <Tooltip label="Cài đặt" shortcut="⌘,"><button type="button" className="fa-iconbtn" aria-label="Cài đặt" onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button></Tooltip>
+          <Tooltip label={dark ? t('side.themeLight') : t('side.themeDark')}><button type="button" className="fa-iconbtn" aria-label={t('side.themeToggle')} aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>
+          <Tooltip label={t('side.settings')} shortcut="⌘,"><button type="button" className="fa-iconbtn" aria-label={t('side.settings')} onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button></Tooltip>
         </div>
       </div>
     </nav>
