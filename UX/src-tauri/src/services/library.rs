@@ -57,8 +57,9 @@ pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
     validate_class_ranges(q)?;
-    if !q.classes.is_empty() || !q.subclasses.is_empty() {
-        let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
+    let min_conf = min_confidence_of(q)?;
+    if !q.classes.is_empty() || !q.subclasses.is_empty() || min_conf.is_some() {
+        let ids = class_face_ids(state, &q.classes, &q.subclasses, q.include_secondary, min_conf)?;
         match &mut scope {
             Some(prev) => prev.retain(|x| ids.contains(&x.0)),
             None => scope = Some(ids.iter().map(|id| (*id, 1.0)).collect()),
@@ -177,7 +178,7 @@ pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
     Ok(map)
 }
 
-pub const TRAITS: [&str; 6] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative"];
+pub const TRAITS: [&str; 9] = ["stencil", "inline_outline", "rounded", "fat_face", "pixel", "decorative", "reverse_contrast", "high_contrast", "monoline"];
 
 /// Face có ít nhất một trait trong `traits`. Traits lấy từ phân loại TỰ ĐỘNG (tên/Panose/sFamilyClass); ghi đè của
 /// người dùng chỉ đổi class/subclass, không đổi traits.
@@ -189,7 +190,42 @@ fn trait_face_ids(state: &AppState, traits: &[String]) -> Result<std::collection
     Ok(b.meta.values().filter(|m| m.auto_traits.iter().any(|t| traits.contains(t))).map(|m| m.face_id).collect())
 }
 
-fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -> Result<std::collections::HashSet<i64>, CmdError> {
+/// Ngưỡng độ tin cậy hiệu lực của truy vấn: `confidentOnly` → CONF_MIN; `minConfidence` nâng thêm; `None` = không lọc.
+fn min_confidence_of(q: &FaceQueryDto) -> Result<Option<f32>, CmdError> {
+    if let Some(m) = q.min_confidence
+        && !(0.0..=1.0).contains(&m)
+    {
+        return Err(CmdError::invalid_arg("minConfidence: phải trong khoảng 0–1"));
+    }
+    let base = q.confident_only.then_some(fontatlas_core::classify::CONF_MIN);
+    Ok(match (base, q.min_confidence) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    })
+}
+
+/// Face khớp bộ lọc class/subclass? Class chính luôn tính; class phụ chỉ khi `include_secondary`.
+/// `classes` rỗng = mọi class; `subclasses` rỗng = mọi subclass (AND giữa hai nhóm, OR trong nhóm).
+pub(crate) fn class_hit(
+    classes: &[String],
+    subclasses: &[String],
+    include_secondary: bool,
+    primary: (&str, &Option<String>),
+    secondary: Option<&(String, Option<String>)>,
+) -> bool {
+    let one = |c: &str, sub: &Option<String>| {
+        (classes.is_empty() || classes.iter().any(|x| x == c)) && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
+    };
+    one(primary.0, primary.1) || (include_secondary && secondary.is_some_and(|(c, s)| one(c, s)))
+}
+
+fn class_face_ids(
+    state: &AppState,
+    classes: &[String],
+    subclasses: &[String],
+    include_secondary: bool,
+    min_conf: Option<f32>,
+) -> Result<std::collections::HashSet<i64>, CmdError> {
     use fontatlas_core::classify::{Class, subclasses_of};
     let classes: Vec<String> = classes.iter().map(|c| c.to_ascii_lowercase()).collect();
     for c in &classes {
@@ -197,7 +233,7 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
             return Err(CmdError::invalid_arg(format!("classes: class không hợp lệ: {c}")));
         }
     }
-    let known: Vec<&str> = [Class::Serif, Class::Sans, Class::Mono, Class::Script]
+    let known: Vec<&str> = [Class::Serif, Class::Slab, Class::Sans, Class::Mono, Class::Script, Class::Handwriting, Class::Display]
         .into_iter()
         .flat_map(subclasses_of)
         .copied()
@@ -207,16 +243,36 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
             return Err(CmdError::invalid_arg(format!("subclasses: subclass không hợp lệ: {s}")));
         }
     }
-    let mut out: std::collections::HashSet<i64> = effective_classes(state)?
-        .iter()
-        .filter(|(_, (c, sub))| {
-            (classes.is_empty() || classes.contains(c))
-                && (subclasses.is_empty() || sub.as_ref().is_some_and(|s| subclasses.contains(s)))
-        })
-        .map(|(id, _)| *id)
-        .collect();
+    let mut out: std::collections::HashSet<i64> = if include_secondary || min_conf.is_some() {
+        // đường dùng class phụ / độ tin cậy: duyệt meta + ghi đè (một lần đọc user.db)
+        let b = crate::services::analysis::bundle(state)?;
+        let ov: std::collections::HashMap<(String, u32), _> = state
+            .with_store(|s| Ok(s.classification_overrides()?))?
+            .into_iter()
+            .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
+            .collect();
+        let filter_classes = !classes.is_empty() || !subclasses.is_empty();
+        b.meta
+            .iter()
+            .filter_map(|(k, m)| {
+                let (primary, conf, sec) = match ov.get(&(k.hash.clone(), k.index)) {
+                    // người dùng đã chọn: tin cậy tuyệt đối, không có class phụ
+                    Some(o) => ((o.class.clone(), o.subclass.clone()), 1.0, None),
+                    None => ((m.auto_class.clone(), m.auto_subclass.clone()), m.auto_confidence, m.auto_secondary.clone()),
+                };
+                if min_conf.is_some_and(|t| conf < t) {
+                    return None;
+                }
+                let hit = !filter_classes || class_hit(&classes, subclasses, include_secondary, (&primary.0, &primary.1), sec.as_ref());
+                hit.then_some(m.face_id)
+            })
+            .collect()
+    } else {
+        effective_classes(state)?.iter().filter(|(_, (c, sub))| class_hit(&classes, subclasses, false, (c, sub), None)).map(|(id, _)| *id).collect()
+    };
     // "unclassified": face chưa có hồ sơ trong Index (chưa phân tích / JSON hỏng) — luôn tách riêng, không lẫn vào "uncertain".
-    if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() {
+    // Không có nhãn nên không bao giờ "tự tin": bị loại khi đặt ngưỡng độ tin cậy.
+    if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() && min_conf.is_none() {
         let b = crate::services::analysis::bundle(state)?;
         let known_ids: std::collections::HashSet<i64> = b.meta.values().map(|m| m.face_id).collect();
         out.extend(state.with_store(|s| Ok(s.all_face_ids()?))?.into_iter().filter(|id| !known_ids.contains(id)));
@@ -540,4 +596,46 @@ fn family_styles(s: &Store, family: &str) -> Result<Vec<FamilyStyleDto>, StoreEr
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod class_filter_tests {
+    use super::*;
+
+    fn v(x: &[&str]) -> Vec<String> {
+        x.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn secondary_only_counts_when_asked() {
+        let sec = ("serif".to_string(), None);
+        let none: Option<String> = None;
+        let sans = ("sans", &none);
+        // class chính luôn khớp
+        assert!(class_hit(&v(&["sans"]), &[], false, sans, Some(&sec)));
+        // chỉ class phụ khớp: cần includeSecondary
+        assert!(!class_hit(&v(&["serif"]), &[], false, sans, Some(&sec)));
+        assert!(class_hit(&v(&["serif"]), &[], true, sans, Some(&sec)));
+        // không có class phụ: includeSecondary không đổi gì
+        assert!(!class_hit(&v(&["serif"]), &[], true, sans, None));
+        // subclass của class phụ cũng được so (AND với classes)
+        let sec2 = ("slab".to_string(), Some("clarendon".to_string()));
+        let disp = ("display", &Some("stencil".to_string()));
+        assert!(class_hit(&v(&["slab"]), &v(&["clarendon"]), true, disp, Some(&sec2)));
+        assert!(!class_hit(&v(&["slab"]), &v(&["egyptian"]), true, disp, Some(&sec2)));
+        assert!(!class_hit(&v(&["slab"]), &v(&["clarendon"]), false, disp, Some(&sec2)));
+    }
+
+    #[test]
+    fn min_confidence_combines_confident_only_and_explicit_threshold() {
+        let q = |c: bool, m: Option<f32>| FaceQueryDto { confident_only: c, min_confidence: m, ..Default::default() };
+        assert_eq!(min_confidence_of(&q(false, None)).unwrap(), None);
+        assert_eq!(min_confidence_of(&q(true, None)).unwrap(), Some(fontatlas_core::classify::CONF_MIN));
+        assert_eq!(min_confidence_of(&q(false, Some(0.5))).unwrap(), Some(0.5));
+        // nâng ngưỡng, không hạ thấp
+        assert_eq!(min_confidence_of(&q(true, Some(0.5))).unwrap(), Some(fontatlas_core::classify::CONF_MIN));
+        assert_eq!(min_confidence_of(&q(true, Some(0.95))).unwrap(), Some(0.95));
+        assert!(min_confidence_of(&q(false, Some(1.5))).is_err());
+        assert!(min_confidence_of(&q(false, Some(f32::NAN))).is_err());
+    }
 }

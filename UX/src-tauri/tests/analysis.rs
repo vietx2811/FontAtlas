@@ -719,3 +719,36 @@ fn traits_filter_or_and_facets_with_named_fonts() {
     let ign = analysis::class_facets(&st, &FaceQueryDto { traits: vec!["stencil".into()], classes: vec!["mono".into()], ..Default::default() }).unwrap();
     assert_eq!(sum(&ign), 1);
 }
+
+#[test]
+fn confident_only_and_include_secondary_filters() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let q = |f: &dyn Fn(&mut FaceQueryDto)| {
+        let mut q = FaceQueryDto { limit: 500, ..Default::default() };
+        f(&mut q);
+        library::query_faces(&st, &q)
+    };
+    let all = q(&|_| {}).unwrap().total;
+    let confident = q(&|q| q.confident_only = true).unwrap();
+    assert!(confident.total <= all);
+    // face uncertain không bao giờ "tự tin"
+    assert_eq!(q(&|q| { q.confident_only = true; q.classes = vec!["uncertain".into()]; }).unwrap().total, 0);
+    // ngưỡng cao hơn chỉ giữ ít hơn hoặc bằng
+    assert!(q(&|q| q.min_confidence = Some(0.99)).unwrap().total <= confident.total.max(q(&|q| q.min_confidence = Some(0.88)).unwrap().total));
+    assert!(q(&|q| q.min_confidence = Some(2.0)).is_err());
+    // includeSecondary chỉ mở rộng
+    let base = q(&|q| q.classes = vec!["serif".into()]).unwrap().total;
+    let wide = q(&|q| { q.classes = vec!["serif".into()]; q.include_secondary = true; }).unwrap().total;
+    assert!(wide >= base);
+    // subclass của class mới (slab/display/handwriting) hợp lệ khi lọc
+    for s in ["clarendon", "stencil", "casual_print", "formal_copperplate", "coding"] {
+        assert!(q(&|q| q.subclasses = vec![s.into()]).is_ok(), "{s}");
+    }
+    assert!(q(&|q| q.subclasses = vec!["wiggly".into()]).is_err());
+    // ghi đè của người dùng = tin cậy tuyệt đối: face đó có trong confidentOnly khi khớp class
+    let roboto = find(&st, "Roboto");
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("stencil".into()) }).unwrap();
+    let hit = q(&|q| { q.confident_only = true; q.classes = vec!["display".into()]; }).unwrap();
+    assert!(hit.items.iter().any(|r| r.family == "Roboto"));
+}

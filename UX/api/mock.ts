@@ -73,6 +73,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const familyOf = new Map(rows.map(r => [r.hashHex, r.family]));
   const classOver = new Map<string, { class: string; subclass: string | null }>();
   const effClass = (r: FaceRow) => classOver.get(keyOf(r)) ?? mockAutoClass(r.family);
+  // Ghi đè của người dùng = tin cậy tuyệt đối; còn lại dùng độ tin cậy tự động. Mock không có class phụ nên `includeSecondary` không đổi kết quả.
+  const mockConfidence = (r: FaceRow) => (classOver.has(keyOf(r)) ? 1 : mockAutoClass(r.family).class === 'uncertain' ? 0 : mockAutoClass(r.family).confidence);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
@@ -145,7 +147,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         usedBody.add(body.family);
         return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
       });
-      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null, langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
       return {
         describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
         query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
@@ -166,6 +168,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.license?.length || q.license.includes(r.licenseClass)) &&
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
         (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
+        (!(q.confidentOnly || q.minConfidence != null) || mockConfidence(r) >= Math.max(q.confidentOnly ? 0.88 : 0, q.minConfidence ?? 0)) &&
         (q.includeMissing || !r.missing) &&
         (!q.weightClass || matchesWeight(r, q.weightClass, q.varAxisMatch?.wght ?? true)) &&
         (!q.widthClass || matchesWidth(r, q.widthClass, q.varAxisMatch?.wdth ?? true)) &&
