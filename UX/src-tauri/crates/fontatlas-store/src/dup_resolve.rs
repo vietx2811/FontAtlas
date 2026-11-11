@@ -199,6 +199,39 @@ fn revert_links(c: &Connection, r: &ResolutionRow) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// Số liệu của một thành viên nhóm trùng cần cho quy tắc chọn bản giữ (không có trong `FaceRow`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberInfo {
+    pub source_id: i64,
+    pub num_glyphs: Option<u32>,
+    /// Số face trong tệp (> 1 = TTC/OTC).
+    pub num_faces: u32,
+}
+
+impl Store {
+    /// Thông tin của (face, đường dẫn); `None` nếu vị trí không còn trong thư viện.
+    pub fn member_info(&self, key: &FaceKey, path: &str) -> Result<Option<MemberInfo>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT l.source_id, f.num_glyphs, fi.num_faces
+                 FROM files fi
+                 JOIN faces f ON f.file_id = fi.file_id AND f.face_index = ?2
+                 JOIN file_locations l ON l.file_id = fi.file_id AND l.path = ?3
+                 WHERE fi.hash = ?1",
+                params![&key.hash[..], key.face_index as i64, path],
+                |r| {
+                    Ok(MemberInfo {
+                        source_id: r.get(0)?,
+                        num_glyphs: r.get::<_, Option<i64>>(1)?.map(|n| n as u32),
+                        num_faces: r.get::<_, i64>(2)? as u32,
+                    })
+                },
+            )
+            .optional()?)
+    }
+}
+
 impl Store {
     /// Ghi một mẻ quyết định trong MỘT transaction (lỗi → không đổi gì) và chuyển liên kết sang bản giữ.
     /// Trả id theo thứ tự `items`. Một vị trí chỉ có thể bị ẩn bởi một quyết định đang sống.

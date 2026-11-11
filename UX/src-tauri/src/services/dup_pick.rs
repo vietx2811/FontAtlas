@@ -160,29 +160,29 @@ pub fn pick_keeper(kind: DuplicateKindDto, newest_known: bool, cands: &[Cand]) -
     }
 
     // 3. version cao hơn (chỉ khi phân biệt được rõ)
-    if kind == DuplicateKindDto::Versions && newest_known {
-        if let Some(k) = pool.iter().copied().find(|&i| cands[i].is_newest) {
-            let fewer = pool.iter().any(|&i| i != k && matches!((cands[k].num_glyphs, cands[i].num_glyphs), (Some(a), Some(b)) if (a as f64) < (b as f64) * 0.98));
-            let r = Reason::new("newer_version")
-                .with("keep", cands[k].version.clone().unwrap_or_default())
-                .with("other", pool.iter().filter(|&&i| i != k).filter_map(|&i| cands[i].version.clone()).next().unwrap_or_default());
-            let rv = fewer.then(|| Reason::new("newer_has_fewer_glyphs"));
-            return finish(k, r, rv, warnings);
-        }
+    if kind == DuplicateKindDto::Versions
+        && newest_known
+        && let Some(k) = pool.iter().copied().find(|&i| cands[i].is_newest)
+    {
+        let fewer = pool.iter().any(|&i| i != k && matches!((cands[k].num_glyphs, cands[i].num_glyphs), (Some(a), Some(b)) if (a as f64) < (b as f64) * 0.98));
+        let r = Reason::new("newer_version")
+            .with("keep", cands[k].version.clone().unwrap_or_default())
+            .with("other", pool.iter().filter(|&&i| i != k).filter_map(|&i| cands[i].version.clone()).next().unwrap_or_default());
+        let rv = fewer.then(|| Reason::new("newer_has_fewer_glyphs"));
+        return finish(k, r, rv, warnings);
     }
     if kind == DuplicateKindDto::Versions && !newest_known {
         review = Some(Reason::new("newest_unknown"));
     }
 
     // 4. định dạng
-    if kind != DuplicateKindDto::SameFile {
-        if let Some(k) = only(&pool, |i| format_rank(&cands[i].format), |a, b| a > b) {
-            // bản được chọn phải thực sự hơn (không phải tất cả cùng hạng)
-            if pool.iter().any(|&i| i != k && format_rank(&cands[i].format) < format_rank(&cands[k].format)) {
-                let r = Reason::new("preferred_format").with("format", cands[k].format.to_uppercase());
-                return finish(k, r, review, warnings);
-            }
-        }
+    // bản được chọn phải thực sự hơn (không phải tất cả cùng hạng)
+    if kind != DuplicateKindDto::SameFile
+        && let Some(k) = only(&pool, |i| format_rank(&cands[i].format), |a, b| a > b)
+        && pool.iter().any(|&i| i != k && format_rank(&cands[i].format) < format_rank(&cands[k].format))
+    {
+        let r = Reason::new("preferred_format").with("format", cands[k].format.to_uppercase());
+        return finish(k, r, review, warnings);
     }
 
     // 5. đầy đủ hơn

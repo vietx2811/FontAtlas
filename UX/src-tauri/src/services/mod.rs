@@ -4,6 +4,7 @@ pub mod activation;
 pub mod analysis;
 pub mod describe;
 pub mod dup_pick;
+pub mod dup_resolve;
 pub mod duplicates;
 pub mod boot;
 pub mod brief;

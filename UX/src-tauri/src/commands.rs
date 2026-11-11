@@ -12,6 +12,7 @@ use tauri::ipc::Channel;
 use crate::dto::activation::*;
 use crate::dto::analysis::*;
 use crate::dto::cases::*;
+use crate::dto::dup_resolve::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use crate::dto::langs::*;
 use crate::dto::library::*;
@@ -21,7 +22,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, brief, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -98,6 +99,10 @@ macro_rules! command_list {
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
+            async resolve_preview(scope: ResolveScopeDto, q: FaceQueryDto) -> Result<ResolvePlanDto, CmdError>;
+            async resolve_apply(req: ResolveRequestDto) -> Result<ResolveResultDto, CmdError>;
+            async resolve_undo(ids: Vec<i64>) -> Result<ResolveResultDto, CmdError>;
+            async resolve_list(include_undone: bool) -> Result<Vec<ResolutionDto>, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
             async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
             async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
@@ -324,6 +329,10 @@ cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s
 cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
 cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));
 cmd!(duplicate_summary(q: FaceQueryDto) -> DuplicateSummaryDto => |s| duplicates::duplicate_summary(s, &q));
+cmd!(resolve_preview(scope: ResolveScopeDto, q: FaceQueryDto) -> ResolvePlanDto => |s| dup_resolve::resolve_preview(s, &scope, &q));
+cmd!(resolve_apply(req: ResolveRequestDto) -> ResolveResultDto => |s| dup_resolve::resolve_apply(s, &req, &crate::trash::trash_item, dup_resolve::now_ms()));
+cmd!(resolve_undo(ids: Vec<i64>) -> ResolveResultDto => |s| dup_resolve::resolve_undo(s, &ids, dup_resolve::now_ms()));
+cmd!(resolve_list(include_undone: bool) -> Vec<ResolutionDto> => |s| dup_resolve::resolve_list(s, include_undone));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
 cmd!(pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Vec<PairComboDto> => |s| compare::pair_these(s, &faces, &opts));
 cmd!(save_pair(pair: NewPairDto) -> i64 => |s| pairs::save_pair(s, &pair));

@@ -683,7 +683,7 @@ pub struct PairComboDto {
 
 // ---- Trùng lặp và phiên bản (D2) — chỉ báo, không xoá/di chuyển file nào ----
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
 pub enum DuplicateKindDto {

@@ -284,6 +284,27 @@ fn filtered_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<RawGroup>, 
     Ok(groups)
 }
 
+/// Sau khi giải quyết / hoàn tác: nhóm cơ sở phải dựng lại (Index không đổi nên cache theo Index không tự mất).
+pub fn invalidate_cache() {
+    if let Some(c) = BASE_CACHE.get()
+        && let Ok(mut g) = c.lock()
+    {
+        *g = None;
+    }
+}
+
+/// Mọi nhóm hiện có (không lọc), đã điền head cho nhóm `versions`. Dùng cho giải quyết trùng lặp.
+pub(crate) fn current_groups(state: &AppState, q: Option<&FaceQueryDto>) -> Result<Vec<RawGroup>, CmdError> {
+    let mut groups: Vec<RawGroup> = match q {
+        Some(q) => filtered_groups(state, q)?,
+        None => base_groups(state, &bundle(state)?)?.as_ref().clone(),
+    };
+    for g in &mut groups {
+        apply_heads(g, &|m| m.path.as_deref().map_or((None, None), |p| head_of(&m.key, p)));
+    }
+    Ok(groups)
+}
+
 /// Chỉ đếm — KHÔNG đọc head hay mở tệp nào.
 pub fn duplicate_summary(state: &AppState, q: &FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError> {
     let mut s = DuplicateSummaryDto::default();
@@ -298,11 +319,11 @@ pub fn duplicate_summary(state: &AppState, q: &FaceQueryDto) -> Result<Duplicate
     Ok(s)
 }
 
-fn rows_by_id(state: &AppState, ids: &[i64]) -> Result<HashMap<i64, FaceRowDto>, CmdError> {
+pub(crate) fn rows_by_id(state: &AppState, ids: &[i64]) -> Result<HashMap<i64, FaceRowDto>, CmdError> {
     let mut out = HashMap::new();
     for chunk in ids.chunks(CHUNK) {
         let scope: Vec<(i64, f32)> = chunk.iter().map(|id| (*id, 1.0)).collect();
-        let q = FaceQuery { include_missing: true, sort: SortKey::Match, limit: MAX_LIMIT, ..Default::default() };
+        let q = FaceQuery { include_missing: true, include_hidden: true, sort: SortKey::Match, limit: MAX_LIMIT, ..Default::default() };
         let page = state.with_store(|s| Ok(s.query_faces_scoped(&q, Some(&scope))?))?;
         for r in page.items {
             out.insert(r.face_id, FaceRowDto::from(r));
