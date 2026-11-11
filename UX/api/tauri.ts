@@ -65,6 +65,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeSecondary: q.includeSecondary ?? false, confidentOnly: q.confidentOnly ?? false, minConfidence: q.minConfidence ?? null,
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
     weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
+    groupByFamily: q.groupByFamily ?? false,
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -84,6 +85,7 @@ export function createTauriApi(): Api {
   return {
     // Xem trước và lưới
     queryFaces: async q => parseFacePage(await call('query_faces', { q: toFaceQueryDto(q) })),
+    familyGroups: (q = {}) => call('family_groups', { q: toFaceQueryDto(q) }),
     previewInfo: () => call('preview_info'),
     bumpGeneration: () => call('preview_bump_generation'),
     previewUrl, fontUrl,
@@ -97,7 +99,8 @@ export function createTauriApi(): Api {
     // Nguồn, quét
     listSources: () => call('list_sources'),
     addSource: path => call('add_source', { path }),
-    removeSource: sourceId => none(call('remove_source', { sourceId })),
+    removeSource: sourceId => call('remove_source', { sourceId }),
+    removeSourcePreview: sourceId => call('remove_source_preview', { sourceId }),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),
     scanStatus: () => call('scan_status'),
@@ -115,6 +118,8 @@ export function createTauriApi(): Api {
     systemTagCatalog: () => call('system_tag_catalog'),
     tagsOf: face => call('tags_of', { face }),
     createTag: name => call('create_tag', { name }),
+    renameTag: (id, name) => call('rename_tag', { id, name }),
+    deleteTag: id => call('delete_tag', { id }),
     tagFaces: (tagId, faces) => none(call('tag_faces', { tagId, faces })),
     untagFaces: (tagId, faces) => none(call('untag_faces', { tagId, faces })),
     revealInFinder: face => none(call('reveal_in_finder', { face })),
@@ -214,6 +219,7 @@ export function createTauriApi(): Api {
     activationRestoreReplaced: id => call('activation_restore_replaced', { id }),
     activationDeactivate: (faces, o = {}) => call('activation_deactivate', { faces, force: o.force ?? false, onProgress: channel(o.onProgress).ch }),
     activationActivateCollection: (collectionId, o = {}) => call('activation_activate_collection', { collectionId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
+    activationActivateCase: (caseId, o = {}) => call('activation_activate_case', { caseId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),

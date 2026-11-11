@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../Modal';
+import { useActivationFlow } from '../activation/useActivationFlow';
 import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t, getLocale } from '../../i18n';
@@ -20,6 +21,8 @@ const faceOf = (r: { hashHex: string; faceIndex: number }): FaceKeyDto => ({ has
 const same = (a: FaceKeyDto | null | undefined, b: FaceKeyDto | null | undefined) => !!a && !!b && a.hashHex === b.hashHex && a.faceIndex === b.faceIndex;
 const nameOf = (r: FaceRowDto | null): string => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
 const keyStr = (f: FaceKeyDto | null | undefined) => (f ? `${f.hashHex}:${f.faceIndex}` : '');
+/** Số font từ đó hỏi xác nhận trước khi bật hàng loạt (spec C6). */
+const CONFIRM_ACTIVATE_FROM = 200;
 const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
 type Trial = { face: FaceKeyDto; row: FaceRowDto; summary: string; fromPeek?: boolean };
 
@@ -38,6 +41,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const [candError, setCandError] = useState<string | null>(null);
   const [idx, setIdx] = useState<number>(-1);
   const root = useRef<HTMLDivElement>(null);
+  const activation = useActivationFlow(api);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [activating, setActivating] = useState(false);
   const role = desk.role;
 
   useEffect(() => {
@@ -152,6 +158,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && mode === 'pairing' && trial && !compareReason) { e.preventDefault(); toCompare(); }
   };
 
+  const runActivateAll = async () => { setConfirmAll(false); setActivating(true); try { await activation.activateCase(desk.caseId); } finally { setActivating(false); } };
   const shownRoles = ROLE_ORDER.filter(r => slotOf(r) || r === role);
 
   return (
@@ -160,6 +167,12 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={leave}>← {t('desk.back')}</button></Tooltip>
         <h1>{t('desk.title')}</h1>
         {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}</span>}
+        {data && (
+          <Tooltip label={t('desk.activateAll.tip')}>
+            <button type="button" className="fa-desk-activate" data-testid="desk-activate-all" aria-disabled={activating || data.faces.length === 0 || undefined}
+              onClick={() => { if (activating || data.faces.length === 0) return; if (data.faces.length > CONFIRM_ACTIVATE_FROM) setConfirmAll(true); else void runActivateAll(); }}>{t('desk.activateAll')}</button>
+          </Tooltip>
+        )}
         <span className="fa-desk-mode" role="group" aria-label={t('desk.mode.tip')}>
           <button type="button" data-testid="mode-pairing" aria-pressed={mode === 'pairing'} onClick={() => setMode('pairing')}>{t('desk.mode.pairing')}</button>
           <button type="button" data-testid="mode-fonts" aria-pressed={mode === 'fonts'} onClick={() => setMode('fonts')}>{t('desk.mode.fonts')}</button>
@@ -224,6 +237,15 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
           <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />
         </section>
       </div>
+      )}
+      {confirmAll && data && (
+        <Modal title={t('act.all.title', { n: data.faces.length })} onClose={() => setConfirmAll(false)}>
+          <p>{t('act.all.body')}</p>
+          <div className="fa-modal-actions">
+            <button type="button" data-testid="desk-activate-cancel" onClick={() => setConfirmAll(false)}>{t('act.all.cancel')}</button>
+            <button type="button" className="primary" data-testid="desk-activate-confirm" onClick={() => void runActivateAll()}>{t('act.all.ok')}</button>
+          </div>
+        </Modal>
       )}
       {confirmDel && combo && (
         <Modal title={t('combo.delete.title', { n: combo.idx })} onClose={() => setConfirmDel(false)}>

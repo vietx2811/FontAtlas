@@ -49,6 +49,7 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         width_class: q.width_class,
         var_weight: q.var_axis_match.wght,
         var_width: q.var_axis_match.wdth,
+        group_by_family: q.group_by_family,
         badge_lang: Some(q.badge_lang.clone().unwrap_or_else(|| crate::services::langs::DEFAULT_BADGE_LANG.to_string())),
     }
 }
@@ -132,6 +133,14 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
             })
             .collect(),
     })
+}
+
+/// Các nhóm family của truy vấn (cùng bộ lọc/scope với `query_faces`), theo đúng thứ tự `query_faces` với `groupByFamily`.
+pub fn family_groups(state: &AppState, q: &FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError> {
+    let scope = scope_of(state, q)?;
+    let sq = to_store_query(q);
+    let groups = state.with_store(|s| Ok(s.family_groups(&sq, scope.as_deref())?))?;
+    Ok(groups.into_iter().map(FamilyGroupDto::from).collect())
 }
 
 /// Phân loại hiệu lực của một face (ghi đè > tự động), kèm độ tin cậy và class phụ để lọc không phải dựng lại.
@@ -474,6 +483,39 @@ pub fn create_tag(state: &AppState, name: &str) -> Result<TagDto, CmdError> {
             .map(Into::into)
             .ok_or_else(|| CmdError::internal("tag vừa tạo không thấy"))
     })
+}
+
+/// Đổi tên Tag. Tiền tố dành riêng (`style:`/`mood:`/`use:`) theo luật `create_tag`: tên phải thuộc danh mục (lưu dạng
+/// chuẩn); Tag hệ thống không đổi thành tên thường (mất nghĩa). Trùng tên với Tag khác → `conflict`.
+pub fn rename_tag(state: &AppState, id: i64, name: &str) -> Result<TagDto, CmdError> {
+    use fontatlas_core::system_tags::{canonical_name, check_name};
+    use unicode_normalization::UnicodeNormalization;
+    let nfc: String = name.nfc().collect();
+    let name = nfc.trim();
+    if name.is_empty() {
+        return Err(CmdError::invalid_arg("tên tag trống"));
+    }
+    let canon;
+    let name = match check_name(name) {
+        Some(true) => {
+            canon = canonical_name(name).unwrap_or_else(|| name.to_string());
+            canon.as_str()
+        }
+        Some(false) => return Err(CmdError::invalid_arg(format!("tag hệ thống không có trong danh mục: {name}"))),
+        None => name,
+    };
+    state.with_user(|u| {
+        let current = u.tags()?.into_iter().find(|t| t.id == id).ok_or_else(|| CmdError::not_found(format!("tag #{id}")))?;
+        if check_name(&current.name) == Some(true) && check_name(name).is_none() {
+            return Err(CmdError::invalid_arg("không thể đổi Tag hệ thống thành tên thường"));
+        }
+        Ok(u.rename_tag(id, name)?.into())
+    })
+}
+
+/// Xoá Tag (Tag hệ thống xoá được: chỉ là lựa chọn của người dùng, tạo lại được). Trả số face đã bị bỏ thẻ.
+pub fn delete_tag(state: &AppState, id: i64) -> Result<u32, CmdError> {
+    state.with_user(|u| Ok(u.delete_tag(id)?))
 }
 
 pub fn tag_faces(state: &AppState, tag_id: i64, faces: &[FaceKeyDto]) -> Result<(), CmdError> {

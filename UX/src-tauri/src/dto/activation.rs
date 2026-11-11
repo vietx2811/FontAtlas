@@ -386,6 +386,17 @@ impl From<&fa::ActivationReport> for ActivationReportDto {
     }
 }
 
+/// Kết quả "Bật tất cả" của một Dự án: báo cáo kích hoạt như `activateFaces` (cùng luồng xung đột — `needsConfirmation`
+/// → gọi lại với `proceed = true`) + các font của Dự án bị bỏ qua vì `missing` (không còn trong thư viện / thiếu trên đĩa).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CaseActivationDto {
+    pub report: ActivationReportDto,
+    /// `skipped: missing` — không bị tính vào `report.failed`.
+    pub skipped_missing: Vec<crate::dto::library::FaceKeyDto>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]

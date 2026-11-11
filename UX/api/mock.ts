@@ -10,7 +10,7 @@ import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './moc
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
-  type FamilyStyleDto, type SettingsDto, type SourceDto, type SystemTagGroupDto, type TagDto, type UiStateDto,
+  type FamilyGroupDto, type FamilyStyleDto, type SettingsDto, type SourceDto, type SystemTagGroupDto, type TagDto, type UiStateDto,
 } from './types';
 
 const WEIGHTS: Array<[string, number]> = [['Thin', 100], ['ExtraLight', 200], ['Light', 300], ['Regular', 400], ['Medium', 500], ['SemiBold', 600], ['Bold', 700], ['ExtraBold', 800], ['Black', 900]];
@@ -35,6 +35,9 @@ export function mockRows(): FaceRow[] {
       supportsVi: viMissing === 0, viMissing, licenseClass: 'ofl',
       path: `/Users/me/Fonts/src${src}/${family.replace(/ /g, '')}-${sub.replace(/ /g, '')}.ttf`,
       fileSize: 180_000 + n * 1000, missing: false, onCloudOnly: false, isFavorite: false, addedAt: n, langBadge: null,
+      // R2 giả: 1/5 face không rõ năm, 1/7 không đọc được ngày file; mọi ngày file là `disk` trừ nguồn 3 (giả cloud)
+      releaseYear: n % 5 === 0 ? null : 1995 + ((n * 7) % 30), releaseYearSource: n % 5 === 0 ? null : (['copyright', 'head_created', 'head_modified'] as const)[n % 3],
+      fileCreatedAt: n % 7 === 0 ? null : 1_600_000_000_000 + ((n * 37) % 100) * 86_400_000, fileCreatedSource: n % 7 === 0 ? null : src === 3 ? 'cloud_sync' : 'disk',
     });
   };
   for (const [family, src, kind, miss] of FAMILIES) {
@@ -173,7 +176,7 @@ export function createMockApi(o: MockOptions = {}): Api {
         usedBody.add(body.family);
         return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
       });
-      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null, langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null, langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true }, groupByFamily: false } as const;
       return {
         describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
         query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
@@ -205,7 +208,19 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.langs?.length || matchesLangs(r, q.langs, q.langMode)) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
       if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
+      else if (q.sort === 'released' || q.sort === 'file_created') {
+        // không rõ luôn cuối bất kể chiều, rồi cùng bậc theo Family → Weight → nghiêng (như store)
+        const val = (r: FaceRow) => (q.sort === 'released' ? r.releaseYear : r.fileCreatedAt);
+        const byFamily = (a: FaceRow, b: FaceRow) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic;
+        hits = hits.sort((a, b) => { const x = val(a), y = val(b); if (x == null || y == null) return x == null && y == null ? byFamily(a, b) : x == null ? 1 : -1; return (x - y) * (q.descending ? -1 : 1) || byFamily(a, b); });
+      }
       else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
+      if (q.groupByFamily) {
+        // mỗi family liền nhau, nhóm theo thứ tự xuất hiện đầu tiên (= cực trị theo sort/chiều), trong nhóm Weight → thẳng trước nghiêng
+        const order: string[] = []; const by = new Map<string, FaceRow[]>();
+        for (const r of hits) { const k = fold(r.family); if (!by.has(k)) { by.set(k, []); order.push(k); } by.get(k)!.push(r); }
+        hits = order.flatMap(k => by.get(k)!.sort((a, b) => (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic));
+      }
       const offset = q.offset ?? 0;
       const limit = q.limit === Infinity ? Infinity : Math.min(q.limit || 100, 1000); // Infinity chỉ dùng nội bộ cho thống kê
       return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r, langBadge: badgeOf(r, q.badgeLang ?? 'vie') })) };
@@ -226,7 +241,12 @@ export function createMockApi(o: MockOptions = {}): Api {
       simulateScan(s.id);
       return ok(s);
     },
-    async removeSource(id) { sources = sources.filter(s => s.id !== id); },
+    async removeSourcePreview(id) {
+      if (!sources.some(s => s.id === id)) throw new CmdError('not_found', 'source');
+      const n = countOf(id);
+      return { removedLocations: n, facesLeftWithoutLocation: n, casesAffected: 0, collectionsAffected: [...collections.values()].filter(c => rows.some(r => sourceOf(r) === id && c.faces.has(keyOf(r)))).length, tagsAffected: [...tags.values()].filter(t => rows.some(r => sourceOf(r) === id && t.faces.has(keyOf(r)))).length, activeFonts: 0 };
+    },
+    async removeSource(id) { const r = await this.removeSourcePreview(id); sources = sources.filter(s => s.id !== id); return r; },
     async rescanSources() {},
 
     async getFamilyStyles(family) {
@@ -253,6 +273,14 @@ export function createMockApi(o: MockOptions = {}): Api {
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
     async createTag(name) { name = canonicalSystemTag(name); const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
     async tagFaces(id, faces) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); faces.forEach(f => t.faces.add(keyOf(f))); },
+    async renameTag(id, name) {
+      const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag');
+      const n = canonicalSystemTag(name.trim()); if (!fold(n)) throw new CmdError('invalid_arg', 'empty tag name');
+      if ([...tags.values()].some(x => x.id !== id && fold(x.name) === fold(n))) throw new CmdError('conflict', 'tag name exists');
+      if (/^(style|mood|use):/.test(t.name) && !/^(style|mood|use):/.test(n)) throw new CmdError('invalid_arg', 'system tag');
+      t.name = n; return ok({ id, name: n, faceCount: t.faces.size });
+    },
+    async deleteTag(id) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); tags.delete(id); return t.faces.size; },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
     async revealLocation(path) { if (!rows.some(r => r.path === path) && !path.includes('/')) throw new CmdError('not_found', 'path'); },
@@ -298,6 +326,23 @@ export function createMockApi(o: MockOptions = {}): Api {
       const g = await this.duplicateGroups(q);
       const n = (k: string) => g.filter(x => x.kind === k).length;
       return { sameFile: n('same_file'), versions: n('versions'), formats: n('formats'), total: g.length };
+    },
+    async activationActivateCase(caseId, o = {}) {
+      const c = await this.getCase(caseId);
+      const report = await this.activationActivate(c.faces.filter(f => !f.missing).map(f => f.key), o);
+      return { report, skippedMissing: c.faces.filter(f => f.missing).map(f => f.key) };
+    },
+    async familyGroups(q = {}) {
+      const { items } = await this.queryFaces({ ...q, groupByFamily: true, offset: 0, limit: Infinity });
+      const totals = new Map<string, number>();
+      for (const r of rows) if (!r.missing) totals.set(fold(r.family), (totals.get(fold(r.family)) ?? 0) + 1);
+      const out: FamilyGroupDto[] = [];
+      items.forEach((r, i) => {
+        const last = out[out.length - 1];
+        if (last && fold(last.family) === fold(r.family)) { last.count++; last.matchCount++; return; }
+        out.push({ family: r.family, start: i, count: 1, matchCount: 1, styleTotal: totals.get(fold(r.family)) ?? 1 });
+      });
+      return out;
     },
     async classFacets(q = {}) {
       const { items } = await this.queryFaces({ ...q, classes: [], subclasses: [], offset: 0, limit: 1000 });

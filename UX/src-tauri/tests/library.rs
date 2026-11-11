@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use app_lib::dto::analysis::ClassificationOverrideDto;
 use app_lib::dto::library::*;
 use app_lib::services::activation::NoActivation;
-use app_lib::services::{boot, library, sources, system};
+use app_lib::services::{analysis, boot, cases, library, sources, system};
 use app_lib::state::{AppDirs, AppState};
 
 fn core_fixture(name: &str) -> PathBuf {
@@ -44,7 +45,7 @@ fn face_row_json_matches_store_fixture() {
     let (st, _) = scanned(d.path(), &["roboto.ttf"]);
     let page = all(&st);
     let mut got = serde_json::to_value(&page.items[0]).unwrap();
-    // `langBadge` do app thêm (Hyperglot); 20 khoá còn lại phải đúng bằng FaceRow của store
+    // `langBadge` do app thêm (Hyperglot); 24 khoá còn lại phải đúng bằng FaceRow của store
     assert!(got.as_object_mut().unwrap().remove("langBadge").is_some());
     let want: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-store/tests/fixtures/face_row.json")).unwrap(),
@@ -56,7 +57,7 @@ fn face_row_json_matches_store_fixture() {
         k
     };
     assert_eq!(keys(&got), keys(&want));
-    assert_eq!(keys(&got).len(), 20);
+    assert_eq!(keys(&got).len(), 24);
 }
 
 #[test]
@@ -229,4 +230,115 @@ fn backup_and_disk_free() {
     assert!(Path::new(&p).exists());
     assert!(system::disk_free(&st, "models").unwrap() > 0 && system::disk_free(&st, "data").unwrap() > 0);
     assert_eq!(system::disk_free(&st, "../etc").unwrap_err().code, "invalid_arg");
+}
+
+#[test]
+fn family_groups_follows_query_faces_order_and_filters() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf", "playfair_display.ttf"]);
+    let q = FaceQueryDto { group_by_family: true, limit: 100, ..Default::default() };
+    let page = library::query_faces(&st, &q).unwrap();
+    let groups = library::family_groups(&st, &q).unwrap();
+    assert_eq!(groups.iter().map(|g| g.count as u64).sum::<u64>(), page.total);
+    let mut next = 0;
+    for g in &groups {
+        assert_eq!(g.start, next);
+        assert!(page.items[g.start as usize..(g.start + g.count) as usize].iter().all(|r| r.family == g.family));
+        assert_eq!(g.match_count, g.count);
+        assert!(g.style_total >= g.match_count);
+        next += g.count;
+    }
+    // bộ lọc dùng chung với query_faces: tìm "roboto" chỉ còn nhóm Roboto, styleTotal không bị lọc
+    let q = FaceQueryDto { text: Some("roboto".into()), ..q };
+    let g = library::family_groups(&st, &q).unwrap();
+    assert_eq!(g.len(), 1);
+    assert_eq!(g[0].family, "Roboto");
+}
+
+#[test]
+fn rename_and_delete_tag_follow_system_tag_rules() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _) = scanned(d.path(), &["roboto.ttf"]);
+    let a = key_of(&all(&st).items[0]);
+    let t = library::create_tag(&st, "retro").unwrap();
+    let other = library::create_tag(&st, "vintage").unwrap();
+    library::tag_faces(&st, t.id, std::slice::from_ref(&a)).unwrap();
+    assert_eq!(library::rename_tag(&st, t.id, "  Nostalgia ").unwrap().name, "Nostalgia");
+    assert_eq!(library::tags_of(&st, &a).unwrap()[0].name, "Nostalgia", "gán thẻ còn nguyên");
+    assert_eq!(library::rename_tag(&st, t.id, "VINTAGE").unwrap_err().code, "conflict");
+    assert_eq!(library::rename_tag(&st, t.id, " ").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::rename_tag(&st, 9999, "x").unwrap_err().code, "not_found");
+    // thường → tiền tố dành riêng: chỉ nhận tên trong danh mục, lưu dạng chuẩn
+    assert_eq!(library::rename_tag(&st, t.id, "style:nope").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::rename_tag(&st, t.id, "Mood: CALM").unwrap().name, "mood:calm");
+    // Tag hệ thống không đổi thành tên thường
+    assert_eq!(library::rename_tag(&st, t.id, "plain").unwrap_err().code, "invalid_arg");
+    assert_eq!(library::delete_tag(&st, t.id).unwrap(), 1, "số face đã bỏ thẻ");
+    assert_eq!(library::list_tags(&st).unwrap().iter().map(|x| x.id).collect::<Vec<_>>(), [other.id]);
+    assert_eq!(library::delete_tag(&st, t.id).unwrap_err().code, "not_found");
+}
+
+#[test]
+fn removing_a_source_keeps_all_user_data_and_reports_real_numbers() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let rows = all(&st).items;
+    let (a, b) = (key_of(&rows[0]), key_of(&rows[1]));
+
+    // dữ liệu người dùng quanh font `a`
+    library::set_favorite(&st, &a, true).unwrap();
+    let col = library::create_collection(&st, "Menu", None).unwrap();
+    library::add_to_collection(&st, col.id, std::slice::from_ref(&a)).unwrap();
+    let tag = library::create_tag(&st, "retro").unwrap();
+    library::tag_faces(&st, tag.id, &[a.clone(), b.clone()]).unwrap();
+    let case = cases::create_case(&st, Some("Dự án"), None, None).unwrap();
+    cases::add_to_case(&st, Some(case.id), std::slice::from_ref(&a), None).unwrap();
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: a.clone(), class: "serif".into(), subclass: None }).unwrap();
+
+    let src = sources::list_sources(&st).unwrap()[0].id;
+    let preview = sources::remove_source_preview(&st, src).unwrap();
+    assert_eq!(
+        (preview.removed_locations, preview.faces_left_without_location, preview.cases_affected, preview.collections_affected, preview.tags_affected),
+        (2, 2, 1, 1, 1),
+        "xem trước = số thật, không đổi gì"
+    );
+    assert_eq!(all(&st).total, 2, "xem trước không gỡ");
+
+    let done = sources::remove_source(&st, src).unwrap();
+    assert_eq!(done, preview, "báo cáo của lệnh gỡ khớp bản xem trước");
+    assert_eq!(all(&st).total, 0, "font rời lưới");
+
+    // dữ liệu người dùng GIỮ NGUYÊN
+    assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 2, "Tag vẫn gán cho 2 face");
+    assert_eq!(library::tags_of(&st, &a).unwrap()[0].name, "retro");
+    assert_eq!(library::list_collections(&st).unwrap()[0].item_count, 1);
+    let c = cases::get_case(&st, case.id).unwrap();
+    assert_eq!((c.faces.len(), c.faces[0].missing), (1, true), "Dự án giữ font, đánh dấu missing");
+    let overrides = st.with_store(|s| Ok(s.classification_overrides().unwrap())).unwrap();
+    assert_eq!(overrides.len(), 1, "ghi đè phân loại còn");
+
+    // thêm lại nguồn: khớp lại theo hash
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let back = library::query_faces(&st, &FaceQueryDto { favorites_only: true, ..Default::default() }).unwrap();
+    assert_eq!((back.total, back.items[0].hash_hex.clone()), (1, a.hash_hex.clone()), "yêu thích khớp lại");
+    assert_eq!(library::query_faces(&st, &FaceQueryDto { tag_ids: vec![tag.id], ..Default::default() }).unwrap().total, 2);
+    let c = cases::get_case(&st, case.id).unwrap();
+    assert!(!c.faces[0].missing, "Dự án hết missing khi font trở lại");
+}
+
+#[test]
+fn removing_a_source_keeps_faces_that_live_in_another_source() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    // nguồn thứ hai có cùng file (khác thư mục, cùng hash)
+    let other = d.path().join("Other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(dir.join("roboto.ttf"), other.join("roboto.ttf")).unwrap();
+    sources::add_source(&st, other.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let first = sources::list_sources(&st).unwrap().into_iter().find(|s| s.path.as_deref() == Some(dir.to_str().unwrap())).unwrap();
+    let r = sources::remove_source(&st, first.id).unwrap();
+    assert_eq!((r.removed_locations, r.faces_left_without_location, r.active_fonts), (1, 0, 0), "face còn ở nguồn kia");
+    assert_eq!(all(&st).total, 1);
 }

@@ -58,7 +58,8 @@ macro_rules! command_list {
             async legacy_retry() -> Result<LegacyStateDto, CmdError>;
             async list_sources() -> Result<Vec<SourceDto>, CmdError>;
             async add_source(path: String) -> Result<SourceDto, CmdError>;
-            async remove_source(source_id: i64) -> Result<(), CmdError>;
+            async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
+            async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
@@ -66,6 +67,7 @@ macro_rules! command_list {
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
             async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
+            async family_groups(q: FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError>;
             async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
             async set_favorite(face: FaceKeyDto, on: bool) -> Result<(), CmdError>;
             async list_collections() -> Result<Vec<CollectionDto>, CmdError>;
@@ -78,6 +80,8 @@ macro_rules! command_list {
             async system_tag_catalog() -> Result<Vec<SystemTagGroupDto>, CmdError>;
             async tags_of(face: FaceKeyDto) -> Result<Vec<TagDto>, CmdError>;
             async create_tag(name: String) -> Result<TagDto, CmdError>;
+            async rename_tag(id: i64, name: String) -> Result<TagDto, CmdError>;
+            async delete_tag(id: i64) -> Result<u32, CmdError>;
             async tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async list_problems() -> Result<Vec<ProblemDto>, CmdError>;
@@ -159,6 +163,7 @@ macro_rules! command_list {
             async activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_list_replaced() -> Result<Vec<ReplacedEntryDto>, CmdError>;
             async activation_restore_replaced(id: i64) -> Result<RestoreOutcomeDto, CmdError>;
+            async activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<CaseActivationDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
@@ -306,6 +311,7 @@ macro_rules! cmd {
 }
 
 cmd!(query_faces(q: FaceQueryDto) -> FacePageDto => |s| library::query_faces(s, &q));
+cmd!(family_groups(q: FaceQueryDto) -> Vec<FamilyGroupDto> => |s| library::family_groups(s, &q));
 cmd!(get_family_styles(family: String) -> Vec<FamilyStyleDto> => |s| library::get_family_styles(s, &family));
 cmd!(set_favorite(face: FaceKeyDto, on: bool) -> () => |s| library::set_favorite(s, &face, on));
 cmd!(list_collections() -> Vec<CollectionDto> => |s| library::list_collections(s));
@@ -318,6 +324,8 @@ cmd!(list_tags() -> Vec<TagDto> => |s| library::list_tags(s));
 cmd!(system_tag_catalog() -> Vec<SystemTagGroupDto> => |_s| Ok(library::system_tag_catalog()));
 cmd!(tags_of(face: FaceKeyDto) -> Vec<TagDto> => |s| library::tags_of(s, &face));
 cmd!(create_tag(name: String) -> TagDto => |s| library::create_tag(s, &name));
+cmd!(rename_tag(id: i64, name: String) -> TagDto => |s| library::rename_tag(s, id, &name));
+cmd!(delete_tag(id: i64) -> u32 => |s| library::delete_tag(s, id));
 cmd!(tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::tag_faces(s, tag_id, &faces));
 cmd!(untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::untag_faces(s, tag_id, &faces));
 cmd!(list_problems() -> Vec<ProblemDto> => |s| library::list_problems(s));
@@ -469,6 +477,11 @@ cmd!(activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirm
     })
 });
 cmd!(activation_restore_replaced(id: i64) -> RestoreOutcomeDto => |s| activation::restore_replaced(s, id));
+cmd!(activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> CaseActivationDto => |s| {
+    activation::activate_case(s, case_id, scope, proceed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::activate_collection(s, collection_id, scope, proceed, &mut |p| {
         let _ = on_progress.send(p);
@@ -535,8 +548,16 @@ pub async fn add_source(
 pub async fn remove_source(
     state: State<'_, Arc<AppState>>,
     source_id: i64,
-) -> Result<(), CmdError> {
+) -> Result<RemoveSourceReportDto, CmdError> {
     blocking(&state, move |s| sources::remove_source(s, source_id)).await
+}
+
+#[tauri::command]
+pub async fn remove_source_preview(
+    state: State<'_, Arc<AppState>>,
+    source_id: i64,
+) -> Result<RemoveSourceReportDto, CmdError> {
+    blocking(&state, move |s| sources::remove_source_preview(s, source_id)).await
 }
 
 #[tauri::command]

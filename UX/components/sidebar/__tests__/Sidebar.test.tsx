@@ -355,6 +355,158 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('Dự án: Bật tất cả (R-activate)', () => {
+    it('menu has "Bật tất cả (N)" before Tắt tất cả; it activates the collection through the activation API', async () => {
+      const { api } = await mount();
+      const col = await api.createCollection('Dự án B', null);
+      const rows = (await api.queryFaces({ limit: 3 })).items;
+      await api.addToCollection(col.id, rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+      useUiStore.getState().bumpLibrary(false); await settle();
+      const spy = vi.spyOn(api, 'activationActivateCollection');
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Dự án B/ })); await settle();
+      const items = screen.getAllByRole('menuitem').map(i => i.textContent ?? '');
+      expect(items.findIndex(x => /Bật tất cả \(3\)/.test(x))).toBeGreaterThan(-1);
+      expect(items.findIndex(x => /Bật tất cả/.test(x))).toBeLessThan(items.findIndex(x => /Tắt tất cả/.test(x)));
+      fireEvent.click(screen.getByRole('menuitem', { name: /Bật tất cả/ })); await settle();
+      expect(spy).toHaveBeenCalledWith(col.id);
+    });
+    it('a double click on Bật tất cả sends one request while the first is running', async () => {
+      const { api } = await mount();
+      const col = await api.createCollection('Kép', null);
+      const rows = (await api.queryFaces({ limit: 2 })).items;
+      await api.addToCollection(col.id, rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+      useUiStore.getState().bumpLibrary(false); await settle();
+      let release: () => void = () => {};
+      const real = api.activationActivateCollection.bind(api);
+      const spy = vi.spyOn(api, 'activationActivateCollection').mockImplementation(async (id, o) => { await new Promise<void>(r => { release = r; }); return real(id, o); });
+      for (let n = 0; n < 2; n++) {
+        fireEvent.contextMenu(screen.getByRole('button', { name: /^Kép/ })); await settle();
+        fireEvent.click(screen.getByRole('menuitem', { name: /Bật tất cả/ })); await settle();
+      }
+      expect(spy).toHaveBeenCalledTimes(1);
+      await act(async () => { release(); }); await settle();
+    });
+    it('an empty project: the entry is disabled with a reason', async () => {
+      const { api } = await mount();
+      await api.createCollection('Rỗng', null); useUiStore.getState().bumpLibrary(false); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Rỗng/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Bật tất cả/ }).getAttribute('aria-disabled')).toBe('true');
+    });
+  });
+
+  describe('Gỡ nguồn (R7)', () => {
+    it('source menu → Gỡ nguồn… opens the preview with real numbers; confirm removes it, leaves its view, and tells how many locations went', async () => {
+      const { api } = await mount();
+      const target = (await api.listSources()).find(s => s.name === 'Dự án khách')!;
+      useUiStore.getState().setView(`src:${target.id}` as never); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Gỡ nguồn/ })); await settle();
+      const preview = await api.removeSourcePreview(target.id);
+      expect(screen.getByTestId('rmsrc-facts').querySelector('[data-fact="locations"]')?.textContent).toContain(`${preview.removedLocations} vị trí`);
+      expect((await api.listSources()).some(s => s.id === target.id)).toBe(true);
+      fireEvent.click(screen.getByTestId('rmsrc-confirm')); await settle();
+      expect((await api.listSources()).some(s => s.id === target.id)).toBe(false);
+      expect(useUiStore.getState().view).toBe('all');
+      expect(screen.queryByRole('button', { name: /Dự án khách/ })).toBeNull();
+    });
+    it('is disabled with a reason while a scan runs', async () => {
+      await mount();
+      useScanStore.setState({ scanning: true });
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Gỡ nguồn/ }).getAttribute('aria-disabled')).toBe('true');
+      useScanStore.setState({ scanning: false });
+    });
+  });
+
+  describe('Thẻ: đổi tên và xoá (R6)', () => {
+    const openMenu = async (name: string | RegExp) => { fireEvent.contextMenu(await screen.findByRole('button', { name })); await settle(); };
+    const seed = async () => { const m = await mount(); const a = await m.api.createTag('serif'); await m.api.createTag('display'); useUiStore.getState().bumpLibrary(false); await settle(); return { ...m, a }; };
+    it('menu lists Lọc / Đổi tên (F2) / Xoá thẻ…; Đổi tên edits inline, Enter saves, focus returns to the chip, the name changes', async () => {
+      const { api, a } = await seed();
+      await openMenu('serif');
+      const items = screen.getAllByRole('menuitem').map(i => i.textContent ?? '');
+      expect(items).toHaveLength(3);
+      expect(items[0]).toMatch(/Lọc theo thẻ này/); expect(items[1]).toMatch(/Đổi tên.*F2/); expect(items[2]).toMatch(/Xoá thẻ…/);
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      const box = screen.getByTestId('tag-rename') as HTMLInputElement;
+      expect(box.value).toBe('serif');
+      fireEvent.change(box, { target: { value: 'serifs' } });
+      fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      expect(screen.queryByTestId('tag-rename')).toBeNull();
+      expect((await api.listTags()).find(t => t.id === a.id)?.name).toBe('serifs');
+      expect(document.activeElement?.textContent).toBe('serifs');
+    });
+    it('F2 on a focused chip starts the rename; Esc cancels and keeps the name', async () => {
+      await seed();
+      const chip = screen.getByRole('button', { name: 'display' });
+      chip.focus(); fireEvent.keyDown(chip, { key: 'F2' }); await settle();
+      const box = screen.getByTestId('tag-rename');
+      fireEvent.change(box, { target: { value: 'zzz' } });
+      fireEvent.keyDown(box, { key: 'Escape' }); await settle();
+      expect(screen.getByRole('button', { name: 'display' })).toBeTruthy();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'display' }));
+    });
+    it('a duplicate name is reported (no silent merge) and the box keeps what was typed; empty is reported too', async () => {
+      const { api } = await seed();
+      await openMenu('serif');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      const box = screen.getByTestId('tag-rename') as HTMLInputElement;
+      fireEvent.change(box, { target: { value: 'Display' } });
+      fireEvent.keyDown(box, { key: 'Enter' }); await settle();
+      expect(screen.getByText(/Đã có thẻ khác tên «Display»/)).toBeTruthy();
+      expect((screen.getByTestId('tag-rename') as HTMLInputElement).value).toBe('Display');
+      expect((await api.listTags()).map(t => t.name).sort()).toEqual(['display', 'serif']);
+      fireEvent.change(screen.getByTestId('tag-rename'), { target: { value: '  ' } });
+      fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
+      expect(screen.getByText('Tên thẻ không được để trống.')).toBeTruthy();
+    });
+    it('NFC: the decomposed spelling of the same name is not a rename (no API call); a real rename is sent in NFC', async () => {
+      const { api } = await seed();
+      await api.createTag('Phở'); useUiStore.getState().bumpLibrary(false); await settle();
+      const spy = vi.spyOn(api, 'renameTag');
+      await openMenu('Phở');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      fireEvent.change(screen.getByTestId('tag-rename'), { target: { value: 'Pho\u031b\u0309' } }); // NFD của "Phở"
+      fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
+      expect(spy).not.toHaveBeenCalled();
+      await openMenu('Phở');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Đổi tên/ })); await settle();
+      fireEvent.change(screen.getByTestId('tag-rename'), { target: { value: 'Cafe\u0301' } }); // NFD của "Café"
+      fireEvent.keyDown(screen.getByTestId('tag-rename'), { key: 'Enter' }); await settle();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][1]).toBe('Café');
+    });
+    it('system tags (style:/mood:/use:) have no Đổi tên / Xoá and F2 does nothing', async () => {
+      const { api } = await seed();
+      const sysName = (await api.systemTagCatalog())[0].tags[0].name;
+      await api.createTag(sysName); useUiStore.getState().bumpLibrary(false); await settle();
+      await openMenu(sysName);
+      expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual([expect.stringMatching(/Lọc theo thẻ này/)]);
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
+      const chip = screen.getByRole('button', { name: sysName });
+      chip.focus(); fireEvent.keyDown(chip, { key: 'F2' }); await settle();
+      expect(screen.queryByTestId('tag-rename')).toBeNull();
+    });
+    it('Xoá thẻ… asks first, names how many fonts lose the tag, and cancel keeps it; confirm deletes and clears the tag filter', async () => {
+      const { api, a } = await seed();
+      const rows = (await api.queryFaces({ limit: 3 })).items;
+      await api.tagFaces(a.id, rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+      useUiStore.getState().bumpLibrary(false); await settle();
+      useUiStore.getState().setTag(String(a.id)); await settle();
+      await openMenu('serif');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá thẻ/ })); await settle();
+      expect(screen.getByText(/Thẻ bị bỏ khỏi 3 font/)).toBeTruthy();
+      fireEvent.click(screen.getByTestId('smenu-cancel')); await settle();
+      expect((await api.listTags()).some(t => t.id === a.id)).toBe(true);
+      await openMenu('serif');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Xoá thẻ/ })); await settle();
+      fireEvent.click(screen.getByTestId('smenu-confirm')); await settle();
+      expect((await api.listTags()).some(t => t.id === a.id)).toBe(false);
+      expect(screen.queryByRole('button', { name: 'serif' })).toBeNull();
+      expect(useUiStore.getState().filters.tagIds).toBeUndefined();
+    });
+  });
+
   describe('review fixes', () => {
     const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, ...o });
     it('Tắt tất cả reports failures and needs-confirmation instead of staying silent', async () => {

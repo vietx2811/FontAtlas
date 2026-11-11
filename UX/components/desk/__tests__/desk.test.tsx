@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useActivationQueue } from '../../../store/activationFlow';
 import { createMockApi } from '../../../api/mock';
 import type { FaceDetailDto } from '../../../api';
 import { useNoticeStore } from '../../../store/notices';
@@ -121,6 +122,42 @@ describe('PairingDesk', () => {
     useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
     fireEvent.keyDown(screen.getByTestId('pairing-desk'), { key: 'Escape' });
     expect(useUiStore.getState().desk).toBeNull();
+  });
+
+  it('Bật tất cả: activates the Case fonts through the normal flow, and says missing fonts were skipped (not as failures)', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const missing = { hashHex: 'ff'.repeat(16), faceIndex: 0 };
+    const real = api.activationActivateCase;
+    const spyCase = vi.spyOn(api, 'activationActivateCase').mockImplementation(async (id, o) => { const r = await real.call(api, id, o); return { ...r, skippedMissing: [missing, missing] }; });
+    fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    expect(spyCase).toHaveBeenCalledWith(res.case.id);
+    expect(useNoticeStore.getState().notices.map(n => n.text).join(' ')).toMatch(/2 font của Case này đang thiếu/);
+    expect(useNoticeStore.getState().notices.some(n => n.kind === 'error')).toBe(false);
+  });
+  it('Bật tất cả: a conflict in the Case goes to the shared conflict queue (not a private dialog); an API error is reported', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const row = (await rows(api))[0];
+    vi.spyOn(api, 'activationActivateCase').mockResolvedValueOnce({ skippedMissing: [], report: { changed: 0, failed: 0, needsConfirmation: 1, results: [{ hashHex: row.hashHex, requestedFaces: [0], outcome: { kind: 'needs_confirmation', conflicts: [{ kind: 'name_clash', family: row.family, otherPath: '/x/y.otf', otherHashHex: 'ab'.repeat(16), otherVersion: '1', otherOwner: 'right_font' } as never] } } as never] } as never });
+    fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    expect(useActivationQueue.getState().queue[0]?.type).toBe('conflict');
+    useActivationQueue.getState().clear();
+    vi.spyOn(api, 'activationActivateCase').mockRejectedValueOnce(new Error('engine down'));
+    fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /engine down/.test(n.text))).toBe(true);
+  });
+  it('Bật tất cả: more than 200 fonts asks first (cancel does nothing)', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const c = await api.getCase(res.case.id);
+    vi.spyOn(api, 'getCase').mockResolvedValue({ ...c, faces: Array.from({ length: 250 }, (_, i) => ({ ...c.faces[0], key: { hashHex: String(i).padStart(32, '0'), faceIndex: 0 } })) });
+    const spyCase = vi.spyOn(api, 'activationActivateCase');
+    cleanup(); render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: res.otherRole, trial: null }} />); await settle();
+    fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    expect(screen.getByText('Bật tất cả 250 font?')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('desk-activate-cancel')); await settle();
+    expect(spyCase).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    fireEvent.click(screen.getByTestId('desk-activate-confirm')); await settle();
+    expect(spyCase).toHaveBeenCalledTimes(1);
   });
 
   it('with no font on the opposite role it says so instead of listing candidates', async () => {

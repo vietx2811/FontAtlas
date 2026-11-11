@@ -340,6 +340,28 @@ pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, 
     Ok(out.into())
 }
 
+/// "Bật tất cả" theo Dự án: font KHÔNG `missing` của Case đi qua đúng luồng `activate` (xung đột tên family/PostScript,
+/// tải trước file cloud, báo cáo theo file); font `missing` không gửi xuống engine mà liệt kê ở `skipped_missing`.
+/// Kích hoạt kiểu thủ công (không gắn lý do "dự án": tắt Dự án không tự tắt font).
+pub fn activate_case(
+    state: &AppState,
+    case_id: i64,
+    scope: Option<ScopeDto>,
+    proceed: bool,
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<CaseActivationDto, CmdError> {
+    writable(state)?;
+    let case = crate::services::cases::get_case(state, case_id)?;
+    let (present, gone): (Vec<_>, Vec<_>) = case.faces.into_iter().partition(|f| !f.missing);
+    let keys: Vec<FaceKeyDto> = present.into_iter().map(|f| f.key).collect();
+    let report = if keys.is_empty() {
+        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0 }
+    } else {
+        activate(state, &keys, scope, proceed, progress)?
+    };
+    Ok(CaseActivationDto { report, skipped_missing: gone.into_iter().map(|f| f.key).collect() })
+}
+
 pub fn activate_collection(
     state: &AppState,
     collection_id: i64,

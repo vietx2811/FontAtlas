@@ -31,7 +31,7 @@ describe('query_faces', () => {
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'auto', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], includeSecondary: false, confidentOnly: false, minConfidence: null,
       langs: [], langMode: 'all', badgeLang: null,
-      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
+      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true }, groupByFamily: false,
     });
   });
 
@@ -324,5 +324,30 @@ describe('duplicates resolve', () => {
     expect(last().cmd).toBe('source_priority');
     await createTauriApi().setSourcePriority([2, 1]);
     expect(last()).toEqual({ cmd: 'set_source_priority', args: { ids: [2, 1] } });
+  });
+});
+
+describe('R3/R6/R7 + activate-case commands', () => {
+  it('maps to the right commands and argument names', async () => {
+    const api = createTauriApi();
+    await api.familyGroups({ sort: 'released', groupByFamily: true });
+    expect(last().cmd).toBe('family_groups');
+    expect(last().args.q).toMatchObject({ sort: 'released', groupByFamily: true });
+    await api.renameTag(3, 'Retro');
+    expect(last()).toEqual({ cmd: 'rename_tag', args: { id: 3, name: 'Retro' } });
+    await api.deleteTag(3);
+    expect(last()).toEqual({ cmd: 'delete_tag', args: { id: 3 } });
+    await api.removeSourcePreview(7);
+    expect(last()).toEqual({ cmd: 'remove_source_preview', args: { sourceId: 7 } });
+    await api.removeSource(7);
+    expect(last()).toEqual({ cmd: 'remove_source', args: { sourceId: 7 } });
+    await api.activationActivateCase(5, { proceed: true });
+    expect(last().cmd).toBe('activation_activate_case');
+    expect(last().args).toMatchObject({ caseId: 5, scope: null, proceed: true });
+  });
+
+  it('a duplicate tag name surfaces as CmdError conflict', async () => {
+    reply = () => ({ __reject: { code: 'conflict', message: 'trùng tên', detail: null } });
+    await expect(createTauriApi().renameTag(1, 'x')).rejects.toMatchObject({ code: 'conflict' });
   });
 });

@@ -203,3 +203,18 @@ describe('mock boot / onboarding / scan', () => {
     vi.useRealTimers();
   });
 });
+
+describe('activationActivateCase', () => {
+  it('goes through the normal flow (conflict asks first) and lists missing fonts as skipped', async () => {
+    const api = createMockApi();
+    const inter = await rowOf(api, 'Inter'); const roboto = await rowOf(api, 'Roboto');
+    const c = await api.createCase('Dự án');
+    await api.addToCase(c.id, [key(inter), key(roboto), { hashHex: 'ab'.repeat(32), faceIndex: 0 }]);
+    const first = await api.activationActivateCase(c.id);
+    expect(first.skippedMissing).toEqual([{ hashHex: 'ab'.repeat(32), faceIndex: 0 }]);
+    expect(first.report.needsConfirmation).toBe(1);
+    expect(first.report.changed).toBe(1);
+    const again = await api.activationActivateCase(c.id, { proceed: true });
+    expect(again.report.needsConfirmation).toBe(0);
+  });
+});

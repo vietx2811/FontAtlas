@@ -93,7 +93,7 @@ describe('backend error messages', () => {
 
 describe('key hygiene', () => {
   it('no key is declared in two groups (a later spread would silently override the earlier one)', async () => {
-    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err', 'dup', 'replace', 'auto'].map(n => import(`../${n}.ts`)));
+    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err', 'dup', 'replace', 'auto', 'library'].map(n => import(`../${n}.ts`)));
     const { MAIN_I18N } = await import('..');
     const seen = new Map<string, string>(); const dup: string[] = [];
     const groups: Array<[string, object]> = [['main', MAIN_I18N]];

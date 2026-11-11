@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import storeRow from '../../../src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json';
 import { ContractError, cssSize, parseFacePage, parseFaceRow } from '../types';
 
-// App thêm `langBadge` (Hyperglot) lên 20 khoá của store.
+// App thêm `langBadge` (Hyperglot) lên 24 khoá của store.
 const row = { ...storeRow, langBadge: null };
 
 describe('hợp đồng FaceRow với store', () => {

@@ -13,6 +13,8 @@ import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { SourcePriority } from './SourcePriority';
 import { Modal } from '../Modal';
+import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
+import { useNoticeStore } from '../../store/notices';
 import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { AutoActivation } from './AutoActivation';
@@ -149,15 +151,8 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
         {' · '}
         <TermTip term="always_keep"><span data-term="always_keep" tabIndex={0} className="fa-termword">Always keep on this device</span></TermTip>
       </p>
-      {removing && (
-        <Modal title={t('set.rm.title', { name: removing.name })} onClose={() => setRemoving(null)}>
-          <p>{t('set.rm.body')}</p>
-          <div className="fa-modal-actions">
-            <button type="button" onClick={() => setRemoving(null)}>{t('set.cancel')}</button>
-            <button type="button" className="primary" onClick={async () => { const id = removing.id; setRemoving(null); await api.removeSource(id); await refresh(); }}>{t('set.rm.ok')}</button>
-          </div>
-        </Modal>
-      )}
+      {removing && <RemoveSourceDialog api={api} source={removing} onClose={() => setRemoving(null)}
+        onRemoved={rep => { const s0 = removing; setRemoving(null); useNoticeStore.getState().push({ kind: 'info', text: t('rmsrc.done', { name: s0.name, n: rep.removedLocations }) }); useUiStore.getState().bumpLibrary(true); void refresh(); }} />}
     </>
   );
 }

@@ -71,4 +71,11 @@ widthClass: [number, number] | null,
 /**
  * Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
  */
-varAxisMatch: VarAxisMatchDto, };
+varAxisMatch: VarAxisMatchDto, 
+/**
+ * `true`: `queryFaces` xếp theo NHÓM family (mỗi family liền nhau; thứ tự nhóm theo `sort`/`descending`:
+ * family → tên, weight/added/released/file_created → kiểu nhẹ nhất|cũ nhất khi tăng, nặng nhất|mới nhất khi giảm,
+ * match → điểm cao nhất; không có giá trị → cuối). Trong nhóm: Weight tăng → thẳng trước nghiêng → tên.
+ * `familyGroups` với cùng truy vấn trả khoảng `[start, start+count)` của từng nhóm trong thứ tự này.
+ */
+groupByFamily: boolean, };

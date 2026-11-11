@@ -10,6 +10,7 @@ import { DESK_I18N } from './desk';
 import { VIEW_I18N } from './view';
 import { DUP_I18N } from './dup';
 import { AUTO_I18N } from './auto';
+import { LIBRARY_I18N } from './library';
 import { ERR_I18N } from './err';
 import { SETTINGS_I18N } from './settings';
 import { DETAIL_I18N } from './detail';
@@ -107,6 +108,7 @@ export const vi = {
   ...DUP_I18N,
   ...REPLACE_I18N,
   ...AUTO_I18N,
+  ...LIBRARY_I18N,
   ...MAIN_I18N,
 } as const;
 export type I18nKey = keyof typeof vi;

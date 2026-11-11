@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use fontatlas_store::{Source, SourceKind, StoreError, cloud_provider_of};
 
-use crate::dto::library::SourceDto;
+use crate::dto::library::{RemoveSourceReportDto, SourceDto};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -71,17 +71,23 @@ pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdErr
     dto(state, src)
 }
 
-pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<(), CmdError> {
+/// Số liệu thật cho câu xác nhận gỡ nguồn (chỉ đọc).
+pub fn remove_source_preview(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceReportDto, CmdError> {
+    state.with_user(|u| u.source(id).map(|_| ()).map_err(CmdError::from))?;
+    state.with_store(|s| Ok(s.source_removal_report(id)?.into()))
+}
+
+pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceReportDto, CmdError> {
     // nguồn đang quét/chờ quét phải dừng trước, kẻo quét ghi vị trí mồ côi sau khi xoá
     if !state.scans.forget(id) {
         return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
     }
-    state.with_store(|s| Ok(s.remove_source(id)?))?;
+    let report: RemoveSourceReportDto = state.with_store(|s| Ok(s.remove_source(id)?.into()))?;
     // ảnh preview theo thế hệ: font vừa bị gỡ không được phục vụ từ URL cũ
     let _ = crate::services::preview::bump_generation(state);
     crate::services::activation::reconcile_now(state, false);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
-    Ok(())
+    Ok(report)
 }
 
 /// `None` = mọi nguồn thư mục.
