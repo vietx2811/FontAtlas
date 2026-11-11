@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConflictDto } from '../../../api';
 import { createMockApi } from '../../../api/mock';
@@ -7,6 +7,7 @@ import { useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
 import { tipOf } from '../../../test/tip';
 import { ActivationDialogHost } from '../ActivationDialogHost';
+import { describeOutcome } from '../messages';
 import { ConflictDialog } from '../ActivationDialogs';
 import { confirmedOf, replaceAdvice, replaceTierOf } from '../conflictModel';
 import { useActivationFlow } from '../useActivationFlow';
@@ -61,6 +62,19 @@ describe('ConflictDialog · replace option', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
     expect(s.onReplace).toHaveBeenCalledTimes(1);
     expect(s.onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('default choice: "Thay bằng bản này" is preselected for a known app, "Bỏ qua" when an unknown app is involved or replacing is not allowed', () => {
+    const radio = (re: RegExp) => screen.getByRole('radio', { name: re }) as HTMLInputElement;
+    const m1 = mount([item([c('font_base', '/Volumes/L/a.ttf')])]);
+    expect(radio(/Thay bằng bản này/).checked).toBe(true);
+    expect(m1.onReplace).not.toHaveBeenCalled();
+    cleanup();
+    mount([item([c('right_font', '/Volumes/L/a.ttf'), c('other', '/Volumes/L/b.ttf')])]);
+    expect(radio(/Bỏ qua/).checked).toBe(true);
+    cleanup();
+    mount([item([c('adobe_fonts', '/x/a.otf')])]);
+    expect(radio(/Bỏ qua/).checked).toBe(true);
   });
 
   it('RightFont also shows "Hướng dẫn tắt trong RightFont" right below, without a toggle: instructions plus a retry that is not inside a paragraph', () => {
@@ -204,7 +218,7 @@ describe('activation flow · replace and restore', () => {
 
   it('"not effective" and "rollback failed" are told truthfully; not-effective still offers the restore action', async () => {
     const api = createMockApi();
-    const f = (rc: string, replaced?: boolean) => ({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: { kind: 'failed' as const, code: rc, message: 'x' }, ...(replaced ? { replaced: [{ id: 1, path: '/x.ttf', owner: 'right_font' as const, scopes: ['persistent' as const] }] } : {}) }], changed: 0, needsConfirmation: 0, failed: 1 });
+    const f = (rc: string, replaced?: boolean) => ({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: rc === 'replace_not_effective' ? { kind: 'activated' as const } : { kind: 'failed' as const, code: rc, message: 'x' }, ...(rc === 'replace_not_effective' ? { warning: rc } : {}), ...(replaced ? { replaced: [{ id: 1, path: '/x.ttf', owner: 'right_font' as const, scopes: ['persistent' as const] }] } : {}) }], changed: 0, needsConfirmation: 0, failed: 1 });
     vi.spyOn(api, 'activationReplace').mockResolvedValueOnce(f('replace_not_effective', true)).mockResolvedValueOnce(f('replace_rollback_failed', true));
     const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
     render(<Harness api={api} faces={faces} />);
@@ -216,5 +230,11 @@ describe('activation flow · replace and restore', () => {
     const ns = useNoticeStore.getState().notices;
     expect(ns.some(n => /một bản khác vẫn đang cung cấp/.test(n.text) && n.action?.label === 'Khôi phục bản cũ')).toBe(true);
     expect(ns.some(n => /không trả lại được bản cũ/.test(n.text))).toBe(true);
+  });
+});
+
+describe('messages for the new replace codes', () => {
+  it('replace_own_held tells the user a collection keeps another copy on', () => {
+    expect(describeOutcome({ kind: 'failed', code: 'replace_own_held', message: 'x' })?.text).toMatch(/collection/);
   });
 });

@@ -160,6 +160,10 @@ pub struct FileResult {
     /// Bản cũ đã gỡ để thay thế (policy `Replace`); mỗi mục có `id` để "Khôi phục bản cũ".
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub replaced: Vec<ReplacedFont>,
+    /// Đã làm xong việc được yêu cầu nhưng có điều người dùng cần biết (vd `replace_not_effective`: font của ta đã bật
+    /// nhưng bản khác vẫn đang cung cấp cùng tên). Kết quả vẫn là `Activated`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

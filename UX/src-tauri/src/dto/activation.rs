@@ -278,6 +278,10 @@ pub struct FileResultDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub replaced: Option<Vec<ReplacedFontDto>>,
+    /// Đã xong nhưng cần báo (vd `replace_not_effective`: bản khác vẫn đang cung cấp font). Kết quả vẫn là `activated`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -347,6 +351,7 @@ impl From<&fa::FileResult> for FileResultDto {
             requested_faces: r.requested_faces.clone(),
             extra_faces: r.extra_faces.clone(),
             outcome: (&r.outcome).into(),
+            warning: r.warning.clone(),
             replaced: (!r.replaced.is_empty()).then(|| {
                 r.replaced
                     .iter()

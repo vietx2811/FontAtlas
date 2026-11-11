@@ -30,10 +30,11 @@ function fillSlots(text: string, slots: Record<string, React.ReactNode>): React.
  * chỉ nằm trong tooltip của dấu "!". Mặc định bỏ qua các font trùng. Hộp cao tối đa 70% cửa sổ, danh sách cuộn bên trong.
  */
 export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, onRetry, onReveal }: ConflictProps): React.JSX.Element {
-  const [choice, setChoice] = useState<Choice>('skip');
-  const [understood, setUnderstood] = useState(false);
   const advice = useMemo(() => replaceAdvice(items), [items]);
   const canReplace = advice.tier === 'replace' && !!onReplace;
+  // chọn sẵn "Thay bằng bản này" khi được phép và chỉ có app đã nhận diện; có app lạ → giữ "bỏ qua" + xác nhận mạnh
+  const [choice, setChoice] = useState<Choice>(() => (canReplace && !advice.unknownApp ? 'replace' : 'skip'));
+  const [understood, setUnderstood] = useState(false);
   const appName = advice.apps.join(' / ');
   const other = t('act.replace.app.other');
   // mọi app (đã nhận diện và "một ứng dụng khác") đều được kể tên trong cảnh báo; có bất kỳ app lạ nào → xác nhận mạnh

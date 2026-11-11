@@ -14,6 +14,7 @@ export function describeOutcome(o: FileOutcomeDto): Msg | null {
       if (o.code === 'replace_conflicts_changed') return { kind: 'error', text: t('act.msg.replaceChanged') };
       if (o.code === 'replace_rollback_failed') return { kind: 'error', text: t('act.msg.replaceRollbackFailed') };
       if (o.code === 'replace_not_effective') return { kind: 'error', text: t('act.msg.replaceNotEffective') };
+      if (o.code === 'replace_own_held') return { kind: 'error', text: t('act.msg.replaceOwnHeld') };
       if (o.code === 'replace_own_not_found') return { kind: 'error', text: t('act.msg.replaceOwnNotFound') };
       if (o.code === 'replace_not_registered') return { kind: 'error', text: t('act.msg.replaceNotRegistered') };
       if (o.code === 'cloud_timeout') return { kind: 'error', text: t('act.msg.cloudTimeout') };

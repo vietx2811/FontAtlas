@@ -34,7 +34,7 @@ export function ActivationDialogHost({ api }: { api: Api }): React.JSX.Element |
         if (!replaced.length) return;
         const apps = [...new Set(replaced.map(x => APP_OF[x.owner] ?? t('act.replace.app.other')))].join(' / ');
         // thay xong (hoặc "không hiệu lực": sayOutcomes đã nói thật) — luôn có đường khôi phục
-        const notEffective = rep.results.some(r => r.outcome.kind === 'failed' && r.outcome.code === 'replace_not_effective');
+        const notEffective = rep.results.some(r => r.warning === 'replace_not_effective');
         useNoticeStore.getState().push({
           kind: 'info', text: notEffective ? t('act.msg.replaceNotEffective') : t('act.replace.done', { app: apps }),
           action: { label: t('act.replace.undo'), run: () => void restoreReplaced(api, replaced.map(x => x.id)) },

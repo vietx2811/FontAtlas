@@ -226,12 +226,12 @@ fn norm_components(path: &Path) -> Vec<String> {
     c
 }
 
-/// Đường dẫn nằm trong 3 thư mục font mà hệ điều hành bật theo thư mục: /System/Library, /Library/Fonts và
-/// ~/Library/Fonts (của mọi người dùng, kể cả khi đi qua symlink, firmlink hay khác hoa/thường).
+/// Đường dẫn nằm trong các thư mục font mà hệ điều hành bật theo thư mục: /System/Library, /Library/Fonts,
+/// /Network/Library/Fonts và ~/Library/Fonts (của mọi người dùng, kể cả khi đi qua symlink, firmlink hay khác hoa/thường).
 pub fn in_protected_font_dir(path: &Path, home: &Path) -> bool {
     let c = norm_components(path);
     let s = |v: &[&str]| c.len() >= v.len() && c.iter().zip(v).all(|(a, b)| a == b);
-    if s(&["system", "library"]) || s(&["library", "fonts"]) {
+    if s(&["system", "library"]) || s(&["library", "fonts"]) || s(&["network", "library", "fonts"]) {
         return true;
     }
     if c.len() >= 4 && c[0] == "users" && c[2] == "library" && c[3] == "fonts" {
@@ -449,6 +449,7 @@ mod tests {
             ("/lib/mine.ttf", Owner::FontAtlas),
             ("/System/Library/Fonts/Helvetica.ttc", Owner::System),
             ("/Library/Fonts/Arial.ttf", Owner::System),
+            ("/Network/Library/Fonts/Shared.otf", Owner::System),
             ("/Users/u/Library/Fonts/Inter.ttf", Owner::UserInstalled),
             ("/Users/u/Library/Application Support/Adobe/CoreSync/plugins/livetype/.r/.123.otf", Owner::AdobeFonts),
             (

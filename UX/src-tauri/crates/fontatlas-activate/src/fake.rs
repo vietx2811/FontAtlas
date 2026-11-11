@@ -27,6 +27,8 @@ struct FakeState {
     fail_scope: Vec<Scope>,
     /// Sau `unregister(path, _)` thành công, đăng ký lại ngay (giả app quản lý bật lại bản của nó).
     revive: HashSet<PathBuf>,
+    /// `unregister(path, _)` luôn lỗi (giả app chặn việc gỡ bản này).
+    fail_unregister_path: HashSet<PathBuf>,
 }
 
 type CallHook = Arc<dyn Fn(&str, &Path) + Send + Sync>;
@@ -87,6 +89,11 @@ impl FakeEngine {
 
     pub fn allow_register_in(&self, scope: Scope) {
         self.st().fail_scope.retain(|s| *s != scope);
+    }
+
+    /// Mọi `unregister` của `path` lỗi.
+    pub fn fail_unregister_of(&self, path: &Path) {
+        self.st().fail_unregister_path.insert(path.to_path_buf());
     }
 
     /// Gỡ `path` xong thì nó tự đăng ký lại (app khác bật lại).
@@ -164,6 +171,9 @@ impl ActivationEngine for FakeEngine {
         let mut st = self.st();
         if let Some(e) = st.fail_unregister.take() {
             return Err(e);
+        }
+        if st.fail_unregister_path.contains(path) {
+            return Err(EngineError::Rejected { code: 8, message: "chặn gỡ đăng ký (test)".into() });
         }
         let before = st.regs.len();
         st.regs.retain(|(p, s)| !(p == path && *s == scope));

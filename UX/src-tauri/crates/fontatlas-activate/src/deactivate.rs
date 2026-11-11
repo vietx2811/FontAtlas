@@ -133,7 +133,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         what: Lift,
     ) -> Result<FileResult, ActivationError> {
         let mut res =
-            FileResult { hash_hex: hex(&hash), path: None, requested_faces, extra_faces: vec![], outcome: FileOutcome::Busy, replaced: vec![] };
+            FileResult { hash_hex: hex(&hash), path: None, requested_faces, extra_faces: vec![], outcome: FileOutcome::Busy, replaced: vec![], warning: None };
         let Some(_guard) = self.take(hash) else { return Ok(res) };
         let (row, target) = {
             let s = relock(store);
@@ -263,6 +263,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                     message: "font chưa đăng ký ổn định nên chưa đổi được phạm vi; hãy tắt rồi bật lại".into(),
                 },
                 replaced: vec![],
+            warning: None,
             });
         }
         let rows: Vec<ActivationRow> =
@@ -275,6 +276,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                 extra_faces: vec![],
                 outcome: FileOutcome::Busy,
                 replaced: vec![],
+            warning: None,
             };
             let Some(_guard) = self.take(row.hash) else {
                 rep.push(res);

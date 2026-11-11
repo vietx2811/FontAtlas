@@ -251,7 +251,8 @@ fn a_foreign_copy_that_comes_back_is_reported_as_not_effective_and_keeps_the_jou
     svc.engine().register(&foreign, Scope::Persistent).unwrap();
     svc.engine().revive_after_unregister(&foreign);
     let r = run(&svc, &env, k, ConflictPolicy::Replace);
-    assert!(matches!(&r.outcome, FileOutcome::Failed { code, .. } if code == "replace_not_effective"), "{:?}", r.outcome);
+    assert_eq!(r.outcome, FileOutcome::Activated, "font của ta đang bật thật: không phải Failed");
+    assert_eq!(r.warning.as_deref(), Some("replace_not_effective"));
     assert_eq!(r.replaced.len(), 1, "UI vẫn đưa được nút Khôi phục");
     assert_eq!(jrows(&env).len(), 1);
 }
@@ -343,4 +344,158 @@ fn restore_keeps_ours_when_a_collection_still_wants_it() {
     let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
     assert_eq!(row.state, DesiredState::Active, "collection còn giữ → không bị xoá lý do");
     assert!(row.reasons.contains(&ActivationReason::Collection(5)));
+}
+
+// ---- Lead review @f00366b3: A–F ----
+
+use fontatlas_store::{ActivationReason, ActivationStatus, DesiredState};
+
+/// Thêm font `b` (cùng PS) của thư viện và bật nó (lý do thủ công); trả key + đường dẫn.
+fn own_copy(env: &Env, svc: &fontatlas_activate::ActivationService<FakeEngine>) -> (FaceKey, PathBuf) {
+    let b = ingest_fake(env, "b.ttf", "file-b", &[PS]);
+    let bp = canon(&env.dir.path().join("extra/b.ttf"));
+    svc.engine().set_names_for(&bp, &[PS]);
+    let kb = FaceKey { hash: b, face_index: 0 };
+    assert_eq!(run(svc, env, kb, ConflictPolicy::Proceed).outcome, FileOutcome::Activated);
+    (kb, bp)
+}
+
+fn reasons(env: &Env, k: &FaceKey) -> Vec<ActivationReason> {
+    env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap().reasons
+}
+
+#[test]
+fn a_replace_never_strips_the_collection_reason_of_our_own_other_copy() {
+    let (env, svc, ka, _foreign) = setup(RIGHT, FakeEngine::new());
+    let (kb, bp) = own_copy(&env, &svc);
+    env.store.lock().unwrap().add_activation_reason(&kb.hash, ActivationReason::Collection(7)).unwrap();
+    let r = run(&svc, &env, ka, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { code, .. } if code == "replace_own_held"), "{:?}", r.outcome);
+    assert!(svc.engine().registrations().iter().any(|(p, _)| p == &bp), "bản của ta do collection giữ vẫn bật");
+    let rs = reasons(&env, &kb);
+    assert!(rs.contains(&ActivationReason::Collection(7)) && rs.contains(&ActivationReason::Manual), "{rs:?}");
+    assert!(jrows(&env).is_empty());
+}
+
+#[test]
+fn a_replace_of_our_own_manual_copy_turns_it_off_without_force() {
+    let (env, svc, ka, _f) = setup(RIGHT, FakeEngine::new());
+    let (kb, bp) = own_copy(&env, &svc);
+    let r = run(&svc, &env, ka, ConflictPolicy::Replace);
+    assert_eq!(r.outcome, FileOutcome::Activated, "{:?}", r.outcome);
+    assert!(r.warning.is_none());
+    assert!(svc.engine().registrations().iter().all(|(p, _)| p != &bp));
+    let row = env.store.lock().unwrap().activation_row(&kb.hash).unwrap().unwrap();
+    assert_eq!(row.state, DesiredState::Inactive);
+}
+
+#[test]
+fn c_a_late_failure_turns_our_own_other_copy_back_on_exactly_as_it_was() {
+    let (env, svc, ka, foreign) = setup(RIGHT, FakeEngine::new());
+    let (kb, bp) = own_copy(&env, &svc);
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    svc.engine().fail_next_register(EngineError::Rejected { code: 7, message: "từ chối".into() });
+    let r = run(&svc, &env, ka, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { .. }), "{:?}", r.outcome);
+    let regs = svc.engine().registrations();
+    assert!(regs.iter().any(|(p, s)| p == &bp && *s == Scope::Session), "bản b của ta bật lại: {regs:?}");
+    assert!(regs.iter().any(|(p, s)| p == &foreign && *s == Scope::Persistent), "bản cũ trả lại: {regs:?}");
+    let row = env.store.lock().unwrap().activation_row(&kb.hash).unwrap().unwrap();
+    assert_eq!((row.state, row.status), (DesiredState::Active, ActivationStatus::Registered));
+    assert_eq!(row.reasons, vec![ActivationReason::Manual]);
+    assert!(jrows(&env).is_empty());
+}
+
+#[test]
+fn c_our_own_copy_counts_for_took_effect_when_it_comes_back() {
+    let (env, svc, ka, _f) = setup(RIGHT, FakeEngine::new());
+    let (_kb, bp) = own_copy(&env, &svc);
+    svc.engine().revive_after_unregister(&bp);
+    let r = run(&svc, &env, ka, ConflictPolicy::Replace);
+    assert_eq!(r.outcome, FileOutcome::Activated);
+    assert_eq!(r.warning.as_deref(), Some("replace_not_effective"), "chỉ có bản của ta bị tắt mà vẫn còn → cảnh báo");
+}
+
+#[test]
+fn b_a_failure_after_removing_the_foreign_copy_gives_it_back() {
+    // dòng kích hoạt cũ của font mới ở chỗ khác; gỡ nó hỏng → bản cũ của app khác phải về lại
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let stale = env.dir.path().join("cu/a-cu.ttf");
+    std::fs::create_dir_all(stale.parent().unwrap()).unwrap();
+    std::fs::write(&stale, b"x").unwrap();
+    svc.engine().register(&stale, Scope::Session).unwrap();
+    let row = fontatlas_store::ActivationRow {
+        reasons: vec![],
+        hash: k.hash,
+        state: DesiredState::Active,
+        scope: Scope::Session,
+        method: "fake".into(),
+        active_path: Some(stale.to_str().unwrap().into()),
+        status: ActivationStatus::Registered,
+        conflict_ps: None,
+        last_error: None,
+        activated_at: Some(1),
+        verified_at: Some(1),
+        updated_at: 0,
+        engine_version: 1,
+    };
+    {
+        let mut st = env.store.lock().unwrap();
+        st.put_activation(&row).unwrap();
+        st.add_activation_reason(&k.hash, ActivationReason::Manual).unwrap();
+    }
+    svc.engine().fail_unregister_of(&stale);
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { .. }), "{:?}", r.outcome);
+    assert!(svc.engine().registrations().iter().any(|(p, s)| p == &foreign && *s == Scope::Persistent), "bản cũ về lại");
+    assert!(jrows(&env).is_empty(), "trả lại được thì không còn sổ");
+}
+
+#[test]
+fn d_unregister_give_back_and_restore_use_the_registered_url_not_the_canonical_one() {
+    let (env, svc, k, foreign) = setup("Cho khac/dup.ttf", FakeEngine::new());
+    let alias = env.dir.path().join("alias.ttf");
+    std::os::unix::fs::symlink(&foreign, &alias).unwrap();
+    assert_ne!(alias, canon(&alias));
+    svc.engine().set_names_for(&alias, &[PS]);
+    svc.engine().register(&alias, Scope::Persistent).unwrap(); // đăng ký dưới URL alias, KHÔNG phải canonical
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert_eq!(r.outcome, FileOutcome::Activated, "{:?}", r.outcome);
+    assert_eq!(r.replaced[0].path, alias.to_str().unwrap(), "sổ ghi URL đã đăng ký");
+    assert!(svc.engine().registrations().iter().all(|(p, _)| p != &alias && p != &foreign));
+    assert_eq!(svc.restore_replaced(&env.store, r.replaced[0].id).unwrap(), RestoreOutcome::Restored);
+    assert_eq!(svc.engine().registrations(), vec![(alias, Scope::Persistent)], "về đúng URL đã đăng ký");
+}
+
+#[test]
+fn d_a_failed_ours_gives_back_to_the_registered_url() {
+    let (env, svc, k, foreign) = setup("Cho khac/dup.ttf", FakeEngine::new());
+    let alias = env.dir.path().join("alias.ttf");
+    std::os::unix::fs::symlink(&foreign, &alias).unwrap();
+    svc.engine().set_names_for(&alias, &[PS]);
+    svc.engine().register(&alias, Scope::Session).unwrap();
+    svc.engine().fail_next_register(EngineError::Rejected { code: 7, message: "từ chối".into() });
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { .. }));
+    assert_eq!(svc.engine().registrations(), vec![(alias, Scope::Session)]);
+}
+
+#[test]
+fn e_restore_that_cannot_turn_ours_off_is_an_error_and_stays_unrestored() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    let ours = canon(&env.dir.path().join("extra/a.ttf"));
+    svc.engine().fail_unregister_of(&ours);
+    assert!(svc.restore_replaced(&env.store, r.replaced[0].id).is_err());
+    assert_eq!(jrows(&env).len(), 1, "chưa khôi phục: giữ sổ");
+    assert_eq!(svc.engine().registrations(), vec![(ours, Scope::Session)], "phần bản cũ vừa đăng ký được gỡ lại");
+}
+
+#[test]
+fn f_network_library_fonts_are_protected() {
+    let home = Path::new("/Users/u");
+    assert!(fontatlas_activate::in_protected_font_dir(Path::new("/Network/Library/Fonts/Shared.otf"), home));
+    assert_eq!(replace_tier(Owner::Other, Path::new("/Network/Library/Fonts/Shared.otf"), home), ReplaceTier::Protected);
 }

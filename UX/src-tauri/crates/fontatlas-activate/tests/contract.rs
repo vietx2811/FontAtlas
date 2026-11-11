@@ -31,6 +31,7 @@ fn result(i: u8, outcome: FileOutcome) -> FileResult {
         extra_faces: if i == 1 { vec![1, 2] } else { vec![] },
         outcome,
         replaced: vec![],
+            warning: None,
     }
 }
 
