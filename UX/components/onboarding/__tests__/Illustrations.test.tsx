@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ILLUSTRATED_STEPS, LEGEND, Illustration } from '../Illustrations';
+import { ILLUSTRATED_STEPS, Illustration } from '../Illustrations';
 import { CAP_HEIGHT, GLYPHS, UPM, X_HEIGHT } from '../glyphOutlines';
 
 const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u;
@@ -52,20 +52,21 @@ describe('onboarding illustrations (blueprint lab)', () => {
     expect(container.querySelector('[data-glyph="Ặ"]')).toBeTruthy();
   });
 
-  it('every numbered callout has a legend entry with a TermTip name, in order', () => {
+  it('o1 has short labels beside the guides (term names with a TermTip), and NO long legend block', () => {
     const { container } = render(<Illustration step="o1" />);
-    const nums = [...container.querySelectorAll('[data-callout]')].map(e => Number(e.getAttribute('data-callout')));
-    expect(nums).toEqual([1, 2, 3, 4]);
-    const names = [...container.querySelectorAll('.fa-legend .name')].map(e => e.textContent);
-    expect(names.every(Boolean)).toBe(true);
-    expect(names).toHaveLength(LEGEND.o1!.length);
-    for (const n of container.querySelectorAll('.fa-legend .name')) expect(n.getAttribute('tabindex')).toBe('0');
+    const terms = [...container.querySelectorAll('[data-callout]')].map(e => e.getAttribute('data-callout'));
+    expect(terms).toEqual(['cap_height', 'x_height', 'baseline', 'vi_marks']);
+    const labels = [...container.querySelectorAll('.bp-label')].map(e => e.textContent);
+    expect(labels.every(l => !!l && l.length <= 24)).toBe(true);
+    expect(container.querySelector('.fa-legend')).toBeNull();
+    expect(container.querySelector('.gloss')).toBeNull();
+    for (const l of container.querySelectorAll('.bp-label')) expect(l.getAttribute('tabindex')).toBe('0');
   });
 
-  it('activation has its callout 1 on the switch', () => {
+  it('no step shows a legend; activation has its label on the switch', () => {
+    for (const s of ILLUSTRATED_STEPS) expect(render(<Illustration step={s} />).container.querySelector('.fa-legend')).toBeNull();
     const { container } = render(<Illustration step="o7" />);
-    expect([...container.querySelectorAll('[data-callout]')].map(e => e.getAttribute('data-callout'))).toEqual(['1']);
-    expect(container.querySelectorAll('.fa-legend li')).toHaveLength(LEGEND.o7!.length);
+    expect([...container.querySelectorAll('[data-callout]')].map(e => e.getAttribute('data-callout'))).toEqual(['activate']);
   });
 
   it('each step has a different picture', () => {

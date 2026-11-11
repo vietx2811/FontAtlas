@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GLYPHS, UPM } from './glyphOutlines';
+import { TERM_NAMES, TermTip, termKey } from '../ui/terms';
 import './blueprint.css';
 
 export const VB_W = 480;
@@ -71,14 +72,14 @@ export function Guide({ y, x1 = 36, x2 = 444, name, at = 0, tone = 'dash' }: { y
   return <path data-guide={name} data-y={y} d={`M${x1} ${y}H${x2}`} pathLength={1} className={`bp-guide ${tone}`} style={delay(at)} />;
 }
 
-/** Số trong vòng tròn nối bằng đường dẫn tới điểm cần chú thích; legend HTML bên dưới giải thích số đó. */
-export function Callout({ n, px, py, cx, cy, at = 0 }: { n: number; px: number; py: number; cx: number; cy: number; at?: number }): React.JSX.Element {
+/** Nhãn ngắn ngay cạnh vạch: chấm ở điểm cần chỉ, đường dẫn tới nhãn tên thuật ngữ. Rê chuột vào nhãn → TermTip (không có khối giải thích dài trên hình). */
+export function Callout({ term, px, py, cx, cy, at = 0 }: { term: string; px: number; py: number; cx: number; cy: number; at?: number }): React.JSX.Element {
+  const key = termKey(term);
   return (
-    <g className="bp-callout" data-callout={n} style={delay(at)}>
-      <line x1={px} y1={py} x2={cx} y2={cy} className="bp-lead" />
+    <g className="bp-callout" data-callout={key} style={delay(at)}>
+      <path d={`M${px} ${py}L${cx} ${cy}`} className="bp-lead" />
       <circle cx={px} cy={py} r="2.4" className="bp-dot" />
-      <circle cx={cx} cy={cy} r="9" className="bp-bubble" />
-      <text x={cx} y={cy + 3.6} textAnchor="middle" className="bp-num">{n}</text>
+      <TermTip term={key}><text x={cx + 4} y={cy - 3} className="bp-label" tabIndex={0}>{TERM_NAMES[key] ?? key}</text></TermTip>
     </g>
   );
 }

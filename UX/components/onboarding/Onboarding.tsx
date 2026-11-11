@@ -123,7 +123,7 @@ function O1({ api, next, finish }: Ctx) {
   return (
     <>
       <h1>Chào mừng đến với Font Atlas</h1>
-      <p>Phân tích giải phẫu font, tìm font tương tự và ghép cặp có giải thích theo từng trục.</p>
+      <p>Phân tích giải phẫu font, tìm font tương tự, ghép cặp có giải thích.</p>
       <fieldset className="fa-onb-field"><legend>Ngôn ngữ</legend>
         {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, label]) => (
           <label key={v}><input type="radio" name="lang" checked={lang === v} onChange={() => { chooseLocale(v); void api.setSettings({ uiLang: v }); }} />{label}</label>))}

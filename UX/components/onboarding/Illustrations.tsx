@@ -2,19 +2,12 @@
 // Bước quét (o4) có hình riêng trong ScanBlocks; ở đây o4 chỉ chừa khung (slot) để ScanBlocks gắn vào qua portal.
 import type { ReactNode } from 'react';
 import { t, type I18nKey } from '../../i18n';
-import { TERM_NAMES, TermTip, termGloss, termKey } from '../ui/terms';
 import type { Step } from '../../store/onboarding';
 import { CAP_HEIGHT, GLYPHS, UPM, X_HEIGHT } from './glyphOutlines';
 import { Callout, Dimension, GlyphArt, Guide, Readout, Sheet, VB_SQ, VB_W, circlePath, delay, glyphWidth } from './blueprint';
 
 export const ILLUSTRATED_STEPS = ['o1', 'o2', 'o3', 'o5', 'o6', 'o7', 'end'] as const;
 type S = typeof ILLUSTRATED_STEPS[number];
-
-/** Thuật ngữ mà số callout của từng bước trỏ tới (theo thứ tự số 1, 2, 3…). Giải thích nằm ở TermTip và ở legend. */
-export const LEGEND: Partial<Record<S, readonly string[]>> = {
-  o1: ['cap_height', 'x_height', 'baseline', 'vi_marks'],
-  o7: ['activate'],
-};
 
 const em = (units: number, size: number) => (units * size) / UPM;
 
@@ -32,12 +25,12 @@ function Welcome(): React.JSX.Element {
       <Dimension x={150} y1={cap} y2={base} at={1000} />
       <Dimension x={124} y1={xh} y2={base} at={1100} />
       <GlyphArt ch="Ặ" x={x} y={base} size={size} at={700} fillAt={1700} />
-      <Callout n={1} px={apex} py={cap} cx={380} cy={cap} at={1400} />
-      <Callout n={2} px={x + em(449, size)} py={xh} cx={380} cy={xh} at={1520} />
-      <Callout n={3} px={x + em(51, size)} py={base} cx={380} cy={base} at={1640} />
-      <Callout n={4} px={apex} py={(top + cap) / 2 - 2} cx={380} cy={top + 6} at={1760} />
-      <Readout x={396} y={cap + 3.5} to={CAP_HEIGHT / UPM} at={1000} />
-      <Readout x={396} y={xh + 3.5} to={X_HEIGHT / UPM} at={1100} />
+      <Callout term="cap_height" px={apex} py={cap} cx={336} cy={cap} at={1400} />
+      <Callout term="x_height" px={x + em(449, size)} py={xh} cx={336} cy={xh} at={1520} />
+      <Callout term="baseline" px={x + em(51, size)} py={base} cx={336} cy={base} at={1640} />
+      <Callout term="vi_marks" px={apex} py={(top + cap) / 2 - 2} cx={336} cy={top + 6} at={1760} />
+      <Readout x={340} y={cap + 10} to={CAP_HEIGHT / UPM} at={1000} />
+      <Readout x={340} y={xh + 10} to={X_HEIGHT / UPM} at={1100} />
       </Sheet>
     </>
   );
@@ -133,7 +126,7 @@ function Activate(): React.JSX.Element {
       <Sheet fig="FIG.07 · PROTOTYPE" h={VB_SQ}>
       <rect x="48" y="130" width="112" height="112" rx="6" className="bp-frame-box" style={delay(150)} />
       <GlyphArt ch="ă" x={104 - w / 2} y={206} size={size} at={400} fillAt={1100} className="src" />
-      <Callout n={1} px={150} py={77} cx={196} cy={46} at={1200} />
+      <Callout term="activate" px={150} py={77} cx={176} cy={46} at={1200} />
       <g className="bp-switch" style={delay(1000)}><rect x="86" y="62" width="64" height="30" rx="15" className="bp-pill" /><circle cx="101" cy="77" r="11" className="bp-knob" /></g>
       <path d="M168 186H236" className="bp-flow dash" pathLength={1} style={delay(1400)} />
       <g className="bp-window" style={delay(1500)}>
@@ -166,34 +159,15 @@ function Done(): React.JSX.Element {
 
 const ART: Record<S, () => React.JSX.Element> = { o1: Welcome, o2: Legacy, o3: Tray, o5: Seal, o6: Embedding, o7: Activate, end: Done };
 
-function Legend({ terms }: { terms: readonly string[] }): React.JSX.Element {
-  return (
-    <ol className="fa-legend" aria-label={t('onb.legend')}>
-      {terms.map((term, i) => {
-        const key = termKey(term);
-        return (
-          <li key={key}>
-            <b aria-hidden>{i + 1}</b>
-            <TermTip term={key}><span className="name" tabIndex={0}>{TERM_NAMES[key] ?? key}</span></TermTip>
-            <span className="gloss">{termGloss(key)}</span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 /** Khung hình (stage) của một bước. `slotRef` chỉ dùng ở o4: nơi ScanBlocks gắn hình quét vào. */
 export function Illustration({ step, slotRef }: { step: Step | S; slotRef?: (el: HTMLDivElement | null) => void }): React.JSX.Element | null {
   if (step === 'o4') return <figure className="fa-stage" data-step="o4"><div className="fa-stage-slot" ref={slotRef} /></figure>;
   const Art = (ART as Record<string, (() => React.JSX.Element) | undefined>)[step];
   if (!Art) return null;
-  const terms = LEGEND[step as S];
   const node: ReactNode = <Art />;
   return (
     <figure className="fa-stage" data-step={step}>
       <svg className="fa-bp" role="img" aria-label={t(`onb.art.${step}` as I18nKey)} viewBox={`0 0 ${VB_W} ${VB_SQ}`} preserveAspectRatio="xMidYMid meet">{node}</svg>
-      {terms && <Legend terms={terms} />}
     </figure>
   );
 }

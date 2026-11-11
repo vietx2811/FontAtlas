@@ -15,5 +15,6 @@ for theme in dark light; do
   shot "$theme-tips" "ob=end&tips=1" $s 1280 800
   shot "$theme-splash" "splash=hold" $s 1280 800
   shot "$theme-narrow-o1" "ob=o1" $s 720 900
+  shot "$theme-wide-o1" "ob=o1" $s 1440 900
 done
 rm -rf "$PROFILE"
