@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import type { AutoStatusDto } from '../../../api';
@@ -141,8 +141,6 @@ describe('Settings → Bật font tự động', () => {
 
   it('polls so an app starting or quitting shows up without reopening the page', async () => {
     const api = createMockApi({ auto: { installed: ['illustrator'] } });
-    const { createMockAuto } = await import('../../../api/mockAuto');
-    void createMockAuto;
     const spy = vi.spyOn(api, 'autoStatus');
     await mount(api, 30);
     await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThan(2), { timeout: 3000 });
@@ -161,5 +159,146 @@ describe('Settings → Bật font tự động', () => {
     expect(targetOf('incopy')).toBe('indesign'); expect(targetOf('photoshop')).toBeNull();
     expect(whenText(Date.now() - 10_000)).toBe('vừa xong');
     await act(async () => {});
+  });
+
+  describe('review fixes', () => {
+    it('a poll that started BEFORE an install and answers after it must not overwrite the new state (no flicker)', async () => {
+      const api = createMockApi();
+      const real = api.autoStatus.bind(api);
+      let release!: () => void; let stale = true;
+      vi.spyOn(api, 'autoStatus').mockImplementation(async () => {
+        const before = await real(); // trạng thái CŨ (chưa cài)
+        if (stale) { stale = false; await new Promise<void>(r => (release = r)); }
+        return before;
+      });
+      await act(async () => { render(<AutoActivation api={api} pollMs={60_000} />); });
+      // lần đọc đầu đang treo; bấm Cài trong lúc đó không thể (chưa có hàng) → dùng công tắc làm lệnh thay đổi
+      await act(async () => { release?.(); });
+      await screen.findAllByTestId('auto-app');
+      expect(within(row('illustrator')).getByTestId('auto-state').textContent).toBe('Chưa cài');
+      let slow!: () => void; stale = true;
+      const poll = vi.spyOn(api, 'autoStatus').mockImplementation(async () => { const s = await real(); await new Promise<void>(r => (slow = r)); return s; });
+      window.dispatchEvent(new Event('focus')); // bắt đầu một lần đọc chậm với trạng thái cũ
+      await act(async () => {});
+      poll.mockRestore();
+      fireEvent.click(within(row('illustrator')).getByTestId('auto-install'));
+      fireEvent.click(screen.getByTestId('auto-confirm'));
+      await waitFor(() => expect(within(row('illustrator')).getByTestId('auto-state').textContent).toBe('Sẵn sàng'));
+      await act(async () => { slow?.(); });
+      await new Promise(r => setTimeout(r, 20));
+      expect(within(row('illustrator')).getByTestId('auto-state').textContent).toBe('Sẵn sàng'); // không bị đè về "Chưa cài"
+    });
+
+    it('does not stack requests: ticks are skipped while one is in flight; polling stops on unmount', async () => {
+      const api = createMockApi();
+      let calls = 0; let finish!: () => void;
+      const real = api.autoStatus.bind(api);
+      vi.spyOn(api, 'autoStatus').mockImplementation(async () => { calls++; const s = await real(); await new Promise<void>(r => (finish = r)); return s; });
+      const { unmount } = render(<AutoActivation api={api} pollMs={10} />);
+      await new Promise(r => setTimeout(r, 120));
+      expect(calls).toBe(1); // nhiều nhịp trôi qua nhưng chỉ một request bay
+      await act(async () => { finish(); });
+      unmount();
+      const after = calls;
+      await new Promise(r => setTimeout(r, 80));
+      expect(calls).toBe(after);
+    });
+
+    it('coming back to the window (focus / becoming visible) reloads immediately', async () => {
+      const api = createMockApi(); const spy = vi.spyOn(api, 'autoStatus');
+      await mount(api, 60_000);
+      const n = spy.mock.calls.length;
+      window.dispatchEvent(new Event('focus'));
+      await waitFor(() => expect(spy.mock.calls.length).toBe(n + 1));
+      document.dispatchEvent(new Event('visibilitychange'));
+      await waitFor(() => expect(spy.mock.calls.length).toBe(n + 2));
+    });
+
+    it('an unknown backend outcome shows its original string, never a raw i18n key', async () => {
+      const api = createMockApi();
+      const { createMockAuto } = await import('../../../api/mockAuto');
+      const auto = createMockAuto();
+      auto.__push({ atMs: BigInt(Date.now() - 1000), app: 'photoshop', doc: null, requested: 'Inter', outcome: 'quarantined', hashHex: null });
+      Object.assign(api, auto);
+      await mount(api);
+      const cell = screen.getByTestId('auto-log').querySelector('tbody tr td:last-child')!;
+      expect(cell.textContent).toBe('quarantined');
+      expect(cell.textContent).not.toMatch(/auto\./);
+    });
+
+    it('after Xác nhận focus lands on the app row (Gỡ appears / Cài goes), a polite live region announces it, and a double click runs once', async () => {
+      const api = createMockApi(); const install = vi.spyOn(api, 'autoInstall');
+      await mount(api);
+      fireEvent.click(within(row('illustrator')).getByTestId('auto-install'));
+      const confirm = screen.getByTestId('auto-confirm');
+      fireEvent.click(confirm); fireEvent.click(confirm);
+      await waitFor(() => expect(screen.getByTestId('auto-live').textContent).toBe('Đã cài cho Illustrator'));
+      expect(install).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('auto-live').getAttribute('aria-live')).toBe('polite');
+      await act(async () => { await new Promise(r => requestAnimationFrame(() => r(null))); });
+      expect(row('illustrator').contains(document.activeElement)).toBe(true);
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('while busy the buttons are aria-disabled with a reason in aria-describedby ("Đang xử lý…"), not removed from the tab order', async () => {
+      const api = createMockApi();
+      let go!: () => void; const real = api.autoInstall.bind(api);
+      vi.spyOn(api, 'autoInstall').mockImplementation(async t => { await new Promise<void>(r => (go = r)); return real(t); });
+      await mount(api);
+      fireEvent.click(within(row('indesign')).getByTestId('auto-install'));
+      fireEvent.click(screen.getByTestId('auto-confirm'));
+      const btn = await waitFor(() => { const b = within(row('illustrator')).getByTestId('auto-install'); expect(b.getAttribute('aria-disabled')).toBe('true'); return b; });
+      const why = document.getElementById(btn.getAttribute('aria-describedby')!);
+      expect(why?.textContent).toBe('Đang xử lý…');
+      expect(btn.hasAttribute('disabled')).toBe(false);
+      await act(async () => { go(); });
+      await waitFor(() => expect(within(row('illustrator')).getByTestId('auto-install').getAttribute('aria-disabled')).toBeNull());
+    });
+
+    it('a foreign file explains itself to assistive tech (aria-describedby) as well as in the tooltip', async () => {
+      const api = createMockApi(); const base = await api.autoStatus();
+      vi.spyOn(api, 'autoStatus').mockResolvedValue({ ...base, apps: base.apps.map(a => (a.id === 'illustrator' ? { ...a, state: 'foreign' as const } : a)) });
+      await mount(api);
+      const btn = within(row('illustrator')).getByTestId('auto-install');
+      expect(document.getElementById(btn.getAttribute('aria-describedby')!)?.textContent).toMatch(/không ghi đè/);
+    });
+
+    it('"Sẵn sàng" is neutral (not green) while the app was never tested; green when measured', async () => {
+      await mount(createMockApi());
+      expect(row('photoshop').querySelector('.fa-auto-state')!.getAttribute('data-tone')).toBe('ok');   // measured
+      expect(row('aftereffects').querySelector('.fa-auto-state')!.getAttribute('data-tone')).toBe('idle'); // untested
+    });
+
+    it('the log is a captioned table with <time dateTime>; the error alert does not wrap the retry button', async () => {
+      const api = createMockApi();
+      const { createMockAuto } = await import('../../../api/mockAuto');
+      const auto = createMockAuto(); auto.__push({ atMs: BigInt(1_700_000_000_000), app: 'photoshop', doc: null, requested: 'Inter', outcome: 'activated', hashHex: null });
+      Object.assign(api, auto);
+      await mount(api);
+      const table = screen.getByTestId('auto-log');
+      expect(table.getAttribute('aria-label')).toBe('Nhật ký gần đây'); expect(table.querySelector('caption')).toBeTruthy();
+      expect(table.querySelector('time')!.getAttribute('datetime')).toBe(new Date(1_700_000_000_000).toISOString());
+      cleanup();
+      const bad = createMockApi(); vi.spyOn(bad, 'autoStatus').mockRejectedValue(new Error('x'));
+      render(<AutoActivation api={bad} pollMs={60_000} />);
+      const box = await screen.findByTestId('auto-error');
+      expect(within(box).getByRole('alert').querySelector('button')).toBeNull();
+      expect(within(box).getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    });
+
+    it('Esc closes the confirm dialog without calling the API; waiting_first_launch / stale / error are rendered with their text', async () => {
+      const api = createMockApi(); const install = vi.spyOn(api, 'autoInstall'); const base = await api.autoStatus();
+      vi.spyOn(api, 'autoStatus').mockResolvedValue({ ...base, apps: base.apps.map(a => (a.id === 'indesign' ? { ...a, state: 'waiting_first_launch' as const } : a.id === 'illustrator' ? { ...a, state: 'stale' as const, installed: true, detail: 'khác phiên bản app' } : a.id === 'incopy' ? { ...a, state: 'error' as const, detail: 'không thấy thư mục Adobe' } : a)) });
+      await mount(api);
+      expect(within(row('indesign')).getByTestId('auto-state').textContent).toBe('Mở InDesign một lần rồi quay lại');
+      expect(within(row('illustrator')).getByTestId('auto-state').textContent).toBe('Cần cài lại');
+      expect(within(row('illustrator')).getByTestId('auto-install').textContent).toBe('Cài lại');
+      expect(within(row('incopy')).getByTestId('auto-state').textContent).toBe('Lỗi');
+      fireEvent.click(within(row('illustrator')).getByTestId('auto-install'));
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(install).not.toHaveBeenCalled();
+    });
   });
 });

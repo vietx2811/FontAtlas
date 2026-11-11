@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Api, AutoAppDto, AutoLogDto, AutoStatusDto, AutoTargetDto } from '../../api';
-import { t, type I18nKey } from '../../i18n';
+import { hasKey, t, type I18nKey } from '../../i18n';
 import { Modal } from '../Modal';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
-import { Tooltip } from '../ui/Tooltip';
 
 /** Trạng thái app đổi ngoài tầm nhìn của Font Atlas (app chạy/tắt) và không có sự kiện đẩy: đọc lại định kỳ khi trang đang mở. */
 export const AUTO_POLL_MS = 7000;
@@ -16,10 +15,10 @@ export const targetOf = (id: string): AutoTargetDto | null => (id === 'illustrat
 export function whenText(ms: number, now = Date.now()): string {
   const s = Math.round((now - ms) / 1000);
   if (s < 45) return t('auto.now');
-  const rtf = new Intl.RelativeTimeFormat('vi', { numeric: 'auto' });
+  const rtf = new Intl.RelativeTimeFormat(t('auto.locale'), { numeric: 'auto' });
   if (s < 3600) return rtf.format(-Math.round(s / 60), 'minute');
   if (s < 86400) return rtf.format(-Math.round(s / 3600), 'hour');
-  return new Date(ms).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(ms).toLocaleString(t('auto.locale'), { dateStyle: 'short', timeStyle: 'short' });
 }
 
 type Pending = { kind: 'install' | 'remove'; app: AutoAppDto };
@@ -30,9 +29,13 @@ function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p:
   const state = app.state;
   const foreign = state === 'foreign';
   const stateText = t(`auto.state.${state}` as I18nKey, { app: app.label });
-  const stateTone = state === 'ready' ? 'ok' : state === 'error' || state === 'foreign' || state === 'stale' ? 'warn' : 'idle';
+  // "Sẵn sàng" chỉ xanh khi đã đo với app thật; chưa kiểm thì trung tính để không hứa quá.
+  const stateTone = state === 'ready' ? (app.evidence === 'untested' ? 'idle' : 'ok') : state === 'error' || state === 'foreign' || state === 'stale' ? 'warn' : 'idle';
+  const why = foreign ? t('auto.foreign.tip') : busy ? t('auto.busy') : null; // lý do nút bị khoá: đọc được bằng bàn phím (aria-describedby)
+  const whyId = `auto-why-${app.id}`;
+  const installDisabled = foreign || busy;
   return (
-    <li className="fa-auto-app" data-testid="auto-app" data-app={app.id} data-state={state} data-missing={!app.appInstalled || undefined}>
+    <li className="fa-auto-app" tabIndex={-1} data-testid="auto-app" data-app={app.id} data-state={state} data-missing={!app.appInstalled || undefined}>
       <div className="fa-auto-name">
         <b>{app.label}</b>
         {app.appRunning && <small>{t('auto.running')}</small>}
@@ -54,10 +57,10 @@ function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p:
       <div className="fa-auto-actions">
         {app.installable && target && (
           <>
-            {foreign
-              ? <Tooltip label={t('auto.foreign.tip')}><button type="button" data-testid="auto-install" aria-disabled="true">{t('auto.install')}</button></Tooltip>
-              : <button type="button" data-testid="auto-install" disabled={busy} onClick={() => onAsk({ kind: 'install', app })}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button>}
-            {app.installed && <button type="button" data-testid="auto-remove" disabled={busy} onClick={() => onAsk({ kind: 'remove', app })}>{t('auto.remove')}</button>}
+            <button type="button" data-testid="auto-install" aria-disabled={installDisabled || undefined} aria-describedby={installDisabled && why ? whyId : undefined}
+              onClick={() => { if (!installDisabled) onAsk({ kind: 'install', app }); }}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button>
+            {app.installed && <button type="button" data-testid="auto-remove" aria-disabled={busy || undefined} aria-describedby={busy ? whyId : undefined} onClick={() => { if (!busy) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button>}
+            {why && <span id={whyId} className="fa-sr-only">{why}</span>}
           </>
         )}
       </div>
@@ -65,19 +68,25 @@ function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p:
   );
 }
 
+const outcomeText = (o: string): string => { const k = `auto.outcome.${o}`; return hasKey(k) ? t(k) : o; }; // outcome lạ của backend mới: hiện nguyên chuỗi gốc, không để lộ khoá
+
 function LogTable({ rows, appLabel }: { rows: AutoLogDto[]; appLabel(id: string): string }): React.JSX.Element {
   if (!rows.length) return <p className="fa-set-note" data-testid="auto-log-empty">{t('auto.log.empty')}</p>;
   return (
-    <table className="fa-auto-log" data-testid="auto-log">
+    <table className="fa-auto-log" data-testid="auto-log" aria-label={t('auto.log')}>
+      <caption className="fa-sr-only">{t('auto.log')}</caption>
       <thead><tr><th scope="col">{t('auto.log.when')}</th><th scope="col">{t('auto.log.app')}</th><th scope="col">{t('auto.log.font')}</th><th scope="col">{t('auto.log.result')}</th></tr></thead>
       <tbody>
-        {rows.map(r => (
-          <tr key={String(r.id)} data-outcome={r.outcome}>
-            <td>{whenText(Number(r.atMs))}</td>
-            <td>{appLabel(r.app)}</td>
-            <td>{r.requested}{r.doc && <small className="fa-auto-doc"> · {r.doc}</small>}</td>
-            <td>{(() => { const k = `auto.outcome.${r.outcome}`; try { return t(k as I18nKey); } catch { return r.outcome; } })()}{r.outcome === 'ambiguous' && <NoteMark inline kind="info" testId="auto-ambiguous" text={t('auto.outcome.ambiguous.tip')} />}</td>
-          </tr>))}
+        {rows.map(r => {
+          const at = Number(r.atMs);
+          return (
+            <tr key={String(r.id)} data-outcome={r.outcome}>
+              <td><time dateTime={new Date(at).toISOString()}>{whenText(at)}</time></td>
+              <td>{appLabel(r.app)}</td>
+              <td>{r.requested}{r.doc && <small className="fa-auto-doc"> · {r.doc}</small>}</td>
+              <td>{outcomeText(r.outcome)}{r.outcome === 'ambiguous' && <NoteMark inline kind="info" testId="auto-ambiguous" text={t('auto.outcome.ambiguous.tip')} />}</td>
+            </tr>);
+        })}
       </tbody>
     </table>
   );
@@ -92,45 +101,66 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
   const error = opError ?? loadError;
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [live, setLive] = useState('');
   const alive = useRef(true);
+  const seq = useRef(0); // mỗi lệnh thay đổi tăng seq: kết quả của lần đọc bắt đầu TRƯỚC đó bị bỏ (poll cũ không ghi đè trạng thái mới)
+  const inflight = useRef(false);
+  const running = useRef(false); // chống bấm đôi
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    if (!force && (inflight.current || running.current)) return; // không chồng request, không đọc giữa lúc đang cài/gỡ
+    inflight.current = true; const mine = seq.current;
     try {
       const [s, l] = await Promise.all([api.autoStatus(), api.autoLog(LOG_LIMIT)]);
-      if (alive.current) { setStatus(s); setLog(l); setLoadError(null); }
-    } catch (e) { if (alive.current) setLoadError(t('auto.loadFail', { msg: msg(e) })); }
+      if (alive.current && mine === seq.current) { setStatus(s); setLog(l); setLoadError(null); }
+    } catch (e) { if (alive.current && mine === seq.current) setLoadError(t('auto.loadFail', { msg: msg(e) })); }
+    finally { inflight.current = false; }
   }, [api]);
   useEffect(() => {
     void load();
     const id = setInterval(() => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') void load(); }, pollMs);
-    return () => clearInterval(id);
+    // Quay lại cửa sổ / tab: đọc ngay, đừng đợi nhịp kế (app có thể đã chạy hoặc tắt trong lúc vắng mặt).
+    const back = () => { if (document.visibilityState !== 'hidden') void load(); };
+    document.addEventListener('visibilitychange', back); window.addEventListener('focus', back);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', back); window.removeEventListener('focus', back); };
   }, [load, pollMs]);
 
+  const focusRow = (id: string) => requestAnimationFrame(() => {
+    const row = document.querySelector<HTMLElement>(`[data-testid=auto-app][data-app="${id}"]`);
+    (row?.querySelector<HTMLElement>('[data-testid=auto-install], [data-testid=auto-remove]') ?? row)?.focus();
+  });
   // Mọi lệnh trả trạng thái mới; lỗi thì báo và đọc lại (không tin trạng thái cũ).
-  const run = async (fn: () => Promise<AutoStatusDto>) => {
-    setBusy(true); setOpError(null);
-    try { const s = await fn(); if (alive.current) setStatus(s); void load(); }
-    catch (e) { if (alive.current) setOpError(t('auto.opFail', { msg: msg(e) })); void load(); }
-    finally { if (alive.current) setBusy(false); }
+  const run = async (fn: () => Promise<AutoStatusDto>, announce: string, focusApp?: string) => {
+    if (running.current) return;
+    running.current = true; seq.current++; setBusy(true); setOpError(null);
+    try { const s = await fn(); seq.current++; if (alive.current) { setStatus(s); setLive(announce); } }
+    catch (e) { seq.current++; if (alive.current) setOpError(t('auto.opFail', { msg: msg(e) })); }
+    finally { running.current = false; if (alive.current) setBusy(false); void load(true); if (focusApp) focusRow(focusApp); }
   };
   const label = (id: string) => status?.apps.find(a => a.id === id)?.label ?? id;
-  const running = status?.otherManagers.filter(m => m.running) ?? [];
+  const runningMgrs = status?.otherManagers.filter(m => m.running) ?? [];
 
   return (
     <div className="fa-auto" data-testid="auto-activation">
       <p className="fa-set-note">{t('auto.intro')} <TermTip term="auto_activation"><span data-term="auto_activation">Auto-activation</span></TermTip></p>
-      {error && <p role="alert" className="fa-set-note fa-auto-err" data-testid="auto-error">{error} <button type="button" onClick={() => { setOpError(null); void load(); }}>{t('auto.retry')}</button></p>}
+      <div role="status" aria-live="polite" className="fa-sr-only" data-testid="auto-live">{live}</div>
+      {error && (
+        <div className="fa-set-note fa-auto-err" data-testid="auto-error">
+          <p role="alert">{error}</p>
+          <button type="button" onClick={() => { setOpError(null); void load(true); }}>{t('auto.retry')}</button>
+        </div>
+      )}
       {status && (
         <>
           <div className="fa-set-row">
             <span>{t('auto.switch')}<small className="fa-auto-sub">{t('auto.switch.sub')}</small></span>
-            <button type="button" role="switch" className="fa-switch" data-testid="auto-switch" aria-checked={status.enabled} aria-label={t('auto.switch')} disabled={busy}
-              onClick={() => void run(() => api.autoSetEnabled(!status.enabled))} />
+            <button type="button" role="switch" className="fa-switch" data-testid="auto-switch" aria-checked={status.enabled} aria-label={t('auto.switch')} aria-disabled={busy || undefined}
+              onClick={() => { if (!busy) void run(() => api.autoSetEnabled(!status.enabled), t(status.enabled ? 'auto.live.off' : 'auto.live.on')); }} />
           </div>
-          {status.enabled && !status.brokerRunning && <p className="fa-set-note"><NoteMark inline kind="warn" text={t('auto.broker')} /> {t('auto.broker')}</p>}
-          {running.map(m => <p key={m.name} className="fa-set-note fa-auto-mgr" data-testid="auto-manager-warn"><NoteMark inline kind="warn" text={t('auto.managers.warn', { name: m.name })} /> {t('auto.managers.warn', { name: m.name })}</p>)}
+          {status.enabled && !status.brokerRunning && <p className="fa-set-note" data-testid="auto-broker-warn">{t('auto.broker')}</p>}
+          {runningMgrs.map(m => <p key={m.name} className="fa-set-note fa-auto-mgr" data-testid="auto-manager-warn"><NoteMark inline kind="warn" text={t('auto.managers.warn', { name: m.name })} /> {t('auto.managers.short', { name: m.name })}</p>)}
           <h3 className="fa-auto-h">{t('auto.apps')}</h3>
           <ul className="fa-auto-apps" aria-label={t('auto.apps')}>
             {status.apps.map(a => <AppRow key={a.id} app={a} busy={busy} onAsk={setPending} />)}
@@ -144,11 +174,14 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
         const title = kind === 'remove' ? t('auto.remove.title', { app: app.label }) : app.installed ? t('auto.reinstall.title', { app: app.label }) : t('auto.install.title', { app: app.label });
         const body = kind === 'remove' ? t('auto.remove.body', { app: app.label }) : t(`auto.install.body.${target}` as I18nKey);
         return (
-          <Modal title={title} onClose={() => setPending(null)}>
+          <Modal title={title} onClose={() => { setPending(null); focusRow(app.id); }}>
             <p>{body}</p>
             <div className="fa-modal-actions">
-              <button type="button" data-testid="auto-cancel" onClick={() => setPending(null)}>{t('auto.cancel')}</button>
-              <button type="button" className="primary" data-testid="auto-confirm" onClick={() => { setPending(null); void run(() => (kind === 'remove' ? api.autoRemove(target) : api.autoInstall(target))); }}>
+              <button type="button" data-testid="auto-cancel" onClick={() => { setPending(null); focusRow(app.id); }}>{t('auto.cancel')}</button>
+              <button type="button" className="primary" data-testid="auto-confirm" onClick={() => {
+                setPending(null);
+                void run(() => (kind === 'remove' ? api.autoRemove(target) : api.autoInstall(target)), t(kind === 'remove' ? 'auto.live.removed' : 'auto.live.installed', { app: app.label }), app.id);
+              }}>
                 {kind === 'remove' ? t('auto.remove') : app.installed ? t('auto.reinstall') : t('auto.install')}
               </button>
             </div>

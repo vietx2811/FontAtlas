@@ -22,5 +22,8 @@ export const AUTO_I18N = {
   'auto.log': 'Nhật ký gần đây', 'auto.log.empty': 'Chưa có app nào hỏi font.', 'auto.log.when': 'Thời điểm', 'auto.log.app': 'App', 'auto.log.font': 'Font', 'auto.log.result': 'Kết quả',
   'auto.outcome.activated': 'Đã bật', 'auto.outcome.missing': 'Không có trong thư viện', 'auto.outcome.conflict': 'Trùng tên với font khác', 'auto.outcome.unavailable': 'Không dùng được',
   'auto.outcome.not_downloaded': 'Font còn trên cloud', 'auto.outcome.failed': 'Lỗi', 'auto.outcome.ambiguous': 'Nhiều bản cùng tên', 'auto.outcome.ambiguous.tip': 'Có nhiều bản font cùng tên; Font Atlas đã chọn một bản theo thứ tự ưu tiên. Nếu app dùng sai bản, hãy tắt bản không muốn dùng.', 'auto.outcome.busy': 'Đang bận',
+  'auto.locale': 'vi-VN', 'auto.busy': 'Đang xử lý…',
+  'auto.live.on': 'Đã bật font tự động', 'auto.live.off': 'Đã tắt font tự động', 'auto.live.installed': 'Đã cài cho {app}', 'auto.live.removed': 'Đã gỡ khỏi {app}',
+  'auto.managers.short': '{name} đang chạy: có thể hiện hai hộp thoại.',
   'auto.broker': 'Dịch vụ nội bộ chưa chạy', 'auto.now': 'vừa xong',
 } as const;
