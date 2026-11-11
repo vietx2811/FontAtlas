@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
+import { loaderFor } from '../../detail/useFontFamily';
 import { useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
 import { ComboCompare } from '../ComboCompare';
@@ -60,14 +61,31 @@ describe('FontCompare (review fixes)', () => {
     expect(callsFor).toBe(1);
   });
 
-  it('a cloud-only face shows the cloud note instead of loading its font', async () => {
+  it('a cloud-only face goes through the shared loader (the cloud gate): skeleton + "đang tải" while loading, the font when ready, the cloud note when it fails', async () => {
     const api = createMockApi(); const fs = await faces(api, 2);
     const cloud = { ...fs[0], row: { ...fs[0].row, onCloudOnly: true } };
+    const loader = loaderFor(api);
+    const waiting: Array<(v: string | null) => void> = [];
+    const spy = vi.spyOn(loader, 'acquire').mockImplementation(row => (row.hashHex === cloud.face.hashHex ? new Promise<string | null>(r => waiting.push(r)) : Promise.resolve(null)));
+    mountFc(api, { suggestions: [cloud, fs[1]] });
+    await settle();
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ hashHex: cloud.face.hashHex }));
+    expect(screen.getAllByTestId('fc-cloud-loading')).toHaveLength(1);
+    expect(screen.queryByTestId('fc-cloud')).toBeNull();
+    await act(async () => { waiting.forEach(r => r('fa-x-0')); });
+    expect(screen.queryByTestId('fc-cloud-loading')).toBeNull();
+    expect(screen.queryByTestId('fc-cloud')).toBeNull(); // đã sẵn sàng: hiện chữ mẫu, không ghi chú
+  });
+
+  it('a cloud-only face whose load fails (gate off / timeout) shows the cloud note', async () => {
+    const api = createMockApi(); const fs = await faces(api, 2);
+    const cloud = { ...fs[0], row: { ...fs[0].row, onCloudOnly: true } };
+    vi.spyOn(loaderFor(api), 'acquire').mockResolvedValue(null);
     mountFc(api, { suggestions: [cloud, fs[1]] });
     await settle();
     expect(screen.getAllByTestId('fc-cloud')).toHaveLength(1);
-    expect(screen.getAllByTestId('fc-sample')).toHaveLength(1);
   });
+
 
   it('removing a column returns focus to the Desk root; pin keeps columns after sorting; columns have scope=col and the License row is localised', async () => {
     const api = createMockApi(); const fs = await faces(api, 3);
@@ -167,6 +185,7 @@ describe('ComboCompare cloud', () => {
       const r = await real(id, ids, lang);
       return { ...r, columns: r.columns.map(c => ({ ...c, combo: { ...c.combo, slots: c.combo.slots.map(sl => ({ ...sl, row: sl.row ? { ...sl.row, onCloudOnly: true } : sl.row })) } })) };
     });
+    vi.spyOn(loaderFor(api), 'acquire').mockResolvedValue(null);
     render(<ComboCompare api={api} caseId={res.case.id} currentId={res.comboId} onOpen={() => {}} onMain={() => {}} />); await settle();
     expect(screen.getAllByTestId('cc-cloud').length).toBeGreaterThan(0);
   });

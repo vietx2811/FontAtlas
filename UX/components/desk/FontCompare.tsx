@@ -5,7 +5,7 @@ import type { ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
-import { useFontFamily } from '../detail/useFontFamily';
+import { useFontStatus } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
@@ -44,10 +44,14 @@ function useFacesData(api: Api, faces: FaceKeyDto[]): { cache: Map<string, Compa
 }
 
 function Sample({ api, row, partner, role, pageMode }: { api: Api; row: FaceRowDto; partner: FaceRowDto | null; role: ComboRoleDto; pageMode: boolean }): React.JSX.Element {
-  // Font còn trên cloud: không nạp (đường nạp của Desk không qua cổng cloud) → ghi chú thay specimen.
-  const cloud = row.onCloudOnly; const pcloud = !!partner?.onCloudOnly;
-  const fam = useFontFamily(api, cloud ? null : row); const pfam = useFontFamily(api, pcloud ? null : partner);
-  if (cloud) return <div className="fa-cc-page" data-testid="fc-cloud"><NoteMark kind="info" inline text={t('cloud.note')} /> <span className="fa-cc-na">{t('fc.cloudOnly')}</span></div>;
+  // Font cloud đi qua cổng tải của backend (≤ 4, hạn chờ, theo công tắc): đang tải → skeleton + ghi chú; lỗi/tắt công tắc → ghi chú.
+  const own = useFontStatus(api, row); const other = useFontStatus(api, partner);
+  const fam = own.family; const pfam = other.family;
+  if (row.onCloudOnly && own.status !== 'ready') {
+    return own.status === 'loading'
+      ? <div className="fa-cc-page" data-testid="fc-cloud-loading" aria-busy="true"><span className="fa-cloud-skeleton" aria-hidden /><NoteMark kind="info" inline text={t('cloud.loading')} /></div>
+      : <div className="fa-cc-page" data-testid="fc-cloud"><NoteMark kind="warn" inline text={t('cloud.errFailed')} /> <span className="fa-cc-na">{t('fc.cloudOnly')}</span></div>;
+  }
   const css = (f: string | null, r: FaceRowDto | null) => ({ fontFamily: f ? `"${f}", var(--font-ui)` : undefined, fontWeight: r?.weightClass ?? undefined, fontStyle: r?.isItalic ? 'italic' as const : undefined });
   const heading = isHeadingLike(role);
   if (!pageMode) {

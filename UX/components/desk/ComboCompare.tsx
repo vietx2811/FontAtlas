@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Api } from '../../api';
 import type { CaseCompareDto, ComboColumnDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t } from '../../i18n';
-import { useFontFamily } from '../detail/useFontFamily';
+import { useFontStatus } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
@@ -16,13 +16,17 @@ const slotRow = (c: ComboDto, roles: readonly ComboRoleDto[]) => roles.map(r => 
 /** Trang thu nhỏ: tiêu đề bằng font nhóm heading, đoạn văn bằng font nhóm body của Combo. */
 function MiniPage({ api, combo }: { api: Api; combo: ComboDto }): React.JSX.Element {
   const head = slotRow(combo, ROLE_ORDER.filter(isHeadingLike)); const body = slotRow(combo, ['body', 'caption']);
-  // Font còn trên cloud không được nạp ở đây (đường nạp của Desk không qua cổng cloud): hiện ghi chú thay vì tải.
-  const hf = useFontFamily(api, head?.onCloudOnly ? null : head); const bf = useFontFamily(api, body?.onCloudOnly ? null : body);
-  const cloud = !!head?.onCloudOnly || !!body?.onCloudOnly;
+  // Font cloud đi qua cổng tải của backend: đang tải → ghi chú "đang tải"; lỗi/tắt công tắc → ghi chú cloud.
+  const hs = useFontStatus(api, head); const bs = useFontStatus(api, body);
+  const hf = hs.family; const bf = bs.family;
+  const cloudRows = [[head, hs], [body, bs]] as const;
+  const loading = cloudRows.some(([r, s]) => r?.onCloudOnly && s.status === 'loading');
+  const cloud = cloudRows.some(([r, s]) => r?.onCloudOnly && s.status === 'failed');
   const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
   return (
     <div className="fa-cc-page" data-testid="cc-page">
-      {cloud && <NoteMark kind="info" inline testId="cc-cloud" text={t('cloud.note')} />}
+      {loading && <NoteMark kind="info" inline testId="cc-cloud-loading" text={t('cloud.loading')} />}
+      {cloud && <NoteMark kind="warn" inline testId="cc-cloud" text={t('cloud.errFailed')} />}
       <div style={{ ...css(hf, head), fontSize: 20, lineHeight: 1.15 }}>{t('desk.pageHeading')}</div>
       <p style={{ ...css(bf, body), fontSize: 11, lineHeight: 1.5, margin: '6px 0 0' }}>{t('desk.pageBody').slice(0, 120)}</p>
     </div>
