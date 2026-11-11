@@ -10,6 +10,7 @@ pub mod boot;
 pub mod broker;
 pub mod cep;
 pub mod fontreq;
+pub mod indesign;
 pub mod brief;
 pub mod cloud;
 pub mod cases;

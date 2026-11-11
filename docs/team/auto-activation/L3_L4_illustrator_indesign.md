@@ -1,0 +1,35 @@
+# L3 + L4 — Illustrator (panel CEP) và InDesign/InCopy (startup script) (0.3.0)
+
+Nhánh `feat/auto-activation`. Crate `fontatlas-cep` (L3) và `fontatlas-indesign` (L4); dịch vụ app ở `services/cep.rs`, `services/indesign.rs` (lệnh Tauri cho Settings thuộc L5). Cả hai gọi broker HTTP của L1 (`POST /v1/ensure`, token trong `broker.json`).
+
+## L3 — Illustrator: panel CEP nền
+
+- **Chạy trong tiến trình Illustrator**: không Apple Events, không hộp Allow (spike 06-3). Panel ẩn (`AutoVisible=false`, `Type=Custom`) tự nạp lúc Illustrator khởi động; manifest theo mẫu của panel nền thật (Version 8.0, HostList trong `<Extension>`, `StartOn` đủ 4 sự kiện, `--mixed-context`).
+- `panel/jsx/host.jsx` `faFonts()`: với mỗi tài liệu mở, lấy `textFont.name` của các text frame và giữ font KHÔNG có trong `app.textFonts` (danh sách font đã cài). Không sửa tài liệu, không hộp thoại.
+- `panel/main.js`: nghe sự kiện tài liệu + poll 3 s dự phòng; mỗi tài liệu chỉ gửi lại khi tập font đổi; `POST /v1/ensure` (`app:"Adobe Illustrator"`); `busy`/`not_downloaded`/`failed` thì hỏi lại sau 5 s (tối đa 6 lần); có font bật được thì gọi `app.redraw()`. Font Atlas chưa chạy → không có `broker.json` → im lặng, lượt poll sau thử lại. Đọc `broker.json` mỗi lần (cổng + token đổi mỗi lần Font Atlas khởi động). Đường dẫn `broker.json` nằm trong `fontatlas.json` do bộ cài ghi vào gói (đã ký).
+- **Ký gói tự ký, không cần PlayerDebugMode (giả thuyết, xem "Chưa đo")**: máy này không có ZXPSignCmd (và tải về cần chủ máy đồng ý), nhưng có sẵn một panel nền thật (`Logi Plugin for Illustrator` trong `/Library/Application Support/Adobe/CEP/extensions`) ký bằng chứng chỉ TỰ KÝ, không timestamp, RSA-SHA1 trên C14N, digest manifest SHA-256. Ta tự viết bộ ký bằng Rust theo đúng định dạng đó. Đã đối chiếu: `tests/format.rs::canonical_manifest_reproduces_a_real_signed_panel` dựng lại DigestValue của manifest Logi **trùng từng byte**; `signature_verifies_with_openssl_the_way_adobe_would` verify chữ ký của ta bằng openssl như Adobe sẽ làm; sửa/đổi/thêm/bớt tệp, chứng chỉ khác, chữ ký hỏng đều bị phát hiện.
+- **Khoá**: sinh riêng cho từng máy lúc cài đầu tiên (RSA 2048, chứng chỉ tự ký 2024–2060), lưu `<data dir>/cep/signing.pem` (0600) + `signing.cert.der`; dùng lại cho các lần cài sau. Không có khoá bí mật nào trong repo hay trong app. Hệ quả: gói đã cài chỉ hợp lệ với khoá của máy đó; mất khoá thì `status` báo `Stale`, cài lại là xong.
+- **Cài / gỡ / trạng thái** (`PanelInstaller`): đích `~/Library/Application Support/Adobe/CEP/extensions/com.fontatlas.autoactivate`. Ghi vào thư mục tạm cùng cha rồi đổi tên (nguyên tử); không bao giờ đè/xoá thư mục cùng tên mà manifest không khai `ExtensionBundleId` của ta (`Foreign`). `status`: `NotInstalled | Installed{version} | Stale{reason} | Foreign`; `Stale` khi khác phiên bản app, `broker.json` chuyển chỗ, nội dung panel cũ, tệp bị sửa/thêm, hoặc chữ ký của khoá khác. `install` trả `restart_illustrator: true` (manifest chỉ đọc lúc khởi động).
+- Ví dụ chạy tay: `cargo run -p fontatlas-cep --example panel -- <install|remove|status> <state_dir> <broker.json> [extensions_dir]`.
+
+## L4 — InDesign / InCopy: startup script
+
+- `script/FontAtlas_Startup.jsx` (`#targetengine "fontatlas"`): nghe `afterOpen`, đọc `doc.fonts` với `Font.status`, font nào khác `INSTALLED` thì `POST /v1/ensure` qua `Socket` BINARY tới `127.0.0.1` (UTF-8 an toàn), đợi tối đa 12 s (Font Atlas có thể đang tải file đám mây ≤ 8 s). Không sửa tài liệu, không hộp thoại, lỗi thì im lặng. Chạy lại script thì gỡ listener cũ (targetengine bền).
+- Không cần ký, không Automation, không PlayerDebugMode (đã chạy trên InDesign 2026: spike 06-2 "Kết quả đêm 2026-11-11").
+- **Cài vào đâu** (`StartupInstaller`): `~/Library/Preferences/Adobe InDesign|InCopy/Version <N>.0/<locale>/Scripts/startup scripts/FontAtlas_Startup.jsx` cho MỌI phiên bản và locale ĐÃ có thư mục (app đã chạy ít nhất một lần). Không đoán locale cho bản chưa chạy: bản đó không có mục trong `targets()`, UI nên nói "mở InDesign một lần rồi cài lại". Máy này hiện có `Version 20.0` (rỗng), `21.0/en_US`, `22.0` (rỗng, InDesign 2027 chưa chạy xong lần đầu).
+- Nhận tệp của mình bằng dòng đầu `// FontAtlas startup script <ver>`; tệp cùng tên không phải của ta (`Foreign`) không bị đè hay xoá, và một nơi lỗi không chặn nơi khác. `status` theo từng nơi: `NotInstalled | Installed | Stale | Foreign` (so băm SHA-256 với script sẽ cài: khác phiên bản, khác đường dẫn `broker.json`, hoặc bị sửa → `Stale`).
+- Đường dẫn `broker.json` được ghi cứng vào script lúc cài (đúng thư mục dữ liệu thật của app, không phải `~/Library/Application Support/FontAtlas/` của spike); đổi thư mục dữ liệu → `Stale` → cài lại.
+- InDesign đọc startup script lúc khởi động: đang chạy thì phải khởi động lại.
+
+## Kiểm đã làm
+
+- `fontatlas-cep`: `tests/format.rs` (3), `tests/install.rs` (5: chu trình cài/trạng thái/gỡ, khoá 0600 và dùng lại, Stale các kiểu, không đụng thư mục lạ, thư mục tạm sót lại); clippy sạch.
+- `fontatlas-indesign`: `tests/install.rs` (6: tìm đúng phiên bản có locale, cài/trạng thái/gỡ, thoát ký tự đường dẫn, Stale, tệp lạ, không có Adobe); clippy sạch.
+
+## Chưa đo (cần Adobe thật chạy được; ghi trung thực)
+
+- **Illustrator nạp panel tự ký CỦA TA khi KHÔNG bật PlayerDebugMode?** Chưa thử. Cơ sở: key `PlayerDebugMode` không tồn tại trên máy này (`defaults read com.adobe.CSXS.12` chỉ có `LogLevel`) mà panel Logi (tự ký) nạp bình thường; định dạng chữ ký của ta trùng định dạng đó. Lần thử bị chặn: cài panel vào thư mục extensions của Adobe là "cài thường trú" và chủ máy chưa cho phép. Nếu hoá ra bắt buộc PlayerDebugMode: dừng, báo Lead trước khi đụng `defaults`.
+- Illustrator hiện trên máy là **2027 (31.0)**, không còn 2026 (30.7) như spike; có `CEPHtmlEngine` nhưng chưa xác nhận CEP 2027 nạp panel nền.
+- `faFonts()` với font thiếu ở Illustrator 2027: spike (30.7) thấy `textFont.name` giữ tên gốc; chưa kiểm ở 2027 và chưa kiểm rằng font thiếu KHÔNG nằm trong `app.textFonts`.
+- Sau khi Font Atlas bật font, tài liệu đang mở có hiển thị lại đúng không (`app.redraw()` có đủ không, hay phải mở lại tài liệu)? Hộp "Missing Fonts" của Adobe và hộp của RightFont (đang chạy ở máy chủ) hiện ngay lúc mở, trước khi panel kịp bật font: chưa biết Adobe có tự bỏ qua sau khi ta bật.
+- InDesign: `afterOpen` có chạy trước hộp Missing Fonts không; `Font.status`/tên gốc; Socket tới broker; InDesign có xoá "missing" sau khi bật session không. InDesign trên máy này kẹt ở màn hình trắng lúc khởi động (cả 2026 lẫn 2027 chưa vào được), nên chưa đo được gì ngoài việc script nạp được.
