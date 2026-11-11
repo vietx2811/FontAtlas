@@ -515,12 +515,14 @@ pub fn classify_v2(i: &ClassifyInput) -> Classification {
             let slab = c.subclass.as_deref() == Some("slab");
             if slab {
                 c.class = Class::Slab;
-                c.subclass = if named(&["clarendon"]) || (m.contrast.is_some_and(|x| x >= 1.5) && m.serif_foot.is_some_and(|f| f > 1.6)) {
+                // Hai tập (egyptian/humanist_slab) không tách được bằng số đo hiện có (contrast, stress, terminal trùng nhau: eval 04
+                // humanist_slab 0/4): chỉ gán subclass khi tên nói rõ; còn lại để trống thay vì đoán.
+                c.subclass = if named(&["clarendon"]) {
                     sub("clarendon")
-                } else if m.stress_abs.is_some_and(|x| x >= 7.0) {
-                    sub("humanist_slab")
-                } else {
+                } else if named(&["egyptian", "memphis", "rockwell"]) {
                     sub("egyptian")
+                } else {
+                    None
                 };
             } else if c.subclass.as_deref() == Some("humanist_oldstyle") {
                 c.subclass = sub(if m.stress_abs.is_some_and(|x| x >= 12.0) && m.contrast.is_some_and(|x| x < 2.6) { "garalde" } else { "venetian_oldstyle" });

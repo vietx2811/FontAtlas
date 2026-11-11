@@ -296,11 +296,14 @@ fn legacy_overrides_map_to_v2_without_losing_the_choice() {
 use fontatlas_core::classify::classify_v2;
 
 #[test]
-fn v2_slab_is_its_own_class_with_a_measured_subclass() {
-    // chân vuông rõ, contrast thấp, name có "slab" → Slab/egyptian
-    let i = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), ..Default::default() }, ..Default::default() };
+fn v2_slab_is_its_own_class_and_subclass_only_when_the_name_says_so() {
+    // chân vuông rõ, contrast thấp, name có "slab" → Slab, KHÔNG đoán subclass (egyptian/humanist_slab không tách được bằng số đo)
+    let m = Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), ..Default::default() };
+    let i = ClassifyInput { name: "acme slab regular".into(), m: m.clone(), ..Default::default() };
     let c = classify_v2(&i);
-    assert_eq!((c.class, c.subclass.as_deref()), (Class::Slab, Some("egyptian")), "{:?}", c.signals);
+    assert_eq!((c.class, c.subclass.as_deref()), (Class::Slab, None), "{:?}", c.signals);
+    let named = ClassifyInput { name: "acme clarendon slab regular".into(), m, ..Default::default() };
+    assert_eq!(classify_v2(&named).subclass.as_deref(), Some("clarendon"));
     // classify() cũ vẫn trả Serif/slab (không đổi hợp đồng v1)
     assert_eq!(classify(&i).class, Class::Serif);
 }
