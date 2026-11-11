@@ -33,7 +33,8 @@ q() { sqlite3 "file:$QA/data/user.db?mode=ro" "$1" 2>/dev/null || true; }
 # Tối đa 15 phút (máy bận chạy chậm hơn); kiểm mỗi 2 giây để dừng ngay khi script báo xong.
 for _ in $(seq 1 450); do
   sleep 2
-  case "$(q "select group_concat(value) from settings where key like 'ui.qa.%'")" in *'"done"'*|*'"error"'*|*onb-stuck*) break;; esac
+  # Dừng khi script ghi bước kết thúc. So TÊN BƯỚC (json_extract), không so chuỗi: chi tiết của bước thường có thể chứa chữ "error".
+  [ -n "$(q "select 1 from settings where key like 'ui.qa.%' and json_extract(value,'\$.step') in ('done','error','onb-stuck') limit 1")" ] && break
 done
 for t in "$QA"/data/snap-*.tiff; do [ -f "$t" ] && sips -s format png "$t" --out "${t%.tiff}.png" >/dev/null && rm "$t"; done
 echo "ảnh: $QA/data/snap-*.png"
@@ -41,7 +42,11 @@ for th in light dark; do b64="$(q "select value from settings where key like 'ui
 q "select value from settings where key like 'ui.qa.%' order by key" | python3 -c '
 import sys, json
 fail = 0
+seen = set()
 for line in sys.stdin:
     d = json.loads(line); fail += not d["ok"]
     print("OK  " if d["ok"] else "FAIL", "%4ss" % d.get("t", "?"), d["step"], "" if d["ok"] else json.dumps(d.get("detail"), ensure_ascii=False)[:600])
+    seen.add(d["step"])
+if "done" not in seen:
+    print("FAIL    ?s done (script không chạy tới bước cuối — QA dừng sớm, app treo hoặc hết 15 phút)"); fail += 1
 sys.exit(1 if fail else 0)'
