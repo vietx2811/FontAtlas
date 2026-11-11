@@ -21,9 +21,9 @@ export function whenText(ms: number, now = Date.now()): string {
   return new Date(ms).toLocaleString(t('auto.locale'), { dateStyle: 'short', timeStyle: 'short' });
 }
 
-type Pending = { kind: 'install' | 'remove'; app: AutoAppDto };
+type Pending = { kind: 'install' | 'remove'; app: AutoAppDto } | { kind: 'forget' };
 
-function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p: Pending): void }): React.JSX.Element {
+function AppRow({ app, busy, isolated, onAsk }: { app: AutoAppDto; busy: boolean; isolated: boolean; onAsk(p: Pending): void }): React.JSX.Element {
   const last = num(app.lastActivityMs);
   const target = targetOf(app.id);
   const state = app.state;
@@ -31,9 +31,10 @@ function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p:
   const stateText = t(`auto.state.${state}` as I18nKey, { app: app.label });
   // "Sẵn sàng" chỉ xanh khi đã đo với app thật; chưa kiểm thì trung tính để không hứa quá.
   const stateTone = state === 'ready' ? (app.evidence === 'untested' ? 'idle' : 'ok') : state === 'error' || state === 'foreign' || state === 'stale' ? 'warn' : 'idle';
-  const why = foreign ? t('auto.foreign.tip') : busy ? t('auto.busy') : null; // lý do nút bị khoá: đọc được bằng bàn phím (aria-describedby)
+  const why = isolated ? t('auto.isolatedBuild.why') : foreign ? t('auto.foreign.tip') : busy ? t('auto.busy') : null; // lý do nút bị khoá: đọc được bằng bàn phím (aria-describedby)
   const whyId = `auto-why-${app.id}`;
-  const installDisabled = foreign || busy;
+  const installDisabled = foreign || busy || isolated;
+  const removeDisabled = busy || isolated;
   return (
     <li className="fa-auto-app" tabIndex={-1} data-testid="auto-app" data-app={app.id} data-state={state} data-missing={!app.appInstalled || undefined}>
       <div className="fa-auto-name">
@@ -59,7 +60,7 @@ function AppRow({ app, busy, onAsk }: { app: AutoAppDto; busy: boolean; onAsk(p:
           <>
             <button type="button" data-testid="auto-install" aria-disabled={installDisabled || undefined} aria-describedby={installDisabled && why ? whyId : undefined}
               onClick={() => { if (!installDisabled) onAsk({ kind: 'install', app }); }}>{app.installed ? t('auto.reinstall') : t('auto.install')}</button>
-            {app.installed && <button type="button" data-testid="auto-remove" aria-disabled={busy || undefined} aria-describedby={busy ? whyId : undefined} onClick={() => { if (!busy) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button>}
+            {app.installed && <button type="button" data-testid="auto-remove" aria-disabled={removeDisabled || undefined} aria-describedby={removeDisabled && why ? whyId : undefined} onClick={() => { if (!removeDisabled) onAsk({ kind: 'remove', app }); }}>{t('auto.remove')}</button>}
             {why && <span id={whyId} className="fa-sr-only">{why}</span>}
           </>
         )}
@@ -140,6 +141,8 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
     finally { running.current = false; if (alive.current) setBusy(false); void load(true); if (focusApp) focusRow(focusApp); }
   };
   const label = (id: string) => status?.apps.find(a => a.id === id)?.label ?? id;
+  // Khoá ký riêng của máy: gỡ panel KHÔNG xoá khoá; chỉ cho xoá khi panel Illustrator đã gỡ (06).
+  const keyShown = !!status && status.signingKeyPresent && status.apps.find(a => a.id === 'illustrator')?.installed === false;
   const runningMgrs = status?.otherManagers.filter(m => m.running) ?? [];
 
   return (
@@ -159,17 +162,37 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
             <button type="button" role="switch" className="fa-switch" data-testid="auto-switch" aria-checked={status.enabled} aria-label={t('auto.switch')} aria-disabled={busy || undefined}
               onClick={() => { if (!busy) void run(() => api.autoSetEnabled(!status.enabled), t(status.enabled ? 'auto.live.off' : 'auto.live.on')); }} />
           </div>
+          {status.isolatedBuild && <p className="fa-set-note" data-testid="auto-isolated"><NoteMark inline kind="info" text={t('auto.isolatedBuild.why')} /> {t('auto.isolatedBuild.short')}</p>}
           {status.enabled && !status.brokerRunning && <p className="fa-set-note" data-testid="auto-broker-warn">{t('auto.broker')}</p>}
           {runningMgrs.map(m => <p key={m.name} className="fa-set-note fa-auto-mgr" data-testid="auto-manager-warn"><NoteMark inline kind="warn" text={t('auto.managers.warn', { name: m.name })} /> {t('auto.managers.short', { name: m.name })}</p>)}
           <h3 className="fa-auto-h">{t('auto.apps')}</h3>
           <ul className="fa-auto-apps" aria-label={t('auto.apps')}>
-            {status.apps.map(a => <AppRow key={a.id} app={a} busy={busy} onAsk={setPending} />)}
+            {status.apps.map(a => <AppRow key={a.id} app={a} busy={busy} isolated={status.isolatedBuild} onAsk={setPending} />)}
           </ul>
+          {keyShown && (
+            <div className="fa-set-note fa-auto-key" data-testid="auto-key">
+              <span>{t('auto.key.note')}</span>
+              <button type="button" data-testid="auto-forget" aria-disabled={busy || status.isolatedBuild || undefined} aria-describedby="auto-key-why"
+                onClick={() => { if (!busy && !status.isolatedBuild) setPending({ kind: 'forget' }); }}>{t('auto.key.forget')}</button>
+              {(busy || status.isolatedBuild) && <span id="auto-key-why" className="fa-sr-only">{status.isolatedBuild ? t('auto.isolatedBuild.why') : t('auto.busy')}</span>}
+            </div>
+          )}
           <h3 className="fa-auto-h">{t('auto.log')}</h3>
           <LogTable rows={log} appLabel={label} />
         </>
       )}
       {pending && (() => {
+        if (pending.kind === 'forget') {
+          return (
+            <Modal title={t('auto.key.title')} onClose={() => setPending(null)}>
+              <p>{t('auto.key.body')}</p>
+              <div className="fa-modal-actions">
+                <button type="button" data-testid="auto-cancel" onClick={() => setPending(null)}>{t('auto.cancel')}</button>
+                <button type="button" className="primary" data-testid="auto-confirm" onClick={() => { setPending(null); void run(() => api.autoForgetKey(), t('auto.live.keyForgotten')); }}>{t('auto.key.forget')}</button>
+              </div>
+            </Modal>
+          );
+        }
         const { kind, app } = pending; const target = targetOf(app.id)!;
         const title = kind === 'remove' ? t('auto.remove.title', { app: app.label }) : app.installed ? t('auto.reinstall.title', { app: app.label }) : t('auto.install.title', { app: app.label });
         const body = kind === 'remove' ? t('auto.remove.body', { app: app.label }) : t(`auto.install.body.${target}` as I18nKey);

@@ -25,5 +25,9 @@ export const AUTO_I18N = {
   'auto.locale': 'vi-VN', 'auto.busy': 'Đang xử lý…',
   'auto.live.on': 'Đã bật font tự động', 'auto.live.off': 'Đã tắt font tự động', 'auto.live.installed': 'Đã cài cho {app}', 'auto.live.removed': 'Đã gỡ khỏi {app}',
   'auto.managers.short': '{name} đang chạy: có thể hiện hai hộp thoại.',
+  'auto.key.note': 'Font Atlas giữ khoá ký riêng của máy này để cài lại panel Illustrator sau này. Gỡ panel không xoá khoá.', 'auto.key.forget': 'Xoá khoá ký',
+  'auto.key.title': 'Xoá khoá ký của Font Atlas?', 'auto.key.body': 'Khoá ký riêng của máy này sẽ bị xoá. Lần sau cài panel Illustrator, Font Atlas tạo khoá mới. Việc này không ảnh hưởng font hay thư viện của bạn.',
+  'auto.live.keyForgotten': 'Đã xoá khoá ký',
+  'auto.isolatedBuild.why': 'Bản chạy với thư mục dữ liệu riêng (QA/test): cài, gỡ và xoá khoá ký bị tắt.', 'auto.isolatedBuild.short': 'Bản dev: cài và gỡ bị tắt.',
   'auto.broker': 'Dịch vụ nội bộ chưa chạy', 'auto.now': 'vừa xong',
 } as const;

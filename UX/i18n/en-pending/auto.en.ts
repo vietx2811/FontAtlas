@@ -30,5 +30,9 @@ export const AUTO_EN = {
   'auto.outcome.ambiguous': 'Several fonts with that name', 'auto.outcome.ambiguous.tip': 'Several fonts share that name; Font Atlas picked one by priority. If the app used the wrong one, deactivate the one you do not want.',
   'auto.locale': 'en-US', 'auto.busy': 'Working…',
   'auto.live.on': 'Auto-activation turned on', 'auto.live.off': 'Auto-activation turned off', 'auto.live.installed': 'Installed for {app}', 'auto.live.removed': 'Removed from {app}',
+  'auto.key.note': 'Font Atlas keeps a signing key for this Mac so it can reinstall the Illustrator panel later. Removing the panel does not delete the key.', 'auto.key.forget': 'Delete signing key',
+  'auto.key.title': 'Delete the Font Atlas signing key?', 'auto.key.body': 'This Mac\'s signing key will be deleted. The next time you install the Illustrator panel, Font Atlas creates a new key. Your fonts and library are not affected.',
+  'auto.live.keyForgotten': 'Signing key deleted',
+  'auto.isolatedBuild.why': 'This build runs with a separate data folder (QA/test): install, remove and deleting the signing key are turned off.', 'auto.isolatedBuild.short': 'Dev build: install and remove are turned off.',
   'auto.broker': 'The internal service is not running', 'auto.now': 'just now',
 } as const;

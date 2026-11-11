@@ -301,4 +301,64 @@ describe('Settings → Bật font tự động', () => {
       expect(install).not.toHaveBeenCalled();
     });
   });
+
+  describe('signing key and isolated build (06 contract)', () => {
+    it('removing the Illustrator panel keeps the key: a note + "Xoá khoá ký" appear only once the panel is gone; confirm forgets it', async () => {
+      const api = createMockApi({ auto: { installed: ['illustrator'], keyPresent: true } });
+      const forget = vi.spyOn(api, 'autoForgetKey');
+      await mount(api);
+      expect(screen.queryByTestId('auto-key')).toBeNull(); // panel còn cài: chưa cho xoá khoá
+      fireEvent.click(within(row('illustrator')).getByTestId('auto-remove'));
+      fireEvent.click(screen.getByTestId('auto-confirm'));
+      const note = await screen.findByTestId('auto-key');
+      expect(note.textContent).toContain('Gỡ panel không xoá khoá');
+      fireEvent.click(within(note).getByTestId('auto-forget'));
+      expect(screen.getByRole('dialog').textContent).toMatch(/tạo khoá mới/);
+      fireEvent.click(screen.getByTestId('auto-cancel'));
+      expect(forget).not.toHaveBeenCalled();
+      fireEvent.click(within(note).getByTestId('auto-forget'));
+      fireEvent.click(screen.getByTestId('auto-confirm'));
+      await waitFor(() => expect(forget).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('auto-key')).toBeNull());
+      expect(screen.getByTestId('auto-live').textContent).toBe('Đã xoá khoá ký');
+    });
+
+    it('no key note when there is no key', async () => {
+      await mount(createMockApi({ auto: { keyPresent: false } }));
+      expect(screen.queryByTestId('auto-key')).toBeNull();
+    });
+
+    it('isolated build: Cài / Gỡ / Xoá khoá ký are aria-disabled with the reason (described by), do nothing when clicked, and a note says so', async () => {
+      const api = createMockApi({ auto: { isolated: true, keyPresent: true, installed: [] } });
+      const install = vi.spyOn(api, 'autoInstall');
+      await mount(api);
+      expect(screen.getByTestId('auto-isolated')).toBeTruthy();
+      const btn = within(row('illustrator')).getByTestId('auto-install');
+      expect(btn.getAttribute('aria-disabled')).toBe('true');
+      expect(document.getElementById(btn.getAttribute('aria-describedby')!)?.textContent).toMatch(/cài, gỡ và xoá khoá ký bị tắt/);
+      fireEvent.click(btn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(install).not.toHaveBeenCalled();
+      const forget = within(screen.getByTestId('auto-key')).getByTestId('auto-forget');
+      expect(forget.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(forget);
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('the mock refuses like the backend: forgetting while the panel is installed is an io error; isolated build refuses everything', async () => {
+      const a = createMockApi({ auto: { installed: ['illustrator'], keyPresent: true } });
+      await expect(a.autoForgetKey()).rejects.toMatchObject({ code: 'io' });
+      const b = createMockApi({ auto: { isolated: true } });
+      await expect(b.autoInstall('illustrator')).rejects.toMatchObject({ code: 'isolated_build' });
+    });
+
+    it('an ambiguous request keeps its "×N" count in the font column', async () => {
+      const api = createMockApi();
+      const { createMockAuto } = await import('../../../api/mockAuto');
+      const auto = createMockAuto(); auto.__push({ atMs: BigInt(Date.now() - 1000), app: 'indesign', doc: null, requested: 'Inter ×3', outcome: 'ambiguous', hashHex: null });
+      Object.assign(api, auto);
+      await mount(api);
+      expect(screen.getByTestId('auto-log').querySelector('tbody tr')!.textContent).toContain('Inter ×3');
+    });
+  });
 });
