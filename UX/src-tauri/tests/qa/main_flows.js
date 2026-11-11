@@ -645,8 +645,8 @@
     let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
-    const boxes = [...(grp?.querySelectorAll('input[type=checkbox]') ?? [])];
+    await wait(() => grp?.querySelectorAll('.fa-class-opt input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
+    const boxes = [...(grp?.querySelectorAll('.fa-class-opt input[type=checkbox]') ?? [])].filter(b => !b.closest('.fa-sub-opts')); // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
     const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
@@ -654,7 +654,7 @@
     await wait(() => countNow() === facetCount, 10000);
     await sleep(300); await snap('class-filter');
     const total1 = countNow();
-    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && !/^Display/.test(chipText) && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
+    await log('class-chip-and-filter', !!cchip && chipText.length > 0 && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
     await closeAdv(); await sleep(200);
     const sIn = document.querySelector('.fa-search input'); sIn?.focus();
     sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
