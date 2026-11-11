@@ -1,0 +1,3 @@
+fail tree=0c98a9561803bdf6510b86ea883c4ce0caa84cf1 qa=1
+2026-11-11T06:38:59Z vxmacmini 1299s
+npm-ci:ok:0 vite-build:ok:1 tsc:ok:3 vitest:ok:16 cargo-test:ok:727 bindings-drift:ok:0 clippy:ok:133 tauri-debug-build:ok:87 native-qa:fail:332
