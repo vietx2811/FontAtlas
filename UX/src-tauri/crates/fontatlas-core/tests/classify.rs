@@ -290,3 +290,49 @@ fn legacy_overrides_map_to_v2_without_losing_the_choice() {
         assert_eq!(migrate_legacy(&once.0, once.1.as_deref()), once);
     }
 }
+
+// --- classify_v2: tinh chỉnh sang 8 class + subclass mới ---
+
+use fontatlas_core::classify::classify_v2;
+
+#[test]
+fn v2_slab_is_its_own_class_with_a_measured_subclass() {
+    // chân vuông rõ, contrast thấp, name có "slab" → Slab/egyptian
+    let i = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), ..Default::default() }, ..Default::default() };
+    let c = classify_v2(&i);
+    assert_eq!((c.class, c.subclass.as_deref()), (Class::Slab, Some("egyptian")), "{:?}", c.signals);
+    // classify() cũ vẫn trả Serif/slab (không đổi hợp đồng v1)
+    assert_eq!(classify(&i).class, Class::Serif);
+}
+
+#[test]
+fn v2_unjoined_handwritten_script_becomes_handwriting() {
+    let i = ClassifyInput {
+        name: "acme hand regular".into(),
+        m: Metrics { slant_abs: Some(14.0), spacing: Some(0.03), connect: Some(0.1), bounce: Some(0.12), ..Default::default() },
+        ..Default::default()
+    };
+    let v1 = classify(&i);
+    let v2 = classify_v2(&i);
+    if v1.class == Class::Script && v1.subclass.as_deref() == Some("handwritten") {
+        assert_eq!(v2.class, Class::Handwriting, "{:?}", v2.signals);
+    }
+}
+
+#[test]
+fn v2_structural_name_makes_display_and_keeps_the_shape_class_secondary() {
+    let i = ClassifyInput { name: "acme stencil regular".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
+    let c = classify_v2(&i);
+    assert_eq!((c.class, c.subclass.as_deref()), (Class::Display, Some("stencil")));
+    assert!(c.confidence >= CONF_MIN, "{}", c.confidence);
+    assert_eq!(c.secondary.as_ref().map(|s| s.class), Some(Class::Sans), "{:?}", c.secondary);
+    // font không có dấu hiệu cấu trúc: không thành Display
+    assert_ne!(classify_v2(&synthetic("acme regular", 1.0, 1.0, 0.0)).class, Class::Display);
+}
+
+#[test]
+fn v2_does_not_change_plain_sans_and_serif() {
+    for (name, foot, flare, head, want) in [("acme sans", 1.0, 1.0, 0.0, Class::Sans), ("acme serif", 2.6, 2.6, 0.9, Class::Serif)] {
+        assert_eq!(classify_v2(&synthetic(name, foot, flare, head)).class, want, "{name}");
+    }
+}

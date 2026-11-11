@@ -141,8 +141,17 @@ pub struct Classification {
     /// Lớp tốt nhất máy đoán khi `class = Uncertain` vì độ tin cậy dưới `CONF_MIN` (để UI hiện "có lẽ là …").
     #[serde(default)]
     pub candidate: Option<Class>,
+    /// Taxonomy v2: class phụ (hybrid) chỉ để hiển thị/tìm kiếm; lọc/nhóm luôn theo `class`.
+    #[serde(default)]
+    pub secondary: Option<Secondary>,
     pub signals: Vec<Signal>,
     pub usage: Vec<Usage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Secondary {
+    pub class: Class,
+    pub subclass: Option<String>,
 }
 
 /// Đầu vào tối thiểu; dựng từ JSON đã lưu.
@@ -465,7 +474,86 @@ pub fn classify(i: &ClassifyInput) -> Classification {
     let subclass = if class == Class::Uncertain { None } else { subclass_of(class, i, &nm) };
     let traits = traits_of(i, &nm);
     let usage = usage_of(candidate.unwrap_or(class), i, &v, &traits);
-    Classification { class, subclass, confidence, candidate, traits, signals: v.list, usage }
+    Classification { class, subclass, confidence, candidate, secondary: None, traits, signals: v.list, usage }
+}
+
+/// Taxonomy v2: tinh chỉnh kết quả `classify` sang 8 class + subclass mới. Hàm thuần, cùng đầu vào JSON đã lưu.
+/// Các luật đã tune/kiểm trên `docs/team/eval/taxonomy_v2_labels.csv` (xem `docs/team/plans/2026-11-11-taxonomy-v2.md`).
+pub fn classify_v2(i: &ClassifyInput) -> Classification {
+    let nm = Nm::new(&i.name);
+    let mut c = classify(i);
+    let m = &i.m;
+    let named = |k: &[&str]| kw(&nm, k);
+    let has = |t: &str| c.traits.iter().any(|x| x == t);
+    let sub = |x: &str| Some(x.to_string());
+    // --- Display cấu trúc (stencil/inline/pixel): class chính là Display, hình dáng gốc thành class phụ
+    if c.class != Class::Symbol {
+        let structural = if has("stencil") {
+            Some("stencil")
+        } else if has("pixel") {
+            Some("pixel_bitmap")
+        } else if has("inline_outline") {
+            Some("inline_outline")
+        } else {
+            None
+        };
+        if let Some(sb) = structural {
+            // cấu trúc đọc từ tên (stencil/inline/pixel) là bằng chứng rõ dù hình dáng gốc chưa chắc
+            let base = c.candidate.take().unwrap_or(c.class);
+            let base_sub = c.subclass.clone();
+            if base != Class::Uncertain {
+                c.secondary = Some(Secondary { class: base, subclass: base_sub });
+            }
+            c.confidence = c.confidence.max(0.9);
+            c.class = Class::Display;
+            c.subclass = sub(sb);
+            return c;
+        }
+    }
+    match c.class {
+        Class::Serif => {
+            let slab = c.subclass.as_deref() == Some("slab");
+            if slab {
+                c.class = Class::Slab;
+                c.subclass = if named(&["clarendon"]) || (m.contrast.is_some_and(|x| x >= 1.5) && m.serif_foot.is_some_and(|f| f > 1.6)) {
+                    sub("clarendon")
+                } else if m.stress_abs.is_some_and(|x| x >= 7.0) {
+                    sub("humanist_slab")
+                } else {
+                    sub("egyptian")
+                };
+            } else if c.subclass.as_deref() == Some("humanist_oldstyle") {
+                c.subclass = sub(if m.stress_abs.is_some_and(|x| x >= 12.0) && m.contrast.is_some_and(|x| x < 2.6) { "garalde" } else { "venetian_oldstyle" });
+            }
+        }
+        Class::Script => {
+            let joined = m.connect.is_some_and(|x| x >= 0.5);
+            match c.subclass.as_deref() {
+                Some("handwritten") if !joined && !named(&["script"]) => {
+                    c.class = Class::Handwriting;
+                    c.subclass = sub(if named(&["marker", "brush"]) { "marker" } else { "casual_print" });
+                }
+                Some("handwritten") => c.subclass = sub(if m.slant_abs.is_some_and(|x| x < 5.0) { "upright_script" } else if m.contrast.is_some_and(|x| x < 1.3) { "monoline_script" } else { "brush" }),
+                Some("casual_brush") => c.subclass = sub("brush"),
+                Some("formal") => c.subclass = sub("formal_copperplate"),
+                _ => {}
+            }
+        }
+        Class::Sans => {
+            if has("rounded") {
+                c.subclass = sub("rounded");
+            }
+        }
+        Class::Mono => {
+            if named(&["courier", "typewriter"]) {
+                c.subclass = sub("typewriter");
+            } else if named(&["code", "coding", "console", "terminal"]) {
+                c.subclass = sub("coding");
+            }
+        }
+        _ => {}
+    }
+    c
 }
 
 /// Chọn class theo hình dáng: Symbol, Blackletter, Mono, Script cần đủ điểm; còn lại Serif/Sans. Display không phải class.

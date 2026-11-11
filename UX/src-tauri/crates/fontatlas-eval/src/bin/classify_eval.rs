@@ -285,8 +285,8 @@ fn predict_v2(file: &Path) -> Option<fontatlas_eval::taxonomy_v2::Pred> {
     let r = fontatlas_core::analyze_path(file).ok()?;
     let face = r.faces.first()?;
     let inp = ClassifyInput::from_json(&serde_json::to_value(&face.metadata).ok()?, &serde_json::to_value(&face.anatomy).ok()?);
-    let c = classify(&inp);
-    Some(fontatlas_eval::taxonomy_v2::map_old_classifier(c.class.snake(), c.subclass.as_deref(), &c.traits))
+    let c = fontatlas_core::classify::classify_v2(&inp);
+    Some(fontatlas_eval::taxonomy_v2::Pred { class: c.class.snake().to_string(), subclass: c.subclass.clone() })
 }
 
 /// Eval taxonomy v2: mặt Regular của từng họ trong bảng nhãn → ma trận nhầm lẫn class + subclass theo split.
