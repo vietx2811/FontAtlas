@@ -113,6 +113,7 @@ dependencies = [
  "fontatlas-core",
  "fontatlas-describe",
  "fontatlas-embed",
+ "fontatlas-fontreq",
  "fontatlas-index",
  "fontatlas-preview",
  "fontatlas-store",
@@ -1698,6 +1699,18 @@ dependencies = [
  "serde_json",
  "skrifa",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "fontatlas-fontreq"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "fontatlas-broker",
+ "fontatlas-core",
+ "libc",
+ "objc2-core-foundation",
+ "objc2-core-text",
 ]
 
 [[package]]

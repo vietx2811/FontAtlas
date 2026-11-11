@@ -1,0 +1,18 @@
+[package]
+name = "fontatlas-fontreq"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Nguồn font request của hệ thống (CoreText): Photoshop/After Effects/... hỏi font còn thiếu, ta trả file từ thư viện"
+
+[dependencies]
+fontatlas-broker = { path = "../fontatlas-broker" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+libc = "0.2"
+objc2-core-foundation = { version = "0.3", features = ["CFArray", "CFString", "CFDictionary", "CFRunLoop", "CFBase", "CFURL"] }
+objc2-core-text = { version = "0.3", features = ["CTFontManager", "CTFontDescriptor", "CTFont", "block2", "libc"] }
+
+[dev-dependencies]
+fontatlas-core = { path = "../fontatlas-core" }

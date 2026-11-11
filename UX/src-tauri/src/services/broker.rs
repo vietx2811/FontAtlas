@@ -9,7 +9,13 @@ use fontatlas_store::{AutoApp, FaceKey, Store};
 use crate::state::AppState;
 
 /// Giữ `Weak` để `AppState` → `Server` → backend → `AppState` không thành vòng giữ nhau.
-struct AppBackend(Weak<AppState>);
+pub(crate) struct AppBackend(Weak<AppState>);
+
+impl AppBackend {
+    pub(crate) fn new(state: &Arc<AppState>) -> Arc<Self> {
+        Arc::new(Self(Arc::downgrade(state)))
+    }
+}
 
 struct ViaApi<'a>(&'a AppState);
 
@@ -40,7 +46,7 @@ pub fn start(state: &Arc<AppState>) {
     if slot.is_some() {
         return;
     }
-    let backend = Arc::new(AppBackend(Arc::downgrade(state)));
+    let backend = AppBackend::new(state);
     match Server::start(ServerConfig::new(&state.dirs.data), backend) {
         Ok(srv) => {
             log::info!("activation broker nghe {}", srv.addr());

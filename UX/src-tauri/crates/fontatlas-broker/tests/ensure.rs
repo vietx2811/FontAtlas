@@ -208,3 +208,20 @@ fn setting_zero_disables() {
     b.store.lock().unwrap().set_setting(fontatlas_broker::SETTING_AUTO_ACTIVATION, "1").unwrap();
     assert!(b.enabled());
 }
+
+#[test]
+fn usable_results_carry_the_file_path_and_others_do_not() {
+    let (env, b) = backend(&[LIBRE]);
+    let r = b.ensure(&req("photoshop", vec![ps(LIBRE_PS), ps("Nope-Regular")])).unwrap();
+    let want = env.fonts.join(LIBRE).to_string_lossy().into_owned();
+    assert_eq!(status(&r, 0), FontStatus::Activated);
+    assert!(r.results[0].path.as_deref().is_some_and(|p| p.ends_with(&want) || canon(&env.fonts.join(LIBRE)).to_string_lossy() == p), "{:?}", r.results[0].path);
+    assert_eq!(r.results[1].path, None);
+    // lần hỏi lại (already_active) vẫn có đường dẫn: helper cần nó mỗi lần Photoshop hỏi
+    let again = b.ensure(&req("photoshop", vec![ps(LIBRE_PS)])).unwrap();
+    assert_eq!(status(&again, 0), FontStatus::AlreadyActive);
+    assert!(again.results[0].path.is_some());
+    let json = serde_json::to_value(&r).unwrap();
+    assert!(json["results"][0]["path"].is_string());
+    assert!(json["results"][1].get("path").is_none());
+}

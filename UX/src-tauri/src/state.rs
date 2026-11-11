@@ -74,6 +74,8 @@ pub struct AppState {
     pub preview: OnceLock<Arc<crate::services::preview::Service>>,
     /// Máy chủ broker localhost (None khi chưa mở hoặc đã tắt).
     pub broker: Mutex<Option<fontatlas_broker::Server>>,
+    /// Nguồn font request của hệ thống (Photoshop/AE hỏi font còn thiếu). Giữ để đóng khi thoát; chỉ macOS có.
+    pub fontreq: Mutex<Option<Box<dyn std::any::Any + Send>>>,
 }
 
 impl AppState {
@@ -99,6 +101,7 @@ impl AppState {
             langs: Default::default(),
             preview: OnceLock::new(),
             broker: Mutex::new(None),
+            fontreq: Mutex::new(None),
         })
     }
 

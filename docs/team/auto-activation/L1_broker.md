@@ -33,6 +33,7 @@ Mọi yêu cầu cần `Authorization: Bearer <token>` (trừ `OPTIONS`).
 - Khớp: `ps` đúng từng ký tự trước; không có thì `family` (gập dấu, không phân biệt hoa thường) + `style` (bỏ khoảng trắng/gạch, rỗng = Regular). Không đoán gần đúng.
 - `app`: nhận tên hiển thị hoặc bundle id; ánh xạ về `photoshop | aftereffects | illustrator | indesign | incopy | sketch | affinity | figma | other`.
 - `status`: `activated` (vừa bật) · `already_active` · `available` (máy đã có đúng file này do bên khác cung cấp) · `missing` (thư viện không có) · `conflict` (máy có font cùng tên nhưng KHÁC nội dung, không tự ghi đè) · `unavailable` (file mất / đã đổi) · `not_downloaded` (file placeholder OneDrive/iCloud chưa tải xong trong hạn chờ; tải vẫn chạy ngầm, hỏi lại sau) · `failed` · `busy` (hỏi lại sau) · `invalid` (yêu cầu rỗng).
+- `path` (tuỳ chọn, thêm sau): đường dẫn file font cho kết quả dùng được. Dành cho nguồn font request (L2, xem `L2_fontreq.md`); panel/script có thể bỏ qua.
 - `found` = `activated | already_active | available`. Phần còn lại vào `missing`; lý do ở `results`.
 - Giới hạn: ≤ 256 font, mỗi chuỗi ≤ 512 ký tự không có ký tự điều khiển, thân ≤ 128 KiB.
 
@@ -55,7 +56,7 @@ Mã lỗi HTTP: 400 (`bad_json`, `bad_request`) · 401 `unauthorized` · 403 `ba
 
 ## Chưa làm ở L1
 
-- Helper font request (L2), panel CEP (L3), startup script (L4), trạng thái từng app + lệnh Tauri cho Settings (L5).
+- Panel CEP (L3), startup script (L4), trạng thái từng app + lệnh Tauri cho Settings (L5).
 - Không có lệnh Tauri nào mới: UI chưa thấy gì ngoài `reasons` mới trong `activation_state`.
 - Chưa có bài thử trên CoreText thật qua broker (test dùng `FakeEngine`; hành vi đăng ký session thật đã đo ở spike 06).
 

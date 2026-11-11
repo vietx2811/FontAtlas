@@ -122,6 +122,10 @@ impl FontStatus {
 pub struct FontResult {
     pub name: String,
     pub status: FontStatus,
+    /// File font dùng được (chỉ khi `status` dùng được). Helper font request trả đường dẫn này cho hệ thống;
+    /// panel/script không cần.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -229,11 +233,15 @@ pub fn ensure_in_library(
             keys.push(*k);
         }
     }
-    let mut by_hash: HashMap<String, FontStatus> = HashMap::new();
+    let mut by_hash: HashMap<String, (FontStatus, Option<String>)> = HashMap::new();
     if !keys.is_empty() {
         let report = service.activate_auto(store, &keys, app).map_err(EnsureError::internal)?;
         for r in &report.results {
-            by_hash.insert(r.hash_hex.clone(), outcome_status(&r.outcome));
+            let path = match &r.outcome {
+                FileOutcome::AlreadyAvailable { path, .. } => Some(path.clone()),
+                _ => r.path.clone(),
+            };
+            by_hash.insert(r.hash_hex.clone(), (outcome_status(&r.outcome), path));
         }
     }
 
@@ -242,14 +250,15 @@ pub fn ensure_in_library(
     let mut logs: Vec<AutoLogEntry> = vec![];
     for (f, hit) in req.fonts.iter().zip(&resolved) {
         let name = f.label();
-        let status = if name.is_empty() {
-            FontStatus::Invalid
+        let (status, path) = if name.is_empty() {
+            (FontStatus::Invalid, None)
         } else {
             match hit {
-                None => FontStatus::Missing,
-                Some(k) => by_hash.get(&hex(&k.hash)).copied().unwrap_or(FontStatus::Failed),
+                None => (FontStatus::Missing, None),
+                Some(k) => by_hash.get(&hex(&k.hash)).cloned().unwrap_or((FontStatus::Failed, None)),
             }
         };
+        let path = if status.usable() { path } else { None };
         // Lặp lại vô ích (đã bật, đã có sẵn, yêu cầu rỗng) không vào nhật ký.
         if !matches!(status, FontStatus::AlreadyActive | FontStatus::Available | FontStatus::Invalid) {
             logs.push(AutoLogEntry {
@@ -260,7 +269,7 @@ pub fn ensure_in_library(
                 hash: hit.as_ref().map(|k| k.hash),
             });
         }
-        results.push(FontResult { name, status });
+        results.push(FontResult { name, status, path });
     }
     if !logs.is_empty() {
         let mut s = lock(store);

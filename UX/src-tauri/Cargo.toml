@@ -21,6 +21,7 @@ fontatlas-broker = { path = "crates/fontatlas-broker" }
 fontatlas-core = { path = "crates/fontatlas-core" }
 fontatlas-describe = { path = "crates/fontatlas-describe" }
 fontatlas-embed = { path = "crates/fontatlas-embed" }
+fontatlas-fontreq = { path = "crates/fontatlas-fontreq" }
 fontatlas-index = { path = "crates/fontatlas-index" }
 fontatlas-preview = { path = "crates/fontatlas-preview" }
 fontatlas-store = { path = "crates/fontatlas-store" }
@@ -52,5 +53,5 @@ tempfile = "3.27"
 tiny_http = "0.12"
 
 [workspace]
-members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-broker", "crates/fontatlas-describe"]
+members = [".", "crates/fontatlas-core", "crates/fontatlas-store", "crates/fontatlas-embed", "crates/fontatlas-index", "crates/fontatlas-eval", "crates/fontatlas-preview", "crates/fontatlas-activate", "crates/fontatlas-broker", "crates/fontatlas-fontreq", "crates/fontatlas-describe"]
 resolver = "2"

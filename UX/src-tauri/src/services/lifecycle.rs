@@ -4,6 +4,7 @@ use crate::state::AppState;
 /// Gọi từ `RunEvent::Exit`; test gọi trực tiếp (không cần webview). Tổng ≈ ≤ 5 s mỗi worker.
 pub fn on_exit(state: &AppState) {
     // đặt cờ huỷ cho cả ba hàng đợi trước, rồi mới chờ: tổng thời gian ≈ một lượt chờ, không cộng dồn
+    crate::services::fontreq::stop(state);
     crate::services::broker::stop(state);
     state.scans.request_shutdown();
     crate::services::model::cancel_download(state);
