@@ -24,7 +24,8 @@ export function filterChips(f: LibraryFilters, sources: SourceDto[] = [], view =
   if (f.favoritesOnly && !forced.favorites) out.push({ id: 'favorites', label: t('filter.favorites'), remove: drop('favoritesOnly') });
   for (const id of forced.source ? [] : f.sourceIds ?? []) out.push({ id: `source:${id}`, label: sources.find(s => s.id === id)?.name ?? `Nguồn ${id}`, remove: x => { const next = (x.sourceIds ?? []).filter(v => v !== id); const { sourceIds: _, ...rest } = x; return next.length ? { ...rest, sourceIds: next } : rest; } });
   for (const c of f.classes ?? []) out.push({ id: `class:${c}`, label: classLabel(c), remove: x => { const next = (x.classes ?? []).filter(v => v !== c); const { classes: _, ...rest } = x; return next.length ? { ...rest, classes: next } : rest; } });
-  if (f.includeSecondary) out.push({ id: 'class:+hybrid', label: t('filter.hybrid'), remove: drop('includeSecondary') });
+  // Cờ hybrid không có tác dụng khi chưa chọn class/subclass: không hiện chip, không tính vào phễu.
+  if (f.includeSecondary && (f.classes?.length || f.subclasses?.length)) out.push({ id: 'class:+hybrid', label: t('filter.hybrid'), remove: drop('includeSecondary') });
   if (f.confidentOnly) out.push({ id: 'class:+confident', label: t('filter.confident'), remove: drop('confidentOnly') });
   for (const c of f.subclasses ?? []) out.push({ id: `subclass:${c}`, label: subclassLabel(c), remove: x => { const next = (x.subclasses ?? []).filter(v => v !== c); const { subclasses: _, ...rest } = x; return next.length ? { ...rest, subclasses: next } : rest; } });
   if (f.weightClass) out.push({ id: 'weightClass', label: `Weight ${f.weightClass[0] === f.weightClass[1] ? weightName(f.weightClass[0]) : `${weightName(f.weightClass[0])}–${weightName(f.weightClass[1])}`}`, remove: x => { const { weightClass: _w, varAxisMatch: vm, ...rest } = x; return vm && x.widthClass ? { ...rest, varAxisMatch: vm } : rest; } });

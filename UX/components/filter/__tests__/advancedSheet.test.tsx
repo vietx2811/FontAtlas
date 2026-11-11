@@ -1,3 +1,4 @@
+import { filterChips } from '../../main/FilterChips';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -14,6 +15,7 @@ import { KEY_COMMIT_MS } from '../RangeSlider';
 const initial = useUiStore.getState();
 const settle = async (ms = HISTOGRAM_DEBOUNCE_MS + 50) => { await act(async () => { await new Promise(r => setTimeout(r, ms)); }); };
 const filters = () => useUiStore.getState().filters;
+const useAdvancedCountOf = (f: Record<string, unknown>) => filterChips(f as never, [], 'all').length;
 
 describe('AdvancedSheet', () => {
   beforeEach(() => { useUiStore.setState(initial, true); useAdvancedSheet.setState({ open: false }); });
@@ -173,19 +175,45 @@ describe('AdvancedSheet · taxonomy v2 classes', () => {
 
 describe('AdvancedSheet · class switches (D1)', () => {
   beforeEach(() => { useUiStore.setState(initial, true); useAdvancedSheet.setState({ open: false }); });
-  it('"Gồm cả font lai" and "Chỉ nhãn chắc chắn" write includeSecondary / confidentOnly, show as class-group chips, and clear again', async () => {
+  it('"Gồm cả font lai" is unavailable (aria-disabled + reason) until a class is chosen and writes nothing; "Chỉ nhãn chắc chắn" always works', async () => {
     render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
-    const hybrid = screen.getByTestId('adv-hybrid') as HTMLInputElement; const conf = screen.getByTestId('adv-confident') as HTMLInputElement;
-    expect(hybrid.checked).toBe(false); expect(conf.checked).toBe(false);
-    fireEvent.click(hybrid); fireEvent.click(conf);
-    expect(filters()).toMatchObject({ includeSecondary: true, confidentOnly: true });
-    await settle();
-    expect((screen.getByTestId('adv-hybrid') as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(screen.getByTestId('adv-hybrid')); fireEvent.click(screen.getByTestId('adv-confident'));
-    expect(filters().includeSecondary).toBeUndefined(); expect(filters().confidentOnly).toBeUndefined();
-    expect(Object.keys(filters())).not.toContain('includeSecondary');
+    const hybrid = screen.getByTestId('adv-hybrid') as HTMLInputElement;
+    expect(hybrid.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByTestId('adv-hybrid-need').textContent).toBe('Chọn một class trước.');
+    fireEvent.click(hybrid);
+    expect(filters().includeSecondary).toBeUndefined();
+    expect(useAdvancedCountOf(filters())).toBe(0); // không chip, không tính vào phễu
+    fireEvent.click(screen.getByTestId('adv-confident'));
+    expect(filters().confidentOnly).toBe(true);
   });
-
+  it('after a class is chosen the hybrid switch works, re-asks classFacets WITH includeSecondary, shows chips, and clearing the class drops the flag', async () => {
+    const api = createMockApi(); const spy = vi.spyOn(api, 'classFacets');
+    useUiStore.setState({ filters: { classes: ['display'] } });
+    render(<AdvancedSheet api={api} onClose={() => {}} />); await settle();
+    expect(screen.getByTestId('adv-hybrid').getAttribute('aria-disabled')).toBe('false');
+    expect(screen.queryByTestId('adv-hybrid-need')).toBeNull();
+    fireEvent.click(screen.getByTestId('adv-hybrid')); await settle();
+    expect(filters()).toMatchObject({ classes: ['display'], includeSecondary: true });
+    expect(spy.mock.calls.at(-1)![0]).toMatchObject({ includeSecondary: true });
+    expect(useAdvancedCountOf(filters())).toBe(2); // Display + Gồm cả font lai
+    fireEvent.click(screen.getByTestId('adv-confident'));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Display/ })); // bỏ chọn class cuối
+    expect(filters().includeSecondary).toBeUndefined();
+    expect(filters().confidentOnly).toBe(true);
+  });
+  it('Reset clears both switches', async () => {
+    useUiStore.setState({ filters: { classes: ['display'], includeSecondary: true, confidentOnly: true } });
+    render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
+    fireEvent.click(document.querySelector('.fa-adv-reset')!);
+    expect(filters()).toEqual({});
+  });
+  it('class rows follow the fixed class order (Serif, Slab, Sans, … Display …); an unknown class goes last', async () => {
+    const api = createMockApi();
+    vi.spyOn(api, 'classFacets').mockResolvedValue([{ class: 'display', count: 1, subclasses: [] }, { class: 'zzz', count: 1, subclasses: [] }, { class: 'sans', count: 1, subclasses: [] }, { class: 'serif', count: 1, subclasses: [] }, { class: 'slab', count: 1, subclasses: [] }] as never);
+    render(<AdvancedSheet api={api} onClose={() => {}} />); await settle();
+    const names = [...document.querySelectorAll('.fa-class-opt > div label, .fa-class-opt > label, .fa-class-opt label')].map(l => l.textContent!.replace(/\d+$/, '').trim()).filter(Boolean);
+    expect(names.slice(0, 5)).toEqual(['Serif', 'Slab', 'Sans', 'Display', 'zzz']);
+  });
   it('the class facets are asked WITH includeSecondary / confidentOnly (counts follow the switches) but without the class selection itself', async () => {
     const api = createMockApi();
     const spy = vi.spyOn(api, 'classFacets');

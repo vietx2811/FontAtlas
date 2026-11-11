@@ -22,7 +22,9 @@ describe('glossary', () => {
     for (const x of subs) { expect(termGloss(subclassTermKey(x)), x).toBeTruthy(); expect(TERM_NAMES[subclassTermKey(x)], x).toBeTruthy(); }
     for (const k of ['class.slab', 'class.handwriting', 'class.display', 'sub.flared', 'sub.squarish', 'sub.venetian_oldstyle', 'sub.garalde', 'sub.monoline_script', 'sub.coding']) {
       const { container, unmount } = render(<TermCard term={k} />);
-      expect(container.querySelector('svg.fa-term-art'), k).toBeTruthy(); unmount();
+      const art = container.querySelector('svg.fa-term-art'); expect(art, k).toBeTruthy();
+      expect(art!.getAttribute('aria-hidden'), k).toBe('true'); // hình minh hoạ chỉ trang trí: chữ giải thích đã đủ nghĩa
+      unmount();
     }
   });
   it('maps backend keys to term keys and has an English name for each', () => {

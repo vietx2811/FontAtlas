@@ -2,7 +2,6 @@ import { hasKey, t } from '../../i18n';
 import { TERM_NAMES, subclassTermKey } from '../ui/termNames';
 
 /** Taxonomy v2: Display là class thật (stencil/inline/pixel); tag mục đích dùng "Headline" độc lập với nó. */
-export const HIDDEN_CLASSES: ReadonlySet<string> = new Set();
 export const CLASS_ORDER = ['serif', 'slab', 'sans', 'mono', 'script', 'handwriting', 'display', 'blackletter', 'symbol', 'uncertain'] as const;
 
 // Chỉ coi là có nhãn khi khoá thật sự có trong từ điển (vote/trait mới từ backend không làm crash).
