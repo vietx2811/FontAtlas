@@ -1,3 +1,4 @@
+import { defaultSample, isDefaultSample } from '../../i18n/sample';
 import { readSplashEnabled, writeSplashEnabled } from '../splash/splashState';
 import { useCallback, useEffect, useState } from 'react';
 import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, ReplacedEntryDto, SettingsDto, SourceDto } from '../../api';
@@ -100,6 +101,8 @@ function General({ api, s, patch }: { api: Api } & SubProps) {
   const locale = useLocale();
   const setSample = useUiStore(x => x.setSample);
   const apply = (t: string) => { setSample(t); void patch({ sampleText: t }); };
+  // Chưa từng đổi (backend còn trả mặc định cũ/của ngôn ngữ khác) → hiện mặc định của ngôn ngữ hiện tại.
+  const shownSample = isDefaultSample(s.sampleText) ? defaultSample(locale) : s.sampleText;
   return (
     <>
       <fieldset className="fa-set-group"><legend>{t('set.uiLang')}</legend>
@@ -109,7 +112,7 @@ function General({ api, s, patch }: { api: Api } & SubProps) {
         {([['system', t('set.theme.system')], ['light', t('set.theme.light')], ['dark', t('set.theme.dark')]] as const).map(([v, l]) => <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{l}</label>)}
       </fieldset>
       <div className="fa-set-group"><label htmlFor="set-sample">{t('set.sample')}</label>
-        <input id="set-sample" type="text" aria-label={t('set.sample')} defaultValue={s.sampleText} key={s.sampleText} onBlur={e => { if (e.target.value !== s.sampleText) apply(e.target.value); }} onChange={e => apply(e.target.value)} />
+        <input id="set-sample" type="text" aria-label={t('set.sample')} defaultValue={shownSample} key={shownSample} onBlur={e => { if (e.target.value !== shownSample) apply(e.target.value); }} onChange={e => apply(e.target.value)} />
         <div className="fa-set-presets">{samplePresets().map(([n, t]) => <button key={n} type="button" onClick={() => apply(t)}>{n}</button>)}</div>
       </div>
       <Switch label={t('set.projectVi')} on={s.projectViDefault} onChange={v => void patch({ projectViDefault: v })} />

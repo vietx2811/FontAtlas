@@ -1,3 +1,4 @@
+import { defaultSample } from '../../../i18n/sample';
 import type { CSSProperties } from 'react';
 
 export const WATERFALL_SIZES = [48, 32, 24, 18, 14, 11];
@@ -8,7 +9,7 @@ type Props = { sample: string; css: CSSProperties };
 export function SpecimenTab({ sample, css }: Props): React.JSX.Element {
   return (
     <>
-      <div className="fa-big" data-testid="specimen-big" style={css}>{sample.trim() || 'Phở bò Hà Nội'}</div>
+      <div className="fa-big" data-testid="specimen-big" style={css}>{sample.trim() || defaultSample()}</div>
       <p className="fa-para" data-testid="specimen-para" style={css}>{PARAGRAPH}</p>
       <div className="fa-waterfall" style={css}>
         {WATERFALL_SIZES.map(s => (

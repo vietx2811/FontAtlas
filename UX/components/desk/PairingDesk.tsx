@@ -4,7 +4,7 @@ import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t, getLocale } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
-import { DEFAULT_SAMPLE_TEXT, useUiStore, type DeskState } from '../../store/ui';
+import { defaultSample, useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
 import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
@@ -213,7 +213,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         </section>
         <section className="fa-desk-page" aria-label={t('desk.sampleLabel')}>
           <div className="fa-desk-sheet">
-            <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() && sample !== DEFAULT_SAMPLE_TEXT ? sample : t('desk.pageHeading')}</div>
+            <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() && sample !== defaultSample() ? sample : t('desk.pageHeading')}</div>
             <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
           </div>
           <div className="fa-desk-strip">

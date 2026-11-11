@@ -23,6 +23,6 @@ describe('SpecimenTab', () => {
 
   it('falls back to a default sample when empty', () => {
     render(<SpecimenTab sample="  " css={{}} />);
-    expect(screen.getByTestId('specimen-big').textContent).toBe('Phở bò Hà Nội');
+    expect(screen.getByTestId('specimen-big').textContent).toBe('Chữ Việt đẹp — Ấn tượng');
   });
 });
