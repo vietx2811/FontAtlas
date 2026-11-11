@@ -7,7 +7,7 @@ import { FontFaceLoader, ScrollVelocity, browserLoaderDeps } from './fontFaceLoa
 import { usePagedFaces, type PagedFaces } from './pagedFaces';
 import { GroupHeader } from './GroupHeader';
 import { useFamilyGroups } from './familyGroups';
-import { HEADER_H, buildLayout, faceSpansOf, groupsCover, type FamilyGroup, type LayoutRow } from './groupLayout';
+import { HEADER_H, buildLayout, faceSpansOf, groupsCover, rowOfFace, type FamilyGroup, type LayoutRow } from './groupLayout';
 import { PreviewBlobs } from './previewBlobs';
 import { DEFAULT_SAMPLE, bucketFor, cellMinWidth, cssSize, previewBox, type FaceRow, type GridQuery, type PxBucket } from './types';
 import { t } from '../../i18n';
@@ -32,7 +32,9 @@ export type LibraryGridProps = {
   onPick?(row: FaceRow, index: number, mods: PickMods): void;
   onContextMenu?(row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void;
   /** Nhóm theo Family: khoảng chỉ số face của các nhóm đang thu gọn (ẩn khỏi lưới) — để vùng chọn dải / chọn tất cả bỏ qua. */
-  onHiddenRanges?(ranges: ReadonlyArray<[number, number]>): void;
+  onHiddenRanges?(ranges: ReadonlyArray<readonly [number, number]>): void;
+  /** Nhóm đang thu gọn (theo tên family) + cách đổi: điều khiển từ ngoài để trạng thái sống qua lần dựng lại; thiếu → lưới tự giữ. */
+  collapsed?: ReadonlySet<string>; onToggleGroup?(group: FamilyGroup, collapse: boolean): void;
   /** Thay cho dòng "Không có font nào khớp" khi kết quả rỗng. */
   emptyState?: React.ReactNode;
 };
@@ -49,13 +51,14 @@ type RowProps = {
   activeScopeOf?(row: FaceRow): 'session' | 'persistent' | 'available' | undefined; onToggleActive?(row: FaceRow): void;
   selectedKeys?: ReadonlySet<string>; onPick?: LibraryGridProps['onPick']; onContextMenu?: LibraryGridProps['onContextMenu'];
   /** Nhóm theo Family (R3): có → hàng là tiêu đề nhóm hoặc hàng thẻ của một nhóm. */
-  gl: readonly LayoutRow[] | null; groups: readonly FamilyGroup[] | null; collapsed: ReadonlySet<string>; onToggleGroup(family: string, collapse: boolean): void;
+  gl: readonly LayoutRow[] | null; groups: readonly FamilyGroup[] | null; collapsed: ReadonlySet<string>; onToggleGroup(group: FamilyGroup, collapse: boolean): void;
+  headFamily: string | null; onHeadFocus(family: string): void; onHeadNav(groupIndex: number, delta: number): void;
 };
 
-function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, gl, groups, collapsed, onToggleGroup }: RowComponentProps<RowProps>) {
+function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, gl, groups, collapsed, onToggleGroup, headFamily, onHeadFocus, onHeadNav }: RowComponentProps<RowProps>) {
   if (index >= rows) return <div role="presentation" style={style} />; // hàng đệm đáy
   const lr: LayoutRow | null = gl ? gl[index] ?? null : null;
-  if (lr && lr.kind === 'head') return <GroupHeader group={groups![lr.g]} rep={paged?.rowAt(groups![lr.g].start)} loader={loader} collapsed={collapsed.has(groups![lr.g].family)} onToggle={onToggleGroup} style={style} />;
+  if (lr && lr.kind === 'head') return <GroupHeader group={groups![lr.g]} rep={paged?.rowAt(groups![lr.g].start)} loader={loader} collapsed={collapsed.has(groups![lr.g].family)} onToggle={onToggleGroup} tabStop={headFamily === groups![lr.g].family} onFocusHead={onHeadFocus} onNavigate={d => onHeadNav(lr.g, d)} style={style} />;
   const cardsRow = lr && lr.kind === 'cards' ? lr : null;
   const base = cardsRow ? cardsRow.first : index * cols; const end = cardsRow ? cardsRow.first + cardsRow.n : total;
   const cells = [];
@@ -109,7 +112,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, selectedKey = null, onSelect = NOOP, loader: loaderProp, velocity: velocityProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, selectedKeys, onPick, onContextMenu, onHiddenRanges,
+  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, selectedKeys, onPick, onContextMenu, onHiddenRanges, collapsed: collapsedProp, onToggleGroup: onToggleGroupProp,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
@@ -198,25 +201,47 @@ export function LibraryGrid({
   const pagedQuery = snap.query;
   const wantGroups = !!pagedQuery?.groupByFamily;
   const fam = useFamilyGroups(api, pagedQuery ?? query, wantGroups);
-  const groups = wantGroups && fam.queryKey === snap.queryKey && groupsCover(fam.groups, snap.total) ? fam.groups : null;
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const groups = useMemo(
+    () => (wantGroups && fam.queryKey === snap.queryKey && groupsCover(fam.groups, snap.total) ? fam.groups : null),
+    [wantGroups, fam.groups, fam.queryKey, snap.queryKey, snap.total],
+  );
+  // Thu gọn: điều khiển từ ngoài (store, sống qua lần dựng lại) khi có `collapsedProp`; không thì giữ trong lưới và mở hết khi truy vấn đổi.
+  const [innerCollapsed, setInnerCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const collapsed = collapsedProp ?? innerCollapsed;
   const queryKey = JSON.stringify(query);
-  useEffect(() => { setCollapsed(new Set()); }, [queryKey]); // thu gọn chỉ trong phiên: đổi view / truy vấn → mở hết
-  const onToggleGroup = useCallback((family: string, collapse: boolean) => setCollapsed(prev => { const n = new Set(prev); if (collapse) n.add(family); else n.delete(family); return n; }), []);
+  useEffect(() => { if (!collapsedProp) setInnerCollapsed(new Set()); }, [queryKey, collapsedProp]);
+  const toggleGroup = useCallback((g: FamilyGroup, collapse: boolean) => {
+    if (onToggleGroupProp) { onToggleGroupProp(g, collapse); return; }
+    setInnerCollapsed(prev => { const n = new Set(prev); if (collapse) n.add(g.family); else n.delete(g.family); return n; });
+  }, [onToggleGroupProp]);
   useEffect(() => {
-    onHiddenRanges?.(groups ? groups.filter(g => collapsed.has(g.family)).map(g => [g.start, g.start + g.count - 1] as [number, number]) : []);
+    onHiddenRanges?.(groups ? groups.filter(g => collapsed.has(g.family)).map(g => [g.start, g.start + g.count - 1] as const) : []);
   }, [groups, collapsed, onHiddenRanges]);
   const glayout = useMemo(() => (groups ? buildLayout(groups, cols, collapsed) : null), [groups, cols, collapsed]);
+  const headRows = useMemo(() => { const out: number[] = []; glayout?.forEach((r, i) => { if (r.kind === 'head') out[r.g] = i; }); return out; }, [glayout]);
   const rowCount = glayout ? glayout.length : Math.ceil(total / cols);
-  // Đổi chiều cao hàng (bật/tắt hàng thông tin thứ 2…) giữa lúc cuộn sâu: giữ hàng đầu đang thấy, không để vị trí nhảy.
+  // Neo cuộn theo FACE đầu tiên đang thấy: bật/tắt nhóm, thu gọn, đổi số cột, đổi cao hàng… đều giữ đúng font đó trong tầm nhìn.
   const listRef = useListRef(null);
-  const topRow = useRef(0);
-  const lastRowH = useRef(rowH);
+  const topFace = useRef(0);
+  const anchorQuery = useRef(snap.queryKey);
   useLayoutEffect(() => {
-    if (lastRowH.current === rowH) return;
-    lastRowH.current = rowH;
-    if (topRow.current > 0) listRef.current?.scrollToRow({ index: Math.min(topRow.current, Math.max(0, rowCount - 1)), align: 'start' });
-  }, [rowH, rowCount, listRef]);
+    if (anchorQuery.current !== snap.queryKey) { anchorQuery.current = snap.queryKey; topFace.current = 0; return; } // truy vấn khác: bắt đầu từ đầu
+    if (topFace.current <= 0) return;
+    const index = glayout && groups ? rowOfFace(glayout, groups, topFace.current) : Math.floor(topFace.current / cols);
+    listRef.current?.scrollToRow({ index: Math.min(index, Math.max(0, rowCount - 1)), align: 'start' });
+  }, [glayout, groups, cols, rowH, rowCount, snap.queryKey, listRef]);
+  // Tiêu đề nhóm: một tab-stop cho cả dải (roving tabindex); ↑/↓ chuyển giữa các tiêu đề (cuộn tới nếu chưa dựng).
+  const [activeHead, setActiveHead] = useState<string | null>(null);
+  const headFamily = groups && groups.some(g => g.family === activeHead) ? activeHead : groups?.[0]?.family ?? null;
+  const navHead = useCallback((gi: number, delta: number) => {
+    if (!groups) return;
+    const t = gi + delta; if (t < 0 || t >= groups.length) return;
+    setActiveHead(groups[t].family);
+    listRef.current?.scrollToRow({ index: headRows[t], align: 'smart' });
+    let tries = 0;
+    const focus = () => { const el = box.current?.querySelector<HTMLElement>(`[data-testid="group-head"][data-family="${CSS.escape(groups[t].family)}"]`); if (el) el.focus(); else if (tries++ < 6) requestAnimationFrame(focus); };
+    requestAnimationFrame(focus);
+  }, [groups, headRows, listRef]);
 
   return (
     <div ref={box} role="grid" data-layout={layout} data-grouped={glayout ? 'true' : undefined} aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
@@ -244,9 +269,9 @@ export function LibraryGrid({
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: '100%', width: '100%' }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, gl: glayout, groups, collapsed, onToggleGroup }}
+          rowProps={{ headFamily, onHeadFocus: setActiveHead, onHeadNav: navHead, cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, gl: glayout, groups, collapsed, onToggleGroup: toggleGroup }}
           onRowsRendered={({ startIndex, stopIndex }) => {
-            topRow.current = startIndex;
+            if (glayout && groups) { const r0 = glayout[startIndex]; if (r0) topFace.current = r0.kind === 'head' ? groups[r0.g].start : r0.first; } else topFace.current = startIndex * cols;
             if (glayout && groups) faceSpansOf(glayout, groups, startIndex, stopIndex).forEach(([a, b]) => paged?.ensureRange(a, b));
             else paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1);
           }}

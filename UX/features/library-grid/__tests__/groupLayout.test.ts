@@ -57,3 +57,27 @@ describe('labels and spans', () => {
   });
   it('header height is a constant (virtualised rowHeight is a function of the row index)', () => { expect(HEADER_H).toBe(32); });
 });
+
+import { inRanges, rowOfFace, visibleSegments } from '../groupLayout';
+
+describe('ranges (collapsed groups)', () => {
+  const R: Array<[number, number]> = [[2, 4], [10, 10], [20, 29]];
+  it('binary search: inside / outside / edges / empty', () => {
+    for (const i of [2, 3, 4, 10, 20, 25, 29]) expect(inRanges(R, i), String(i)).toBe(true);
+    for (const i of [0, 1, 5, 9, 11, 19, 30, 99]) expect(inRanges(R, i), String(i)).toBe(false);
+    expect(inRanges([], 3)).toBe(false);
+  });
+  it('visible segments are the complement, clipped to the total', () => {
+    expect(visibleSegments(40, R)).toEqual([[0, 1], [5, 9], [11, 19], [30, 39]]);
+    expect(visibleSegments(25, R)).toEqual([[0, 1], [5, 9], [11, 19]]);
+    expect(visibleSegments(5, [])).toEqual([[0, 4]]);
+    expect(visibleSegments(5, [[0, 4]])).toEqual([]);
+    expect(visibleSegments(5, [[0, 1], [2, 4]])).toEqual([]);
+  });
+  it('row of a face: its card row; a collapsed group maps to its header', () => {
+    const l = buildLayout(G, 4, new Set());
+    expect(rowOfFace(l, G, 0)).toBe(1); expect(rowOfFace(l, G, 4)).toBe(2); expect(rowOfFace(l, G, 5)).toBe(4); expect(rowOfFace(l, G, 9)).toBe(6);
+    const c = buildLayout(G, 4, new Set(['Alpha']));
+    expect(rowOfFace(c, G, 3)).toBe(0); expect(rowOfFace(c, G, 5)).toBe(2);
+  });
+});

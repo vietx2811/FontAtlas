@@ -51,16 +51,6 @@ export function ViewOptions(): React.JSX.Element {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [close]);
-  // ⌥G: bật/tắt nhóm theo Family (khi không gõ chữ / IME / hộp thoại).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || e.defaultPrevented || e.isComposing || e.repeat || e.code !== 'KeyG') return;
-      if (shortcutBlocked(e)) return;
-      e.preventDefault(); useUiStore.getState().setGroupByFamily(!useUiStore.getState().sort.group);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setPos({ right: Math.max(8, Math.round(window.innerWidth - r.right)), top: Math.round(r.bottom + 6) }); };

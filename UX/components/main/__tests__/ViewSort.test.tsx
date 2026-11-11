@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { DEFAULT_SORT, parseSort, serializeSort, SORT_KEY } from '../../../store/sortPrefs';
 import { toGridQuery, useUiStore } from '../../../store/ui';
 import { ViewOptions } from '../ViewOptions';
+import { useGroupShortcut } from '../useGroupShortcut';
 
 const initial = useUiStore.getState();
 const q = () => { const s = useUiStore.getState(); return toGridQuery({ view: s.view, query: s.query, viOnly: s.viOnly, recentViews: s.recentViews, active: s.active, filters: s.filters, familyScope: s.familyScope, sort: s.sort }); };
@@ -135,8 +136,8 @@ describe('sort in the View popover', () => {
     expect(useUiStore.getState().sort).toEqual(DEFAULT_SORT);
     expect(q().groupByFamily).toBeUndefined();
   });
-  it('⌥G toggles grouping from anywhere that is not a text field', () => {
-    render(<ViewOptions />);
+  it('⌥G toggles grouping from anywhere that is not a text field — with the popover NOT mounted', () => {
+    renderHook(() => useGroupShortcut());
     fireEvent.keyDown(document.body, { key: 'g', code: 'KeyG', altKey: true });
     expect(useUiStore.getState().sort.group).toBe(true);
     fireEvent.keyDown(document.body, { key: 'g', code: 'KeyG', altKey: true });

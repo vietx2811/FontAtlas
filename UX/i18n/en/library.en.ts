@@ -58,4 +58,7 @@ export const LIBRARY_EN: Record<keyof typeof LIBRARY_I18N, string> = {
   'group.styles.of': '{m}/{n} styles',
   'group.styles.tip': 'Number of styles in this family: matching the filters / total in the library.',
   'smenu.tag.fail': 'Could not rename the tag: {msg}',
+  'group.deselected': 'Deselected {n} fonts in the collapsed group.',
+  'group.selectAll.skip': 'Selected {n} visible fonts; skipped {skipped} fonts in collapsed groups.',
+  'group.selectAll.capSkip': 'Selected the first {max} of {total} visible fonts (skipped {skipped} fonts in collapsed groups).',
 };

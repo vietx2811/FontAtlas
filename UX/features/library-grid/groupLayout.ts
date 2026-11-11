@@ -38,3 +38,38 @@ export function faceSpansOf(layout: readonly LayoutRow[], groups: readonly Famil
   }
   return out;
 }
+
+/** Khoảng chỉ số face [a, b] (đóng), đã sắp theo a và không chồng nhau — các nhóm đang thu gọn. */
+export type Ranges = ReadonlyArray<readonly [number, number]>;
+
+/** Tìm nhị phân: chỉ số i có nằm trong một khoảng không (O(log R)). */
+export function inRanges(ranges: Ranges, i: number): boolean {
+  let lo = 0; let hi = ranges.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1; const [a, b] = ranges[mid];
+    if (i < a) hi = mid - 1; else if (i > b) lo = mid + 1; else return true;
+  }
+  return false;
+}
+
+/** Các đoạn [a, b] của chỉ số ĐANG THẤY trong [0, total): phần bù của các khoảng ẩn. */
+export function visibleSegments(total: number, hidden: Ranges): Array<[number, number]> {
+  const out: Array<[number, number]> = []; let at = 0;
+  for (const [a, b] of hidden) {
+    if (a > at) out.push([at, Math.min(a - 1, total - 1)]);
+    at = Math.max(at, b + 1);
+    if (at >= total) break;
+  }
+  if (at < total) out.push([at, total - 1]);
+  return out.filter(([a, b]) => b >= a);
+}
+
+/** Chỉ số hàng chứa face `face` trong bố cục (nhóm thu gọn → hàng tiêu đề của nó); 0 nếu không thấy. Dùng để giữ vị trí cuộn khi bố cục đổi. */
+export function rowOfFace(layout: readonly LayoutRow[], groups: readonly FamilyGroup[], face: number): number {
+  for (let i = 0; i < layout.length; i++) {
+    const r = layout[i];
+    if (r.kind === 'cards') { if (face >= r.first && face < r.first + r.n) return i; }
+    else { const g = groups[r.g]; if (face >= g.start && face < g.start + g.count && (layout[i + 1]?.kind !== 'cards' || (layout[i + 1] as { g: number }).g !== r.g)) return i; }
+  }
+  return 0;
+}

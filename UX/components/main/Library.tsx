@@ -3,6 +3,7 @@ import type { Api, SourceDto } from '../../api';
 import { LibraryGrid } from '../../features/library-grid';
 import { sharedFontLoader } from '../../features/library-grid/sharedLoader';
 import type { FaceRow } from '../../features/library-grid';
+import type { FamilyGroup, Ranges } from '../../features/library-grid/groupLayout';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
 import { refreshActivation } from '../../store/activationSync';
@@ -12,12 +13,14 @@ import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
 import { libraryEmpty, type Empty } from '../zero/zeroStates';
 import { COMPOSER_INSET } from './SampleComposer';
+import { useGroupShortcut } from './useGroupShortcut';
 import { faceKey, singleTagId, toGridQuery, useUiStore } from '../../store/ui';
 
 type Props = { api: Api; width?: number; height?: number };
 
 /** Nối store → GridQuery → LibraryGrid. Không lọc ở client. */
 export function Library({ api, width, height }: Props): React.JSX.Element {
+  useGroupShortcut();
   const filters = useUiStore(s => s.filters);
   const familyScope = useUiStore(s => s.familyScope);
   const view = useUiStore(s => s.view);
@@ -68,9 +71,18 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const gridQuery = useMemo(() => toGridQuery({ view, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
   const scopeKey = useMemo(() => JSON.stringify([view, query, viOnly, filters, familyScope?.name ?? null, locked ? null : gridQuery.sort ? [gridQuery.sort, gridQuery.descending ?? false] : null]), [view, query, viOnly, filters, familyScope, locked, gridQuery.sort, gridQuery.descending]);
-  const hiddenRanges = useRef<ReadonlyArray<[number, number]>>([]);
-  const onHiddenRanges = useCallback((r: ReadonlyArray<[number, number]>) => { hiddenRanges.current = r; }, []);
+  const hiddenRanges = useRef<Ranges>([]);
+  const onHiddenRanges = useCallback((r: Ranges) => { hiddenRanges.current = r; }, []);
+  // Nhóm Family thu gọn nằm ở store (sống qua lần dựng lại sau quét); truy vấn khác → mở hết.
+  const collapsedGroups = useUiStore(s => s.groupCollapsed);
+  const gridScope = useMemo(() => JSON.stringify(gridQuery), [gridQuery]);
+  useEffect(() => { useUiStore.getState().syncGroupScope(gridScope); }, [gridScope]);
   const selection = useLibrarySelection(api, gridQuery, scopeKey, wrap, hiddenRanges);
+  const { deselectRange } = selection;
+  const onToggleGroup = useCallback((g: FamilyGroup, collapse: boolean) => {
+    useUiStore.getState().setGroupCollapsed(g.family, collapse);
+    if (collapse) void deselectRange(g.start, g.count).catch(() => undefined);
+  }, [deselectRange]);
   const onContextMenu = useMemo(() => actions && ((row: FaceRow, index: number, at: { x: number; y: number; keyboard: boolean; el: HTMLElement }) => {
     const st = useSelectionStore.getState();
     let target: FaceRow[];
@@ -95,7 +107,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
       <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
-        selectedKeys={selection.keys} onPick={selection.pick} onHiddenRanges={onHiddenRanges} onContextMenu={onContextMenu ?? undefined} />
+        selectedKeys={selection.keys} onPick={selection.pick} onHiddenRanges={onHiddenRanges} collapsed={collapsedGroups} onToggleGroup={onToggleGroup} onContextMenu={onContextMenu ?? undefined} />
     </div>
   );
 }

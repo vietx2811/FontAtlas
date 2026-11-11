@@ -56,4 +56,7 @@ export const LIBRARY_I18N = {
   'group.styles.of': '{m}/{n} kiểu',
   'group.styles.tip': 'Số kiểu (style) của family này: khớp bộ lọc / tổng trong thư viện.',
   'smenu.tag.fail': 'Không đổi được tên thẻ: {msg}',
+  'group.deselected': 'Đã bỏ chọn {n} font trong nhóm thu gọn.',
+  'group.selectAll.skip': 'Đã chọn {n} font đang thấy; bỏ qua {skipped} font trong nhóm thu gọn.',
+  'group.selectAll.capSkip': 'Đã chọn {max} font đầu tiên trong {total} font đang thấy (bỏ qua {skipped} font trong nhóm thu gọn).',
 } as const;

@@ -3,8 +3,9 @@ import type { Api } from '../../api';
 import type { PickMods } from '../../features/library-grid';
 import type { FaceRow, GridQuery } from '../../features/library-grid/types';
 import { useNoticeStore } from '../../store/notices';
-import { SELECT_MAX, clearSelection, rowKey, useSelectionStore } from '../../store/selection';
+import { SELECT_MAX, clearSelection, dropFromSelection, rowKey, useSelectionStore } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
+import { inRanges, visibleSegments, type Ranges } from '../../features/library-grid/groupLayout';
 import { t, formatNumber } from '../../i18n';
 
 const CHUNK = 500;
@@ -17,13 +18,13 @@ const say = (kind: 'info' | 'error', text: string) => void useNoticeStore.getSta
  * Đa chọn trên lưới: click = một, ⌘/Ctrl = bật tắt, Shift = dải theo index (lấy hàng còn thiếu từ backend),
  * ⌘A = cả truy vấn (≤ SELECT_MAX), Esc = bỏ chọn. Vùng chọn xoá khi `scopeKey` (view/truy vấn) đổi.
  */
-export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: string, container: React.RefObject<HTMLElement | null>, hidden?: React.RefObject<ReadonlyArray<[number, number]>>) {
+export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: string, container: React.RefObject<HTMLElement | null>, hidden?: React.RefObject<Ranges>) {
   const rows = useSelectionStore(s => s.rows);
   const keys = useMemo(() => new Set(rows.keys()) as ReadonlySet<string>, [rows]);
   const queryRef = useRef(gridQuery); queryRef.current = gridQuery;
   const token = useRef(0);
   /** Face nằm trong nhóm Family đang thu gọn: không thấy trên lưới nên dải / chọn tất cả bỏ qua. */
-  const isHidden = (i: number) => !!hidden?.current?.some(([a, b]) => i >= a && i <= b);
+  const isHidden = (i: number) => !!hidden?.current && inRanges(hidden.current, i); // khoảng đã sắp, tìm nhị phân
 
   useEffect(() => { token.current++; useSelectionStore.getState().clear(); }, [scopeKey]);
   // Truy vấn đổi (kể cả thành viên Gần đây/Đang bật): mốc cũ không còn nghĩa.
@@ -101,20 +102,39 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
     plain();
   }, [fetchRange, locate]);
 
+  /** ⌘A = mọi font ĐANG THẤY: bỏ các nhóm Family thu gọn TRƯỚC, rồi mới cắt ở SELECT_MAX (nên font thấy không bị trần chiếm bởi font ẩn). */
   const selectAll = useCallback(async () => {
     const mine = ++token.current;
     const epoch = useSelectionStore.getState().epoch;
     try {
-      const first = await api.queryFaces({ ...queryRef.current, offset: 0, limit: Math.min(CHUNK, SELECT_MAX) });
-      const want = Math.min(first.total, SELECT_MAX);
-      const list = [...first.items];
-      if (want > list.length) list.push(...await fetchRange(list.length, want - 1));
+      const probe = await api.queryFaces({ ...queryRef.current, offset: 0, limit: 1 });
+      const hiddenR = hidden?.current ?? [];
+      const segs = visibleSegments(probe.total, hiddenR);
+      const visibleTotal = segs.reduce((n, [a, b]) => n + (b - a + 1), 0);
+      const picked: FaceRow[] = [];
+      for (const [a, b] of segs) {
+        if (picked.length >= SELECT_MAX) break;
+        picked.push(...await fetchRange(a, Math.min(b, a + (SELECT_MAX - picked.length) - 1)));
+      }
       if (token.current !== mine || useSelectionStore.getState().epoch !== epoch) return;
-      const picked = list.slice(0, want).filter((_, k) => !isHidden(k));
-      useSelectionStore.getState().replace(picked, picked.length ? { key: rowKey(picked[0]), index: 0 } : null);
-      if (first.total > SELECT_MAX) say('info', t('sel.firstN', { n: fmt(SELECT_MAX), total: fmt(first.total) }));
+      useSelectionStore.getState().replace(picked, picked.length ? { key: rowKey(picked[0]), index: segs[0]?.[0] ?? 0 } : null);
+      const skipped = probe.total - visibleTotal;
+      if (visibleTotal > SELECT_MAX) say('info', skipped ? t('group.selectAll.capSkip', { max: fmt(SELECT_MAX), total: fmt(visibleTotal), skipped: fmt(skipped) }) : t('sel.firstN', { n: fmt(SELECT_MAX), total: fmt(visibleTotal) }));
+      else if (skipped) say('info', t('group.selectAll.skip', { n: fmt(picked.length), skipped: fmt(skipped) }));
     } catch (e) { if (token.current === mine) say('error', t('sel.allFail', { msg: (e as Error)?.message ?? String(e) })); }
-  }, [api, fetchRange]);
+  }, [api, fetchRange, hidden]);
+
+  /** Thu gọn một nhóm: bỏ chọn các font của nó (không thấy thì không được tác động). Trả số font đã bỏ chọn. */
+  const deselectRange = useCallback(async (start: number, count: number): Promise<number> => {
+    const st = useSelectionStore.getState();
+    if (st.rows.size === 0 || count <= 0) return 0;
+    const list = await fetchRange(start, start + count - 1);
+    const mine = list.filter(r => st.rows.has(rowKey(r)));
+    if (!mine.length) return 0;
+    dropFromSelection(mine);
+    say('info', t('group.deselected', { n: fmt(mine.length) }));
+    return mine.length;
+  }, [fetchRange]);
 
   // ⌘A / Esc: chỉ khi không đang gõ chữ, không có menu/hộp thoại, và focus ở thư viện hoặc ngoài mọi vùng.
   useEffect(() => {
@@ -137,5 +157,5 @@ export function useLibrarySelection(api: Api, gridQuery: GridQuery, scopeKey: st
     return () => document.removeEventListener('keydown', onKey);
   }, [container, selectAll, clear]);
 
-  return { rows, keys, pick, selectAll, clear };
+  return { rows, keys, pick, selectAll, clear, deselectRange };
 }

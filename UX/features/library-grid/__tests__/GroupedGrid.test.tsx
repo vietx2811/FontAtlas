@@ -94,6 +94,33 @@ describe('grid grouped by Family (R3)', () => {
     expect(heads().map(h => h.dataset.family)).toEqual(['Gamma', 'Beta', 'Alpha']);
     expect(names()).toHaveLength(10);
   });
+  it('headers are ONE tab stop (roving tabindex): ↓/↑ move between headers and the stop follows the focus', async () => {
+    await mount();
+    const stops = () => heads().filter(h => h.tabIndex === 0).map(h => h.dataset.family);
+    expect(stops()).toEqual(['Alpha']);
+    heads()[0].focus();
+    fireEvent.keyDown(heads()[0], { key: 'ArrowDown' }); await settle();
+    expect(document.activeElement).toBe(heads()[1]);
+    expect(stops()).toEqual(['Beta']);
+    fireEvent.keyDown(heads()[1], { key: 'ArrowDown' }); await settle();
+    expect(document.activeElement).toBe(heads()[2]);
+    fireEvent.keyDown(heads()[2], { key: 'ArrowDown' }); await settle(); // đã ở cuối: đứng yên
+    expect(document.activeElement).toBe(heads()[2]);
+    fireEvent.keyDown(heads()[2], { key: 'ArrowUp' }); await settle(); fireEvent.keyDown(heads()[1], { key: 'ArrowUp' }); await settle();
+    expect(document.activeElement).toBe(heads()[0]);
+    expect(stops()).toEqual(['Alpha']);
+  });
+  it('controlled collapse: the grid follows `collapsed` and reports the toggled group (with its range) instead of keeping its own state', async () => {
+    const onToggleGroup = vi.fn();
+    const m = await mount({ collapsed: new Set(['Beta']), onToggleGroup });
+    expect(heads()[1].getAttribute('aria-expanded')).toBe('false');
+    expect(names()).toHaveLength(9);
+    fireEvent.click(heads()[0]); await settle();
+    expect(onToggleGroup).toHaveBeenCalledWith(expect.objectContaining({ family: 'Alpha', start: 0, count: 5 }), true);
+    expect(heads()[0].getAttribute('aria-expanded')).toBe('true'); // controlled: nothing changes until the owner says so
+    await m.rerenderWith({ collapsed: new Set(['Alpha', 'Beta']), onToggleGroup });
+    expect(names()).toHaveLength(4);
+  });
   it('the count says "m/N kiểu" when filters hide some styles of the family', async () => {
     const api = createMockLibraryApi(data);
     const real = api.familyGroups!.bind(api);
