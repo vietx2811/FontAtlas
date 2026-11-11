@@ -725,6 +725,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf".into(),
         owner: fa::Owner::RightFont,
         same_file: false,
+        replace_tier: fa::ReplaceTier::Replace,
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

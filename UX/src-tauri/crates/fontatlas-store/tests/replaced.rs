@@ -60,3 +60,20 @@ fn journal_survives_a_library_rebuild() {
     let s = open_store(d.path());
     assert_eq!(s.unrestored_replaced().unwrap().len(), 1);
 }
+
+#[test]
+fn a_user_db_from_the_previous_version_upgrades_and_keeps_its_data() {
+    let d = tmp();
+    let user = d.path().join(fontatlas_store::USER_FILE);
+    fontatlas_store::create_user_pre_replaced_for_test(&user);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        assert_eq!(c.query_row("SELECT count(*) FROM sqlite_schema WHERE name='activation_replaced'", [], |r| r.get::<_, i64>(0)).unwrap(), 0, "bản trước chưa có bảng");
+        c.execute("INSERT INTO classification_overrides(hash, face_index, class, subclass, updated_at) VALUES (?1,0,'sans',NULL,5)", rusqlite::params![&[9u8; 32][..]]).unwrap();
+    }
+    let (mut s, rep) = fontatlas_store::Store::open(d.path()).unwrap();
+    assert!(rep.user_backup.is_some(), "có backup trước khi nâng cấp");
+    assert_eq!(s.classification_overrides().unwrap().len(), 1, "dữ liệu cũ còn nguyên");
+    let id = s.add_replaced(&new_entry([1; 32], "/a.ttf", vec![ActivationScope::Persistent])).unwrap();
+    assert_eq!(s.unrestored_replaced().unwrap()[0].id, id);
+}

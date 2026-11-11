@@ -559,6 +559,17 @@ pub fn create_user_pre_taxonomy_for_test(path: &Path) {
     c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
 }
 
+/// Chỉ cho test: user.db ngay TRƯỚC migration sổ "thay thế" (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_replaced_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-replaced");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_REPLACED).expect("replaced migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]
 pub fn create_user_v1_for_test(path: &Path) {

@@ -8,25 +8,22 @@ import { useUiStore } from '../../../store/ui';
 import { tipOf } from '../../../test/tip';
 import { ActivationDialogHost } from '../ActivationDialogHost';
 import { ConflictDialog } from '../ActivationDialogs';
-import { replaceAdvice, replaceTierOf } from '../conflictModel';
+import { confirmedOf, replaceAdvice, replaceTierOf } from '../conflictModel';
 import { useActivationFlow } from '../useActivationFlow';
 
-const c = (owner: ConflictDto['owner'], existingPath: string, over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath, owner, sameFile: false, ...over });
+/** Stand-in for the backend's matrix (fontatlas-activate::replace_tier): the UI only echoes what the backend says. */
+const tierOf = (owner: ConflictDto['owner'], path: string): ConflictDto['replaceTier'] =>
+  /^(\/System\/Library|\/Library\/Fonts|\/Users\/[^/]+\/Library\/Fonts)\//.test(path) || owner === 'system' || owner === 'user_installed' ? 'protected' : owner === 'adobe_fonts' || owner === 'suitcase' ? 'guide' : 'replace';
+const c = (owner: ConflictDto['owner'], existingPath: string, over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath, owner, sameFile: false, replaceTier: tierOf(owner, existingPath), ...over });
 const item = (conflicts: ConflictDto[]) => ({ family: 'Oswald', style: 'Regular', conflicts });
 const initial = useUiStore.getState();
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 
-describe('replace matrix in the UI (mirrors fontatlas-activate::replace_tier)', () => {
-  it('protected: system and font folders by owner or by path; guide: Adobe and Suitcase; replace: everything else', () => {
-    expect(replaceTierOf(c('system', '/System/Library/Fonts/A.ttf'))).toBe('protected');
-    expect(replaceTierOf(c('system', '/Library/Fonts/A.ttf'))).toBe('protected');
-    expect(replaceTierOf(c('user_installed', '/Users/u/Library/Fonts/A.ttf'))).toBe('protected');
-    expect(replaceTierOf(c('other', '/Users/u/Library/Fonts/A.ttf'))).toBe('protected');
-    expect(replaceTierOf(c('right_font', '~/Library/Fonts/A.ttf'))).toBe('protected');
-    expect(replaceTierOf(c('adobe_fonts', '/x/Adobe/CoreSync/plugins/livetype/.r/.1.otf'))).toBe('guide');
-    expect(replaceTierOf(c('suitcase', '/x/Suitcase Fusion/a.ttf'))).toBe('guide');
-    for (const o of ['font_atlas', 'right_font', 'font_base', 'typeface', 'other'] as const) expect(replaceTierOf(c(o, '/Volumes/X/lib/A.ttf'))).toBe('replace');
-    expect(replaceTierOf(c('right_font', '/Users/u/Library/FontsOld/A.ttf'))).toBe('replace');
+describe('replace matrix in the UI (the backend decides; the UI never guesses from paths)', () => {
+  it('the tier comes from the conflict itself, whatever the path looks like', () => {
+    expect(replaceTierOf(c('other', '/Users/u/Library/Fonts/A.ttf', { replaceTier: 'replace' }))).toBe('replace');
+    expect(replaceTierOf(c('right_font', '/Volumes/X/lib/A.ttf', { replaceTier: 'protected' }))).toBe('protected');
+    expect(replaceTierOf(c('right_font', '/x.ttf', { replaceTier: 'guide' }))).toBe('guide');
   });
 
   it('advice: the worst tier wins; app names are collected; "other" is flagged as unknown', () => {
@@ -35,6 +32,16 @@ describe('replace matrix in the UI (mirrors fontatlas-activate::replace_tier)', 
     expect(replaceAdvice([item([c('other', '/lib/a.ttf')])])).toMatchObject({ tier: 'replace', apps: [], unknownApp: true });
     expect(replaceAdvice([item([c('right_font', '/lib/a.ttf')]), item([c('adobe_fonts', '/x/a.otf')])]).tier).toBe('guide');
     expect(replaceAdvice([item([c('right_font', '/lib/a.ttf')]), item([c('system', '/Library/Fonts/a.ttf')])]).tier).toBe('protected');
+  });
+
+  it('same-file copies count too: the backend removes every conflict, so a protected same-file copy blocks replacing', () => {
+    const a = replaceAdvice([item([c('right_font', '/lib/a.ttf'), c('system', '/Library/Fonts/a.ttf', { sameFile: true })])]);
+    expect(a.tier).toBe('protected');
+  });
+
+  it('confirmedOf lists every (file, installed path) pair the user saw, once', () => {
+    const it1 = { hashHex: 'aa', family: 'F', style: 'Regular', conflicts: [c('right_font', '/lib/a.ttf'), c('right_font', '/lib/a.ttf', { postscriptName: 'X-Bold' })] };
+    expect(confirmedOf([it1, { ...it1, hashHex: 'bb' }])).toEqual([{ hashHex: 'aa', existingPath: '/lib/a.ttf' }, { hashHex: 'bb', existingPath: '/lib/a.ttf' }]);
   });
 });
 
@@ -56,11 +63,10 @@ describe('ConflictDialog · replace option', () => {
     expect(s.onConfirm).not.toHaveBeenCalled();
   });
 
-  it('RightFont also gets the secondary "Hướng dẫn tắt trong RightFont": instructions plus a retry', () => {
+  it('RightFont also shows "Hướng dẫn tắt trong RightFont" right below, without a toggle: instructions plus a retry that is not inside a paragraph', () => {
     const s = mount([item([c('right_font', '/Volumes/L/a.ttf')])]);
-    expect(screen.queryByTestId('guide-text')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Hướng dẫn tắt trong RightFont' }));
-    expect(screen.getByTestId('guide-text').textContent).toMatch(/Mở RightFont, tắt font này/);
+    expect(screen.getByTestId('guide-text').textContent).toMatch(/Hướng dẫn tắt trong RightFont.*Mở RightFont, tắt font này/);
+    expect(screen.getByRole('button', { name: 'Thử lại' }).closest('p')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect(s.onRetry).toHaveBeenCalledTimes(1);
   });
@@ -81,6 +87,22 @@ describe('ConflictDialog · replace option', () => {
     expect(go.disabled).toBe(false);
     fireEvent.click(go);
     expect(s.onReplace).toHaveBeenCalled();
+  });
+
+  it('an unknown app next to a known one still needs "I understand", and the warning lists both', () => {
+    const s = mount([item([c('right_font', '/Volumes/L/a.ttf'), c('other', '/Volumes/L/b.ttf')])]);
+    fireEvent.click(screen.getByRole('radio', { name: /Thay bằng bản này/ }));
+    expect(screen.getByTestId('replace-warning').textContent).toMatch(/RightFont \/ một ứng dụng khác/);
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Tôi hiểu/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+    expect(s.onReplace).toHaveBeenCalled();
+  });
+
+  it('the warning is linked to the replace option for screen readers', () => {
+    mount([item([c('font_base', '/Volumes/L/a.ttf')])]);
+    const radio = screen.getByRole('radio', { name: /Thay bằng bản này/ });
+    expect(document.getElementById(radio.getAttribute('aria-describedby')!)).toBe(screen.getByTestId('replace-warning'));
   });
 
   it('Adobe / Suitcase: no replace option, only guidance with a retry', () => {
@@ -106,6 +128,17 @@ describe('ConflictDialog · replace option', () => {
 });
 
 describe('activation flow · replace and restore', () => {
+  it('Settings-style journal: a restored copy leaves the unrestored list', async () => {
+    const api = createMockApi();
+    const f = (await api.queryFaces({ text: 'Oswald', limit: 5 })).items[0];
+    const pre = await api.activationPreflight([{ hashHex: f.hashHex, faceIndex: f.faceIndex }]);
+    const seen = pre.results.flatMap(r => (r.outcome.kind === 'needs_confirmation' ? r.outcome.conflicts.map(x => ({ hashHex: r.hashHex, existingPath: x.existingPath })) : []));
+    const rep = await api.activationReplace([{ hashHex: f.hashHex, faceIndex: f.faceIndex }], seen);
+    expect(await api.activationListReplaced()).toHaveLength(1);
+    await api.activationRestoreReplaced(rep.results[0].replaced![0].id);
+    expect(await api.activationListReplaced()).toHaveLength(0);
+  });
+
   beforeEach(() => { useActivationQueue.getState().clear(); useUiStore.setState(initial, true); useNoticeStore.setState({ notices: [] }); });
   function Harness({ api, faces }: { api: ReturnType<typeof createMockApi>; faces: { hashHex: string; faceIndex: number }[] }) {
     const flow = useActivationFlow(api);
@@ -136,7 +169,6 @@ describe('activation flow · replace and restore', () => {
     const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
     render(<Harness api={api} faces={faces} />);
     await act(async () => { fireEvent.click(screen.getByText('go')); }); await settle();
-    fireEvent.click(screen.getByRole('button', { name: 'Hướng dẫn tắt trong RightFont' }));
     spy.mockClear();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })); }); await settle();
     expect(spy).toHaveBeenCalledTimes(1);
@@ -153,5 +185,36 @@ describe('activation flow · replace and restore', () => {
     const text = useNoticeStore.getState().notices.map(n => n.text).join('\n');
     expect(text).toMatch(/không tắt được từ Font Atlas/);
     expect(text).not.toMatch(/replace_not_registered/);
+  });
+
+  it('a confirmation that went stale asks again with the new conflicts instead of replacing', async () => {
+    const api = createMockApi();
+    const real = api.activationReplace.bind(api);
+    const spy = vi.spyOn(api, 'activationReplace').mockImplementationOnce(async (faces, _confirmed, o) => real(faces, [{ hashHex: faces[0].hashHex, existingPath: '/da/doi.ttf' }], o));
+    const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
+    render(<Harness api={api} faces={faces} />);
+    await act(async () => { fireEvent.click(screen.getByText('go')); }); await settle();
+    fireEvent.click(screen.getByRole('radio', { name: /Thay bằng bản này/ }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' })); }); await settle();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(await api.activationState()).toEqual([]);
+    expect(screen.getByRole('dialog'), 'dialog reopens').toBeTruthy();
+    expect(useNoticeStore.getState().notices.map(n => n.text).join('\n')).toMatch(/đã đổi so với lúc bạn xác nhận/);
+  });
+
+  it('"not effective" and "rollback failed" are told truthfully; not-effective still offers the restore action', async () => {
+    const api = createMockApi();
+    const f = (rc: string, replaced?: boolean) => ({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: { kind: 'failed' as const, code: rc, message: 'x' }, ...(replaced ? { replaced: [{ id: 1, path: '/x.ttf', owner: 'right_font' as const, scopes: ['persistent' as const] }] } : {}) }], changed: 0, needsConfirmation: 0, failed: 1 });
+    vi.spyOn(api, 'activationReplace').mockResolvedValueOnce(f('replace_not_effective', true)).mockResolvedValueOnce(f('replace_rollback_failed', true));
+    const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
+    render(<Harness api={api} faces={faces} />);
+    for (let i = 0; i < 2; i++) {
+      await act(async () => { fireEvent.click(screen.getByText('go')); }); await settle();
+      fireEvent.click(screen.getByRole('radio', { name: /Thay bằng bản này/ }));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' })); }); await settle();
+    }
+    const ns = useNoticeStore.getState().notices;
+    expect(ns.some(n => /một bản khác vẫn đang cung cấp/.test(n.text) && n.action?.label === 'Khôi phục bản cũ')).toBe(true);
+    expect(ns.some(n => /không trả lại được bản cũ/.test(n.text))).toBe(true);
   });
 });

@@ -173,9 +173,12 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     const ch = last().args.onProgress as { onmessage(m: unknown): void };
     ch.onmessage({ done: 1, total: 2, hashHex: 'h' });
     expect(onProgress).toHaveBeenCalledWith({ done: 1, total: 2, hashHex: 'h' });
-    await api.activationReplace(faces, { scope: 'persistent', onProgress });
+    const confirmed = [{ hashHex: 'h', existingPath: '/x/a.ttf' }];
+    await api.activationReplace(faces, confirmed, { scope: 'persistent', onProgress });
     expect(last().cmd).toBe('activation_replace');
-    expect(last().args).toMatchObject({ faces, scope: 'persistent' });
+    expect(last().args).toMatchObject({ faces, scope: 'persistent', confirmed });
+    await api.activationListReplaced();
+    expect(last().cmd).toBe('activation_list_replaced');
     await api.activationRestoreReplaced(42);
     expect(last()).toEqual({ cmd: 'activation_restore_replaced', args: { id: 42 } });
     await api.activationDeactivate(faces, { force: true });

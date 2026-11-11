@@ -1,6 +1,7 @@
 import { readSplashEnabled, writeSplashEnabled } from '../splash/splashState';
 import { useCallback, useEffect, useState } from 'react';
-import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, SettingsDto, SourceDto } from '../../api';
+import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, ReplacedEntryDto, SettingsDto, SourceDto } from '../../api';
+import { restoreReplaced } from '../activation/restoreReplaced';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
@@ -182,7 +183,9 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
   const [ob, setOb] = useState<OnboardingDto | null>(null);
   const [confirm, setConfirm] = useState(false);
   const active = useUiStore(x => x.active);
-  useEffect(() => { void api.onboardingState().then(setOb); }, [api]);
+  const [replaced, setReplaced] = useState<ReplacedEntryDto[]>([]);
+  const reloadReplaced = useCallback(() => api.activationListReplaced().then(setReplaced, () => setReplaced([])), [api]);
+  useEffect(() => { void api.onboardingState().then(setOb); void reloadReplaced(); }, [api, reloadReplaced]);
   if (ob && !ob.activationSupported) return <p className="fa-set-note">Kích hoạt font chưa có trên hệ điều hành này.</p>;
   return (
     <>
@@ -191,6 +194,15 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
         <label><input type="radio" name="keep" checked={s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: true })} />Giữ font hoạt động cả khi tắt Font Atlas</label>
       </fieldset>
       {ob?.fontManagers.filter(m => m.installed).map(m => <p key={m.name} className="fa-set-note">Phát hiện {m.name}{m.activeCount ? `: ~${m.activeCount} font đang kích hoạt` : ' đã cài trên máy'}. Chỉ là thông tin.</p>)}
+      <fieldset className="fa-set-group" data-testid="replaced-list"><legend>{t('set.replaced.title')}</legend>
+        <p className="fa-set-note">{replaced.length ? t('set.replaced.note') : t('set.replaced.empty')}</p>
+        {replaced.map(r => (
+          <div key={r.id} className="fa-set-row">
+            <span title={r.path}>{r.path} · {r.owner} · {r.scopes.join(' + ')}</span>
+            <button type="button" onClick={async () => { await restoreReplaced(api, [r.id]); await reloadReplaced(); }}>{t('set.replaced.restore')}</button>
+          </div>
+        ))}
+      </fieldset>
       <div className="fa-set-group"><button type="button" className="danger" disabled={active.size === 0} onClick={() => setConfirm(true)}>Tắt mọi font đã kích hoạt ({active.size})</button></div>
       {confirm && (
         <Modal title="Tắt mọi font đã kích hoạt?" onClose={() => setConfirm(false)}>

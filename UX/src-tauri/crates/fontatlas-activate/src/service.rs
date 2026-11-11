@@ -20,7 +20,7 @@ use crate::engine::{ActivationEngine, Scope};
 use crate::paths::{
     CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, probe_file, replace_tier, same_content,
 };
-use crate::types::{
+use crate::types::{ConfirmedConflict, 
     ActivationError, ActivationReport, ActivationStateDto, Conflict, ConflictPolicy, ENGINE_VERSION, EngineError, FileOutcome,
     FileResult, Owner, Progress, ReplaceTier, ReplacedFont, RestoreOutcome, SETTING_ACTIVATION_KEEP,
 };
@@ -227,7 +227,7 @@ impl<E: ActivationEngine> ActivationService<E> {
     /// Kiểm tra xung đột, không đăng ký, không ghi DB. Không xung đột → `Ready`.
     pub fn preflight(&self, store: &Mutex<Store>, keys: &[FaceKey]) -> Result<ActivationReport, ActivationError> {
         let scope = Self::default_scope(store)?;
-        self.run(store, keys, ActivationReason::Manual, scope, false, ConflictPolicy::Ask, true, &mut |_| {})
+        self.run(store, keys, ActivationReason::Manual, scope, false, ConflictPolicy::Ask, true, None, &mut |_| {})
     }
 
     pub fn activate_faces(
@@ -267,7 +267,25 @@ impl<E: ActivationEngine> ActivationService<E> {
             Some(s) => s,
             None => Self::default_scope(store)?,
         };
-        self.run(store, keys, reason, scope, explicit, policy, false, progress)
+        self.run(store, keys, reason, scope, explicit, policy, false, None, progress)
+    }
+
+    /// "Thay bằng bản này": chỉ thay đúng những xung đột người dùng đã thấy và xác nhận. Tập xung đột của một file đổi
+    /// so với `confirmed` (bản cũ mới xuất hiện / biến mất giữa lúc hỏi và lúc bấm) → `replace_conflicts_changed`.
+    pub fn replace_faces(
+        &self,
+        store: &Mutex<Store>,
+        keys: &[FaceKey],
+        scope: Option<Scope>,
+        confirmed: &[ConfirmedConflict],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        let explicit = scope.is_some();
+        let scope = match scope {
+            Some(s) => s,
+            None => Self::default_scope(store)?,
+        };
+        self.run(store, keys, ActivationReason::Manual, scope, explicit, ConflictPolicy::Replace, false, Some(confirmed), progress)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -280,6 +298,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         explicit: bool,
         policy: ConflictPolicy,
         dry_run: bool,
+        confirmed: Option<&[ConfirmedConflict]>,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
         let groups = group(keys);
@@ -287,7 +306,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut rep = ActivationReport::default();
         let total = groups.len();
         for (i, (hash, req)) in groups.into_iter().enumerate() {
-            let r = self.one_file(store, &mut batch, hash, req, reason, scope, explicit, policy, dry_run)?;
+            let r = self.one_file(store, &mut batch, hash, req, reason, scope, explicit, policy, dry_run, confirmed)?;
             rep.push(r);
             progress(Progress { done: i + 1, total, hash_hex: hex(&hash) });
         }
@@ -339,7 +358,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                     .borrow_mut()
                     .entry((path.to_path_buf(), p.to_path_buf()))
                     .or_insert_with(|| same_content(path, p));
-                out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner, same_file });
+                out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner, same_file, replace_tier: tier_of(owner, p, &batch.home) });
             }
         };
         for name in names {
@@ -371,6 +390,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         explicit: bool,
         policy: ConflictPolicy,
         dry_run: bool,
+        confirmed: Option<&[ConfirmedConflict]>,
     ) -> Result<FileResult, ActivationError> {
         let mut res = FileResult {
             hash_hex: hex(&hash),
@@ -484,6 +504,21 @@ impl<E: ActivationEngine> ActivationService<E> {
         }
         // "Tắt bản cũ và bật bản này": gỡ các bản đăng ký xung đột (nếu ma trận cho phép) TRƯỚC khi đăng ký bản của ta.
         let mut removed: Vec<Removed> = vec![];
+        if let (ConflictPolicy::Replace, Some(ok)) = (policy, confirmed) {
+            let mut now: Vec<&str> = conflicts.iter().map(|c| c.existing_path.as_str()).collect();
+            let mut seen: Vec<&str> = ok.iter().filter(|c| c.hash == hash).map(|c| c.existing_path.as_str()).collect();
+            now.sort_unstable();
+            now.dedup();
+            seen.sort_unstable();
+            seen.dedup();
+            if now != seen {
+                res.outcome = FileOutcome::Failed {
+                    code: "replace_conflicts_changed".into(),
+                    message: "các bản đang cài đã khác so với lúc bạn xác nhận; hãy xem lại rồi thử lại".into(),
+                };
+                return Ok(res);
+            }
+        }
         if policy == ConflictPolicy::Replace && !conflicts.is_empty() {
             match self.remove_conflicts(store, &hash, &conflicts, &batch.home) {
                 Ok(r) => removed = r,
@@ -553,11 +588,20 @@ impl<E: ActivationEngine> ActivationService<E> {
                 self.remember_available(store, &hash, false)?;
                 res.replaced = removed.iter().filter_map(|r| r.journal.clone()).collect();
                 res.outcome = FileOutcome::Activated;
+                if !removed.is_empty() && !self.replace_took_effect(&conflicts, &path) {
+                    res.outcome = FileOutcome::Failed {
+                        code: "replace_not_effective".into(),
+                        message: "đã tắt bản cũ nhưng một bản khác vẫn đang cung cấp font này; app quản lý nó có thể đã bật lại".into(),
+                    };
+                }
             }
             Err(e) => {
-                let failure = engine_failure(&e);
-                // đã gỡ bản cũ mà bật bản mới hỏng → trả bản cũ lại đúng URL + scope, bỏ dòng sổ
-                self.give_back(store, &removed);
+                let mut failure = engine_failure(&e);
+                // đã gỡ bản cũ mà bật bản mới hỏng → trả bản cũ lại đúng URL + scope, bỏ dòng sổ. Trả lại hỏng thì GIỮ sổ.
+                if !self.give_back(store, &removed) {
+                    failure = rollback_failed(e.code());
+                    res.replaced = removed.iter().filter_map(|r| r.journal.clone()).collect();
+                }
                 relock(store).with_tx(|tx| {
                     // Lý do đã có từ trước thì vẫn còn: giữ state=Active.
                     let none_left = added_new && remove_activation_reason_tx(tx, &hash, reason)?.is_empty();
@@ -657,8 +701,42 @@ struct Removed {
     journal: Option<ReplacedFont>,
 }
 
+/// Tier chặt nhất giữa chủ sở hữu đã phân loại và tier tính lại trên đường dẫn (canonical hoá).
+fn tier_of(owner: Owner, p: &Path, home: &Path) -> ReplaceTier {
+    use ReplaceTier::*;
+    let canon = canonical_path(p).unwrap_or_else(|_| p.to_path_buf());
+    let again = classify_owner(&canon, home, &HashSet::new());
+    let a = replace_tier(owner, p, home);
+    let b = replace_tier(if owner == Owner::FontAtlas { owner } else { again }, &canon, home);
+    match (a, b) {
+        (Protected, _) | (_, Protected) => Protected,
+        (Guide, _) | (_, Guide) => Guide,
+        _ => Replace,
+    }
+}
+
+fn rollback_failed(cause: &str) -> FileOutcome {
+    FileOutcome::Failed {
+        code: "replace_rollback_failed".into(),
+        message: format!("không bật được bản mới ({cause}) và cũng không trả lại được bản cũ; bản cũ nằm trong mục \"Đã thay thế\" để khôi phục"),
+    }
+}
+
 impl<E: ActivationEngine> ActivationService<E> {
-    /// Gỡ mọi bản xung đột, theo ma trận. Lỗi → `Err(outcome)` và mọi thứ đã gỡ được trả lại.
+    /// Sau khi gỡ + đăng ký: không còn file nào khác (ngoài bản của ta) cung cấp các PS name đã xung đột?
+    /// Không hỏi được hệ điều hành → coi như hiệu lực (không có bằng chứng ngược lại).
+    fn replace_took_effect(&self, conflicts: &[Conflict], ours: &Path) -> bool {
+        let ours = canonical_path(ours).unwrap_or_else(|_| ours.to_path_buf());
+        let mut names: Vec<&str> = conflicts.iter().map(|c| c.postscript_name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        names.into_iter().all(|n| match self.engine.providers(n) {
+            Ok(ps) => ps.iter().all(|p| canonical_path(p).unwrap_or_else(|_| p.clone()) == ours),
+            Err(_) => true,
+        })
+    }
+
+    /// Gỡ mọi bản xung đột, theo ma trận. Lỗi → `Err(outcome)` và mọi thứ đã gỡ được trả lại (không trả được → giữ sổ).
     fn remove_conflicts(
         &self,
         store: &Mutex<Store>,
@@ -667,17 +745,24 @@ impl<E: ActivationEngine> ActivationService<E> {
         home: &Path,
     ) -> Result<Vec<Removed>, FileOutcome> {
         let fail = |code: &str, message: String| FileOutcome::Failed { code: code.into(), message };
-        // gom theo đường dẫn: một bản có thể trùng nhiều PS name
+        // gom theo đường dẫn CANONICAL: một bản có thể trùng nhiều PS name, hoặc hiện ra dưới nhiều tên (symlink/firmlink)
         let mut by_path: Vec<(PathBuf, Owner, Vec<String>)> = vec![];
         for c in conflicts {
-            let p = PathBuf::from(&c.existing_path);
-            match by_path.iter_mut().find(|(q, ..)| *q == p) {
-                Some((_, _, names)) => names.push(c.postscript_name.clone()),
-                None => by_path.push((p, c.owner, vec![c.postscript_name.clone()])),
+            let raw = PathBuf::from(&c.existing_path);
+            let canon = canonical_path(&raw).unwrap_or(raw);
+            match by_path.iter_mut().find(|(q, ..)| *q == canon) {
+                Some((_, o, names)) => {
+                    names.push(c.postscript_name.clone());
+                    if c.owner != Owner::FontAtlas {
+                        *o = c.owner;
+                    }
+                }
+                None => by_path.push((canon, c.owner, vec![c.postscript_name.clone()])),
             }
         }
         // 1. Ma trận: Protected thắng Guide; một bản không được phép là dừng cả lần, chưa đụng gì.
-        let tiers: Vec<ReplaceTier> = by_path.iter().map(|(p, o, _)| replace_tier(*o, p, home)).collect();
+        let tiers: Vec<ReplaceTier> =
+            by_path.iter().map(|(p, o, _)| if *o == Owner::FontAtlas { ReplaceTier::Replace } else { tier_of(*o, p, home) }).collect();
         if let Some(i) = tiers.iter().position(|t| *t == ReplaceTier::Protected) {
             return Err(fail(
                 "replace_protected",
@@ -689,71 +774,76 @@ impl<E: ActivationEngine> ActivationService<E> {
         }
         // 2. Gỡ từng bản. Không biết bản cũ đăng ký ở scope nào → thử cả hai; 201 (chưa đăng ký ở scope đó) là bình thường.
         let mut done: Vec<Removed> = vec![];
-        for (p, owner, names) in &by_path {
+        let abort = |this: &Self, done: &[Removed], out: FileOutcome| -> FileOutcome {
+            if this.give_back(store, done) { out } else { rollback_failed("trả bản cũ") }
+        };
+        for (target, owner, names) in &by_path {
             if *owner == Owner::FontAtlas {
                 // chính ta đăng ký (lô này hoặc trước đó): tắt qua luồng tắt bình thường để dòng kích hoạt khớp thực tế
-                if let Err(o) = self.turn_off_our_own(store, p) {
-                    self.give_back(store, &done);
-                    return Err(o);
+                if let Err(o) = self.turn_off_our_own(store, target) {
+                    return Err(abort(self, &done, o));
                 }
                 continue;
             }
-            let target = canonical_path(p).unwrap_or_else(|_| p.clone());
+            // kiểm lại tier trên target canonical NGAY trước khi gỡ (đường dẫn có thể đã đổi từ lúc phân loại)
+            if tier_of(*owner, target, home) != ReplaceTier::Replace {
+                return Err(abort(self, &done, fail("replace_protected", format!("{} không được phép gỡ", target.display()))));
+            }
             let mut scopes = vec![];
             for s in [Scope::Persistent, Scope::Session] {
-                match self.engine.unregister(&target, s) {
+                match self.engine.unregister(target, s) {
                     Ok(()) => scopes.push(s),
                     Err(EngineError::NotRegistered) => {}
                     Err(e) => {
-                        self.give_back(store, &done);
-                        self.give_back_one(&target, &scopes);
-                        return Err(engine_failure(&e));
+                        let back = self.give_back_one(target, &scopes);
+                        let out = abort(self, &done, engine_failure(&e));
+                        return Err(if back { out } else { rollback_failed(e.code()) });
                     }
                 }
             }
             if scopes.is_empty() {
-                self.give_back(store, &done);
-                return Err(fail(
-                    "replace_not_registered",
-                    format!("{} không phải font do app đăng ký qua hệ thống nên Font Atlas không tắt được", p.display()),
+                return Err(abort(
+                    self,
+                    &done,
+                    fail("replace_not_registered", format!("{} không phải font do app đăng ký qua hệ thống nên Font Atlas không tắt được", target.display())),
                 ));
             }
-            done.push(Removed { path: target, scopes, journal: None });
-            let _ = names;
-        }
-        // 3. Cả lô đã gỡ → ghi sổ (user.db) để khôi phục.
-        for ((p, owner, names), r) in by_path.iter().filter(|(_, o, _)| *o != Owner::FontAtlas).zip(done.iter_mut()) {
-            let owner_str = owner.as_str().to_string();
+            // ghi sổ NGAY sau khi gỡ: nếu bước sau hỏng và không trả lại được thì bản cũ vẫn khôi phục được từ sổ
             let entry = fontatlas_store::NewReplaced {
                 hash: *new_hash,
-                old_path: path_str(&r.path),
-                owner: owner_str,
-                scopes: r.scopes.clone(),
+                old_path: path_str(target),
+                owner: owner.as_str().to_string(),
+                scopes: scopes.clone(),
                 postscript_names: names.clone(),
             };
-            match relock(store).add_replaced(&entry) {
-                Ok(id) => r.journal = Some(ReplacedFont { id, path: path_str(&r.path), owner: *owner, scopes: r.scopes.clone() }),
+            let journal = match relock(store).add_replaced(&entry) {
+                Ok(id) => Some(ReplacedFont { id, path: path_str(target), owner: *owner, scopes: scopes.clone() }),
                 Err(e) => {
-                    self.give_back(store, &done);
-                    return Err(fail("store", e.to_string()));
+                    let back = self.give_back_one(target, &scopes);
+                    let out = abort(self, &done, fail("store", e.to_string()));
+                    return Err(if back { out } else { rollback_failed("ghi sổ") });
                 }
-            }
-            let _ = p;
+            };
+            done.push(Removed { path: target.clone(), scopes, journal });
         }
         Ok(done)
     }
 
-    /// Tắt (Force) font do chính Font Atlas đang bật ở `path`.
+    /// Tắt (Force) font do chính Font Atlas đang bật ở `path` (so theo đường dẫn canonical). Không thấy dòng nào → lỗi rõ.
     fn turn_off_our_own(&self, store: &Mutex<Store>, path: &Path) -> Result<(), FileOutcome> {
         let rows = relock(store).activation_rows().map_err(|e| FileOutcome::Failed { code: "store".into(), message: e.to_string() })?;
-        let want = path_str(path);
+        let want = canonical_path(path).unwrap_or_else(|_| path.to_path_buf());
         let keys: Vec<FaceKey> = rows
             .into_iter()
-            .filter(|r| r.status == ActivationStatus::Registered && r.active_path.as_deref() == Some(want.as_str()))
+            .filter(|r| r.status == ActivationStatus::Registered)
+            .filter(|r| r.active_path.as_deref().is_some_and(|a| canonical_path(Path::new(a)).unwrap_or_else(|_| PathBuf::from(a)) == want))
             .map(|r| FaceKey { hash: r.hash, face_index: 0 })
             .collect();
         if keys.is_empty() {
-            return Ok(());
+            return Err(FileOutcome::Failed {
+                code: "replace_own_not_found".into(),
+                message: format!("không tìm thấy font Font Atlas đang bật ở {}", path.display()),
+            });
         }
         match self.deactivate_faces(store, &keys, crate::types::DeactivatePolicy::Force, &mut |_| {}) {
             Ok(rep) => match rep.results.into_iter().find(|r| matches!(r.outcome, FileOutcome::Failed { .. })) {
@@ -764,42 +854,66 @@ impl<E: ActivationEngine> ActivationService<E> {
         }
     }
 
-    fn give_back_one(&self, path: &Path, scopes: &[Scope]) {
+    /// Đăng ký lại `path` ở các scope; true khi tất cả OK / đã có.
+    fn give_back_one(&self, path: &Path, scopes: &[Scope]) -> bool {
+        let mut all = true;
         for s in scopes {
-            let _ = self.engine.register(path, *s);
-        }
-    }
-
-    /// Trả lại các bản đã gỡ (đúng URL + scope) và bỏ dòng sổ tương ứng.
-    fn give_back(&self, store: &Mutex<Store>, removed: &[Removed]) {
-        for r in removed {
-            self.give_back_one(&r.path, &r.scopes);
-            if let Some(j) = &r.journal {
-                let _ = relock(store).delete_replaced(j.id);
+            match self.engine.register(path, *s) {
+                Ok(()) | Err(EngineError::AlreadyRegistered) => {}
+                Err(_) => all = false,
             }
         }
+        all
     }
 
-    /// "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope), rồi tắt bản của Font Atlas đã thay nó.
+    /// Trả lại các bản đã gỡ (đúng URL + scope). Dòng sổ chỉ bị xoá khi trả lại thành công; hỏng → giữ sổ, trả false.
+    fn give_back(&self, store: &Mutex<Store>, removed: &[Removed]) -> bool {
+        let mut all = true;
+        for r in removed {
+            if self.give_back_one(&r.path, &r.scopes) {
+                if let Some(j) = &r.journal {
+                    let _ = relock(store).delete_replaced(j.id);
+                }
+            } else {
+                all = false;
+            }
+        }
+        all
+    }
+
+    /// "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope), rồi tắt bản của Font Atlas đã thay nó
+    /// (chỉ khi không còn dòng sổ nào khác của cùng font; collection còn giữ thì bản của ta ở lại).
     pub fn restore_replaced(&self, store: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         let row = relock(store).get_replaced(id)?.ok_or_else(|| ActivationError::NotFound(format!("sổ khôi phục #{id}")))?;
         if row.restored_at.is_some() {
             return Ok(RestoreOutcome::AlreadyRestored);
         }
         let path = PathBuf::from(&row.old_path);
-        if probe_file(&path) == FileProbe::Missing {
-            return Ok(RestoreOutcome::MissingFile);
+        match probe_file(&path) {
+            FileProbe::Missing => return Ok(RestoreOutcome::MissingFile),
+            FileProbe::NotDownloaded => return Ok(RestoreOutcome::NotDownloaded),
+            FileProbe::Ready => {}
         }
-        // đăng ký bản cũ trước: nếu hỏng thì chưa đổi gì
+        // đăng ký bản cũ trước; hỏng giữa chừng → gỡ các scope vừa đăng ký, chưa đổi gì
+        let mut fresh: Vec<Scope> = vec![];
         for s in &row.scopes {
             match self.engine.register(&path, *s) {
-                Ok(()) | Err(EngineError::AlreadyRegistered) => {}
-                Err(e) => return Err(engine_err(e)),
+                Ok(()) => fresh.push(*s),
+                Err(EngineError::AlreadyRegistered) => {}
+                Err(e) => {
+                    for f in &fresh {
+                        let _ = self.engine.unregister(&path, *f);
+                    }
+                    return Err(engine_err(e));
+                }
             }
         }
-        // rồi tắt bản của ta (nếu còn bật)
-        let key = FaceKey { hash: row.hash, face_index: 0 };
-        self.deactivate_faces(store, &[key], crate::types::DeactivatePolicy::Force, &mut |_| {})?;
+        let others = relock(store).unrestored_replaced()?.iter().any(|r| r.hash == row.hash && r.id != id);
+        if !others {
+            // Ask (không Force): lý do bật từ collection không bị xoá; collection còn giữ thì bản của ta ở lại
+            let key = FaceKey { hash: row.hash, face_index: 0 };
+            self.deactivate_faces(store, &[key], crate::types::DeactivatePolicy::Ask, &mut |_| {})?;
+        }
         relock(store).mark_replaced_restored(id)?;
         Ok(RestoreOutcome::Restored)
     }

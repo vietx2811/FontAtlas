@@ -17,6 +17,14 @@ type ConflictProps = {
 };
 type Choice = 'skip' | 'both' | 'replace';
 
+/** Thay `{tên}` trong chuỗi i18n bằng phần tử React (vd TermTip), giữ nguyên phần chữ còn lại. */
+function fillSlots(text: string, slots: Record<string, React.ReactNode>): React.ReactNode[] {
+  return text.split(/(\{\w+\})/).map((part, i) => {
+    const m = /^\{(\w+)\}$/.exec(part);
+    return m && m[1] in slots ? <span key={i}>{slots[m[1]]}</span> : part;
+  });
+}
+
 /**
  * D3 (UX 03 §4.3): trùng tên PostScript với font đang có. Gộp theo family (một dòng mỗi family, mở ra xem kiểu); ai cài và đường dẫn
  * chỉ nằm trong tooltip của dấu "!". Mặc định bỏ qua các font trùng. Hộp cao tối đa 70% cửa sổ, danh sách cuộn bên trong.
@@ -24,11 +32,16 @@ type Choice = 'skip' | 'both' | 'replace';
 export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, onRetry, onReveal }: ConflictProps): React.JSX.Element {
   const [choice, setChoice] = useState<Choice>('skip');
   const [understood, setUnderstood] = useState(false);
-  const [guide, setGuide] = useState(false);
   const advice = useMemo(() => replaceAdvice(items), [items]);
   const canReplace = advice.tier === 'replace' && !!onReplace;
   const appName = advice.apps.join(' / ');
-  const strong = canReplace && advice.unknownApp && advice.apps.length === 0;
+  const other = t('act.replace.app.other');
+  // mọi app (đã nhận diện và "một ứng dụng khác") đều được kể tên trong cảnh báo; có bất kỳ app lạ nào → xác nhận mạnh
+  const names = [...advice.apps, ...(advice.unknownApp ? [other] : [])];
+  const guideApp = names.join(' / ');
+  const strong = canReplace && advice.unknownApp;
+  const warnText = advice.apps.length === 0 ? t('act.replace.warn.other') : t('act.replace.warn', { app: guideApp });
+  const warnId = 'fa-replace-warn';
   const goDisabled = choice === 'replace' && strong && !understood;
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const groups = useMemo(() => groupByFamily(items), [items]);
@@ -56,48 +69,43 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
       <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'skip'} onChange={() => setChoice('skip')} />
         {total === n ? t('act.conflict.skip') : t('act.conflict.skip.rest', { n: total - n })}</label>
       {canReplace && (
-        <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'replace'} onChange={() => setChoice('replace')} />
+        <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'replace'} onChange={() => setChoice('replace')} aria-describedby={warnId} />
           {t('act.replace.option')} <span className="fa-conf-gloss">· {t('act.replace.option.gloss')}</span></label>
       )}
       <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'both'} disabled={blocked} onChange={() => setChoice('both')} />
         {total === n ? t('act.conflict.force') : t('act.conflict.force.all', { total })}{blocked && <em> ({t('act.conflict.blocked')})</em>}</label>
       {canReplace && (
         <div className="fa-conf-replace">
-          <p className="fa-conf-warn" data-testid="replace-warning">
-            {advice.apps.length ? t('act.replace.warn', { app: appName }) : t('act.replace.warn.other')}
+          <p id={warnId} className="fa-conf-warn" data-testid="replace-warning">
+            {warnText}
           </p>
           <p className="fa-conf-scope">
-            {t('act.replace.scope.pre')}
-            <TermTip term="scope_session"><span data-term="scope_session" tabIndex={0} className="fa-termword">session scope</span></TermTip>
-            {t('act.replace.scope.mid')}
-            <TermTip term="scope_persistent"><span data-term="scope_persistent" tabIndex={0} className="fa-termword">persistent scope</span></TermTip>
-            {t('act.replace.scope.post')}
+            {fillSlots(t('act.replace.scope', { session: '{session}', persistent: '{persistent}' }), {
+              session: <TermTip term="scope_session"><span data-term="scope_session" tabIndex={0} className="fa-termword">session scope</span></TermTip>,
+              persistent: <TermTip term="scope_persistent"><span data-term="scope_persistent" tabIndex={0} className="fa-termword">persistent scope</span></TermTip>,
+            })}
           </p>
           {strong && choice === 'replace' && (
             <label className="fa-radio"><input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)} />{t('act.replace.strong')}</label>
           )}
-          {advice.apps.length > 0 && onRetry && (
-            <button type="button" className="fa-conf-guide" onClick={() => setGuide(g => !g)}>{t('act.replace.guide', { app: appName })}</button>
-          )}
-          {guide && (
-            <p data-testid="guide-text">
-              {t('act.replace.guide.body', { app: appName })}{' '}
-              <button type="button" onClick={onRetry}>{t('act.replace.retry')}</button>
-            </p>
-          )}
+          <div className="fa-conf-guide" data-testid="guide-text">
+            <strong>{t('act.replace.guide', { app: guideApp })}</strong>
+            <span>{t('act.replace.guide.body', { app: guideApp })}</span>
+            {onRetry && <button type="button" onClick={onRetry}>{t('act.replace.retry')}</button>}
+          </div>
         </div>
       )}
       {advice.tier === 'guide' && (
-        <p className="fa-conf-replace" data-testid="guide-text">
-          {t('act.replace.guideOnly', { app: appName || t('act.replace.app.other') })}{' '}
+        <div className="fa-conf-replace" data-testid="guide-text">
+          <span>{t('act.replace.guideOnly', { app: appName || t('act.replace.app.other') })}</span>
           {onRetry && <button type="button" onClick={onRetry}>{t('act.replace.retry')}</button>}
-        </p>
+        </div>
       )}
       {advice.tier === 'protected' && (
-        <p className="fa-conf-replace" data-testid="protected-note">
-          {t('act.replace.protected')}{' '}
+        <div className="fa-conf-replace" data-testid="protected-note">
+          <span>{t('act.replace.protected')}</span>
           {onReveal && advice.protectedPath && <button type="button" onClick={() => onReveal(advice.protectedPath!)}>{t('act.replace.reveal')}</button>}
-        </p>
+        </div>
       )}
       <div className="fa-modal-actions">
         <button type="button" onClick={onCancel}>{t('act.conflict.cancel')}</button>

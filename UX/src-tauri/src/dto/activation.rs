@@ -1,7 +1,7 @@
 //! DTO kích hoạt font: bản sao trong app của kiểu Plan 7 (hình dạng JSON giữ nguyên fixture của Plan 7).
 use fontatlas_activate as fa;
 use fontatlas_store::{ActivationReason, ActivationScope, ActivationStatus, DesiredState};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -171,6 +171,27 @@ pub struct ConflictDto {
     pub owner: OwnerDto,
     /// Font đang cài giống hệt file trong thư viện (từng byte): đã dùng được, không cần hỏi.
     pub same_file: bool,
+    /// Ma trận "Thay thế" do backend tính (đã canonical hoá đường dẫn): UI dùng nguyên, không tự đoán.
+    pub replace_tier: ReplaceTierDto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum ReplaceTierDto {
+    Replace,
+    Guide,
+    Protected,
+}
+
+impl From<fa::ReplaceTier> for ReplaceTierDto {
+    fn from(t: fa::ReplaceTier) -> Self {
+        match t {
+            fa::ReplaceTier::Replace => Self::Replace,
+            fa::ReplaceTier::Guide => Self::Guide,
+            fa::ReplaceTier::Protected => Self::Protected,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -221,7 +242,7 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::NeedsConfirmation { conflicts } => Self::NeedsConfirmation {
                 conflicts: conflicts
                     .iter()
-                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file })
+                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file, replace_tier: c.replace_tier.into() })
                     .collect(),
             },
             F::HeldByCollections { collection_ids } => Self::HeldByCollections { collection_ids: collection_ids.clone() },
@@ -271,6 +292,32 @@ pub struct ReplacedFontDto {
     pub scopes: Vec<ScopeDto>,
 }
 
+/// Xung đột người dùng đã thấy và xác nhận thay: file của thư viện + đường dẫn bản đang cài. Backend từ chối nếu tập này đã đổi.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ConfirmedConflictDto {
+    pub hash_hex: String,
+    pub existing_path: String,
+}
+
+/// Một bản cũ đã gỡ và chưa khôi phục (Cài đặt → Kích hoạt).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ReplacedEntryDto {
+    #[ts(type = "number")]
+    pub id: i64,
+    /// File của thư viện đã thay nó.
+    pub hash_hex: String,
+    pub path: String,
+    pub owner: String,
+    pub scopes: Vec<ScopeDto>,
+    pub postscript_names: Vec<String>,
+    #[ts(type = "number")]
+    pub created_at: i64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
@@ -278,6 +325,7 @@ pub enum RestoreOutcomeDto {
     Restored,
     AlreadyRestored,
     MissingFile,
+    NotDownloaded,
 }
 
 impl From<fa::RestoreOutcome> for RestoreOutcomeDto {
@@ -286,6 +334,7 @@ impl From<fa::RestoreOutcome> for RestoreOutcomeDto {
             fa::RestoreOutcome::Restored => Self::Restored,
             fa::RestoreOutcome::AlreadyRestored => Self::AlreadyRestored,
             fa::RestoreOutcome::MissingFile => Self::MissingFile,
+            fa::RestoreOutcome::NotDownloaded => Self::NotDownloaded,
         }
     }
 }

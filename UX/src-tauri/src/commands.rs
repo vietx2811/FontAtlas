@@ -154,7 +154,8 @@ macro_rules! command_list {
             async activation_state() -> Result<Vec<ActivationStateDto>, CmdError>;
             async activation_preflight(faces: Vec<FaceKeyDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
-            async activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_list_replaced() -> Result<Vec<ReplacedEntryDto>, CmdError>;
             async activation_restore_replaced(id: i64) -> Result<RestoreOutcomeDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
@@ -445,8 +446,9 @@ cmd!(activation_activate(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, procee
         let _ = on_progress.send(p);
     })
 });
-cmd!(activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
-    activation::replace(s, &faces, scope, &mut |p| {
+cmd!(activation_list_replaced() -> Vec<ReplacedEntryDto> => |s| activation::list_replaced(s));
+cmd!(activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::replace(s, &faces, scope, &confirmed, &mut |p| {
         let _ = on_progress.send(p);
     })
 });

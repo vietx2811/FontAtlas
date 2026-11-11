@@ -199,3 +199,148 @@ fn owners_of_typeface_and_suitcase_are_guessed_from_the_path() {
     assert_eq!(classify_owner(Path::new("/Volumes/Fonts/Suitcase Fusion 2024/a.ttf"), home, &none), Owner::Suitcase);
     assert_eq!(classify_owner(Path::new("/Users/u/Dropbox/a.ttf"), home, &none), Owner::Other);
 }
+
+// ───────── review 0.3.0 ─────────
+
+fn jrows(env: &Env) -> Vec<fontatlas_store::ReplacedRow> {
+    env.store.lock().unwrap().unrestored_replaced().unwrap()
+}
+
+#[test]
+fn protected_dirs_are_recognised_through_symlinks_firmlinks_and_case() {
+    let d = tempfile::tempdir().unwrap();
+    let home = canon(d.path()).join("home");
+    let fonts = home.join("Library/Fonts");
+    std::fs::create_dir_all(&fonts).unwrap();
+    std::fs::write(fonts.join("x.ttf"), b"x").unwrap();
+    let link_dir = canon(d.path()).join("alias");
+    std::os::unix::fs::symlink(&fonts, &link_dir).unwrap();
+    let t = |o: Owner, p: &Path| replace_tier(o, p, &home);
+    assert_eq!(t(Owner::Other, &link_dir.join("x.ttf")), ReplaceTier::Protected, "symlink vào ~/Library/Fonts");
+    assert_eq!(t(Owner::Other, &home.join("LIBRARY/fonts/X.TTF")), ReplaceTier::Protected, "khác hoa/thường");
+    assert_eq!(t(Owner::Other, Path::new("/System/Volumes/Data/Library/Fonts/A.ttf")), ReplaceTier::Protected, "firmlink");
+    assert_eq!(t(Owner::RightFont, Path::new("/system/library/fonts/A.ttf")), ReplaceTier::Protected);
+    assert_eq!(t(Owner::Other, Path::new("/Volumes/Macintosh HD/Users/bob/Library/Fonts/a.ttf")), ReplaceTier::Protected, "/Volumes/<HD>/Users/…");
+    assert_eq!(t(Owner::Other, Path::new("/Volumes/Work/Fonts/a.ttf")), ReplaceTier::Replace);
+    // classify_owner dùng cùng logic
+    let none = std::collections::HashSet::new();
+    assert_eq!(fontatlas_activate::classify_owner(&link_dir.join("x.ttf"), &home, &none), Owner::UserInstalled);
+    assert_eq!(fontatlas_activate::classify_owner(Path::new("/System/Volumes/Data/Library/Fonts/A.ttf"), &home, &none), Owner::System);
+}
+
+#[test]
+fn a_failed_rollback_keeps_the_journal_and_says_so() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    svc.engine().fail_next_register(EngineError::Rejected { code: 7, message: "từ chối".into() });
+    svc.engine().fail_register_of(&foreign); // trả lại bản cũ cũng hỏng
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { code, .. } if code == "replace_rollback_failed"), "{:?}", r.outcome);
+    let j = jrows(&env);
+    assert_eq!(j.len(), 1, "sổ còn để khôi phục");
+    assert_eq!(r.replaced.len(), 1);
+    // chặn gỡ → khôi phục được
+    svc.engine().allow_register_of(&foreign);
+    assert_eq!(svc.restore_replaced(&env.store, j[0].id).unwrap(), RestoreOutcome::Restored);
+    assert_eq!(svc.engine().registrations(), vec![(foreign, Scope::Persistent)]);
+}
+
+#[test]
+fn a_foreign_copy_that_comes_back_is_reported_as_not_effective_and_keeps_the_journal() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    svc.engine().revive_after_unregister(&foreign);
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert!(matches!(&r.outcome, FileOutcome::Failed { code, .. } if code == "replace_not_effective"), "{:?}", r.outcome);
+    assert_eq!(r.replaced.len(), 1, "UI vẫn đưa được nút Khôi phục");
+    assert_eq!(jrows(&env).len(), 1);
+}
+
+#[test]
+fn replace_only_acts_on_the_conflicts_the_user_confirmed() {
+    use fontatlas_activate::ConfirmedConflict;
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let go = |c: &[ConfirmedConflict]| svc.replace_faces(&env.store, &[k], None, c, &mut |_| {}).unwrap().results.remove(0);
+    let changed = |r: &fontatlas_activate::FileResult| matches!(&r.outcome, FileOutcome::Failed { code, .. } if code == "replace_conflicts_changed");
+    // danh sách rỗng / đường dẫn khác / thừa → từ chối, chưa đụng gì
+    assert!(changed(&go(&[])));
+    assert!(changed(&go(&[ConfirmedConflict { hash: k.hash, existing_path: "/x/khac.ttf".into() }])));
+    assert!(changed(&go(&[
+        ConfirmedConflict { hash: k.hash, existing_path: foreign.to_str().unwrap().into() },
+        ConfirmedConflict { hash: k.hash, existing_path: "/x/them.ttf".into() },
+    ])));
+    assert_eq!(svc.engine().registrations(), vec![(foreign.clone(), Scope::Persistent)]);
+    assert!(jrows(&env).is_empty());
+    let ok = go(&[ConfirmedConflict { hash: k.hash, existing_path: foreign.to_str().unwrap().into() }]);
+    assert_eq!(ok.outcome, FileOutcome::Activated, "{:?}", ok.outcome);
+}
+
+#[test]
+fn conflicts_carry_the_backend_replace_tier() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let r = svc.preflight(&env.store, &[k]).unwrap().results.remove(0);
+    let FileOutcome::NeedsConfirmation { conflicts } = r.outcome else { panic!("{:?}", r.outcome) };
+    assert_eq!(conflicts[0].replace_tier, ReplaceTier::Replace);
+}
+
+#[test]
+fn restore_of_a_cloud_placeholder_is_refused_and_keeps_the_record() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    let id = r.replaced[0].id;
+    std::fs::remove_file(&foreign).unwrap();
+    std::fs::write(foreign.with_file_name(format!(".{}.icloud", foreign.file_name().unwrap().to_str().unwrap())), b"").unwrap();
+    assert_eq!(svc.restore_replaced(&env.store, id).unwrap(), RestoreOutcome::NotDownloaded);
+    assert_eq!(jrows(&env).len(), 1);
+}
+
+#[test]
+fn restore_undoes_the_scopes_it_already_registered_when_a_later_scope_fails() {
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    svc.engine().register(&foreign, Scope::Session).unwrap();
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert_eq!(r.replaced[0].scopes.len(), 2);
+    svc.engine().fail_register_in(Scope::Session);
+    assert!(svc.restore_replaced(&env.store, r.replaced[0].id).is_err());
+    assert!(svc.engine().registrations().iter().all(|(p, _)| p != &foreign), "Persistent đã đăng ký phải được gỡ lại");
+    assert_eq!(jrows(&env).len(), 1);
+    svc.engine().allow_register_in(Scope::Session);
+    assert_eq!(svc.restore_replaced(&env.store, r.replaced[0].id).unwrap(), RestoreOutcome::Restored);
+}
+
+#[test]
+fn two_journal_rows_for_one_font_turn_ours_off_only_with_the_last_restore() {
+    let (env, svc, k, first) = setup("Cho khac/dup1.ttf", FakeEngine::new());
+    let second = canon(&{
+        let p = env.dir.path().join("Cho khac/dup2.ttf");
+        std::fs::write(&p, b"khac nua").unwrap();
+        p
+    });
+    svc.engine().set_names_for(&second, &[PS]);
+    svc.engine().register(&first, Scope::Session).unwrap();
+    svc.engine().register(&second, Scope::Session).unwrap();
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    assert_eq!(r.replaced.len(), 2, "{:?}", r.outcome);
+    let ours = canon(&env.dir.path().join("extra/a.ttf"));
+    assert_eq!(svc.restore_replaced(&env.store, r.replaced[0].id).unwrap(), RestoreOutcome::Restored);
+    assert!(svc.engine().registrations().iter().any(|(p, _)| p == &ours), "còn một bản cũ chưa khôi phục: bản của ta ở lại");
+    assert_eq!(svc.restore_replaced(&env.store, r.replaced[1].id).unwrap(), RestoreOutcome::Restored);
+    assert!(svc.engine().registrations().iter().all(|(p, _)| p != &ours), "khôi phục bản cuối thì tắt bản của ta");
+}
+
+#[test]
+fn restore_keeps_ours_when_a_collection_still_wants_it() {
+    use fontatlas_store::{ActivationReason, DesiredState};
+    let (env, svc, k, foreign) = setup(RIGHT, FakeEngine::new());
+    svc.engine().register(&foreign, Scope::Persistent).unwrap();
+    let r = run(&svc, &env, k, ConflictPolicy::Replace);
+    env.store.lock().unwrap().add_activation_reason(&k.hash, ActivationReason::Collection(5)).unwrap();
+    assert_eq!(svc.restore_replaced(&env.store, r.replaced[0].id).unwrap(), RestoreOutcome::Restored);
+    let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(row.state, DesiredState::Active, "collection còn giữ → không bị xoá lý do");
+    assert!(row.reasons.contains(&ActivationReason::Collection(5)));
+}

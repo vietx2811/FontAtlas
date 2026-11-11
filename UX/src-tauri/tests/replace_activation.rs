@@ -27,6 +27,18 @@ fn fixture(name: &str) -> PathBuf {
 
 fn noop(_: ProgressDto) {}
 
+/// Xung đột mà người dùng "đã thấy" trong hộp thoại: lấy từ preflight như giao diện làm.
+fn confirmed(st: &AppState, key: &FaceKeyDto) -> Vec<ConfirmedConflictDto> {
+    let rep = activation::preflight(st, std::slice::from_ref(key)).unwrap();
+    rep.results
+        .iter()
+        .flat_map(|r| match &r.outcome {
+            FileOutcomeDto::NeedsConfirmation { conflicts } => conflicts.iter().map(|c| ConfirmedConflictDto { hash_hex: r.hash_hex.clone(), existing_path: c.existing_path.clone() }).collect(),
+            _ => vec![],
+        })
+        .collect()
+}
+
 /// Thư viện có Roboto; một bản KHÁC nội dung của Roboto do "RightFont" đăng ký persistent.
 fn setup(root: &Path) -> (Arc<AppState>, Arc<FakeEngine>, FaceKeyDto, PathBuf) {
     let eng = Arc::new(FakeEngine::new());
@@ -55,7 +67,7 @@ fn replace_swaps_the_foreign_registration_and_restore_brings_it_back() {
     let ask = activation::activate(&st, std::slice::from_ref(&key), None, false, &mut noop).unwrap();
     assert!(matches!(ask.results[0].outcome, FileOutcomeDto::NeedsConfirmation { .. }), "{:?}", ask.results[0].outcome);
 
-    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &mut noop).unwrap();
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &confirmed(&st, &key), &mut noop).unwrap();
     assert!(matches!(rep.results[0].outcome, FileOutcomeDto::Activated), "{:?}", rep.results[0].outcome);
     let r = rep.results[0].replaced.as_ref().expect("có bản cũ đã gỡ");
     assert_eq!(r.len(), 1);
@@ -75,7 +87,7 @@ fn replace_without_a_conflict_reports_no_replaced_entries() {
     let d = tempfile::tempdir().unwrap();
     let (st, eng, key, foreign) = setup(d.path());
     eng.unregister(&foreign, Scope::Persistent).unwrap();
-    let rep = activation::replace(&st, &[key], None, &mut noop).unwrap();
+    let rep = activation::replace(&st, &[key.clone()], None, &confirmed(&st, &key), &mut noop).unwrap();
     assert!(matches!(rep.results[0].outcome, FileOutcomeDto::Activated));
     assert!(rep.results[0].replaced.is_none());
 }
@@ -84,9 +96,29 @@ fn replace_without_a_conflict_reports_no_replaced_entries() {
 fn replace_json_carries_the_replaced_list_in_camel_case() {
     let d = tempfile::tempdir().unwrap();
     let (st, _eng, key, _foreign) = setup(d.path());
-    let rep = activation::replace(&st, &[key], None, &mut noop).unwrap();
+    let rep = activation::replace(&st, &[key.clone()], None, &confirmed(&st, &key), &mut noop).unwrap();
     let v = serde_json::to_value(&rep.results[0]).unwrap();
     assert_eq!(v["replaced"][0]["owner"], "right_font");
     assert_eq!(v["replaced"][0]["scopes"][0], "persistent");
     assert!(v["replaced"][0]["id"].is_number());
+}
+
+#[test]
+fn replace_with_a_stale_confirmation_is_refused_and_the_journal_lists_what_was_replaced() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, eng, key, foreign) = setup(d.path());
+    // danh sách xác nhận không khớp tập xung đột hiện tại → từ chối, không đụng gì
+    let stale = vec![ConfirmedConflictDto { hash_hex: key.hash_hex.clone(), existing_path: "/khong/co.ttf".into() }];
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &stale, &mut noop).unwrap();
+    assert!(matches!(&rep.results[0].outcome, FileOutcomeDto::Failed { code, .. } if code == "replace_conflicts_changed"), "{:?}", rep.results[0].outcome);
+    assert_eq!(eng.registrations(), vec![(foreign.clone(), Scope::Persistent)]);
+    assert!(activation::list_replaced(&st).unwrap().is_empty());
+
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &confirmed(&st, &key), &mut noop).unwrap();
+    let id = rep.results[0].replaced.as_ref().unwrap()[0].id;
+    let list = activation::list_replaced(&st).unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!((list[0].id, list[0].hash_hex.as_str(), list[0].path.as_str(), list[0].owner.as_str()), (id, key.hash_hex.as_str(), foreign.to_str().unwrap(), "right_font"));
+    activation::restore_replaced(&st, id).unwrap();
+    assert!(activation::list_replaced(&st).unwrap().is_empty(), "khôi phục xong thì rời danh sách");
 }

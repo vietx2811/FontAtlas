@@ -42,6 +42,7 @@ fn activation_report_json_matches_contract_fixture() {
             .into(),
         owner: Owner::RightFont,
         same_file: false,
+        replace_tier: fontatlas_activate::ReplaceTier::Replace,
     };
     let outcomes = vec![
         FileOutcome::Ready,

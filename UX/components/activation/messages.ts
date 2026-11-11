@@ -11,6 +11,10 @@ export function describeOutcome(o: FileOutcomeDto): Msg | null {
       if (o.code === 'scope_unsettled') return { kind: 'error', text: t('act.msg.scope_unsettled') };
       if (o.code === 'replace_protected') return { kind: 'error', text: t('act.replace.protected') };
       if (o.code === 'replace_guide_only') return { kind: 'error', text: t('act.msg.replaceGuide') };
+      if (o.code === 'replace_conflicts_changed') return { kind: 'error', text: t('act.msg.replaceChanged') };
+      if (o.code === 'replace_rollback_failed') return { kind: 'error', text: t('act.msg.replaceRollbackFailed') };
+      if (o.code === 'replace_not_effective') return { kind: 'error', text: t('act.msg.replaceNotEffective') };
+      if (o.code === 'replace_own_not_found') return { kind: 'error', text: t('act.msg.replaceOwnNotFound') };
       if (o.code === 'replace_not_registered') return { kind: 'error', text: t('act.msg.replaceNotRegistered') };
       if (o.code === 'cloud_timeout') return { kind: 'error', text: t('act.msg.cloudTimeout') };
       if (o.code === 'cloud_download_failed') return { kind: 'error', text: t('act.msg.cloudFailed', { message: o.message }) };

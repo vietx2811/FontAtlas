@@ -2,7 +2,7 @@ import type { ConflictDto, FaceKeyDto, FaceRow } from '../../api';
 import { t } from '../../i18n';
 
 /** Một font cần xác nhận: tên family/kiểu đọc từ thư viện, và các bản trùng đang cài ở máy. */
-export type ConflictItem = { family: string; style: string; conflicts: ConflictDto[] };
+export type ConflictItem = { hashHex?: string; family: string; style: string; conflicts: ConflictDto[] };
 /** Gộp theo family: mỗi family một dòng ("BT Annam Neue · 8 kiểu"). */
 export type ConflictGroup = { family: string; styles: string[]; conflicts: ConflictDto[] };
 
@@ -26,15 +26,9 @@ export function ownerNote(c: Pick<ConflictDto, 'owner' | 'existingPath'>): strin
   }
 }
 
-/** "Thay thế" theo ma trận (khớp fontatlas-activate::replace_tier): protected = không bao giờ đụng; guide = chỉ hướng dẫn. */
-export type ReplaceTier = 'replace' | 'guide' | 'protected';
-const FONT_DIRS = /^(?:\/System\/Library|\/Library\/Fonts|\/Users\/[^/]+\/Library\/Fonts|~\/Library\/Fonts)(?:\/|$)/;
-
-export function replaceTierOf(c: Pick<ConflictDto, 'owner' | 'existingPath'>): ReplaceTier {
-  if (FONT_DIRS.test(c.existingPath) || c.owner === 'system' || c.owner === 'user_installed') return 'protected';
-  if (c.owner === 'adobe_fonts' || c.owner === 'suitcase') return 'guide';
-  return 'replace';
-}
+/** "Thay thế" theo ma trận — backend tính (đường dẫn đã canonical hoá); UI dùng nguyên, không tự đoán từ đường dẫn. */
+export type ReplaceTier = ConflictDto['replaceTier'];
+export const replaceTierOf = (c: Pick<ConflictDto, 'replaceTier'>): ReplaceTier => c.replaceTier;
 
 const APP_NAME: Partial<Record<ConflictDto['owner'], string>> = {
   right_font: 'RightFont', font_base: 'FontBase', typeface: 'Typeface', adobe_fonts: 'Creative Cloud (Adobe Fonts)', suitcase: 'Suitcase / Connect',
@@ -42,9 +36,10 @@ const APP_NAME: Partial<Record<ConflictDto['owner'], string>> = {
 
 export type ReplaceAdvice = { tier: ReplaceTier; apps: string[]; unknownApp: boolean; protectedPath: string | null };
 
-/** Gộp mọi xung đột của hộp thoại: tier tệ nhất thắng (protected > guide > replace), tên các app đã nhận diện, có bản "app lạ" không. */
+/** Gộp mọi xung đột của hộp thoại (cùng tập backend xét: KHÔNG bỏ sameFile): tier tệ nhất thắng (protected > guide > replace),
+ *  tên các app đã nhận diện, và có bản "app lạ" không. */
 export function replaceAdvice(items: readonly ConflictItem[]): ReplaceAdvice {
-  const all = items.flatMap(i => i.conflicts).filter(c => !c.sameFile);
+  const all = items.flatMap(i => i.conflicts);
   const rank: Record<ReplaceTier, number> = { replace: 0, guide: 1, protected: 2 };
   let tier: ReplaceTier = 'replace';
   const apps: string[] = [];
@@ -58,6 +53,13 @@ export function replaceAdvice(items: readonly ConflictItem[]): ReplaceAdvice {
     if (app) { if (!apps.includes(app)) apps.push(app); } else if (c.owner === 'other') unknownApp = true;
   }
   return { tier, apps, unknownApp, protectedPath };
+}
+
+/** Xung đột người dùng đã thấy, gửi kèm "Thay bằng bản này": backend từ chối nếu tập này đã đổi (TOCTOU). */
+export function confirmedOf(items: readonly ConflictItem[]): { hashHex: string; existingPath: string }[] {
+  const out = new Map<string, { hashHex: string; existingPath: string }>();
+  for (const it of items) if (it.hashHex) for (const c of it.conflicts) out.set(`${it.hashHex}\n${c.existingPath}`, { hashHex: it.hashHex, existingPath: c.existingPath });
+  return [...out.values()];
 }
 
 export function groupByFamily(items: readonly ConflictItem[]): ConflictGroup[] {
@@ -85,6 +87,6 @@ export function toItems(rows: readonly FaceRow[], keys: readonly FaceKeyDto[], c
     const r = byKey.get(`${k.hashHex}:${k.faceIndex}`);
     const ps = conflicts[i]?.[0]?.postscriptName ?? '';
     const [fam, ...rest] = ps.split('-');
-    return { family: r?.family ?? (fam || k.hashHex.slice(0, 8)), style: r?.subfamily ?? (rest.join('-') || 'Regular'), conflicts: conflicts[i] ?? [] };
+    return { hashHex: k.hashHex, family: r?.family ?? (fam || k.hashHex.slice(0, 8)), style: r?.subfamily ?? (rest.join('-') || 'Regular'), conflicts: conflicts[i] ?? [] };
   });
 }

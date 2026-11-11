@@ -198,6 +198,23 @@ describe('Settings', () => {
   });
 
   describe('Kích hoạt font', () => {
+    it('lists the old copies that were replaced and not yet restored, with a Restore button that removes the row', async () => {
+      const api = createMockApi();
+      const f = (await api.queryFaces({ text: 'Oswald', limit: 5 })).items[0];
+      const key = { hashHex: f.hashHex, faceIndex: f.faceIndex };
+      const pre = await api.activationPreflight([key]);
+      const seen = pre.results.flatMap(r => (r.outcome.kind === 'needs_confirmation' ? r.outcome.conflicts.map(x => ({ hashHex: r.hashHex, existingPath: x.existingPath })) : []));
+      await api.activationReplace([key], seen);
+      await mount({}, api);
+      await go('Kích hoạt font');
+      const box = screen.getByTestId('replaced-list');
+      expect(within(box).getByText(/Oswald\.ttf/)).toBeTruthy();
+      await act(async () => { fireEvent.click(within(box).getByRole('button', { name: 'Khôi phục' })); });
+      await settle();
+      expect(within(screen.getByTestId('replaced-list')).queryByRole('button', { name: 'Khôi phục' })).toBeNull();
+      expect(within(screen.getByTestId('replaced-list')).getByText('Chưa có bản cũ nào bị thay.')).toBeTruthy();
+    });
+
     it('"when FontAtlas quits" is saved; other font managers are information only', async () => {
       const { api } = await mount();
       await go('Kích hoạt font');
