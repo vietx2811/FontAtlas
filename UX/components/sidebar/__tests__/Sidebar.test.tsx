@@ -355,6 +355,29 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('Dự án: Bật tất cả (R-activate)', () => {
+    it('menu has "Bật tất cả (N)" before Tắt tất cả; it activates the collection through the activation API', async () => {
+      const { api } = await mount();
+      const col = await api.createCollection('Dự án B', null);
+      const rows = (await api.queryFaces({ limit: 3 })).items;
+      await api.addToCollection(col.id, rows.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex })));
+      useUiStore.getState().bumpLibrary(false); await settle();
+      const spy = vi.spyOn(api, 'activationActivateCollection');
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Dự án B/ })); await settle();
+      const items = screen.getAllByRole('menuitem').map(i => i.textContent ?? '');
+      expect(items.findIndex(x => /Bật tất cả \(3\)/.test(x))).toBeGreaterThan(-1);
+      expect(items.findIndex(x => /Bật tất cả/.test(x))).toBeLessThan(items.findIndex(x => /Tắt tất cả/.test(x)));
+      fireEvent.click(screen.getByRole('menuitem', { name: /Bật tất cả/ })); await settle();
+      expect(spy).toHaveBeenCalledWith(col.id);
+    });
+    it('an empty project: the entry is disabled with a reason', async () => {
+      const { api } = await mount();
+      await api.createCollection('Rỗng', null); useUiStore.getState().bumpLibrary(false); await settle();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Rỗng/ })); await settle();
+      expect(screen.getByRole('menuitem', { name: /Bật tất cả/ }).getAttribute('aria-disabled')).toBe('true');
+    });
+  });
+
   describe('Gỡ nguồn (R7)', () => {
     it('source menu → Gỡ nguồn… opens the preview with real numbers; confirm removes it, leaves its view, and tells how many locations went', async () => {
       const { api } = await mount();

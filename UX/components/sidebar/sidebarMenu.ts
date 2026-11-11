@@ -9,7 +9,7 @@ export type SidebarMenuCtx = {
   /** Nguồn */
   sourceAvailable?: boolean; hasPath?: boolean; scanning?: boolean; reveal?(): void; rescan?(): void; removeSource?(): void;
   /** Dự án */
-  rename?(): void; deactivateAll?(): void; /** Số font ĐANG BẬT trong dự án; chưa biết (đang đếm) → undefined. */ colActive?: number; remove?(): void;
+  rename?(): void; activateAll?(): void; /** Số font trong dự án (itemCount). */ colSize?: number; deactivateAll?(): void; /** Số font ĐANG BẬT trong dự án; chưa biết (đang đếm) → undefined. */ colActive?: number; remove?(): void;
   /** Thẻ */
   filterByTag?(): void; renameTag?(): void; deleteTag?(): void;
   /** Gần đây */
@@ -36,6 +36,7 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
     case 'collection': return [
       open(c),
       { id: 'rename', label: t('smenu.rename'), hint: 'F2', onSelect: c.rename },
+      { id: 'activate', label: c.colSize === undefined ? t('smenu.activateAll') : t('smenu.activateAllN', { n: c.colSize }), disabled: c.colSize === 0, reason: t('smenu.activateAll.empty'), onSelect: c.activateAll },
       { id: 'deactivate', label: c.colActive === undefined ? t('smenu.deactivateAll') : t('smenu.deactivateAllN', { n: c.colActive }), disabled: c.colActive === 0, reason: t('smenu.noneActive'), onSelect: c.deactivateAll },
       sep,
       { id: 'delete', label: t('smenu.deleteCollection'), danger: true, onSelect: c.remove },
@@ -54,3 +55,5 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
 
 /** Số font từ đó hỏi xác nhận trước khi tắt hàng loạt. */
 export const CONFIRM_DEACTIVATE_FROM = 50;
+/** Số font từ đó hỏi xác nhận trước khi bật hàng loạt (spec C6). */
+export const CONFIRM_ACTIVATE_FROM = 200;

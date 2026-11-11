@@ -18,9 +18,10 @@ import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
 import { Menu, type MenuAnchor } from '../ui/Menu';
 import { Modal } from '../Modal';
-import { CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
+import { CONFIRM_ACTIVATE_FROM, CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
 import { NoteMark } from '../ui/noteMark';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
+import { useActivationFlow } from '../activation/useActivationFlow';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
 type Counts = { all: number | null; star: number | null; dups: number | null };
@@ -76,6 +77,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [renamingTag, setRenamingTag] = useState<number | null>(null);
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const activation = useActivationFlow(api);
   const [removingSrc, setRemovingSrc] = useState<SourceDto | null>(null);
   const recentCount = useUiStore(s => s.recentViews.length);
   const scanningNow = useScanStore(s => s.scanning);
@@ -221,7 +223,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
       removeSource: () => { if (src) setRemovingSrc(src); },
       rename: () => { if (col) setRenaming(col.id); },
-      colActive: c.colActive,
+      colActive: c.colActive, colSize: col?.itemCount,
+      activateAll: () => { if (col) { const n = col.itemCount; if (n > CONFIRM_ACTIVATE_FROM) setConfirm({ title: t('act.all.title', { n }), body: t('act.all.body'), ok: t('act.all.ok'), run: () => activation.activateCollection(col.id) }); else void activation.activateCollection(col.id); } },
       deactivateAll: c.kind === 'active' ? () => deactivate(activeCount, () => api.activationDeactivateAll()) : () => { if (col) deactivate(c.colActive ?? 0, () => api.activationDeactivateCollection(col.id)); },
       remove: () => { if (col) setConfirm({ title: t('smenu.delCol.title', { name: col.name }), body: t('smenu.delCol.body'), ok: t('smenu.delCol.ok'), run: () => removeCollection(col.id).catch(warn) }); },
       filterByTag: () => setTag(String(c.id)),
