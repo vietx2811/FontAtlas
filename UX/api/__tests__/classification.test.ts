@@ -13,7 +13,29 @@ describe('mock classification', () => {
     const filtered = await api.classFacets({ classes: ['sans'] });
     expect(filtered.find(f => f.class === 'serif')!.count).toBe(serif.count);
     expect((await api.queryFaces({ classes: ['serif'] })).total).toBe(serif.count);
-    expect(facets.every(f => f.class !== 'display')).toBe(true);
+    // v2: Slab, Handwriting và Display có trong dữ liệu mock.
+    for (const c of ['slab', 'handwriting', 'display']) expect(facets.some(f => f.class === c), c).toBe(true);
+  });
+
+  it('includeSecondary: a hybrid face is ALSO counted under its secondary class, so facet totals can exceed the number of faces; filters match it too', async () => {
+    const api = createMockApi();
+    const all = await api.queryFaces({});
+    const plain = await api.classFacets({});
+    const withSec = await api.classFacets({ includeSecondary: true });
+    const sum = (f: typeof plain) => f.reduce((n, x) => n + x.count, 0);
+    expect(sum(plain)).toBe(all.total);
+    expect(sum(withSec)).toBeGreaterThan(all.total);
+    expect(withSec.find(f => f.class === 'sans')!.count).toBe(plain.find(f => f.class === 'sans')!.count + 1);
+    expect((await api.queryFaces({ classes: ['sans'], includeSecondary: true })).total).toBe(plain.find(f => f.class === 'sans')!.count + 1);
+    expect((await api.queryFaces({ classes: ['sans'] })).total).toBe(plain.find(f => f.class === 'sans')!.count);
+  });
+
+  it('an override sent with v1 labels is STORED as v2 and drops the secondary class', async () => {
+    const api = createMockApi();
+    const face = { hashHex: (await api.queryFaces({ text: 'Caveat' })).items[0].hashHex, faceIndex: 0 };
+    await api.setClassificationOverride({ face, class: 'script', subclass: 'formal' });
+    const d = await api.getFace(face, 'vi');
+    expect(d.classificationInfo).toMatchObject({ class: 'script', subclass: 'formal_copperplate', source: 'override', secondary: null });
   });
 
   it('subclass filter ANDs with class and uses snake_case', async () => {

@@ -13,7 +13,7 @@ const info = (o: Partial<ClassificationDto> = {}): ClassificationDto => ({ class
 const mount = (i: ClassificationDto, api = createMockApi(), onChanged = vi.fn()) => { render(<ClassChip api={api} face={face} info={i} onChanged={onChanged} />); return { api, onChanged }; };
 
 describe('ClassChip', () => {
-  it('shows class and subclass as English terms; Display is never shown as the class', () => {
+  it('shows class and subclass as English terms; the Headline usage tag is not the Display class', () => {
     mount(info());
     const chip = screen.getByTestId('class-chip');
     expect(chip.textContent).toContain('Serif');
@@ -21,12 +21,28 @@ describe('ClassChip', () => {
     expect(chip.textContent).not.toMatch(/Display/);
   });
 
+  it('v2: Display is a real class; a secondary class shows a note mark; a null subclass shows no empty box', async () => {
+    mount(info({ class: 'display', label: 'Display', subclass: 'stencil', secondary: { class: 'sans', subclass: 'geometric' } }));
+    const chip = screen.getByTestId('class-chip');
+    expect(chip.textContent).toContain('Display'); expect(chip.textContent).toContain('Stencil');
+    const mark = screen.getByTestId('class-secondary');
+    expect(mark.getAttribute('aria-label')).toBe('Có thể cũng là Sans · Geometric');
+  });
+
+  it('v2: no subclass → only the class; slab and handwriting are classes in the menu', () => {
+    mount(info({ class: 'slab', label: 'Slab', subclass: null, secondary: null }));
+    expect(screen.getByTestId('class-chip').textContent).toBe('Slab');
+    expect(screen.queryByTestId('class-secondary')).toBeNull();
+    fireEvent.click(screen.getByTestId('class-chip'));
+    for (const n of ['Slab', 'Handwriting', 'Display']) expect(screen.getByRole('menuitemradio', { name: new RegExp(`^${n}`) })).toBeTruthy();
+  });
+
   it('tooltip lists confidence, signals and usage (Display lives in usage)', async () => {
     mount(info());
     const tip = await tipOf(screen.getByTestId('class-chip'));
     expect(tip).toContain('94%');
     expect(tip).toContain('contrast 4,89');
-    expect(tip).toContain('Display');
+    expect(tip).toContain('Headline');
   });
 
   it('shows traits when the backend sends them and works without them', () => {
@@ -58,7 +74,6 @@ describe('ClassChip', () => {
     const set = vi.spyOn(api, 'setClassificationOverride');
     fireEvent.click(screen.getByTestId('class-chip'));
     expect(screen.queryByRole('menuitem', { name: 'Về tự động' })).toBeNull();
-    expect(screen.queryByRole('menuitemradio', { name: /Display/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     fireEvent.click(screen.getByTestId('class-chip'));
@@ -75,9 +90,9 @@ describe('ClassChip', () => {
     expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: /^Sans/ }));
     expect(screen.getByRole('menuitemradio', { name: /^Sans/ }).getAttribute('aria-checked')).toBe('true');
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(items[2]);
+    expect(document.activeElement).toBe(items[3]);
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' }); fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(items[0]);
+    expect(document.activeElement).toBe(items[1]);
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(chip);
@@ -117,7 +132,7 @@ describe('ClassChip', () => {
     mount(info());
     const tip = await tipOf(screen.getByTestId('class-chip'));
     expect(tip).toContain('Số đo');
-    expect(tip).toContain('Display (tiêu đề lớn)');
+    expect(tip).toContain('Headline (tiêu đề cỡ lớn)');
   });
 
   it('renders unknown signal votes, sources and traits instead of crashing', async () => {

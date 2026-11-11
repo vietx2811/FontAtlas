@@ -125,7 +125,7 @@ describe('Sidebar', () => {
     const dlg = screen.getByRole('dialog', { name: /nằm trong một nguồn đã có/ });
     expect(within(dlg).getByText('/Users/me/Fonts/src1/Khách A')).toBeTruthy();
     expect(within(dlg).getByText('/Users/me/Fonts/src1')).toBeTruthy();
-    expect(dlg.textContent).toMatch(/70 font/);
+    expect(dlg.textContent).toMatch(/73 font/);
     expect(dlg.textContent).toMatch(/tạo một collection/i);
     fireEvent.click(within(dlg).getByRole('button', { name: 'Tạo collection “Khách A”' }));
     await settle();

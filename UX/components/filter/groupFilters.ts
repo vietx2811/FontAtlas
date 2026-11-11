@@ -12,7 +12,7 @@ const ORDER: ReadonlyArray<[GroupId, I18nKey]> = [
 
 const groupOf = (chipId: string): GroupId => {
   const head = chipId.split(':')[0];
-  if (head === 'class' || head === 'subclass') return 'class';
+  if (head === 'class' || head === 'subclass') return 'class'; // gồm cả công tắc class-hybrid / class-confident
   if (head === 'variable' || head === 'italic') return 'style';
   if (head === 'vi') return 'vi';
   if (head === 'lang') return 'lang';

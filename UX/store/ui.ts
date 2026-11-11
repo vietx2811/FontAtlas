@@ -25,7 +25,7 @@ export type SectionKey = 'col' | 'src' | 'tag';
 /** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
 export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
-export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode' | 'tagIds'>;
+export type LibraryFilters = Pick<FaceQuery, 'variable' | 'italic' | 'rawAxisRanges' | 'vi' | 'license' | 'sourceIds' | 'favoritesOnly' | 'classes' | 'subclasses' | 'weightClass' | 'widthClass' | 'varAxisMatch' | 'langs' | 'langMode' | 'tagIds' | 'includeSecondary' | 'confidentOnly'>;
 export type DeskState = { caseId: number; comboId: number; role: ComboRoleDto; trial: FaceKeyDto | null };
 export type FamilyScope = { name: string; faces: FaceKeyDto[] };
 

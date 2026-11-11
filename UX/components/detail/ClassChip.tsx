@@ -4,10 +4,11 @@ import { t, type I18nKey } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { TermTip, classTermKey, subclassTermKey } from '../ui/terms';
-import { HIDDEN_CLASSES, classGloss, classLabel, subclassLabel, traitLabel } from '../main/classLabels';
+import { classGloss, classLabel, subclassLabel, traitLabel } from '../main/classLabels';
 import { Tooltip } from '../ui/Tooltip';
+import { NoteMark } from '../ui/noteMark';
 
-const PICKABLE = ['serif', 'sans', 'mono', 'script', 'blackletter', 'symbol'];
+const PICKABLE = ['serif', 'slab', 'sans', 'mono', 'script', 'handwriting', 'display', 'blackletter', 'symbol'];
 const tr = (key: string, fallback: string): string => { try { return (t as (k: string) => string)(key) || fallback; } catch { return fallback; } };
 const signalSource = (s: string) => tr(`class.signal.${s}`, s);
 const usageLabel = (u: string) => tr(`class.usage.${u}`, u);
@@ -76,9 +77,10 @@ export function ClassChip({ api, face, info, onChanged }: Props): React.JSX.Elem
           {!uncertain && info.subclass && <TermTip term={subclassTermKey(info.subclass)}><span className="m" data-term={subclassTermKey(info.subclass)}>· {subclassLabel(info.subclass)}</span></TermTip>}
         </button>
       </Tooltip>
+      {!uncertain && info.secondary && <NoteMark inline kind="info" testId="class-secondary" text={t('class.secondary', { label: [classLabel(info.secondary.class), info.secondary.subclass ? subclassLabel(info.secondary.subclass) : ''].filter(Boolean).join(' · ') })} />}
       {overridden && <Tooltip label={t('class.machine', { label: info.autoClass ? classLabel(info.autoClass) : '—' })}><span className="fa-class-edited" tabIndex={0}>{t('class.edited')}</span></Tooltip>}
       {open && <div ref={menu} role="menu" aria-label={t('class.menu')} className="fa-class-menu" onKeyDown={onMenuKey}>
-        {PICKABLE.filter(c => !HIDDEN_CLASSES.has(c)).map(c => <button key={c} type="button" role="menuitemradio" aria-checked={info.class === c} data-current={info.class === c} onClick={() => void act(() => api.setClassificationOverride({ face, class: c, subclass: null }))}>{classLabel(c)}<small>{classGloss(c)}</small></button>)}
+        {PICKABLE.map(c => <button key={c} type="button" role="menuitemradio" aria-checked={info.class === c} data-current={info.class === c} onClick={() => void act(() => api.setClassificationOverride({ face, class: c, subclass: null }))}>{classLabel(c)}<small>{classGloss(c)}</small></button>)}
         {overridden && <button type="button" role="menuitem" className="auto" onClick={() => void act(() => api.clearClassificationOverride(face))}>{t('class.auto')}</button>}
       </div>}
     </div>
