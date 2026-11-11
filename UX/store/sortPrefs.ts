@@ -1,12 +1,12 @@
-/** Sắp xếp thư viện (spec library-view-options B5). Chỉ các trường backend đã hỗ trợ; năm phát hành / ngày file chờ R2. */
-export const SORT_FIELDS = ['family', 'added', 'weight', 'match'] as const;
+/** Sắp xếp thư viện (spec library-view-options B5). `released` = năm phát hành ước lượng, `file_created` = ngày tạo file (R2). */
+export const SORT_FIELDS = ['family', 'added', 'released', 'file_created', 'weight', 'match'] as const;
 export type SortField = (typeof SORT_FIELDS)[number];
 /** `explicit`: người dùng đã chọn (kể cả đúng mặc định Tên A→Z) → xếp THUẦN theo trường; chưa chọn mà đang tìm → Khớp. */
 export type SortPrefs = { by: SortField; desc: boolean; explicit?: boolean };
 export const SORT_KEY = 'ui.sort'; // 6a: ^ui\.[a-z0-9_.-]{1,60}$
 export const DEFAULT_SORT: SortPrefs = { by: 'family', desc: false };
-/** Đổi trường thì chiều về mặc định của trường đó: tên và độ đậm tăng dần, ngày thêm mới → cũ. */
-export const defaultDesc = (by: SortField): boolean => by === 'added';
+/** Đổi trường thì chiều về mặc định của trường đó: tên và độ đậm tăng dần, các trường ngày/năm mới → cũ. */
+export const defaultDesc = (by: SortField): boolean => by === 'added' || by === 'released' || by === 'file_created';
 export const isDefaultSort = (s: SortPrefs): boolean => s.by === DEFAULT_SORT.by && s.desc === DEFAULT_SORT.desc;
 /** Sắp xếp áp dụng thật cho truy vấn: Khớp khi đang tìm mà người dùng chưa chọn; Khớp mà không có chữ tìm thì về mặc định. */
 export function effectiveSort(s: SortPrefs, hasQuery: boolean): SortPrefs {

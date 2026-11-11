@@ -1,0 +1,13 @@
+/** Chuỗi tiếng Việt cho các tuỳ chọn thư viện (R2/R3 UI). Bản tiếng Anh: i18n/en-pending/library.en.ts. */
+export const LIBRARY_I18N = {
+  'view.sort.released': 'Năm phát hành (ước lượng)',
+  'view.sort.file_created': 'Ngày tạo file',
+  'view.sort.released.asc': 'Cũ → Mới',
+  'view.sort.released.desc': 'Mới → Cũ',
+  'view.sort.file_created.asc': 'Cũ → Mới',
+  'view.sort.file_created.desc': 'Mới → Cũ',
+  'view.sort.src.released': 'Ước lượng từ dòng copyright; nếu không có thì năm tạo (head.created), rồi năm sửa (head.modified). Font không có thông tin xếp cuối.',
+  'view.sort.src.file_created': 'Lúc file xuất hiện trên đĩa (birth time). Font không đọc được ngày xếp cuối.',
+  'view.sort.note.released': 'Độ tin cậy trung bình: dòng copyright thường là năm xuất bản đầu tiên; một số hãng đặt năm tạo theo lúc build, hoặc để 0/1904.',
+  'view.sort.note.file_created': 'Độ tin cậy thấp làm “ngày font ra đời”: sao chép, tải lại hoặc đồng bộ đám mây đặt lại ngày. Với file trên ổ đám mây, đây có thể là lúc đồng bộ, không phải lúc font ra đời.',
+} as const;

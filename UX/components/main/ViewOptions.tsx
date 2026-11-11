@@ -7,6 +7,7 @@ import { CARD_FIELD_ORDER, DEFAULT_CARD_FIELDS, useCardFields, type CardField } 
 import { Icon } from '../sidebar/icons';
 import { shortcutBlocked } from './TopBarActions';
 import { Tooltip } from '../ui/Tooltip';
+import { NoteMark } from '../ui/noteMark';
 import './viewOptions.css';
 
 const label = (k: CardField) => t(`view.field.${k}` as I18nKey);
@@ -99,7 +100,7 @@ export function ViewOptions(): React.JSX.Element {
                   <button key={String(d)} type="button" role="radio" aria-checked={desc === d} data-testid={d ? 'view-sort-desc' : 'view-sort-asc'} onClick={() => setSortDesc(d)}>{t(`view.sort.${by}.${d ? 'desc' : 'asc'}` as I18nKey)}</button>
                 ))}
               </div>}
-              <p className="fa-viewpop-src">{t(`view.sort.src.${by}` as I18nKey)}</p>
+              <p className="fa-viewpop-src" data-testid="view-sort-src">{t(`view.sort.src.${by}` as I18nKey)}{(by === 'released' || by === 'file_created') && <> <NoteMark inline kind={by === 'file_created' ? 'warn' : 'info'} text={t(`view.sort.note.${by}` as I18nKey)} testId="view-sort-note" /></>}</p>
             </>}
           </fieldset>
           <fieldset>

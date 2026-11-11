@@ -13,7 +13,9 @@ describe('sort prefs', () => {
   it('parse: valid, unknown field, garbage, match never restored', () => {
     expect(parseSort('{"v":1,"by":"added","desc":true}')).toEqual({ by: 'added', desc: true });
     expect(parseSort('{"v":1,"by":"weight"}')).toEqual({ by: 'weight', desc: false });
-    for (const bad of [null, 'x', '{"v":1,"by":"released"}', '{"v":2,"by":"added"}', '{"v":1,"by":"match","desc":true}']) expect(parseSort(bad as string | null)).toEqual(DEFAULT_SORT);
+    expect(parseSort('{"v":1,"by":"released"}')).toEqual({ by: 'released', desc: true });
+    expect(parseSort('{"v":1,"by":"file_created","desc":false}')).toEqual({ by: 'file_created', desc: false });
+    for (const bad of [null, 'x', '{"v":1,"by":"ghost"}', '{"v":2,"by":"added"}', '{"v":1,"by":"match","desc":true}']) expect(parseSort(bad as string | null)).toEqual(DEFAULT_SORT);
     expect(JSON.parse(serializeSort({ by: 'match', desc: true }))).toEqual({ v: 1, by: 'family', desc: false });
   });
 });
@@ -65,7 +67,7 @@ describe('sort in the View popover', () => {
   it('picks a field, flips direction with field-specific labels, shows the source line', () => {
     open();
     const sel = screen.getByTestId('view-sort-by') as HTMLSelectElement;
-    expect([...sel.options].map(o => o.value)).toEqual(['family', 'added', 'weight']); // chưa tìm: không có "Khớp"
+    expect([...sel.options].map(o => o.value)).toEqual(['family', 'added', 'released', 'file_created', 'weight']); // chưa tìm: không có "Khớp"
     expect(screen.getByTestId('view-sort-asc').textContent).toBe('A → Z');
     fireEvent.change(sel, { target: { value: 'added' } });
     expect(useUiStore.getState().sort).toEqual({ by: 'added', desc: true, explicit: true });
@@ -93,5 +95,22 @@ describe('sort in the View popover', () => {
     expect(screen.queryByTestId('view-sort-by')).toBeNull();
     expect(screen.getByTestId('view-sort-locked').textContent).toBe('Thứ tự theo lần mở gần nhất');
     expect(screen.getByTestId('view-sort').getAttribute('aria-disabled')).toBe('true');
+  });
+  it('Năm phát hành / Ngày tạo file: mới → cũ mặc định, vào truy vấn, kèm NoteMark (cloud_sync = cảnh báo)', () => {
+    open();
+    expect(screen.queryByTestId('view-sort-note')).toBeNull();
+    fireEvent.change(screen.getByTestId('view-sort-by'), { target: { value: 'released' } });
+    expect(useUiStore.getState().sort).toEqual({ by: 'released', desc: true, explicit: true });
+    expect(q()).toMatchObject({ sort: 'released', descending: true });
+    expect(screen.getByTestId('view-sort-asc').textContent).toBe('Cũ → Mới');
+    expect(screen.getByTestId('view-sort-note').dataset.kind).toBe('info');
+    expect(screen.getByTestId('view-sort-note').getAttribute('aria-label')).toMatch(/copyright/);
+    fireEvent.change(screen.getByTestId('view-sort-by'), { target: { value: 'file_created' } });
+    expect(q()).toMatchObject({ sort: 'file_created', descending: true });
+    const n = screen.getByTestId('view-sort-note');
+    expect(n.dataset.kind).toBe('warn');
+    expect(n.getAttribute('aria-label')).toMatch(/đồng bộ đám mây/);
+    fireEvent.change(screen.getByTestId('view-sort-by'), { target: { value: 'weight' } });
+    expect(screen.queryByTestId('view-sort-note')).toBeNull();
   });
 });
