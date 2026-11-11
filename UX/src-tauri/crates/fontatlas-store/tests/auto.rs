@@ -124,7 +124,7 @@ fn user_v8_migrates_v7_keeping_reasons_and_backs_up() {
         c.execute("INSERT INTO activation_reasons(hash,reason,added_at) VALUES (?1,'collection:3',6)", [&hash]).unwrap();
     }
     let (mut s, rep) = Store::open(d.path()).unwrap();
-    assert_eq!(count(&s, "PRAGMA u.user_version"), 8);
+    assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     let b = rep.user_backup.expect("có backup trước khi migrate");
     assert!(b.file_name().unwrap().to_string_lossy().starts_with("user.v7."));
     let bc = rusqlite::Connection::open(b).unwrap();
