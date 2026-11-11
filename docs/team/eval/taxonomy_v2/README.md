@@ -24,6 +24,11 @@ cd UX/src-tauri && cargo run --release -p fontatlas-eval --bin classify_eval -- 
 Mặc định in ba khối: `test`, `tune`, `all`. Số chính của classifier mới là khối `test`; chỉ chỉnh ngưỡng bằng `tune`.
 Muốn đo classifier taxonomy v2 mới: thay thân hàm `predict_v2` trong `classify_eval.rs` (hiện ánh xạ classifier cũ bằng `taxonomy_v2::map_old_classifier`), phần còn lại giữ nguyên.
 
+## Công cụ xem glyph khi gán nhãn tay
+
+`crates/fontatlas-embed/examples/contact_sheet.rs` vẽ một dòng mẫu của nhiều font vào một ảnh PNG (mỗi ô 340×150) để so mắt nhãn `visual`:
+`cargo run --release -p fontatlas-embed --example contact_sheet -- out.png "Rag" 4 file1.ttf file2.ttf ...` (in `ô N = file` theo thứ tự trái→phải, trên→dưới). Không nằm trong CI.
+
 ## Cách đọc nhãn
 
 - **Cổng** = nhãn `quality` gf hoặc visual. Ma trận class và bảng subclass chỉ tính nhãn cổng; nhãn `weak` chỉ in một dòng tổng.
