@@ -4,6 +4,16 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.2.3] — 2026-11-11
+
+### Thêm mới
+
+**Pairing Desk: so sánh ngay trong Desk**
+- Desk có ba chế độ: **Pairing**, **So sánh Font** và **So sánh Combo**; không phải rời Desk để mở Compare.
+- So sánh Font: font đang dùng làm mốc, thêm cột từ gợi ý ghép hoặc tìm trong cả thư viện; ghim cột; bấm **Đặt** để đưa font vào vai đang chọn.
+- So sánh Combo: các Combo của Case đặt cạnh nhau với trang mẫu thu nhỏ, quan hệ giữa các vai và độ phủ tiếng Việt.
+- Font còn trên ổ cloud được tải về để xem như ở lưới (tối đa 4 font cùng lúc, có hạn chờ, theo công tắc trong Cài đặt); lỗi hoặc đang tải có ghi chú riêng.
+
 ## [0.2.2] — 2026-11-11
 
 ### Thêm mới
