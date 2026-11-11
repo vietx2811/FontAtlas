@@ -119,6 +119,7 @@ dependencies = [
  "fontatlas-index",
  "fontatlas-preview",
  "fontatlas-store",
+ "libc",
  "log",
  "objc2",
  "objc2-app-kit",

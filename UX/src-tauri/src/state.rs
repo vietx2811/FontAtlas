@@ -76,6 +76,9 @@ pub struct AppState {
     pub broker: Mutex<Option<fontatlas_broker::Server>>,
     /// Nguồn font request của hệ thống (Photoshop/AE hỏi font còn thiếu). Giữ để đóng khi thoát; chỉ macOS có.
     pub fontreq: Mutex<Option<Box<dyn std::any::Any + Send>>>,
+    /// Chỉ app thật (lib.rs `run`) bật: cho phép đăng ký thứ có phạm vi CẢ phiên đăng nhập (nguồn font request). Test và
+    /// công cụ dựng `AppState` thì để tắt.
+    pub system_hooks: std::sync::atomic::AtomicBool,
 }
 
 impl AppState {
@@ -102,6 +105,7 @@ impl AppState {
             preview: OnceLock::new(),
             broker: Mutex::new(None),
             fontreq: Mutex::new(None),
+            system_hooks: std::sync::atomic::AtomicBool::new(false),
         })
     }
 

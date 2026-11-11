@@ -42,6 +42,7 @@ ts-rs = { version = "=12.0.1", features = ["serde-json-impl"] }
 
 # Chỉ dùng cho QA bản debug (chụp webview của chính app, không cần quyền ghi màn hình).
 [target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
 objc2 = "0.6"
 block2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSError", "NSProcessInfo", "NSString", "NSFileManager", "NSURL"] }

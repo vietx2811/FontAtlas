@@ -11,7 +11,7 @@ pub fn start(state: &Arc<AppState>) {
     use fontatlas_fontreq::{FontRequestSource, Observer, PidAppNamer, Responder};
     use std::time::Duration;
 
-    if !state.activation.supported() {
+    if !state.activation.supported() || !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
     // Nguồn này là của CẢ phiên đăng nhập (mọi app hỏi font đều tới). Bản chạy với thư mục dữ liệu riêng
