@@ -852,12 +852,17 @@
         const r = nav.getBoundingClientRect();
         nav.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 20, clientY: r.top + 10 }));
         await wait(() => !!document.querySelector('[role=menu]'), 5000);
+        await wait(() => nav.dataset.context === 'true', 3000);
         const opened = !!document.querySelector('[role=menu]') && nav.dataset.context === 'true';
+        const menuLabel = document.querySelector('[role=menu]')?.getAttribute('aria-label') ?? null;
         await snap('sidebar-context-menu');
-        document.querySelector('[role=menu]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-        await sleep(300);
+        (document.querySelector('[role=menu]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        // Đóng menu và trả focus xảy ra bất đồng bộ (máy tải nặng có thể trễ): chờ điều kiện, không đọc ngay.
+        const closed = !!(await wait(() => !document.querySelector('[role=menu]'), 3000));
+        const focused = !!(await wait(() => document.activeElement === nav, 3000));
+        const sameView = !!(await wait(() => document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent === viewBefore, 3000));
         const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
-        await log('sidebar-context-menu', opened && !document.querySelector('[role=menu]') && viewBefore === viewAfter && document.activeElement === nav, { viewBefore, viewAfter });
+        await log('sidebar-context-menu', opened && closed && sameView && focused, { opened, closed, focused, sameView, menuLabel, viewBefore, viewAfter, context: nav.dataset.context ?? null, active: document.activeElement?.tagName + '.' + (document.activeElement?.className ?? '') });
       } else await log('sidebar-context-menu', false, 'no Gần đây item');
     }
 
