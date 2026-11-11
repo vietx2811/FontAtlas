@@ -17,6 +17,8 @@ pub struct Inputs {
     pub broker_running: bool,
     pub font_request_running: bool,
     pub signing_key_present: bool,
+    /// Bản cô lập: từ chối cài/gỡ/xoá khoá (xem `is_isolated`).
+    pub isolated_build: bool,
     /// Bản chạy với thư mục dữ liệu riêng: nguồn font request cố ý không mở.
     pub isolated: bool,
     /// Tên các app có trong `/Applications` (vd "Adobe Photoshop 2026").
@@ -148,6 +150,7 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
         broker_running: i.broker_running,
         font_request_running: i.font_request_running,
         signing_key_present: i.signing_key_present,
+        isolated_build: i.isolated_build,
         apps,
         other_managers: i
             .managers
@@ -216,6 +219,7 @@ pub fn status(state: &AppState) -> Result<AutoStatusDto, CmdError> {
         broker_running: crate::services::broker::healthy(state),
         font_request_running: state.fontreq.lock().map(|g| g.is_some()).unwrap_or(false),
         signing_key_present: crate::services::cep::key_present(state),
+        isolated_build: is_isolated(state),
         isolated: !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst)
             || (std::env::var_os("FONTATLAS_DATA_DIR").is_some() && std::env::var_os("FONTATLAS_FONTREQ").is_none()),
         installed_apps: installed_app_names(),

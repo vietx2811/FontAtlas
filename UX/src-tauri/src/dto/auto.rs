@@ -94,6 +94,9 @@ pub struct AutoStatusDto {
     /// Khoá ký panel Illustrator của máy này đang được giữ ở thư mục dữ liệu (`<data>/cep/signing.pem`, quyền 0600).
     /// Settings nên nói rõ điều này và cho nút **Xoá khoá** (`auto_forget_key`, chỉ khi panel đã gỡ).
     pub signing_key_present: bool,
+    /// Bản chạy cô lập (QA/test/`FONTATLAS_DATA_DIR`): `auto_install`, `auto_remove`, `auto_forget_key` bị từ chối (`isolated_build`).
+    /// UI vô hiệu nút Cài/Gỡ/Xoá khoá dựa vào cờ này, KHÔNG suy từ `state` của từng app.
+    pub isolated_build: bool,
     pub apps: Vec<AutoAppDto>,
     /// Trình quản lý font khác trên máy: có thể cùng phản ứng với tài liệu thiếu font.
     pub other_managers: Vec<OtherManagerDto>,
@@ -118,7 +121,8 @@ pub struct AutoLogDto {
     pub app: String,
     pub doc: Option<String>,
     pub requested: String,
-    /// activated | missing | conflict | unavailable | not_downloaded | failed | busy
+    /// activated | missing | conflict | unavailable | not_downloaded | failed | busy | ambiguous
+    /// (`ambiguous`: nhiều bản cùng tên, đã chọn theo ưu tiên; `requested` có dạng "<tên> ×N")
     pub outcome: String,
     pub hash_hex: Option<String>,
 }

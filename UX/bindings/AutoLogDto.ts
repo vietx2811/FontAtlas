@@ -2,6 +2,7 @@
 
 export type AutoLogDto = { id: bigint, atMs: bigint, app: string, doc: string | null, requested: string, 
 /**
- * activated | missing | conflict | unavailable | not_downloaded | failed | busy
+ * activated | missing | conflict | unavailable | not_downloaded | failed | busy | ambiguous
+ * (`ambiguous`: nhiều bản cùng tên, đã chọn theo ưu tiên; `requested` có dạng "<tên> ×N")
  */
 outcome: string, hashHex: string | null, };

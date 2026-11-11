@@ -7,7 +7,12 @@ export type AutoStatusDto = { enabled: boolean, brokerRunning: boolean, fontRequ
  * Khoá ký panel Illustrator của máy này đang được giữ ở thư mục dữ liệu (`<data>/cep/signing.pem`, quyền 0600).
  * Settings nên nói rõ điều này và cho nút **Xoá khoá** (`auto_forget_key`, chỉ khi panel đã gỡ).
  */
-signingKeyPresent: boolean, apps: Array<AutoAppDto>, 
+signingKeyPresent: boolean, 
+/**
+ * Bản chạy cô lập (QA/test/`FONTATLAS_DATA_DIR`): `auto_install`, `auto_remove`, `auto_forget_key` bị từ chối (`isolated_build`).
+ * UI vô hiệu nút Cài/Gỡ/Xoá khoá dựa vào cờ này, KHÔNG suy từ `state` của từng app.
+ */
+isolatedBuild: boolean, apps: Array<AutoAppDto>, 
 /**
  * Trình quản lý font khác trên máy: có thể cùng phản ứng với tài liệu thiếu font.
  */

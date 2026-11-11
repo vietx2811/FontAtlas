@@ -19,6 +19,7 @@ fn base() -> Inputs {
         indesign: vec![],
         last_activity: HashMap::new(),
         signing_key_present: false,
+        isolated_build: false,
         managers: vec![("RightFont".into(), true), ("FontBase".into(), false)],
     }
 }
@@ -184,4 +185,18 @@ fn status_reports_whether_the_signing_key_is_kept() {
     assert!(!build_status(&i).signing_key_present);
     i.signing_key_present = true;
     assert!(build_status(&i).signing_key_present);
+}
+
+#[test]
+fn isolated_build_flag_is_explicit_and_matches_the_refusal() {
+    use app_lib::services::{activation::NoActivation, auto, boot};
+    use app_lib::state::{AppDirs, AppState};
+    let d = tempfile::tempdir().unwrap();
+    let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(NoActivation));
+    boot::run_boot(&st);
+    assert!(auto::status(&st).unwrap().isolated_build, "AppState dựng trong test là bản cô lập");
+    let mut i = base();
+    assert!(!build_status(&i).isolated_build);
+    i.isolated_build = true;
+    assert!(build_status(&i).isolated_build);
 }

@@ -19,7 +19,7 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 
 ### `AutoStatusDto`
 
-`{ enabled, brokerRunning, fontRequestRunning, signingKeyPresent, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
+`{ enabled, brokerRunning, fontRequestRunning, signingKeyPresent, isolatedBuild, apps: AutoAppDto[6], otherManagers: OtherManagerDto[] }`
 
 `brokerRunning` là kết quả PING thật (không chỉ cổng còn mở). `signingKeyPresent`: Settings phải nói rõ "Font Atlas giữ một khoá ký riêng của máy này ở thư mục dữ liệu để cài lại panel Illustrator" và cho nút **Xoá khoá** (`auto_forget_key`) khi panel đã gỡ.
 
@@ -46,9 +46,10 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 
 `OtherManagerDto`: `{ name, installed, running }` cho RightFont, FontBase, Typeface, Suitcase Fusion, FontExplorer X. Khi có cái `running=true`: hiện ghi chú "<Tên> đang chạy: nó cũng phản ứng với tài liệu thiếu font, bạn có thể thấy hai hộp thoại" (spike 06-3 thấy RightFont và hộp Missing Fonts của Adobe cùng hiện). Chưa có logic tắt hộ.
 
-`AutoLogDto`: `{ id, atMs, app (slug), doc?, requested, outcome, hashHex? }`. `outcome`: `activated | missing | conflict | unavailable | not_downloaded | failed | busy`. Nhật ký giữ 500 dòng; không có `already_active`/`available` (xem L1). `hashHex` mở được font trong thư viện.
+`AutoLogDto`: `{ id, atMs, app (slug), doc?, requested, outcome, hashHex? }`. `outcome`: `activated | missing | conflict | unavailable | not_downloaded | failed | busy | ambiguous` (`ambiguous`: nhiều bản cùng tên, đã chọn theo ưu tiên; `requested` dạng "<tên> ×N"). Nhật ký giữ 500 dòng; không có `already_active`/`available` (xem L1). `hashHex` mở được font trong thư viện.
 
 ### Bản cô lập
+`AutoStatusDto.isolatedBuild: bool` cho biết rõ; UI vô hiệu nút Cài/Gỡ/Xoá khoá khi true, đừng suy từ `state` của từng app (với Photoshop/AE `isolated_build` nghĩa là nguồn font request không mở; với Illustrator `state` vẫn có thể là `needs_install`).
 `auto_install`, `auto_remove`, `auto_forget_key` từ chối với `CmdError{code:"isolated_build"}` khi app chạy với dữ liệu riêng (QA/test/`FONTATLAS_DATA_DIR`): các bản đó không được ghi vào thư mục Adobe/Preferences THẬT của người dùng.
 
 ### Điều UI KHÔNG được giả định
