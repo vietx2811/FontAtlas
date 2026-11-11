@@ -21,6 +21,6 @@ export const AUTO_I18N = {
   'auto.managers.warn': '{name} đang chạy: nó cũng phản ứng với tài liệu thiếu font, bạn có thể thấy hai hộp thoại cùng lúc. Font Atlas không tắt hộ.',
   'auto.log': 'Nhật ký gần đây', 'auto.log.empty': 'Chưa có app nào hỏi font.', 'auto.log.when': 'Thời điểm', 'auto.log.app': 'App', 'auto.log.font': 'Font', 'auto.log.result': 'Kết quả',
   'auto.outcome.activated': 'Đã bật', 'auto.outcome.missing': 'Không có trong thư viện', 'auto.outcome.conflict': 'Trùng tên với font khác', 'auto.outcome.unavailable': 'Không dùng được',
-  'auto.outcome.not_downloaded': 'Font còn trên cloud', 'auto.outcome.failed': 'Lỗi', 'auto.outcome.busy': 'Đang bận',
+  'auto.outcome.not_downloaded': 'Font còn trên cloud', 'auto.outcome.failed': 'Lỗi', 'auto.outcome.ambiguous': 'Nhiều bản cùng tên', 'auto.outcome.ambiguous.tip': 'Có nhiều bản font cùng tên; Font Atlas đã chọn một bản theo thứ tự ưu tiên. Nếu app dùng sai bản, hãy tắt bản không muốn dùng.', 'auto.outcome.busy': 'Đang bận',
   'auto.broker': 'Dịch vụ nội bộ chưa chạy', 'auto.now': 'vừa xong',
 } as const;

@@ -116,6 +116,18 @@ describe('Settings → Bật font tự động', () => {
     expect(within(row('photoshop')).getByTestId('auto-last').textContent).toMatch(/^lần cuối .*phút/);
   });
 
+  it('an ambiguous outcome (several fonts with the same name, one chosen by priority) is translated and carries a note', async () => {
+    const api = createMockApi();
+    const { createMockAuto } = await import('../../../api/mockAuto');
+    const auto = createMockAuto();
+    auto.__push({ atMs: BigInt(Date.now() - 60_000), app: 'indesign', doc: null, requested: 'Inter', outcome: 'ambiguous', hashHex: null });
+    Object.assign(api, auto);
+    await mount(api);
+    const r = screen.getByTestId('auto-log').querySelector('tbody tr')!;
+    expect(r.textContent).toContain('Nhiều bản cùng tên');
+    expect(within(r as HTMLElement).getByTestId('auto-ambiguous').getAttribute('aria-label')).toMatch(/theo thứ tự ưu tiên/);
+  });
+
   it('a status error is shown with a retry that reloads', async () => {
     const api = createMockApi();
     const spy = vi.spyOn(api, 'autoStatus').mockRejectedValueOnce(new Error('broker chết'));

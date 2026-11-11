@@ -76,7 +76,7 @@ function LogTable({ rows, appLabel }: { rows: AutoLogDto[]; appLabel(id: string)
             <td>{whenText(Number(r.atMs))}</td>
             <td>{appLabel(r.app)}</td>
             <td>{r.requested}{r.doc && <small className="fa-auto-doc"> · {r.doc}</small>}</td>
-            <td>{(() => { const k = `auto.outcome.${r.outcome}`; try { return t(k as I18nKey); } catch { return r.outcome; } })()}</td>
+            <td>{(() => { const k = `auto.outcome.${r.outcome}`; try { return t(k as I18nKey); } catch { return r.outcome; } })()}{r.outcome === 'ambiguous' && <NoteMark inline kind="info" testId="auto-ambiguous" text={t('auto.outcome.ambiguous.tip')} />}</td>
           </tr>))}
       </tbody>
     </table>
