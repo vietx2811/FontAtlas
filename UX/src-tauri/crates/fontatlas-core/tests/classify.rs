@@ -275,7 +275,11 @@ fn legacy_overrides_map_to_v2_without_losing_the_choice() {
     assert_eq!(m("serif", Some("slab")), ("slab".into(), None));
     assert_eq!(m("script", Some("handwritten")), ("handwriting".into(), None));
     assert_eq!(m("script", Some("casual_brush")), ("script".into(), Some("brush".into())));
-    assert_eq!(m("script", Some("formal")), ("script".into(), Some("copperplate".into())));
+    assert_eq!(m("script", Some("formal")), ("script".into(), Some("formal_copperplate".into()))
+    );
+    assert_eq!(
+        m("serif", Some("humanist_oldstyle")),
+        ("serif".into(), Some("venetian_oldstyle".into())));
     // nhãn còn hợp lệ giữ nguyên; subclass không hợp lệ bị bỏ nhưng class giữ
     assert_eq!(m("sans", Some("geometric")), ("sans".into(), Some("geometric".into())));
     assert_eq!(m("serif", Some("nonsense")), ("serif".into(), None));

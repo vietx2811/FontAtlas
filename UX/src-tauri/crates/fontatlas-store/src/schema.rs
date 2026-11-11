@@ -460,7 +460,8 @@ INSERT INTO classification_overrides_tx (hash, face_index, class, subclass, upda
     CASE WHEN class='serif'  AND subclass='slab'        THEN NULL
          WHEN class='script' AND subclass='handwritten' THEN NULL
          WHEN class='script' AND subclass='casual_brush' THEN 'brush'
-         WHEN class='script' AND subclass='formal'       THEN 'copperplate'
+         WHEN class='script' AND subclass='formal'       THEN 'formal_copperplate'
+         WHEN class='serif'  AND subclass='humanist_oldstyle' THEN 'venetian_oldstyle'
          ELSE subclass END,
     updated_at
   FROM classification_overrides;

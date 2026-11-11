@@ -79,20 +79,22 @@ impl Class {
 /// ghi đè đã lưu vẫn hợp lệ cho tới khi `migrate_legacy` ánh xạ chúng.
 pub fn subclasses_of(c: Class) -> &'static [&'static str] {
     match c {
-        Class::Serif => &["humanist_oldstyle", "garalde", "transitional", "didone", "glyphic", "wedge", "slab"],
+        // `humanist_oldstyle` là tên v1 của `venetian_oldstyle` (giữ hợp lệ, migrate_legacy đổi sang tên mới)
+        Class::Serif => &["venetian_oldstyle", "humanist_oldstyle", "garalde", "transitional", "didone", "glyphic", "wedge", "slab"],
         Class::Slab => &["clarendon", "egyptian", "humanist_slab", "typewriter"],
-        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist", "rounded", "flared", "squarish"],
-        Class::Mono => &["serif_mono", "sans_mono", "coding"],
-        Class::Script => &["copperplate", "brush", "monoline", "upright", "calligraphic", "formal", "casual_brush", "handwritten"],
+        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist", "flared", "rounded", "squarish"],
+        Class::Mono => &["sans_mono", "serif_mono", "coding", "typewriter"],
+        Class::Script => &["formal_copperplate", "brush", "monoline_script", "signature", "upright_script", "calligraphic_unjoined", "formal", "casual_brush", "handwritten"],
         Class::Handwriting => &["casual_print", "marker", "childlike"],
-        Class::Display => &["stencil", "inline", "shaded", "pixel"],
+        Class::Display => &["stencil", "inline_outline", "shaded_3d", "pixel_bitmap"],
         Class::Blackletter | Class::Symbol | Class::Uncertain => &[],
     }
 }
 
 /// Ánh xạ nhãn v1 (class, subclass) sang taxonomy v2; không mất dữ liệu: nhãn lạ giữ nguyên class, bỏ subclass không hợp lệ.
 /// - Serif/`slab` → Slab (không subclass; người dùng/phân loại sau mới chọn clarendon/egyptian…)
-/// - Script/`handwritten` → Handwriting; Script/`casual_brush` → Script/`brush`; Script/`formal` → Script/`copperplate`
+/// - Script/`handwritten` → Handwriting; Script/`casual_brush` → Script/`brush`; Script/`formal` → Script/`formal_copperplate`;
+///   Serif/`humanist_oldstyle` → Serif/`venetian_oldstyle`
 pub fn migrate_legacy(class: &str, subclass: Option<&str>) -> (String, Option<String>) {
     let keep = |c: &str, s: Option<&str>| {
         let valid = Class::parse(c).is_some_and(|k| s.is_none_or(|s| subclasses_of(k).contains(&s)));
@@ -102,7 +104,8 @@ pub fn migrate_legacy(class: &str, subclass: Option<&str>) -> (String, Option<St
         ("serif", Some("slab")) => ("slab".into(), None),
         ("script", Some("handwritten")) => ("handwriting".into(), None),
         ("script", Some("casual_brush")) => ("script".into(), Some("brush".into())),
-        ("script", Some("formal")) => ("script".into(), Some("copperplate".into())),
+        ("script", Some("formal")) => ("script".into(), Some("formal_copperplate".into())),
+        ("serif", Some("humanist_oldstyle")) => ("serif".into(), Some("venetian_oldstyle".into())),
         (c, s) => keep(c, s),
     }
 }
