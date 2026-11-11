@@ -318,7 +318,9 @@ fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
 }
 
 /// Ngày tạo file sớm nhất của face (các vị trí chưa missing).
-const FILE_CREATED_SQL: &str = "(SELECT MIN(l.created_ns) FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)";
+/// Vị trí bị ẩn bởi quyết định Trùng lặp không tính (cùng luật với cột `file_created_at` trả về).
+const FILE_CREATED_SQL: &str = "(SELECT MIN(l.created_ns) FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 \
+     AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL))";
 
 fn user_order(q: &FaceQuery, scoped: bool) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
