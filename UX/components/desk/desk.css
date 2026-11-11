@@ -64,3 +64,25 @@
 .fa-combo .fa-combo-label { color: var(--fg); font-weight: 600; }
 .fa-combo { margin-left: auto; }
 .fa-dstrip-table td.sk i { display: block; height: 10px; width: 60%; border-radius: 3px; background: var(--border); opacity: .6; }
+
+.fa-desk-mode { display: inline-flex; margin-left: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.fa-desk-mode button { padding: 3px 10px; color: var(--muted); font-size: var(--text-sm); }
+.fa-desk-mode button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.fa-cc { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; }
+.fa-cc table { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: var(--text-sm); }
+.fa-cc th, .fa-cc td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); min-width: 190px; }
+.fa-cc thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.fa-cc th[data-base] { background: var(--accent-soft); }
+.fa-cc tbody th { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; min-width: 120px; position: sticky; left: 0; background: var(--panel); cursor: help; }
+.fa-cc-title { font-weight: 700; }
+.fa-cc-actions { display: flex; gap: 6px; margin-top: 4px; }
+.fa-cc-actions button { padding: 2px 8px; border-radius: var(--radius-md); color: var(--accent-ink); background: var(--accent-soft); font-size: var(--text-xs); }
+.fa-cc-actions button:disabled { opacity: .4; }
+.fa-cc-page { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
+.fa-cc-na { color: var(--muted); }
+.fa-fc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 8px; font-size: var(--text-xs); color: var(--muted); }
+.fa-fc-bar select, .fa-fc-bar > button { font-size: var(--text-xs); }
+.fa-fc td u { text-decoration: none; color: var(--muted); margin-left: 2px; }
+.fa-fc-d { font-size: var(--text-2xs); }
+.fa-fc-d.up { color: var(--accent-ink); } .fa-fc-d.down { color: var(--muted); }
+.fa-fc th[data-pinned] { box-shadow: inset 0 2px 0 var(--accent); }

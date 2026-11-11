@@ -811,6 +811,20 @@
         pressOn(deskEl(), '['); await sleep(500);
         const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
         await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
+        document.querySelector('[data-testid=mode-combos]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=cc-col]').length >= 2, 10000);
+        await sleep(400);
+        const ccCols = document.querySelectorAll('[data-testid=cc-col]').length;
+        await log('desk-compare-combos', ccCols === 2 && document.querySelector('[data-testid=cc-col]')?.dataset.base === 'true' && document.querySelectorAll('[data-testid=cc-rel]').length === 2, { ccCols });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-combos-' + th); }
+        document.querySelector('[data-testid=mode-fonts]')?.click();
+        await wait(() => !!document.querySelector('[data-testid=font-compare]'), 8000);
+        await sleep(500);
+        await log('desk-compare-fonts', !!document.querySelector('[data-testid=font-compare]') && document.querySelectorAll('tr[data-metric]').length >= 4 && !!document.querySelector('[data-testid=fc-sort]'), { cols: document.querySelectorAll('[data-testid=fc-col]').length });
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-fonts-' + th); }
+        document.querySelector('[data-testid=fc-view-pages]')?.click(); await sleep(400);
+        await log('desk-compare-fonts-pages', !document.querySelector('tr[data-metric]'), {});
+        document.querySelector('[data-testid=mode-pairing]')?.click(); await sleep(400);
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
         pressOn(deskEl(), 'Escape');
         await wait(() => !deskEl(), 8000);

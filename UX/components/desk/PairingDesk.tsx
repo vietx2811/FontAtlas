@@ -10,7 +10,9 @@ import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorPairRole, anchorRoles, isHeadingLike } from './deskRoles';
+import { ComboCompare } from './ComboCompare';
 import { ComboStepper } from './ComboStepper';
+import { FontCompare } from './FontCompare';
 import { DetailStrip } from './DetailStrip';
 import './desk.css';
 
@@ -27,6 +29,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const openDesk = useUiStore(s => s.openDesk);
   const openCompare = useUiStore(s => s.openCompare);
   const [stripCollapsed, setStripCollapsed] = useState(false);
+  const [mode, setMode] = useState<'pairing' | 'fonts' | 'combos'>('pairing');
+  const [cmpRev, setCmpRev] = useState(0);
   const sample = useUiStore(s => s.sample);
   const [data, setData] = useState<CaseDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,14 +88,15 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
 
   const inUseSame = same(current?.key, trial?.face);
-  const place = useCallback(async () => {
-    if (!combo || !trial) return;
+  const placeFace = useCallback(async (face: FaceKeyDto, row: FaceRowDto) => {
+    if (!combo) return;
     try {
-      const next = await api.setComboSlot(combo.id, role, trial.face);
+      const next = await api.setComboSlot(combo.id, role, face);
       setData(d => (d ? { ...d, combos: d.combos.map(c => (c.id === next.id ? next : c)) } : d));
-      useNoticeStore.getState().push({ kind: 'info', text: t('desk.placed', { font: nameOf(trial.row), role: roleName(role) }) });
+      useNoticeStore.getState().push({ kind: 'info', text: t('desk.placed', { font: nameOf(row), role: roleName(role) }) });
     } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
-  }, [api, combo, trial, role]);
+  }, [api, combo, role]);
+  const place = useCallback(async () => { if (trial) await placeFace(trial.face, trial.row); }, [placeFace, trial]);
 
   const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) });
   const goCombo = useCallback((id: number) => { openDesk({ caseId: desk.caseId, comboId: id, role, trial: null }); }, [openDesk, desk.caseId, role]);
@@ -102,7 +107,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }).catch(fail); },
     rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId))).catch(fail); },
     makeMain: () => { if (combo) comboOps.makeMainOf(combo.id); },
-    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); }).catch(fail); },
+    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); setCmpRev(n => n + 1); }).catch(fail); },
     remove: () => setConfirmDel(true),
     removeNow: async () => {
       if (!combo || !data) return;
@@ -124,7 +129,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     if (confirmDel) return; // hộp xác nhận đang giữ focus: không cướp
     const a = document.activeElement as HTMLElement | null;
     if (!a || a === document.body || !root.current?.contains(a) || (a as HTMLButtonElement).disabled) root.current?.focus();
-  }, [desk.comboId, confirmDel]);
+  }, [desk.comboId, mode, confirmDel]);
   const leave = useCallback(() => { closeDesk(); requestAnimationFrame(() => (document.querySelector('[data-testid=open-desk]') as HTMLElement | null)?.focus()); }, [closeDesk]);
   const cmpFaces = trial ? (current && !current.missing && !inUseSame ? [current.key, trial.face] : [trial.face]) : [];
   const compareReason = cmpFaces.length < 2 ? t('desk.compareNeed') : null;
@@ -136,11 +141,11 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     if (!root.current?.contains(tgt) || tgt.closest('input, textarea, select, [contenteditable]')) return;
     const onList = tgt === root.current || !!tgt.closest('[role=option]');
     if (e.key === 'Escape') { e.preventDefault(); leave(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-    else if (e.key === 'Enter' && onList && !e.repeat && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if (e.key === 'ArrowDown' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
+    else if (e.key === 'ArrowUp' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
+    else if (e.key === 'Enter' && onList && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
     else if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
-    else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setStripCollapsed(c => !c); }
+    else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing') { e.preventDefault(); setStripCollapsed(c => !c); }
     else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial && !compareReason) { e.preventDefault(); toCompare(); }
   };
 
@@ -152,9 +157,23 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={leave}>← {t('desk.back')}</button></Tooltip>
         <h1>{t('desk.title')}</h1>
         {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}</span>}
+        <span className="fa-desk-mode" role="group" aria-label={t('desk.mode.tip')}>
+          <button type="button" data-testid="mode-pairing" aria-pressed={mode === 'pairing'} onClick={() => setMode('pairing')}>{t('desk.mode.pairing')}</button>
+          <button type="button" data-testid="mode-fonts" aria-pressed={mode === 'fonts'} onClick={() => setMode('fonts')}>{t('desk.mode.fonts')}</button>
+          <button type="button" data-testid="mode-combos" aria-pressed={mode === 'combos'} onClick={() => setMode('combos')}>{t('desk.mode.combos')}</button>
+        </span>
         {data && combo && <ComboStepper data={data} combo={combo} ops={comboOps} />}
       </header>
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}
+      {mode === 'fonts' && data && combo ? (
+        <FontCompare key={`${combo.id}:${role}`} api={api} role={role}
+          base={current && !current.missing ? { face: current.key, row: current.row } : null}
+          partner={(anchor?.row ?? null)} suggestions={cands.map(c => ({ face: c.face, row: c.row }))}
+          onPlace={f => { void placeFace(f.face, f.row); }}
+          onTry={f => { setMode('pairing'); openDesk({ caseId: desk.caseId, comboId: combo.id, role, trial: f.face }); }} />
+      ) : mode === 'combos' && data && combo ? (
+        <ComboCompare key={cmpRev} api={api} caseId={desk.caseId} currentId={combo.id} onOpen={id => { setMode('pairing'); goCombo(id); }} onMain={id => comboOps.makeMainOf(id)} />
+      ) : (
       <div className="fa-desk-body">
         <section className="fa-desk-roles" aria-label={t('desk.roles')}>
           <h2>{t('desk.roles')}</h2>
@@ -202,6 +221,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
           <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />
         </section>
       </div>
+      )}
       {confirmDel && combo && (
         <Modal title={t('combo.delete.title', { n: combo.idx })} onClose={() => setConfirmDel(false)}>
           <p>{t('combo.delete.body', { n: String(combo.slots.length) })}</p>
