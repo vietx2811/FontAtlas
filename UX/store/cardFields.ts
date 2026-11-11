@@ -30,18 +30,22 @@ export const useCardFields = create<State>()((set, get) => ({
   reset: () => set({ fields: [...DEFAULT_CARD_FIELDS] }),
 }));
 
-/** Đọc `ui.card_fields` rồi ghi ngược (debounce) khi đổi. Trả hàm dừng. */
+/**
+ * Đọc `ui.card_fields` rồi ghi ngược (debounce) khi đổi. Trả hàm dừng; dừng (unmount) hoặc đóng cửa sổ / ẩn tab
+ * (`pagehide`, `visibilitychange`) thì ghi NGAY phần còn treo. `written` chỉ cập nhật sau khi ghi thành công, nên lỗi được thử lại ở lần đổi sau.
+ */
 export async function hydrateCardFields(api: Api): Promise<() => void> {
   try { useCardFields.getState().set(parseCardFields(await api.getSetting(CARD_FIELDS_KEY))); } catch { useCardFields.getState().reset(); }
   let written = serializeCardFields(useCardFields.getState().fields); let timer: ReturnType<typeof setTimeout> | undefined;
-  const unsub = useCardFields.subscribe(s => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const json = serializeCardFields(s.fields);
-      if (json === written) return;
-      written = json;
-      api.setSetting(CARD_FIELDS_KEY, json).catch(e => console.warn('set_setting failed', e));
-    }, PERSIST_MS);
-  });
-  return () => { unsub(); clearTimeout(timer); };
+  const flush = () => {
+    clearTimeout(timer); timer = undefined;
+    const json = serializeCardFields(useCardFields.getState().fields);
+    if (json === written) return;
+    api.setSetting(CARD_FIELDS_KEY, json).then(() => { written = json; }, e => console.warn('set_setting failed', e));
+  };
+  const unsub = useCardFields.subscribe(() => { clearTimeout(timer); timer = setTimeout(flush, PERSIST_MS); });
+  const onHide = () => { if (document.visibilityState === 'hidden' || document.visibilityState === undefined) flush(); };
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', onHide);
+  return () => { unsub(); window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', onHide); flush(); };
 }

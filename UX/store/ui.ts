@@ -294,6 +294,14 @@ export function createUiStore(): UiStore {
       try { set({ sort: parseSort(await api.getSetting(SORT_KEY)) }); } catch { set({ sort: { ...DEFAULT_SORT } }); }
       let sortWritten = serializeSort(get().sort);
       let sortTimer: ReturnType<typeof setTimeout> | undefined;
+      // Ghi ngay phần còn treo khi dừng / đóng cửa sổ; `sortWritten` chỉ cập nhật sau khi ghi thành công (lỗi thì lần đổi sau thử lại).
+      const flushSort = () => {
+        clearTimeout(sortTimer); sortTimer = undefined;
+        const now = serializeSort(get().sort);
+        if (now === sortWritten) return;
+        api.setSetting(SORT_KEY, now).then(() => { sortWritten = now; }, e => console.warn('set_setting failed', e));
+      };
+      window.addEventListener('pagehide', flushSort);
       let recentWritten = JSON.stringify(get().recentViews);
       let recentTimer: ReturnType<typeof setTimeout> | undefined;
       let written = JSON.stringify(toDto(get()));
@@ -302,12 +310,7 @@ export function createUiStore(): UiStore {
         const sjson = serializeSort(get().sort);
         if (sjson !== sortWritten) {
           clearTimeout(sortTimer);
-          sortTimer = setTimeout(() => {
-            const now = serializeSort(get().sort);
-            if (now === sortWritten) return;
-            sortWritten = now;
-            api.setSetting(SORT_KEY, now).catch(e => console.warn('set_setting failed', e));
-          }, PERSIST_DEBOUNCE_MS);
+          sortTimer = setTimeout(flushSort, PERSIST_DEBOUNCE_MS);
         }
         const rjson = JSON.stringify(get().recentViews);
         if (rjson !== recentWritten) {
@@ -328,7 +331,7 @@ export function createUiStore(): UiStore {
           api.setUiState(dto).catch(e => console.warn('set_ui_state failed', e));
         }, PERSIST_DEBOUNCE_MS);
       });
-      stop = () => { unsub(); clearTimeout(timer); clearTimeout(recentTimer); clearTimeout(sortTimer); };
+      stop = () => { unsub(); clearTimeout(timer); clearTimeout(recentTimer); window.removeEventListener('pagehide', flushSort); flushSort(); };
     },
   }));
   return store;

@@ -1,4 +1,3 @@
-import { hydrateCardFields } from './store/cardFields';
 import React, { useEffect, useState } from 'react';
 import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
@@ -23,6 +22,7 @@ import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
+import { hydrateCardFields } from './store/cardFields';
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
     state = { hasError: false };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { List, type RowComponentProps } from 'react-window';
+import { List, useListRef, type RowComponentProps } from 'react-window';
 import type { LibraryApi } from './api';
 import { CARD_ROW2_H, DEFAULT_PREVIEW_MODE, FaceCell, type PickMods, type PreviewMode } from './FaceCell';
 import { useCardFields } from '../../store/cardFields';
@@ -182,6 +182,15 @@ export function LibraryGrid({
   }
   const total = snap.total ?? 0;
   const rowCount = Math.ceil(total / cols);
+  // Đổi chiều cao hàng (bật/tắt hàng thông tin thứ 2…) giữa lúc cuộn sâu: giữ hàng đầu đang thấy, không để vị trí nhảy.
+  const listRef = useListRef(null);
+  const topRow = useRef(0);
+  const lastRowH = useRef(rowH);
+  useLayoutEffect(() => {
+    if (lastRowH.current === rowH) return;
+    lastRowH.current = rowH;
+    if (topRow.current > 0) listRef.current?.scrollToRow({ index: Math.min(topRow.current, Math.max(0, rowCount - 1)), align: 'start' });
+  }, [rowH, rowCount, listRef]);
 
   return (
     <div ref={box} role="grid" data-layout={layout} aria-rowcount={rowCount} aria-colcount={cols} style={{ width: width ?? '100%', height: height ?? '100%' }}>
@@ -202,6 +211,7 @@ export function LibraryGrid({
       ) : (
         <List
           data-testid="library-grid-scroller"
+          listRef={listRef}
           rowComponent={Row}
           rowCount={rowCount + (bottomInset ? 1 : 0)}
           rowHeight={(i: number) => (i >= rowCount ? bottomInset : rowH)}
@@ -209,7 +219,7 @@ export function LibraryGrid({
           defaultHeight={size.height}
           style={{ height: '100%', width: '100%' }}
           rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive }}
-          onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
+          onRowsRendered={({ startIndex, stopIndex }) => { topRow.current = startIndex; paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1); }}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />
       )}
