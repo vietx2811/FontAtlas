@@ -100,3 +100,23 @@ fn font_uri_not_found_and_stale() {
     std::fs::copy(core_fixture("open_sans.ttf"), &path).unwrap();
     assert_eq!(handle_font_uri(s.locator(), &format!("fontatlas-font://localhost/{h}_0.font"), APP, &CorsPolicy::app()).status, 409);
 }
+
+struct Slow(String, PathBuf, bool);
+impl FaceLocator for Slow {
+    fn locate(&self, h: &str, _i: u32) -> Option<PathBuf> { (h == self.0).then(|| self.1.clone()) }
+    fn before_read(&self, _p: &std::path::Path) -> Result<(), PreviewError> {
+        if self.2 { Err(PreviewError::CloudTimeout) } else { Ok(()) }
+    }
+}
+
+#[test]
+fn font_uri_goes_through_before_read_and_reports_cloud_errors() {
+    let p = core_fixture("roboto.ttf");
+    let h = FontFile::open(&p).unwrap().hash_hex();
+    let uri = format!("fontatlas-font://localhost/{h}_0.font");
+    let cors = CorsPolicy::app();
+    let bad = handle_font_uri(&Slow(h.clone(), p.clone(), true), &uri, APP, &cors);
+    assert_eq!((bad.status, bad.body.as_slice()), (504, b"cloud_timeout".as_slice()));
+    let ok = handle_font_uri(&Slow(h, p, false), &uri, APP, &cors);
+    assert_eq!(ok.status, 200);
+}

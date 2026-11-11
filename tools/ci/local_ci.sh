@@ -45,6 +45,16 @@ if [ ! -e "$WT/.git" ]; then
 fi
 cd "$WT" || exit 2
 git checkout -q --detach -f "$SHA" || exit 2
+
+# target/ của Rust rất nặng (~30 GB). Đặt nó ở ổ dữ liệu, không ở ổ hệ thống:
+# UX/src-tauri/target là symlink tới $FONTATLAS_CI_TARGET (mặc định ổ VXData nếu có).
+CI_TARGET="${FONTATLAS_CI_TARGET:-}"
+[ -z "$CI_TARGET" ] && [ -d /Volumes/VXData/Users/VietX ] && CI_TARGET="/Volumes/VXData/Users/VietX/.fontatlas-ci/target"
+if [ -n "$CI_TARGET" ] && [ ! -L UX/src-tauri/target ]; then
+  mkdir -p "$CI_TARGET" || exit 2
+  if [ -e UX/src-tauri/target ]; then echo "UX/src-tauri/target vẫn là thư mục thật; xoá nó để chuyển sang $CI_TARGET"; exit 2; fi
+  ln -s "$CI_TARGET" UX/src-tauri/target || exit 2
+fi
 git clean -ffdxq -e UX/src-tauri/target -e UX/node_modules
 
 OUT="$CI/runs/$SHA"; rm -rf "$OUT"; mkdir -p "$OUT"

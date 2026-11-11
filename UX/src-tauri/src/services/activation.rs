@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use fontatlas_activate::{
-    ActivationEngine, ActivationError, ActivationReport, ActivationService, ActivationStateDto as CoreState, ConflictPolicy,
+    ActivationEngine, ActivationError, ActivationReport, ActivationService, Availability, ActivationStateDto as CoreState, ConflictPolicy,
     DeactivatePolicy, Progress, ReconcileReport, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
 };
 use fontatlas_store::{FaceKey, Store};
@@ -52,6 +52,7 @@ pub trait ActivationApi: Send + Sync {
     fn on_collection_deleted(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn set_scope(&self, s: &Mutex<Store>, hashes: Option<&[[u8; 32]]>, scope: Scope) -> Result<ActivationReport, ActivationError>;
     fn state(&self, s: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError>;
+    fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
 }
@@ -107,6 +108,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn state(&self, s: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError> {
         ActivationService::state(self, s)
     }
+    fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError> {
+        ActivationService::availability(self, s, hashes)
+    }
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
         ActivationService::reconcile(self, s, progress)
     }
@@ -147,6 +151,9 @@ impl ActivationApi for NoActivation {
         Err(ActivationError::Unsupported)
     }
     fn state(&self, _: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError> {
+        Ok(Vec::new())
+    }
+    fn availability(&self, _: &Mutex<Store>, _: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError> {
         Ok(Vec::new())
     }
     fn reconcile(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
@@ -276,6 +283,50 @@ pub fn deactivate_collection(state: &AppState, collection_id: i64, progress: &mu
 pub fn deactivate_all(state: &AppState, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
     let r = state.activation.deactivate_all(state.store()?, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
+
+/// Font nào đang "Có sẵn trên máy" (file giống hệt do bên khác cung cấp)? Tính lại mỗi lần; `faces` là các face
+/// cần kiểm thêm ngoài tập đã nhớ. Rỗng khi nền tảng chưa hỗ trợ.
+pub fn availability(state: &AppState, faces: &[FaceKeyDto]) -> Result<Vec<AvailabilityDto>, CmdError> {
+    if !state.activation.supported() {
+        return Ok(vec![]);
+    }
+    let keys = keys_of(faces)?;
+    let mut hashes: Vec<[u8; 32]> = keys.iter().map(|k| k.hash).collect();
+    hashes.sort_unstable();
+    hashes.dedup();
+    let list = state.activation.availability(state.store()?, &hashes)?;
+    state.with_store(|s| {
+        let mut st = s
+            .conn()
+            .prepare("SELECT f.face_index FROM faces f JOIN files fi ON fi.file_id = f.file_id WHERE fi.hash = ?1 ORDER BY f.face_index")
+            .map_err(fontatlas_store::StoreError::from)?;
+        list.into_iter()
+            .map(|a| {
+                let hash: Vec<u8> = (0..a.hash_hex.len() / 2).filter_map(|i| u8::from_str_radix(&a.hash_hex[2 * i..2 * i + 2], 16).ok()).collect();
+                let mut fs: Vec<u32> = st
+                    .query_map([&hash[..]], |x| x.get::<_, i64>(0))
+                    .map_err(fontatlas_store::StoreError::from)?
+                    .filter_map(|x| x.ok().map(|v| v as u32))
+                    .collect();
+                if fs.is_empty() {
+                    fs.push(0);
+                }
+                Ok(AvailabilityDto { hash_hex: a.hash_hex, faces: fs, owner: a.owner.into(), path: a.path })
+            })
+            .collect()
+    })
+}
+
+/// Đổi phạm vi (session ↔ persistent) của các font ĐANG bật, không tắt giữa chừng (đăng ký scope mới trước, rồi gỡ scope cũ).
+pub fn set_scope(state: &AppState, faces: &[FaceKeyDto], scope: ScopeDto) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let mut hashes: Vec<[u8; 32]> = keys.iter().map(|k| k.hash).collect();
+    hashes.sort_unstable();
+    hashes.dedup();
+    let r = state.activation.set_scope(state.store()?, Some(&hashes), scope.into())?;
     Ok(finish(state, r))
 }
 

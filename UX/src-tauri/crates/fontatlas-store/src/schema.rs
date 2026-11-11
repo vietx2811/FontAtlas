@@ -296,9 +296,150 @@ DROP TABLE classification_overrides;
 ALTER TABLE classification_overrides_v5 RENAME TO classification_overrides;
 "#;
 
+/// v6 (Font Desk 0.3.0): Case và Combo. Face khoá theo (hash, face_index) như collection/pairs; font không còn trong
+/// thư viện vẫn nằm trong Case (DTO báo `missing`). Xoá Case là xoá mềm (`deleted_at`), dọn sau 30 ngày.
+pub(crate) const USER_V6: &str = r#"
+CREATE TABLE cases (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  brief      TEXT,                          -- JSON BriefDto (NULL = không có)
+  settings   TEXT NOT NULL DEFAULT '{}',    -- JSON {vi, mode}
+  view_state TEXT NOT NULL DEFAULT '{}',    -- JSON: cột/ghim/sắp/nhóm đóng của Pairing và Compare
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  opened_at  INTEGER NOT NULL,
+  deleted_at INTEGER
+);
+CREATE INDEX cases_opened ON cases(opened_at) WHERE deleted_at IS NULL;
+CREATE TABLE case_faces (
+  case_id    INTEGER NOT NULL REFERENCES cases ON DELETE CASCADE,
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  origin     TEXT NOT NULL CHECK (origin IN ('added','pinned','brief','peek')),
+  note       TEXT,
+  added_at   INTEGER NOT NULL,
+  PRIMARY KEY (case_id, hash, face_index)
+) WITHOUT ROWID;
+CREATE TABLE combos (
+  id         INTEGER PRIMARY KEY,
+  case_id    INTEGER NOT NULL REFERENCES cases ON DELETE CASCADE,
+  idx        INTEGER NOT NULL,
+  name       TEXT NOT NULL,
+  is_main    INTEGER NOT NULL DEFAULT 0,
+  note       TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (case_id, idx)
+);
+CREATE TABLE combo_slots (
+  combo_id   INTEGER NOT NULL REFERENCES combos ON DELETE CASCADE,
+  role       TEXT NOT NULL CHECK (role IN ('display','heading','subheading','body','caption','accent','quote')),
+  ord        INTEGER NOT NULL DEFAULT 0,
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  note       TEXT,
+  style      TEXT NOT NULL DEFAULT '{}',    -- JSON: weight, italic, case, size_step, tracking, leading
+  PRIMARY KEY (combo_id, role)
+) WITHOUT ROWID;
+"#;
+
 /// Phần tử `i` đưa DB từ v`i` lên v`i+1`. Chỉ nối thêm, không sửa bản đã phát hành.
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1];
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5];
+/// Library v2 (0.3.0): độ phủ ngôn ngữ (Hyperglot) theo face. Khoá theo (hash, face_index) như `analyses`.
+/// `face_langs` chỉ giữ ngôn ngữ đạt ≥ near; `face_lang_state` đánh dấu face đã tính với `db_version` nào
+/// (không có hàng ở `face_langs` + có dấu = "đã tính, không đạt"; không có dấu = chưa tính).
+pub(crate) const LIBRARY_V2: &str = r#"
+CREATE TABLE face_langs (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  lang       TEXT NOT NULL,
+  have       INTEGER NOT NULL,
+  total      INTEGER NOT NULL,
+  level      TEXT NOT NULL CHECK (level IN ('full','near')),
+  PRIMARY KEY (hash, face_index, lang)
+) WITHOUT ROWID;
+CREATE INDEX face_langs_lang ON face_langs(lang, level);
+CREATE TABLE face_lang_state (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  db_version TEXT NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+"#;
+
+
+/// Library v3 (0.3.0): dải trục `wght`/`wdth` của font Variable (từ `fvar`) để lọc giao khoảng bằng SQL.
+/// NULL = không phải Variable hoặc không có trục đó. Backfill từ bản phân tích MỚI NHẤT của mỗi face
+/// (min và max luôn lấy từ cùng một hàng). Face Variable mà bản phân tích mới nhất hỏng JSON, không có
+/// `axes` hoặc không có bản phân tích thì không thể điền: đánh dấu `pipeline_state.version = 'axes-backfill'`
+/// ở dòng `load` của file để lần quét sau phân tích lại (xem `AXES_REANALYZE_MARK`).
+pub(crate) const LIBRARY_V3: &str = r#"
+ALTER TABLE faces ADD COLUMN wght_min REAL;
+ALTER TABLE faces ADD COLUMN wght_max REAL;
+ALTER TABLE faces ADD COLUMN wdth_min REAL;
+ALTER TABLE faces ADD COLUMN wdth_max REAL;
+CREATE INDEX faces_wght ON faces(wght_min, wght_max) WHERE wght_min IS NOT NULL;
+CREATE TEMP TABLE latest_meta AS
+  SELECT hash, face_index, mj FROM (
+    SELECT hash, face_index, CASE WHEN json_valid(metadata_json) THEN metadata_json END AS mj,
+           row_number() OVER (PARTITION BY hash, face_index ORDER BY analyzed_at DESC, rowid DESC) AS rn
+    FROM analyses)
+  WHERE rn = 1;
+CREATE TEMP TABLE face_axes AS
+  SELECT f.face_id AS face_id,
+         json_extract(j.value, '$.tag') AS tag,
+         json_extract(j.value, '$.min') AS mn,
+         json_extract(j.value, '$.max') AS mx
+  FROM faces f
+  JOIN files fi ON fi.file_id = f.file_id
+  JOIN latest_meta l ON l.hash = fi.hash AND l.face_index = f.face_index
+  JOIN json_each(l.mj, '$.axes') j
+  WHERE f.is_variable = 1;
+UPDATE faces SET
+  wght_min = (SELECT mn FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wght' LIMIT 1),
+  wght_max = (SELECT mx FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wght' LIMIT 1),
+  wdth_min = (SELECT mn FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wdth' LIMIT 1),
+  wdth_max = (SELECT mx FROM face_axes a WHERE a.face_id = faces.face_id AND a.tag = 'wdth' LIMIT 1)
+WHERE is_variable = 1;
+UPDATE pipeline_state SET version = 'axes-backfill'
+WHERE stage = 'load' AND face_index = -1 AND hash IN (
+  SELECT fi.hash FROM faces f JOIN files fi ON fi.file_id = f.file_id
+  LEFT JOIN latest_meta l ON l.hash = fi.hash AND l.face_index = f.face_index
+  WHERE f.is_variable = 1
+    AND (l.mj IS NULL OR json_type(l.mj, '$.axes') IS NOT 'array'));
+DROP TABLE latest_meta;
+DROP TABLE face_axes;
+"#;
+
+/// Giá trị `pipeline_state.version` mà migration library v3 đặt để buộc phân tích lại.
+pub const AXES_REANALYZE_MARK: &str = "axes-backfill";
+
+/// Library v4 (0.2.1): `file_locations.cloud_only` = vị trí hiện là placeholder trên ổ cloud (dataless, chưa tải về).
+/// Quét lại đặt 1 khi thấy cờ dataless, 0 khi file đã nằm trên máy. Dữ liệu phân tích giữ nguyên.
+pub(crate) const LIBRARY_V4: &str = r#"
+ALTER TABLE file_locations ADD COLUMN cloud_only INTEGER NOT NULL DEFAULT 0;
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4];
+/// Chỉ cho test: library.db ở v3 (trước cờ cloud_only).
+pub fn create_library_v3_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch(LIBRARY_V2).expect("LIBRARY_V2");
+    c.execute_batch(LIBRARY_V3).expect("LIBRARY_V3");
+    c.execute_batch("PRAGMA user_version = 3;").expect("user_version");
+}
+/// Chỉ cho test: library.db ở v2 (trước dải trục).
+pub fn create_library_v2_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch(LIBRARY_V2).expect("LIBRARY_V2");
+    c.execute_batch("PRAGMA user_version = 2;").expect("user_version");
+}
+/// Chỉ cho test: library.db ở v1 (trước độ phủ ngôn ngữ).
+pub fn create_library_v1_for_test(c: &Connection) {
+    c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");
+    c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
+}
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6];
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]
@@ -323,6 +464,15 @@ pub fn create_user_v4_for_test(path: &Path) {
         c.execute_batch(m).expect("USER_Vn");
     }
     c.execute_batch("PRAGMA user_version = 4;").expect("user_version");
+}
+/// Chỉ cho test: tạo user.db ở v5 để kiểm migration lên v6.
+#[doc(hidden)]
+pub fn create_user_v5_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user v5");
+    for m in [USER_V1, USER_V2, USER_V3, USER_V4, USER_V5] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 5;").expect("user_version");
 }
 /// Chỉ cho test: tạo user.db ở v3 để kiểm migration lên v4.
 #[doc(hidden)]

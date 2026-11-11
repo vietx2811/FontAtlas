@@ -103,6 +103,10 @@ pub struct SourceDto {
     pub path: Option<String>,
     pub enabled: bool,
     pub available: bool,
+    /// Nguồn nằm trên ổ cloud (theo đường dẫn): `one_drive` | `google_drive` | `dropbox` | `box` | `icloud` | `other`.
+    pub cloud_provider: Option<String>,
+    /// Số font của nguồn còn là placeholder trên ổ cloud (chưa tải về máy), theo lần quét gần nhất.
+    pub cloud_only_count: u32,
     pub face_count: u32,
     pub last_scan: Option<RescanStatsDto>,
     pub scanning: bool,
@@ -125,6 +129,7 @@ pub struct ScanStatusDto {
 use fontatlas_store::{Collection, FaceKey, FacePage, FaceRow, ProblemFile, SortKey, Tag};
 use serde::Deserialize;
 
+use crate::dto::langs::{LangBadgeDto, LangFilterDto, LangModeDto};
 use crate::error::CmdError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -156,7 +161,7 @@ pub fn keys_of(v: &[FaceKeyDto]) -> Result<Vec<FaceKey>, CmdError> {
     v.iter().map(FaceKey::try_from).collect()
 }
 
-/// Đúng 19 khoá của `FaceRow` của store (parser Plan 5 từ chối khoá lạ).
+/// Đúng 20 khoá của `FaceRow` của store (parser Plan 5 từ chối khoá lạ).
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
@@ -180,13 +185,19 @@ pub struct FaceRowDto {
     #[ts(type = "number")]
     pub file_size: u64,
     pub missing: bool,
+    /// Mọi bản còn thấy là placeholder trên ổ cloud (chưa tải về): chưa dùng/bật ngay được.
+    pub on_cloud_only: bool,
     pub is_favorite: bool,
     #[ts(type = "number")]
     pub added_at: i64,
+    /// Chỉ báo ngôn ngữ trên thẻ, theo `FaceQueryDto.badgeLang` (mặc định `vie`). `null` khi mã ngôn ngữ lạ.
+    /// `viMissing` giữ nguyên cho tương thích; giao diện dùng `langBadge` thay chỉ báo `−N`.
+    pub lang_badge: Option<LangBadgeDto>,
 }
 
 impl From<FaceRow> for FaceRowDto {
     fn from(r: FaceRow) -> Self {
+        let lang_badge = crate::services::langs::badge_of(crate::services::langs::DEFAULT_BADGE_LANG, r.lang_hit.as_ref(), r.lang_computed, r.vi_missing);
         FaceRowDto {
             face_id: r.face_id,
             hash_hex: r.hash_hex,
@@ -205,8 +216,10 @@ impl From<FaceRow> for FaceRowDto {
             path: r.path,
             file_size: r.file_size,
             missing: r.missing,
+            on_cloud_only: r.on_cloud_only,
             is_favorite: r.is_favorite,
             added_at: r.added_at,
+            lang_badge,
         }
     }
 }
@@ -325,6 +338,33 @@ pub struct FaceQueryDto {
     pub subclasses: Vec<String>,
     /// Lọc theo tag hình thái (OR): stencil | inline_outline | rounded | fat_face | pixel | decorative.
     pub traits: Vec<String>,
+    /// Lọc theo ngôn ngữ (Hyperglot). Rỗng = không lọc. Chỉ face đã tính độ phủ mới khớp.
+    pub langs: Vec<LangFilterDto>,
+    /// `all` (mặc định): phải đủ mọi ngôn ngữ trong `langs`; `any`: đủ ít nhất một.
+    pub lang_mode: LangModeDto,
+    /// Ngôn ngữ cho chỉ báo `langBadge` trên thẻ (mã ISO 639-3, vd `vie`); `null` = `vie`.
+    pub badge_lang: Option<String>,
+    /// usWeightClass, khoảng đóng trong 100..=900 (font cũ ghi 1–9 được coi là ×100).
+    pub weight_class: Option<[u16; 2]>,
+    /// usWidthClass, khoảng đóng trong 1..=9.
+    pub width_class: Option<[u16; 2]>,
+    /// Font Variable cũng khớp khi dải trục `wght`/`wdth` giao khoảng đã chọn (mặc định bật cả hai).
+    pub var_axis_match: VarAxisMatchDto,
+}
+
+/// Bật/tắt khớp theo dải trục Variable. `wdth` (%) quy về class theo bảng OS/2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export, rename_all = "camelCase")]
+pub struct VarAxisMatchDto {
+    pub wght: bool,
+    pub wdth: bool,
+}
+
+impl Default for VarAxisMatchDto {
+    fn default() -> Self {
+        VarAxisMatchDto { wght: true, wdth: true }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]

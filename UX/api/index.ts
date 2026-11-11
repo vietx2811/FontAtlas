@@ -3,8 +3,8 @@
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
-  ActivationEvent, ActivationReportDto, ActivationStateDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
 
@@ -58,8 +58,40 @@ export interface Api extends LibraryApi {
   similar(face: FaceKeyDto, opts?: SimilarQuery): Promise<SimilarHitDto[]>;
   similarFamilies(face: FaceKeyDto, opts?: SimilarQuery, q?: FaceQuery): Promise<SimilarFamilyPageDto>;
   axisStats(q?: FaceQuery): Promise<AxisStatsDto[]>;
+  // Font Desk (0.3.0): Case + Combo
+  createCase(name?: string, brief?: BriefDto, settings?: CaseSettingsDto): Promise<CaseDto>;
+  listCases(includeDeleted?: boolean): Promise<CaseSummaryDto[]>;
+  /** Mở Case (đánh dấu vừa mở) và trả đủ nội dung. */
+  openCase(id: number): Promise<CaseDto>;
+  getCase(id: number): Promise<CaseDto>;
+  updateCase(id: number, patch: Partial<CasePatchDto>): Promise<CaseDto>;
+  /** Xoá mềm 30 ngày. */
+  deleteCase(id: number): Promise<void>;
+  restoreCase(id: number): Promise<CaseDto>;
+  /** `caseId` null = Case đang mở gần nhất, chưa có thì tạo mới (`created`). */
+  addToCase(caseId: number | null, faces: FaceKeyDto[], origin?: CaseOriginDto): Promise<AddToCaseDto>;
+  removeFromCase(caseId: number, faces: FaceKeyDto[]): Promise<number>;
+  createCombo(caseId: number, name?: string, fromCombo?: number): Promise<ComboDto>;
+  updateCombo(id: number, patch: Partial<ComboPatchDto>): Promise<ComboDto>;
+  deleteCombo(id: number): Promise<void>;
+  reorderCombos(caseId: number, ids: number[]): Promise<void>;
+  /** `face` null = bỏ font khỏi vai. */
+  setComboSlot(comboId: number, role: ComboRoleDto, face: FaceKeyDto | null, note?: string, style?: unknown): Promise<ComboDto>;
+  createCombos(caseId: number, combos: NewComboDto[]): Promise<ComboDto[]>;
+  /** Compare Combo: cột = Combo, kèm quan hệ giữa giọng ① và các vai khác. `comboIds` rỗng = mọi Combo (≤ 8). */
+  caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
+  /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */
+  briefStarter(brief: BriefDto, caseId?: number): Promise<BriefStarterDto>;
+  /** Pair from peek (2d): font làm neo ở vai `as`; ứng viên chỉ trả lại làm `trial`, chưa đặt vào vai. Vai đã có font khác ⇒ không ghi, trả `occupied`; gửi lại với `replace:true` sau khi người dùng đồng ý. `settings` chỉ dùng khi Case được tạo ở lệnh này. */
+  openCaseFromPeek(peek: Omit<PeekOpenDto, 'replace'> & { replace?: boolean }): Promise<PeekOpenResultDto>;
+  /** Histogram 18 trục (16 số đo + weight_class + width_class), mỗi trục đếm trên tập lọc TRỪ chính trục đó. `bins` 0 = 24 (tối đa 64); trục class luôn 9 bin. */
+  axisHistogram(q?: FaceQuery, bins?: number): Promise<AxisHistogramDto[]>;
   /** Facet phân loại cho Library (đếm bỏ qua chính classes/subclasses; gồm bucket `unclassified`). */
   classFacets(q?: FaceQuery): Promise<ClassFacetDto[]>;
+  /** Ngôn ngữ (Hyperglot) có ≥ 1 face trong tập lọc, kèm số face `full`/`near`; bỏ điều kiện `langs` của chính q. */
+  languageList(q?: FaceQuery): Promise<LangListDto>;
+  /** Ký tự thiếu của một face với một ngôn ngữ (≤ 200 + cờ cắt). */
+  langCoverage(faceId: number, code: string): Promise<LangCoverageDto>;
   setClassificationOverride(over: ClassificationOverrideDto): Promise<void>;
   clearClassificationOverride(face: FaceKeyDto): Promise<void>;
   /** So sánh 2–8 face: số đo thật + percentile + Dấu chồng. Hiện ghép từ getFace; khi có command compare_faces thì đổi ở tauri.ts. */
@@ -108,6 +140,10 @@ export interface Api extends LibraryApi {
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;
+  /** Đổi phạm vi của các font ĐANG bật (không tắt giữa chừng). */
+  activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<ActivationReportDto>;
+  /** Font nào đang "Có sẵn trên máy" (file giống hệt do bên khác cung cấp). Tính lại mỗi lần; `faces` kiểm thêm ngoài tập đã nhớ. */
+  activationAvailability(faces?: FaceKeyDto[]): Promise<AvailabilityDto[]>;
   activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
 }
 

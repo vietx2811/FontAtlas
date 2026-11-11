@@ -1,13 +1,23 @@
+import { LangBadge, viBadgeFromMissing } from './LangBadge';
 import { memo, useEffect, useRef, useState } from 'react';
 import './libraryGrid.css';
 import '../../components/ui/faceTitle.css';
 import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
+import { NoteMark } from '../../components/ui/noteMark';
+import { t } from '../../i18n';
+import { ownerNote } from '../../components/activation/conflictModel';
+import { useUiStore } from '../../store/ui';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
 
 export const HOVER_DELAY_MS = 150;
+
+/** Mã lỗi preview của backend → câu giải thích trên thẻ font cloud (`not_found` là file mất thật, KHÔNG phải công tắc tắt). */
+const CLOUD_ERR_KEY: Record<string, 'cloud.errTimeout' | 'cloud.errFailed' | 'cloud.errOff' | 'cloud.errMissing' | 'cloud.errBusy'> = {
+  cloud_timeout: 'cloud.errTimeout', cloud_unavailable: 'cloud.errFailed', cloud_disabled: 'cloud.errOff', not_found: 'cloud.errMissing', cloud_busy: 'cloud.errBusy',
+};
 
 /** Nhãn định dạng theo đuôi file (TTF, OTF, TTC, WOFF, WOFF2…); không có đường dẫn thì không nhãn. */
 export function fileFormat(path: string | null): string | null {
@@ -25,6 +35,9 @@ type Props = {
   onStale?(): void;
   /** Cỡ chữ mẫu (css px). Có → ảnh bucket co về cỡ này; không → cỡ gốc của bucket (harness cũ). */
   fontSize?: number; layout?: 'grid' | 'list'; active?: boolean; favorite?: boolean;
+  /** Phạm vi bật (chỉ có nghĩa khi `active`): tooltip chấm xanh nói "phiên này" hay "Luôn bật". */
+  /** `available`: không phải do Font Atlas bật — một bản giống hệt đã dùng được trên máy (chấm rỗng, không có nút nguồn). */
+  activeScope?: 'session' | 'persistent' | 'available'; onToggleActive?(row: FaceRow): void;
   onToggleFavorite?(row: FaceRow): void; boxHeight?: number;
   /** Vị trí của ô trong truy vấn hiện tại (để chọn dải bằng index). */
   index?: number;
@@ -35,9 +48,11 @@ type Props = {
 };
 export type PickMods = { meta: boolean; shift: boolean };
 
-function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+  const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
+  const [errCode, setErrCode] = useState('');
   const [shown, setShown] = useState<{ src: string; blob: string } | null>(null);
   const shownRef = useRef<{ src: string; blob: string } | null>(null);
   const [imgShown, setImgShown] = useState<string | null>(null);
@@ -55,7 +70,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
     let done = false;
     let raf = 0;
     setState('loading');
-    blobs.acquire(url).then(
+    blobs.acquire(url, { cloud: !!row?.onCloudOnly }).then(
       blob => {
         done = true;
         if (!alive) { blobs.release(url); return; }
@@ -69,6 +84,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         done = true;
         if (!alive) return;
         if (err instanceof PreviewHttpError && err.status === 410) { onStale?.(); return; } // xin thế hệ mới, URL mới sẽ tới
+        setErrCode(err instanceof PreviewHttpError ? err.code : '');
         setState('error');
       },
     );
@@ -118,6 +134,28 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
     if (onPick) onPick(row, index, { meta: e.metaKey || e.ctrlKey, shift: e.shiftKey });
     else onSelect(row);
   };
+  // Chấm trạng thái đứng ĐẦU tên: xanh = đang bật, xám = chưa bật; có `onToggleActive` thì chính chấm là nút bật/tắt (Space khi focus).
+  const dotScope = activeScope === 'persistent' ? 'persistent' : 'session';
+  const onTip = t(activeScope === 'persistent' ? 'act.dot.persistent' : 'act.dot.session');
+  const stateDot = active ? (
+    onToggleActive ? (
+      <Tooltip label={`${t('act.toggle')} · ${onTip}`}>
+        <button type="button" className="fa-state" data-testid="cell-active" aria-label={t('act.toggle')} aria-pressed
+          onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
+          <span className="fa-dot" data-testid="active-dot" data-scope={dotScope} />
+        </button>
+      </Tooltip>
+    ) : <Tooltip label={onTip}><span className="fa-state"><span className="fa-dot" data-testid="active-dot" data-scope={dotScope} /></span></Tooltip>
+  ) : avail ? (
+    <Tooltip label={t('act.available.dot', { who: ownerNote({ owner: avail.owner, existingPath: avail.path }) })}><span className="fa-state"><span className="fa-dot" data-testid="active-dot" data-scope="available" /></span></Tooltip>
+  ) : onToggleActive ? (
+    <Tooltip label={`${t('act.toggle')} · ${t('act.dot.off')}`}>
+      <button type="button" className="fa-state" data-testid="cell-active" aria-label={t('act.toggle')} aria-pressed={false}
+        onClick={e => { e.stopPropagation(); onToggleActive(row); }} onKeyDown={e => e.stopPropagation()}>
+        <span className="fa-dot" data-scope="off" />
+      </button>
+    </Tooltip>
+  ) : <span className="fa-state" aria-hidden><span className="fa-dot" data-scope="off" /></span>;
   return (
     <div
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
@@ -140,7 +178,12 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       }}
       onPointerLeave={() => { hovering.current = false; if (!selected) stopLive(); }}
     >
-      {active && <Tooltip label="Đang bật"><span className="fa-dot" data-testid="active-dot" /></Tooltip>}
+      {/* theo trạng thái của ẢNH preview (state), không phải `shownState`: hover mở FontFace sống không được đổi ghi chú */}
+      {row.onCloudOnly && (state === 'loading'
+        ? <NoteMark kind="info" className="fa-note-cloud" testId="cloud-loading-note" text={t('cloud.loading')} />
+        : state === 'error'
+          ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(CLOUD_ERR_KEY[errCode] ?? 'cloud.errFailed')} />
+          : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
       <Tooltip label={favorite ? 'Bỏ yêu thích' : 'Yêu thích'}>
         <button type="button" className="fa-star" aria-label="Yêu thích" aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>
@@ -154,20 +197,21 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         ) : state === 'error' ? (
           <span className="fa-spec-error" style={{ lineHeight: `${ch}px` }}>Không có preview</span>
         ) : mode === 'mask' ? (
-          shown && <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+          shown
+            ? <div data-mask aria-hidden className="fa-preview-mask" style={{ width: cw, height: ch, ['--preview-url' as string]: `url("${shown.blob}")`, ...(layout === 'grid' ? { transform: `translateY(${(ch * 0.14).toFixed(1)}px)` } : {}) }} />
+            : row.onCloudOnly && state === 'loading' && <div data-cloud-skeleton aria-hidden className="fa-cloud-skeleton" style={{ width: Math.min(cw, 160), height: Math.max(10, Math.round(ch * 0.4)) }} />
         ) : (
           url && <img className="fa-preview-img" src={url} width={cw} height={ch} alt=""
             onLoad={() => { setImgShown(url); setState('ready'); }} onError={() => setState('error')} />
         )}
       </div>
       <div className="fa-meta">
+        {stateDot}
         <Tooltip label={name} onlyIfTruncated>
           <span className={`fa-name${nameFamily ? ' fa-own-font' : ''}`} data-testid="face-name" data-own-font={nameFamily ?? undefined} style={nameFamily ? { fontFamily: ownFontStack(nameFamily) } : undefined}>{name}</span>
         </Tooltip>
         {format && <Tooltip label={`Định dạng file ${format}`}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
-        <Tooltip label={missing ? `Thiếu ${row.viMissing} ký tự tiếng Việt` : 'Đủ dấu tiếng Việt'}>
-          <span className={`fa-vi ${missing ? 'miss' : 'ok'}`} data-testid="vi-mark" data-warn={missing ? 'true' : undefined}>{missing ? `−${row.viMissing}` : '●'}</span>
-        </Tooltip>
+        <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />
       </div>
     </div>
   );

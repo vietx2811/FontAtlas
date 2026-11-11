@@ -42,12 +42,21 @@ pub(crate) fn to_store_query(q: &FaceQueryDto) -> FaceQuery {
         descending: q.descending,
         offset: q.offset,
         limit: q.limit,
+        langs: crate::services::langs::lang_filters(q).0,
+        lang_any: crate::services::langs::lang_filters(q).1,
+        weight_class: q.weight_class,
+        width_class: q.width_class,
+        var_weight: q.var_axis_match.wght,
+        var_width: q.var_axis_match.wdth,
+        badge_lang: Some(q.badge_lang.clone().unwrap_or_else(|| crate::services::langs::DEFAULT_BADGE_LANG.to_string())),
     }
 }
 
-pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
+/// Phạm vi face (điểm) từ các bộ lọc không nằm trong SQL: trục, class, trait, raw range, faceKeys.
+pub(crate) fn scope_of(state: &AppState, q: &FaceQueryDto) -> Result<Option<Vec<(i64, f32)>>, CmdError> {
     let mut scope = axis_scope(state, &q.axis_filters, &q.hard)?;
     validate_raw_ranges(&q.raw_axis_ranges)?;
+    validate_class_ranges(q)?;
     if !q.classes.is_empty() || !q.subclasses.is_empty() {
         let ids = class_face_ids(state, &q.classes, &q.subclasses)?;
         match &mut scope {
@@ -66,7 +75,7 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
         let b = crate::services::analysis::bundle(state)?;
         let raw: Vec<(i64, f32)> = b
             .index
-            .profiles_for_test()
+            .profiles()
             .iter()
             .filter(|p| raw_matches(p, &q.raw_axis_ranges))
             .filter_map(|p| Some((b.meta.get(&p.key)?.face_id, 1.0)))
@@ -99,8 +108,28 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
         }
         scope = Some(by_keys);
     }
+    Ok(scope)
+}
+
+pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, CmdError> {
+    let scope = scope_of(state, q)?;
     let sq = to_store_query(q);
-    state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?.into()))
+    let badge = sq.badge_lang.clone().unwrap_or_default();
+    let page = state.with_store(|s| Ok(s.query_faces_scoped(&sq, scope.as_deref())?))?;
+    Ok(FacePageDto {
+        total: page.total,
+        offset: page.offset,
+        items: page
+            .items
+            .into_iter()
+            .map(|r| {
+                let b = crate::services::langs::badge_of(&badge, r.lang_hit.as_ref(), r.lang_computed, r.vi_missing);
+                let mut d = FaceRowDto::from(r);
+                d.lang_badge = b;
+                d
+            })
+            .collect(),
+    })
 }
 
 type EffMap = std::sync::Arc<std::collections::HashMap<i64, (String, Option<String>)>>;
@@ -193,6 +222,16 @@ fn class_face_ids(state: &AppState, classes: &[String], subclasses: &[String]) -
         out.extend(state.with_store(|s| Ok(s.all_face_ids()?))?.into_iter().filter(|id| !known_ids.contains(id)));
     }
     Ok(out)
+}
+
+pub(crate) fn validate_class_ranges(q: &FaceQueryDto) -> Result<(), CmdError> {
+    if q.weight_class.is_some_and(|[a, b]| a > b || !(100..=900).contains(&a) || !(100..=900).contains(&b)) {
+        return Err(CmdError::invalid_arg("weightClass: khoảng không hợp lệ (100–900, min ≤ max)"));
+    }
+    if q.width_class.is_some_and(|[a, b]| a == 0 || a > b || b > 9) {
+        return Err(CmdError::invalid_arg("widthClass: khoảng không hợp lệ (1–9, min ≤ max)"));
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_raw_ranges(ranges: &[RawAxisRangeDto]) -> Result<(), CmdError> {

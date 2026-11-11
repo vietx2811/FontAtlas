@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use fontatlas_preview::{
-    Budgets, CorsPolicy, FaceLocator, PX_BUCKETS, PreviewCache, PreviewHttp, PreviewRequest, PreviewService, RENDERER_VERSION,
+    Budgets, CorsPolicy, FaceLocator, PX_BUCKETS, PreviewCache, PreviewError, PreviewHttp, PreviewRequest, PreviewService, RENDERER_VERSION,
     handle_font_uri, handle_preview_uri,
 };
 use fontatlas_store::{FaceKey, Store};
@@ -11,23 +11,55 @@ use fontatlas_store::{FaceKey, Store};
 use crate::dto::library::FaceKeyDto;
 use crate::dto::preview::{PreviewCacheInfoDto, PreviewInfoDto, PreviewItemDto};
 use crate::error::CmdError;
+use crate::services::cloud::CloudDownloader;
+use crate::services::keys;
 use crate::state::AppState;
 
 /// Tra đường dẫn file theo (hash, face) bằng kết nối đọc riêng của Store.
+///
+/// `locate` luôn trả đường dẫn (bản ở máy trước, không có thì bản cloud). Việc có được ĐỌC bản cloud hay không do
+/// `before_read` quyết, theo công tắc `cloud_preview_download` (mặc định bật) và theo trạng thái THẬT của file
+/// (stat), không theo cờ trong DB: bật → tải qua cổng (≤ 4 đồng thời, mỗi lần 30 s); tắt → `CloudDisabled`.
 pub struct StoreLocator {
     store: Mutex<Store>,
+    cloud: CloudDownloader,
 }
 
 impl StoreLocator {
     pub fn open(dir: &std::path::Path) -> Result<Self, CmdError> {
-        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?) })
+        // Font cloud vừa tải về: ghi cờ cloud_only=0 qua một kết nối library riêng (như nền ngôn ngữ), không giành khoá với giao diện.
+        let writer = Store::open_library_only(dir).ok().map(Mutex::new);
+        let cloud = CloudDownloader::default().on_local(move |p| {
+            if let Some(Ok(mut w)) = writer.as_ref().map(|m| m.lock()) {
+                let _ = w.refresh_cloud_flag(p);
+            }
+        });
+        Self::open_with(dir, cloud)
+    }
+
+    /// Như `open` với bộ tải thay được (test dataless không cần ổ cloud thật).
+    pub fn open_with(dir: &std::path::Path, cloud: CloudDownloader) -> Result<Self, CmdError> {
+        Ok(StoreLocator { store: Mutex::new(Store::open_reader(dir)?), cloud })
+    }
+
+    /// Công tắc đọc mỗi lần (một truy vấn nhỏ): đổi trong Cài đặt có hiệu lực ngay, không cần đồng bộ cờ.
+    fn allow_cloud(&self) -> bool {
+        self.store
+            .lock()
+            .ok()
+            .and_then(|s| s.setting(keys::CLOUD_PREVIEW_DOWNLOAD).ok().flatten())
+            .is_none_or(|v| v != "0" && v != "false")
     }
 }
 
 impl FaceLocator for StoreLocator {
     fn locate(&self, hash_hex: &str, face_index: u32) -> Option<PathBuf> {
         let key = FaceKey::from_hex(hash_hex, face_index).ok()?;
-        self.store.lock().ok()?.face_path(&key).ok().flatten()
+        self.store.lock().ok()?.face_read_path(&key).ok().flatten()
+    }
+
+    fn before_read(&self, path: &std::path::Path) -> Result<(), PreviewError> {
+        self.cloud.before_read(path, self.allow_cloud())
     }
 }
 
@@ -126,7 +158,13 @@ pub fn missing_chars(state: &AppState, face: &FaceKeyDto, chars: &[String]) -> R
     if chars.len() > MAX_COVERAGE_CHARS {
         return Err(CmdError::invalid_arg(format!("tối đa {MAX_COVERAGE_CHARS} ký tự mỗi lần")));
     }
-    let path = service(state)?.locator().locate(&face.hash_hex, face.face_index).ok_or_else(|| CmdError::new("not_found", "không tìm thấy file font"))?;
+    missing_chars_with(service(state)?.locator(), face, chars)
+}
+
+/// Tách để test: mở file chỉ sau `before_read` (font cloud đi qua cổng tải, không tải ngầm).
+pub fn missing_chars_with<L: FaceLocator>(locator: &L, face: &FaceKeyDto, chars: &[String]) -> Result<Vec<String>, CmdError> {
+    let path = locator.locate(&face.hash_hex, face.face_index).ok_or_else(|| CmdError::new("not_found", "không tìm thấy file font"))?;
+    locator.before_read(&path)?;
     let file = fontatlas_core::FontFile::open(&path).map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
     let faces = file.faces().map_err(|e| CmdError::new("invalid_font", e.to_string()))?;
     let f = faces.iter().find(|f| f.index() == face.face_index).ok_or_else(|| CmdError::new("not_found", "không có face này trong file"))?;

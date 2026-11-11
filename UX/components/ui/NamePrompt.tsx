@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom';
 import type { MenuAnchor } from './Menu';
 import './menu.css';
 
-type Props = { label: string; initial: string; submitLabel?: string; anchor: MenuAnchor; onSubmit(name: string): void; onCancel(): void };
+type Props = { label: string; initial: string; submitLabel?: string; cancelLabel?: string; anchor: MenuAnchor; onSubmit(name: string): void; onCancel(): void };
 
 /** Hộp nhỏ nhập một tên (Dự án mới…, Thẻ mới…). Enter tạo, Esc huỷ, bấm ngoài huỷ. */
-export function NamePrompt({ label, initial, submitLabel = 'Tạo', anchor, onSubmit, onCancel }: Props): React.JSX.Element {
+export function NamePrompt({ label, initial, submitLabel = 'Tạo', cancelLabel = 'Huỷ', anchor, onSubmit, onCancel }: Props): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(initial);
@@ -27,9 +27,9 @@ export function NamePrompt({ label, initial, submitLabel = 'Tạo', anchor, onSu
   const submit = () => { const name = value.trim(); if (name) onSubmit(name); };
   return createPortal(
     <div ref={box} className="fa-prompt" role="dialog" aria-label={label} style={{ visibility: 'hidden' }}
-      onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancel(); } }}>
+      onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); onCancel(); } }}>
       <label>{label}<input ref={input} value={value} aria-label={label} autoComplete="off" onChange={e => setValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }} /></label>
-      <div className="row"><button type="button" onClick={onCancel}>Huỷ</button><button type="button" data-primary onClick={submit} disabled={!value.trim()}>{submitLabel}</button></div>
+      <div className="row"><button type="button" onClick={onCancel}>{cancelLabel}</button><button type="button" data-primary onClick={submit} disabled={!value.trim()}>{submitLabel}</button></div>
     </div>,
     document.body,
   );

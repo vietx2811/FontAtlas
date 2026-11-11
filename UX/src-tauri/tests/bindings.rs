@@ -7,6 +7,7 @@ use app_lib::commands::COMMANDS;
 use app_lib::dto::activation as ad;
 use app_lib::dto::analysis::*;
 use app_lib::dto::events::*;
+use app_lib::dto::langs::*;
 use app_lib::dto::library::*;
 use app_lib::dto::model::*;
 use app_lib::dto::settings::*;
@@ -112,6 +113,7 @@ fn row(id: i64, h: u8, family: &str, sub: &str, w: u16, italic: bool) -> FaceRow
         vi_status: "full".into(),
         supports_vi: true,
         vi_missing: 0,
+        lang_badge: Some(LangBadgeDto { code: "vie".into(), bcp47: "vie".into(), state: LangBadgeStateDto::Full, have: 186, total: 186 }),
         license_class: "ofl".into(),
         path: Some(format!(
             "/Users/u/Fonts/{}-{sub}.ttf",
@@ -119,6 +121,7 @@ fn row(id: i64, h: u8, family: &str, sub: &str, w: u16, italic: bool) -> FaceRow
         )),
         file_size: 176_000 + id as u64,
         missing: false,
+        on_cloud_only: false,
         is_favorite: id == 1,
         added_at: 1_700_000_000_000 + id,
     }
@@ -374,6 +377,37 @@ fn fixtures() -> Vec<(&'static str, Value)> {
         ("face_detail_playfair", v(&detail())),
         ("compare_two", v(&compare())),
         ("duplicate_groups", v(&duplicate_groups_fixture())),
+        (
+            "language_list",
+            v(&LangListDto {
+                db_version: "hg-12d0c093-3".into(),
+                complete: false,
+                ready: LangReadyDto { done: 120, total: 480 },
+                items: vec![LangItemDto {
+                    code: "vie".into(),
+                    bcp47: "vie".into(),
+                    name_en: "Vietnamese".into(),
+                    autonym: "Tiếng Việt".into(),
+                    script: "Latin".into(),
+                    full: 31,
+                    near: 36,
+                }],
+            }),
+        ),
+        (
+            "lang_coverage",
+            v(&LangCoverageDto {
+                code: "vie".into(),
+                level: LangCoverageLevelDto::Partial,
+                base_have: 118,
+                base_total: 186,
+                marks_have: 8,
+                marks_total: 8,
+                missing: vec!["Ặ".into(), "ặ".into()],
+                missing_marks: vec![],
+                truncated: false,
+            }),
+        ),
         ("duplicate_summary", v(&DuplicateSummaryDto { same_file: 1, versions: 1, formats: 0, total: 2 })),
         ("pair_these_combos", v(&vec![PairComboDto { heading: row(3, 3, "Playfair Display", "Regular", 400, false), body: row(5, 5, "Libre Baskerville", "Regular", 400, false), assessment: candidate(), rank: 1 }])),
         ("similar_hits", v(&vec![detail().similar_top[0].clone()])),
@@ -400,6 +434,19 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 max: Some(1.2),
                 p1: Some(0.804),
                 p99: Some(1.196),
+            }]),
+        ),
+        (
+            "axis_histogram",
+            v(&vec![AxisHistogramDto {
+                axis: "weight_class".into(),
+                unit: "class".into(),
+                count: 5,
+                lo: 100.0,
+                hi: 900.0,
+                bins: vec![1, 0, 0, 3, 0, 0, 1, 0, 0],
+                span_bins: vec![2, 1, 1, 3, 1, 1, 2, 1, 1],
+                empty: false,
             }]),
         ),
         ("pair_candidates", v(&vec![candidate()])),
@@ -463,6 +510,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 project_vi_default: true,
                 keep_active_on_exit: false,
                 rescan_on_launch: true,
+                cloud_preview_download: true,
             }),
         ),
         ("ui_state", v(&UiStateDto::default())),
@@ -475,6 +523,8 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 path: Some("/Users/u/Fonts".into()),
                 enabled: true,
                 available: true,
+                cloud_provider: Some("one_drive".into()),
+                cloud_only_count: 1100,
                 face_count: 1200,
                 last_scan: None,
                 scanning: false,
@@ -672,6 +722,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         postscript_name: "LibreBaskerville-Regular".into(),
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf".into(),
         owner: fa::Owner::RightFont,
+        same_file: false,
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

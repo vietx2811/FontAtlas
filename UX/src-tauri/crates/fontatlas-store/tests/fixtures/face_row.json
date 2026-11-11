@@ -11,6 +11,7 @@
   "isVariable": false,
   "licenseClass": "ofl",
   "missing": false,
+  "onCloudOnly": false,
   "path": "/fonts/OpenSans.ttf",
   "subfamily": "Regular",
   "supportsVi": true,

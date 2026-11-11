@@ -4,4 +4,8 @@ export type SettingsDto = { embedEnabled: boolean, licenseNoticeAck: boolean,
 /**
  * "vi" | "en"
  */
-uiLang: string, sampleText: string, projectViDefault: boolean, keepActiveOnExit: boolean, rescanOnLaunch: boolean, };
+uiLang: string, sampleText: string, projectViDefault: boolean, keepActiveOnExit: boolean, rescanOnLaunch: boolean, 
+/**
+ * Tự tải font trên ổ cloud để xem trước (thẻ đang hiện). Tắt: bỏ qua bản chưa tải về, không đọc file dataless.
+ */
+cloudPreviewDownload: boolean, };

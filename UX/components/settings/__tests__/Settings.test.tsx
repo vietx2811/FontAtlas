@@ -5,6 +5,7 @@ import { createModelStore } from '../../../store/model';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Settings, SETTINGS_GROUPS } from '../Settings';
+import { tipOf } from '../../../test/tip';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const initial = useUiStore.getState();
@@ -103,6 +104,33 @@ describe('Settings', () => {
       await go('Thư viện và nguồn');
       expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/12 chưa tải về/);
       expect(screen.getAllByTestId('source-row')[0].textContent).not.toMatch(/chưa tải về/);
+    });
+
+    it('a cloud source shows the same hint as the sidebar; a local one does not', async () => {
+      await mount();
+      await go('Thư viện và nguồn');
+      const rows = screen.getAllByTestId('source-row');
+      expect(within(rows[1]).getByTestId('cloud-hint')).toBeTruthy();
+      expect(await tipOf(within(rows[1]).getByTestId('cloud-hint'))).toMatch(/^90% font của nguồn này chưa tải về máy/);
+      expect(within(rows[0]).queryByTestId('cloud-hint')).toBeNull();
+    });
+
+    it('"Tự tải font trên cloud để xem trước" is on by default, is saved when switched, and explains dataless / Always keep', async () => {
+      const { api } = await mount();
+      await go('Thư viện và nguồn');
+      const sw = screen.getByRole('switch', { name: 'Tự tải font trên cloud để xem trước' });
+      expect(sw.getAttribute('aria-checked')).toBe('true');
+      const set = vi.spyOn(api, 'setSettings');
+      fireEvent.click(sw);
+      await settle();
+      expect(set).toHaveBeenLastCalledWith({ cloudPreviewDownload: false });
+      expect(screen.getByRole('switch', { name: 'Tự tải font trên cloud để xem trước' }).getAttribute('aria-checked')).toBe('false');
+      const dataless = document.querySelector('[data-term="dataless"]')!;
+      expect(await tipOf(dataless)).toMatch(/bản giữ chỗ/);
+      const keep = document.querySelector('[data-term="always_keep"]')!;
+      const keepTip = await tipOf(keep);
+      expect(keepTip).toMatch(/Always keep on this device/);
+      expect(keepTip).toMatch(/Finder/);
     });
 
     it('a source that needs access says so and offers Cấp quyền and Thử lại', async () => {
@@ -258,5 +286,15 @@ describe('Settings', () => {
     await settle();
     expect((await api.onboardingState()).step).toBe('o1');
     expect(onRerun).toHaveBeenCalled();
+  });
+
+  it('General has "Hiện splash khi mở app" (default on) that persists under ui.splash', async () => {
+    const { api } = await mount();
+    const sw = screen.getByRole('switch', { name: 'Hiện splash khi mở app' });
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { fireEvent.click(sw); });
+    await settle();
+    expect(await api.getSetting('ui.splash')).toBe('off');
+    expect(screen.getByRole('switch', { name: 'Hiện splash khi mở app' }).getAttribute('aria-checked')).toBe('false');
   });
 });

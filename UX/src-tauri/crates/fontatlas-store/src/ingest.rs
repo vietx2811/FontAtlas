@@ -159,6 +159,11 @@ pub(crate) fn set_state(
     Ok(())
 }
 
+/// Dải (min, max) của trục `tag` trong fvar; None nếu không có.
+fn axis_span(m: &fontatlas_core::Metadata, tag: &str) -> Option<(f64, f64)> {
+    m.axes.iter().find(|a| a.tag == tag).map(|a| (a.min as f64, a.max as f64))
+}
+
 fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport, now: i64) -> rusqlite::Result<usize> {
     tx.execute(
         "UPDATE files SET container=?1, num_faces=?2 WHERE file_id=?3",
@@ -171,15 +176,16 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
         tx.execute(
             "INSERT INTO faces(file_id,face_index,family_name,subfamily,full_name,postscript_name,manufacturer,designer,
                 weight_class,width_class,is_italic,is_variable,outline_format,license_class,vi_status,supports_vi,
-                vi_missing,num_glyphs,family_key,search_text)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
+                vi_missing,num_glyphs,family_key,search_text,wght_min,wght_max,wdth_min,wdth_max)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)
              ON CONFLICT(file_id,face_index) DO UPDATE SET family_name=excluded.family_name, subfamily=excluded.subfamily,
                 full_name=excluded.full_name, postscript_name=excluded.postscript_name, manufacturer=excluded.manufacturer,
                 designer=excluded.designer, weight_class=excluded.weight_class, width_class=excluded.width_class,
                 is_italic=excluded.is_italic, is_variable=excluded.is_variable, outline_format=excluded.outline_format,
                 license_class=excluded.license_class, vi_status=excluded.vi_status, supports_vi=excluded.supports_vi,
                 vi_missing=excluded.vi_missing, num_glyphs=excluded.num_glyphs, family_key=excluded.family_key,
-                search_text=excluded.search_text",
+                search_text=excluded.search_text, wght_min=excluded.wght_min, wght_max=excluded.wght_max,
+                wdth_min=excluded.wdth_min, wdth_max=excluded.wdth_max",
             params![
                 file_id,
                 f.index as i64,
@@ -201,6 +207,10 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
                 m.num_glyphs,
                 c.family_key,
                 c.search_text,
+                axis_span(m, "wght").map(|x| x.0),
+                axis_span(m, "wght").map(|x| x.1),
+                axis_span(m, "wdth").map(|x| x.0),
+                axis_span(m, "wdth").map(|x| x.1),
             ],
         )?;
         tx.execute(
@@ -251,7 +261,7 @@ impl Store {
                  VALUES (?1,?2,?3,?4,?5,?6,0,?7)
                  ON CONFLICT(path) DO UPDATE SET file_id=excluded.file_id, source_id=excluded.source_id,
                    size=excluded.size, mtime_ns=excluded.mtime_ns, last_seen_at=excluded.last_seen_at,
-                   missing=0, scan_gen=excluded.scan_gen",
+                   missing=0, scan_gen=excluded.scan_gen, cloud_only=0",
                 params![
                     file_id,
                     it.source_id,

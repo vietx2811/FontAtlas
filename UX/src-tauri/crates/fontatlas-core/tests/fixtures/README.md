@@ -28,3 +28,12 @@ Unmodified OFL fonts from `google/fonts@47d54ca1ebb14fd864695f1d39dc734f39017c33
 | `miltonian.ttf` | `miltonian/Miltonian-Regular.ttf` | 126804 | `bd4ada3764e6774964efe097463533b2759755e390f68e3d16974264f8dd2d98` |
 | `libre_baskerville_italic_vf.ttf` | `librebaskerville/LibreBaskerville-Italic[wght].ttf` | 167456 | `223959683dc73ec4437bd61fabaa4b3f22209e22855ffd3aee36ba61a5116e97` |
 | `dancing_script_vf.ttf` | `dancingscript/DancingScript[wght].ttf` | 133636 | `21808625578fe8d8cd10cb684be546dca077b27cd03a53a2f1ec11dc743c924c` |
+
+## Small-foot serif regressions (core-0.9.0)
+
+Unmodified OFL fonts from `google/fonts@47d54ca1ebb14fd864695f1d39dc734f39017c33`; license texts in `accuracy-licenses/`. Serif faces whose `serif_foot` sits in the old dead zone (1.2–1.6): used to prove the foot-flare / top-flag cues.
+
+| Fixture | Source under ofl/ | Bytes | SHA-256 |
+|---|---|---:|---|
+| `dm_serif_display.ttf` | `dmserifdisplay/DMSerifDisplay-Regular.ttf` | 76580 | `8cc3643535edf039aa5d95440a8542735e9197e4f4b8d9303e980fefbf5ab616` |
+| `chonburi.ttf` | `chonburi/Chonburi-Regular.ttf` | 170492 | `aa0dac4df08af10785ba1dc10121492227f8e4288f0a23d11dd1d1f5a7f6ebfa` |

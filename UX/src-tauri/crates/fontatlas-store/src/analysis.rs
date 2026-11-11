@@ -202,6 +202,67 @@ impl Store {
         Ok(p.map(PathBuf::from))
     }
 
+    /// Như `face_path` nhưng bỏ vị trí còn là placeholder trên ổ cloud (`cloud_only`): đường dẫn này an toàn để MỞ ĐỌC
+    /// (preview, FontFace) mà không kích hoạt tải cả file về. None nếu mọi bản còn thấy đều chưa tải.
+    pub fn face_local_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
+        let p: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+                 WHERE fi.hash = ?1 AND l.missing = 0 AND l.cloud_only = 0 ORDER BY l.location_id LIMIT 1",
+                [&key.hash[..]],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(p.map(PathBuf::from))
+    }
+
+    /// Đường dẫn để MỞ ĐỌC khi người dùng cho phép tải font cloud: bản trên máy trước, không có thì bản cloud
+    /// (đọc sẽ kéo về — gọi qua cổng tải có giới hạn). None nếu mọi bản đều missing.
+    pub fn face_read_path(&self, key: &FaceKey) -> Result<Option<PathBuf>, StoreError> {
+        let p: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT l.path FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+                 WHERE fi.hash = ?1 AND l.missing = 0 ORDER BY l.cloud_only, l.location_id LIMIT 1",
+                [&key.hash[..]],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(p.map(PathBuf::from))
+    }
+
+    /// Stat lại `path` và đặt `file_locations.cloud_only` đúng với trạng thái thật (không đợi lần quét sau).
+    /// Gọi sau khi một font cloud vừa được tải về (preview, bật font). None: không stat được → không biết → không đổi.
+    pub fn refresh_cloud_flag(&mut self, path: &std::path::Path) -> Result<Option<bool>, StoreError> {
+        self.refresh_cloud_flag_with(path, &crate::rescan::os_placeholder)
+    }
+
+    /// Như `refresh_cloud_flag` với hàm nhận diện thay được (test không cần ổ cloud thật).
+    pub fn refresh_cloud_flag_with(&mut self, path: &std::path::Path, probe: crate::PlaceholderProbe) -> Result<Option<bool>, StoreError> {
+        let Ok(meta) = std::fs::metadata(path) else { return Ok(None) };
+        if !meta.is_file() {
+            return Ok(None);
+        }
+        let dataless = probe(path, &meta);
+        self.conn.execute(
+            "UPDATE file_locations SET cloud_only = ?2 WHERE path = ?1 AND cloud_only <> ?2",
+            rusqlite::params![path.to_string_lossy(), dataless as i64],
+        )?;
+        Ok(Some(dataless))
+    }
+
+    /// Số face có bản còn là placeholder cloud ở nguồn này (để gợi ý "chưa tải về máy"). Theo lần quét gần nhất.
+    pub fn cloud_only_count(&self, source_id: i64) -> Result<u32, StoreError> {
+        let n: i64 = self.conn.query_row(
+            "SELECT count(*) FROM faces f WHERE EXISTS (SELECT 1 FROM file_locations l
+               WHERE l.file_id = f.file_id AND l.source_id = ?1 AND l.missing = 0 AND l.cloud_only = 1)",
+            [source_id],
+            |r| r.get(0),
+        )?;
+        Ok(n.max(0) as u32)
+    }
+
     /// Sao lưu user.db (VACUUM INTO) vào `<dir>/backups/user-<ms>.db`; trả đường dẫn.
     pub fn backup_user_db(&self) -> Result<PathBuf, StoreError> {
         let dir = self.dir().join(BACKUP_DIR);

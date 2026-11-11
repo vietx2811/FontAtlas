@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
-import { notDownloadedOf } from '../zero/zeroStates';
+import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { useUiStore } from '../../store/ui';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -13,9 +13,10 @@ import { Icon } from './icons';
 import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
 import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
+import { NoteMark } from '../ui/noteMark';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
-type Counts = { all: number | null; star: number | null; active: number | null; dups: number | null };
+type Counts = { all: number | null; star: number | null; dups: number | null };
 type Nested = { newPath: string; existing: SourceDto; nesting: Nesting };
 type Notice = { text: string; action?: { label: string; run(): void } };
 
@@ -50,12 +51,14 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const cmpSession = useUiStore(s => s.compareSession);
   const cmpOpen = useUiStore(s => s.compare !== null);
   const libraryRev = useUiStore(s => s.libraryRev);
+  // "Đang bật" đếm theo store (nạp lại sau mỗi lần bật/tắt), không theo lần nạp thanh bên: bật xong con số phải đổi ngay.
+  const activeCount = useUiStore(s => s.active.size);
   const { setView, setTag, toggleSection } = useUiStore.getState();
 
   const [sources, setSources] = useState<SourceDto[]>([]);
   const [cols, setCols] = useState<CollectionDto[]>([]);
   const [tags, setTags] = useState<TagDto[]>([]);
-  const [counts, setCounts] = useState<Counts>({ all: null, star: null, active: null, dups: null });
+  const [counts, setCounts] = useState<Counts>({ all: null, star: null, dups: null });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [nested, setNested] = useState<Nested | null>(null);
   const [adding, setAdding] = useState(false);
@@ -63,13 +66,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [menuFor, setMenuFor] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    const [s, c, t, all, star, act, dup] = await Promise.all([
+    const [s, c, t, all, star, dup] = await Promise.all([
       api.listSources(), api.listCollections(), api.listTags(),
-      api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }), api.activationState(),
+      api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
       api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
     ]);
     setSources(s); setCols(c); setTags(t);
-    setCounts({ all: all.total, star: star.total, active: act.filter(x => x.state === 'active').length, dups: dup ? dup.total : null });
+    setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: `Không tải được thanh bên: ${e?.message ?? e}` })); }, [refresh, scanVersion, libraryRev]);
 
@@ -147,7 +150,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="all" label="Tất cả" count={counts.all} current={cur('all')} onClick={() => setView('all')} />
         <NavItem icon="star" label="Yêu thích" count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label="Gần đây" current={cur('recent')} onClick={() => setView('recent')} />
-        <NavItem icon="power" label="Đang bật" count={counts.active} current={cur('active')} onClick={() => setView('active')} />
+        <NavItem icon="power" label="Đang bật" count={activeCount} current={cur('active')} onClick={() => setView('active')} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
         {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} />}
 
@@ -179,7 +182,12 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? `${s.name}: cần quyền truy cập` : s.available ? s.path ?? s.name : `${s.name}: chưa kết nối`} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)}
-              sub={notDownloadedOf(s, cloud) > 0 ? <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip> : undefined} />
+              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
+                ? <>
+                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={CLOUD_TIP}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)} font chưa tải về</div></Tooltip>}
+                    {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
+                  </>
+                : undefined} />
           ))}
         </NavSection>
 

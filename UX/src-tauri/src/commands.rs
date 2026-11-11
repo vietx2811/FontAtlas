@@ -11,7 +11,9 @@ use tauri::ipc::Channel;
 
 use crate::dto::activation::*;
 use crate::dto::analysis::*;
+use crate::dto::cases::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
 use crate::dto::preview::*;
@@ -19,7 +21,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, boot, compare, describe, duplicates, embed, library, model, onboarding, pairs, preview,
+    activation, analysis, boot, brief, cases, compare, describe, duplicates, embed, langs, library, model, onboarding, pairs, preview,
     settings, sources, system,
 };
 use crate::state::AppState;
@@ -88,6 +90,7 @@ macro_rules! command_list {
             async similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Result<Vec<SimilarHitDto>, CmdError>;
             async similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> Result<SimilarFamilyPageDto, CmdError>;
             async axis_stats(q: FaceQueryDto) -> Result<Vec<AxisStatsDto>, CmdError>;
+            async axis_histogram(q: FaceQueryDto, bins: u32) -> Result<Vec<AxisHistogramDto>, CmdError>;
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
@@ -95,12 +98,32 @@ macro_rules! command_list {
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
+            async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
+            async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
             async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
             async pair_these(faces: Vec<FaceKeyDto>, opts: PairTheseOptsDto) -> Result<Vec<PairComboDto>, CmdError>;
             async save_pair(pair: NewPairDto) -> Result<i64, CmdError>;
             async list_pairs(collection_id: Option<i64>) -> Result<Vec<SavedPairDto>, CmdError>;
             async delete_pair(id: i64) -> Result<(), CmdError>;
             async describe(text: String) -> Result<DescribeDto, CmdError>;
+            async create_case(name: Option<String>, brief: Option<BriefDto>, settings: Option<CaseSettingsDto>) -> Result<CaseDto, CmdError>;
+            async list_cases(include_deleted: bool) -> Result<Vec<CaseSummaryDto>, CmdError>;
+            async open_case(id: i64) -> Result<CaseDto, CmdError>;
+            async get_case(id: i64) -> Result<CaseDto, CmdError>;
+            async update_case(id: i64, patch: CasePatchDto) -> Result<CaseDto, CmdError>;
+            async delete_case(id: i64) -> Result<(), CmdError>;
+            async restore_case(id: i64) -> Result<CaseDto, CmdError>;
+            async add_to_case(case_id: Option<i64>, faces: Vec<FaceKeyDto>, origin: Option<CaseOriginDto>) -> Result<AddToCaseDto, CmdError>;
+            async remove_from_case(case_id: i64, faces: Vec<FaceKeyDto>) -> Result<u32, CmdError>;
+            async create_combo(case_id: i64, name: Option<String>, from_combo: Option<i64>) -> Result<ComboDto, CmdError>;
+            async update_combo(id: i64, patch: ComboPatchDto) -> Result<ComboDto, CmdError>;
+            async delete_combo(id: i64) -> Result<(), CmdError>;
+            async reorder_combos(case_id: i64, ids: Vec<i64>) -> Result<(), CmdError>;
+            async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
+            async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
+            async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
+            async brief_starter(brief: BriefDto, case_id: Option<i64>) -> Result<BriefStarterDto, CmdError>;
+            async open_case_from_peek(peek: PeekOpenDto) -> Result<PeekOpenResultDto, CmdError>;
             async set_classification_override(over: ClassificationOverrideDto) -> Result<(), CmdError>;
             async clear_classification_override(face: FaceKeyDto) -> Result<(), CmdError>;
             async get_settings() -> Result<SettingsDto, CmdError>;
@@ -125,6 +148,8 @@ macro_rules! command_list {
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
+            async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
+            async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
             async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
             sync preview_info() -> Result<PreviewInfoDto, CmdError>;
             async preview_bump_generation() -> Result<u64, CmdError>;
@@ -286,12 +311,15 @@ cmd!(get_face(face: FaceKeyDto, lang: LangDto) -> FaceDetailDto => |s| analysis:
 cmd!(similar(face: FaceKeyDto, opts: SimilarOptsDto) -> Vec<SimilarHitDto> => |s| analysis::similar(s, &face, &opts));
 cmd!(similar_families(face: FaceKeyDto, opts: SimilarOptsDto, q: FaceQueryDto) -> SimilarFamilyPageDto => |s| analysis::similar_families(s, &face, &opts, &q));
 cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stats(s, &q));
+cmd!(axis_histogram(q: FaceQueryDto, bins: u32) -> Vec<AxisHistogramDto> => |s| analysis::axis_histograms(s, &q, bins));
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
 }));
+cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));
+cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
 cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));
 cmd!(duplicate_summary(q: FaceQueryDto) -> DuplicateSummaryDto => |s| duplicates::duplicate_summary(s, &q));
 cmd!(compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> CompareDto => |s| compare::compare_faces(s, &faces, &opts));
@@ -302,6 +330,24 @@ cmd!(delete_pair(id: i64) -> () => |s| pairs::delete_pair(s, id));
 cmd!(set_classification_override(over: ClassificationOverrideDto) -> () => |s| analysis::set_classification_override(s, &over));
 cmd!(clear_classification_override(face: FaceKeyDto) -> () => |s| analysis::clear_classification_override(s, &face));
 cmd!(describe(text: String) -> DescribeDto => |s| Ok(describe::describe(s, &text)));
+cmd!(create_case(name: Option<String>, brief: Option<BriefDto>, settings: Option<CaseSettingsDto>) -> CaseDto => |s| cases::create_case(s, name.as_deref(), brief.as_ref(), settings.as_ref()));
+cmd!(list_cases(include_deleted: bool) -> Vec<CaseSummaryDto> => |s| cases::list_cases(s, include_deleted));
+cmd!(open_case(id: i64) -> CaseDto => |s| cases::open_case(s, id));
+cmd!(get_case(id: i64) -> CaseDto => |s| cases::get_case(s, id));
+cmd!(update_case(id: i64, patch: CasePatchDto) -> CaseDto => |s| cases::update_case(s, id, &patch));
+cmd!(delete_case(id: i64) -> () => |s| cases::delete_case(s, id));
+cmd!(restore_case(id: i64) -> CaseDto => |s| cases::restore_case(s, id));
+cmd!(add_to_case(case_id: Option<i64>, faces: Vec<FaceKeyDto>, origin: Option<CaseOriginDto>) -> AddToCaseDto => |s| cases::add_to_case(s, case_id, &faces, origin));
+cmd!(remove_from_case(case_id: i64, faces: Vec<FaceKeyDto>) -> u32 => |s| cases::remove_from_case(s, case_id, &faces));
+cmd!(create_combo(case_id: i64, name: Option<String>, from_combo: Option<i64>) -> ComboDto => |s| cases::create_combo(s, case_id, name.as_deref(), from_combo));
+cmd!(update_combo(id: i64, patch: ComboPatchDto) -> ComboDto => |s| cases::update_combo(s, id, &patch));
+cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
+cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
+cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
+cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
+cmd!(brief_starter(brief: BriefDto, case_id: Option<i64>) -> BriefStarterDto => |s| brief::brief_starter(s, &brief, case_id));
+cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));
+cmd!(create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Vec<ComboDto> => |s| cases::create_combos(s, case_id, &combos));
 cmd!(get_settings() -> SettingsDto => |s| settings::get_settings(s));
 cmd!(set_settings(patch: SettingsPatchDto) -> SettingsDto => |s| settings::set_settings(s, patch));
 cmd!(model_status() -> ModelStatusDto => |s| Ok(model::model_status(s)));
@@ -397,6 +443,8 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
     })
 });
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
+cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => |s| activation::availability(s, &faces));
+cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
 
 #[tauri::command]
 pub async fn activation_subscribe(

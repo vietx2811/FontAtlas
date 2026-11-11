@@ -80,7 +80,8 @@
           {
             "existingPath": "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf",
             "owner": "right_font",
-            "postscriptName": "LibreBaskerville-Regular"
+            "postscriptName": "LibreBaskerville-Regular",
+            "sameFile": false
           }
         ],
         "kind": "needs_confirmation"

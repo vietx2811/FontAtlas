@@ -1,4 +1,4 @@
-import type { RawAxisRangeDto } from '../../bindings';
+import type { LangBadgeDto, LangFilterDto, RawAxisRangeDto } from '../../bindings';
 // Kiểu dữ liệu lưới thư viện — gương fontatlas-store (serde camelCase) trên dev/mvp.
 
 export type FaceQuery = {
@@ -12,6 +12,10 @@ export type FaceQuery = {
   faceKeys?: Array<{ hashHex: string; faceIndex: number }>;
   /** D1 (feat/classify): lọc theo phân loại hiệu lực; OR trong nhóm, AND giữa hai nhóm. */
   classes?: string[]; subclasses?: string[]; traits?: string[];
+  /** 0.3.0 (Hyperglot): lọc ngôn ngữ; `all` = đủ mọi ngôn ngữ (mặc định), `any` = ít nhất một; `badgeLang` = ngôn ngữ trên thẻ (mặc định vie). */
+  langs?: LangFilterDto[]; langMode?: 'all' | 'any'; badgeLang?: string;
+  /** 0.3.0 (advanced filters): usWeightClass 100–900 / usWidthClass 1–9, khoảng đóng. `varAxisMatch` (mặc định bật cả hai): font Variable khớp khi dải trục wght/wdth giao khoảng. */
+  weightClass?: [number, number]; widthClass?: [number, number]; varAxisMatch?: { wght: boolean; wdth: boolean };
 };
 
 export type FaceRow = {
@@ -21,7 +25,11 @@ export type FaceRow = {
   isItalic: boolean; isVariable: boolean; viStatus: string;
   supportsVi: boolean; viMissing: number; licenseClass: string;
   path: string | null; fileSize: number; missing: boolean;
+  /** Chỉ còn placeholder trên ổ cloud (OneDrive/iCloud…): chưa tải về máy. */
+  onCloudOnly: boolean;
   isFavorite: boolean; addedAt: number;
+  /** Chỉ báo ngôn ngữ trên thẻ (thay −N); null khi mã ngôn ngữ lạ. */
+  langBadge: LangBadgeDto | null;
 };
 
 export type FacePage = { total: number; offset: number; items: FaceRow[] };
@@ -29,7 +37,7 @@ export type GridQuery = Omit<FaceQuery, 'offset' | 'limit'>;
 
 export class ContractError extends Error {}
 
-type Kind = 'number' | 'string' | 'boolean' | 'string|null' | 'number|null';
+type Kind = 'number' | 'string' | 'boolean' | 'string|null' | 'number|null' | 'object|null';
 // Record<keyof FaceRow, …> buộc bảng đủ khoá: thêm trường vào FaceRow mà quên ở đây là lỗi tsc.
 const ROW_SCHEMA: Record<keyof FaceRow, Kind> = {
   faceId: 'number', hashHex: 'string', faceIndex: 'number', family: 'string',
@@ -37,8 +45,8 @@ const ROW_SCHEMA: Record<keyof FaceRow, Kind> = {
   weightClass: 'number|null', widthClass: 'number|null',
   isItalic: 'boolean', isVariable: 'boolean', viStatus: 'string',
   supportsVi: 'boolean', viMissing: 'number', licenseClass: 'string',
-  path: 'string|null', fileSize: 'number', missing: 'boolean',
-  isFavorite: 'boolean', addedAt: 'number',
+  path: 'string|null', fileSize: 'number', missing: 'boolean', onCloudOnly: 'boolean',
+  isFavorite: 'boolean', addedAt: 'number', langBadge: 'object|null',
 };
 
 function matches(v: unknown, kind: Kind): boolean {

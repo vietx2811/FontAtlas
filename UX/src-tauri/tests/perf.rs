@@ -20,7 +20,7 @@ fn timed<T>(label: &str, n: u32, mut f: impl FnMut() -> T) -> T {
 }
 
 #[test]
-#[ignore]
+#[ignore = "hiệu năng trên thư viện thật: cần FONTATLAS_PERF_DIR, chạy với --ignored"]
 fn real_library_timings() {
     let Ok(dir) = std::env::var("FONTATLAS_PERF_DIR") else {
         eprintln!("đặt FONTATLAS_PERF_DIR để đo");

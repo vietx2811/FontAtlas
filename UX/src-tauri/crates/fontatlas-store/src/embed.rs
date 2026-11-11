@@ -32,6 +32,8 @@ pub enum JobResult {
     Done { raw: Vec<f32>, white: Option<Vec<f32>> },
     Failed { code: &'static str, detail: String },
     Skipped { code: &'static str },
+    /// Chưa làm được lúc này (vd file là placeholder cloud): về `pending`, không ghi lỗi, không tính là xong.
+    Deferred { code: &'static str },
 }
 
 fn to_blob(v: &[f32]) -> Vec<u8> {
@@ -178,8 +180,9 @@ impl Store {
             let hash = hash_from_blob(h)?;
             let path: Option<String> = tx
                 .query_row(
+                    // bỏ bản placeholder cloud: đọc nó sẽ kéo cả file về; để face `pending` tới khi có bản ở máy
                     "SELECT l.path FROM files f JOIN file_locations l USING(file_id)
-                     WHERE f.hash=?1 AND l.missing=0 ORDER BY l.location_id LIMIT 1",
+                     WHERE f.hash=?1 AND l.missing=0 AND l.cloud_only=0 ORDER BY l.location_id LIMIT 1",
                     [&hash[..]],
                     |r| r.get(0),
                 )
@@ -189,7 +192,17 @@ impl Store {
                     set_state(&tx, &hash, fi, STAGE, "running", raw_version, None, now)?;
                     out.push(EmbedJob { key: FaceKey { hash, face_index: fi as u32 }, path: PathBuf::from(p) });
                 }
-                None => set_state(&tx, &hash, fi, STAGE, "failed", raw_version, Some(("missing_file", "")), now)?,
+                None => {
+                    let has_cloud_copy: bool = tx.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM files f JOIN file_locations l USING(file_id)
+                                       WHERE f.hash=?1 AND l.missing=0 AND l.cloud_only=1)",
+                        [&hash[..]],
+                        |r| r.get(0),
+                    )?;
+                    if !has_cloud_copy {
+                        set_state(&tx, &hash, fi, STAGE, "failed", raw_version, Some(("missing_file", "")), now)?;
+                    } // chỉ còn bản cloud: giữ `pending`
+                }
             }
         }
         tx.commit()?;
@@ -233,6 +246,7 @@ impl Store {
                 JobResult::Skipped { code } => {
                     set_state(&tx, &k.hash, fi, STAGE, "skipped", raw_version, Some((code, "")), now)?
                 }
+                JobResult::Deferred { .. } => set_state(&tx, &k.hash, fi, STAGE, "pending", raw_version, None, now)?,
             }
             written += 1;
         }

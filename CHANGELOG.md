@@ -4,6 +4,56 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.2.1] — 2026-11-11
+
+Bản này thêm Pairing Desk, tìm kiếm nâng cao, độ phủ ngôn ngữ, hỗ trợ font trên ổ cloud và giao diện mới (màu theo macOS, onboarding mới). Bật font tự động khi app thiết kế cần (Adobe, Affinity…) sẽ có ở 0.3.0.
+
+### Thêm mới
+
+**Tìm kiếm nâng cao (Advanced search)**
+- Bảng Advanced với 18 trục số đo chia 6 nhóm (x-height, contrast, width, aperture…), mỗi trục có histogram của thư viện và thanh kéo hai đầu; gõ số trực tiếp được.
+- Lọc theo Weight class / Width class, khớp cả font variable có trục wght/wdth phủ khoảng đang lọc.
+- Tóm tắt bộ lọc ngay trong ô tìm kiếm; mục **Đang lọc** liệt kê từng điều kiện. Backspace hoặc ⌘⌫ bỏ một nhóm, có Hoàn tác; ⌘Z lùi tới 20 bước.
+- Phím tắt ⌥⌘F mở bảng Advanced.
+
+**Ngôn ngữ (Hyperglot)**
+- App tính độ phủ ngôn ngữ của từng font theo dữ liệu Hyperglot. Lọc theo một hay nhiều ngôn ngữ (có tất cả / có ít nhất một).
+- Thẻ font có vòng phủ ngôn ngữ thay cho số ký tự thiếu; tooltip nêu mức phủ. Font chưa đủ ngưỡng được ghi "dưới mức", không hiện số giả.
+
+**Pairing Desk**
+- Từ ô xem nhanh, bấm **Pair** để mở Pairing Desk với font đang xem làm neo: trang mẫu dàn sẵn tiêu đề và đoạn văn, danh sách ứng viên cho từng vai (tiêu đề, nội dung…).
+- Dùng ↑↓ để thử từng ứng viên ngay trên trang, Enter để đặt vào vai.
+- Dải chi tiết so font **Đang dùng** với font **Đang thử**: 8 số đo kèm Δ (mỗi thuật ngữ có tooltip). Phím I thu/mở dải; ⇧C mở Compare và đóng Compare là quay lại đúng chỗ trong Desk.
+- **Combo**: nhiều bộ font cho cùng một Case; tạo mới, nhân bản, đổi tên, đặt làm chính, xoá (có hỏi lại). Phím [ ] chuyển Combo.
+
+**Font trên ổ cloud (OneDrive, iCloud, Dropbox, Google Drive…)**
+- App nhận ra font chỉ còn bản giữ chỗ trên cloud (chưa tải về máy). Khi quét, app không kéo các file này về; dữ liệu phân tích cũ vẫn dùng được.
+- Thẻ font đang hiện trên màn hình tự tải font về để xem trước (tối đa 4 font cùng lúc, có hạn chờ), kèm dấu "Trên cloud — đang tải". Có thể tắt trong Cài đặt → Thư viện và nguồn.
+- Bật font nằm trên cloud: app tải file về trước rồi mới bật, báo lỗi rõ khi mạng hoặc ổ cloud không phản hồi.
+- Nguồn trên cloud hiện số % font chưa tải về và gợi ý chọn **Always keep on this device** trong Finder.
+
+**Giao diện**
+- Màu nhấn (accent) theo màu nhấn của macOS (System Settings → Appearance). Nền chuyển sang xám trung tính lạnh, cả sáng lẫn tối.
+- Chấm trạng thái đứng đầu tên font: xanh là đang bật, xám là chưa bật; bấm chấm để bật/tắt. Vòng rỗng là font đã có sẵn trên máy.
+- Badge ngôn ngữ dùng màu trung tính (màu xanh chỉ dành cho trạng thái bật).
+- Advanced search gộp vào ô tìm kiếm thành icon phễu, có số bộ lọc đang dùng.
+- Danh sách ngôn ngữ: tiếng Việt trước, rồi các ngôn ngữ Latin phổ biến, Cyrillic/Greek, còn lại theo ABC.
+- **Splash** khi mở app: chữ FontAtlas đảo qua các font trên máy rồi dừng ở "Font" có chân + "Atlas" không chân cùng x-height. Bấm phím bất kỳ để bỏ qua; tắt được trong Cài đặt → Chung.
+- **Onboarding** mới theo phong cách phòng lab: hình giải phẫu chữ có animation (cap height, x-height, baseline, dấu chồng tiếng Việt), bố cục mới, màn kết chuyển vào thư viện. Tôn trọng chế độ giảm chuyển động của macOS.
+
+
+**Bật font (activation)**
+- Hàng Active trong ô xem nhanh có nhãn rõ, chọn theo phiên làm việc hoặc giữ lâu dài, đổi phạm vi không cần tắt font.
+- Trạng thái **Có sẵn trên máy**: font đã được hệ thống cài sẵn (cùng nội dung) không bị bật trùng.
+- Bật/tắt cả họ font một lần; bật/tắt nhiều font đang chọn bằng ⌘⇧A.
+- Hộp xung đột gọn hơn: gom theo họ, giải thích ai đang giữ font bằng lời thường; cùng một file thì không hỏi.
+
+### Sửa lỗi
+- **Classification**: font serif chân nhỏ, chân nhọn hoặc có bracket không còn bị nhận là Sans; tên font (Neue, Grotesk…) không còn lấn số đo thật. Thư viện tự phân tích lại (bỏ qua font chưa tải về từ cloud, phân tích sau khi tải).
+- Hộp thoại mở từ Top Bar không còn bị lưới font che.
+- Đếm "Đang bật" ở sidebar cập nhật ngay khi bật/tắt.
+- Tiếng Việt không bao giờ được ghi "đủ" khi chưa kiểm được.
+
 ## [0.2.0] — 2026-11-09
 
 Bản phát hành đầu tiên. App được dựng lại toàn bộ trên engine phân tích font viết bằng Rust và chạy hoàn toàn trên máy: không tải font hay số đo của bạn lên đâu cả.

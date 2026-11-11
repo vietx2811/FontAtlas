@@ -244,14 +244,28 @@ impl<E: ActivationEngine> ActivationService<E> {
         hashes: Option<&[[u8; 32]]>,
         scope: Scope,
     ) -> Result<ActivationReport, ActivationError> {
-        let rows: Vec<ActivationRow> = relock(store)
+        let wanted: Vec<ActivationRow> = relock(store)
             .activation_rows()?
             .into_iter()
-            .filter(|r| r.state == DesiredState::Active && r.status == ActivationStatus::Registered)
-            .filter(|r| r.scope != scope)
+            .filter(|r| r.state == DesiredState::Active)
             .filter(|r| hashes.is_none_or(|hs| hs.contains(&r.hash)))
             .collect();
         let mut rep = ActivationReport::default();
+        // Dòng Unknown/Error không rõ đang đăng ký ở scope nào: không đổi, nhưng BÁO để UI không im lặng.
+        for r in wanted.iter().filter(|r| matches!(r.status, ActivationStatus::Unknown | ActivationStatus::Error)) {
+            rep.push(FileResult {
+                hash_hex: hex(&r.hash),
+                path: r.active_path.clone(),
+                requested_faces: vec![],
+                extra_faces: vec![],
+                outcome: FileOutcome::Failed {
+                    code: "scope_unsettled".into(),
+                    message: "font chưa đăng ký ổn định nên chưa đổi được phạm vi; hãy tắt rồi bật lại".into(),
+                },
+            });
+        }
+        let rows: Vec<ActivationRow> =
+            wanted.into_iter().filter(|r| r.status == ActivationStatus::Registered && r.scope != scope).collect();
         for mut row in rows {
             let mut res = FileResult {
                 hash_hex: hex(&row.hash),

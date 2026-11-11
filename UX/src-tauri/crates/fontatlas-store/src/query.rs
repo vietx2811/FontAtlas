@@ -1,5 +1,5 @@
 //! Truy vấn lưới thư viện: tìm, lọc, sắp xếp, phân trang phía backend.
-use rusqlite::ToSql;
+use rusqlite::{OptionalExtension, ToSql};
 use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,21 @@ pub enum ViFilter {
     Supported,
 }
 
+/// Lọc theo ngôn ngữ (Hyperglot): `near_ok` = chấp nhận mức near (ngược lại chỉ full).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LangFilter {
+    pub code: String,
+    pub near_ok: bool,
+}
+
+/// Mức độ phủ đã lưu của một face với một ngôn ngữ (chỉ có khi ≥ near).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LangHit {
+    pub level: String,
+    pub have: u32,
+    pub total: u32,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FaceQuery {
@@ -48,6 +63,89 @@ pub struct FaceQuery {
     pub descending: bool,
     pub offset: u32,
     pub limit: u32,
+    /// Ngôn ngữ cần có (xem `lang_any`); chỉ face đã tính độ phủ mới khớp.
+    pub langs: Vec<LangFilter>,
+    /// true = OR giữa các ngôn ngữ, false = AND.
+    pub lang_any: bool,
+    /// Ngôn ngữ để điền `FaceRow::lang_hit` (chỉ báo trên thẻ).
+    pub badge_lang: Option<String>,
+    /// usWeightClass, khoảng đóng trong 100..=900 (giá trị ghi 1–9 coi như ×100).
+    pub weight_class: Option<[u16; 2]>,
+    /// usWidthClass, khoảng đóng trong 1..=9.
+    pub width_class: Option<[u16; 2]>,
+    /// Font Variable cũng khớp `weight_class` khi dải trục `wght` giao khoảng chọn.
+    pub var_weight: bool,
+    /// Như trên cho `wdth` (quy % về class theo bảng OS/2, xem `WIDTH_PCT`).
+    pub var_width: bool,
+}
+
+/// `wdth` (%) ứng với usWidthClass 1..=9 theo OS/2.
+pub const WIDTH_PCT: [f64; 9] = [50.0, 62.5, 75.0, 87.5, 100.0, 112.5, 125.0, 150.0, 200.0];
+
+/// Khoảng `wdth` (%) mà các class a..=b phủ: ranh giới là trung điểm giữa hai class liền kề.
+pub fn width_pct_span(a: u16, b: u16) -> (f64, f64) {
+    let (a, b) = (a.clamp(1, 9) as usize - 1, b.clamp(1, 9) as usize - 1);
+    let lo = if a == 0 { WIDTH_PCT[0] } else { (WIDTH_PCT[a - 1] + WIDTH_PCT[a]) / 2.0 };
+    let hi = if b == 8 { WIDTH_PCT[8] } else { (WIDTH_PCT[b] + WIDTH_PCT[b + 1]) / 2.0 };
+    (lo, hi)
+}
+
+/// usWeightClass chuẩn hoá về 100..=900: font cũ ghi 1–9 → ×100; 0/NULL → NULL; giá trị ngoài (50, 950, 1000)
+/// kẹp vào biên; giá trị lẻ (250) giữ nguyên. Bộ lọc và histogram dùng chung biểu thức này.
+pub(crate) const WEIGHT_NORM: &str = "(CASE WHEN f.weight_class BETWEEN 1 AND 9 THEN f.weight_class * 100 \
+     WHEN f.weight_class > 0 THEN min(900, max(100, f.weight_class)) END)";
+/// usWidthClass hợp lệ 1..=9; 0 hoặc lớn hơn 9 → NULL.
+pub(crate) const WIDTH_NORM: &str = "(CASE WHEN f.width_class BETWEEN 1 AND 9 THEN f.width_class END)";
+
+/// Điều kiện lớp weight: instance mặc định nằm trong khoảng, hoặc (nếu `var`) dải `wght` giao khoảng.
+pub(crate) fn weight_cond(r: [u16; 2], var: bool, p: &mut Vec<Value>) -> String {
+    let (a, b) = (r[0].min(r[1]) as i64, r[0].max(r[1]) as i64);
+    p.push(Value::Integer(a));
+    p.push(Value::Integer(b));
+    let base = format!("{WEIGHT_NORM} BETWEEN ? AND ?");
+    if !var {
+        return format!("({base})");
+    }
+    p.push(Value::Integer(b));
+    p.push(Value::Integer(a));
+    format!("({base} OR (f.wght_min IS NOT NULL AND f.wght_min <= ? AND f.wght_max >= ?))")
+}
+
+/// `wdth` (%) giao khoảng class [a, b]: khoảng nửa mở [lo, hi) — giá trị đúng ranh giới thuộc class bên trên —
+/// riêng class 9 đóng ở 200.
+fn wdth_intersects(lo: f64, hi: f64, hi_closed: bool, p: &mut Vec<Value>) -> String {
+    p.push(Value::Real(hi));
+    p.push(Value::Real(lo));
+    format!("f.wdth_min IS NOT NULL AND f.wdth_min {} ? AND f.wdth_max >= ?", if hi_closed { "<=" } else { "<" })
+}
+
+pub(crate) fn width_cond(r: [u16; 2], var: bool, p: &mut Vec<Value>) -> String {
+    let (a, b) = (r[0].min(r[1]).max(1), r[0].max(r[1]).min(9));
+    p.push(Value::Integer(a as i64));
+    p.push(Value::Integer(b as i64));
+    let base = format!("{WIDTH_NORM} BETWEEN ? AND ?");
+    if !var {
+        return format!("({base})");
+    }
+    let (lo, hi) = width_pct_span(a, b);
+    format!("({base} OR ({}))", wdth_intersects(lo, hi, b == 9, p))
+}
+
+impl FaceQuery {
+    /// Không có điều kiện lọc nào (bỏ qua sort/phân trang/`badge_lang`/`langs`): tập = cả thư viện.
+    pub fn is_unfiltered(&self) -> bool {
+        self.text.as_deref().and_then(text_match).is_none()
+            && self.vi.is_none()
+            && self.license.is_empty()
+            && self.variable.is_none()
+            && self.italic.is_none()
+            && self.source_ids.is_empty()
+            && !self.favorites_only
+            && self.collection_id.is_none()
+            && self.tag_ids.is_empty()
+            && self.weight_class.is_none()
+            && self.width_class.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,8 +169,17 @@ pub struct FaceRow {
     /// Kích thước file gốc (byte) — cho ngân sách nạp FontFace.
     pub file_size: u64,
     pub missing: bool,
+    /// Mọi bản còn thấy đều là placeholder trên ổ cloud (chưa tải về): chưa dùng được ngay.
+    pub on_cloud_only: bool,
     pub is_favorite: bool,
     pub added_at: i64,
+    /// Độ phủ đã lưu với `FaceQuery::badge_lang` (None: không hỏi, chưa tính, hoặc dưới near).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang_hit: Option<LangHit>,
+    /// Face đã được tính độ phủ (với bất kỳ `db_version`); chỉ đặt khi có `badge_lang`.
+    /// `lang_computed && lang_hit.is_none()` = đã tính, dưới near.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub lang_computed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,7 +191,7 @@ pub struct FacePage {
 }
 
 /// Điều kiện WHERE + tham số theo đúng thứ tự `?`.
-fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
+pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     let mut w: Vec<String> = vec!["1=1".into()];
     let mut p: Vec<Value> = Vec::new();
     let in_list = |n: usize| vec!["?"; n].join(",");
@@ -146,6 +253,26 @@ fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     if !q.include_missing {
         w.push("EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)".into());
     }
+    if !q.langs.is_empty() {
+        let one = |lf: &LangFilter, p: &mut Vec<Value>| {
+            p.push(Value::Text(lf.code.clone()));
+            format!(
+                "EXISTS (SELECT 1 FROM face_langs fl WHERE fl.hash = fi.hash AND fl.face_index = f.face_index \
+                 AND fl.lang = ?{})",
+                if lf.near_ok { "" } else { " AND fl.level = 'full'" }
+            )
+        };
+        let parts: Vec<String> = q.langs.iter().map(|lf| one(lf, &mut p)).collect();
+        w.push(if q.lang_any { format!("({})", parts.join(" OR ")) } else { parts.join(" AND ") });
+    }
+    if let Some(r) = q.weight_class {
+        let c = weight_cond(r, q.var_weight, &mut p);
+        w.push(c);
+    }
+    if let Some(r) = q.width_class {
+        let c = width_cond(r, q.var_width, &mut p);
+        w.push(c);
+    }
     (w.join(" AND "), p)
 }
 
@@ -175,7 +302,145 @@ fn user_order(q: &FaceQuery, scoped: bool) -> String {
     }
 }
 
+/// Hai chuỗi 9 nấc của `class_histogram`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ClassHistogram {
+    /// Mỗi face một lần, ở class của instance mặc định.
+    pub default_bins: [u32; 9],
+    /// Như `default_bins` + font Variable đếm vào mọi nấc dải trục của nó phủ.
+    pub span_bins: [u32; 9],
+}
+
+/// Trục rời rạc của OS/2 có histogram theo nấc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassAxis {
+    Weight,
+    Width,
+}
+
 impl Store {
+    /// Histogram 9 nấc (usWeightClass 100..900 hoặc usWidthClass 1..9; index 0 = nấc đầu) trên tập `q`
+    /// BỎ điều kiện chính trục đó. Hai chuỗi:
+    ///
+    /// - `default_bins`: mỗi face đếm một lần ở class của instance mặc định;
+    /// - `span_bins`: như trên, nhưng font Variable còn được đếm vào MỌI nấc mà dải trục `wght`/`wdth` của nó phủ
+    ///   (đúng tập mà bộ lọc với `varAxisMatch` bật sẽ khớp).
+    ///
+    /// Weight lẻ (250) làm tròn về trăm gần nhất; face không có giá trị bị bỏ qua.
+    pub fn class_histogram(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>, axis: ClassAxis) -> Result<ClassHistogram, StoreError> {
+        let mut q = q.clone();
+        let (col, vmin, vmax) = match axis {
+            ClassAxis::Weight => {
+                q.weight_class = None;
+                (WEIGHT_NORM, "f.wght_min", "f.wght_max")
+            }
+            ClassAxis::Width => {
+                q.width_class = None;
+                (WIDTH_NORM, "f.wdth_min", "f.wdth_max")
+            }
+        };
+        let (w, p) = where_clause(&q);
+        let refs: Vec<&dyn ToSql> = p.iter().map(|v| v as &dyn ToSql).collect();
+        let from = if scope.is_some() {
+            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+        } else {
+            "faces f JOIN files fi ON fi.file_id = f.file_id"
+        };
+        let sql = format!(
+            "SELECT {col}, {vmin}, {vmax}, count(*) FROM {from} WHERE {w} AND {col} IS NOT NULL GROUP BY {col}, {vmin}, {vmax}"
+        );
+        if let Some(sc) = scope {
+            self.load_scope(sc)?;
+        }
+        let out = (|| -> Result<ClassHistogram, StoreError> {
+            let mut st = self.conn.prepare(&sql)?;
+            let rows = st.query_map(refs.as_slice(), |r| {
+                Ok((r.get::<_, i64>(0)?, r.get::<_, Option<f64>>(1)?, r.get::<_, Option<f64>>(2)?, r.get::<_, i64>(3)?))
+            })?;
+            let mut h = ClassHistogram::default();
+            for r in rows {
+                let (v, lo, hi, n) = r?;
+                let k = match axis {
+                    ClassAxis::Weight => ((v as f64 / 100.0).round() as i64).clamp(1, 9),
+                    ClassAxis::Width => v,
+                };
+                if !(1..=9).contains(&k) {
+                    continue;
+                }
+                let n = n as u32;
+                h.default_bins[k as usize - 1] += n;
+                let mut covered = [false; 9];
+                covered[k as usize - 1] = true;
+                if let (Some(lo), Some(hi)) = (lo, hi) {
+                    for c in 1..=9u16 {
+                        covered[c as usize - 1] |= match axis {
+                            ClassAxis::Weight => lo <= c as f64 * 100.0 && c as f64 * 100.0 <= hi,
+                            ClassAxis::Width => {
+                                let (a, b) = width_pct_span(c, c);
+                                (if c == 9 { lo <= b } else { lo < b }) && hi >= a
+                            }
+                        };
+                    }
+                }
+                for (i, c) in covered.iter().enumerate() {
+                    if *c {
+                        h.span_bins[i] += n;
+                    }
+                }
+            }
+            Ok(h)
+        })();
+        if scope.is_some() {
+            self.clear_scope();
+        }
+        out
+    }
+
+    /// `face_id` của mọi face khớp `q` (và `scope` nếu có) — không phân trang, không sắp xếp: dùng để lập tập
+    /// "được phép" một lần cho các phép thống kê.
+    pub fn face_ids_matching(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<Vec<i64>, StoreError> {
+        let (w, p) = where_clause(q);
+        let refs: Vec<&dyn ToSql> = p.iter().map(|v| v as &dyn ToSql).collect();
+        let from = if scope.is_some() {
+            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+        } else {
+            "faces f JOIN files fi ON fi.file_id = f.file_id"
+        };
+        if let Some(sc) = scope {
+            self.load_scope(sc)?;
+        }
+        let out = (|| -> Result<Vec<i64>, StoreError> {
+            let mut st = self.conn.prepare(&format!("SELECT f.face_id FROM {from} WHERE {w}"))?;
+            let rows = st.query_map(refs.as_slice(), |r| r.get::<_, i64>(0))?;
+            Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        })();
+        if scope.is_some() {
+            self.clear_scope();
+        }
+        out
+    }
+
+    /// Nạp `temp.scope` (thay nội dung cũ). Gọi `clear_scope` khi xong.
+    pub(crate) fn load_scope(&self, sc: &[(i64, f32)]) -> Result<(), StoreError> {
+        self.conn.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS scope(face_id INTEGER PRIMARY KEY, score REAL NOT NULL);
+             DELETE FROM temp.scope;",
+        )?;
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut ins = tx.prepare_cached("INSERT OR REPLACE INTO temp.scope(face_id, score) VALUES (?1, ?2)")?;
+            for &(id, score) in sc {
+                ins.execute(rusqlite::params![id, score as f64])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub(crate) fn clear_scope(&self) {
+        let _ = self.conn.execute("DELETE FROM temp.scope", []);
+    }
+
     pub fn query_faces(&self, q: &FaceQuery) -> Result<FacePage, StoreError> {
         self.query_faces_scoped(q, None)
     }
@@ -185,18 +450,7 @@ impl Store {
     pub fn query_faces_scoped(&self, q: &FaceQuery, scope: Option<&[(i64, f32)]>) -> Result<FacePage, StoreError> {
         let scoped = scope.is_some();
         if let Some(sc) = scope {
-            self.conn.execute_batch(
-                "CREATE TEMP TABLE IF NOT EXISTS scope(face_id INTEGER PRIMARY KEY, score REAL NOT NULL);
-                 DELETE FROM temp.scope;",
-            )?;
-            let tx = self.conn.unchecked_transaction()?;
-            {
-                let mut ins = tx.prepare_cached("INSERT OR REPLACE INTO temp.scope(face_id, score) VALUES (?1, ?2)")?;
-                for &(id, score) in sc {
-                    ins.execute(rusqlite::params![id, score as f64])?;
-                }
-            }
-            tx.commit()?;
+            self.load_scope(sc)?;
         }
         let page = self.query_faces_inner(q, scoped);
         if scoped {
@@ -231,7 +485,9 @@ impl Store {
                       ORDER BY l.missing, l.location_id LIMIT 1),
                     NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0),
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
-                    fi.first_seen_at, fi.size
+                    fi.first_seen_at, fi.size,
+                    (EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 1)
+                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0))
              FROM {from}
              WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset
@@ -260,15 +516,39 @@ impl Store {
                     path: r.get(14)?,
                     file_size: r.get::<_, i64>(18)?.max(0) as u64,
                     missing: r.get(15)?,
+                    on_cloud_only: r.get(19)?,
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
+                    lang_hit: None,
+                    lang_computed: false,
                 },
             ))
         })?;
         let mut items = Vec::new();
+        let mut badge = match q.badge_lang.as_deref() {
+            Some(_) => Some(self.conn.prepare(
+                "SELECT level, have, total FROM face_langs WHERE hash = ?1 AND face_index = ?2 AND lang = ?3",
+            )?),
+            None => None,
+        };
+        let mut computed = match q.badge_lang {
+            Some(_) => Some(self.conn.prepare_cached("SELECT 1 FROM face_lang_state WHERE hash = ?1 AND face_index = ?2")?),
+            None => None,
+        };
         for row in rows {
             let (_, h, mut fr) = row?;
-            fr.hash_hex = hex_of(&hash_from_blob(h)?);
+            let hash = hash_from_blob(h)?;
+            fr.hash_hex = hex_of(&hash);
+            if let (Some(st), Some(lang)) = (badge.as_mut(), q.badge_lang.as_deref()) {
+                fr.lang_hit = st
+                    .query_row(rusqlite::params![&hash[..], fr.face_index, lang], |r| {
+                        Ok(LangHit { level: r.get(0)?, have: r.get(1)?, total: r.get(2)? })
+                    })
+                    .optional()?;
+            }
+            if let Some(st) = computed.as_mut() {
+                fr.lang_computed = fr.lang_hit.is_some() || st.exists(rusqlite::params![&hash[..], fr.face_index])?;
+            }
             items.push(fr);
         }
         Ok(FacePage { total: total.max(0) as u64, offset: q.offset, items })

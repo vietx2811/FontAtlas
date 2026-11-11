@@ -1,19 +1,31 @@
 /** Từ điển chuỗi giao diện (vi). Mọi chuỗi mới đi qua khoá; thuật ngữ font giữ tiếng Anh, chú giải để ở khoá `*.gloss`. */
 import { TERM_GLOSS } from './terms';
 import { COMPARE_V2 } from './compareV2';
+import { ACTIVATION_I18N } from './activation';
+import { CLOUD_I18N } from './cloud';
+import { ONBOARDING_I18N } from './onboarding';
+import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
+import { DESK_I18N } from './desk';
 
 const vi = {
   ...TERM_GLOSS,
   ...COMPARE_V2,
+  ...ACTIVATION_I18N,
+  ...CLOUD_I18N,
+  ...FILTER_I18N,
+  ...FILTER_I18N_2,
+  ...FILTER_I18N_3,
+  ...FILTER_I18N_4,
+  ...DESK_I18N,
+  ...ONBOARDING_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
   'settings.title': 'Cài đặt',
-  'filter.vi': 'Tiếng Việt', 'filter.vi.full': 'Đủ dấu', 'filter.vi.supported': 'Có dấu cơ bản', 'filter.vi.clear': 'Bỏ',
-  'filter.license': 'Giấy phép', 'filter.license.ofl': 'OFL', 'filter.license.apache': 'Apache', 'filter.license.other': 'Khác / thương mại', 'filter.license.unknown': 'Chưa rõ',
-  'filter.source': 'Nguồn', 'filter.kind': 'Loại font', 'filter.favorites': 'Yêu thích', 'filter.variable': 'Variable', 'filter.variable.gloss': 'font biến thiên theo trục',
-  'filter.italic': 'Italic', 'filter.italic.gloss': 'chữ nghiêng', 'filter.forced': 'Đang theo mục bên trái',
-  'filter.class': 'Phân loại',
+  'filter.vi.full': 'Đủ dấu', 'filter.vi.supported': 'Có dấu cơ bản', 'filter.vi.clear': 'Bỏ',
+  'filter.license.ofl': 'OFL', 'filter.license.apache': 'Apache', 'filter.license.other': 'Khác / thương mại', 'filter.license.unknown': 'Chưa rõ',
+  'filter.favorites': 'Yêu thích', 'filter.variable': 'Variable', 'filter.variable.gloss': 'font biến thiên theo trục',
+  'filter.italic': 'Italic', 'filter.italic.gloss': 'chữ nghiêng',
   'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain', 'class.unclassified': 'Chưa phân loại',
   'class.serif.gloss': 'có chân', 'class.sans.gloss': 'không chân', 'class.mono.gloss': 'cùng độ rộng', 'class.script.gloss': 'chữ viết tay', 'class.blackletter.gloss': 'chữ Gothic', 'class.symbol.gloss': 'ký hiệu', 'class.uncertain.gloss': 'chưa đủ chắc', 'class.unclassified.gloss': 'chưa phân tích',
   'class.edited': 'Đã sửa', 'class.auto': 'Về tự động', 'class.maybe': 'có lẽ là {label}', 'class.machine': 'Máy nghĩ: {label}', 'class.menu': 'Đổi phân loại',
@@ -23,11 +35,11 @@ const vi = {
   'class.tip.conf': 'Độ chắc {pct}%', 'class.tip.usage': 'Dùng cho: {usage}',
   'topbar.group': 'Pair / Compare', 'topbar.pair': 'Pair', 'topbar.pairThese': 'Pair these', 'topbar.compare': 'Compare', 'topbar.similar': 'Find similar',
   'topbar.pair.gloss': 'ghép cặp', 'topbar.pairThese.gloss': 'ghép các font đã chọn', 'topbar.compare.gloss': 'so sánh cạnh nhau', 'topbar.similar.gloss': 'tìm font giống',
-  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font — nên ≤ 4 để so rõ.', 'topbar.useFirst': 'Chỉ lấy 4 đầu',
+  'topbar.selected': '{n} chọn', 'topbar.clear': 'Bỏ chọn', 'topbar.narrow': '{n} font đang chọn — nên ≤ {max} để so cho rõ.', 'topbar.narrow.short': 'nên ≤ {max}', 'topbar.narrow.title': 'Chọn quá nhiều để so sánh', 'topbar.useFirst': 'Chỉ lấy {max} đầu',
   'compare.sec.specimen.gloss': 'mẫu chữ', 'compare.sec.metrics.gloss': 'phép đo', 'compare.sec.meta.gloss': 'thông tin', 'compare.row.class.gloss': 'phân loại', 'compare.row.license.gloss': 'giấy phép',
   'compare.percentile': 'Percentile {p}', 'compare.baseNa': 'Mốc không đo được, không có Δ', 'compare.noXh': 'Không đo được x-height', 'compare.viNone': 'Không hỗ trợ tiếng Việt',
-  'compare.skipped': 'Không đọc được {n} font: {reason}', 'compare.pngSaved': 'Đã lưu {name}', 'compare.pngCancelled': '', 'compare.footnote2': '±0: lệch < 1% (hoặc < 0,5°)',
-  'compare.fontsPending': 'Đang nạp font để xuất…', 'topbar.compareCut': 'Compare tối đa 8 font — đang lấy 8 font đầu trong {n}.',
+  'compare.skipped': 'Không đọc được {n} font: {reason}', 'compare.pngSaved': 'Đã lưu {name}', 'compare.footnote2': '±0: lệch < 1% (hoặc < 0,5°)',
+  'topbar.compareCut': 'Compare tối đa 8 font — đang lấy 8 font đầu trong {n}.',
   'compare.viWarnPct': 'Dấu tràn khung · {pct}% em', 'compare.viOkTip': 'Dấu cao hơn chữ hoa {pct}% em', 'compare.noExtras': 'Chưa có dữ liệu — quét lại để cập nhật',
   'compare.rescan': 'Cần quét lại', 'compare.noDelta': 'Không có Δ cho số đo này',
   'meta.vendor': 'Vendor', 'meta.vendor.gloss': 'nhà phát hành (OS/2 vendor ID)', 'meta.years': 'Years', 'meta.years.gloss': 'năm tạo · sửa · bản quyền',
@@ -71,7 +83,6 @@ const vi = {
   'compare.m.contrast': 'contrast ⊥', 'compare.m.contrast.gloss': 'tương phản nét (vuông góc)', 'compare.m.contrast_h': 'contrast H', 'compare.m.contrast_h.gloss': 'tương phản ngang',
   'compare.m.slant_deg': 'slant I/T', 'compare.m.slant_deg.gloss': 'độ nghiêng (I, T)', 'compare.m.stress_deg': 'stress', 'compare.m.stress_deg.gloss': 'trục nhấn',
   'compare.m.aperture': 'aperture', 'compare.m.aperture.gloss': 'độ mở', 'compare.m.serif_foot': 'serif foot', 'compare.m.serif_foot.gloss': 'chân serif',
-  'chips.label': 'Bộ lọc đang bật', 'chips.remove': 'Bỏ lọc {label}',
 } as const;
 export type I18nKey = keyof typeof vi;
 /** Khoá có trong từ điển hay không (dùng cho khoá ghép động như `class.${x}`). */

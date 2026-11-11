@@ -218,6 +218,61 @@ fn set_keep_switches_scope_and_marks_onboarded() {
 }
 
 #[test]
+fn set_scope_changes_only_the_requested_faces_without_deactivating() {
+    let d = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let (st, faces, _) = library3(d.path(), &eng);
+    activation::activate(&st, &faces[..2], None, false, &mut noop).unwrap();
+    let scopes = |st: &AppState| {
+        let mut v: Vec<_> = activation::state_list(st).unwrap().into_iter().map(|s| (s.hash_hex, s.scope, s.state)).collect();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    };
+    assert!(scopes(&st).iter().all(|(_, sc, _)| *sc == ScopeDto::Session));
+    let rep = activation::set_scope(&st, &faces[..1], ScopeDto::Persistent).unwrap();
+    assert_eq!(rep.changed, 1);
+    let after = scopes(&st);
+    let (persist, session): (Vec<_>, Vec<_>) = after.iter().partition(|(_, sc, _)| *sc == ScopeDto::Persistent);
+    assert_eq!((persist.len(), session.len()), (1, 1), "chỉ font được chọn đổi phạm vi");
+    assert!(persist[0].0 == faces[0].hash_hex);
+    // không có lúc nào font bị tắt: cả hai vẫn active, engine vẫn giữ đủ 2 đăng ký (1 persistent + 1 session)
+    assert!(after.iter().all(|(_, _, s)| matches!(s, DesiredStateDto::Active)));
+    assert_eq!(eng.registrations().len(), 2);
+    // font chưa bật: không làm gì
+    let none = activation::set_scope(&st, &faces[2..3], ScopeDto::Persistent).unwrap();
+    assert_eq!(none.changed, 0);
+}
+
+#[test]
+fn identical_font_installed_elsewhere_is_available_not_activated() {
+    let d = tempfile::tempdir().unwrap();
+    let other = d.path().join("FontBase");
+    std::fs::create_dir_all(&other).unwrap();
+    let copy = other.join("roboto.ttf");
+    std::fs::copy(fixture("roboto.ttf"), &copy).unwrap();
+    let eng = Arc::new(FakeEngine::new().with_system_font("Roboto-Regular", &copy));
+    let (st, faces, _) = library3(d.path(), &eng);
+    let rep = activation::activate(&st, &faces, None, false, &mut noop).unwrap();
+    let avail: Vec<_> = rep.results.iter().filter(|r| matches!(r.outcome, FileOutcomeDto::AlreadyAvailable { .. })).collect();
+    assert_eq!(avail.len(), 1, "chỉ Roboto có bản giống hệt ở nơi khác");
+    let roboto = FaceKeyDto { hash_hex: avail[0].hash_hex.clone(), face_index: 0 };
+    match &avail[0].outcome {
+        FileOutcomeDto::AlreadyAvailable { owner, path } => {
+            assert_eq!(*owner, OwnerDto::FontBase);
+            assert_eq!(path, copy.to_str().unwrap());
+        }
+        o => panic!("{o:?}"),
+    }
+    assert_eq!(rep.changed, 2);
+    assert_eq!(eng.registrations().len(), 2, "hai font còn lại được bật bình thường");
+    assert_eq!(activation::state_list(&st).unwrap().len(), 2, "sidebar Đang bật chỉ đếm font do Font Atlas bật");
+    let av = activation::availability(&st, &[]).unwrap();
+    assert_eq!(av.len(), 1, "tập đã nhớ được tính lại không cần truyền hash");
+    assert_eq!(av[0].hash_hex, roboto.hash_hex);
+    assert_eq!(av[0].faces, vec![0]);
+}
+
+#[test]
 fn gdi_engine_returns_unsupported() {
     let d = tempfile::tempdir().unwrap();
     let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(ActivationService::new(WindowsGdiEngine)));

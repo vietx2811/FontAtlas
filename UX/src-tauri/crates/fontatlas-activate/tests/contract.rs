@@ -40,6 +40,7 @@ fn activation_report_json_matches_contract_fixture() {
         existing_path: "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf"
             .into(),
         owner: Owner::RightFont,
+        same_file: false,
     };
     let outcomes = vec![
         FileOutcome::Ready,

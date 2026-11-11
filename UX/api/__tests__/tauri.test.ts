@@ -30,6 +30,8 @@ describe('query_faces', () => {
     expect(toFaceQueryDto({})).toEqual({
       text: null, vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [],
       includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 100, axisFilters: [], hard: [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [],
+      langs: [], langMode: 'all', badgeLang: null,
+      weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true },
     });
   });
 
@@ -51,11 +53,34 @@ describe('query_faces', () => {
   });
 });
 
+describe('case/combo commands', () => {
+  it('maps every Api method to its command with camelCase args and explicit nulls', async () => {
+    const api = createTauriApi();
+    const f = { hashHex: 'ab', faceIndex: 0 };
+    const cases: Array<[() => Promise<unknown>, string, unknown]> = [
+      [() => api.createCase(), 'create_case', { name: null, brief: null, settings: null }],
+      [() => api.listCases(), 'list_cases', { includeDeleted: false }],
+      [() => api.addToCase(null, [f]), 'add_to_case', { caseId: null, faces: [f], origin: null }],
+      [() => api.addToCase(3, [f], 'peek'), 'add_to_case', { caseId: 3, faces: [f], origin: 'peek' }],
+      [() => api.createCombo(3), 'create_combo', { caseId: 3, name: null, fromCombo: null }],
+      [() => api.setComboSlot(5, 'body', null), 'set_combo_slot', { comboId: 5, role: 'body', face: null, note: null, style: null }],
+      [() => api.reorderCombos(3, [2, 1]), 'reorder_combos', { caseId: 3, ids: [2, 1] }],
+      [() => api.briefStarter({ uses: ['poster'], tones: [], needs: { vi: true, installedOnly: false, italic: false, variable: false, openLicense: false }, text: null }), 'brief_starter', { brief: { uses: ['poster'], tones: [], needs: { vi: true, installedOnly: false, italic: false, variable: false, openLicense: false }, text: null }, caseId: null }],
+      [() => api.caseCompare(3, [1, 2]), 'case_compare', { caseId: 3, comboIds: [1, 2], lang: 'vi' }],
+      [() => api.updateCase(3, { clearBrief: true }), 'update_case', { id: 3, patch: { name: null, brief: null, clearBrief: true, settings: null, viewState: null } }],
+    ];
+    for (const [run, cmd, args] of cases) { await run(); expect(last()).toEqual({ cmd, args }); }
+  });
+});
+
 describe('round2 contracts', () => {
   it('sends physical raw filters to query_faces, axis_stats and family pagination to similar_families', async () => {
     const api = createTauriApi();
     const q = { italic: true, sourceIds: [2], rawAxisRanges: [{ axis: 'slant_deg', range: [-25.5, 15] as [number, number] }], offset: 6, limit: 6 };
     expect(toFaceQueryDto(q).rawAxisRanges).toEqual(q.rawAxisRanges);
+    await api.axisStats(q);
+    await api.axisHistogram(q, 12);
+    expect(last()).toEqual({ cmd: 'axis_histogram', args: { q: toFaceQueryDto(q), bins: 12 } });
     await api.axisStats(q);
     expect(last()).toEqual({ cmd: 'axis_stats', args: { q: toFaceQueryDto(q) } });
     const face = { hashHex: 'ab', faceIndex: 2 };
@@ -128,7 +153,7 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
   it('set_settings sends a full patch with null for what did not change', async () => {
     reply = () => ({});
     await createTauriApi().setSettings({ embedEnabled: true });
-    expect(last().args).toEqual({ patch: { embedEnabled: true, licenseNoticeAck: null, uiLang: null, sampleText: null, projectViDefault: null, keepActiveOnExit: null, rescanOnLaunch: null } });
+    expect(last().args).toEqual({ patch: { embedEnabled: true, licenseNoticeAck: null, uiLang: null, sampleText: null, projectViDefault: null, keepActiveOnExit: null, rescanOnLaunch: null, cloudPreviewDownload: null } });
   });
 
   it('similar fills the 6a defaults', async () => {
@@ -155,6 +180,9 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     await api.activationDeactivateCollection(7); expect(last().args).toMatchObject({ collectionId: 7 });
     await api.activationDeactivateAll(); expect(last().cmd).toBe('activation_deactivate_all');
     await api.activationSetKeep(true); expect(last()).toEqual({ cmd: 'activation_set_keep', args: { on: true } });
+    await api.activationSetScope([{ hashHex: 'aa', faceIndex: 0 }], 'persistent'); expect(last()).toEqual({ cmd: 'activation_set_scope', args: { faces: [{ hashHex: 'aa', faceIndex: 0 }], scope: 'persistent' } });
+    await api.activationAvailability(); expect(last()).toEqual({ cmd: 'activation_availability', args: { faces: [] } });
+    await api.activationAvailability([{ hashHex: 'aa', faceIndex: 1 }]); expect(last().args).toEqual({ faces: [{ hashHex: 'aa', faceIndex: 1 }] });
   });
 });
 

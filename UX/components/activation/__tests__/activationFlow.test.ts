@@ -13,9 +13,23 @@ describe('describeOutcome', () => {
   it('other failures show the short code', () => {
     expect(t({ kind: 'failed', code: 'os_denied', message: 'boom' })!.text).toMatch(/os_denied/);
   });
+  it('an unsettled row that set_scope could not change is explained, not skipped silently; "already available" says nothing here (the flow toasts once)', () => {
+    expect(t({ kind: 'failed', code: 'scope_unsettled', message: 'x' })!.text).toMatch(/tắt rồi bật lại/);
+    expect(t({ kind: 'already_available', owner: 'font_base', path: '/x.ttf' })).toBeNull();
+  });
   it('missing file and iCloud have their own wording', () => {
     expect(t({ kind: 'missing_file' })!.text).toMatch(/Không tìm thấy file/);
     expect(t({ kind: 'not_downloaded' })!.text).toMatch(/iCloud/);
+  });
+  it('cloud download failures are explained in their own words, not as a bare code', () => {
+    const timeout = t({ kind: 'failed', code: 'cloud_timeout', message: 'x' })!;
+    expect(timeout.kind).toBe('error');
+    expect(timeout.text).toMatch(/30 giây/);
+    expect(timeout.text).not.toMatch(/cloud_timeout/);
+    const failed = t({ kind: 'failed', code: 'cloud_download_failed', message: 'offline' })!;
+    expect(failed.text).toMatch(/không tải được/i);
+    expect(failed.text).toMatch(/offline/);
+    expect(t({ kind: 'failed', code: 'cloud_stub', message: 'x' })!.text).toMatch(/iCloud/);
   });
   it('busy is a retry hint; success outcomes say nothing', () => {
     expect(t({ kind: 'busy' })!.text).toMatch(/thử lại/);

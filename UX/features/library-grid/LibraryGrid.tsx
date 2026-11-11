@@ -18,6 +18,7 @@ export type LibraryGridProps = {
   /** Hàng đệm ở đáy (px) cho ô nổi che thẻ cuối. */
   bottomInset?: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
+  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | 'available' | undefined; onToggleActive?(row: FaceRow): void;
   /** Tập khoá `${hashHex}:${faceIndex}` đang được chọn (đa chọn). Có → thay cho selectedFaceId/selectedKey khi tô thẻ. */
   /** Bộ nạp dùng chung toàn app kèm ScrollVelocity của nó (lưới đưa tốc độ cuộn vào). Thiếu → lưới tự tạo bộ nạp riêng. */
   velocity?: ScrollVelocity;
@@ -38,10 +39,11 @@ type RowProps = {
   blobs: PreviewBlobs; loader: FontFaceLoader | null; onSelect(row: FaceRow): void; onStale(): void;
   fontSize?: number; layout: 'grid' | 'list'; boxHeight: number; rows: number;
   isActive?(row: FaceRow): boolean; isFavorite?(row: FaceRow): boolean; onToggleFavorite?(row: FaceRow): void;
+  activeScopeOf?(row: FaceRow): 'session' | 'persistent' | 'available' | undefined; onToggleActive?(row: FaceRow): void;
   selectedKeys?: ReadonlySet<string>; onPick?: LibraryGridProps['onPick']; onContextMenu?: LibraryGridProps['onContextMenu'];
 };
 
-function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite }: RowComponentProps<RowProps>) {
+function Row({ index, style, rows, cols, total, paged, applied, api, px, text, mode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive }: RowComponentProps<RowProps>) {
   if (index >= rows) return <div role="presentation" style={style} />; // hàng đệm đáy
   const cells = [];
   for (let c = 0; c < cols; c++) {
@@ -57,7 +59,7 @@ function Row({ index, style, rows, cols, total, paged, applied, api, px, text, m
       <FaceCell key={row ? `${i}:${row.faceId}` : `p${i}`} row={row} url={url} px={px} text={text} mode={mode}
         selected={!!row && (selectedKeys ? selectedKeys.has(`${row.hashHex}:${row.faceIndex}`) || `${row.hashHex}:${row.faceIndex}` === selectedKey : selectedKey ? `${row.hashHex}:${row.faceIndex}` === selectedKey : row.faceId === selectedFaceId)} blobs={blobs} loader={loader} onSelect={onSelect} onStale={onStale}
         index={i} onPick={onPick} onContextMenu={onContextMenu}
-        fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} />,
+        fontSize={fontSize} layout={layout} boxHeight={boxHeight} active={!!row && !!isActive?.(row)} favorite={row ? (isFavorite ? isFavorite(row) : row.isFavorite) : false} onToggleFavorite={onToggleFavorite} activeScope={row ? activeScopeOf?.(row) : undefined} onToggleActive={onToggleActive} />,
     );
   }
   return <div role="row" style={{ ...style, display: 'flex' }}>{cells}</div>;
@@ -94,7 +96,7 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, selectedKey = null, onSelect = NOOP, loader: loaderProp, velocity: velocityProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, selectedKeys, onPick, onContextMenu,
+  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, selectedKeys, onPick, onContextMenu,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
@@ -203,7 +205,7 @@ export function LibraryGrid({
           overscanCount={2}
           defaultHeight={size.height}
           style={{ height: '100%', width: '100%' }}
-          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite }}
+          rowProps={{ cols, total, paged, version: snap.version, applied, api, px, text: sampleText, mode: previewMode, selectedFaceId, selectedKey, selectedKeys, blobs, loader, onSelect, onPick, onContextMenu, onStale, fontSize, layout, boxHeight, rows: rowCount, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive }}
           onRowsRendered={({ startIndex, stopIndex }) => paged?.ensureRange(startIndex * cols, (stopIndex + 1) * cols - 1)}
           onScroll={e => { velocity.sample((e.currentTarget as HTMLElement).scrollTop, performance.now()); loader?.onScroll(); }}
         />

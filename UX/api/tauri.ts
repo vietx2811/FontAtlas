@@ -52,6 +52,8 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
     includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
     classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
+    langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,
+    weightClass: q.weightClass ?? null, widthClass: q.widthClass ?? null, varAxisMatch: q.varAxisMatch ?? { wght: true, wdth: true },
   };
 }
 const similarOpts = (o: SimilarQuery = {}) => ({
@@ -61,7 +63,7 @@ const similarOpts = (o: SimilarQuery = {}) => ({
 const settingsPatch = (p: Partial<Record<keyof SettingsPatchDto, unknown>>): SettingsPatchDto => ({
   embedEnabled: (p.embedEnabled as boolean) ?? null, licenseNoticeAck: (p.licenseNoticeAck as boolean) ?? null, uiLang: (p.uiLang as string) ?? null,
   sampleText: (p.sampleText as string) ?? null, projectViDefault: (p.projectViDefault as boolean) ?? null, keepActiveOnExit: (p.keepActiveOnExit as boolean) ?? null,
-  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null,
+  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null, cloudPreviewDownload: (p.cloudPreviewDownload as boolean) ?? null,
 });
 
 export function createTauriApi(): Api {
@@ -110,7 +112,28 @@ export function createTauriApi(): Api {
     getFace: (face, lang) => call('get_face', { face, lang }),
     similar: (face, opts) => call('similar', { face, opts: similarOpts(opts) }),
     similarFamilies: (face, opts, q = {}) => call('similar_families', { face, opts: similarOpts(opts), q: toFaceQueryDto(q) }),
+    languageList: (q = {}) => call('language_list', { q: toFaceQueryDto({ ...q, langs: [] }) }),
+    langCoverage: (faceId, code) => call('lang_coverage', { faceId, code }),
     axisStats: (q = {}) => call('axis_stats', { q: toFaceQueryDto(q) }),
+    createCase: (name, brief, settings) => call('create_case', { name: name ?? null, brief: brief ?? null, settings: settings ?? null }),
+    listCases: (includeDeleted = false) => call('list_cases', { includeDeleted }),
+    openCase: id => call('open_case', { id }),
+    getCase: id => call('get_case', { id }),
+    updateCase: (id, patch) => call('update_case', { id, patch: { name: null, brief: null, clearBrief: false, settings: null, viewState: null, ...patch } }),
+    deleteCase: id => none(call('delete_case', { id })),
+    restoreCase: id => call('restore_case', { id }),
+    addToCase: (caseId, faces, origin) => call('add_to_case', { caseId, faces, origin: origin ?? null }),
+    removeFromCase: (caseId, faces) => call('remove_from_case', { caseId, faces }),
+    createCombo: (caseId, name, fromCombo) => call('create_combo', { caseId, name: name ?? null, fromCombo: fromCombo ?? null }),
+    updateCombo: (id, patch) => call('update_combo', { id, patch: { name: null, isMain: null, note: null, clearNote: false, ...patch } }),
+    deleteCombo: id => none(call('delete_combo', { id })),
+    reorderCombos: (caseId, ids) => none(call('reorder_combos', { caseId, ids })),
+    setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
+    createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
+    caseCompare: (caseId, comboIds, lang = 'vi') => call('case_compare', { caseId, comboIds, lang }),
+    briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
+    openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),
+    axisHistogram: (q = {}, bins = 0) => call('axis_histogram', { q: toFaceQueryDto(q), bins }),
     async compareFaces(faces) {
       if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
       return fromWire(await call('compare_faces', { faces, opts: { lang: 'vi' } }));
@@ -163,6 +186,8 @@ export function createTauriApi(): Api {
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),
+    activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
+    activationAvailability: (faces = []) => call('activation_availability', { faces }),
     activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),
   };
 }

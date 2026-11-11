@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.2.0"
+version = "0.2.1"
 description = "FontAtlas: khám phá, so sánh và ghép cặp font"
 authors = ["you"]
 license = ""

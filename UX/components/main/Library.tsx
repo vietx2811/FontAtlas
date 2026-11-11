@@ -5,6 +5,7 @@ import { sharedFontLoader } from '../../features/library-grid/sharedLoader';
 import type { FaceRow } from '../../features/library-grid';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
+import { refreshActivation } from '../../store/activationSync';
 import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
 import { useFaceActions } from '../faces/FaceActions';
 import { useLibrarySelection } from './useLibrarySelection';
@@ -40,8 +41,12 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const favs = useFavoriteStore(s => s.overrides);
   const actions = useFaceActions();
   const wrap = useRef<HTMLDivElement>(null);
-  useEffect(() => { useUiStore.getState().refreshActive(api).catch(e => console.warn('activation_state failed', e)); }, [api]);
+  useEffect(() => { void refreshActivation(api); }, [api]);
   const isActive = useCallback((r: FaceRow) => active.has(r.hashHex), [active]);
+  const activeScope = useUiStore(s => s.activeScope);
+  const available = useUiStore(s => s.available);
+  const activeScopeOf = useCallback((r: FaceRow) => activeScope.get(r.hashHex) ?? (available.has(r.hashHex) ? 'available' as const : undefined), [activeScope, available]);
+  const toggleActive = useCallback((r: FaceRow) => { void actions?.setActive([r], !useUiStore.getState().active.has(r.hashHex)); }, [actions]);
   const isFavorite = useCallback((r: FaceRow) => favs.get(r.faceId) ?? r.isFavorite, [favs]);
   const toggleFavorite = useCallback((r: FaceRow) => {
     const next = !(useFavoriteStore.getState().overrides.get(r.faceId) ?? r.isFavorite);
@@ -85,7 +90,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
-      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
+      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onContextMenu={onContextMenu ?? undefined} />
     </div>
   );

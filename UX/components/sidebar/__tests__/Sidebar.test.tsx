@@ -235,6 +235,15 @@ describe('Sidebar', () => {
       expect(screen.getAllByTestId('not-downloaded')).toHaveLength(1); // chỉ nguồn có file chưa tải
     });
 
+    it('a cloud source warns with the real share and the Finder advice; a local source has no hint', async () => {
+      await mount();
+      const hints = screen.getAllByTestId('cloud-hint');
+      expect(hints).toHaveLength(1);
+      const tip = await tipOf(hints[0]);
+      expect(tip).toMatch(/^90% font của nguồn này chưa tải về máy/);
+      expect(tip).toMatch(/Always keep on this device/);
+    });
+
     it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
       await mount();
       act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));

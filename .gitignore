@@ -73,3 +73,8 @@ UX/python-sidecar/dist/
 # Harness S2 (Plan 5)
 UX/features/library-grid/perf/.data/
 UX/features/library-grid/perf/wk
+
+# Release artifacts
+*.zip
+*.dmg
+/release/

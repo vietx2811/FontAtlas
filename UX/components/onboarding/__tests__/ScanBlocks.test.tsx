@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BEAT_MS, ScanBlocks, usePrefersReducedMotion } from '../ScanBlocks';
+import { BEAT_MS, SPECIMENS, ScanBlocks, usePrefersReducedMotion } from '../ScanBlocks';
 
 function mockMatchMedia(reduced: boolean) {
   vi.stubGlobal('matchMedia', (q: string) => ({ matches: reduced && q.includes('prefers-reduced-motion'), media: q, addEventListener: () => {}, removeEventListener: () => {} }));
@@ -9,22 +9,24 @@ beforeEach(() => { vi.useFakeTimers(); mockMatchMedia(false); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('ScanBlocks', () => {
-  it('draws 9 square blocks, each with one letter set in a system font; no preview frame, no grid', () => {
+  it('draws 9 specimen cells, each a real Inter outline (path), no text glyph, no bitmap', () => {
     const { container } = render(<ScanBlocks seed={1} scanning progress={0.3} done={false} />);
     const blocks = screen.getAllByTestId('scan-block');
     expect(blocks).toHaveLength(9);
     for (const b of blocks) {
-      expect(b.textContent).toMatch(/^\S$/u);
-      expect((b as HTMLElement).style.fontFamily).toMatch(/\S/);
+      expect(b.getAttribute('data-char')).toMatch(/^\S$/u);
+      expect(b.querySelector('path.bp-outline')!.getAttribute('d')).toMatch(/^M/);
+      expect(b.querySelector('text')).toBeNull();
     }
-    expect(container.querySelector('[role=grid], [role=gridcell], img')).toBeNull();
+    expect(new Set(blocks.map(b => b.getAttribute('data-char'))).size).toBe(9);
+    expect(container.querySelector('[role=grid], [role=gridcell], img, image, foreignObject')).toBeNull();
   });
 
-  it('turns the blocks while scanning and changes letter/font on every beat', () => {
+  it('sweeps a beam while scanning and changes letters on every beat', () => {
     render(<ScanBlocks seed={1} scanning progress={0.3} done={false} />);
     const grid = screen.getByTestId('scan-blocks');
     expect(grid.getAttribute('data-spinning')).toBe('true');
-    const snap = () => screen.getAllByTestId('scan-block').map(b => `${b.textContent}|${(b as HTMLElement).style.fontFamily}`).join();
+    const snap = () => screen.getAllByTestId('scan-block').map(b => b.getAttribute('data-char')).join();
     const a = snap();
     act(() => { vi.advanceTimersByTime(BEAT_MS + 10); });
     expect(snap()).not.toBe(a);
@@ -33,13 +35,13 @@ describe('ScanBlocks', () => {
   it('stands still when not scanning (no beats)', () => {
     render(<ScanBlocks seed={1} scanning={false} progress={0} done={false} />);
     expect(screen.getByTestId('scan-blocks').getAttribute('data-spinning')).toBe('false');
-    const snap = () => screen.getAllByTestId('scan-block').map(b => b.textContent).join();
+    const snap = () => screen.getAllByTestId('scan-block').map(b => b.getAttribute('data-char')).join();
     const a = snap();
     act(() => { vi.advanceTimersByTime(BEAT_MS * 3); });
     expect(snap()).toBe(a);
   });
 
-  it('respects prefers-reduced-motion: no rotation, a fade instead', () => {
+  it('respects prefers-reduced-motion: no beam, a fade instead', () => {
     mockMatchMedia(true);
     render(<ScanBlocks seed={1} scanning progress={0.3} done={false} />);
     const grid = screen.getByTestId('scan-blocks');
@@ -49,7 +51,7 @@ describe('ScanBlocks', () => {
     expect(screen.getAllByTestId('scan-block').some(b => b.getAttribute('data-fade') === 'true')).toBe(true);
   });
 
-  it('only a progress bar under the blocks while scanning, then a green check circle when done', () => {
+  it('only a progress bar under the blocks while scanning, then a check ring when done', () => {
     const { rerender } = render(<ScanBlocks seed={1} scanning progress={0.4} done={false} />);
     const bar = screen.getByRole('progressbar');
     expect(bar.getAttribute('aria-valuenow')).toBe('40');
@@ -65,14 +67,12 @@ describe('ScanBlocks', () => {
   });
 });
 
-describe('ScanBlocks fonts', () => {
-  it('uses only the families it is given, at most twice each', () => {
-    const fams = ['Helvetica Neue', 'Georgia', 'Menlo', 'Didot', 'Avenir Next', 'Palatino'];
-    render(<ScanBlocks seed={4} scanning progress={0.1} done={false} families={fams} />);
-    const used = screen.getAllByTestId('scan-block').map(b => (b as HTMLElement).style.fontFamily.replace(/^"|".*$/g, '').split('"')[0]);
-    for (const f of used) expect(fams).toContain(f);
-    const counts = used.reduce<Record<string, number>>((m, f) => ({ ...m, [f]: (m[f] ?? 0) + 1 }), {});
-    expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
+describe('ScanBlocks specimens', () => {
+  it('uses only outlines that ship with the app, each at most once on the tray', () => {
+    render(<ScanBlocks seed={4} scanning progress={0.1} done={false} />);
+    const chars = screen.getAllByTestId('scan-block').map(b => b.getAttribute('data-char')!);
+    for (const c of chars) expect(SPECIMENS as readonly string[]).toContain(c);
+    expect(new Set(chars).size).toBe(chars.length);
   });
 });
 

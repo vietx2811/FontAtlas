@@ -14,7 +14,7 @@ describe('bindings contract', () => {
     const page = parseFacePage(fx('face_page'));
     expect(page.items.length).toBe(2);
     const keys = Object.keys(fx('face_page').items[0]).sort();
-    expect(keys).toHaveLength(19);
+    expect(keys).toHaveLength(21); // 20 khoá của store + langBadge
     for (const k of keys) expect(typeText('FaceRowDto')).toContain(`${k}:`);
   });
 

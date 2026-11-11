@@ -180,24 +180,11 @@ impl IndexBundle {
         if filters.is_empty() && hard.is_empty() {
             return None;
         }
-        let fl: Vec<fontatlas_describe::AxisFilter> = filters
-            .iter()
-            .map(|f| fontatlas_describe::AxisFilter {
-                axis: f.axis.clone(),
-                range: f.range.map(|r| (r[0], r[1])),
-                equals: f.equals.clone(),
-                strength: match f.strength {
-                    crate::dto::library::StrengthDto::Required => fontatlas_describe::Strength::Required,
-                    crate::dto::library::StrengthDto::Preferred => fontatlas_describe::Strength::Preferred,
-                },
-                weight: f.weight,
-                term_id: String::new(),
-            })
-            .collect();
+        let fl = describe_filters(filters);
         let r = self.index.reference();
         let out = self
             .index
-            .profiles_for_test()
+            .profiles()
             .iter()
             .filter_map(|p| {
                 let m = self.meta.get(&p.key)?;
@@ -207,6 +194,31 @@ impl IndexBundle {
             .collect();
         Some(out)
     }
+
+    /// Face có qua các bộ lọc `filters` (chỉ ràng buộc `Required`) và `hard` không.
+    pub fn passes(&self, p: &FaceProfile, filters: &[fontatlas_describe::AxisFilter], hard: &[HardConstraint]) -> bool {
+        let Some(m) = self.meta.get(&p.key) else { return false };
+        let view = ProfileView { p, r: self.index.reference(), vi_supported: m.vi_supported };
+        evaluate(filters, hard, &view).is_some()
+    }
+}
+
+/// `AxisFilterDto` → bộ lọc của `fontatlas-describe`.
+pub fn describe_filters(filters: &[AxisFilterDto]) -> Vec<fontatlas_describe::AxisFilter> {
+    filters
+        .iter()
+        .map(|f| fontatlas_describe::AxisFilter {
+            axis: f.axis.clone(),
+            range: f.range.map(|r| (r[0], r[1])),
+            equals: f.equals.clone(),
+            strength: match f.strength {
+                crate::dto::library::StrengthDto::Required => fontatlas_describe::Strength::Required,
+                crate::dto::library::StrengthDto::Preferred => fontatlas_describe::Strength::Preferred,
+            },
+            weight: f.weight,
+            term_id: String::new(),
+        })
+        .collect()
 }
 
 pub struct ProfileView<'a> {

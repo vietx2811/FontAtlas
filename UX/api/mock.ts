@@ -6,6 +6,7 @@ import { createMockLibraryApi } from '../features/library-grid/api';
 import type { Api } from './index';
 import { createActivationSim } from './mockActivation';
 import { createModelSim } from './mockModel';
+import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './mockFilters';
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
@@ -31,7 +32,7 @@ export function mockRows(): FaceRow[] {
       weightClass: w, widthClass: 5, isItalic: italic, isVariable: false, viStatus: viMissing ? 'partial' : 'full',
       supportsVi: viMissing === 0, viMissing, licenseClass: 'ofl',
       path: `/Users/me/Fonts/src${src}/${family.replace(/ /g, '')}-${sub.replace(/ /g, '')}.ttf`,
-      fileSize: 180_000 + n * 1000, missing: false, isFavorite: false, addedAt: n,
+      fileSize: 180_000 + n * 1000, missing: false, onCloudOnly: false, isFavorite: false, addedAt: n, langBadge: null,
     });
   };
   for (const [family, src, kind, miss] of FAMILIES) {
@@ -61,7 +62,9 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent } from './types';
+import { createMockCases } from './mockCases';
+import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
+import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
 export type MockOptions = { latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
@@ -73,9 +76,9 @@ export function createMockApi(o: MockOptions = {}): Api {
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
   let sources: SourceDto[] = o.firstRun ? [] : [
-    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
-    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Fonts/src2', enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false },
-    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, faceCount: 0, lastScan: null, scanning: false },
+    { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
+    { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
+    { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
   ];
   // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
   const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
@@ -92,7 +95,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
   const boot = (): BootStatusDto => ({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
-  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true };
+  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: 'vi', sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true };
 
   const simulateScan = (id: number) => {
     const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));
@@ -116,8 +119,39 @@ export function createMockApi(o: MockOptions = {}): Api {
   const delay = async () => { if (o.latencyMs) await new Promise(r => setTimeout(r, o.latencyMs)); };
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
 
+  const caseApi = createMockCases(k => byKey.get(keyOf(k)));
   return {
     ...lib,
+    ...caseApi,
+    async briefStarter(brief) {
+      // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
+      const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };
+      const USE: Record<string, string[]> = { editorial: ['editorial'], ui_web: ['readable_small', 'clean'], poster: ['display', 'heavy'], branding: [], packaging: [] };
+      const ids: string[] = [];
+      for (const t of brief.tones) if (Math.abs(t.value) >= 0.25) ids.push(TONE[t.pair][t.value < 0 ? 0 : 1]);
+      for (const u of brief.uses) for (const id of USE[u]) if (!ids.includes(id)) ids.push(id);
+      const notes: Array<{ code: string; detail: string | null }> = [];
+      if (brief.uses.length === 1 && brief.uses[0] === 'branding') notes.push({ code: 'branding_class_only', detail: null });
+      if (brief.uses.includes('packaging')) notes.push({ code: 'packaging_inferred', detail: 'display=display+heavy; body=readable_small+clean' });
+      if (!ids.length && !brief.uses.includes('packaging')) notes.push({ code: 'no_terms', detail: null });
+      const { items } = await this.queryFaces({ sort: 'family', limit: Infinity, vi: brief.needs.vi ? 'supported' : undefined, license: brief.needs.openLicense ? ['ofl', 'apache'] : undefined });
+      const seen = new Set<string>();
+      const anchors = items.filter(r => !seen.has(r.family) && seen.add(r.family)).slice(0, 3);
+      if (anchors.length < 3) notes.push({ code: 'few_anchors', detail: String(anchors.length) });
+      const usedBody = new Set<string>();
+      const combos = anchors.flatMap((a, i) => {
+        const body = items.find(r => r.family !== a.family && (r.weightClass ?? 400) <= 500 && !usedBody.has(r.family));
+        if (!body) { notes.push({ code: 'no_body_pair', detail: a.family }); return []; }
+        usedBody.add(body.family);
+        return [{ heading: a, body, assessment: comboAssessment(a, body, i), rank: i + 1 }];
+      });
+      const query = { text: null, vi: brief.needs.vi ? 'supported' : null, license: brief.needs.openLicense ? ['ofl', 'apache'] : [], variable: brief.needs.variable ? true : null, italic: brief.needs.italic ? true : null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'match', descending: false, offset: 0, limit: 60, axisFilters: [], hard: brief.needs.vi ? ['vi_supported'] : [], rawAxisRanges: [], faceKeys: null, classes: [], subclasses: [], traits: [], langs: brief.needs.vi ? [{ code: 'vie', level: 'near' }] : [], langMode: 'all', badgeLang: null, weightClass: null, widthClass: null, varAxisMatch: { wght: true, wdth: true } } as const;
+      return {
+        describe: { dictionaryVersion: 'mock', matched: ids.map(id => ({ id, text: id, group: 'mock', subjectivity: '', culture: '', rationaleVi: '', rationaleEn: '', explanationBanned: false })), filters: [], hard: [...query.hard], conflicts: [], unmappable: [], partial: [], unknownWords: [] },
+        query: { ...query } as never, displayQuery: { ...query, weightClass: [600, 900] } as never, bodyQuery: { ...query, weightClass: [400, 500] } as never,
+        anchors, combos, notes, ai: null,
+      };
+    },
     async queryFaces(q) {
       await delay();
       const t = q.text ? fold(q.text) : '';
@@ -133,15 +167,18 @@ export function createMockApi(o: MockOptions = {}): Api {
         (q.variable == null || r.isVariable === q.variable) && (q.italic == null || r.isItalic === q.italic) &&
         (!q.classes?.length || q.classes.includes(effClass(r).class)) && (!q.subclasses?.length || q.subclasses.includes(effClass(r).subclass ?? '')) &&
         (q.includeMissing || !r.missing) &&
+        (!q.weightClass || matchesWeight(r, q.weightClass, q.varAxisMatch?.wght ?? true)) &&
+        (!q.widthClass || matchesWidth(r, q.widthClass, q.varAxisMatch?.wdth ?? true)) &&
         (!q.rawAxisRanges?.length || q.rawAxisRanges.every(f => { const a = axesFor(r).find(a => a.key === f.axis); return a && a.quality !== 'failed' && a.rawValue !== null && a.rawValue >= f.range[0] && a.rawValue <= f.range[1]; })) &&
         (q.collectionId == null || !!col?.faces.has(keyOf(r))) &&
         (!q.tagIds?.length || q.tagIds.every(id => tags.get(id)?.faces.has(keyOf(r)))) &&
+        (!q.langs?.length || matchesLangs(r, q.langs, q.langMode)) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
       if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
       else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
       const offset = q.offset ?? 0;
-      const limit = Math.min(q.limit || 100, 1000);
-      return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r })) };
+      const limit = q.limit === Infinity ? Infinity : Math.min(q.limit || 100, 1000); // Infinity chỉ dùng nội bộ cho thống kê
+      return { total: hits.length, offset, items: hits.slice(offset, offset + limit).map(r => ({ ...r, langBadge: badgeOf(r, q.badgeLang ?? 'vie') })) };
     },
     previewUrl: (row, { text, px }) => {
       const r = byKey.get(keyOf(row));
@@ -149,11 +186,12 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     fontUrl: () => null,
 
-    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), lastScan: s.lastScan ?? lastScanOf(s.id) }))),
+    // nguồn cloud trong mock: 9/10 font còn là placeholder (để QA và chụp ảnh gợi ý "Always keep on this device")
+    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), cloudOnlyCount: s.cloudProvider ? Math.round(countOf(s.id) * 0.9) : 0, lastScan: s.lastScan ?? lastScanOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
-      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, faceCount: 0, lastScan: null, scanning: false };
+      const s: SourceDto = { id: nextId++, kind: 'folder', name: path.split('/').pop() || path, path, enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false };
       sources = [...sources, s];
       simulateScan(s.id);
       return ok(s);
@@ -247,13 +285,38 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async setClassificationOverride(o) { findRow(o.face); classOver.set(keyOf(o.face), { class: o.class, subclass: o.subclass }); },
     async clearClassificationOverride(face) { classOver.delete(keyOf(face)); },
+    async languageList(q = {}) { return listFor((await this.queryFaces({ ...q, langs: [], offset: 0, limit: Infinity })).items); },
+    async langCoverage(faceId, code) { const r = rows.find(x => x.faceId === faceId); if (!r) throw new CmdError('not_found', 'face not found'); return coverageFor(r, code); },
     async axisStats(q = {}) {
-      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: 1000 });
+      const { items } = await this.queryFaces({ ...q, rawAxisRanges: [], weightClass: undefined, widthClass: undefined, offset: 0, limit: Infinity });
       return MEASURED_AXES.map(axis => {
         const values = items.flatMap(r => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? [a.rawValue] : []; }).sort((a, b) => a - b);
         const quantile = (p: number) => { if (!values.length) return null; const at = (values.length - 1) * p; const i = Math.floor(at); return values[i] + (values[Math.ceil(at)] - values[i]) * (at - i); };
         return { axis, unit: MOCK_UNITS[axis], count: values.length, min: values[0] ?? null, max: values.at(-1) ?? null, p1: quantile(.01), p99: quantile(.99) };
       });
+    },
+    async axisHistogram(q = {}, bins = 0) {
+      const nb = bins === 0 ? 24 : Math.min(64, Math.max(2, bins));
+      const ranges = q.rawAxisRanges ?? [];
+      // miền: bỏ MỌI bộ lọc trục (kể cả weight/width class); đếm: còn weight/width class, trừ khoảng của chính trục
+      const domainRows = (await this.queryFaces({ ...q, rawAxisRanges: [], weightClass: undefined, widthClass: undefined, offset: 0, limit: Infinity })).items;
+      const countRows = (await this.queryFaces({ ...q, rawAxisRanges: [], offset: 0, limit: Infinity })).items;
+      const val = (r: FaceRow, axis: string) => { const a = axesFor(r).find(a => a.key === axis); return a?.rawValue != null && a.quality !== 'failed' ? a.rawValue : null; };
+      const out: AxisHistogramDto[] = MEASURED_AXES.map(axis => {
+        const others = ranges.filter(r => r.axis !== axis);
+        const domain = domainRows.flatMap(r => { const v = val(r, axis); return v == null ? [] : [v]; });
+        const counted = countRows.flatMap(r => { const v = val(r, axis); return v != null && others.every(f => { const x = val(r, f.axis); return x != null && x >= f.range[0] && x <= f.range[1]; }) ? [v] : []; });
+        return measuredHistogram(axis, MOCK_UNITS[axis], domain, counted, nb);
+      });
+      const klass = async (axis: 'weight' | 'width') => {
+        const own = axis === 'weight' ? 'weightClass' : 'widthClass';
+        const { items } = await this.queryFaces({ ...q, [own]: undefined, offset: 0, limit: Infinity });
+        const { bins: b, spanBins } = classBins(items, axis);
+        out.push({ axis: `${axis}_class`, unit: 'class', count: b.reduce((x, y) => x + y, 0), lo: axis === 'weight' ? 100 : 1, hi: axis === 'weight' ? 900 : 9, bins: b, spanBins, empty: spanBins.every(n => n === 0) });
+      };
+      await klass('weight');
+      await klass('width');
+      return out;
     },
     async similarFamilies(face, opts = {}, q = {}) {
       const row = findRow(face);

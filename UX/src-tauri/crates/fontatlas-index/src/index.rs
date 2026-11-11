@@ -146,7 +146,7 @@ impl Index {
     }
 
     #[doc(hidden)]
-    pub fn profiles_for_test(&self) -> &[FaceProfile] {
+    pub fn profiles(&self) -> &[FaceProfile] {
         &self.profiles
     }
 
