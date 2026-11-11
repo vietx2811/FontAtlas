@@ -6,6 +6,7 @@ import { CLOUD_I18N } from './cloud';
 import { ONBOARDING_I18N } from './onboarding';
 import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
 import { DESK_I18N } from './desk';
+import { VIEW_I18N } from './view';
 
 const vi = {
   ...TERM_GLOSS,
@@ -17,6 +18,7 @@ const vi = {
   ...FILTER_I18N_3,
   ...FILTER_I18N_4,
   ...DESK_I18N,
+  ...VIEW_I18N,
   ...ONBOARDING_I18N,
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',

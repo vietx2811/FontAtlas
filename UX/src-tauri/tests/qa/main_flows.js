@@ -818,6 +818,25 @@
       }
     }
 
+    // Hiển thị (A3): mở bằng nút, bật Giấy phép → thẻ có hàng 2, Đặt lại, Esc trả focus về nút.
+    {
+      const vb = () => document.querySelector('[data-testid=view-open]');
+      if (vb()) {
+        vb().click();
+        await wait(() => !!document.querySelector('[data-testid=view-pop]'), 5000);
+        const before = document.querySelectorAll('[data-testid=face-meta2]').length;
+        document.querySelector('[data-field=license] input')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length > 0, 8000);
+        const after = document.querySelectorAll('[data-testid=face-meta2]').length;
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('view-options-' + th); }
+        document.querySelector('[data-testid=view-reset]')?.click();
+        await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
+        (document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]') && document.activeElement === vb(), { before, after });
+      } else await log('view-options', false, 'no view-open button');
+    }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

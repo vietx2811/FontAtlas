@@ -1,3 +1,4 @@
+import { hydrateCardFields } from './store/cardFields';
 import React, { useEffect, useState } from 'react';
 import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
@@ -51,6 +52,11 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     const desk = useUiStore(s => s.desk);
     const dups = useUiStore(s => s.view) === 'dups';
     useEffect(() => { void useUiStore.getState().hydrate(api); }, [api]);
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
+        hydrateCardFields(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('card fields hydrate failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
         useModelStore.getState().sync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('model sync failed', e));
