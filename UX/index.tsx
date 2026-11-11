@@ -6,11 +6,15 @@ import { setApi } from './api';
 import { createApi } from './api/select';
 import { applyDevBoot, applyDevPreset, devInitial } from './store/devPreset';
 import { StatusProvider } from './context/StatusContext';
+import { LocaleBoundary } from './i18n/LocaleBoundary';
+import { chooseLocale, initLocale } from './i18n';
 
 // Trong cửa sổ Tauri: lệnh thật (UX/bindings). Ngoài Tauri hoặc VITE_FA_API=mock: mock, kèm preset trạng thái cho dev/QA.
 const dev = import.meta.env.DEV;
 const { api } = createApi(dev ? { initial: devInitial(location.hash), tickMs: 1500, firstRun: /[#&]first=1(&|$)/.test(location.hash) } : {}); // #first=1: mở như lần đầu (onboarding) — chỉ dev/QA
 setApi(api);
+// QA native chọn ngôn ngữ xác định (không phụ thuộc ngôn ngữ của máy chạy QA).
+(window as unknown as { __faLocale?: typeof chooseLocale }).__faLocale = chooseLocale;
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -20,14 +24,18 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 const render = () => root.render(
   <React.StrictMode>
-    <StatusProvider>
-      <App />
-    </StatusProvider>
+    <LocaleBoundary>
+      <StatusProvider>
+        <App />
+      </StatusProvider>
+    </LocaleBoundary>
   </React.StrictMode>
 );
+// Ngôn ngữ giao diện quyết định trước lần vẽ đầu: lựa chọn đã lưu → setting backend → ngôn ngữ ưu tiên của hệ điều hành.
+const langReady = api.getSettings().then(s => { initLocale(s.uiLang); }, () => { initLocale(null); });
 if (dev) {
-  void applyDevBoot(api, location.hash).catch(e => console.warn('dev boot', e)).finally(() => {
+  void applyDevBoot(api, location.hash).catch(e => console.warn('dev boot', e)).then(() => langReady).finally(() => {
     render();
     setTimeout(() => void applyDevPreset(api, location.hash), 400); // sau hydrate()
   });
-} else render();
+} else void langReady.finally(render);

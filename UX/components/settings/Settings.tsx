@@ -7,7 +7,7 @@ import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
-import { t } from '../../i18n';
+import { chooseLocale, t, useLocale } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -97,12 +97,13 @@ function General({ api, s, patch }: { api: Api } & SubProps) {
   const [splashOn, setSplashOn] = useState(true);
   useEffect(() => { let alive = true; void readSplashEnabled(api).then(v => { if (alive) setSplashOn(v); }); return () => { alive = false; }; }, [api]);
   const [theme, setTheme] = useState<ThemeMode>(() => (document.documentElement.dataset.theme as ThemeMode | undefined) ?? 'system');
+  const locale = useLocale();
   const setSample = useUiStore(x => x.setSample);
   const apply = (t: string) => { setSample(t); void patch({ sampleText: t }); };
   return (
     <>
       <fieldset className="fa-set-group"><legend>Ngôn ngữ giao diện</legend>
-        {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, l]) => <label key={v}><input type="radio" name="lang" checked={s.uiLang === v} onChange={() => void patch({ uiLang: v })} />{l}</label>)}
+        {([['vi', 'Tiếng Việt'], ['en', 'English']] as const).map(([v, l]) => <label key={v}><input type="radio" name="lang" checked={locale === v} onChange={() => { chooseLocale(v); void patch({ uiLang: v }); }} />{l}</label>)}
       </fieldset>
       <fieldset className="fa-set-group"><legend>Giao diện</legend>
         {([['system', 'Theo hệ thống'], ['light', 'Sáng'], ['dark', 'Tối']] as const).map(([v, l]) => <label key={v}><input type="radio" name="theme" checked={theme === v} onChange={() => { setTheme(v); applyTheme(v); }} />{l}</label>)}

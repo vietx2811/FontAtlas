@@ -10,8 +10,11 @@ import { DESK_I18N } from './desk';
 import { VIEW_I18N } from './view';
 import { DUP_I18N } from './dup';
 import { AUTO_I18N } from './auto';
+import { getLocale } from './locale';
+import { en } from './en';
+export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, formatNumber, formatDate, type Locale } from './locale';
 
-const vi = {
+export const vi = {
   ...TERM_GLOSS,
   ...COMPARE_V2,
   ...ACTIVATION_I18N,
@@ -91,4 +94,5 @@ export type I18nKey = keyof typeof vi;
 /** Khoá có trong từ điển hay không (dùng cho khoá ghép động như `class.${x}`). */
 export const hasKey = (key: string): key is I18nKey => Object.prototype.hasOwnProperty.call(vi, key);
 /** Thiếu khoá thì trả chính khoá thay vì ném lỗi: dữ liệu thật có thể mang giá trị mới (vote, trait…) mà UI chưa dịch. */
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => ((vi as Record<string, string>)[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+const lookup = (key: string): string | undefined => (getLocale() === 'en' ? en[key as I18nKey] : undefined) ?? (vi as Record<string, string>)[key];
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => (lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
