@@ -166,8 +166,11 @@ export function AutoActivation({ api, pollMs = AUTO_POLL_MS }: { api: Api; pollM
           {status.enabled && !status.brokerRunning && <p className="fa-set-note" data-testid="auto-broker-warn">{t('auto.broker')}</p>}
           {status.enabled && status.fontRequestError && (
             <p className="fa-set-note" data-testid="auto-fontreq-warn">
-              <NoteMark inline kind="warn" text={t('auto.fontreq.warn', { why: t(status.fontRequestError === 'timeout' ? 'auto.fontreq.timeout' : status.fontRequestError === 'thread' ? 'auto.fontreq.thread' : 'auto.fontreq.refused') })} /> {t('auto.fontreq.short')}
-              {runningMgrs.length > 0 && <> {t('auto.fontreq.hint', { names: runningMgrs.map(m => m.name).join(', ') })}</>}
+              {status.fontRequestError === 'starved'
+                ? <><NoteMark inline kind="warn" text={t('auto.fontreq.starved.tip')} /> {runningMgrs.length > 0 ? t('auto.fontreq.starved', { names: runningMgrs.map(m => m.name).join(', ') }) : t('auto.fontreq.starved.anon')}</>
+                : <><NoteMark inline kind="warn" text={t('auto.fontreq.warn', { why: t(status.fontRequestError === 'timeout' ? 'auto.fontreq.timeout' : status.fontRequestError === 'thread' ? 'auto.fontreq.thread' : 'auto.fontreq.refused') })} /> {t('auto.fontreq.short')}{runningMgrs.length > 0 && <> {t('auto.fontreq.hint', { names: runningMgrs.map(m => m.name).join(', ') })}</>}</>}
+              {' '}<button type="button" data-testid="auto-probe" aria-disabled={busy || undefined}
+                onClick={() => { if (!busy) void run(() => api.autoProbe(), t('auto.fontreq.live')); }}>{t('auto.fontreq.recheck')}</button>
             </p>
           )}
           {runningMgrs.map(m => <p key={m.name} className="fa-set-note fa-auto-mgr" data-testid="auto-manager-warn"><NoteMark inline kind="warn" text={t('auto.managers.warn', { name: m.name })} /> {t('auto.managers.short', { name: m.name })}</p>)}

@@ -184,6 +184,7 @@ export function createTauriApi(): Api {
     autoInstall: target => call('auto_install', { target }),
     autoRemove: target => call('auto_remove', { target }),
     autoForgetKey: () => call('auto_forget_key'),
+    autoProbe: () => call('auto_probe'),
     autoLog: limit => call('auto_log', { limit: limit ?? null }),
     modelStatus: () => call('model_status'),
     modelDownload: onEvent => none(call('model_download', { onEvent: channel(onEvent).ch })),

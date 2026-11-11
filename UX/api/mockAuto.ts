@@ -2,7 +2,7 @@ import { CmdError } from './types';
 import type { AutoAppDto, AutoLogDto, AutoStatusDto, AutoTargetDto, OtherManagerDto } from './types';
 
 /** Bật font tự động (mock, gương services/auto.rs): 6 app cố định thứ tự, cài/gỡ chỉ đổi cờ trong bộ nhớ. */
-export type MockAutoOptions = { isolated?: boolean; keyPresent?: boolean; enabled?: boolean; others?: OtherManagerDto[]; running?: string[]; installed?: string[]; log?: AutoLogDto[]; fontRequestError?: string | null };
+export type MockAutoOptions = { isolated?: boolean; keyPresent?: boolean; enabled?: boolean; others?: OtherManagerDto[]; running?: string[]; installed?: string[]; log?: AutoLogDto[]; fontRequestError?: string | null; probeClears?: boolean };
 const APPS: Array<Pick<AutoAppDto, 'id' | 'label' | 'method' | 'evidence' | 'installable'>> = [
   { id: 'photoshop', label: 'Photoshop', method: 'font_request', evidence: 'measured', installable: false },
   { id: 'aftereffects', label: 'After Effects', method: 'font_request', evidence: 'untested', installable: false },
@@ -34,6 +34,7 @@ export function createMockAuto(o: MockAutoOptions = {}) {
   });
   return {
     async autoStatus() { return status(); },
+    async autoProbe() { if (o.probeClears) o.fontRequestError = null; return status(); },
     async autoSetEnabled(on: boolean) { enabled = on; return status(); },
     async autoInstall(target: AutoTargetDto) { refuse(); if (target === 'illustrator') key = true; for (const a of TARGET_APPS[target]) installed.add(a); return status(); },
     async autoForgetKey() { refuse(); if (installed.has('illustrator')) throw new CmdError('io', 'panel still installed'); key = false; return status(); },

@@ -105,6 +105,23 @@ describe('Settings → Bật font tự động', () => {
     expect(screen.queryByTestId('auto-fontreq-warn')).toBeNull();
   });
 
+  it('starved: names the running manager, offers Kiểm tra lại, and the note disappears once the probe clears it', async () => {
+    const api = createMockApi({ auto: { fontRequestError: 'starved', probeClears: true, others: [{ name: 'RightFont', installed: true, running: true }] } });
+    await mount(api);
+    expect(screen.getByTestId('auto-fontreq-warn').textContent).toContain('RightFont đang nhận yêu cầu font trước Font Atlas');
+    fireEvent.click(screen.getByTestId('auto-probe'));
+    await waitFor(() => expect(screen.queryByTestId('auto-fontreq-warn')).toBeNull());
+  });
+
+  it('starved with no known manager uses the anonymous sentence; refused keeps the retry text and also has the button', async () => {
+    await mount(createMockApi({ auto: { fontRequestError: 'starved' } }));
+    expect(screen.getByTestId('auto-fontreq-warn').textContent).toContain('Một app khác đang nhận yêu cầu font');
+    cleanup();
+    await mount(createMockApi({ auto: { fontRequestError: 'timeout' } }));
+    expect(screen.getByTestId('auto-fontreq-warn').textContent).toContain('tự thử lại');
+    expect(screen.getByTestId('auto-probe')).toBeTruthy();
+  });
+
   it('the log lists app, font, outcome (newest first) and "last activity"; empty log has its own message', async () => {
     const empty = createMockApi();
     await mount(empty);

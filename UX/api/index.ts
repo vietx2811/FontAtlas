@@ -142,6 +142,7 @@ export interface Api extends LibraryApi {
   autoRemove(target: AutoTargetDto): Promise<AutoStatusDto>;
   /** Xoá khoá ký riêng của máy (chỉ khi panel Illustrator đã gỡ); bản cô lập từ chối. */
   autoForgetKey(): Promise<AutoStatusDto>;
+  autoProbe(): Promise<AutoStatusDto>;
   autoLog(limit?: number): Promise<AutoLogDto[]>;
   modelStatus(): Promise<ModelStatusDto>;
   /** Trả ngay khi bắt đầu; tiến độ, Ready, Paused, Failed qua `onEvent`. */
