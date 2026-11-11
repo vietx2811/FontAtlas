@@ -435,6 +435,6 @@ function mockClassification(family: string, over?: { class: string; subclass: st
     // Cố ý có giá trị lạ như dữ liệu thật (vote 'usage', nguồn và trait chưa dịch) để UI không giả định tập khoá đóng.
     signals: [{ source: 'measure', detail: 'serif_foot', vote: auto.class, weight: 0.6 }, ...(/Abril|Pacifico/.test(family) ? [{ source: 'future_source', detail: 'x', vote: 'usage', weight: 0.1 }] : [])],
     traits: /Bebas/.test(family) ? ['fat_face'] : /Abril/.test(family) ? ['Fat face', 'Quirky_new_trait'] : [],
-    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null,
+    usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null, secondary: null,
   };
 }

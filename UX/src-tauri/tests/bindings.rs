@@ -161,6 +161,7 @@ fn detail() -> FaceDetailDto {
             usage: vec!["display".into()],
             source: "auto".into(),
             auto_class: None,
+            secondary: None,
         },
         source: "axes_and_image".into(),
         has_image: true,

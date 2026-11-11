@@ -410,7 +410,7 @@ pub struct ClassSignalDto {
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct ClassificationDto {
-    /// serif | sans | mono | script | blackletter | symbol | uncertain (Display là `usage`, không phải class)
+    /// serif | slab | sans | mono | script | handwriting | display | blackletter | symbol | uncertain (taxonomy v2)
     pub class: String,
     /// Nhãn hiển thị tiếng Anh (thuật ngữ font giữ tiếng Anh): "Serif", "Uncertain"…
     pub label: String,
@@ -419,7 +419,7 @@ pub struct ClassificationDto {
     pub confidence: f32,
     /// Khi `class = "uncertain"` vì độ tin cậy thấp: lớp máy đoán (để hiện "có lẽ là …"); ngược lại `null`.
     pub candidate: Option<String>,
-    /// Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative.
+    /// Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative (và các trait v2 khi có).
     pub traits: Vec<String>,
     pub signals: Vec<ClassSignalDto>,
     /// "text" | "display" | "ui"
@@ -428,6 +428,16 @@ pub struct ClassificationDto {
     pub source: String,
     /// Bản tự động khi đang bị ghi đè (để UI hiện "Máy nghĩ: …"); `null` nếu không ghi đè.
     pub auto_class: Option<String>,
+    /// Class phụ (hybrid) chỉ để hiển thị/tìm kiếm, vd. Display/stencil có phụ Sans; lọc/nhóm luôn theo `class`. `null` nếu không lai.
+    pub secondary: Option<ClassSecondaryDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ClassSecondaryDto {
+    pub class: String,
+    pub subclass: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, TS)]

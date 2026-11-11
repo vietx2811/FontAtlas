@@ -992,9 +992,9 @@ mod raw_stats_tests {
 
 /// Phân loại tự động từ JSON đã lưu, rồi áp ghi đè của người dùng (ưu tiên hơn).
 pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy: &Value) -> Result<ClassificationDto, CmdError> {
-    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify, usage_for};
+    use fontatlas_core::classify::{Class, ClassifyInput, Usage, classify_v2, usage_for};
     let input = ClassifyInput::from_json(meta, anatomy);
-    let auto = classify(&input);
+    let auto = classify_v2(&input);
     let ov = state.with_user(|u| Ok(u.classification_override(key)?))?;
     let usage_str = |u: &[Usage]| -> Vec<String> {
         u.iter()
@@ -1026,6 +1026,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
             usage: usage_str(&usage_for(&input, c)),
             source: "override".into(),
             auto_class: Some(snake(auto.class)),
+            secondary: None,
         });
     }
     Ok(ClassificationDto {
@@ -1039,6 +1040,7 @@ pub fn classification_of(state: &AppState, key: &FaceKey, meta: &Value, anatomy:
         usage: usage_str(&auto.usage),
         source: "auto".into(),
         auto_class: None,
+        secondary: auto.secondary.map(|x| ClassSecondaryDto { class: x.class.snake().into(), subclass: x.subclass }),
     })
 }
 

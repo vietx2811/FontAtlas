@@ -29,6 +29,7 @@ export type { CasePatchDto } from './CasePatchDto';
 export type { CaseSettingsDto } from './CaseSettingsDto';
 export type { CaseSummaryDto } from './CaseSummaryDto';
 export type { ClassFacetDto } from './ClassFacetDto';
+export type { ClassSecondaryDto } from './ClassSecondaryDto';
 export type { ClassSignalDto } from './ClassSignalDto';
 export type { ClassificationDto } from './ClassificationDto';
 export type { ClassificationOverrideDto } from './ClassificationOverrideDto';

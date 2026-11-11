@@ -117,7 +117,7 @@ impl IndexBundle {
             let hash = a.key.hash_hex();
             let Some(p) = FaceProfile::from_json(&hash, a.key.face_index, &m, &v, &an) else { return };
             let status = v.get("status").and_then(Value::as_str).unwrap_or("");
-            let auto = fontatlas_core::classify::classify(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
+            let auto = fontatlas_core::classify::classify_v2(&fontatlas_core::classify::ClassifyInput::from_json(&m, &an));
             meta.insert(
                 p.key.clone(),
                 FaceMeta {
