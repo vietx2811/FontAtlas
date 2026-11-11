@@ -18,7 +18,7 @@ Photoshop 2026 (và app khác theo cơ chế CoreText) hỏi font còn thiếu q
 - **Công tắc** = setting `auto_activation_enabled` (cùng broker), đọc MỖI request: tắt/bật có hiệu lực ngay, không đóng/mở nguồn. Tắt → mảng rỗng (không hỏi thư viện, không ghi gì).
 - **Nhớ "không có" 10 s** (`NEGATIVE_TTL`) theo (ps, family, style): Photoshop hỏi lại mỗi lần dựng chữ. Chỉ nhớ khi thư viện nói `missing`; `busy`, `not_downloaded`, `failed`, `unavailable`, `conflict` được hỏi lại lần sau. Hết hạn thì hỏi lại để font mới thêm vào thư viện được thấy.
 - **Không phục vụ chính mình** (pid = pid của app).
-- **Chỉ mở khi dữ liệu là thật**: nếu `FONTATLAS_DATA_DIR` được đặt (QA, test, thử máy) thì KHÔNG mở nguồn, vì nguồn là của cả phiên đăng nhập và một thư viện tạm không được trả lời thay thư viện thật. Ép mở bằng `FONTATLAS_FONTREQ=1`.
+- **Chỉ mở khi là app thật**: `AppState.system_hooks` chỉ do `lib.rs` bật (test và công cụ dựng `AppState` không mở nguồn của cả phiên đăng nhập). Ngoài ra nếu `FONTATLAS_DATA_DIR` được đặt (QA, test, thử máy) thì KHÔNG mở nguồn, vì nguồn là của cả phiên đăng nhập và một thư viện tạm không được trả lời thay thư viện thật. Ép mở bằng `FONTATLAS_FONTREQ=1`.
 - Trả đường dẫn: `FontResult.path` mới ở giao thức broker v1 (thêm, tương thích; chỉ có khi trạng thái dùng được: `activated | already_active | available`; với `available` là file của bên khác đang cung cấp).
 - Ghi log (`log::debug`; `warn` nếu một request trả lời > 3 s): pid, tên, có/không, thời gian. Dùng để đo Photoshop chờ bao lâu.
 
