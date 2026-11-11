@@ -22,18 +22,8 @@ import { EN_ONE } from './en/plural';
 export { EN_ONE };
 export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, hasChosenThisSession, formatNumber, formatDate, localeTag, type Locale } from './locale';
 
-  ...ERR_I18N,
-  ...SETTINGS_I18N,
-  ...DETAIL_I18N,
-  ...UI_I18N,
-  ...FACES_I18N,
-  ...SIDEBAR_I18N,
-  ...ONBOARDING_I18N,
-  ...DUP_I18N,
-=======
 /** Khoá khai báo trực tiếp ở đây (các nhóm còn lại nằm trong file riêng). */
 export const MAIN_I18N = {
->>>>>>> 09ccedbe (fix(i18n): re-render instead of remount, nullable uiLang, desk lang, plurals, AST string scan)
   'anat.rawValue': 'Giá trị gốc: {v}', 'anat.failed': 'Không đo được', 'anat.unmeasured': 'Chưa đo', 'anat.reasonUnknown': 'không rõ lý do', 'anat.noData': 'Chưa có dữ liệu', 'anat.noRaw': 'Chưa có số đo', 'anat.estimated': 'Ước lượng',
   'anat.percentileTip': 'Vị trí so với tập tham chiếu; không phải độ tin cậy', 'anat.hxgAria': 'Glyph Hxg với đường chữ hoa, chiều cao x và đường nền',
   'anat.guides.mismatch': 'Số đo analyzer khác hình hiển thị', 'anat.guides.mismatchTip': 'Analyzer: cap {capA} · x {xA} em — hình hiển thị: cap {capI} · x {xI} em', 'anat.guides.unavailable': 'Chưa nạp được font để minh hoạ đường kẻ',
@@ -116,6 +106,7 @@ export const vi = {
   ...ONBOARDING_I18N,
   ...DUP_I18N,
   ...REPLACE_I18N,
+  ...AUTO_I18N,
   ...MAIN_I18N,
 } as const;
 export type I18nKey = keyof typeof vi;

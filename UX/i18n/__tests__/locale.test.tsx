@@ -93,11 +93,11 @@ describe('backend error messages', () => {
 
 describe('key hygiene', () => {
   it('no key is declared in two groups (a later spread would silently override the earlier one)', async () => {
-    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err', 'dup', 'replace'].map(n => import(`../${n}.ts`)));
+    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err', 'dup', 'replace', 'auto'].map(n => import(`../${n}.ts`)));
     const { MAIN_I18N } = await import('..');
     const seen = new Map<string, string>(); const dup: string[] = [];
     const groups: Array<[string, object]> = [['main', MAIN_I18N]];
-    for (const [i, m] of mods.entries()) for (const [name, v] of Object.entries(m)) if (v && typeof v === 'object' && !name.endsWith('_EN')) groups.push([`${i}:${name}`, v as object]);
+    for (const [i, m] of mods.entries()) for (const [name, v] of Object.entries(m)) if (v && typeof v === 'object' && !name.endsWith('_EN') && !name.endsWith('_EN')) groups.push([`${i}:${name}`, v as object]);
     for (const [g, o] of groups) for (const k of Object.keys(o)) { if (seen.has(k)) dup.push(`${k} in ${seen.get(k)} and ${g}`); else seen.set(k, g); }
     expect(dup).toEqual([]);
     expect(seen.size).toBe(Object.keys(vi).length);

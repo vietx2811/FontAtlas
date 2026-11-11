@@ -19,7 +19,7 @@ const LETTERS = /[A-Za-zÀ-ỹ]{2,}/;
 const ATTRS = new Set(['aria-label', 'title', 'placeholder', 'alt']);
 /** `file::nội dung` chính xác: chữ mẫu, tên riêng, dữ liệu, không phải câu chữ giao diện. */
 const ALLOWED = new Set<string>([
-  'components/activation/ActivationDialogs.tsx::persistent scope', 'components/activation/ActivationDialogs.tsx::session scope', // thuật ngữ font giữ tiếng Anh, có TermTip + gloss
+  'components/settings/AutoActivation.tsx::Auto-activation', 'components/activation/ActivationDialogs.tsx::persistent scope', 'components/activation/ActivationDialogs.tsx::session scope', // thuật ngữ font giữ tiếng Anh, có TermTip + gloss
   'components/compare/CompareCells.tsx::Hxgă', 'components/compare/CompareCells.tsx::ỮẶỆỖỞ ươ',
   'components/detail/tabs/SpecimenTab.tsx::Hà Nội mùa thu, cây cơm nguội vàng, cây bàng lá đỏ, nằm kề bên nhau, phố xưa nhà cổ, mái ngói thâm nâu.',
   'components/detail/tabs/SpecimenTab.tsx::Phở bò Hà Nội', 'components/detail/tabs/SpecimenTab.tsx::Đẹp như Hà Nội',

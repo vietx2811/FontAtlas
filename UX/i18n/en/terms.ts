@@ -2,7 +2,8 @@ import type { TERM_GLOSS } from '../terms';
 import type { DUP_TERMS_EN } from './dup';
 
 /** Thuật ngữ typo giữ nguyên tiếng Anh; ở đây chỉ dịch phần chú giải. */
-export const EN_TERMS: Record<Exclude<keyof typeof TERM_GLOSS, keyof typeof DUP_TERMS_EN>, string> = {
+export const EN_TERMS: Record<Exclude<keyof typeof TERM_GLOSS, keyof typeof DUP_TERMS_EN>, string> = {  'term.auto_activation.gloss': 'Auto-activation: when a design app opens a document with missing fonts, it asks Font Atlas; Font Atlas finds them in your library and turns them on for that app. Unlike manual font activation, you don’t have to do anything.',
+
   'term.x_height.gloss': 'The height of lowercase letters (like x) measured up from the baseline; the taller it is, the bigger the text looks and the easier it reads at small sizes.',
   'term.cap_height.gloss': 'The height of capital letters (like H) measured up from the baseline.',
   'term.ascender.gloss': 'The part of a stroke that rises above the x-height, like the tops of b, d, h, l.',

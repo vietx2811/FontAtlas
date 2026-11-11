@@ -10,6 +10,7 @@ import type { VIEW_I18N } from '../view';
 import type { ERR_I18N } from '../err';
 import type { DUP_I18N } from '../dup';
 import type { REPLACE_I18N } from '../replace';
+import type { AUTO_I18N } from '../auto';
 import type { SETTINGS_I18N } from '../settings';
 import type { DETAIL_I18N } from '../detail';
 import type { UI_I18N } from '../ui';
@@ -17,7 +18,7 @@ import type { SIDEBAR_I18N } from '../sidebar';
 import type { FACES_I18N } from '../faces';
 
 /** Khoá khai báo trực tiếp trong i18n/index.ts (không thuộc nhóm nào có file riêng). */
-export type MainKey = Exclude<I18nKey, keyof typeof ACTIVATION_I18N | keyof typeof CLOUD_I18N | keyof typeof COMPARE_V2 | keyof typeof DESK_I18N | keyof typeof FILTER_I18N | keyof typeof FILTER_I18N_2 | keyof typeof FILTER_I18N_3 | keyof typeof FILTER_I18N_4 | keyof typeof ONBOARDING_I18N | keyof typeof TERM_GLOSS | keyof typeof VIEW_I18N | keyof typeof SIDEBAR_I18N | keyof typeof FACES_I18N | keyof typeof UI_I18N | keyof typeof DETAIL_I18N | keyof typeof SETTINGS_I18N | keyof typeof ERR_I18N | keyof typeof DUP_I18N | keyof typeof REPLACE_I18N>;
+export type MainKey = Exclude<I18nKey, keyof typeof ACTIVATION_I18N | keyof typeof CLOUD_I18N | keyof typeof COMPARE_V2 | keyof typeof DESK_I18N | keyof typeof FILTER_I18N | keyof typeof FILTER_I18N_2 | keyof typeof FILTER_I18N_3 | keyof typeof FILTER_I18N_4 | keyof typeof ONBOARDING_I18N | keyof typeof TERM_GLOSS | keyof typeof VIEW_I18N | keyof typeof SIDEBAR_I18N | keyof typeof FACES_I18N | keyof typeof UI_I18N | keyof typeof DETAIL_I18N | keyof typeof SETTINGS_I18N | keyof typeof ERR_I18N | keyof typeof DUP_I18N | keyof typeof REPLACE_I18N | keyof typeof AUTO_I18N>;
 
 export const EN_MAIN: Record<MainKey, string> = {
   'anat.rawValue': 'Raw value: {v}',
