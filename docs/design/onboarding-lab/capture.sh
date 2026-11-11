@@ -12,7 +12,9 @@ shot() { # tên, hash, sáng=1/tối=0, w, h
 for theme in dark light; do
   s=0; [ "$theme" = light ] && s=1
   for step in ${STEPS:-o1 o2 o3 o4 o5 o6 o7 end}; do [ "$step" = none ] && continue; shot "$theme-$step" "ob=$step" $s 1280 800; done
+  shot "$theme-tips" "ob=end&tips=1" $s 1280 800
   shot "$theme-splash" "splash=hold" $s 1280 800
   shot "$theme-narrow-o1" "ob=o1" $s 720 900
+  shot "$theme-wide-o1" "ob=o1" $s 1440 900
 done
 rm -rf "$PROFILE"

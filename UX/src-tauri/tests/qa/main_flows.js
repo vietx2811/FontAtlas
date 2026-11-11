@@ -99,6 +99,18 @@
         const go = await wait(() => btn('Tiếp tục'));
         go?.click(); await sleep(800); continue;
       }
+      if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
+        // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
+        const vb = document.querySelector('.fa-stage svg.fa-bp')?.getAttribute('viewBox');
+        const bw = document.querySelector('.fa-stage svg.fa-bp') ? getComputedStyle(document.querySelector('.fa-stage svg.fa-bp')).borderTopWidth : null;
+        btn('Vào thư viện')?.click();
+        const dlg = await wait(() => document.querySelector('[role=dialog] .fa-tips-grid'), 8000);
+        await sleep(300); await snap('onb-tips');
+        const cards = dlg ? dlg.querySelectorAll('[data-testid=tip-card]').length : 0;
+        const dots = document.querySelectorAll('.fa-onb-dots i').length;
+        await log('onb-tips-overlay', !!dlg && cards >= 8 && vb === '0 0 480 480' && bw === '0px' && dots >= 6 && !document.querySelector('.fa-onb-keys, .fa-onb-stepno, .fa-legend'), { cards, vb, bw, dots, legend: !!document.querySelector('.fa-legend') });
+        continue;
+      }
       const order = /Kích hoạt/.test(h1) ? ['Để sau', 'Tiếp tục'] : ['Đã hiểu', 'Không dùng', 'Bỏ qua', 'Tiếp tục', 'Bắt đầu', 'Vào thư viện'];
       // Intro (nút "Bỏ qua") và outro (~1,5 s, không có nút) là màn chuyển động: outro kết thúc thì .fa-onb biến mất, thoát vòng lặp.
       const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);

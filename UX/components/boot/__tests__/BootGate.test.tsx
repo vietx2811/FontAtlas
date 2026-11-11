@@ -18,6 +18,7 @@ describe('BootGate', { timeout: 15000 }, () => {
   it('first run: onboarding first, the library after "Vào thư viện"', async () => {
     const api = createMockApi({ firstRun: true });
     await api.setOnboardingStep('end');
+    await api.setSettings({ uiLang: 'vi' }); // jsdom báo en-US; BootGate đọc ngôn ngữ đã lưu
     render(<BootGate api={api}>{app}</BootGate>);
     const h1 = await screen.findByRole('heading', { level: 1 }, { timeout: 8000 });
     expect(screen.queryByTestId('app')).toBeNull();
@@ -25,7 +26,7 @@ describe('BootGate', { timeout: 15000 }, () => {
     // Onboarding có thể render lại (reload trạng thái) khi máy bận, làm nút đã tìm bị tách khỏi DOM.
     // Luôn bấm nút hiện tại cho tới khi vào thư viện; finish() là idempotent.
     await waitFor(() => {
-      if (!screen.queryByTestId('app')) fireEvent.click(screen.getByRole('button', { name: 'Vào thư viện' }));
+      if (!screen.queryByTestId('app')) fireEvent.click(screen.queryByRole('button', { name: 'Bắt đầu' }) ?? screen.getByRole('button', { name: 'Vào thư viện' }));
       expect(screen.getByTestId('app')).toBeTruthy();
     }, { timeout: 8000 });
   });

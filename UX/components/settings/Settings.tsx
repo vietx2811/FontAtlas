@@ -19,6 +19,7 @@ import { useNoticeStore } from '../../store/notices';
 import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { AutoActivation } from './AutoActivation';
+import { takeSettingsGroup } from './groupRequest';
 
 export const SETTINGS_GROUPS = [
   { id: 'general', get label() { return t('set.g.general'); } }, { id: 'library', get label() { return t('set.g.library'); } }, { id: 'vision', get label() { return t('set.g.vision'); } },
@@ -46,7 +47,7 @@ function Switch({ label, on, onChange }: { label: string; on: boolean; onChange(
 }
 
 export function Settings({ api, onClose, onRerunOnboarding, modelStore = useModelStore }: Props): React.JSX.Element {
-  const [group, setGroup] = useState<GroupId>('general');
+  const [group, setGroup] = useState<GroupId>(() => { const w = takeSettingsGroup(); return SETTINGS_GROUPS.some(g => g.id === w) ? (w as GroupId) : 'general'; });
   const [s, setS] = useState<SettingsDto | null>(null);
   useEffect(() => { let alive = true; api.getSettings().then(v => { if (alive) setS(v); }); return () => { alive = false; }; }, [api]);
   useEffect(() => {

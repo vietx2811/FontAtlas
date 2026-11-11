@@ -61,8 +61,8 @@ export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props)
   const size = 50; const s = size / UPM;
   return (
     <div className="fa-scan-wrap">
-      <svg className="fa-bp" viewBox="0 0 480 320" role="img" aria-label={t('onb.art.o4')} data-testid="scan-blocks" data-spinning={live && !reduced} data-motion={reduced ? 'reduced' : 'full'}>
-        <Sheet fig="FIG.04 · SCAN" />
+      <svg className="fa-bp" viewBox="0 0 480 480" role="img" aria-label={t('onb.art.o4')} data-testid="scan-blocks" data-spinning={live && !reduced} data-motion={reduced ? 'reduced' : 'full'}>
+        <Sheet fig="FIG.04 · SCAN" h={480}>
         {blocks.map((b, i) => {
           const g = GLYPHS[b.char];
           const x = X0 + (i % 3) * (CELL_W + GAP); const y = Y0 + Math.floor(i / 3) * (CELL_H + GAP);
@@ -79,6 +79,7 @@ export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props)
         })}
         <rect x={X0 - 4} y={Y0 - 8} width="26" height={3 * CELL_H + 2 * GAP + 16} className="bp-beam scan" style={{ ...delay(0), ['--travel' as string]: `${3 * (CELL_W + GAP) - 18}px` }} />
         <text x={X0} y="288" className="bp-read" aria-hidden>{blocks[Math.min(focus, blocks.length - 1)].char}  adv {(cur.adv / UPM).toFixed(3)} em · h {((cur.top - cur.bottom) / UPM).toFixed(3)} em</text>
+        </Sheet>
       </svg>
       {done ? (
         <svg className="fa-check" role="img" aria-label={t('onb.scan.done')} viewBox="0 0 32 32" width="32" height="32">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GLYPHS, UPM } from './glyphOutlines';
+import { TERM_NAMES, TermTip, termKey } from '../ui/terms';
 import './blueprint.css';
 
 export const VB_W = 480;
@@ -22,28 +23,32 @@ export function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-/** Nền giấy kẻ ô + khung góc + thước ở mép. `fig` là nhãn bản vẽ (trang trí, ẩn với trình đọc màn hình). */
-export function Sheet({ fig, children }: { fig: string; children?: ReactNode }): React.JSX.Element {
+/** Nền giấy kẻ ô + thước ở mép (không viền khung). `fig` là nhãn bản vẽ (trang trí, ẩn với trình đọc màn hình).
+ *  `h` = chiều cao khung: 320 (ngang, outro) hoặc 480 (vuông, minh hoạ từng bước); nội dung vẽ theo toạ độ 480×320 và được đặt giữa khung. */
+export function Sheet({ fig, h = VB_H, children }: { fig: string; h?: number; children?: ReactNode }): React.JSX.Element {
   const ticks: React.JSX.Element[] = [];
+  const dy = (h - VB_H) / 2;
   for (let x = 40; x <= 440; x += 20) ticks.push(<line key={`t${x}`} className="bp-tick" x1={x} x2={x} y1={14} y2={x % 100 === 0 ? 22 : 18} />);
-  for (let y = 40; y <= 280; y += 20) ticks.push(<line key={`l${y}`} className="bp-tick" x1={14} x2={y % 100 === 0 ? 22 : 18} y1={y} y2={y} />);
+  for (let y = 40; y <= h - 40; y += 20) ticks.push(<line key={`l${y}`} className="bp-tick" x1={14} x2={y % 100 === 0 ? 22 : 18} y1={y} y2={y} />);
   return (
-    <g aria-hidden>
-      <defs>
-        <pattern id="bp-grid-s" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" className="bp-gridline" /></pattern>
-        <pattern id="bp-grid-l" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" className="bp-gridline strong" /></pattern>
-      </defs>
-      <rect x="0" y="0" width={VB_W} height={VB_H} className="bp-paper" />
-      <rect x="0" y="0" width={VB_W} height={VB_H} fill="url(#bp-grid-s)" className="bp-grid" />
-      <rect x="0" y="0" width={VB_W} height={VB_H} fill="url(#bp-grid-l)" className="bp-grid" />
-      {ticks}
-      <path className="bp-corner" d="M8 26V8H26M454 8H472V26M472 294V312H454M26 312H8V294" />
-      <text className="bp-fig" x="34" y="306">{fig}</text>
-      <text className="bp-fig" x="446" y="306" textAnchor="end">GRID 20 · 1:1</text>
-      {children}
+    <g>
+      <g aria-hidden>
+        <defs>
+          <pattern id="bp-grid-s" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" className="bp-gridline" /></pattern>
+          <pattern id="bp-grid-l" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" className="bp-gridline strong" /></pattern>
+        </defs>
+        <rect x="0" y="0" width={VB_W} height={h} className="bp-paper" />
+        <rect x="0" y="0" width={VB_W} height={h} fill="url(#bp-grid-s)" className="bp-grid" />
+        <rect x="0" y="0" width={VB_W} height={h} fill="url(#bp-grid-l)" className="bp-grid" />
+        {ticks}
+        <text className="bp-fig" x="34" y={h - 14}>{fig}</text>
+        <text className="bp-fig" x="446" y={h - 14} textAnchor="end">GRID 20 · 1:1</text>
+      </g>
+      <g transform={dy ? `translate(0 ${dy})` : undefined}>{children}</g>
     </g>
   );
 }
+export const VB_SQ = 480;
 
 type GlyphProps = { ch: string; x: number; y: number; size: number; at?: number; fill?: boolean; fillAt?: number; sw?: number; className?: string; label?: string };
 /** Glyph vẽ bằng nét (stroke-dashoffset) rồi đổ đặc dần (wireframe → prototype). x là mép trái ô chữ, y là baseline, size là em (px trong viewBox). */
@@ -67,14 +72,14 @@ export function Guide({ y, x1 = 36, x2 = 444, name, at = 0, tone = 'dash' }: { y
   return <path data-guide={name} data-y={y} d={`M${x1} ${y}H${x2}`} pathLength={1} className={`bp-guide ${tone}`} style={delay(at)} />;
 }
 
-/** Số trong vòng tròn nối bằng đường dẫn tới điểm cần chú thích; legend HTML bên dưới giải thích số đó. */
-export function Callout({ n, px, py, cx, cy, at = 0 }: { n: number; px: number; py: number; cx: number; cy: number; at?: number }): React.JSX.Element {
+/** Nhãn ngắn ngay cạnh vạch: chấm ở điểm cần chỉ, đường dẫn tới nhãn tên thuật ngữ. Rê chuột vào nhãn → TermTip (không có khối giải thích dài trên hình). */
+export function Callout({ term, px, py, cx, cy, at = 0 }: { term: string; px: number; py: number; cx: number; cy: number; at?: number }): React.JSX.Element {
+  const key = termKey(term);
   return (
-    <g className="bp-callout" data-callout={n} style={delay(at)}>
-      <line x1={px} y1={py} x2={cx} y2={cy} className="bp-lead" />
+    <g className="bp-callout" data-callout={key} style={delay(at)}>
+      <path d={`M${px} ${py}L${cx} ${cy}`} className="bp-lead" />
       <circle cx={px} cy={py} r="2.4" className="bp-dot" />
-      <circle cx={cx} cy={cy} r="9" className="bp-bubble" />
-      <text x={cx} y={cy + 3.6} textAnchor="middle" className="bp-num">{n}</text>
+      <TermTip term={key}><text x={cx + 4} y={cy - 3} className="bp-label" tabIndex={0}>{TERM_NAMES[key] ?? key}</text></TermTip>
     </g>
   );
 }
