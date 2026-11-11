@@ -4,6 +4,49 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.3.0] — 2026-11-12
+
+Bản lớn: bật font tự động khi app thiết kế cần, tiếng Anh, giải quyết trùng lặp, thay bản đang bật bởi app khác, phân loại mới và nhiều cải tiến thư viện.
+
+### Thêm mới
+
+**Bật font tự động (Settings → Bật font tự động)**
+- Khi Photoshop, After Effects và các app macOS khác hỏi một font chưa bật, Font Atlas tìm trong thư viện và bật font đó (theo phiên), không cần bạn làm gì.
+- Illustrator: cài một panel nền nhỏ (Font Atlas tự ký trên máy bạn) để tự bật font khi mở tài liệu. InDesign và InCopy: cài một script khởi động. Cài/gỡ từ Settings, có xác nhận nói rõ sẽ ghi gì; gỡ chỉ xoá phần của Font Atlas.
+- Nhật ký các lần tự bật; cảnh báo khi RightFont, Typeface, FontBase… đang chạy. Nếu một trình quản lý font khác nhận yêu cầu font trước Font Atlas, trang này báo rõ và có nút **Kiểm tra lại**.
+- Font trên ổ cloud được tải về trước khi bật (hạn chờ ngắn để app thiết kế không bị treo).
+
+**Thay bản đang bật bởi app khác**
+- Khi bật một font mà bản cùng tên đã được bật ở nơi khác, hộp xung đột có thêm **Thay bằng bản này**: tắt bản cũ và bật bản của Font Atlas, kèm cảnh báo khi app kia có thể bật lại. Có hướng dẫn tắt trong RightFont, Typeface, FontBase…
+- Mọi lần thay đều có thể **Khôi phục bản cũ** (Settings → Kích hoạt). Font hệ thống và các thư mục Fonts không bao giờ bị đụng tới.
+
+**Trùng lặp**
+- Trang Trùng lặp viết lại bằng ngôn ngữ thường: "Bản sao giống hệt", "Bản cũ và bản mới", "Cùng font, khác định dạng"; hai bản đặt cạnh nhau cùng dòng mẫu, kèm lý do nên giữ bản nào.
+- **Giải quyết** từng nhóm hoặc **Giải quyết các nhóm an toàn**, luôn có màn xem trước. Mặc định chỉ **ẩn** bản thừa (không đụng file); đưa vào **Thùng rác** là lựa chọn phụ, xác nhận từng tệp. Yêu thích, bộ sưu tập, thẻ, Case và cặp font được chuyển sang bản giữ lại.
+- Hoàn tác được mọi lần giải quyết (tab Đã giải quyết); bỏ qua nhóm; thứ tự nguồn ưu tiên kéo-thả trong Settings.
+
+**Tiếng Anh**
+- Toàn bộ giao diện có tiếng Anh. Mặc định theo ngôn ngữ của macOS; đổi ở onboarding hoặc Settings → Chung, áp ngay không cần mở lại app.
+
+**Phân loại**
+- Thêm Slab, Handwriting và Display (chữ trang trí có cấu trúc riêng) thành class; nhiều subclass mới. Font lai có dấu "!" chỉ class phụ; bộ lọc **Gồm cả font lai** và **Chỉ nhãn chắc chắn**.
+
+**Thư viện**
+- **Nhóm theo Family** (⌥G, lưới và danh sách), mỗi nhóm có số kiểu, thu gọn được.
+- Sắp xếp theo **Năm phát hành** (ước lượng từ bản quyền/ngày tạo trong font) và **Ngày tạo file**.
+- Đổi tên (F2) và xoá thẻ; gỡ nguồn với màn xem trước số liệu (không xoá file, dự án/thẻ được giữ); **Bật tất cả** cho Dự án và Case.
+- Chữ mẫu mặc định mới, trung tính, theo ngôn ngữ.
+
+**Giao diện**
+- Splash gọn hơn; onboarding với minh hoạ vuông, chỉ báo bước dạng chấm; màn **Phím tắt & tính năng** trước khi vào thư viện, mở lại bằng phím ?.
+
+### Sửa lỗi
+- Tooltip thuật ngữ đóng ngay khi rời chuột.
+- Nhiều sửa nhỏ về bố cục, focus bàn phím và trình đọc màn hình.
+
+### Lưu ý khi nâng cấp
+- Lần mở đầu, dữ liệu người dùng được nâng lên phiên bản mới (có sao lưu trước). Bản 0.2.x không mở được dữ liệu đã nâng.
+
 ## [0.2.3] — 2026-11-11
 
 ### Thêm mới
