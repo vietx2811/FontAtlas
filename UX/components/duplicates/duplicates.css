@@ -109,3 +109,6 @@ button.primary[aria-disabled="true"], .dup-foot button[aria-disabled="true"], .f
 .dup-res-act button { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 12px; }
 
 @media (max-width: 760px) { .dup-cols { grid-template-columns: 1fr; } .dup-others { border-left: 0; border-top: 1px solid var(--border); } }
+
+/* Hàng trăm nhóm: chỉ vẽ thẻ đang gần khung nhìn */
+.dup-group { content-visibility: auto; contain-intrinsic-size: auto 280px; }

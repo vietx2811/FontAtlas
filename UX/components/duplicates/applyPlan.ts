@@ -31,11 +31,19 @@ export async function applyPlan(i: ApplyInput): Promise<ResolveResultDto> {
     const items = views.map(({ it, v }) => toRequestItem(it, v, only, handled)).filter(x => x.loserPaths.length > 0);
     if (items.length === 0) return;
     const req: ResolveRequestDto = { items, action, explicitTrashPaths: action === 'trash' ? [...only].filter(p => i.ticked.has(p)) : [], mode: 'chosen' };
-    const r = await i.api.resolveApply(req);
+    let r: ResolveResultDto;
+    try { r = await i.api.resolveApply(req); }
+    catch (e) {
+      // Một yêu cầu ném lỗi không được làm mất kết quả của yêu cầu trước (đã đổi thật): ghi lỗi cho từng tệp của yêu cầu này và đi tiếp.
+      const detail = e instanceof Error ? e.message : String(e);
+      r = { batchId: '', done: [], failed: items.flatMap(x => x.loserPaths).map(path => ({ path, code: 'unknown', detail })), needsRescan: false };
+    }
     r.done.forEach(d => handled.add(d.loserPath));
     out = merge(out, r);
   };
   await run('trash', trashSet);
+  // Kế hoạch đã cũ ngay từ yêu cầu đầu: dừng, để người dùng xem lại, đừng ẩn nốt phần còn lại theo kế hoạch cũ.
+  if (out.done.length === 0 && out.failed.some(f => f.code === 'plan_stale')) return out;
   await run('hide', hideSet);
   return out;
 }

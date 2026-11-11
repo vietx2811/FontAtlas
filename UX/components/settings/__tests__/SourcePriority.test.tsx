@@ -37,7 +37,7 @@ describe('SourcePriority', () => {
     await waitFor(() => expect(names()).toEqual(['Dự án khách', 'Fonts', 'Ổ ngoài']));
     expect(spy).toHaveBeenCalledWith([2, 1, 3]);
     expect(await api.sourcePriority()).toEqual([2, 1, 3]);
-    expect(screen.getByRole('status').textContent).toBe('Fonts giờ ở vị trí 2 / 3');
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Đã lưu thứ tự ưu tiên'));
     expect(useUiStore.getState().libraryRev).toBeGreaterThan(0);
   });
 
@@ -75,6 +75,7 @@ describe('SourcePriority', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Đưa Fonts xuống' }));
     await waitFor(() => expect(names()).toEqual(['Fonts', 'Dự án khách', 'Ổ ngoài']));
     expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error', text: 'Không đổi được thứ tự: db locked' });
+    expect(screen.getByRole('status').textContent).toBe('Không lưu được, đã trả về thứ tự cũ');
   });
 
   it('renders nothing with fewer than two sources (nothing to order)', async () => {

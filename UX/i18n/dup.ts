@@ -52,7 +52,7 @@ export const DUP_I18N = {
   // Kết quả
   'dup.res.hidden': 'Đã ẩn {n} bản', 'dup.res.trashed': 'Đã chuyển {n} tệp vào Thùng rác', 'dup.res.undo': 'Hoàn tác', 'dup.res.undone': 'Đã hoàn tác {n} bản',
   'dup.res.partial': 'Đã xử lý {done} nhóm, {failed} nhóm chưa làm được', 'dup.res.allFailed': 'Chưa làm được nhóm nào ({failed} nhóm)', 'dup.res.attention': 'Cần chú ý: {n} bản đã xử lý nhưng còn việc dở',
-  'dup.res.title': 'Kết quả', 'dup.res.fails': 'Chưa làm được', 'dup.res.notes': 'Đã xử lý, nhưng cần chú ý', 'dup.res.close': 'Đóng', 'dup.res.review': 'Xem lại kế hoạch',
+  'dup.res.title': 'Kết quả', 'dup.res.failMany': '{n} tệp: {why}', 'dup.res.fails': 'Chưa làm được', 'dup.res.notes': 'Đã xử lý, nhưng cần chú ý', 'dup.res.close': 'Đóng', 'dup.res.review': 'Xem lại kế hoạch',
   'dup.res.rescan': 'Đang quét lại để thư viện thấy tệp đã về…', 'dup.res.detail': 'Chi tiết kỹ thuật: {detail}',
   'dup.fail.plan_stale': '{name}: danh sách font vừa thay đổi, hãy xem lại kế hoạch', 'dup.fail.not_auto_safe': '{name}: nhóm này không còn đủ chắc chắn để tự xử lý',
   'dup.fail.keeper_missing': '{name}: bản định giữ không còn trên đĩa', 'dup.fail.keeper_not_local': '{name}: bản định giữ chưa tải về máy (đang trên cloud)',
@@ -80,6 +80,7 @@ export const DUP_I18N = {
   'dup.prio.title': 'Thứ tự ưu tiên giữ bản', 'dup.prio.hint': 'Khi hai nguồn có cùng một font, bản ở nguồn đứng trên được giữ. Kéo để đổi thứ tự.', 'dup.prio.empty': 'Chưa có nguồn nào.',
   'dup.prio.pos': 'Ưu tiên {n}', 'dup.prio.up': 'Đưa {name} lên', 'dup.prio.down': 'Đưa {name} xuống', 'dup.prio.drag': 'Kéo {name} để đổi thứ tự', 'dup.prio.moved': '{name} giờ ở vị trí {n} / {total}',
   'dup.prio.fail': 'Không đổi được thứ tự: {msg}', 'dup.prio.list': 'Danh sách nguồn theo thứ tự ưu tiên',
+  'dup.prio.saved': 'Đã lưu thứ tự ưu tiên', 'dup.prio.reverted': 'Không lưu được, đã trả về thứ tự cũ',
   'dup.prio.recheck': 'Đổi thứ tự có thể đổi bản được giữ; bản đang xem trước sẽ được lập lại.',
 } as const;
 

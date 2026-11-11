@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { ResolveResultDto } from '../../api';
 import { t } from '../../i18n';
 import { Modal } from '../Modal';
@@ -7,6 +8,9 @@ import { groupsDone } from './applyPlan';
 
 /** Báo thành công một phần: nhóm đã xử lý, nhóm chưa làm được (kèm lý do thường) và việc dở cần chú ý. `detail` thô nằm sau "Chi tiết kỹ thuật". */
 export function ResultDialog({ result, onClose, onUndo }: { result: ResolveResultDto; onClose(): void; onUndo?(): void }): React.JSX.Element {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Modal đưa tiêu điểm vào nút đầu tiên; ở đây nút an toàn nhất là "Đóng", không phải "Hoàn tác".
+  useEffect(() => { closeRef.current?.focus(); }, []);
   const notes = result.failed.filter(f => PARTIAL_CODES.has(f.code));
   const fails = result.failed.filter(f => !PARTIAL_CODES.has(f.code));
   const done = groupsDone(result);
@@ -20,7 +24,7 @@ export function ResultDialog({ result, onClose, onUndo }: { result: ResolveResul
         <ul className="dup-res" data-testid="res-notes">{notes.map((f, i) => <li key={`${f.path}:${i}`}>{failText(f)}{f.detail && <details><summary>{t('dup.details')}</summary><code>{t('dup.res.detail', { detail: f.detail })}</code></details>}</li>)}</ul></section>}
       <div className="fa-modal-actions">
         {onUndo && result.done.length > 0 && <button type="button" onClick={onUndo}>{t('dup.res.undo')}</button>}
-        <button type="button" className="primary" onClick={onClose}>{t('dup.res.close')}</button>
+        <button type="button" className="primary" ref={closeRef} onClick={onClose}>{t('dup.res.close')}</button>
       </div>
     </Modal>
   );

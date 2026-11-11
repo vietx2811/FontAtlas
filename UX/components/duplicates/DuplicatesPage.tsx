@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Api, ResolvePlanDto, ResolveResultDto, ResolveScopeDto } from '../../api';
+import type { Api, PlanItemDto, ResolvePlanDto, ResolveResultDto, ResolveScopeDto } from '../../api';
 import { t } from '../../i18n';
 import { dropTags, toMetadataQuery, useUiStore } from '../../store/ui';
 import { useScanStore } from '../../store/scan';
@@ -57,35 +57,35 @@ export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
     setDialog(null);
     if (r.done.length > 0) {
       useUiStore.getState().bumpLibrary(true);
-      const n = r.done.length;
-      useNoticeStore.getState().push({
-        kind: 'info', text: action === 'trash' && r.done.every(d => d.action === 'trash') ? t('dup.res.trashed', { n }) : t('dup.res.hidden', { n }),
-        action: { label: t('dup.res.undo'), run: () => { void undoWithFeedback(api, r.done.map(d => d.id)); } },
-      });
+      const hid = r.done.filter(d => d.action === 'hide').length, trashed = r.done.length - hid;
+      const text = [trashed > 0 && t('dup.res.trashed', { n: trashed }), hid > 0 && t('dup.res.hidden', { n: hid })].filter(Boolean).join(' · ');
+      useNoticeStore.getState().push({ kind: 'info', text, action: { label: t('dup.res.undo'), run: () => { void undoWithFeedback(api, r.done.map(d => d.id), setResult); } } });
     }
     if (r.failed.length > 0 || r.done.length === 0) setResult(r);
   };
 
-  const ignore = async (it: (typeof items)[number]) => {
-    if (busy) return; setBusy(true);
-    const name = memberName(viewOf(it, choices[itemId(it)]).keeper);
+  const choicesRef = useRef(choices); choicesRef.current = choices;
+  const busyRef = useRef(false);
+  const ignore = useCallback(async (it: PlanItemDto) => {
+    if (busyRef.current) return; busyRef.current = true; setBusy(true);
+    const name = memberName(viewOf(it, choicesRef.current[itemId(it)]).keeper);
     try {
       await api.duplicateIgnore(it.kind, it.key);
       useUiStore.getState().bumpLibrary();
-      useNoticeStore.getState().push({ kind: 'info', text: t('dup.ign.done', { name }), action: { label: t('dup.res.undo'), run: () => { void api.duplicateUnignore(it.kind, it.key).then(() => useUiStore.getState().bumpLibrary()); } } });
+      useNoticeStore.getState().push({ kind: 'info', text: t('dup.ign.done', { name }), action: { label: t('dup.res.undo'), run: () => {
+        void api.duplicateUnignore(it.kind, it.key).then(() => useUiStore.getState().bumpLibrary(), e => useNoticeStore.getState().push({ kind: 'error', text: t('dup.ign.fail', { msg: e instanceof Error ? e.message : String(e) }) }));
+      } } });
     } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('dup.ign.fail', { msg: e instanceof Error ? e.message : String(e) }) }); }
-    finally { setBusy(false); }
-  };
+    finally { busyRef.current = false; setBusy(false); }
+  }, [api]);
+  const swap = useCallback((it: PlanItemDto, p: string) => setChoices(c => ({ ...c, [itemId(it)]: p })), []);
+  const resolveOne = useCallback((it: PlanItemDto) => setDialog({ type: 'group', kind: it.kind, key: it.key }), []);
 
-  const card = (it: (typeof items)[number]) => (
-    <GroupCard key={itemId(it)} api={api} item={it} choice={choices[itemId(it)]} busy={busy}
-      onSwap={p => setChoices(c => ({ ...c, [itemId(it)]: p }))}
-      onResolve={() => setDialog({ type: 'group', kind: it.kind, key: it.key })}
-      onIgnore={() => void ignore(it)} />
-  );
+  const card = (it: PlanItemDto) => <GroupCard key={itemId(it)} api={api} item={it} choice={choices[itemId(it)]} busy={busy} onSwap={swap} onResolve={resolveOne} onIgnore={ignore} />;
   const onTabKey = (e: React.KeyboardEvent) => {
-    const i = TABS.indexOf(tab); const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!d) return; e.preventDefault(); const nx = TABS[(i + d + TABS.length) % TABS.length]; setTab(nx);
+    const i = TABS.indexOf(tab);
+    const nx = e.key === 'Home' ? TABS[0] : e.key === 'End' ? TABS[TABS.length - 1] : e.key === 'ArrowRight' ? TABS[(i + 1) % TABS.length] : e.key === 'ArrowLeft' ? TABS[(i - 1 + TABS.length) % TABS.length] : null;
+    if (!nx) return; e.preventDefault(); setTab(nx);
     requestAnimationFrame(() => document.getElementById(`dup-tab-${nx}`)?.focus());
   };
 
@@ -98,7 +98,7 @@ export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
         </div>
       </header>
       <div id="dup-panel" role="tabpanel" aria-labelledby={`dup-tab-${tab}`} className="dup-body">
-        {tab === 'done' && <ResolvedTab api={api} />}
+        {tab === 'done' && <ResolvedTab api={api} onReport={setResult} />}
         {tab === 'ignored' && <IgnoredTab api={api} />}
         {tab === 'todo' && <>
           {error && <div role="alert" className="dup-state warn">{t('dup.error', { msg: error })} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t('dup.retry')}</button></div>}
@@ -129,7 +129,7 @@ export function DuplicatesPage({ api }: { api: Api }): React.JSX.Element {
         </>}
       </div>
       {dialog && <ResolveDialog api={api} scope={dialog} q={q} choices={choices} onClose={() => setDialog(null)} onDone={onDone} />}
-      {result && <ResultDialog result={result} onClose={() => setResult(null)} onUndo={result.done.length ? () => { const ids = result.done.map(d => d.id); setResult(null); void undoWithFeedback(api, ids); } : undefined} />}
+      {result && <ResultDialog result={result} onClose={() => setResult(null)} onUndo={result.done.length ? () => { const ids = result.done.map(d => d.id); setResult(null); void undoWithFeedback(api, ids, setResult); } : undefined} />}
     </section>
   );
 }

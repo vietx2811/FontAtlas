@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Api, ResolutionDto } from '../../api';
+import type { Api, ResolutionDto, ResolveResultDto } from '../../api';
 import { t } from '../../i18n';
 import { NoteMark } from '../ui/noteMark';
+import { localeTag } from './dupLocale';
 import { useUiStore } from '../../store/ui';
+import { groupBatches } from './batches';
 import { baseName } from './dupPlan';
 import { reasonText } from './dupText';
 import { undoWithFeedback } from './undoFlow';
 
-const when = (sec: number): string => new Date(sec * 1000).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (sec: number): string => new Date(sec * 1000).toLocaleString(localeTag(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const rowName = (r: ResolutionDto): string => (r.family ? `${r.family}${r.style ? ` ${r.style}` : ''}` : baseName(r.loserPath));
 
 /** Tab "Đã giải quyết": mới nhất trước, gom theo mẻ, hoàn tác từng quyết định hoặc cả mẻ (thứ tự ngược do backend xếp). */
-export function ResolvedTab({ api }: { api: Api }): React.JSX.Element {
+export function ResolvedTab({ api, onReport }: { api: Api; onReport?(r: ResolveResultDto): void }): React.JSX.Element {
   const rev = useUiStore(s => s.libraryRev);
   const [list, setList] = useState<ResolutionDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +31,13 @@ export function ResolvedTab({ api }: { api: Api }): React.JSX.Element {
     if (busy) return;
     setBusy(true); setHint(null);
     try {
-      const r = await undoWithFeedback(api, ids);
+      const r = await undoWithFeedback(api, ids, onReport);
       const dep = r.failed.find(f => f.code === 'newer_resolution_depends');
       if (dep) setHint(t('dup.done.dependsHint'));
     } finally { setBusy(false); load(); }
   };
 
-  const batches: Array<{ id: string; rows: ResolutionDto[] }> = [];
-  for (const r of list ?? []) { const b = batches.find(x => x.id === r.batchId); if (b) b.rows.push(r); else batches.push({ id: r.batchId, rows: [r] }); }
+  const batches = groupBatches(list ?? []);
 
   return (
     <div className="dup-tabbody" data-testid="dup-resolved">
@@ -51,7 +52,7 @@ export function ResolvedTab({ api }: { api: Api }): React.JSX.Element {
       {batches.map((b, bi) => {
         const live = b.rows.filter(r => r.undoneAt === null && r.canUndo);
         return (
-          <section key={b.id} className="dup-batch" aria-label={`${t('dup.done.batch', { n: batches.length - bi })} · ${when(b.rows[0].createdAt)}`} data-testid="dup-batch">
+          <section key={b.ids.join('+')} className="dup-batch" aria-label={`${t('dup.done.batch', { n: batches.length - bi })} · ${when(b.rows[0].createdAt)}`} data-testid="dup-batch">
             <header>
               <b>{when(b.rows[0].createdAt)}</b>
               <span className="dup-count">{t('dup.done.batchCount', { n: b.rows.length })}</span>

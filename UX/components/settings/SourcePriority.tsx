@@ -33,8 +33,8 @@ export function SourcePriority({ api, sources }: { api: Api; sources: SourceDto[
   const commit = useCallback(async (next: number[], movedId: number) => {
     const before = ids; const mine = ++seq.current;
     setOrder(next); setLive(t('dup.prio.moved', { name: name(movedId), n: next.indexOf(movedId) + 1, total: next.length }));
-    try { const saved = await api.setSourcePriority(next); if (mine === seq.current) setOrder(saved); useUiStore.getState().bumpLibrary(); }
-    catch (e) { if (mine === seq.current) setOrder(before); useNoticeStore.getState().push({ kind: 'error', text: t('dup.prio.fail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+    try { const saved = await api.setSourcePriority(next); if (mine === seq.current) { setOrder(saved); setLive(t('dup.prio.saved')); } useUiStore.getState().bumpLibrary(); }
+    catch (e) { if (mine === seq.current) { setOrder(before); setLive(t('dup.prio.reverted')); } useNoticeStore.getState().push({ kind: 'error', text: t('dup.prio.fail', { msg: e instanceof Error ? e.message : String(e) }) }); }
   }, [api, ids]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const move = (id: number, to: number) => { const from = ids.indexOf(id); if (to < 0 || to >= ids.length || to === from) return; void commit(moveItem(ids, from, to), id); };

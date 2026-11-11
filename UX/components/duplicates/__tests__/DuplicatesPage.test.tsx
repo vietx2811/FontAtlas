@@ -333,3 +333,84 @@ describe('DuplicatesPage: Đã giải quyết', () => {
     expect(await api.resolveList(false)).toHaveLength(2);
   });
 });
+
+describe('DuplicatesPage: review fixes', () => {
+  const openTrash = async (api: Api) => {
+    click(screen.getByTestId('resolve-all-safe'));
+    const d = await screen.findByRole('dialog'); await within(d).findByTestId('pv-summary');
+    click(within(d).getByLabelText(/Chuyển vào Thùng rác/));
+    return dialog();
+  };
+
+  it('Trash request succeeds but the follow-up Hide request throws: the done work is kept — toast with Undo, library refreshed, the failure is listed', async () => {
+    const api = await mount();
+    const real = api.resolveApply.bind(api); let n = 0;
+    vi.spyOn(api, 'resolveApply').mockImplementation(async r => { if (++n === 2) throw new Error('network gone'); return real(r); });
+    await openTrash(api);
+    confirm();
+    expect(await screen.findByTestId('res-fails')).toBeTruthy();
+    const note = useNoticeStore.getState().notices.find(x => /Đã chuyển 2 tệp vào Thùng rác/.test(x.text))!;
+    expect(note).toBeTruthy(); expect(note.action?.label).toBe('Hoàn tác');
+    expect(useUiStore.getState().libraryRev).toBeGreaterThan(0);
+    expect(screen.getByTestId('res-fails').textContent).toMatch(/chưa làm được/);
+    expect((await api.resolveList(false)).length).toBe(2);
+  });
+
+  it('the toast splits the numbers when one action produced both Trash and Hide results', async () => {
+    const api = await mount();
+    await openTrash(api); confirm();
+    await waitFor(() => expect(useNoticeStore.getState().notices.some(x => x.text === 'Đã chuyển 2 tệp vào Thùng rác · Đã ẩn 2 bản')).toBe(true));
+  });
+
+  it('plan_stale reloads the plan and resets the choice to Hide with nothing ticked', async () => {
+    const api = await mount();
+    const real = api.resolveApply.bind(api); let n = 0;
+    vi.spyOn(api, 'resolveApply').mockImplementation(async r => (++n === 1 ? { batchId: '', done: [], failed: [{ path: '/x', code: 'plan_stale', detail: null }], needsRescan: false } : real(r)));
+    const d = await openTrash(api);
+    click(within(d).getByRole('checkbox'));
+    confirm();
+    await within(dialog()).findByText('Danh sách font vừa thay đổi. Hãy xem lại kế hoạch mới.');
+    await waitFor(() => expect((within(dialog()).getByLabelText(/Ẩn trong Font Atlas/) as HTMLInputElement).checked).toBe(true));
+    click(within(dialog()).getByLabelText(/Chuyển vào Thùng rác/));
+    expect((within(dialog()).getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('while applying: Cancel does nothing and a double click sends one request', async () => {
+    const api = await mount();
+    let release: () => void = () => {}; const gate = new Promise<void>(r => { release = r; });
+    const real = api.resolveApply.bind(api);
+    const spy = vi.spyOn(api, 'resolveApply').mockImplementation(async r => { await gate; return real(r); });
+    click(within(cardOf(/Be Vietnam Pro Regular/)).getByRole('button', { name: 'Giải quyết' }));
+    await within(await screen.findByRole('dialog')).findByTestId('pv-summary');
+    confirm(); confirm();
+    click(screen.getByRole('button', { name: 'Huỷ' }));
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+    release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Home / End jump to the first / last tab; the Details button controls the region it opens', async () => {
+    await mount();
+    fireEvent.keyDown(screen.getAllByRole('tab')[0], { key: 'End' });
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Đã bỏ qua' }).getAttribute('aria-selected')).toBe('true'));
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Đã bỏ qua' }), { key: 'Home' });
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Cần xử lý/ }).getAttribute('aria-selected')).toBe('true'));
+    await screen.findAllByTestId('dup-group');
+    const g = cardOf(/Be Vietnam Pro Regular/);
+    const btn = within(g).getByRole('button', { name: 'Chi tiết' });
+    click(btn);
+    const id = btn.getAttribute('aria-controls')!;
+    expect(id).toBeTruthy(); expect(g.querySelector(`#${CSS.escape(id)}`)).toBeTruthy();
+  });
+
+  it('the result dialog opens with "Đóng" focused, not Undo', async () => {
+    const api = await mount();
+    resolveHooks(api).__failPaths.set('/Users/me/Library/Fonts/Inter-Regular.ttf', 'file_changed');
+    click(within(cardOf(/Inter Regular/)).getByRole('button', { name: 'Giải quyết' }));
+    await within(await screen.findByRole('dialog')).findByTestId('pv-summary');
+    confirm();
+    const close = await screen.findByRole('button', { name: 'Đóng' });
+    await waitFor(() => expect(document.activeElement).toBe(close));
+  });
+});

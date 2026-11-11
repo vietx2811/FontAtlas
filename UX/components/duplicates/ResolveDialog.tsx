@@ -22,6 +22,7 @@ export function ResolveDialog({ api, scope, q, choices, onClose, onDone }: {
   const [stale, setStale] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const seq = useRef(0);
+  const running = useRef(false);
   const scopeKey = JSON.stringify(scope);
 
   useEffect(() => {
@@ -40,13 +41,16 @@ export function ResolveDialog({ api, scope, q, choices, onClose, onDone }: {
   const canGo = !!plan && items.length > 0 && !busy && (action === 'hide' || split.trash.length > 0);
 
   const go = async () => {
-    if (!canGo) return;
-    setBusy(true); setStale(false);
+    if (!canGo || running.current) return;
+    running.current = true; setBusy(true); setStale(false);
     try {
       const r = await applyPlan({ api, items, choices, action, ticked, allSafe: allSafe && !changed });
-      if (r.done.length === 0 && r.failed.some(f => f.code === 'plan_stale')) { setStale(true); setAttempt(n => n + 1); setBusy(false); return; }
+      if (r.done.length === 0 && r.failed.some(f => f.code === 'plan_stale')) {
+        // Kế hoạch cũ: lập lại, và đưa các lựa chọn về mặc định an toàn (Ẩn, chưa tick tệp nào) để không gửi nhầm cho tệp mới.
+        setStale(true); setTicked(new Set()); setAction('hide'); setAttempt(n => n + 1); running.current = false; setBusy(false); return;
+      }
       onDone(r, action);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); setBusy(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); running.current = false; setBusy(false); }
   };
 
   return (
@@ -92,7 +96,7 @@ export function ResolveDialog({ api, scope, q, choices, onClose, onDone }: {
         )}
       </>}
       <div className="fa-modal-actions">
-        <button type="button" onClick={onClose} aria-disabled={busy}>{t('dup.pv.cancel')}</button>
+        <button type="button" onClick={() => { if (!busy) onClose(); }} aria-disabled={busy}>{t('dup.pv.cancel')}</button>
         <button type="button" className="primary" aria-disabled={!canGo} onClick={() => void go()} data-testid="pv-confirm">
           {busy ? t('dup.pv.working') : action === 'hide' ? t('dup.pv.confirm.hide', { n: losers.length }) : t('dup.pv.confirm.trash', { n: split.trash.length })}
         </button>

@@ -3,6 +3,7 @@ import type { Api, IgnoredGroupDto } from '../../api';
 import { t } from '../../i18n';
 import { Tooltip } from '../ui/Tooltip';
 import { useNoticeStore } from '../../store/notices';
+import { localeTag } from './dupLocale';
 import { useUiStore } from '../../store/ui';
 import { kindLabel } from './GroupCard';
 import { groupTitle, splitPath } from './duplicatesFormat';
@@ -34,7 +35,7 @@ export function IgnoredTab({ api }: { api: Api }): React.JSX.Element {
             <b>{groupTitle(g.group)}</b><span className="dup-fmt">{kindLabel(g.group.kind)}</span>
             <span className="dup-count">{t('dup.members', { n: g.group.faces.length })}</span>
             <span className="dup-sp" />
-            <span className="dup-muted">{t('dup.ign.at', { d: new Date(g.ignoredAt * 1000).toLocaleDateString('vi-VN') })}</span>
+            <span className="dup-muted">{t('dup.ign.at', { d: new Date(g.ignoredAt * 1000).toLocaleDateString(localeTag()) })}</span>
             <button type="button" onClick={() => void restore(g)}>{t('dup.ign.show')}</button>
           </header>
           <ul className="dup-paths">{g.group.faces.map((f, i) => <li key={i} className="dup-path">{f.path ? <Tooltip label={f.path}><span tabIndex={0}>{splitPath(f.path, 2).tail}</span></Tooltip> : '—'}</li>)}</ul>

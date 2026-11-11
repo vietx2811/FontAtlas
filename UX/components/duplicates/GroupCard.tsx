@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useId, useState } from 'react';
 import type { Api, PlanItemDto, PlanMemberDto } from '../../api';
 import { t } from '../../i18n';
 import { NoteMark } from '../ui/noteMark';
@@ -67,15 +67,18 @@ function Side({ api, m, role, active, onKeep, note, canKeep, depth }: { api: Api
 }
 
 /** Một nhóm trùng: hai (hoặc nhiều) bản cạnh nhau cùng dòng mẫu, lý do bằng câu thường, chi tiết kỹ thuật sau "Chi tiết". */
-export function GroupCard({ api, item, choice, onSwap, onResolve, onIgnore, busy }: {
-  api: Api; item: PlanItemDto; /** Đường dẫn bản giữ người dùng đã chọn lại (nếu có). */ choice?: string; onSwap(path: string): void; onResolve(): void; onIgnore(): void; busy: boolean;
+export const GroupCard = memo(function GroupCard({ api, item, choice, onSwap, onResolve, onIgnore, busy }: {
+  api: Api; item: PlanItemDto; /** Đường dẫn bản giữ người dùng đã chọn lại (nếu có). */ choice?: string;
+  /** Ba hàm này phải ổn định giữa các lần render (nhận `item` làm tham số) để memo có tác dụng với hàng trăm nhóm. */
+  onSwap(item: PlanItemDto, path: string): void; onResolve(item: PlanItemDto): void; onIgnore(item: PlanItemDto): void; busy: boolean;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const detailsId = useId();
   const [ref, seen] = useSeen<HTMLElement>();
   const v = viewOf(item, choice);
   const sameFile = item.kind === 'same_file';
   const hasVer = item.kind === 'versions';
-  const swapTo = (m: PlanMemberDto) => onSwap(m.path);
+  const swapTo = (m: PlanMemberDto) => onSwap(item, m.path);
   const depth = tailDepth(item.memberPaths);
   return (
     <article ref={ref} className={`dup-group${item.autoSafe ? '' : ' review'}`} data-testid="dup-group" data-kind={item.kind} aria-label={memberName(v.keeper)}>
@@ -90,15 +93,15 @@ export function GroupCard({ api, item, choice, onSwap, onResolve, onIgnore, busy
         <div className="dup-others">{v.losers.map(l => <Side key={l.path} api={api} m={l} role="hide" active={seen} canKeep depth={depth} onKeep={() => swapTo(l)} />)}</div>
       </div>
       {sameFile && <p className="dup-same">{t('dup.sample.same')}</p>}
-      {open && <div className="dup-details">{v.all.map(m => <Details key={m.path} api={api} m={m} showVersion={hasVer || m.version !== null} />)}<p className="dup-key">{t('dup.d.key')}: <code>{item.key}</code></p></div>}
+      {open && <div className="dup-details" id={detailsId}>{v.all.map(m => <Details key={m.path} api={api} m={m} showVersion={hasVer || m.version !== null} />)}<p className="dup-key">{t('dup.d.key')}: <code>{item.key}</code></p></div>}
       <footer className="dup-foot">
-        <button type="button" className="primary" aria-disabled={busy} onClick={() => { if (!busy) onResolve(); }}>{t('dup.resolve')}</button>
+        <button type="button" className="primary" aria-disabled={busy} onClick={() => { if (!busy) onResolve(item); }}>{t('dup.resolve')}</button>
         {v.losers.length === 1 && <button type="button" aria-disabled={busy} onClick={() => { if (!busy) swapTo(v.losers[0]); }}>{t('dup.swap')}</button>}
-        <button type="button" aria-disabled={busy} onClick={() => { if (!busy) onIgnore(); }}>{t('dup.ignore')}</button>
+        <button type="button" aria-disabled={busy} onClick={() => { if (!busy) onIgnore(item); }}>{t('dup.ignore')}</button>
         <span className="dup-sp" />
-        <button type="button" className="dup-linkbtn" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? t('dup.details.hide') : t('dup.details')}</button>
+        <button type="button" className="dup-linkbtn" aria-expanded={open} aria-controls={open ? detailsId : undefined} onClick={() => setOpen(o => !o)}>{open ? t('dup.details.hide') : t('dup.details')}</button>
       </footer>
       {v.losers.some(l => !l.trash.allowed) && open && <p className="dup-key">{v.losers.filter(l => !l.trash.allowed).map(l => `${memberName(l)}: ${blockedText(l.trash.blocked)}`).join(' · ')}</p>}
     </article>
   );
-}
+});

@@ -50,7 +50,7 @@ export const DUP_EN = {
   'dup.blocked.symlink': 'an alias, not a real file', 'dup.blocked.collection_file': 'a multi-font file (TTC/OTC)', 'dup.blocked.missing_file': 'the file is no longer on disk', 'dup.blocked.unknown': 'not eligible',
   'dup.res.hidden': 'Hid {n} copies', 'dup.res.trashed': 'Moved {n} files to the Trash', 'dup.res.undo': 'Undo', 'dup.res.undone': 'Undid {n} copies',
   'dup.res.partial': 'Handled {done} groups, {failed} could not be done', 'dup.res.allFailed': 'Could not handle any group ({failed} groups)', 'dup.res.attention': 'Needs attention: {n} copies were handled but left a loose end',
-  'dup.res.title': 'Result', 'dup.res.fails': 'Could not be done', 'dup.res.notes': 'Done, but needs attention', 'dup.res.close': 'Close', 'dup.res.review': 'Review the plan again',
+  'dup.res.title': 'Result', 'dup.res.failMany': '{n} files: {why}', 'dup.res.fails': 'Could not be done', 'dup.res.notes': 'Done, but needs attention', 'dup.res.close': 'Close', 'dup.res.review': 'Review the plan again',
   'dup.res.rescan': 'Rescanning so the library sees the restored files…', 'dup.res.detail': 'Technical detail: {detail}',
   'dup.fail.plan_stale': '{name}: the font list just changed, please review the plan again', 'dup.fail.not_auto_safe': '{name}: this group is no longer certain enough to handle automatically',
   'dup.fail.keeper_missing': '{name}: the copy to keep is no longer on disk', 'dup.fail.keeper_not_local': '{name}: the copy to keep is not downloaded yet (it is in the cloud)',
@@ -75,6 +75,7 @@ export const DUP_EN = {
   'dup.prio.title': 'Which copy to keep: source order', 'dup.prio.hint': 'When two sources hold the same font, the copy in the higher source is kept. Drag to reorder.', 'dup.prio.empty': 'No sources yet.',
   'dup.prio.pos': 'Priority {n}', 'dup.prio.up': 'Move {name} up', 'dup.prio.down': 'Move {name} down', 'dup.prio.drag': 'Drag {name} to reorder', 'dup.prio.moved': '{name} is now {n} of {total}',
   'dup.prio.fail': 'Could not change the order: {msg}', 'dup.prio.list': 'Sources in priority order',
+  'dup.prio.saved': 'Source order saved', 'dup.prio.reverted': 'Could not save, the previous order is back',
   'dup.prio.recheck': 'Changing the order can change which copy is kept; plans on screen are rebuilt.',
 } as const;
 
