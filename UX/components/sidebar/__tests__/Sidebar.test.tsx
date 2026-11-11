@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
@@ -408,6 +408,26 @@ describe('Sidebar', () => {
       expect((await api.listSources()).some(s => s.id === target.id)).toBe(false);
       expect(useUiStore.getState().view).toBe('all');
       expect(screen.queryByRole('button', { name: /Dự án khách/ })).toBeNull();
+    });
+    it.each(['rmsrc-cancel', 'rmsrc-confirm'])('closing the dialog via %s moves focus to the library grid so ⌘A/Esc work (not left on the sidebar)', async (btn) => {
+      const grid = document.createElement('div'); grid.setAttribute('role', 'grid');
+      const cell = document.createElement('div'); cell.setAttribute('role', 'gridcell'); cell.tabIndex = 0; grid.append(cell); document.body.append(grid);
+      try {
+        const { api } = await mount();
+        const target = (await api.listSources()).find(s => s.name === 'Dự án khách')!;
+        useUiStore.getState().setView(`src:${target.id}` as never); await settle();
+        fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+        fireEvent.click(screen.getByRole('menuitem', { name: /Gỡ nguồn/ })); await settle();
+        fireEvent.click(screen.getByTestId(btn)); await settle();
+        await waitFor(() => expect(document.activeElement).toBe(cell));
+      } finally { grid.remove(); }
+    });
+    it('with no grid cell to focus, closing the dialog leaves no sidebar control focused', async () => {
+      await mount();
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Dự án khách/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Gỡ nguồn/ })); await settle();
+      fireEvent.click(screen.getByTestId('rmsrc-cancel')); await settle();
+      await waitFor(() => expect(document.activeElement).toBe(document.body), { timeout: 2000 });
     });
     it('is disabled with a reason while a scan runs', async () => {
       await mount();

@@ -21,6 +21,7 @@ import { Modal } from '../Modal';
 import { CONFIRM_ACTIVATE_FROM, CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
 import { NoteMark } from '../ui/noteMark';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
+import { focusLibraryGrid } from '../sources/focusLibrary';
 import { useActivationFlow } from '../activation/useActivationFlow';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
@@ -320,9 +321,9 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </div>
       </div>
     </nav>
-    {removingSrc && <RemoveSourceDialog api={api} source={removingSrc} onClose={() => setRemovingSrc(null)}
+    {removingSrc && <RemoveSourceDialog api={api} source={removingSrc} onClose={() => { setRemovingSrc(null); focusLibraryGrid(); }}
       onRemoved={rep => {
-        const s = removingSrc; setRemovingSrc(null);
+        const s = removingSrc; setRemovingSrc(null); focusLibraryGrid();
         if (useUiStore.getState().view === `src:${s.id}`) setView('all');
         useNoticeStore.getState().push({ kind: 'info', text: t('rmsrc.done', { name: s.name, n: rep.removedLocations }) });
         useUiStore.getState().bumpLibrary(true);
