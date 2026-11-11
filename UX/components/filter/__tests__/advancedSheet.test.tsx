@@ -201,6 +201,12 @@ describe('AdvancedSheet · class switches (D1)', () => {
     expect(filters().includeSecondary).toBeUndefined();
     expect(filters().confidentOnly).toBe(true);
   });
+  it('class rows have a class-facet-<class> test id; the two switches never carry one', async () => {
+    render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();
+    expect(document.querySelectorAll('[data-testid^="class-facet-"]').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('adv-hybrid').getAttribute('data-testid')).not.toMatch(/^class-facet-/);
+    expect(screen.getByTestId('adv-confident').getAttribute('data-testid')).not.toMatch(/^class-facet-/);
+  });
   it('Reset clears both switches', async () => {
     useUiStore.setState({ filters: { classes: ['display'], includeSecondary: true, confidentOnly: true } });
     render(<AdvancedSheet api={createMockApi()} onClose={() => {}} />); await settle();

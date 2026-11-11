@@ -645,8 +645,8 @@
     let total0 = 0; for (let i = 0, prev = -1; i < 40; i++) { total0 = countNow(); if (total0 > 0 && total0 === prev) break; prev = total0; await sleep(300); }
     await openAdv();
     const grp = await wait(() => document.querySelector('[aria-label="Phân loại"]'), 10000);
-    await wait(() => grp?.querySelectorAll('.fa-class-opt input[type=checkbox]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
-    const boxes = [...(grp?.querySelectorAll('.fa-class-opt input[type=checkbox]') ?? [])].filter(b => !b.closest('.fa-sub-opts')); // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
+    await wait(() => grp?.querySelectorAll('[data-testid^="class-facet-"]').length > 0, 30000); // facet tải sau debounce; máy chậm có thể lâu hơn 15 giây
+    const boxes = [...(grp?.querySelectorAll('[data-testid^="class-facet-"]') ?? [])]; // chỉ hàng class (bỏ công tắc hybrid/confident và subclass)
     const label0 = boxes[0]?.closest('label')?.textContent ?? '';
     boxes[0]?.click();
     const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
