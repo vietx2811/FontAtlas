@@ -148,7 +148,7 @@ export function AdvancedSheet({ api, onClose }: { api: Api; onClose(): void }): 
           {classRows.map(f => (
             <div key={f.class} className="fa-class-opt">
               <TermTip term={classTermKey(f.class)}>
-                <label><input type="checkbox" checked={filters.classes?.includes(f.class) ?? false} onChange={e => toggleClass(f, e.target.checked)} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
+                <label><input type="checkbox" data-testid={`class-facet-${f.class}`} checked={filters.classes?.includes(f.class) ?? false} onChange={e => toggleClass(f, e.target.checked)} />{classLabel(f.class)} <span className="fa-count">{f.count}</span></label>
               </TermTip>
               {filters.classes?.includes(f.class) && f.subclasses.length > 0 && <div className="fa-sub-opts">
                 {f.subclasses.map(sc => <TermTip key={sc.subclass} term={subclassTermKey(sc.subclass)}>
