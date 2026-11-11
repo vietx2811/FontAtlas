@@ -439,7 +439,47 @@ pub fn create_library_v1_for_test(c: &Connection) {
     c.execute_batch("PRAGMA user_version = 1;").expect("user_version");
 }
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6];
+/// Taxonomy v2 (Font Desk 0.3.x): ghi đè phân loại của người dùng chuyển sang 8 class mới.
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định (không hard-code ở đâu khác): nếu nhánh khác lấy cùng số
+/// (feat/auto-activation cũng thêm một migration user.db), chỉ cần đổi thứ tự mục trong danh sách khi merge.
+/// Ánh xạ SQL này phải khớp `fontatlas_core::classify::migrate_legacy` (có test đối chiếu).
+pub(crate) const USER_TAXONOMY_V2: &str = r#"
+CREATE TABLE classification_overrides_tx (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  class      TEXT NOT NULL CHECK (class IN ('serif','slab','sans','mono','script','handwriting','display','blackletter','symbol')),
+  subclass   TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+INSERT INTO classification_overrides_tx (hash, face_index, class, subclass, updated_at)
+  SELECT hash, face_index,
+    CASE WHEN class='serif'  AND subclass='slab'        THEN 'slab'
+         WHEN class='script' AND subclass='handwritten' THEN 'handwriting'
+         ELSE class END,
+    CASE WHEN class='serif'  AND subclass='slab'        THEN NULL
+         WHEN class='script' AND subclass='handwritten' THEN NULL
+         WHEN class='script' AND subclass='casual_brush' THEN 'brush'
+         WHEN class='script' AND subclass='formal'       THEN 'copperplate'
+         ELSE subclass END,
+    updated_at
+  FROM classification_overrides;
+DROP TABLE classification_overrides;
+ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2];
+
+/// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_taxonomy_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-taxonomy");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_TAXONOMY_V2).expect("taxonomy migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
 
 /// Chỉ cho test: tạo user.db ở v1 (trước Plan 7) để kiểm migration.
 #[doc(hidden)]

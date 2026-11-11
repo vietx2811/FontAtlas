@@ -604,9 +604,11 @@ fn class_filter_facets_and_override_use_effective_class() {
     assert!(hit.items.iter().any(|r| r.family == "Roboto"));
     let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
     assert!(disp.iter().find(|f| f.class == "script").unwrap().subclasses.iter().any(|s| s.subclass == "formal"));
-    // Display không còn là class: không lọc, không ghi đè được
-    assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["display".into()], ..Default::default() }).is_err());
-    assert!(analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: None }).is_err());
+    // taxonomy v2: Display là class (lọc/ghi đè được); class lạ vẫn bị từ chối
+    assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["display".into()], ..Default::default() }).is_ok());
+    assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["wiggly".into()], ..Default::default() }).is_err());
+    assert!(analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: None }).is_ok());
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: Some("formal".into()) }).unwrap();
     // lọc traits: giá trị lạ bị từ chối, giá trị hợp lệ chạy được
     assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["wiggly".into()], ..Default::default() }).is_err());
     assert!(library::query_faces(&st, &FaceQueryDto { traits: vec!["stencil".into()], ..Default::default() }).is_ok());
