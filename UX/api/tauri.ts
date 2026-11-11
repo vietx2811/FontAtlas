@@ -101,6 +101,7 @@ export function createTauriApi(): Api {
     addToCollection: (id, faces) => none(call('add_to_collection', { id, faces })),
     removeFromCollection: (id, faces) => none(call('remove_from_collection', { id, faces })),
     listTags: () => call('list_tags'),
+    systemTagCatalog: () => call('system_tag_catalog'),
     tagsOf: face => call('tags_of', { face }),
     createTag: name => call('create_tag', { name }),
     tagFaces: (tagId, faces) => none(call('tag_faces', { tagId, faces })),

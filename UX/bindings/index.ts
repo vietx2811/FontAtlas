@@ -143,6 +143,8 @@ export type { StrengthDto } from './StrengthDto';
 export type { StyleStructureDto } from './StyleStructureDto';
 export type { StylisticSetDto } from './StylisticSetDto';
 export type { SubclassFacetDto } from './SubclassFacetDto';
+export type { SystemTagDto } from './SystemTagDto';
+export type { SystemTagGroupDto } from './SystemTagGroupDto';
 export type { TagDto } from './TagDto';
 export type { ToneDto } from './ToneDto';
 export type { TonePairDto } from './TonePairDto';

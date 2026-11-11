@@ -68,6 +68,7 @@ import type { SimilarFamilyPageDto } from './SimilarFamilyPageDto';
 import type { SimilarHitDto } from './SimilarHitDto';
 import type { SimilarOptsDto } from './SimilarOptsDto';
 import type { SourceDto } from './SourceDto';
+import type { SystemTagGroupDto } from './SystemTagGroupDto';
 import type { TagDto } from './TagDto';
 import type { UiStateDto } from './UiStateDto';
 
@@ -98,6 +99,7 @@ export interface TauriCommandMap {
   add_to_collection: { args: { id: number; faces: FaceKeyDto[] }; result: null };
   remove_from_collection: { args: { id: number; faces: FaceKeyDto[] }; result: null };
   list_tags: { args: Record<string, never>; result: TagDto[] };
+  system_tag_catalog: { args: Record<string, never>; result: SystemTagGroupDto[] };
   tags_of: { args: { face: FaceKeyDto }; result: TagDto[] };
   create_tag: { args: { name: string }; result: TagDto };
   tag_faces: { args: { tagId: number; faces: FaceKeyDto[] }; result: null };

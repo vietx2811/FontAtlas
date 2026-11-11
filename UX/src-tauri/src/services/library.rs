@@ -376,11 +376,35 @@ pub fn tags_of(state: &AppState, face: &FaceKeyDto) -> Result<Vec<TagDto>, CmdEr
     state.with_user(|u| Ok(u.tags_of(&k)?.into_iter().map(Into::into).collect()))
 }
 
+/// Danh mục tag hệ thống (style/mood/use). Chỉ đọc.
+pub fn system_tag_catalog() -> Vec<SystemTagGroupDto> {
+    use fontatlas_core::system_tags::{SYSTEM_TAG_GROUPS, tag_name};
+    SYSTEM_TAG_GROUPS
+        .iter()
+        .map(|g| SystemTagGroupDto {
+            namespace: g.namespace.into(),
+            label: g.label.into(),
+            tags: g.tags.iter().map(|t| SystemTagDto { key: t.key.into(), label: t.label.into(), name: tag_name(g.namespace, t.key) }).collect(),
+        })
+        .collect()
+}
+
 pub fn create_tag(state: &AppState, name: &str) -> Result<TagDto, CmdError> {
+    use fontatlas_core::system_tags::{canonical_name, check_name};
     let name = name.trim();
     if name.is_empty() {
         return Err(CmdError::invalid_arg("tên tag trống"));
     }
+    // tiền tố dành riêng (style:/mood:/use:) chỉ nhận giá trị trong danh mục, lưu dạng chuẩn hoá
+    let canon;
+    let name = match check_name(name) {
+        Some(true) => {
+            canon = canonical_name(name).unwrap_or_else(|| name.to_string());
+            canon.as_str()
+        }
+        Some(false) => return Err(CmdError::invalid_arg(format!("tag hệ thống không có trong danh mục: {name}"))),
+        None => name,
+    };
     state.with_user(|u| {
         let id = u.tag(name)?;
         u.tags()?

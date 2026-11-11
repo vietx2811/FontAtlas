@@ -119,7 +119,7 @@ fn main() {
             let inp = ClassifyInput::from_json(&serde_json::to_value(&face.metadata).ok()?, &serde_json::to_value(&face.anatomy).ok()?);
             let mut row = format!("{},{},{}", f.name.replace(',', " "), gt.primary.label(), gt.sub.iter().next().copied().unwrap_or(""));
             let m = &inp.m;
-            for x in [m.serif_foot, m.contrast, m.stress_abs, m.slant_abs, m.aperture, m.width, m.width_cv, m.spacing, m.stem, m.x_height_em, m.a_storeys, m.g_storeys, m.connect, m.bounce, m.terminal, m.aperture_e, m.counter, m.serif_flare, m.serif_head] {
+            for x in [m.serif_foot, m.contrast, m.stress_abs, m.slant_abs, m.aperture, m.width, m.width_cv, m.spacing, m.stem, m.x_height_em, m.a_storeys, m.g_storeys, m.connect, m.bounce, m.terminal, m.aperture_e, m.counter, m.serif_flare, m.serif_head, m.contrast_h] {
                 row.push_str(&format!(",{}", x.map_or(String::new(), |v| format!("{v:.4}"))));
             }
             let md = serde_json::to_value(&face.metadata).ok()?;
@@ -134,7 +134,7 @@ fn main() {
     if let Some(d) = &dump {
         let mut rows: Vec<&str> = results.iter().map(|r| r.0.as_str()).collect();
         rows.sort();
-        std::fs::write(d, format!("name,gt,gtsub,serif_foot,contrast,stress,slant,aperture,width,width_cv,spacing,stem,xh,a_st,g_st,connect,bounce,terminal,aperture_e,counter,flare,head,panose0,sfc,fixed,accept,pred,predsub,conf,s_serif,s_sans,s_script,s_display,s_mono,split,gtsub2\n{}\n", rows.join("\n"))).expect("ghi dump");
+        std::fs::write(d, format!("name,gt,gtsub,serif_foot,contrast,stress,slant,aperture,width,width_cv,spacing,stem,xh,a_st,g_st,connect,bounce,terminal,aperture_e,counter,flare,head,ch,panose0,sfc,fixed,accept,pred,predsub,conf,s_serif,s_sans,s_script,s_display,s_mono,split,gtsub2\n{}\n", rows.join("\n"))).expect("ghi dump");
     }
     let mut md = String::new();
     // họ DISPLAY không có tag hình dáng: chỉ dùng cho bảng usage/traits, không vào bảng class

@@ -399,6 +399,28 @@ pub struct TagDto {
     pub face_count: u32,
 }
 
+/// Danh mục tag hệ thống (phong cách, mood, mục đích dùng): KHÔNG đo bằng máy, chỉ là tag người dùng gán.
+/// Tên lưu: `namespace:key` (ví dụ `mood:calm`); `create_tag` chuẩn hoá và từ chối tiền tố dành riêng không có trong danh mục.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SystemTagGroupDto {
+    /// "style" | "mood" | "use"
+    pub namespace: String,
+    pub label: String,
+    pub tags: Vec<SystemTagDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct SystemTagDto {
+    pub key: String,
+    pub label: String,
+    /// Tên tag đầy đủ để gọi `create_tag` / so với `TagDto.name`: `namespace:key`.
+    pub name: String,
+}
+
 impl From<Tag> for TagDto {
     fn from(t: Tag) -> Self {
         TagDto {

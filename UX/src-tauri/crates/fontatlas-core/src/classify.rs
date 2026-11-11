@@ -177,6 +177,8 @@ pub struct Metrics {
     pub serif_flare: Option<f32>,
     /// Cờ serif trên-trái của i/l/n ÷ thân (core ≥ 0.9.0).
     pub serif_head: Option<f32>,
+    /// Dày thân H ÷ dày thanh ngang H (< 1 = thanh ngang dày hơn thân: reverse contrast).
+    pub contrast_h: Option<f32>,
     pub contrast: Option<f32>,
     pub stress_abs: Option<f32>,
     pub slant_abs: Option<f32>,
@@ -238,6 +240,7 @@ impl ClassifyInput {
                 serif_foot: g("serif_foot"),
                 serif_flare: g("serif_flare"),
                 serif_head: g("serif_head"),
+                contrast_h: g("contrast_h"),
                 contrast: g("contrast"),
                 stress_abs: g("stress_deg").map(f32::abs),
                 slant_abs: g("slant_deg").map(f32::abs),
@@ -555,8 +558,40 @@ pub fn classify_v2(i: &ClassifyInput) -> Classification {
         }
         _ => {}
     }
+    // --- Class phụ (hybrid): chỉ để hiển thị/tìm kiếm
+    if c.secondary.is_none() {
+        let semi_serif = m.serif_head.is_some_and(|h| h >= SMALL_HEAD_STRONG) || m.serif_flare.is_some_and(|f| f >= SMALL_FOOT_FLARE);
+        if c.class == Class::Sans && semi_serif {
+            c.secondary = Some(Secondary { class: Class::Serif, subclass: None });
+        } else if c.class == Class::Mono && c.subclass.as_deref() == Some("typewriter") {
+            c.secondary = Some(Secondary { class: Class::Slab, subclass: None });
+        }
+    }
+    // --- Trait hình thái v2 từ số đo (độc lập với class)
+    // trait độc lập với class: chỉ loại Symbol (số đo không có nghĩa); Uncertain vẫn mang trait đo được
+    let measurable = c.class != Class::Symbol;
+    let mut add = |t: &str| {
+        if !c.traits.iter().any(|x| x == t) {
+            c.traits.push(t.to_string());
+        }
+    };
+    if matches!(c.class, Class::Serif | Class::Slab | Class::Sans | Class::Display) && m.contrast_h.is_some_and(|x| x < REVERSE_CONTRAST_H) {
+        add("reverse_contrast");
+    }
+    if measurable && c.class != Class::Script && m.contrast.is_some_and(|x| x >= HIGH_CONTRAST) {
+        add("high_contrast");
+    }
+    if measurable && m.contrast.is_some_and(|x| x <= MONOLINE_MAX) {
+        add("monoline");
+    }
     c
 }
+
+/// Thanh ngang H dày hơn thân (`contrast_h` = thân ÷ thanh ngang) tới mức này: reverse contrast.
+const REVERSE_CONTRAST_H: f32 = 0.7;
+/// Tỉ lệ nét dày/mỏng của 'o' từ đây là high contrast; tới ngưỡng trên là monoline (nét đều).
+const HIGH_CONTRAST: f32 = 5.0;
+const MONOLINE_MAX: f32 = 1.08;
 
 /// Chọn class theo hình dáng: Symbol, Blackletter, Mono, Script cần đủ điểm; còn lại Serif/Sans. Display không phải class.
 /// Tổng điểm Script+Display tối thiểu để coi là font không dùng cho chữ văn bản.

@@ -10,7 +10,7 @@ import { classBins, matchesWeight, matchesWidth, measuredHistogram } from './moc
 import { VI_TOTAL, axesFor, MEASURED_AXES, MOCK_UNITS, pairFor, comboAssessment, similarFor, viMissingFor } from './mockAnalysis';
 import {
   CmdError, DEFAULT_UI_STATE, type ActivationStateDto, type CollectionDto, type FaceDetailDto, type FaceKeyDto,
-  type FamilyStyleDto, type SettingsDto, type SourceDto, type TagDto, type UiStateDto,
+  type FamilyStyleDto, type SettingsDto, type SourceDto, type SystemTagGroupDto, type TagDto, type UiStateDto,
 } from './types';
 
 const WEIGHTS: Array<[string, number]> = [['Thin', 100], ['ExtraLight', 200], ['Light', 300], ['Regular', 400], ['Medium', 500], ['SemiBold', 600], ['Bold', 700], ['ExtraBold', 800], ['Black', 900]];
@@ -218,9 +218,10 @@ export function createMockApi(o: MockOptions = {}): Api {
       faces.forEach(f => c.faces.delete(keyOf(f)));
       act.collectionChanged(faces.map(f => [f, id] as [typeof f, number]), 'left_collection');
     },
+    systemTagCatalog: () => ok(MOCK_SYSTEM_TAGS),
     listTags: () => ok([...tags.values()].map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))),
     async tagsOf(k) { return ok([...tags.values()].filter(t => t.faces.has(keyOf(k))).map(({ faces, ...t }) => ({ ...t, faceCount: faces.size }))); },
-    async createTag(name) { const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
+    async createTag(name) { name = canonicalSystemTag(name); const id = nextId++; tags.set(id, { id, name, faceCount: 0, faces: new Set() }); return ok({ id, name, faceCount: 0 }); },
     async tagFaces(id, faces) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); faces.forEach(f => t.faces.add(keyOf(f))); },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
@@ -437,4 +438,23 @@ function mockClassification(family: string, over?: { class: string; subclass: st
     traits: /Bebas/.test(family) ? ['fat_face'] : /Abril/.test(family) ? ['Fat face', 'Quirky_new_trait'] : [],
     usage: auto.class === 'sans' || auto.class === 'serif' ? ['text'] : [], source: over ? 'override' : 'auto', autoClass: over ? auto.class : null, secondary: null,
   };
+}
+
+// Danh mục tag hệ thống giống backend (fontatlas-core/system_tags.rs): phong cách, mood, mục đích dùng.
+const mkSys = (namespace: string, label: string, tags: [string, string][]): SystemTagGroupDto => ({ namespace, label, tags: tags.map(([key, l]) => ({ key, label: l, name: `${namespace}:${key}` })) });
+export const MOCK_SYSTEM_TAGS: SystemTagGroupDto[] = [
+  mkSys('style', 'Style', [['art_deco', 'Art Deco'], ['art_nouveau', 'Art Nouveau'], ['wood_type', 'Wood type'], ['western', 'Western'], ['retro_vintage', 'Retro / Vintage'], ['psychedelic', 'Psychedelic'], ['brutalist', 'Brutalist'], ['techno', 'Techno'], ['medieval', 'Medieval'], ['tuscan', 'Tuscan'], ['distressed', 'Distressed'], ['blobby', 'Blobby'], ['wacky', 'Wacky']]),
+  mkSys('mood', 'Mood', [['business', 'Business'], ['calm', 'Calm'], ['elegant', 'Elegant'], ['playful', 'Playful'], ['friendly_cute', 'Friendly / Cute'], ['loud_bold', 'Loud / Bold'], ['vintage_retro', 'Vintage / Retro'], ['futuristic_tech', 'Futuristic / Tech'], ['rugged', 'Rugged'], ['artistic', 'Artistic'], ['formal', 'Formal'], ['handmade', 'Handmade']]),
+  mkSys('use', 'Use', [['editorial', 'Editorial'], ['logo_branding', 'Logo / Branding'], ['packaging', 'Packaging'], ['signage', 'Signage']]),
+];
+/** Như backend `create_tag`: tiền tố dành riêng được chuẩn hoá và phải có trong danh mục; tên khác giữ nguyên. */
+function canonicalSystemTag(raw: string): string {
+  const name = raw.trim();
+  const i = name.indexOf(':');
+  if (i < 0) return name;
+  const g = MOCK_SYSTEM_TAGS.find(x => x.namespace === name.slice(0, i).trim().toLowerCase());
+  if (!g) return name;
+  const t = g.tags.find(x => x.key === name.slice(i + 1).trim().toLowerCase());
+  if (!t) throw new CmdError('invalid_arg', `tag hệ thống không có trong danh mục: ${name}`);
+  return t.name;
 }

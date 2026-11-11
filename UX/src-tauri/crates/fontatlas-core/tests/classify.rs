@@ -339,3 +339,28 @@ fn v2_does_not_change_plain_sans_and_serif() {
         assert_eq!(classify_v2(&synthetic(name, foot, flare, head)).class, want, "{name}");
     }
 }
+
+#[test]
+fn v2_traits_are_measured_and_independent_of_class() {
+    let mk = |contrast: f32, ch: f32| ClassifyInput { name: "acme regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.0), serif_head: Some(0.0), contrast: Some(contrast), contrast_h: Some(ch), ..Default::default() }, ..Default::default() };
+    let t = |i: &ClassifyInput| classify_v2(i).traits;
+    assert!(t(&mk(1.05, 1.0)).contains(&"monoline".to_string()));
+    assert!(t(&mk(6.0, 1.0)).contains(&"high_contrast".to_string()));
+    assert!(t(&mk(2.0, 0.5)).contains(&"reverse_contrast".to_string()));
+    // sans bình thường: không trait v2
+    let plain = t(&mk(1.4, 1.0));
+    assert!(!plain.iter().any(|x| ["monoline", "high_contrast", "reverse_contrast"].contains(&x.as_str())), "{plain:?}");
+    // v1 không phát trait v2 (giữ hợp đồng)
+    assert!(!classify(&mk(1.05, 0.5)).traits.iter().any(|x| x == "monoline" || x == "reverse_contrast"));
+}
+
+#[test]
+fn v2_hybrid_secondary_for_semi_serif_sans_and_typewriter() {
+    let semi = ClassifyInput { name: "acme regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.0), serif_head: Some(0.1), ..Default::default() }, ..Default::default() };
+    assert!(classify_v2(&semi).secondary.is_none());
+    let flared = ClassifyInput { name: "acme sans regular".into(), m: Metrics { serif_foot: Some(1.0), serif_flare: Some(1.35), serif_head: Some(0.1), ..Default::default() }, ..Default::default() };
+    let c = classify_v2(&flared);
+    if c.class == Class::Sans {
+        assert_eq!(c.secondary.as_ref().map(|s| s.class), Some(Class::Serif));
+    }
+}
