@@ -277,6 +277,25 @@ fn undo_is_blocked_while_a_newer_resolution_depends_on_the_keeper() {
     assert_eq!(total(&w.s), 3);
 }
 
+/// Minor: hai bản thua cùng mẻ cùng nằm trong một collection → liên kết trên bản giữ là CHUNG; hoàn tác một quyết định
+/// không được xoá nó khi quyết định kia còn sống.
+#[test]
+fn a_link_shared_by_two_resolutions_of_one_batch_survives_until_both_are_undone() {
+    let (mut w, c) = three();
+    let (a, b) = (w.a, w.b);
+    let col = w.s.create_collection("Chung", None).unwrap();
+    w.s.add_to_collection(col, &[b, c]).unwrap();
+    let ids = w
+        .s
+        .apply_resolutions("b1", &[res_between(&a, "/f/A.ttf", &b, "/f/B.ttf"), res_between(&a, "/f/A.ttf", &c, "/f/C.ttf")], 500)
+        .unwrap();
+    assert!(w.s.collection_faces(col).unwrap().contains(&a));
+    w.s.undo_resolution(ids[0], 600).unwrap();
+    assert!(w.s.collection_faces(col).unwrap().contains(&a), "quyết định thứ hai còn sống vẫn cần liên kết này");
+    w.s.undo_resolution(ids[1], 601).unwrap();
+    assert!(!w.s.collection_faces(col).unwrap().contains(&a), "cả hai đã hoàn tác → gỡ");
+}
+
 /// Review #8: undo chỉ xoá liên kết do CHÍNH lần giải quyết tạo; người dùng xoá rồi tạo lại sau đó thì giữ nguyên.
 #[test]
 fn undo_keeps_a_link_the_user_recreated_after_resolving() {

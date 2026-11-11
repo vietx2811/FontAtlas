@@ -92,6 +92,27 @@ fn journal(c: &Connection, id: i64, tbl: &str, op: &str, ref_id: i64, side: &str
     Ok(())
 }
 
+/// Quyết định SỐNG khác (cùng bản giữ) cũng đã ghi sổ chính liên kết này? `created_at` = Some(t): chỉ xét quyết định tạo cùng
+/// thời điểm t (cùng mẻ: dòng liên kết có dấu thời gian t là của chung cả mẻ).
+fn other_live_journal(c: &Connection, id: i64, keeper: &FaceKey, tbl: &str, ref_id: i64, created_at: Option<i64>) -> Result<bool, StoreError> {
+    Ok(c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM u.dup_link_moves m JOIN u.dup_resolutions r ON r.id = m.resolution_id
+          WHERE m.tbl=?1 AND m.ref_id=?2 AND m.op='insert' AND r.id<>?3 AND r.undone_at IS NULL
+            AND r.keeper_hash=?4 AND r.keeper_face=?5 AND (?6 IS NULL OR r.created_at=?6))",
+        params![tbl, ref_id, id, &keeper.hash[..], keeper.face_index as i64, created_at],
+        |r| r.get(0),
+    )?)
+}
+
+/// Ghi sổ một liên kết đã chép. Khi INSERT OR IGNORE không thêm gì vì chính một quyết định cùng mẻ (cùng bản giữ, cùng thời
+/// điểm) vừa thêm nó, vẫn ghi sổ cho quyết định này: dòng đó thuộc chung cả hai, chỉ xoá khi cả hai đã hoàn tác.
+fn insert_link(c: &Connection, id: i64, keeper: &FaceKey, now: i64, tbl: &str, ref_id: i64, changed: usize) -> Result<(), StoreError> {
+    if changed > 0 || other_live_journal(c, id, keeper, tbl, ref_id, Some(now))? {
+        journal(c, id, tbl, "insert", ref_id, "")?;
+    }
+    Ok(())
+}
+
 /// Chép liên kết của bản thua sang bản giữ (INSERT OR IGNORE: chỉ dòng thực sự mới được ghi sổ) và đổi trỏ cặp / slot.
 /// Cùng (hash, face) thì không có gì để chuyển (vd hai đường dẫn của một tệp).
 fn move_links(c: &Connection, id: i64, keeper: &FaceKey, loser: &FaceKey, now: i64) -> Result<(), StoreError> {
@@ -101,48 +122,40 @@ fn move_links(c: &Connection, id: i64, keeper: &FaceKey, loser: &FaceKey, now: i
     let (kh, kf) = (&keeper.hash[..], keeper.face_index as i64);
     let (lh, lf) = (&loser.hash[..], loser.face_index as i64);
 
-    if c.execute(
+    let n = c.execute(
         "INSERT OR IGNORE INTO u.favorites(hash,face_index,created_at)
          SELECT ?1,?2,?5 FROM u.favorites WHERE hash=?3 AND face_index=?4",
         params![kh, kf, lh, lf, now],
-    )? > 0
-    {
-        journal(c, id, "favorites", "insert", 0, "")?;
-    }
+    )?;
+    insert_link(c, id, keeper, now, "favorites", 0, n)?;
     let mut ids = c.prepare("SELECT collection_id FROM u.collection_items WHERE hash=?1 AND face_index=?2")?;
     let cols = ids.query_map(params![lh, lf], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
     for col in cols {
-        if c.execute(
+        let n = c.execute(
             "INSERT OR IGNORE INTO u.collection_items(collection_id,hash,face_index,added_at) VALUES (?1,?2,?3,?4)",
             params![col, kh, kf, now],
-        )? > 0
-        {
-            journal(c, id, "collection_items", "insert", col, "")?;
-        }
+        )?;
+        insert_link(c, id, keeper, now, "collection_items", col, n)?;
     }
     let mut ids = c.prepare("SELECT tag_id FROM u.face_tags WHERE hash=?1 AND face_index=?2")?;
     let tags = ids.query_map(params![lh, lf], |r| r.get::<_, i64>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
     for t in tags {
-        if c.execute(
+        let n = c.execute(
             "INSERT OR IGNORE INTO u.face_tags(tag_id,hash,face_index,added_at) VALUES (?1,?2,?3,?4)",
             params![t, kh, kf, now],
-        )? > 0
-        {
-            journal(c, id, "face_tags", "insert", t, "")?;
-        }
+        )?;
+        insert_link(c, id, keeper, now, "face_tags", t, n)?;
     }
     let mut ids = c.prepare("SELECT case_id, origin, note FROM u.case_faces WHERE hash=?1 AND face_index=?2")?;
     let cases = ids
         .query_map(params![lh, lf], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     for (case, origin, note) in cases {
-        if c.execute(
+        let n = c.execute(
             "INSERT OR IGNORE INTO u.case_faces(case_id,hash,face_index,origin,note,added_at) VALUES (?1,?2,?3,?4,?5,?6)",
             params![case, kh, kf, origin, note, now],
-        )? > 0
-        {
-            journal(c, id, "case_faces", "insert", case, "")?;
-        }
+        )?;
+        insert_link(c, id, keeper, now, "case_faces", case, n)?;
     }
     // Cặp: chỉ cặp (bản thua, bản giữ) mới tránh đổi trỏ — đổi sẽ tạo cặp tự trỏ (A,A). Cặp đã tự trỏ ở bản thua
     // (B,B) thì chuyển cả hai phía. Quyết định theo trạng thái cặp TRƯỚC khi sửa.
@@ -189,6 +202,10 @@ fn revert_links(c: &Connection, r: &ResolutionRow) -> Result<(), StoreError> {
         .query_map([r.id], |m| Ok((m.get::<_, String>(0)?, m.get::<_, String>(1)?, m.get::<_, i64>(2)?, m.get::<_, String>(3)?)))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     for (tbl, op, ref_id, side) in moves {
+        // dòng chung với một quyết định sống khác (cùng bản giữ): chỉ quyết định cuối cùng hoàn tác mới được xoá
+        if op == "insert" && other_live_journal(c, r.id, &r.keeper, &tbl, ref_id, None)? {
+            continue;
+        }
         match (tbl.as_str(), op.as_str()) {
             // chỉ xoá dòng do CHÍNH lần này tạo: dấu thời gian trùng `created_at` của quyết định. Người dùng xoá rồi
             // tạo lại dòng đó về sau sẽ có dấu thời gian khác → được giữ nguyên.

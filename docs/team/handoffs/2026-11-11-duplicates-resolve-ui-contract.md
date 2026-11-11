@@ -102,6 +102,9 @@ Thuật ngữ font (PostScript name, revision, variable/static…) theo quy ư�
 - **Đang bật**: bản thua khác hash đang bật sẽ được tắt, rồi bật bản giữ cùng phạm vi. `same_file` mà font đang bật chính bằng bản sao bị ẩn: từ chối với `active_copy_in_use` (yêu cầu người dùng tắt font trước).
 - **Không thể bật bản đã ẩn** (activation thấy mọi vị trí của nó như đã mất).
 - **Tệp nhiều face (TTC/OTC)**: không tự ẩn / không Thùng rác (`collection_file`).
+- **Worker nền (nhúng embedding, độ phủ ngôn ngữ, quét) chạy trên kết nối chỉ-library** nên không thấy sổ quyết định. Với `trash`, vị trí được đánh dấu `missing` ngay (và đánh dấu lại khi hoàn tác) nên worker bỏ qua. Với `hide`, tệp vẫn nguyên nên worker vẫn có thể đọc vị trí đã ẩn (vô hại: nội dung giống hệt; nhúng đã bỏ qua bản cloud_only nên không kéo file cloud về). Với `same_file` bản ẩn có thể được worker chọn thay vì bản giữ; kết quả như nhau vì cùng hash.
+- **Chạy tuần tự**: `resolve_apply`, `resolve_undo`, `resolve_list` dùng chung một khoá; dòng `pending` chỉ được dọn khi không có lệnh nào đang chạy.
+- **Chuyển tệp không ghi đè**: đưa tệp từ Thùng rác về chỉ thành công nếu chỗ cũ còn trống (`path_occupied` nếu vừa có tệp khác xuất hiện).
 - **Rescan**: quyết định nằm trong sổ bền theo đường dẫn; quét lại không làm bản đã ẩn hiện lại.
 - **Thùng rác**: macOS `NSFileManager.trashItem`; hoàn tác đưa tệp về đúng đường dẫn cũ; nếu chỗ cũ đã có tệp khác (`path_occupied`) hoặc Thùng rác đã dọn (`trash_emptied`) thì không làm gì và quyết định vẫn giữ nguyên.
 

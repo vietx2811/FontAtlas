@@ -425,3 +425,195 @@ fn leftover_pending_rows_are_recovered_and_never_left_half_done() {
 fn face(m: &PlanMemberDto) -> fontatlas_store::FaceKey {
     fontatlas_store::FaceKey::from_hex(&m.face.hash_hex, m.face.face_index).unwrap()
 }
+
+fn missing_flag(st: &AppState, path: &str) -> i64 {
+    st.with_store(|s| Ok(s.conn().query_row("SELECT missing FROM file_locations WHERE path=?1", [path], |r| r.get(0)).unwrap())).unwrap()
+}
+
+// ---------- vòng review 2 ----------
+
+/// F1: dọn pending phải tính cả activation đã ghi trong sổ.
+#[test]
+fn recovering_a_pending_resolution_also_repairs_activation() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    let it = &p.items[0];
+    let (old, new) = (it.losers[0].clone(), it.keeper.clone());
+    activation::activate(&st, &[key_of(&old)], Some(ScopeDto::Persistent), true, &mut |_| {}).unwrap();
+    let row = |action: &str| fontatlas_store::NewResolution {
+        kind: "versions".into(),
+        group_key: it.key.clone(),
+        keeper: face(&new),
+        keeper_path: new.path.clone(),
+        loser: face(&old),
+        loser_path: old.path.clone(),
+        action: action.into(),
+        trash_path: None,
+        reason: "{}".into(),
+        was_active: true,
+        loser_scope: Some("persistent".into()),
+    };
+    // (a) sự cố TRƯỚC khi tắt font, action = hide: hoàn tất phải tắt bản thua
+    st.with_store(|s| Ok(s.begin_resolution("crash", &row("hide"), 5)?)).unwrap();
+    assert_eq!(eng.registrations().len(), 1);
+    let (n, failed) = dup_resolve::recover_pending_report(&st, 6).unwrap();
+    assert_eq!((n, failed.len()), (1, 0), "{failed:?}");
+    assert!(eng.registrations().is_empty(), "bản thua phải đã tắt sau khi hoàn tất hide");
+    assert_eq!(dup_resolve::resolve_list(&st, false).unwrap()[0].status, "done");
+    // dọn sạch để thử tiếp
+    let id = dup_resolve::resolve_list(&st, false).unwrap()[0].id;
+    dup_resolve::resolve_undo(&st, &[id], 7).unwrap();
+    eng.simulate_logout(); // bỏ mọi đăng ký Session; Persistent giữ nguyên
+    activation::activate(&st, &[key_of(&old)], Some(ScopeDto::Persistent), true, &mut |_| {}).unwrap();
+
+    // (b) sự cố SAU khi tắt font, action = trash, tệp còn ở chỗ cũ: huỷ phải bật lại bản thua
+    st.with_store(|s| Ok(s.begin_resolution("crash2", &row("trash"), 8)?)).unwrap();
+    activation::deactivate(&st, &[key_of(&old)], true, &mut |_| {}).unwrap();
+    assert!(eng.registrations().is_empty());
+    let (n, failed) = dup_resolve::recover_pending_report(&st, 9).unwrap();
+    assert_eq!((n, failed.len()), (1, 0), "{failed:?}");
+    assert_eq!(eng.registrations().len(), 1, "bản thua được bật lại theo loser_scope");
+    assert!(dup_resolve::resolve_list(&st, false).unwrap().is_empty());
+}
+
+/// F2: chuyển tệp KHÔNG ghi đè.
+#[test]
+fn moving_a_file_never_overwrites_an_existing_one() {
+    let d = tempfile::tempdir().unwrap();
+    let (a, b) = (d.path().join("a.ttf"), d.path().join("b.ttf"));
+    std::fs::write(&a, b"nguon").unwrap();
+    std::fs::write(&b, b"dich co san").unwrap();
+    let e = app_lib::services::dup_resolve::move_no_clobber_for_test(&a, &b).unwrap_err();
+    assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(std::fs::read(&b).unwrap(), b"dich co san");
+    assert_eq!(std::fs::read(&a).unwrap(), b"nguon", "nguồn còn nguyên");
+    std::fs::remove_file(&b).unwrap();
+    app_lib::services::dup_resolve::move_no_clobber_for_test(&a, &b).unwrap();
+    assert!(!a.exists() && b.exists());
+}
+
+/// F3: undo lỗi (DB) sau khi đã đưa tệp ra khỏi Thùng rác → đưa lại và đặt missing=1.
+#[test]
+fn a_failed_undo_puts_the_file_back_in_the_trash_and_marks_the_location_missing_again() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    let loser = p.items[0].losers[0].path.clone();
+    let trash_dir = td.path().join("trash");
+    let r = dup_resolve::resolve_apply(&st, &req(&p, ResolveActionDto::Trash), &fake_trash(&trash_dir), 1).unwrap();
+    let t = r.done[0].trash_path.clone().unwrap();
+    assert_eq!(missing_flag(&st, &loser), 1, "vừa vào Thùng rác → missing");
+    // làm undo_resolution lỗi ở DB sau khi tệp đã được đưa về
+    st.with_store(|s| {
+        s.conn()
+            .execute_batch("CREATE TRIGGER u.no_undo BEFORE UPDATE OF undone_at ON dup_resolutions BEGIN SELECT RAISE(ABORT, 'chặn để thử'); END;")
+            .unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let u = dup_resolve::resolve_undo(&st, &[r.done[0].id], 2).unwrap();
+    assert!(codes(&u).contains(&"db_error"), "{:?}", u.failed);
+    assert!(Path::new(&t).exists() && !Path::new(&loser).exists(), "tệp lại nằm trong Thùng rác");
+    assert_eq!(missing_flag(&st, &loser), 1, "vị trí cũ lại missing");
+}
+
+/// F4: cảnh báo ở nhánh thành công (không đánh dấu missing được) phải xuất hiện trong `failed`.
+#[test]
+fn a_warning_on_the_success_path_is_reported_not_swallowed() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    st.with_store(|s| {
+        s.conn()
+            .execute_batch("CREATE TRIGGER no_missing BEFORE UPDATE OF missing ON main.file_locations BEGIN SELECT RAISE(ABORT, 'chặn để thử'); END;")
+            .unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let trash_dir = td.path().join("trash");
+    let r = dup_resolve::resolve_apply(&st, &req(&p, ResolveActionDto::Trash), &fake_trash(&trash_dir), 1).unwrap();
+    assert_eq!(r.done.len(), 1, "quyết định vẫn thành công");
+    assert!(codes(&r).contains(&"db_error"), "cảnh báo không bị nuốt: {:?}", r.failed);
+}
+
+/// F5: tệp trong Thùng rác bị đổi ngay sau khi chuyển → đưa về và đảo sổ.
+#[test]
+fn a_file_that_changes_during_the_move_is_rolled_back() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    let loser = p.items[0].losers[0].path.clone();
+    let trash_dir = td.path().join("trash");
+    let swapping = |q: &Path| -> Result<PathBuf, String> {
+        let to = fake_trash(&trash_dir)(q)?;
+        std::fs::write(&to, b"bi thay trong luc chuyen").map_err(|e| e.to_string())?;
+        Ok(to)
+    };
+    let r = dup_resolve::resolve_apply(&st, &req(&p, ResolveActionDto::Trash), &swapping, 1).unwrap();
+    assert!(codes(&r).contains(&"trash_mismatch"), "{:?}", r.failed);
+    assert!(r.done.is_empty());
+    assert!(Path::new(&loser).exists(), "tệp được đưa về chỗ cũ");
+    assert!(dup_resolve::resolve_list(&st, false).unwrap().is_empty(), "sổ đảo");
+    assert_eq!(missing_flag(&st, &loser), 0);
+}
+
+/// F7: resolve_list không được dọn dòng pending của một apply đang chạy.
+#[test]
+fn listing_waits_for_a_running_apply_instead_of_recovering_its_pending_row() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    let request = req(&p, ResolveActionDto::Trash);
+    let trash_dir = td.path().join("trash");
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let st2 = st.clone();
+    let worker = std::thread::spawn(move || {
+        let slow = move |q: &Path| -> Result<PathBuf, String> {
+            tx.send(()).unwrap(); // sổ đã ở trạng thái pending ngay lúc này
+            std::thread::sleep(Duration::from_millis(400));
+            fake_trash(&trash_dir)(q)
+        };
+        dup_resolve::resolve_apply(&st2, &request, &slow, 1).unwrap()
+    });
+    rx.recv().unwrap();
+    let listed = dup_resolve::resolve_list(&st, false).unwrap(); // phải chờ apply xong
+    let res = worker.join().unwrap();
+    assert!(res.failed.is_empty(), "{:?}", res.failed);
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].status, "done");
+    assert!(listed[0].trash_path.is_some(), "list thấy kết quả cuối, không phải dòng bị dọn giữa chừng");
+}
+
+/// Nhỏ: bản giữ chỉ bị coi là "đã dùng" khi có ít nhất một bản thua thành công.
+#[test]
+fn a_keeper_whose_losers_all_failed_is_not_marked_as_used() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let st = versions(td.path(), &eng, &[("old", 1.203), ("new", 1.204)]);
+    let p = plan(&st);
+    let it = &p.items[0];
+    let mut r = req(&p, ResolveActionDto::Hide);
+    r.items[0].loser_paths = vec!["/khong/co.ttf".into()]; // mục 1: bản thua không thuộc nhóm → thất bại
+    r.items.push(ResolveItemDto {
+        kind: it.kind,
+        key: it.key.clone(),
+        keeper_path: it.losers[0].path.clone(), // mục 2 đảo vai: bản giữ của mục 1 thành bản thua
+        loser_paths: vec![it.keeper.path.clone()],
+        member_paths: it.member_paths.clone(),
+    });
+    let out = dup_resolve::resolve_apply(&st, &r, &no_trash, 1).unwrap();
+    assert!(codes(&out).contains(&"loser_not_in_group"));
+    assert_eq!(out.done.len(), 1, "mục 2 không bị chặn oan bởi mục 1 đã thất bại: {:?}", out.failed);
+}

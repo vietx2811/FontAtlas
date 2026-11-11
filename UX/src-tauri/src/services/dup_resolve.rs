@@ -302,23 +302,69 @@ fn mark_missing(state: &AppState, path: &str, missing: bool, failed: &mut Vec<Re
     }
 }
 
-/// Dọn các quyết định còn `pending` sau sự cố giữa chừng. `hide`: ý định đã ghi → hoàn tất. `trash`: tệp còn ở chỗ cũ
-/// (chưa kịp vào Thùng rác) → huỷ hẳn; tệp đã đi (không biết nó nằm đâu) → hoàn tất không có `trash_path` (không hoàn tác tự động).
-pub fn recover_pending(state: &AppState, now: i64) -> Result<usize, CmdError> {
+/// Chỉ MỘT lệnh resolve chạy tại một thời điểm: `resolve_list` cũng dọn `pending`, không được đụng dòng pending của một
+/// `resolve_apply` đang chạy giữa chừng.
+static RESOLVE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lock() -> std::sync::MutexGuard<'static, ()> {
+    RESOLVE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Chuyển tệp KHÔNG ghi đè: hard-link sang đích (lỗi `AlreadyExists` nếu đã có gì ở đó) rồi gỡ nguồn. Nếu gỡ nguồn lỗi thì
+/// gỡ liên kết mới để không để tệp ở hai nơi. Cùng volume (Thùng rác của volume chứa tệp), khác volume → lỗi rõ ràng.
+fn move_no_clobber(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::hard_link(from, to)?;
+    if let Err(e) = std::fs::remove_file(from) {
+        let _ = std::fs::remove_file(to);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Chỉ cho test tích hợp (crate test không thấy hàm private).
+#[doc(hidden)]
+pub fn move_no_clobber_for_test(from: &Path, to: &Path) -> std::io::Result<()> {
+    move_no_clobber(from, to)
+}
+
+fn is_active(state: &AppState, key: &FaceKey) -> bool {
+    state.with_store(|s| Ok(s.activation_row(&key.hash)?)).ok().flatten().is_some_and(|a| a.state == DesiredState::Active)
+}
+
+/// Dọn các quyết định còn `pending` sau sự cố giữa chừng, theo cả trạng thái ACTIVATION đã ghi trong sổ:
+/// `hide` → hoàn tất và bảo đảm bản thua đã tắt (sự cố có thể xảy ra trước khi tắt). `trash` mà tệp còn ở chỗ cũ → huỷ và
+/// bật lại bản thua nếu nó từng bật mà nay đã tắt. `trash` mà tệp đã đi (không biết đâu) → hoàn tất không có `trash_path`
+/// (không hoàn tác tự động) và bảo đảm bản thua đã tắt.
+pub fn recover_pending_report(state: &AppState, now: i64) -> Result<(usize, Vec<ResolveFailureDto>), CmdError> {
     let pending = state.with_store(|s| Ok(s.pending_resolutions()?))?;
     let n = pending.len();
+    let mut failed = Vec::new();
     for r in pending {
-        let still_there = Path::new(&r.loser_path).exists();
-        if r.action == "trash" && still_there {
+        let revives = r.was_active && r.keeper != r.loser; // bản thua từng bật và khác hash với bản giữ
+        if r.action == "trash" && Path::new(&r.loser_path).exists() {
             state.with_store(|s| Ok(s.undo_resolution(r.id, now).map(|_| ())?))?;
+            if revives && state.activation.supported() && !is_active(state, &r.loser) {
+                reactivate(state, &r.loser, scope_parse(r.loser_scope.as_deref()), &r.loser_path, &mut failed);
+            }
         } else {
             state.with_store(|s| Ok(s.complete_resolution(r.id, None)?))?;
+            if revives
+                && state.activation.supported()
+                && is_active(state, &r.loser)
+                && let Err(e) = set_active(state, &r.loser, false, Scope::Persistent)
+            {
+                failed.push(fail(&r.loser_path, "deactivate_failed", e));
+            }
         }
     }
     if n > 0 {
         duplicates::invalidate_cache();
     }
-    Ok(n)
+    Ok((n, failed))
+}
+
+pub fn recover_pending(state: &AppState, now: i64) -> Result<usize, CmdError> {
+    Ok(recover_pending_report(state, now)?.0)
 }
 
 /// Đảo ghi sổ pending của một bản thua (huỷ giữa chừng). Lỗi đảo là lỗi nặng: báo `rollback_failed`, KHÔNG nuốt.
@@ -372,13 +418,13 @@ pub fn resolve_apply(
     trasher: &dyn Fn(&Path) -> Result<PathBuf, String>,
     now: i64,
 ) -> Result<ResolveResultDto, CmdError> {
-    recover_pending(state, now)?;
+    let _guard = lock();
+    let (_, mut failed) = recover_pending_report(state, now)?;
     let batch_id = format!("dup-{now}-{}", std::process::id());
     let all_groups = duplicates::current_groups(state, None)?;
     let ctx = ctx_for(state, &all_groups)?;
     let trash = req.action == ResolveActionDto::Trash;
     let mut done = Vec::new();
-    let mut failed = Vec::new();
     // trong một request: đường dẫn đã làm bản giữ / bản thua ở mục trước
     let mut kept: HashSet<String> = HashSet::new();
     let mut lost: HashSet<String> = HashSet::new();
@@ -432,7 +478,8 @@ pub fn resolve_apply(
             failed.push(fail(&keeper.cand.path, code, ""));
             continue;
         }
-        kept.insert(keeper_path.clone());
+        // chỉ đánh dấu "đã làm bản giữ" khi ít nhất một bản thua thực sự được xử lý (xem cuối vòng lặp)
+        let done_before = done.len();
 
         for lp in &loser_paths {
             if *lp == keeper_path {
@@ -513,6 +560,21 @@ pub fn resolve_apply(
             if trash {
                 match trasher(Path::new(lp)) {
                     Ok(p) => {
+                        // hash lại tệp NGAY trong Thùng rác: lệch (tệp bị thay giữa kiểm tra và chuyển) → đưa về, đảo hết
+                        let intact = std::fs::read(&p).is_ok_and(|b| blake3::hash(&b).as_bytes() == &loser.member.key.hash);
+                        if !intact {
+                            match move_no_clobber(&p, Path::new(lp)) {
+                                Ok(()) => mark_missing(state, lp, false, &mut side),
+                                Err(re) => side.push(fail(lp, "rollback_failed", format!("không đưa tệp từ {} về được: {re}", p.display()))),
+                            }
+                            abort(state, id, now, lp, &mut side);
+                            if deactivated {
+                                reactivate(state, &loser.member.key, scope_parse(loser_scope.as_deref()), lp, &mut side);
+                            }
+                            failed.push(fail(lp, "trash_mismatch", p.to_string_lossy()));
+                            failed.append(&mut side);
+                            continue;
+                        }
                         trashed_to = Some(p.to_string_lossy().into_owned());
                         mark_missing(state, lp, true, &mut side);
                     }
@@ -530,7 +592,7 @@ pub fn resolve_apply(
             // 4. đánh dấu xong; lỗi → đưa tệp về chỗ cũ (lỗi đưa về được báo), đảo sổ, bật lại
             if let Err(e) = state.with_store(|s| Ok(s.complete_resolution(id, trashed_to.as_deref())?)) {
                 if let Some(t) = &trashed_to
-                    && let Err(re) = std::fs::rename(t, lp)
+                    && let Err(re) = move_no_clobber(Path::new(t), Path::new(lp))
                 {
                     failed.push(fail(lp, "rollback_failed", format!("không đưa tệp từ {t} về được: {re}")));
                 } else if trashed_to.is_some() {
@@ -558,9 +620,13 @@ pub fn resolve_apply(
                     }
                 }
             }
+            failed.append(&mut side); // cảnh báo không chặn (vd không đánh dấu missing được) KHÔNG được nuốt
             lost.insert(lp.clone());
             let r = state.with_store(|s| Ok(s.resolution(id)?))?;
             done.push(to_dto(&r, Some((loser.row.family.clone(), loser.row.subfamily.clone())), true));
+        }
+        if done.len() > done_before {
+            kept.insert(keeper_path.clone());
         }
     }
     duplicates::invalidate_cache();
@@ -572,12 +638,12 @@ pub fn resolve_apply(
 /// Hoàn tác theo thứ tự NGƯỢC (mới nhất trước) nên một mẻ chuỗi A→B→C hoàn tác được; hoàn tác riêng một quyết định cũ
 /// khi còn quyết định mới hơn dùng bản giữ của nó làm bản thua bị từ chối (`newer_resolution_depends`).
 pub fn resolve_undo(state: &AppState, ids: &[i64], now: i64) -> Result<ResolveResultDto, CmdError> {
-    recover_pending(state, now)?;
+    let _guard = lock();
+    let (_, mut failed) = recover_pending_report(state, now)?;
     let mut ordered: Vec<i64> = ids.to_vec();
     ordered.sort_unstable_by(|a, b| b.cmp(a));
     ordered.dedup();
     let mut done = Vec::new();
-    let mut failed = Vec::new();
     let mut needs_rescan = false;
     for id in ordered {
         let r = match state.with_store(|s| Ok(s.resolution(id)?)) {
@@ -618,8 +684,10 @@ pub fn resolve_undo(state: &AppState, ids: &[i64], now: i64) -> Result<ResolveRe
                     continue;
                 }
             }
-            if let Err(e) = std::fs::rename(t, &r.loser_path) {
-                failed.push(fail(&r.loser_path, "trash_failed", e.to_string()));
+            // KHÔNG ghi đè: một tệp mới có thể vừa xuất hiện ở đường dẫn cũ sau lần kiểm tra ở trên
+            if let Err(e) = move_no_clobber(Path::new(t), Path::new(&r.loser_path)) {
+                let code = if e.kind() == std::io::ErrorKind::AlreadyExists { "path_occupied" } else { "trash_failed" };
+                failed.push(fail(&r.loser_path, code, e.to_string()));
                 continue;
             }
             moved_back = true;
@@ -641,11 +709,12 @@ pub fn resolve_undo(state: &AppState, ids: &[i64], now: i64) -> Result<ResolveRe
                 done.push(to_dto(&u, names_of(state, &u.loser), false));
             }
             Err(e) => {
-                if moved_back
-                    && let Some(t) = r.trash_path.as_deref()
-                    && let Err(re) = std::fs::rename(&r.loser_path, t)
-                {
-                    failed.push(fail(&r.loser_path, "rollback_failed", format!("không đưa tệp về Thùng rác được: {re}")));
+                if moved_back && let Some(t) = r.trash_path.as_deref() {
+                    match move_no_clobber(Path::new(&r.loser_path), Path::new(t)) {
+                        // tệp lại ở Thùng rác → vị trí cũ lại missing (sổ vẫn nói quyết định còn sống)
+                        Ok(()) => mark_missing(state, &r.loser_path, true, &mut failed),
+                        Err(re) => failed.push(fail(&r.loser_path, "rollback_failed", format!("không đưa tệp về Thùng rác được: {re}"))),
+                    }
                 }
                 failed.push(fail(&r.loser_path, "db_error", e.message));
             }
@@ -657,6 +726,7 @@ pub fn resolve_undo(state: &AppState, ids: &[i64], now: i64) -> Result<ResolveRe
 
 /// Các quyết định đã ghi, mới nhất trước (trang "Đã giải quyết").
 pub fn resolve_list(state: &AppState, include_undone: bool) -> Result<Vec<ResolutionDto>, CmdError> {
+    let _guard = lock();
     recover_pending(state, now_ms())?;
     let rows = state.with_store(|s| Ok(s.resolutions(!include_undone)?))?;
     Ok(rows
