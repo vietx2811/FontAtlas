@@ -169,7 +169,12 @@ fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>,
                     placeholders.push((p, Some((m.len(), mtime_ns))));
                     continue;
                 }
-                out.push(ScannedFile { path: p, size: m.len(), mtime_ns });
+                let created_ns = m
+                    .created()
+                    .ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_nanos() as i64);
+                out.push(ScannedFile { path: p, size: m.len(), mtime_ns, created_ns });
             }
         }
     }

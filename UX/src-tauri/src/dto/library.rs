@@ -190,6 +190,18 @@ pub struct FaceRowDto {
     pub is_favorite: bool,
     #[ts(type = "number")]
     pub added_at: i64,
+    /// Năm phát hành ƯỚC LƯỢNG (độ tin cậy trung bình-thấp): năm trong dòng copyright, nếu không có thì `head.created`,
+    /// rồi `head.modified`; giá trị rõ ràng sai (0, 1904, tương lai) bị bỏ. `null` = không rõ hoặc bản phân tích cũ chưa
+    /// có dữ liệu (analyzer < core-0.8.0, có sau khi phân tích lại).
+    pub release_year: Option<u16>,
+    /// `copyright` | `head_created` | `head_modified`; `null` khi `releaseYear` là `null`.
+    pub release_year_source: Option<String>,
+    /// Ngày tạo file sớm nhất (ms từ epoch) trong các vị trí còn thấy; `null` = không đọc được / chưa quét lại.
+    /// Độ tin cậy thấp làm "ngày font ra đời": sao chép/đồng bộ đặt lại ngày.
+    #[ts(type = "number | null")]
+    pub file_created_at: Option<i64>,
+    /// `disk` | `cloud_sync` (file trên ổ cloud: có thể là lúc đồng bộ); `null` khi `fileCreatedAt` là `null`.
+    pub file_created_source: Option<String>,
     /// Chỉ báo ngôn ngữ trên thẻ, theo `FaceQueryDto.badgeLang` (mặc định `vie`). `null` khi mã ngôn ngữ lạ.
     /// `viMissing` giữ nguyên cho tương thích; giao diện dùng `langBadge` thay chỉ báo `−N`.
     pub lang_badge: Option<LangBadgeDto>,
@@ -219,6 +231,10 @@ impl From<FaceRow> for FaceRowDto {
             on_cloud_only: r.on_cloud_only,
             is_favorite: r.is_favorite,
             added_at: r.added_at,
+            release_year: r.release_year,
+            release_year_source: r.release_year_source,
+            file_created_at: r.file_created_at,
+            file_created_source: r.file_created_source,
             lang_badge,
         }
     }
@@ -254,6 +270,10 @@ pub enum SortKeyDto {
     Family,
     Weight,
     Added,
+    /// Năm phát hành ước lượng; không rõ luôn cuối bất kể chiều.
+    Released,
+    /// Ngày tạo file sớm nhất; không đọc được luôn cuối bất kể chiều.
+    FileCreated,
     Match,
 }
 
@@ -264,6 +284,8 @@ impl From<SortKeyDto> for SortKey {
             SortKeyDto::Family => SortKey::Family,
             SortKeyDto::Weight => SortKey::Weight,
             SortKeyDto::Added => SortKey::Added,
+            SortKeyDto::Released => SortKey::Released,
+            SortKeyDto::FileCreated => SortKey::FileCreated,
             SortKeyDto::Match => SortKey::Match,
         }
     }

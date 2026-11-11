@@ -73,6 +73,7 @@ export function makeRow(i: number, over: Partial<FaceRow> = {}): FaceRow {
     weightClass: null, widthClass: null, isItalic: false, isVariable: false,
     viStatus: 'full', supportsVi: true, viMissing: 0, licenseClass: 'ofl',
     path: `/fonts/${i}.ttf`, fileSize: 200_000, missing: false, onCloudOnly: false, isFavorite: false, addedAt: 0, langBadge: null,
+    releaseYear: null, releaseYearSource: null, fileCreatedAt: null, fileCreatedSource: null,
     ...over,
   };
 }

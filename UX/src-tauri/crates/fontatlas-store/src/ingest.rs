@@ -45,6 +45,8 @@ pub struct ScannedFile {
     pub path: PathBuf,
     pub size: u64,
     pub mtime_ns: i64,
+    /// Birth time của file (ns từ epoch); `None` khi hệ điều hành không cho đọc.
+    pub created_ns: Option<i64>,
 }
 
 pub enum Analysis {
@@ -173,11 +175,12 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
         let c = face_cols(f);
         let m = &f.metadata;
         let v = &f.vietnamese;
+        let ry = crate::release::columns(&m.extras.years, crate::release::current_year());
         tx.execute(
             "INSERT INTO faces(file_id,face_index,family_name,subfamily,full_name,postscript_name,manufacturer,designer,
                 weight_class,width_class,is_italic,is_variable,outline_format,license_class,vi_status,supports_vi,
-                vi_missing,num_glyphs,family_key,search_text,wght_min,wght_max,wdth_min,wdth_max)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)
+                vi_missing,num_glyphs,family_key,search_text,wght_min,wght_max,wdth_min,wdth_max,release_year,release_year_src)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?26)
              ON CONFLICT(file_id,face_index) DO UPDATE SET family_name=excluded.family_name, subfamily=excluded.subfamily,
                 full_name=excluded.full_name, postscript_name=excluded.postscript_name, manufacturer=excluded.manufacturer,
                 designer=excluded.designer, weight_class=excluded.weight_class, width_class=excluded.width_class,
@@ -185,7 +188,8 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
                 license_class=excluded.license_class, vi_status=excluded.vi_status, supports_vi=excluded.supports_vi,
                 vi_missing=excluded.vi_missing, num_glyphs=excluded.num_glyphs, family_key=excluded.family_key,
                 search_text=excluded.search_text, wght_min=excluded.wght_min, wght_max=excluded.wght_max,
-                wdth_min=excluded.wdth_min, wdth_max=excluded.wdth_max",
+                wdth_min=excluded.wdth_min, wdth_max=excluded.wdth_max,
+                release_year=excluded.release_year, release_year_src=excluded.release_year_src",
             params![
                 file_id,
                 f.index as i64,
@@ -211,6 +215,8 @@ fn write_report(tx: &Transaction, file_id: i64, hash: &[u8; 32], r: &FileReport,
                 axis_span(m, "wght").map(|x| x.1),
                 axis_span(m, "wdth").map(|x| x.0),
                 axis_span(m, "wdth").map(|x| x.1),
+                ry.0,
+                ry.1,
             ],
         )?;
         tx.execute(
@@ -257,11 +263,12 @@ impl Store {
                 .optional()?
                 .ok_or_else(|| StoreError::NotFound(format!("file {}", hex_of(&it.hash))))?;
             tx.execute(
-                "INSERT INTO file_locations(file_id,source_id,path,size,mtime_ns,last_seen_at,missing,scan_gen)
-                 VALUES (?1,?2,?3,?4,?5,?6,0,?7)
+                "INSERT INTO file_locations(file_id,source_id,path,size,mtime_ns,last_seen_at,missing,scan_gen,created_ns,created_src)
+                 VALUES (?1,?2,?3,?4,?5,?6,0,?7,?8,?9)
                  ON CONFLICT(path) DO UPDATE SET file_id=excluded.file_id, source_id=excluded.source_id,
                    size=excluded.size, mtime_ns=excluded.mtime_ns, last_seen_at=excluded.last_seen_at,
-                   missing=0, scan_gen=excluded.scan_gen, cloud_only=0",
+                   missing=0, scan_gen=excluded.scan_gen, cloud_only=0,
+                   created_ns=excluded.created_ns, created_src=excluded.created_src",
                 params![
                     file_id,
                     it.source_id,
@@ -269,7 +276,9 @@ impl Store {
                     it.file.size as i64,
                     it.file.mtime_ns,
                     seen_at,
-                    generation
+                    generation,
+                    it.file.created_ns,
+                    it.file.created_ns.map(|_| crate::release::created_src(&it.file.path)),
                 ],
             )?;
             match &it.analysis {

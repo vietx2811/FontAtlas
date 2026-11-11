@@ -53,7 +53,7 @@ pub fn hash_of(r: &FileReport) -> [u8; 32] {
 pub fn item(source_id: i64, path: &str, r: &FileReport) -> IngestItem {
     IngestItem {
         source_id,
-        file: ScannedFile { path: path.into(), size: 1, mtime_ns: 1 },
+        file: ScannedFile { path: path.into(), size: 1, mtime_ns: 1, created_ns: None },
         hash: hash_of(r),
         analysis: Analysis::Report(r.clone()),
     }

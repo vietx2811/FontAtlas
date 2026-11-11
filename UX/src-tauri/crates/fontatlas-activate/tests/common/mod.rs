@@ -61,7 +61,7 @@ pub fn ingest_fake(env: &Env, file_name: &str, seed: &str, ps_names: &[&str]) ->
         .collect();
     let item = IngestItem {
         source_id: 999,
-        file: ScannedFile { path: path.clone(), size: bytes.len() as u64, mtime_ns: 1 },
+        file: ScannedFile { path: path.clone(), size: bytes.len() as u64, mtime_ns: 1, created_ns: None },
         hash,
         analysis: Analysis::Report(r),
     };

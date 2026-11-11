@@ -89,7 +89,7 @@ fn failure_is_recorded_with_code_path_and_attempts() {
     let h = *blake3::hash(b"rac").as_bytes();
     let fail = || IngestItem {
         source_id: 1,
-        file: ScannedFile { path: "/a/broken.ttf".into(), size: 3, mtime_ns: 1 },
+        file: ScannedFile { path: "/a/broken.ttf".into(), size: 3, mtime_ns: 1, created_ns: None },
         hash: h,
         analysis: Analysis::Failed { code: "not_a_font".into(), detail: "không phải file font".into() },
     };

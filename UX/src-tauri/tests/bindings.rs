@@ -124,6 +124,10 @@ fn row(id: i64, h: u8, family: &str, sub: &str, w: u16, italic: bool) -> FaceRow
         on_cloud_only: false,
         is_favorite: id == 1,
         added_at: 1_700_000_000_000 + id,
+        release_year: if id % 3 == 0 { None } else { Some(2010 + id as u16) },
+        release_year_source: if id % 3 == 0 { None } else { Some("copyright".into()) },
+        file_created_at: Some(1_600_000_000_000 + id),
+        file_created_source: Some("disk".into()),
     }
 }
 

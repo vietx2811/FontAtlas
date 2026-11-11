@@ -35,6 +35,9 @@ export function mockRows(): FaceRow[] {
       supportsVi: viMissing === 0, viMissing, licenseClass: 'ofl',
       path: `/Users/me/Fonts/src${src}/${family.replace(/ /g, '')}-${sub.replace(/ /g, '')}.ttf`,
       fileSize: 180_000 + n * 1000, missing: false, onCloudOnly: false, isFavorite: false, addedAt: n, langBadge: null,
+      // R2 giả: 1/5 face không rõ năm, 1/7 không đọc được ngày file; mọi ngày file là `disk` trừ nguồn 3 (giả cloud)
+      releaseYear: n % 5 === 0 ? null : 1995 + ((n * 7) % 30), releaseYearSource: n % 5 === 0 ? null : (['copyright', 'head_created', 'head_modified'] as const)[n % 3],
+      fileCreatedAt: n % 7 === 0 ? null : 1_600_000_000_000 + ((n * 37) % 100) * 86_400_000, fileCreatedSource: n % 7 === 0 ? null : src === 3 ? 'cloud_sync' : 'disk',
     });
   };
   for (const [family, src, kind, miss] of FAMILIES) {
@@ -205,6 +208,12 @@ export function createMockApi(o: MockOptions = {}): Api {
         (!q.langs?.length || matchesLangs(r, q.langs, q.langMode)) &&
         (q.vi !== 'full' || r.viMissing === 0) && (q.vi !== 'supported' || r.supportsVi));
       if (q.sort === 'match' && wanted) hits = hits.sort((a, b) => wanted.get(keyOf(a))! - wanted.get(keyOf(b))!);
+      else if (q.sort === 'released' || q.sort === 'file_created') {
+        // không rõ luôn cuối bất kể chiều, rồi cùng bậc theo Family → Weight → nghiêng (như store)
+        const val = (r: FaceRow) => (q.sort === 'released' ? r.releaseYear : r.fileCreatedAt);
+        const byFamily = (a: FaceRow, b: FaceRow) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic;
+        hits = hits.sort((a, b) => { const x = val(a), y = val(b); if (x == null || y == null) return x == null && y == null ? byFamily(a, b) : x == null ? 1 : -1; return (x - y) * (q.descending ? -1 : 1) || byFamily(a, b); });
+      }
       else hits = hits.sort((a, b) => fold(a.family).localeCompare(fold(b.family)) || (a.weightClass ?? 0) - (b.weightClass ?? 0) || +a.isItalic - +b.isItalic);
       const offset = q.offset ?? 0;
       const limit = q.limit === Infinity ? Infinity : Math.min(q.limit || 100, 1000); // Infinity chỉ dùng nội bộ cho thống kê

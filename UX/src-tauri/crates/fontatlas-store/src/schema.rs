@@ -419,7 +419,27 @@ pub(crate) const LIBRARY_V4: &str = r#"
 ALTER TABLE file_locations ADD COLUMN cloud_only INTEGER NOT NULL DEFAULT 0;
 "#;
 
-pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4];
+/// Library v5 (Library view options R2): năm phát hành ước lượng và ngày tạo file.
+/// - `faces.release_year`/`release_year_src`: `release_year_src` = `copyright|head_created|head_modified|none`; NULL = chưa tính
+///   (bản phân tích cũ chưa có `extras`) và được điền ở lần mở sau / khi phân tích lại. Backfill chạy ở Rust (`release::backfill`).
+/// - `file_locations.created_ns` (birth time) và `created_src` (`disk` | `cloud_sync`): NULL tới lần quét kế tiếp.
+pub(crate) const LIBRARY_V5: &str = r#"
+ALTER TABLE faces ADD COLUMN release_year INTEGER;
+ALTER TABLE faces ADD COLUMN release_year_src TEXT;
+ALTER TABLE file_locations ADD COLUMN created_ns INTEGER;
+ALTER TABLE file_locations ADD COLUMN created_src TEXT;
+CREATE INDEX faces_release ON faces(release_year);
+"#;
+
+pub(crate) const LIBRARY_MIGRATIONS: &[&str] = &[LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4, LIBRARY_V5];
+/// Chỉ cho test: library.db ở v4 (trước năm phát hành/ngày tạo file).
+#[doc(hidden)]
+pub fn create_library_v4_for_test(c: &Connection) {
+    for m in [LIBRARY_V1, LIBRARY_V2, LIBRARY_V3, LIBRARY_V4] {
+        c.execute_batch(m).expect("LIBRARY_Vn");
+    }
+    c.execute_batch("PRAGMA user_version = 4;").expect("user_version");
+}
 /// Chỉ cho test: library.db ở v3 (trước cờ cloud_only).
 pub fn create_library_v3_for_test(c: &Connection) {
     c.execute_batch(LIBRARY_V1).expect("LIBRARY_V1");

@@ -22,6 +22,10 @@ pub enum SortKey {
     Family,
     Weight,
     Added,
+    /// Năm phát hành ước lượng (`release_year`); face không có năm luôn xếp cuối bất kể chiều.
+    Released,
+    /// Ngày tạo file sớm nhất trong các vị trí còn thấy; không có thì xếp cuối bất kể chiều.
+    FileCreated,
     /// Điểm khớp trong scope (cao trước); không có scope: khớp đầu từ trước, rồi theo tên (chiều không áp dụng).
     Match,
 }
@@ -179,6 +183,14 @@ pub struct FaceRow {
     pub on_cloud_only: bool,
     pub is_favorite: bool,
     pub added_at: i64,
+    /// Năm phát hành ước lượng (xem `fontatlas_core::extras::release_year`); `None` = không rõ hoặc chưa tính.
+    pub release_year: Option<u16>,
+    /// `copyright` | `head_created` | `head_modified`; `None` khi `release_year` là `None`.
+    pub release_year_source: Option<String>,
+    /// Ngày tạo file sớm nhất (ms từ epoch) trong các vị trí chưa missing; `None` = không đọc được / chưa quét lại.
+    pub file_created_at: Option<i64>,
+    /// `disk` | `cloud_sync` (birth time của file cloud có thể là lúc đồng bộ); `None` khi `file_created_at` là `None`.
+    pub file_created_source: Option<String>,
     /// Độ phủ đã lưu với `FaceQuery::badge_lang` (None: không hỏi, chưa tính, hoặc dưới near).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang_hit: Option<LangHit>,
@@ -305,12 +317,18 @@ fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
     (format!("{head}{}", user_order(q, scoped)), params)
 }
 
+/// Ngày tạo file sớm nhất của face (các vị trí chưa missing).
+const FILE_CREATED_SQL: &str = "(SELECT MIN(l.created_ns) FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0)";
+
 fn user_order(q: &FaceQuery, scoped: bool) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
     match q.sort {
         SortKey::Auto | SortKey::Family => format!("f.family_key {dir}, f.weight_class, f.is_italic, f.face_id"),
         SortKey::Weight => format!("f.weight_class {dir}, f.family_key, f.face_id"),
         SortKey::Added => format!("fi.first_seen_at {dir}, f.face_id"),
+        // không có giá trị: luôn cuối (kể cả khi giảm dần), rồi cùng bậc theo Family → Weight → nghiêng
+        SortKey::Released => format!("(f.release_year IS NULL), f.release_year {dir}, f.family_key, f.weight_class, f.is_italic, f.face_id"),
+        SortKey::FileCreated => format!("({FILE_CREATED_SQL} IS NULL), {FILE_CREATED_SQL} {dir}, f.family_key, f.weight_class, f.is_italic, f.face_id"),
         SortKey::Match if scoped => "sc.score DESC, f.family_key, f.face_id".to_string(),
         SortKey::Match => "f.family_key, f.weight_class, f.is_italic, f.face_id".to_string(),
     }
@@ -503,7 +521,11 @@ impl Store {
                     EXISTS (SELECT 1 FROM u.favorites fv WHERE fv.hash = fi.hash AND fv.face_index = f.face_index),
                     fi.first_seen_at, fi.size,
                     (EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 1{nh})
-                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0{nh}))
+                     AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.cloud_only = 0{nh})),
+                    f.release_year, f.release_year_src,
+                    (SELECT MIN(l.created_ns) FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0{nh}),
+                    (SELECT l.created_src FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 AND l.created_ns IS NOT NULL{nh}
+                      ORDER BY l.created_ns, l.location_id LIMIT 1)
              FROM {from}
              WHERE {w} ORDER BY {order} LIMIT {limit} OFFSET {}",
             q.offset
@@ -535,6 +557,10 @@ impl Store {
                     on_cloud_only: r.get(19)?,
                     is_favorite: r.get(16)?,
                     added_at: r.get(17)?,
+                    release_year: r.get::<_, Option<i64>>(20)?.and_then(|y| u16::try_from(y).ok()),
+                    release_year_source: r.get::<_, Option<String>>(21)?.filter(|s| s != "none"),
+                    file_created_at: r.get::<_, Option<i64>>(22)?.map(|ns| ns / 1_000_000),
+                    file_created_source: r.get(23)?,
                     lang_hit: None,
                     lang_computed: false,
                 },
