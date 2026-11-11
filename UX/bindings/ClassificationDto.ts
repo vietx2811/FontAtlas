@@ -28,7 +28,7 @@ candidate: string | null,
  */
 traits: Array<string>, signals: Array<ClassSignalDto>, 
 /**
- * "text" | "display" | "ui"
+ * "text" | "display" | "ui". Khoá `display` hiển thị là **"Headline"** ở UI (tránh nhầm với class `display`); đổi tên chỉ ở nhãn, không đổi khoá.
  */
 usage: Array<string>, 
 /**

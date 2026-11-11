@@ -465,6 +465,16 @@ INSERT INTO classification_overrides_tx (hash, face_index, class, subclass, upda
          ELSE subclass END,
     updated_at
   FROM classification_overrides;
+-- subclass không thuộc class (vd sans/slab, blackletter/x) bị bỏ, class giữ: cùng quy tắc `migrate_legacy`
+UPDATE classification_overrides_tx SET subclass = NULL
+ WHERE subclass IS NOT NULL AND class || '/' || subclass NOT IN (
+  'serif/venetian_oldstyle','serif/garalde','serif/transitional','serif/didone','serif/glyphic','serif/wedge',
+  'slab/clarendon','slab/egyptian','slab/humanist_slab','slab/typewriter',
+  'sans/grotesque','sans/neo_grotesque','sans/geometric','sans/humanist','sans/flared','sans/rounded','sans/squarish',
+  'mono/sans_mono','mono/serif_mono','mono/coding','mono/typewriter',
+  'script/formal_copperplate','script/brush','script/monoline_script','script/signature','script/upright_script','script/calligraphic_unjoined',
+  'handwriting/casual_print','handwriting/marker','handwriting/childlike',
+  'display/stencil','display/inline_outline','display/shaded_3d','display/pixel_bitmap');
 DROP TABLE classification_overrides;
 ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 "#;

@@ -510,6 +510,7 @@ pub fn classify_v2(i: &ClassifyInput) -> Classification {
             c.confidence = c.confidence.max(0.9);
             c.class = Class::Display;
             c.subclass = sub(sb);
+            c.usage = usage_for(i, Class::Display);
             return c;
         }
     }
@@ -558,6 +559,8 @@ pub fn classify_v2(i: &ClassifyInput) -> Classification {
         }
         _ => {}
     }
+    // --- Usage tính lại từ class v2 cuối cùng (cùng hàm với ghi đè của người dùng)
+    c.usage = usage_for(i, c.candidate.unwrap_or(c.class));
     // --- Class phụ (hybrid): chỉ để hiển thị/tìm kiếm
     if c.secondary.is_none() {
         let semi_serif = m.serif_head.is_some_and(|h| h >= SMALL_HEAD_STRONG) || m.serif_flare.is_some_and(|f| f >= SMALL_FOOT_FLARE);
@@ -831,8 +834,9 @@ fn usage_of(class: Class, i: &ClassifyInput, v: &Votes, traits: &[String]) -> Ve
     // Display là tag mục đích: Script/Blackletter, font có trait hình thái, hoặc đủ bằng chứng nổi bật
     let showy = !traits.is_empty() || v.display_ev() >= DISPLAY_MIN;
     match class {
-        Class::Script | Class::Blackletter => out.push(Usage::Display),
-        Class::Serif | Class::Sans | Class::Mono => {
+        // v2: Slab đi theo nhánh Serif, Handwriting theo Script, Display luôn là chữ trưng bày: cùng một nguồn cho auto và ghi đè
+        Class::Script | Class::Blackletter | Class::Handwriting | Class::Display => out.push(Usage::Display),
+        Class::Serif | Class::Slab | Class::Sans | Class::Mono => {
             let contrast = m.contrast.unwrap_or(1.5);
             if showy || contrast >= 4.0 || i.opsz_max.is_some_and(|o| o >= 72.0) {
                 out.push(Usage::Display);
@@ -840,7 +844,7 @@ fn usage_of(class: Class, i: &ClassifyInput, v: &Votes, traits: &[String]) -> Ve
             if !showy && contrast < 4.0 && m.x_height_em.is_none_or(|x| x >= 0.44) && m.spacing.is_none_or(|s| s >= 0.08) {
                 out.push(Usage::Text);
             }
-            if class != Class::Serif && contrast < 1.6 && m.x_height_em.is_some_and(|x| x >= 0.5) {
+            if !matches!(class, Class::Serif | Class::Slab) && contrast < 1.6 && m.x_height_em.is_some_and(|x| x >= 0.5) {
                 out.push(Usage::Ui);
             }
         }

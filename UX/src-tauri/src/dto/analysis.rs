@@ -422,7 +422,7 @@ pub struct ClassificationDto {
     /// Tag hình thái độc lập với class: stencil | inline_outline | rounded | fat_face | pixel | decorative (và các trait v2 khi có).
     pub traits: Vec<String>,
     pub signals: Vec<ClassSignalDto>,
-    /// "text" | "display" | "ui"
+    /// "text" | "display" | "ui". Khoá `display` hiển thị là **"Headline"** ở UI (tránh nhầm với class `display`); đổi tên chỉ ở nhãn, không đổi khoá.
     pub usage: Vec<String>,
     /// "auto" | "override"
     pub source: String,

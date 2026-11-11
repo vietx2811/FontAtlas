@@ -133,7 +133,17 @@ pub fn query_faces(state: &AppState, q: &FaceQueryDto) -> Result<FacePageDto, Cm
     })
 }
 
-type EffMap = std::sync::Arc<std::collections::HashMap<i64, (String, Option<String>)>>;
+/// Phân loại hiệu lực của một face (ghi đè > tự động), kèm độ tin cậy và class phụ để lọc không phải dựng lại.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct EffClass {
+    pub class: String,
+    pub sub: Option<String>,
+    /// Ghi đè của người dùng = 1.0; tự động = độ tin cậy của bộ phân loại (0 khi `uncertain`).
+    pub conf: f32,
+    /// Class phụ (hybrid) của phân loại TỰ ĐỘNG; ghi đè không có.
+    pub secondary: Option<(String, Option<String>)>,
+}
+type EffMap = std::sync::Arc<std::collections::HashMap<i64, EffClass>>;
 static CLASS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 type EffCache = Option<(std::sync::Weak<crate::index_bundle::IndexBundle>, u64, EffMap)>;
 static EFF_CACHE: std::sync::Mutex<EffCache> = std::sync::Mutex::new(None);
@@ -160,18 +170,28 @@ pub(crate) fn effective_classes(state: &AppState) -> Result<EffMap, CmdError> {
         .into_iter()
         .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
         .collect();
-    let map: EffMap = std::sync::Arc::new(
-        b.meta
-            .iter()
-            .map(|(k, m)| {
-                let eff = match ov.get(&(k.hash.clone(), k.index)) {
-                    Some(o) => (o.class.clone(), o.subclass.clone()),
-                    None => (m.auto_class.clone(), m.auto_subclass.clone()),
-                };
-                (m.face_id, eff)
-            })
-            .collect(),
-    );
+    let mut map: std::collections::HashMap<i64, EffClass> = b
+        .meta
+        .iter()
+        .map(|(k, m)| {
+            let eff = match ov.get(&(k.hash.clone(), k.index)) {
+                Some(o) => EffClass { class: o.class.clone(), sub: o.subclass.clone(), conf: 1.0, secondary: None },
+                None => EffClass { class: m.auto_class.clone(), sub: m.auto_subclass.clone(), conf: m.auto_confidence, secondary: m.auto_secondary.clone() },
+            };
+            (m.face_id, eff)
+        })
+        .collect();
+    // ghi đè cho face chưa có hồ sơ trong Index: lựa chọn của người dùng vẫn là phân loại hiệu lực
+    let in_meta: std::collections::HashSet<(&str, u32)> = b.meta.keys().map(|k| (k.hash.as_str(), k.index)).collect();
+    let orphans: Vec<FaceKey> = ov.values().filter(|o| !in_meta.contains(&(o.key.hash_hex().as_str(), o.key.face_index))).map(|o| o.key).collect();
+    if !orphans.is_empty() {
+        for (k, id) in state.with_store(|s| Ok(s.face_ids_of(&orphans)?))? {
+            if let Some(o) = ov.get(&(k.hash_hex(), k.face_index)) {
+                map.insert(id, EffClass { class: o.class.clone(), sub: o.subclass.clone(), conf: 1.0, secondary: None });
+            }
+        }
+    }
+    let map: EffMap = std::sync::Arc::new(map);
     if let Ok(mut g) = EFF_CACHE.lock() {
         *g = Some((std::sync::Arc::downgrade(&b), generation, map.clone()));
     }
@@ -243,33 +263,17 @@ fn class_face_ids(
             return Err(CmdError::invalid_arg(format!("subclasses: subclass không hợp lệ: {s}")));
         }
     }
-    let mut out: std::collections::HashSet<i64> = if include_secondary || min_conf.is_some() {
-        // đường dùng class phụ / độ tin cậy: duyệt meta + ghi đè (một lần đọc user.db)
-        let b = crate::services::analysis::bundle(state)?;
-        let ov: std::collections::HashMap<(String, u32), _> = state
-            .with_store(|s| Ok(s.classification_overrides()?))?
-            .into_iter()
-            .map(|o| ((o.key.hash_hex(), o.key.face_index), o))
-            .collect();
-        let filter_classes = !classes.is_empty() || !subclasses.is_empty();
-        b.meta
-            .iter()
-            .filter_map(|(k, m)| {
-                let (primary, conf, sec) = match ov.get(&(k.hash.clone(), k.index)) {
-                    // người dùng đã chọn: tin cậy tuyệt đối, không có class phụ
-                    Some(o) => ((o.class.clone(), o.subclass.clone()), 1.0, None),
-                    None => ((m.auto_class.clone(), m.auto_subclass.clone()), m.auto_confidence, m.auto_secondary.clone()),
-                };
-                if min_conf.is_some_and(|t| conf < t) {
-                    return None;
-                }
-                let hit = !filter_classes || class_hit(&classes, subclasses, include_secondary, (&primary.0, &primary.1), sec.as_ref());
-                hit.then_some(m.face_id)
-            })
-            .collect()
-    } else {
-        effective_classes(state)?.iter().filter(|(_, (c, sub))| class_hit(&classes, subclasses, false, (c, sub), None)).map(|(id, _)| *id).collect()
-    };
+    let filter_classes = !classes.is_empty() || !subclasses.is_empty();
+    let mut out: std::collections::HashSet<i64> = effective_classes(state)?
+        .iter()
+        .filter(|(_, e)| {
+            if min_conf.is_some_and(|t| e.conf < t) {
+                return false;
+            }
+            !filter_classes || class_hit(&classes, subclasses, include_secondary, (&e.class, &e.sub), e.secondary.as_ref())
+        })
+        .map(|(id, _)| *id)
+        .collect();
     // "unclassified": face chưa có hồ sơ trong Index (chưa phân tích / JSON hỏng) — luôn tách riêng, không lẫn vào "uncertain".
     // Không có nhãn nên không bao giờ "tự tin": bị loại khi đặt ngưỡng độ tin cậy.
     if classes.iter().any(|c| c == "unclassified") && subclasses.is_empty() && min_conf.is_none() {

@@ -364,3 +364,21 @@ fn v2_hybrid_secondary_for_semi_serif_sans_and_typewriter() {
         assert_eq!(c.secondary.as_ref().map(|s| s.class), Some(Class::Serif));
     }
 }
+
+#[test]
+fn v2_usage_is_the_same_for_auto_and_user_override() {
+    use fontatlas_core::classify::usage_for;
+    let slab = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), serif_flare: Some(2.4), serif_head: Some(0.6), contrast: Some(1.2), stress_abs: Some(2.0), x_height_em: Some(0.5), spacing: Some(0.1), ..Default::default() }, ..Default::default() };
+    let hand = ClassifyInput { name: "acme hand regular".into(), m: Metrics { slant_abs: Some(14.0), spacing: Some(0.03), connect: Some(0.1), bounce: Some(0.12), ..Default::default() }, ..Default::default() };
+    let stencil = ClassifyInput { name: "acme stencil regular".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
+    for (name, i) in [("slab", slab), ("hand", hand), ("stencil", stencil)] {
+        let c = classify_v2(&i);
+        assert_eq!(c.usage, usage_for(&i, c.class), "{name}: auto vs override ({:?})", c.class);
+    }
+    // Slab giữ usage Text như Serif (không bị mất vì rơi vào nhánh mặc định)
+    let i = ClassifyInput { name: "acme slab regular".into(), m: Metrics { serif_foot: Some(2.4), contrast: Some(1.2), x_height_em: Some(0.5), spacing: Some(0.1), ..Default::default() }, ..Default::default() };
+    assert_eq!(usage_for(&i, Class::Slab), usage_for(&i, Class::Serif));
+    assert!(usage_for(&i, Class::Slab).contains(&Usage::Text));
+    assert_eq!(usage_for(&i, Class::Handwriting), usage_for(&i, Class::Script));
+    assert_eq!(usage_for(&i, Class::Display), vec![Usage::Display]);
+}

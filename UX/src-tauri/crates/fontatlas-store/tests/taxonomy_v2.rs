@@ -19,6 +19,10 @@ fn legacy_overrides_migrate_like_migrate_legacy_with_backup_and_no_loss() {
             }
         }
     }
+    // cặp lạ: subclass không thuộc class (SQL phải bỏ subclass như `migrate_legacy`, giữ class)
+    for (c, s) in [("sans", "slab"), ("blackletter", "wedge"), ("serif", "handwritten"), ("mono", "egyptian"), ("script", "garalde")] {
+        cases.push((c.into(), Some(s.into())));
+    }
     {
         let c = rusqlite::Connection::open(&user).unwrap();
         for (i, (cl, sub)) in cases.iter().enumerate() {

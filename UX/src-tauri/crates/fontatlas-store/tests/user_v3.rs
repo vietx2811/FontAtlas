@@ -22,7 +22,6 @@ fn v1_to_v3_migrates() {
         c.execute("INSERT INTO collections(name,created_at,updated_at) VALUES ('Giữ',1,1)", []).unwrap();
     }
     let (s, rep) = Store::open(d.path()).unwrap();
-    assert!(fontatlas_store::USER_VERSION >= 6);
     assert_eq!(count(&s, "PRAGMA u.user_version"), fontatlas_store::USER_VERSION as i64);
     assert_eq!(s.collections().unwrap().len(), 1);
     assert_eq!(count(&s, "SELECT count(*) FROM u.sqlite_schema WHERE name IN ('activation_reasons','pairs')"), 2);

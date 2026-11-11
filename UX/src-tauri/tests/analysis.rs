@@ -599,11 +599,12 @@ fn class_filter_facets_and_override_use_effective_class() {
         &ClassificationOverrideDto { face: key(&roboto), class: "script".into(), subclass: Some("formal".into()) },
     )
     .unwrap();
-    let qd = FaceQueryDto { classes: vec!["script".into()], subclasses: vec!["formal".into()], limit: 50, ..Default::default() };
+    // nhãn v1 `formal` được lưu dạng v2 `formal_copperplate`
+    let qd = FaceQueryDto { classes: vec!["script".into()], subclasses: vec!["formal_copperplate".into()], limit: 50, ..Default::default() };
     let hit = library::query_faces(&st, &qd).unwrap();
     assert!(hit.items.iter().any(|r| r.family == "Roboto"));
     let disp = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
-    assert!(disp.iter().find(|f| f.class == "script").unwrap().subclasses.iter().any(|s| s.subclass == "formal"));
+    assert!(disp.iter().find(|f| f.class == "script").unwrap().subclasses.iter().any(|s| s.subclass == "formal_copperplate"));
     // taxonomy v2: Display là class (lọc/ghi đè được); class lạ vẫn bị từ chối
     assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["display".into()], ..Default::default() }).is_ok());
     assert!(library::query_faces(&st, &FaceQueryDto { classes: vec!["wiggly".into()], ..Default::default() }).is_err());
@@ -751,4 +752,65 @@ fn confident_only_and_include_secondary_filters() {
     analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "display".into(), subclass: Some("stencil".into()) }).unwrap();
     let hit = q(&|q| { q.confident_only = true; q.classes = vec!["display".into()]; }).unwrap();
     assert!(hit.items.iter().any(|r| r.family == "Roboto"));
+}
+
+#[test]
+fn legacy_override_labels_are_stored_as_v2_and_usage_matches_auto() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let roboto = find(&st, "Roboto");
+    let set = |c: &str, s: Option<&str>| analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: c.into(), subclass: s.map(String::from) });
+    let stored = || {
+        let k = fontatlas_store::FaceKey::try_from(&key(&roboto)).unwrap();
+        st.with_user(|u| Ok(u.classification_override(&k)?)).unwrap().map(|o| (o.class, o.subclass))
+    };
+    // nhãn v1 vẫn được nhận nhưng chỉ lưu dạng v2
+    for (c, s, want) in [
+        ("serif", Some("slab"), ("slab", None)),
+        ("script", Some("handwritten"), ("handwriting", None)),
+        ("script", Some("casual_brush"), ("script", Some("brush"))),
+        ("script", Some("formal"), ("script", Some("formal_copperplate"))),
+        ("serif", Some("humanist_oldstyle"), ("serif", Some("venetian_oldstyle"))),
+        ("sans", Some("rounded"), ("sans", Some("rounded"))),
+    ] {
+        set(c, s).unwrap();
+        assert_eq!(stored(), Some((want.0.to_string(), want.1.map(String::from))), "{c}/{s:?}");
+    }
+    // rác vẫn bị từ chối, và không ghi gì
+    set("sans", Some("slab")).unwrap_err();
+    set("wiggly", None).unwrap_err();
+    // usage của slab ghi đè = usage của Serif cùng face (không rơi vào nhánh mặc định)
+    set("slab", None).unwrap();
+    let slab = analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap().classification_info.usage;
+    set("serif", None).unwrap();
+    let serif = analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap().classification_info.usage;
+    assert_eq!(slab, serif);
+    set("display", None).unwrap();
+    assert_eq!(analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap().classification_info.usage, vec!["display".to_string()]);
+}
+
+#[test]
+fn effective_class_is_consistent_across_detail_filter_facets_and_index() {
+    let td = tempfile::tempdir().unwrap();
+    let st = lib6(td.path());
+    let b = analysis::bundle(&st).unwrap();
+    // đổi class của một face bằng ghi đè: mọi nơi đọc phải thấy cùng nhãn
+    let roboto = find(&st, "Roboto");
+    analysis::set_classification_override(&st, &ClassificationOverrideDto { face: key(&roboto), class: "slab".into(), subclass: Some("clarendon".into()) }).unwrap();
+    let detail = analysis::get_face(&st, &key(&roboto), LangDto::Vi).unwrap().classification_info;
+    assert_eq!((detail.class.as_str(), detail.subclass.as_deref(), detail.source.as_str()), ("slab", Some("clarendon"), "override"));
+    let hit = library::query_faces(&st, &FaceQueryDto { classes: vec!["slab".into()], subclasses: vec!["clarendon".into()], limit: 50, ..Default::default() }).unwrap();
+    assert!(hit.items.iter().any(|r| r.family == "Roboto"));
+    let facets = analysis::class_facets(&st, &FaceQueryDto::default()).unwrap();
+    assert!(facets.iter().find(|f| f.class == "slab").unwrap().subclasses.iter().any(|s| s.subclass == "clarendon"));
+    // class tự động của Index (nguồn của compare/similar/brief/pairing) không bị ghi đè của người dùng đụng tới
+    let key_roboto = fontatlas_index::FaceKey { hash: roboto.hash_hex.clone(), index: roboto.face_index };
+    assert_ne!(b.meta[&key_roboto].auto_class, "slab");
+    // confidentOnly: ghi đè luôn tự tin ⇒ face vẫn có mặt; face tự động dưới ngưỡng thì không
+    let conf = library::query_faces(&st, &FaceQueryDto { confident_only: true, classes: vec!["slab".into()], limit: 50, ..Default::default() }).unwrap();
+    assert!(conf.items.iter().any(|r| r.family == "Roboto"));
+    // includeSecondary: facet chỉ có thể nhiều hơn
+    let with = analysis::class_facets(&st, &FaceQueryDto { include_secondary: true, ..Default::default() }).unwrap();
+    let sum = |v: &[ClassFacetDto]| v.iter().map(|f| f.count).sum::<u32>();
+    assert!(sum(&with) >= sum(&facets));
 }
