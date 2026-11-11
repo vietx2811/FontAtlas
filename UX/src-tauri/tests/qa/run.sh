@@ -6,6 +6,22 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
 test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
+# Chỉ MỘT lượt QA native tại một thời điểm trên máy: font đăng ký phiên (CoreText) của app đang chạy là toàn người dùng, nên lượt QA khác
+# (CI cục bộ, worktree khác) làm font của mình thành "đã có sẵn · ứng dụng khác" và dọn không sạch (conflict-clean left:5, available-*).
+LOCK="${FONTATLAS_QA_LOCK:-/tmp/fontatlas-native-qa.lock}"
+for _ in $(seq 1 600); do
+  if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid"; break; fi
+  holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
+  if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$LOCK"; continue; fi   # người giữ khoá đã chết
+  [ $((_ % 30)) -eq 1 ] && echo "chờ lượt QA native khác (pid ${holder:-?}) xong…"
+  sleep 3
+done
+[ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] || { echo "không lấy được khoá QA native sau 30 phút"; exit 1; }
+release_lock() { [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK"; true; }
+trap release_lock EXIT
+# Dọn đăng ký font còn sót từ lượt QA trước bị ngắt giữa chừng (persistent scope sống qua tiến trình). Chỉ file dưới thư mục QA có qa.js.
+sweep_qa_fonts() { command -v swift >/dev/null && swift "$HERE/unregister_qa_fonts.swift" 2>/dev/null || true; }
+sweep_qa_fonts
 QA="$(mktemp -d)"; F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
 mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/data"
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
@@ -28,7 +44,7 @@ fi
 if command -v node >/dev/null; then node --check "$QA/qa.js" || { echo "qa.js lỗi cú pháp"; exit 1; }; fi
 FONTATLAS_DATA_DIR="$QA/data" FONTATLAS_QA_SCRIPT="$QA/qa.js" "$APP" > "$QA/app.log" 2>&1 &
 PID=$!
-trap 'kill "$PID" 2>/dev/null || true' EXIT   # chỉ PID của chính mình
+trap 'kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; sweep_qa_fonts; release_lock' EXIT   # chỉ PID của chính mình
 q() { sqlite3 "file:$QA/data/user.db?mode=ro" "$1" 2>/dev/null || true; }
 # Tối đa 15 phút (máy bận chạy chậm hơn); kiểm mỗi 2 giây để dừng ngay khi script báo xong.
 for _ in $(seq 1 450); do
