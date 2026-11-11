@@ -2,6 +2,7 @@
 export const REPLACE_I18N = {
   'act.replace.option': 'Thay bằng bản này',
   'act.replace.option.gloss': 'tắt bản cũ rồi bật bản của Font Atlas',
+  'act.replace.more': 'Chi tiết và cách tắt trong app kia',
   'act.replace.warn': '{app} có thể bật lại bản của nó; tắt trong {app} để giữ lâu dài.',
   'act.replace.warn.other': 'Một ứng dụng khác đã bật bản cũ và có thể bật lại; Font Atlas không biết đó là app nào.',
   'act.replace.strong': 'Tôi hiểu: bản cũ sẽ bị tắt ngay (có thể khôi phục sau).',
@@ -37,6 +38,7 @@ export const REPLACE_I18N = {
 export const REPLACE_I18N_EN: Record<keyof typeof REPLACE_I18N, string> = {
   'act.replace.option': 'Replace with this one',
   'act.replace.option.gloss': 'turn the old one off, then turn on the Font Atlas copy',
+  'act.replace.more': 'Details, and how to turn it off in the other app',
   'act.replace.warn': '{app} may turn its copy back on; turn it off in {app} to keep this lasting.',
   'act.replace.warn.other': 'Another app turned the old copy on and may turn it back on; Font Atlas cannot tell which app.',
   'act.replace.strong': 'I understand: the old copy is turned off right away (it can be restored later).',

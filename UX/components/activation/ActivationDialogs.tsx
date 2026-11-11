@@ -77,23 +77,27 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
         {total === n ? t('act.conflict.force') : t('act.conflict.force.all', { total })}{blocked && <em> ({t('act.conflict.blocked')})</em>}</label>
       {canReplace && (
         <div className="fa-conf-replace">
-          <p id={warnId} className="fa-conf-warn" data-testid="replace-warning">
-            {warnText}
-          </p>
-          <p className="fa-conf-scope">
-            {fillSlots(t('act.replace.scope', { session: '{session}', persistent: '{persistent}' }), {
-              session: <TermTip term="scope_session"><span data-term="scope_session" tabIndex={0} className="fa-termword">session scope</span></TermTip>,
-              persistent: <TermTip term="scope_persistent"><span data-term="scope_persistent" tabIndex={0} className="fa-termword">persistent scope</span></TermTip>,
-            })}
-          </p>
           {strong && choice === 'replace' && (
             <label className="fa-radio"><input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)} />{t('act.replace.strong')}</label>
           )}
-          <div className="fa-conf-guide" data-testid="guide-text">
-            <strong>{t('act.replace.guide', { app: guideApp })}</strong>
-            <span>{t('act.replace.guide.body', { app: guideApp })}</span>
-            {onRetry && <button type="button" onClick={onRetry}>{t('act.replace.retry')}</button>}
-          </div>
+          {/* Cảnh báo, scope và hướng dẫn thu vào một dòng mở được: hộp thoại giữ gọn (QA conflict-dialog-compact). */}
+          <details className="fa-conf-more">
+            <summary>{t('act.replace.more')}</summary>
+            <p id={warnId} className="fa-conf-warn" data-testid="replace-warning">
+              {warnText}
+            </p>
+            <p className="fa-conf-scope">
+              {fillSlots(t('act.replace.scope', { session: '{session}', persistent: '{persistent}' }), {
+                session: <TermTip term="scope_session"><span data-term="scope_session" tabIndex={0} className="fa-termword">session scope</span></TermTip>,
+                persistent: <TermTip term="scope_persistent"><span data-term="scope_persistent" tabIndex={0} className="fa-termword">persistent scope</span></TermTip>,
+              })}
+            </p>
+            <div className="fa-conf-guide" data-testid="guide-text">
+              <strong>{t('act.replace.guide', { app: guideApp })}</strong>
+              <span>{t('act.replace.guide.body', { app: guideApp })}</span>
+              {onRetry && <button type="button" onClick={onRetry}>{t('act.replace.retry')}</button>}
+            </div>
+          </details>
         </div>
       )}
       {advice.tier === 'guide' && (

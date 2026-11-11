@@ -238,3 +238,29 @@ describe('messages for the new replace codes', () => {
     expect(describeOutcome({ kind: 'failed', code: 'replace_own_held', message: 'x' })?.text).toMatch(/collection/);
   });
 });
+
+describe('conflict dialog stays compact and "skip" does not replace', () => {
+  const open = () => {
+    const onConfirm = vi.fn(); const onReplace = vi.fn();
+    render(<ConflictDialog items={[item([c('right_font', '/lib/a.ttf', { replaceTier: 'replace' })])]} total={25} onCancel={() => {}} onConfirm={onConfirm} onReplace={onReplace} />);
+    return { onConfirm, onReplace };
+  };
+  it('warning, scope and guide live inside one collapsed <details>', () => {
+    open();
+    const det = document.querySelector('details.fa-conf-more') as HTMLDetailsElement;
+    expect(det).toBeTruthy();
+    expect(det.open).toBe(false);
+    for (const id of ['replace-warning', 'guide-text']) expect(det.contains(screen.getByTestId(id))).toBe(true);
+    cleanup();
+  });
+  it('choosing skip then continue only confirms (no replace); replace is the pre-selected default for a known app', () => {
+    const { onConfirm, onReplace } = open();
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.find(r => r.checked)?.closest('label')?.textContent).toMatch(/Thay bằng bản này/);
+    fireEvent.click(radios[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+    expect(onReplace).not.toHaveBeenCalled();
+    expect(onConfirm).toHaveBeenCalledWith(false);
+    cleanup();
+  });
+});

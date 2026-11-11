@@ -884,12 +884,16 @@
       const exp = dlg?.querySelector('button[aria-expanded=false]'); exp?.click();
       const styles = await wait(() => dlg?.querySelector('.fa-conf-styles'), 5000);
       await log('conflict-dialog-expand', !!exp && !!styles && exp.getAttribute('aria-expanded') === 'true', { expanded: exp?.getAttribute('aria-expanded') });
+      // Mặc định mới có thể là "Thay bằng bản này" (khi chỉ có app đã nhận diện): bước này kiểm "Bỏ qua" nên chọn nó rõ ràng.
+      const skipRadio = radios.find(r => r.closest('label')?.textContent?.includes('Bỏ qua'));
+      const activeBeforeGo = (await actOn()).length;
+      skipRadio?.click(); await sleep(100);
       const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
       await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
       await log('conflict-dialog-returns-focus', document.activeElement === selBtn || document.activeElement?.closest('[data-testid=selbar-activate]') === selBtn, { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
       await sleep(800);
       let st2 = await actOn();
-      await log('conflict-skip-activates-rest', st2.length >= 12 && st2.length <= total - 6, { active: st2.length, total });
+      await log('conflict-skip-activates-rest', st2.length >= 12 && st2.length <= total - 6, { active: st2.length, total, activeBeforeGo, skipChosen: !!skipRadio });
       // Dọn: tắt mọi font đã bật (command thật, không động tới thứ gì ngoài các font QA vừa bật).
       try { await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) }); } catch (e) { await log('conflict-clean-error', false, String(e && e.message || e)); }
       await sleep(800); st2 = await actOn();
