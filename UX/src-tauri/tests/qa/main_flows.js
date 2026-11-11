@@ -837,7 +837,9 @@
         await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
         (document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         await sleep(300);
-        await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]') && document.activeElement === vb(), { before, after, h0, h1 });
+        await log('view-options', before === 0 && after > 0 && !document.querySelector('[data-testid=view-pop]'), { before, after, h0, h1, popOpen: !!document.querySelector('[data-testid=view-pop]') });
+        await wait(() => document.activeElement === vb(), 2000).catch(() => {});
+        await log('view-options-focus-returns', document.activeElement === vb(), { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
         await log('view-options-row-height', h0 > 0 && Math.abs((h1 - h0) - 18) <= 2, { h0, h1 });
       } else await log('view-options', false, 'no view-open button');
     }
