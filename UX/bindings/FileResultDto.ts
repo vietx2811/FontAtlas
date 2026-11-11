@@ -6,4 +6,4 @@ export type FileResultDto = { hashHex: string, path: string | null, requestedFac
 /**
  * Bản cũ đã gỡ để thay thế (chỉ khi dùng `activation_replace`); mỗi mục có `id` cho "Khôi phục bản cũ".
  */
-replaced: Array<ReplacedFontDto>, };
+replaced?: Array<ReplacedFontDto>, };

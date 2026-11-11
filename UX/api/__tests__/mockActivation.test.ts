@@ -108,6 +108,41 @@ describe('mock activation (Plan 7 contract)', () => {
   });
 });
 
+describe('mock replace / restore (tắt bản cũ và bật bản này)', () => {
+  it('a RightFont clash is replaced: ours becomes active, the removed copy is reported with its scope, restore puts it back once', async () => {
+    const api = createMockApi();
+    const r = await rowOf(api, 'Oswald');
+    const ask = await api.activationActivate([key(r)]);
+    expect(ask.results[0].outcome.kind).toBe('needs_confirmation');
+    const rep = await api.activationReplace([key(r)]);
+    expect(rep.results[0].outcome.kind).toBe('activated');
+    const rf = rep.results[0].replaced!;
+    expect(rf).toHaveLength(1);
+    expect(rf[0]).toMatchObject({ owner: 'right_font', scopes: ['persistent'] });
+    expect((await api.activationState()).map(s => s.hashHex)).toContain(r.hashHex);
+    expect(await api.activationRestoreReplaced(rf[0].id)).toBe('restored');
+    expect((await api.activationState()).map(s => s.hashHex)).not.toContain(r.hashHex);
+    expect(await api.activationRestoreReplaced(rf[0].id)).toBe('already_restored');
+    await expect(api.activationRestoreReplaced(99999)).rejects.toMatchObject({ code: 'activation_not_found' });
+  });
+
+  it('system and user font folders are never touched: replace fails with replace_protected', async () => {
+    const api = createMockApi();
+    const sys = await rowOf(api, 'Roboto');
+    const out = (await api.activationReplace([key(sys)])).results[0].outcome;
+    expect(out).toMatchObject({ kind: 'failed', code: 'replace_protected' });
+    expect((await api.activationState())).toHaveLength(0);
+  });
+
+  it('with nothing to replace it simply activates and reports no replaced copies', async () => {
+    const api = createMockApi();
+    const r = await rowOf(api, 'Inter');
+    const rep = await api.activationReplace([key(r)]);
+    expect(rep.results[0].outcome.kind).toBe('activated');
+    expect(rep.results[0].replaced ?? []).toHaveLength(0);
+  });
+});
+
 describe('mock model: redownload while downloading is busy', () => {
   it('rejects with CmdError busy and keeps downloading', async () => {
     const api = createMockApi();

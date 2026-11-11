@@ -9,6 +9,9 @@ export function describeOutcome(o: FileOutcomeDto): Msg | null {
     case 'failed':
       if (o.code === 'file_changed') return { kind: 'error', text: t('act.msg.changed') };
       if (o.code === 'scope_unsettled') return { kind: 'error', text: t('act.msg.scope_unsettled') };
+      if (o.code === 'replace_protected') return { kind: 'error', text: t('act.replace.protected') };
+      if (o.code === 'replace_guide_only') return { kind: 'error', text: t('act.msg.replaceGuide') };
+      if (o.code === 'replace_not_registered') return { kind: 'error', text: t('act.msg.replaceNotRegistered') };
       if (o.code === 'cloud_timeout') return { kind: 'error', text: t('act.msg.cloudTimeout') };
       if (o.code === 'cloud_download_failed') return { kind: 'error', text: t('act.msg.cloudFailed', { message: o.message }) };
       if (o.code === 'cloud_stub') return { kind: 'error', text: t('act.msg.cloudStub') };

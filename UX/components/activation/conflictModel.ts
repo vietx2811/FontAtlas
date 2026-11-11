@@ -19,9 +19,45 @@ export function ownerNote(c: Pick<ConflictDto, 'owner' | 'existingPath'>): strin
     case 'adobe_fonts': return t('act.owner.by', { app: 'Adobe Fonts' });
     case 'right_font': return t('act.owner.by', { app: 'RightFont' });
     case 'font_base': return t('act.owner.by', { app: 'FontBase' });
+    case 'typeface': return t('act.owner.by', { app: 'Typeface' });
+    case 'suitcase': return t('act.owner.by', { app: 'Suitcase / Connect' });
     case 'font_atlas': return t('act.owner.atlas');
     default: return t('act.owner.other');
   }
+}
+
+/** "Thay thế" theo ma trận (khớp fontatlas-activate::replace_tier): protected = không bao giờ đụng; guide = chỉ hướng dẫn. */
+export type ReplaceTier = 'replace' | 'guide' | 'protected';
+const FONT_DIRS = /^(?:\/System\/Library|\/Library\/Fonts|\/Users\/[^/]+\/Library\/Fonts|~\/Library\/Fonts)(?:\/|$)/;
+
+export function replaceTierOf(c: Pick<ConflictDto, 'owner' | 'existingPath'>): ReplaceTier {
+  if (FONT_DIRS.test(c.existingPath) || c.owner === 'system' || c.owner === 'user_installed') return 'protected';
+  if (c.owner === 'adobe_fonts' || c.owner === 'suitcase') return 'guide';
+  return 'replace';
+}
+
+const APP_NAME: Partial<Record<ConflictDto['owner'], string>> = {
+  right_font: 'RightFont', font_base: 'FontBase', typeface: 'Typeface', adobe_fonts: 'Creative Cloud (Adobe Fonts)', suitcase: 'Suitcase / Connect',
+};
+
+export type ReplaceAdvice = { tier: ReplaceTier; apps: string[]; unknownApp: boolean; protectedPath: string | null };
+
+/** Gộp mọi xung đột của hộp thoại: tier tệ nhất thắng (protected > guide > replace), tên các app đã nhận diện, có bản "app lạ" không. */
+export function replaceAdvice(items: readonly ConflictItem[]): ReplaceAdvice {
+  const all = items.flatMap(i => i.conflicts).filter(c => !c.sameFile);
+  const rank: Record<ReplaceTier, number> = { replace: 0, guide: 1, protected: 2 };
+  let tier: ReplaceTier = 'replace';
+  const apps: string[] = [];
+  let unknownApp = false;
+  let protectedPath: string | null = null;
+  for (const c of all) {
+    const k = replaceTierOf(c);
+    if (rank[k] > rank[tier]) tier = k;
+    if (k === 'protected') protectedPath ??= c.existingPath;
+    const app = APP_NAME[c.owner];
+    if (app) { if (!apps.includes(app)) apps.push(app); } else if (c.owner === 'other') unknownApp = true;
+  }
+  return { tier, apps, unknownApp, protectedPath };
 }
 
 export function groupByFamily(items: readonly ConflictItem[]): ConflictGroup[] {

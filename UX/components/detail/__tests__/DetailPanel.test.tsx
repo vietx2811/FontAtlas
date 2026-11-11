@@ -151,7 +151,8 @@ describe('DetailPanel', () => {
       await settle();
       const dlg = screen.getByRole('dialog');
       expect(within(dlg).getByRole('img', { name: /do RightFont cài/ })).toBeTruthy();
-      expect(dlg.textContent).not.toMatch(/RightFont/); // không in inline
+      expect(within(dlg).getByRole('list').textContent).not.toMatch(/RightFont/); // danh sách không in inline; tên app chỉ ở dòng cảnh báo thay thế
+      expect(within(dlg).getByTestId('replace-warning').textContent).toMatch(/RightFont/);
       expect((within(dlg).getByRole('radio', { name: /Bỏ qua/ }) as HTMLInputElement).checked).toBe(true); // mặc định
       fireEvent.click(within(dlg).getByRole('radio', { name: /Vẫn kích hoạt/ }));
       await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Tiếp tục' })); });

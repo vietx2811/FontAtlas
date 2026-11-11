@@ -254,8 +254,9 @@ pub struct FileResultDto {
     pub extra_faces: Vec<u32>,
     pub outcome: FileOutcomeDto,
     /// Bản cũ đã gỡ để thay thế (chỉ khi dùng `activation_replace`); mỗi mục có `id` cho "Khôi phục bản cũ".
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub replaced: Vec<ReplacedFontDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub replaced: Option<Vec<ReplacedFontDto>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -297,11 +298,12 @@ impl From<&fa::FileResult> for FileResultDto {
             requested_faces: r.requested_faces.clone(),
             extra_faces: r.extra_faces.clone(),
             outcome: (&r.outcome).into(),
-            replaced: r
-                .replaced
-                .iter()
-                .map(|x| ReplacedFontDto { id: x.id, path: x.path.clone(), owner: x.owner.into(), scopes: x.scopes.iter().map(|s| (*s).into()).collect() })
-                .collect(),
+            replaced: (!r.replaced.is_empty()).then(|| {
+                r.replaced
+                    .iter()
+                    .map(|x| ReplacedFontDto { id: x.id, path: x.path.clone(), owner: x.owner.into(), scopes: x.scopes.iter().map(|s| (*s).into()).collect() })
+                    .collect()
+            }),
         }
     }
 }

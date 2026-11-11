@@ -281,10 +281,8 @@ pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, 
     // hash của font Atlas đã thay: để giao diện cập nhật chấm bật/tắt của nó
     let hash_hex = state.with_store(|s| Ok(s.get_replaced(id)?.map(|r| r.hash.iter().map(|b| format!("{b:02x}")).collect::<String>())))?;
     let out = state.activation.restore_replaced(state.store()?, id)?;
-    if out == RestoreOutcome::Restored {
-        if let Some(h) = hash_hex {
-            state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![h] });
-        }
+    if let (RestoreOutcome::Restored, Some(h)) = (out, hash_hex) {
+        state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![h] });
     }
     Ok(out.into())
 }

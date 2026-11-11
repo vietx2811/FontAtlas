@@ -1,5 +1,6 @@
 // Mô phỏng dịch vụ kích hoạt của Plan 7 (hợp đồng 6a): lý do thủ công/theo dự án, xung đột tên, tự gỡ khi rời dự án.
 import type { FaceRow } from '../features/library-grid/types';
+import { CmdError } from './types';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, FaceKeyDto, FileOutcomeDto, FileResultDto, ReasonDto,
 } from './types';
@@ -84,6 +85,11 @@ export function createActivationSim(d: Deps) {
     emit({ type: 'reconciled', report: { autoDeactivated, autoDeactivateFailed, reregistered: 0, moved: 0, missing: 0, notDownloaded: 0, cleaned: 0, failed: autoDeactivateFailed.length, results: [] } });
   };
 
+  /** Sổ "bản cũ đã gỡ" của mock (khớp activation_replaced phía Rust). */
+  const replacedLog = new Map<number, { hashHex: string; restored: boolean }>();
+  let nextReplaced = 1;
+  const fail = (f: FaceKeyDto, code: string, message: string) => result(f, { kind: 'failed', code, message });
+
   return {
     /** Dành cho mock: ép "hệ điều hành từ chối gỡ" cho các hash này ở lần tự gỡ kế tiếp. */
     failNextAutoDeactivate: new Set<string>(),
@@ -108,6 +114,30 @@ export function createActivationSim(d: Deps) {
         state.delete(f.hashHex);
         return result(f, { kind: 'deactivated' });
       }), o.onProgress);
+    },
+    async activationReplace(faces: FaceKeyDto[], o: Pick<ActivateOptions, 'scope' | 'onProgress'> = {}) {
+      return finish(hashes(faces).map(f => {
+        const conflicts = conflictOf(d.rowOf(f));
+        if (!conflicts.length || conflicts.every(c => c.sameFile)) return result(f, activateOne(f, { kind: 'manual' }, { ...o, proceed: true }));
+        if (conflicts.some(c => c.owner === 'system' || c.owner === 'user_installed')) return fail(f, 'replace_protected', 'font nằm trong thư mục font của hệ thống hoặc của bạn');
+        if (conflicts.some(c => (c.owner as string) === 'adobe_fonts' || (c.owner as string) === 'suitcase')) return fail(f, 'replace_guide_only', 'font do app khác quản lý');
+        const r = result(f, activateOne(f, { kind: 'manual' }, { ...o, proceed: true }));
+        r.replaced = conflicts.map(c => {
+          const id = nextReplaced++;
+          replacedLog.set(id, { hashHex: f.hashHex, restored: false });
+          return { id, path: c.existingPath, owner: c.owner, scopes: ['persistent' as const] };
+        });
+        return r;
+      }), o.onProgress);
+    },
+    async activationRestoreReplaced(id: number) {
+      const e = replacedLog.get(id);
+      if (!e) throw new CmdError('activation_not_found', `không tìm thấy: sổ khôi phục #${id}`);
+      if (e.restored) return 'already_restored' as const;
+      e.restored = true;
+      state.delete(e.hashHex);
+      emit({ type: 'changed', hashes: [e.hashHex] });
+      return 'restored' as const;
     },
     async activationActivateCollection(id: number, o: ActivateOptions = {}) {
       return finish(hashes(d.collectionFaces(id)).map(f => result(f, activateOne(f, { kind: 'collection', collectionId: id }, o))), o.onProgress);

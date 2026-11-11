@@ -3,7 +3,7 @@
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import type {
-  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
   AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe,
 } from './types';
@@ -151,6 +151,10 @@ export interface Api extends LibraryApi {
   activationState(): Promise<ActivationStateDto[]>;
   activationPreflight(faces: FaceKeyDto[]): Promise<ActivationReportDto>;
   activationActivate(faces: FaceKeyDto[], opts?: ActivateOptions): Promise<ActivationReportDto>;
+  /** "Tắt bản cũ và bật bản này": gỡ các bản xung đột (nếu ma trận cho phép) rồi bật bản của Font Atlas. Mỗi kết quả có `replaced` (id để khôi phục). */
+  activationReplace(faces: FaceKeyDto[], opts?: Pick<ActivateOptions, 'scope' | 'onProgress'>): Promise<ActivationReportDto>;
+  /** "Khôi phục bản cũ": đăng ký lại bản đã gỡ (cùng URL + scope) và tắt bản của Font Atlas. */
+  activationRestoreReplaced(id: number): Promise<RestoreOutcomeDto>;
   activationDeactivate(faces: FaceKeyDto[], opts?: DeactivateOptions): Promise<ActivationReportDto>;
   activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;

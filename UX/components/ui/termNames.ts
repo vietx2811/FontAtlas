@@ -3,6 +3,7 @@ export const TERM_NAMES: Record<string, string> = {
   x_height: 'x-height', cap_height: 'cap height', ascender: 'ascender', descender: 'descender', stem: 'stem weight', contrast: 'contrast ⊥', contrast_h: 'contrast H',
   stress: 'stress', slant: 'slant I/T', aperture: 'aperture c', aperture_e: 'aperture e', serif_foot: 'serif foot', width: 'width o', counter: 'counter o', spacing: 'letter spacing',
   darkness: 'ink density', x_height_cap: 'x / cap ratio', mean_advance: 'mean advance', width_cv: 'advance variation', terminal: 'terminal c', a_storeys: 'a storeys',
+  scope_session: 'session scope', scope_persistent: 'persistent scope',
   dataless: 'Dataless file', always_keep: 'Always keep on this device',
   g_storeys: 'g storeys', weight_class: 'Weight', width_class: 'Width', overlay: 'Overlay', activate: 'Active', vi_marks: 'Stacked diacritics', baseline: 'baseline', classification: 'Classification',
   'class.serif': 'Serif', 'class.sans': 'Sans', 'class.mono': 'Mono', 'class.script': 'Script', 'class.blackletter': 'Blackletter', 'class.symbol': 'Symbol', 'class.uncertain': 'Uncertain',

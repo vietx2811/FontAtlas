@@ -52,12 +52,12 @@ fn setup(root: &Path) -> (Arc<AppState>, Arc<FakeEngine>, FaceKeyDto, PathBuf) {
 fn replace_swaps_the_foreign_registration_and_restore_brings_it_back() {
     let d = tempfile::tempdir().unwrap();
     let (st, eng, key, foreign) = setup(d.path());
-    let ask = activation::activate(&st, &[key.clone()], None, false, &mut noop).unwrap();
+    let ask = activation::activate(&st, std::slice::from_ref(&key), None, false, &mut noop).unwrap();
     assert!(matches!(ask.results[0].outcome, FileOutcomeDto::NeedsConfirmation { .. }), "{:?}", ask.results[0].outcome);
 
-    let rep = activation::replace(&st, &[key.clone()], None, &mut noop).unwrap();
+    let rep = activation::replace(&st, std::slice::from_ref(&key), None, &mut noop).unwrap();
     assert!(matches!(rep.results[0].outcome, FileOutcomeDto::Activated), "{:?}", rep.results[0].outcome);
-    let r = &rep.results[0].replaced;
+    let r = rep.results[0].replaced.as_ref().expect("có bản cũ đã gỡ");
     assert_eq!(r.len(), 1);
     assert_eq!((r[0].owner, r[0].scopes.clone(), r[0].path.as_str()), (OwnerDto::RightFont, vec![ScopeDto::Persistent], foreign.to_str().unwrap()));
     let regs = eng.registrations();
@@ -77,7 +77,7 @@ fn replace_without_a_conflict_reports_no_replaced_entries() {
     eng.unregister(&foreign, Scope::Persistent).unwrap();
     let rep = activation::replace(&st, &[key], None, &mut noop).unwrap();
     assert!(matches!(rep.results[0].outcome, FileOutcomeDto::Activated));
-    assert!(rep.results[0].replaced.is_empty());
+    assert!(rep.results[0].replaced.is_none());
 }
 
 #[test]

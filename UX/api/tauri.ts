@@ -192,6 +192,8 @@ export function createTauriApi(): Api {
     activationState: () => call('activation_state'),
     activationPreflight: faces => call('activation_preflight', { faces }),
     activationActivate: (faces, o = {}) => call('activation_activate', { faces, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
+    activationReplace: (faces, o = {}) => call('activation_replace', { faces, scope: o.scope ?? null, onProgress: channel(o.onProgress).ch }),
+    activationRestoreReplaced: id => call('activation_restore_replaced', { id }),
     activationDeactivate: (faces, o = {}) => call('activation_deactivate', { faces, force: o.force ?? false, onProgress: channel(o.onProgress).ch }),
     activationActivateCollection: (collectionId, o = {}) => call('activation_activate_collection', { collectionId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
