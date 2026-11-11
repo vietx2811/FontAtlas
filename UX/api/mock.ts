@@ -327,6 +327,11 @@ export function createMockApi(o: MockOptions = {}): Api {
       const n = (k: string) => g.filter(x => x.kind === k).length;
       return { sameFile: n('same_file'), versions: n('versions'), formats: n('formats'), total: g.length };
     },
+    async activationActivateCase(caseId, o = {}) {
+      const c = await this.getCase(caseId);
+      const report = await this.activationActivate(c.faces.filter(f => !f.missing).map(f => f.key), o);
+      return { report, skippedMissing: c.faces.filter(f => f.missing).map(f => f.key) };
+    },
     async familyGroups(q = {}) {
       const { items } = await this.queryFaces({ ...q, groupByFamily: true, offset: 0, limit: Infinity });
       const totals = new Map<string, number>();

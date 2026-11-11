@@ -28,6 +28,7 @@ export type { BriefNeedsDto } from './BriefNeedsDto';
 export type { BriefNoteDto } from './BriefNoteDto';
 export type { BriefStarterDto } from './BriefStarterDto';
 export type { BriefUseDto } from './BriefUseDto';
+export type { CaseActivationDto } from './CaseActivationDto';
 export type { CaseCompareDto } from './CaseCompareDto';
 export type { CaseDto } from './CaseDto';
 export type { CaseFaceDto } from './CaseFaceDto';

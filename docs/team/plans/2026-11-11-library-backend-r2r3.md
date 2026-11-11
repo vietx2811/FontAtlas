@@ -1,6 +1,6 @@
 # Backend cho Library view options (R2, R3, R6, R7, activate theo Dự án)
 
-Nhánh `feat/library-backend-r2r3` (cắt từ dev/mvp 4960e6f1, đã gồm taxonomy-v2 + cloud-fonts). Tiến độ: **R2 xong** (core `release_year`, library v5, ingest/scan/backfill, sort `released`/`file_created`, DTO `releaseYear`/`releaseYearSource`/`fileCreatedAt`/`fileCreatedSource`, bindings/mock/TS); R3, R6, R7, activate theo Dự án: chưa.
+Nhánh `feat/library-backend-r2r3` (rebase lên dev/mvp 3a3fbf9d; library.db vẫn ở v4 trên dev nên R2 = **v5**). Tiến độ: **R2, R3, R6, R7, activate theo Dự án: xong** (ghi chú triển khai ở cuối).
 Spec: `docs/design/library-view-options/spec.md` (c2ce50e) mục B5, C6, R1–R7.
 
 ## Phạm vi lát này
@@ -87,3 +87,10 @@ Việc làm: (a) test xác nhận từng dòng bảng trên (nhất là: gỡ ng
 - `created_ns` lấy từ `Metadata::created()` khi quét (chỉ stat, an toàn với file dataless); vị trí không đổi được cập nhật ở mỗi lần quét. `created_src = cloud_sync` khi đường dẫn nằm dưới ổ cloud (`cloud_provider_of`).
 - Face nhiều vị trí: `fileCreatedAt` = MIN các vị trí chưa missing; `fileCreatedSource` lấy của vị trí sớm nhất.
 - NULL luôn cuối bất kể chiều; cùng bậc → Family → Weight → nghiêng → face_id.
+
+## Ghi chú triển khai R3 / R6 / R7 / activate (đã làm)
+
+- **R3**: `FaceQuery.groupByFamily` (DTO `groupByFamily`) + `Store::family_groups(q, scope)` / lệnh `family_groups(q)` → `FamilyGroupDto { family, start, count, matchCount, styleTotal }`. Khoá nhóm = cực trị của family theo `sort`/chiều (hàm cửa sổ cho từng hàng, hàm gộp cho GROUP BY — cùng một biểu thức nên `start` luôn khớp `query_faces`); family sort → tên; weight/added/released/file_created → nhỏ nhất khi tăng, lớn nhất khi giảm, NULL cuối; match có scope → điểm cao nhất; Auto/Match không scope → tên (khớp đầu từ lên trước). Trong nhóm: Weight → thẳng trước nghiêng → tên → face_id. `family_key` (gập dấu) nên "Café"/"Cafe" không tách. `styleTotal` = số face của family còn ít nhất một vị trí hiện diện, chưa bị ẩn bởi Trùng lặp, không áp bộ lọc. 2.300 face: chạy dưới 50 ms (test).
+- **R6**: `rename_tag(id, name) -> TagDto`, `delete_tag(id) -> number`. Mã lỗi mới `conflict` (`StoreError::Conflict`; thêm vào `CmdErrorCode`). Luật tiền tố dành riêng như `create_tag`; Tag hệ thống không đổi thành tên thường. Xoá Tag hệ thống được.
+- **R7**: kiểm tra thực tế: `gc()` không đụng user.db và dữ liệu người dùng khoá theo `(hash, face_index)` — **không có lỗi**, test chốt hành vi (gỡ rồi thêm lại ⇒ Dự án hết `missing`, Tag/Collection/Yêu thích/ghi đè còn). `remove_source` nay trả `RemoveSourceReportDto { removedLocations, facesLeftWithoutLocation, casesAffected, collectionsAffected, tagsAffected, activeFonts }`; thêm `remove_source_preview(sourceId)` (chỉ đọc, cùng số liệu) vì câu xác nhận cần số TRƯỚC khi gỡ.
+- **Activate theo Dự án**: `activation_activate_case(caseId, scope?, proceed, onProgress) -> CaseActivationDto { report, skippedMissing }`. Font không `missing` đi qua `activate` (cùng luồng xung đột/cloud); font `missing` không gửi xuống engine, liệt kê ở `skippedMissing`, không tính `failed`. Kích hoạt thủ công (reason `Manual`), tắt Dự án không tự tắt font.

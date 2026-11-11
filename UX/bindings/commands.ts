@@ -15,6 +15,7 @@ import type { BootEvent } from './BootEvent';
 import type { BootStatusDto } from './BootStatusDto';
 import type { BriefDto } from './BriefDto';
 import type { BriefStarterDto } from './BriefStarterDto';
+import type { CaseActivationDto } from './CaseActivationDto';
 import type { CaseCompareDto } from './CaseCompareDto';
 import type { CaseDto } from './CaseDto';
 import type { CaseOriginDto } from './CaseOriginDto';
@@ -201,6 +202,7 @@ export interface TauriCommandMap {
   activation_replace: { args: { faces: FaceKeyDto[]; scope: ScopeDto | null; confirmed: ConfirmedConflictDto[]; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_list_replaced: { args: Record<string, never>; result: ReplacedEntryDto[] };
   activation_restore_replaced: { args: { id: number }; result: RestoreOutcomeDto };
+  activation_activate_case: { args: { caseId: number; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: CaseActivationDto };
   activation_activate_collection: { args: { collectionId: number; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate: { args: { faces: FaceKeyDto[]; force: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };

@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, CaseActivationDto,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto,
 } from './types';
 
@@ -183,6 +183,11 @@ export interface Api extends LibraryApi {
   activationRestoreReplaced(id: number): Promise<RestoreOutcomeDto>;
   activationDeactivate(faces: FaceKeyDto[], opts?: DeactivateOptions): Promise<ActivationReportDto>;
   activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
+  /**
+   * "Bật tất cả" của một Dự án: font không `missing` đi qua đúng luồng `activationActivate` (xung đột → `needsConfirmation`,
+   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Kích hoạt thủ công, không gắn lý do "dự án".
+   */
+  activationActivateCase(caseId: number, opts?: ActivateOptions): Promise<CaseActivationDto>;
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;

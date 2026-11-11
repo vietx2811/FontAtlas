@@ -163,6 +163,7 @@ macro_rules! command_list {
             async activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirmed: Vec<ConfirmedConflictDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_list_replaced() -> Result<Vec<ReplacedEntryDto>, CmdError>;
             async activation_restore_replaced(id: i64) -> Result<RestoreOutcomeDto, CmdError>;
+            async activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<CaseActivationDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
@@ -476,6 +477,11 @@ cmd!(activation_replace(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, confirm
     })
 });
 cmd!(activation_restore_replaced(id: i64) -> RestoreOutcomeDto => |s| activation::restore_replaced(s, id));
+cmd!(activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> CaseActivationDto => |s| {
+    activation::activate_case(s, case_id, scope, proceed, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::activate_collection(s, collection_id, scope, proceed, &mut |p| {
         let _ = on_progress.send(p);
