@@ -91,7 +91,7 @@ fn migration_v4_to_v5_backfills_from_stored_analysis_without_reading_files() {
         s.conn()
             .execute_batch("UPDATE analyses SET metadata_json = json_remove(metadata_json, '$.extras') WHERE hash IN (SELECT fi.hash FROM faces f JOIN files fi USING(file_id) WHERE f.family_name='Open Sans');")
             .unwrap();
-        s.conn().execute_batch("UPDATE faces SET release_year=NULL, release_year_src=NULL;").unwrap();
+        s.conn().execute_batch("UPDATE faces SET release_year=NULL, release_year_src=NULL; DELETE FROM meta WHERE key='release_backfill';").unwrap();
     }
     let s = Store::open(&d.path().join("db")).unwrap().0;
     let rows = s.query_faces(&FaceQuery { limit: 10, ..Default::default() }).unwrap().items;
@@ -101,5 +101,25 @@ fn migration_v4_to_v5_backfills_from_stored_analysis_without_reading_files() {
     assert_eq!(sans.release_year, None, "chưa có extras: chờ phân tích lại");
     let pending: i64 = s.conn().query_row("SELECT count(*) FROM faces WHERE release_year_src IS NULL", [], |r| r.get(0)).unwrap();
     assert_eq!(pending, 1, "Open Sans vẫn chưa tính (NULL), không bị đánh `none`");
+    // đã xét một lần: lần mở sau không quét lại (cờ), kể cả face chưa có extras
+    drop(s);
+    let s = Store::open(&d.path().join("db")).unwrap().0;
+    let flag: i64 = s.conn().query_row("SELECT value FROM meta WHERE key='release_backfill'", [], |r| r.get(0)).unwrap();
+    assert_eq!(flag, 1);
     let _ = create_library_v4_for_test; // helper cho test migration cấp schema (xem placeholders.rs)
+}
+
+#[test]
+fn rescan_of_unchanged_files_fills_created_ns_on_a_migrated_library() {
+    let (d, mut s) = scanned(&["roboto.ttf", "open_sans.ttf"]);
+    // thư viện cũ nâng lên v5: cột created_ns còn NULL, file không đổi
+    s.conn().execute_batch("UPDATE file_locations SET created_ns = NULL, created_src = NULL;").unwrap();
+    let before = s.query_faces(&FaceQuery { limit: 10, ..Default::default() }).unwrap().items;
+    assert!(before.iter().all(|r| r.file_created_at.is_none()));
+    let src = s.sources().unwrap()[0].id;
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    let after = s.query_faces(&FaceQuery { limit: 10, ..Default::default() }).unwrap().items;
+    assert!(after.iter().all(|r| r.file_created_at.is_some_and(|t| t > 1_000_000_000_000)), "quét lại file không đổi vẫn điền ngày tạo");
+    assert!(after.iter().all(|r| r.file_created_source.as_deref() == Some("disk")));
+    drop(d);
 }

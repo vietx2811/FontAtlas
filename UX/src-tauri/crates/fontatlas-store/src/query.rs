@@ -360,10 +360,21 @@ fn grouped_order(q: &FaceQuery, scoped: bool, window: bool) -> (String, Vec<Valu
     (format!("{head}{key}, f.family_key"), params)
 }
 
-/// Ngày tạo file sớm nhất của face (các vị trí chưa missing).
-/// Vị trí bị ẩn bởi quyết định Trùng lặp không tính (cùng luật với cột `file_created_at` trả về).
-const FILE_CREATED_SQL: &str = "(SELECT MIN(l.created_ns) FROM file_locations l WHERE l.file_id = f.file_id AND l.missing = 0 \
-     AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL))";
+/// Khoá sắp xếp "ngày tạo file sớm nhất" của face: cột `fc.m` của phép JOIN [`file_created_join`] (tính MỘT lần cho cả
+/// thư viện bằng GROUP BY, không phải subquery tương quan cho từng hàng).
+const FILE_CREATED_SQL: &str = "fc.m";
+
+/// JOIN cho `SortKey::FileCreated`: MIN(created_ns) trên các vị trí chưa missing; vị trí bị ẩn bởi Trùng lặp không tính trừ
+/// khi `include_hidden` — CÙNG điều kiện với cột `file_created_at` trả về, nên khoá sort và giá trị hiển thị không lệch.
+fn file_created_join(q: &FaceQuery) -> String {
+    if q.sort != SortKey::FileCreated {
+        return String::new();
+    }
+    let nh = if q.include_hidden { String::new() } else { format!(" AND NOT {HIDDEN_LOC}") };
+    format!(
+        " LEFT JOIN (SELECT l.file_id AS fid, MIN(l.created_ns) AS m FROM file_locations l WHERE l.missing = 0{nh} GROUP BY l.file_id) fc ON fc.fid = f.file_id"
+    )
+}
 
 fn user_order(q: &FaceQuery, scoped: bool) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
@@ -495,11 +506,15 @@ impl Store {
         let scoped = scope.is_some();
         let (w, p) = where_clause(q);
         let (order, order_params) = grouped_order(q, scoped, false);
-        let from = if scoped {
-            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
-        } else {
-            "faces f JOIN files fi ON fi.file_id = f.file_id"
-        };
+        let from = format!(
+            "{}{}",
+            if scoped {
+                "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+            } else {
+                "faces f JOIN files fi ON fi.file_id = f.file_id"
+            },
+            file_created_join(q)
+        );
         // tham số: WHERE trước, ORDER BY sau (đúng thứ tự `?` trong câu lệnh)
         let all: Vec<&dyn ToSql> = p.iter().chain(order_params.iter()).map(|v| v as &dyn ToSql).collect();
         let sql = format!(
@@ -610,15 +625,19 @@ impl Store {
     }
 
     fn query_faces_inner(&self, q: &FaceQuery, scoped: bool) -> Result<FacePage, StoreError> {
-        let from = if scoped {
-            "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
-        } else {
-            "faces f JOIN files fi ON fi.file_id = f.file_id"
-        };
+        let from = format!(
+            "{}{}",
+            if scoped {
+                "faces f JOIN files fi ON fi.file_id = f.file_id JOIN temp.scope sc ON sc.face_id = f.face_id"
+            } else {
+                "faces f JOIN files fi ON fi.file_id = f.file_id"
+            },
+            file_created_join(q)
+        );
         let (w, p) = where_clause(q);
         let refs: Vec<&dyn ToSql> = p.iter().map(|v| v as &dyn ToSql).collect();
         let total: i64 = self.conn.query_row(
-            &format!("SELECT count(*) FROM {from} WHERE {w}"),
+            &format!("SELECT count(*) FROM {} WHERE {w}", from.replace(&file_created_join(q), "")),
             refs.as_slice(),
             |r| r.get(0),
         )?;

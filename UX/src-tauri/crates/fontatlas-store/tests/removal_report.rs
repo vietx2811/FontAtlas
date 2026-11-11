@@ -38,3 +38,24 @@ fn report_counts_active_fonts_and_user_links_then_remove_changes_nothing_of_the_
     assert_eq!(count(&s, "SELECT count(*) FROM u.activation_state WHERE state='active'"), 1, "font đang bật không tự tắt");
     assert_eq!(count(&s, "SELECT count(*) FROM files"), 0);
 }
+
+#[test]
+fn faces_whose_only_other_locations_are_missing_leave_the_grid() {
+    let d = tmp();
+    let a = d.path().join("A");
+    let b = d.path().join("B");
+    for p in [&a, &b] {
+        std::fs::create_dir_all(p).unwrap();
+        std::fs::copy(core_fixture("roboto.ttf"), p.join("roboto.ttf")).unwrap();
+    }
+    let mut s = open_store(&d.path().join("db"));
+    let sa = s.add_source(SourceKind::Directory, "A", Some(&a)).unwrap();
+    let sb = s.add_source(SourceKind::Directory, "B", Some(&b)).unwrap();
+    for id in [sa, sb] {
+        s.rescan_source_with(id, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    }
+    assert_eq!(s.source_removal_report(sa).unwrap().faces_left_without_location, 0, "B còn hiện diện");
+    // vị trí ở B bị đánh missing ⇒ gỡ A là font rời lưới
+    s.conn().execute("UPDATE file_locations SET missing = 1 WHERE source_id = ?1", [sb]).unwrap();
+    assert_eq!(s.source_removal_report(sa).unwrap().faces_left_without_location, 1);
+}

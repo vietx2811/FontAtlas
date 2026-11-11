@@ -293,12 +293,19 @@ impl Store {
     /// Đổi tên Tag giữ nguyên `face_tags`. `name` đã trim; rỗng → `Invalid`; trùng (theo `vi_fold`) với Tag KHÁC →
     /// `Conflict` (không gộp ngầm); đổi hoa/thường/dấu của chính nó hợp lệ; id lạ → `NotFound`.
     pub fn rename_tag(&mut self, id: i64, name: &str) -> Result<Tag, StoreError> {
-        let name = name.trim();
+        // NFC trước khi trim/gập/lưu: "Phở" gõ rời dấu và dựng sẵn là cùng một tên
+        let name: String = name.nfc().collect::<String>().trim().to_string();
+        let name = name.as_str();
         let key = vi_fold(name);
         if key.is_empty() {
             return Err(StoreError::Invalid("tên tag trống".into()));
         }
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        // id lạ ⇒ not_found TRƯỚC khi xét trùng tên (không báo conflict cho thẻ không tồn tại)
+        let exists: bool = tx.query_row("SELECT EXISTS (SELECT 1 FROM u.tags WHERE tag_id=?1)", [id], |r| r.get(0))?;
+        if !exists {
+            return Err(StoreError::NotFound(format!("tag #{id}")));
+        }
         let other: Option<i64> =
             tx.query_row("SELECT tag_id FROM u.tags WHERE name_key=?1 AND tag_id<>?2", params![key, id], |r| r.get(0)).optional()?;
         if other.is_some() {

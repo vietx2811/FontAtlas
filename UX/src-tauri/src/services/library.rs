@@ -489,7 +489,9 @@ pub fn create_tag(state: &AppState, name: &str) -> Result<TagDto, CmdError> {
 /// chuẩn); Tag hệ thống không đổi thành tên thường (mất nghĩa). Trùng tên với Tag khác → `conflict`.
 pub fn rename_tag(state: &AppState, id: i64, name: &str) -> Result<TagDto, CmdError> {
     use fontatlas_core::system_tags::{canonical_name, check_name};
-    let name = name.trim();
+    use unicode_normalization::UnicodeNormalization;
+    let nfc: String = name.nfc().collect();
+    let name = nfc.trim();
     if name.is_empty() {
         return Err(CmdError::invalid_arg("tên tag trống"));
     }

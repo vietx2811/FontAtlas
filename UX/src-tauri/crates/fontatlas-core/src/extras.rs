@@ -200,17 +200,22 @@ pub fn year_from_longdatetime(secs: i64) -> Option<u16> {
     (1950..=2100).contains(&y).then_some(y as u16)
 }
 
-/// Các năm (1900–2099) đứng riêng thành số 4 chữ số, kèm vị trí byte.
-fn years_in(s: &str) -> Vec<(usize, u16)> {
+/// Các năm (1900 .. năm hiện tại + 1) đứng riêng thành số 4 chữ số, kèm vị trí byte. "Đứng riêng" = hai bên không phải chữ
+/// số hay chữ cái (loại `font2012.com`, `v20123`, `A1995B`); `©2012`, `2012-2015`, `(2012)` vẫn nhận.
+fn years_in(s: &str, max_year: u16) -> Vec<(usize, u16)> {
     let b = s.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
     while i < b.len() {
         if b[i].is_ascii_digit() {
             let j = (i..b.len()).find(|k| !b[*k].is_ascii_digit()).unwrap_or(b.len());
+            let letter_before = s[..i].chars().next_back().is_some_and(|c| c.is_alphabetic());
+            let letter_after = s[j..].chars().next().is_some_and(|c| c.is_alphabetic());
             if j - i == 4
+                && !letter_before
+                && !letter_after
                 && let Ok(y) = s[i..j].parse::<u16>()
-                && (1900..=2099).contains(&y)
+                && (1900..=max_year).contains(&y)
             {
                 out.push((i, y));
             }
@@ -222,22 +227,35 @@ fn years_in(s: &str) -> Vec<(usize, u16)> {
     out
 }
 
-/// Năm bản quyền: ưu tiên số đứng ngay sau `©` / `Copyright` / `(c)` (trong 24 byte), nếu không thì năm sớm nhất tìm thấy.
+/// Năm bản quyền của font: mốc `©` / `Copyright` / `(c)` ĐẦU TIÊN trong chuỗi, lấy năm đầu tiên đứng sau mốc (trong 24 byte);
+/// năm ngoài khoảng hợp lệ thì thử ứng viên kế (năm kế sau mốc, rồi mốc kế). Không có mốc nào cho ra năm thì lấy năm hợp lệ
+/// đầu tiên trong chuỗi. KHÔNG lấy năm nhỏ nhất: "Copyright 2010 Foo. Portions © 1995 Bar" là 2010 (1995 là của bên khác).
 pub fn copyright_year(s: &str) -> Option<u16> {
-    let years = years_in(s);
+    copyright_year_at(s, current_year().saturating_add(1))
+}
+
+fn copyright_year_at(s: &str, max_year: u16) -> Option<u16> {
+    let years = years_in(s, max_year);
     let lower = s.to_lowercase();
     // vị trí byte trong `lower` có thể lệch với `s` khi có ký tự đổi độ dài khi hạ chữ: chỉ dùng khi độ dài bằng nhau
     if lower.len() == s.len() {
-        let marked = ["©", "copyright", "(c)"]
-            .iter()
-            .flat_map(|m| lower.match_indices(m).map(move |(p, m)| p + m.len()))
-            .filter_map(|end| years.iter().find(|(p, _)| *p >= end && *p <= end + 24).map(|(_, y)| *y))
-            .min();
-        if marked.is_some() {
-            return marked;
+        let mut ends: Vec<usize> =
+            ["©", "copyright", "(c)"].iter().flat_map(|m| lower.match_indices(m).map(move |(p, m)| p + m.len())).collect();
+        ends.sort_unstable();
+        ends.dedup();
+        for end in ends {
+            if let Some((_, y)) = years.iter().find(|(p, _)| *p >= end && *p <= end + 24) {
+                return Some(*y);
+            }
         }
     }
-    years.iter().map(|(_, y)| *y).min()
+    years.first().map(|(_, y)| *y)
+}
+
+/// Năm hiện tại (UTC), chỉ để chặn "năm tương lai" khi đọc chuỗi bản quyền.
+pub(crate) fn current_year() -> u16 {
+    let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    year_from_longdatetime(unix + 2_082_844_800).unwrap_or(2026)
 }
 
 /// OS/2 fsType: bit 1 restricted, 2 preview&print, 3 editable, 8 no subsetting, 9 bitmap only; 0 = installable.
@@ -515,5 +533,44 @@ mod release_year_tests {
             assert_eq!(ReleaseYearSource::parse(s.as_str()), Some(s));
         }
         assert_eq!(ReleaseYearSource::parse("nope"), None);
+    }
+}
+
+#[cfg(test)]
+mod copyright_year_tests {
+    use super::*;
+
+    const NOW: u16 = 2026;
+    fn c(s: &str) -> Option<u16> {
+        copyright_year_at(s, NOW + 1)
+    }
+
+    #[test]
+    fn first_marker_wins_not_the_smallest_year() {
+        assert_eq!(c("Copyright 2010 Foo Inc. Portions © 1995 Bar Ltd."), Some(2010), "1995 là của bên khác");
+        assert_eq!(c("Portions © 1995 Bar. Copyright (c) 2010 Foo"), Some(1995), "mốc đầu tiên trong chuỗi");
+        assert_eq!(c("© 2012-2015 Foo"), Some(2012), "năm đầu sau mốc");
+    }
+
+    #[test]
+    fn digits_inside_urls_and_words_are_not_years() {
+        assert_eq!(c("Visit font2012.com — Copyright 2018 Foo"), Some(2018));
+        assert_eq!(c("Copyright 20123 Foo, id1995a"), None, "5 chữ số / dính chữ không phải năm");
+        assert_eq!(c("© 2012"), Some(2012));
+        assert_eq!(c("(c)2012 Foo"), Some(2012));
+        assert_eq!(c("Copyright (2014) Foo"), Some(2014));
+    }
+
+    #[test]
+    fn out_of_range_year_tries_the_next_candidate() {
+        assert_eq!(c("Copyright 2099 2011 Foo"), Some(2011), "2099 là tương lai ⇒ thử năm kế");
+        assert_eq!(c("Copyright 1800 Foo © 2001"), Some(2001), "năm ngoài khoảng ⇒ thử mốc kế");
+        assert_eq!(c("Copyright 2099 Foo"), None);
+    }
+
+    #[test]
+    fn without_a_marker_the_first_valid_year_is_used() {
+        assert_eq!(c("Designed 2003, revised 1999"), Some(2003));
+        assert_eq!(c("no year here"), None);
     }
 }

@@ -121,7 +121,8 @@ fn icloud_real_name(name: &str) -> Option<&str> {
 
 /// Như `walk_fonts`, kèm các thư mục không đọc được (font bên trong không được coi là đã xoá).
 /// Placeholder tìm thấy: đường dẫn + (size, mtime) từ stat nếu có (stub `.icloud` không có file thật nên không có).
-type Placeholder = (PathBuf, Option<(u64, i64)>);
+/// (size, mtime_ns, created_ns) — chỉ stat, không đọc nội dung.
+type Placeholder = (PathBuf, Option<(u64, i64, Option<i64>)>);
 
 fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>, Vec<PathBuf>, Vec<Placeholder>) {
     let mut out = Vec::new();
@@ -165,15 +166,15 @@ fn walk_fonts_report(root: &Path, probe: PlaceholderProbe) -> (Vec<ScannedFile>,
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_nanos() as i64)
                     .unwrap_or(0);
-                if probe(&p, &m) {
-                    placeholders.push((p, Some((m.len(), mtime_ns))));
-                    continue;
-                }
                 let created_ns = m
                     .created()
                     .ok()
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_nanos() as i64);
+                if probe(&p, &m) {
+                    placeholders.push((p, Some((m.len(), mtime_ns, created_ns))));
+                    continue;
+                }
                 out.push(ScannedFile { path: p, size: m.len(), mtime_ns, created_ns });
             }
         }
@@ -209,7 +210,8 @@ fn root_available(root: &Path) -> bool {
 pub struct SourceRemovalReport {
     /// Số vị trí file của nguồn sẽ bị bỏ khỏi thư viện.
     pub removed_locations: u32,
-    /// Số face không còn vị trí nào sau khi gỡ (chỉ có ở nguồn này): rời lưới, bản phân tích bị dọn.
+    /// Số face rời khỏi lưới sau khi gỡ: không còn vị trí nào ở nguồn khác mà hiện diện và chưa bị ẩn bởi Trùng lặp
+    /// (face chỉ còn vị trí `missing` cũng tính — chúng không hiện trong lưới).
     pub faces_left_without_location: u32,
     /// Số Dự án (chưa xoá) có chứa face nói trên — các face đó hiện `missing`, KHÔNG bị xoá khỏi Dự án.
     pub cases_affected: u32,
@@ -222,11 +224,12 @@ pub struct SourceRemovalReport {
 }
 
 fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
-    // face chỉ còn tồn tại nhờ nguồn này
+    // face SẼ RỜI LƯỚI: không còn vị trí nào ở nguồn khác mà hiện diện (missing = 0) và chưa bị ẩn bởi Trùng lặp
     const GONE: &str = "WITH gone(hash, face_index) AS (
         SELECT fi.hash, f.face_index FROM faces f JOIN files fi ON fi.file_id = f.file_id
          WHERE EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id = ?1)
-           AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id <> ?1))";
+           AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id <> ?1 AND l.missing = 0
+                           AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)))";
     let n = |sql: String| -> Result<u32, StoreError> { Ok(c.query_row(&sql, [source_id], |r| r.get::<_, i64>(0))? as u32) };
     Ok(SourceRemovalReport {
         removed_locations: n("SELECT count(*) FROM file_locations WHERE source_id = ?1".into())?,
@@ -342,33 +345,39 @@ impl Store {
             for (p, meta) in &placeholders {
                 let path = p.to_string_lossy();
                 let changed = match (known.get(path.as_ref()), meta) {
-                    (Some(&(ksize, kmtime, _)), Some((size, mtime))) => ksize != *size as i64 || kmtime != *mtime,
+                    (Some(&(ksize, kmtime, _)), Some((size, mtime, _))) => ksize != *size as i64 || kmtime != *mtime,
                     _ => false,
                 };
+                // birth time lấy từ stat (an toàn với file dataless); stub .icloud không có stat ⇒ giữ giá trị cũ
+                let created = meta.and_then(|m| m.2);
+                let csrc = created.map(|_| crate::release::created_src(p));
                 if changed {
                     // Nội dung trên cloud đã đổi mà ta không được đọc: kết quả của hash cũ không còn đáng tin. Ghi size/mtime mới
                     // và đánh dấu lần phân tích cũ là "cần làm lại"; khi file được tải về, lần quét sau băm và phân tích lại.
-                    let (size, mtime) = meta.unwrap_or_default();
+                    let (size, mtime, _) = meta.unwrap_or_default();
                     tx.execute(
                         "UPDATE pipeline_state SET version=?2 WHERE stage='load' AND face_index=-1 AND hash IN
                            (SELECT fi.hash FROM file_locations l JOIN files fi USING(file_id) WHERE l.path=?1)",
                         params![path, CLOUD_STALE_MARK],
                     )?;
                     tx.execute(
-                        "UPDATE file_locations SET size=?2, mtime_ns=?3, last_seen_at=?4, scan_gen=?5, missing=0, cloud_only=1 WHERE path=?1",
-                        params![path, size as i64, mtime, started, generation],
+                        "UPDATE file_locations SET size=?2, mtime_ns=?3, last_seen_at=?4, scan_gen=?5, missing=0, cloud_only=1,
+                                created_ns=COALESCE(?6, created_ns), created_src=COALESCE(?7, created_src) WHERE path=?1",
+                        params![path, size as i64, mtime, started, generation, created, csrc],
                     )?;
                 } else {
                     tx.execute(
-                        "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=1 WHERE path=?1",
-                        params![path, started, generation],
+                        "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=1,
+                                created_ns=COALESCE(?4, created_ns), created_src=COALESCE(?5, created_src) WHERE path=?1",
+                        params![path, started, generation, created, csrc],
                     )?;
                 }
             }
             for f in &unchanged {
                 tx.execute(
-                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=0 WHERE path=?1",
-                    params![f.path.to_string_lossy(), started, generation],
+                    "UPDATE file_locations SET last_seen_at=?2, scan_gen=?3, missing=0, cloud_only=0,
+                            created_ns=COALESCE(?4, created_ns), created_src=COALESCE(?5, created_src) WHERE path=?1",
+                    params![f.path.to_string_lossy(), started, generation, f.created_ns, f.created_ns.map(|_| crate::release::created_src(&f.path))],
                 )?;
             }
             tx.commit()?;

@@ -157,3 +157,20 @@ fn delete_tag_cascades_to_assignments_and_reports_the_count() {
     assert_eq!(s.delete_tag(a).unwrap_err().code(), "not_found");
     assert_eq!(count(&s, "SELECT count(*) FROM u.face_tags WHERE tag_id NOT IN (SELECT tag_id FROM u.tags)"), 0, "không mồ côi");
 }
+
+#[test]
+fn rename_tag_normalizes_nfc_and_pho_vs_pho_conflict_is_intentional() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let a = s.tag("Retro").unwrap();
+    let other = s.tag("Other").unwrap();
+    // "Phở" gõ rời dấu (o + U+031B + U+0309) lưu thành NFC dựng sẵn
+    let t = s.rename_tag(a, "  Pho\u{031B}\u{0309}  ").unwrap();
+    assert_eq!(t.name, "Ph\u{1EDF}", "NFC + trim");
+    assert_eq!(s.tags().unwrap().iter().find(|x| x.id == a).unwrap().name, "Ph\u{1EDF}");
+    // CHỦ Ý: "Phở" và "Pho" cùng khoá gập dấu ⇒ conflict (cùng luật dedupe với tag()/create_tag)
+    assert_eq!(s.rename_tag(other, "Pho").unwrap_err().code(), "conflict");
+    // id lạ ⇒ not_found, dù tên mới trùng một Tag khác
+    assert_eq!(s.rename_tag(9999, "Retro").unwrap_err().code(), "not_found");
+    assert_eq!(s.rename_tag(9999, "Phở").unwrap_err().code(), "not_found");
+}

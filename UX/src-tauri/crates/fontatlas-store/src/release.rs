@@ -19,30 +19,50 @@ pub(crate) fn columns(y: &Years, now_year: u16) -> (Option<i64>, &'static str) {
     }
 }
 
-/// Điền `release_year` cho mọi face chưa tính (`release_year_src IS NULL`) từ bản phân tích local mới nhất có `extras`.
-/// Face mà bản phân tích chưa có `extras` (analyzer < core-0.8.0) giữ NULL tới lần phân tích lại. Trả số face đã điền.
+const BACKFILL_KEY: &str = "release_backfill";
+const BATCH: i64 = 2000;
+
+/// Điền `release_year` MỘT LẦN sau khi nâng lên v5, từ bản phân tích local mới nhất có `extras` (không đọc file font).
+/// Chạy theo lô `BATCH` face (`face_id` tăng dần), mỗi lô một transaction, đọc thẳng `$.extras.years` bằng `json_extract`
+/// nên không nạp `metadata_json` vào RAM. Xong thì ghi cờ `meta.release_backfill` nên các lần mở sau không quét lại; face mà
+/// bản phân tích chưa có `extras` (analyzer < core-0.8.0) giữ NULL tới lần phân tích lại (ingest ghi cột). Trả số face đã điền.
 pub(crate) fn backfill(conn: &Connection) -> Result<usize, StoreError> {
-    let now_year = current_year();
-    let rows: Vec<(i64, String)> = {
-        let mut st = conn.prepare(
-            "SELECT f.face_id, a.metadata_json
-               FROM faces f JOIN files fi ON fi.file_id = f.file_id
-               JOIN analyses a ON a.hash = fi.hash AND a.face_index = f.face_index AND a.source = 'local'
-              WHERE f.release_year_src IS NULL
-                AND a.rowid = (SELECT a2.rowid FROM analyses a2 WHERE a2.hash = a.hash AND a2.face_index = a.face_index
-                                AND a2.source = 'local' ORDER BY a2.analyzed_at DESC, a2.rowid DESC LIMIT 1)",
-        )?;
-        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?
-    };
-    let mut n = 0;
-    for (id, json) in rows {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) else { continue };
-        let Some(years) = v.get("extras").and_then(|e| e.get("years")) else { continue };
-        let y: Years = serde_json::from_value(years.clone()).unwrap_or_default();
-        let (year, src) = columns(&y, now_year);
-        conn.execute("UPDATE faces SET release_year = ?2, release_year_src = ?3 WHERE face_id = ?1", params![id, year, src])?;
-        n += 1;
+    let done: Option<i64> = conn.query_row("SELECT value FROM meta WHERE key = ?1", [BACKFILL_KEY], |r| r.get(0)).ok();
+    if done.is_some() {
+        return Ok(0);
     }
+    let now_year = current_year();
+    let mut last = 0i64;
+    let mut n = 0;
+    loop {
+        let rows: Vec<(i64, Option<String>)> = {
+            let mut st = conn.prepare_cached(
+                "SELECT f.face_id, json_extract(a.metadata_json, '$.extras.years')
+                   FROM faces f JOIN files fi ON fi.file_id = f.file_id
+                   JOIN analyses a ON a.hash = fi.hash AND a.face_index = f.face_index AND a.source = 'local'
+                  WHERE f.face_id > ?1 AND f.release_year_src IS NULL
+                    AND a.rowid = (SELECT a2.rowid FROM analyses a2 WHERE a2.hash = a.hash AND a2.face_index = a.face_index
+                                    AND a2.source = 'local' ORDER BY a2.analyzed_at DESC, a2.rowid DESC LIMIT 1)
+                  ORDER BY f.face_id LIMIT ?2",
+            )?;
+            st.query_map(params![last, BATCH], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?
+        };
+        let Some(&(max_id, _)) = rows.last() else { break };
+        let tx = conn.unchecked_transaction()?;
+        {
+            let mut up = tx.prepare_cached("UPDATE faces SET release_year = ?2, release_year_src = ?3 WHERE face_id = ?1")?;
+            for (id, years) in &rows {
+                let Some(years) = years else { continue };
+                let y: Years = serde_json::from_str(years).unwrap_or_default();
+                let (year, src) = columns(&y, now_year);
+                up.execute(params![id, year, src])?;
+                n += 1;
+            }
+        }
+        tx.commit()?;
+        last = max_id;
+    }
+    conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?1, 1)", [BACKFILL_KEY])?;
     Ok(n)
 }
 
