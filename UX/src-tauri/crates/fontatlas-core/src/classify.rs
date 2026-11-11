@@ -10,9 +10,15 @@ use serde_json::Value;
 #[serde(rename_all = "snake_case")]
 pub enum Class {
     Serif,
+    /// Taxonomy v2: slab tách khỏi Serif. Bộ phân loại tự động chưa phát ra (chỉ nhãn người dùng/ánh xạ cũ).
+    Slab,
     Sans,
     Mono,
     Script,
+    /// Taxonomy v2: chữ viết tay, không nối (tách khỏi Script nối).
+    Handwriting,
+    /// Taxonomy v2: Display cấu trúc (stencil/inline/shaded/pixel).
+    Display,
     Blackletter,
     Symbol,
     Uncertain,
@@ -22,6 +28,9 @@ impl Class {
     pub fn label(self) -> &'static str {
         match self {
             Class::Serif => "Serif",
+            Class::Slab => "Slab",
+            Class::Handwriting => "Handwriting",
+            Class::Display => "Display",
             Class::Sans => "Sans",
             Class::Mono => "Mono",
             Class::Script => "Script",
@@ -34,6 +43,9 @@ impl Class {
     pub fn parse(s: &str) -> Option<Class> {
         Some(match s.to_ascii_lowercase().as_str() {
             "serif" => Class::Serif,
+            "slab" => Class::Slab,
+            "handwriting" => Class::Handwriting,
+            "display" => Class::Display,
             "sans" => Class::Sans,
             "mono" => Class::Mono,
             "script" => Class::Script,
@@ -50,6 +62,9 @@ impl Class {
     pub fn snake(self) -> &'static str {
         match self {
             Class::Serif => "serif",
+            Class::Slab => "slab",
+            Class::Handwriting => "handwriting",
+            Class::Display => "display",
             Class::Sans => "sans",
             Class::Mono => "mono",
             Class::Script => "script",
@@ -60,14 +75,35 @@ impl Class {
     }
 }
 
-/// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng).
+/// Subclass hợp lệ của từng class (dùng kiểm tra ghi đè của người dùng). Bao gồm cả nhãn cũ (v1) để
+/// ghi đè đã lưu vẫn hợp lệ cho tới khi `migrate_legacy` ánh xạ chúng.
 pub fn subclasses_of(c: Class) -> &'static [&'static str] {
     match c {
-        Class::Serif => &["humanist_oldstyle", "transitional", "didone", "slab", "glyphic"],
-        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist"],
-        Class::Mono => &["serif_mono", "sans_mono"],
-        Class::Script => &["formal", "casual_brush", "handwritten"],
+        Class::Serif => &["humanist_oldstyle", "garalde", "transitional", "didone", "glyphic", "wedge", "slab"],
+        Class::Slab => &["clarendon", "egyptian", "humanist_slab", "typewriter"],
+        Class::Sans => &["grotesque", "neo_grotesque", "geometric", "humanist", "rounded", "flared", "squarish"],
+        Class::Mono => &["serif_mono", "sans_mono", "coding"],
+        Class::Script => &["copperplate", "brush", "monoline", "upright", "calligraphic", "formal", "casual_brush", "handwritten"],
+        Class::Handwriting => &["casual_print", "marker", "childlike"],
+        Class::Display => &["stencil", "inline", "shaded", "pixel"],
         Class::Blackletter | Class::Symbol | Class::Uncertain => &[],
+    }
+}
+
+/// Ánh xạ nhãn v1 (class, subclass) sang taxonomy v2; không mất dữ liệu: nhãn lạ giữ nguyên class, bỏ subclass không hợp lệ.
+/// - Serif/`slab` → Slab (không subclass; người dùng/phân loại sau mới chọn clarendon/egyptian…)
+/// - Script/`handwritten` → Handwriting; Script/`casual_brush` → Script/`brush`; Script/`formal` → Script/`copperplate`
+pub fn migrate_legacy(class: &str, subclass: Option<&str>) -> (String, Option<String>) {
+    let keep = |c: &str, s: Option<&str>| {
+        let valid = Class::parse(c).is_some_and(|k| s.is_none_or(|s| subclasses_of(k).contains(&s)));
+        (c.to_string(), s.filter(|_| valid).map(str::to_string))
+    };
+    match (class, subclass) {
+        ("serif", Some("slab")) => ("slab".into(), None),
+        ("script", Some("handwritten")) => ("handwriting".into(), None),
+        ("script", Some("casual_brush")) => ("script".into(), Some("brush".into())),
+        ("script", Some("formal")) => ("script".into(), Some("copperplate".into())),
+        (c, s) => keep(c, s),
     }
 }
 

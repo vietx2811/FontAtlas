@@ -122,8 +122,9 @@ fn every_subclass_the_classifier_can_emit_is_valid() {
 }
 
 #[test]
-fn display_is_a_usage_tag_not_a_class() {
-    assert!(Class::parse("display").is_none());
+fn display_is_a_usage_tag_until_the_v2_classifier_emits_it() {
+    // v2: `Display` tồn tại như class (nhãn người dùng/ánh xạ) nhưng bộ phân loại tự động CHƯA phát ra nó; vẫn là tag usage
+    assert_eq!(Class::parse("display"), Some(Class::Display));
     // tên có "Stencil": trait stencil, class vẫn theo hình dáng (ở đây không đủ bằng chứng → không phải Display)
     let i = ClassifyInput { name: "foo stencil".into(), m: Metrics { serif_foot: Some(1.0), ..Default::default() }, ..Default::default() };
     let c = classify(&i);
@@ -252,4 +253,36 @@ fn italic_fixtures_measure_like_their_upright_counterparts() {
     assert!(b.m.serif_head.unwrap() > 0.4, "serif italic vẫn thấy cờ trên: {:?}", b.m.serif_head);
     let up = inp("libre_baskerville.ttf");
     assert!(up.m.serif_flare.unwrap() > 2.0 && up.m.serif_head.unwrap() > 0.4);
+}
+
+// --- taxonomy v2: lớp mới + ánh xạ nhãn cũ (không mất ghi đè người dùng) ---
+
+#[test]
+fn v2_classes_round_trip_and_have_subclasses() {
+    use fontatlas_core::classify::subclasses_of;
+    for c in [Class::Slab, Class::Handwriting, Class::Display] {
+        assert_eq!(Class::parse(c.snake()), Some(c));
+        assert!(!subclasses_of(c).is_empty());
+    }
+    assert!(subclasses_of(Class::Slab).contains(&"clarendon") && subclasses_of(Class::Sans).contains(&"flared"));
+    assert!(subclasses_of(Class::Mono).contains(&"coding") && subclasses_of(Class::Serif).contains(&"wedge"));
+}
+
+#[test]
+fn legacy_overrides_map_to_v2_without_losing_the_choice() {
+    use fontatlas_core::classify::migrate_legacy;
+    let m = |c: &str, s: Option<&str>| migrate_legacy(c, s);
+    assert_eq!(m("serif", Some("slab")), ("slab".into(), None));
+    assert_eq!(m("script", Some("handwritten")), ("handwriting".into(), None));
+    assert_eq!(m("script", Some("casual_brush")), ("script".into(), Some("brush".into())));
+    assert_eq!(m("script", Some("formal")), ("script".into(), Some("copperplate".into())));
+    // nhãn còn hợp lệ giữ nguyên; subclass không hợp lệ bị bỏ nhưng class giữ
+    assert_eq!(m("sans", Some("geometric")), ("sans".into(), Some("geometric".into())));
+    assert_eq!(m("serif", Some("nonsense")), ("serif".into(), None));
+    assert_eq!(m("blackletter", None), ("blackletter".into(), None));
+    // idempotent
+    for (c, s) in [("serif", Some("slab")), ("script", Some("handwritten")), ("mono", Some("sans_mono"))] {
+        let once = migrate_legacy(c, s);
+        assert_eq!(migrate_legacy(&once.0, once.1.as_deref()), once);
+    }
 }
