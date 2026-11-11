@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use fontatlas_broker::{EnsureError, EnsureRequest, EnsureResponse, FontReq};
@@ -8,6 +8,10 @@ use fontatlas_broker::{EnsureError, EnsureRequest, EnsureResponse, FontReq};
 /// Cùng một tên không có trong thư viện: trong ngần này giây trả rỗng ngay, không hỏi lại thư viện.
 /// (Photoshop hỏi lại mỗi lần dựng chữ; xem spike 06-1.)
 pub const NEGATIVE_TTL: Duration = Duration::from_secs(10);
+
+/// Hạn tối đa một request được giữ app hỏi chờ (lớn hơn `AUTO_DOWNLOAD_TIMEOUT` 8 s của tải file đám mây một chút).
+/// Quá hạn (khoá DB bị giữ, tải treo, ...) thì trả rỗng để app thiết kế không treo; việc bật vẫn chạy nốt ở nền.
+pub const ANSWER_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Điều CoreText hỏi. `ps` là tên PostScript (Photoshop chỉ gửi cái này); family/style chỉ dùng khi app gửi.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -65,13 +69,14 @@ impl<F: Fn(i32) -> Option<String> + Send + Sync> AppNamer for F {
     }
 }
 
-type Ensure = dyn Fn(&EnsureRequest) -> Result<EnsureResponse, EnsureError> + Send + Sync;
+type Ensure = dyn Fn(&EnsureRequest) -> Result<EnsureResponse, EnsureError> + Send + Sync + 'static;
 
 pub struct Responder {
-    ensure: Box<Ensure>,
+    ensure: Arc<Ensure>,
     enabled: Box<dyn Fn() -> bool + Send + Sync>,
     namer: Box<dyn AppNamer>,
     ttl: Duration,
+    deadline: Duration,
     missing: Mutex<HashMap<String, Instant>>,
 }
 
@@ -83,12 +88,18 @@ impl Responder {
         enabled: impl Fn() -> bool + Send + Sync + 'static,
         namer: impl AppNamer + 'static,
     ) -> Self {
-        Self { ensure: Box::new(ensure), enabled: Box::new(enabled), namer: Box::new(namer), ttl: NEGATIVE_TTL, missing: Mutex::new(HashMap::new()) }
+        Self { ensure: Arc::new(ensure), enabled: Box::new(enabled), namer: Box::new(namer), ttl: NEGATIVE_TTL, deadline: ANSWER_DEADLINE, missing: Mutex::new(HashMap::new()) }
     }
 
     /// Chỉ cho test: đổi thời hạn nhớ "không có".
     pub fn with_negative_ttl(mut self, ttl: Duration) -> Self {
         self.ttl = ttl;
+        self
+    }
+
+    /// Chỉ cho test: đổi hạn trả lời.
+    pub fn with_deadline(mut self, d: Duration) -> Self {
+        self.deadline = d;
         self
     }
 
@@ -123,9 +134,18 @@ impl Responder {
             doc: None,
             fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone() }],
         };
-        let resp = match (self.ensure)(&er) {
-            Ok(r) => r,
-            Err(_) => return Answer::Nothing,
+        // Chạy ở luồng phụ để có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi.
+        let (tx, rx) = mpsc::channel();
+        let ensure = self.ensure.clone();
+        let spawned = std::thread::Builder::new().name("fontatlas-fontreq-ensure".into()).spawn(move || {
+            let _ = tx.send(ensure(&er));
+        });
+        if spawned.is_err() {
+            return Answer::Nothing;
+        }
+        let resp = match rx.recv_timeout(self.deadline) {
+            Ok(Ok(r)) => r,
+            _ => return Answer::Nothing,
         };
         let path = resp.results.first().filter(|r| r.status.usable()).and_then(|r| r.path.clone());
         match path {

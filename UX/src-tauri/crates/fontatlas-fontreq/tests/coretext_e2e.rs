@@ -10,6 +10,8 @@ use std::time::Duration;
 use fontatlas_broker::{EnsureRequest, EnsureResponse, FontResult, FontStatus};
 use fontatlas_fontreq::{Answer, FontRequestSource, Observer, PidAppNamer, Request, Responder};
 
+type Seen = Vec<(i32, Request, Answer, Duration)>;
+
 fn fixture() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../fontatlas-core/tests/fixtures/libre_baskerville.ttf").canonicalize().unwrap()
 }
@@ -51,7 +53,7 @@ fn another_process_gets_the_font_we_serve_and_unknown_names_get_nothing() {
         || true,
         PidAppNamer,
     ));
-    let log: Arc<Mutex<Vec<(i32, Request, Answer, Duration)>>> = Arc::default();
+    let log: Arc<Mutex<Seen>> = Arc::default();
     let l2 = log.clone();
     let obs: Arc<Observer> = Arc::new(move |pid, req, ans, d| l2.lock().unwrap().push((pid, req.clone(), ans.clone(), d)));
     let src = FontRequestSource::start(responder, Some(obs)).expect("nguồn font request");

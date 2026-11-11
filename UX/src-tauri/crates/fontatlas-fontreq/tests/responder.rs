@@ -160,3 +160,22 @@ fn app_label_comes_from_the_outermost_app_bundle() {
     );
     assert_eq!(app_label_from_exe_path("/usr/bin/python3"), None);
 }
+
+#[test]
+fn slow_or_panicking_backend_does_not_hold_the_asking_app() {
+    let slow = Responder::new(
+        |_q: &EnsureRequest| {
+            std::thread::sleep(Duration::from_millis(600));
+            Ok(resp(FontStatus::Activated, Some("/late.ttf")))
+        },
+        || true,
+        |_: i32| None,
+    )
+    .with_deadline(Duration::from_millis(80));
+    let t = std::time::Instant::now();
+    assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing);
+    assert!(t.elapsed() < Duration::from_millis(400), "{:?}", t.elapsed());
+
+    let boom = Responder::new(|_q: &EnsureRequest| -> Result<EnsureResponse, EnsureError> { panic!("lỗi giả") }, || true, |_: i32| None);
+    assert_eq!(boom.answer(1, &ps("Boom-Regular")), Answer::Nothing);
+}
