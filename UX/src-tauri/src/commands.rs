@@ -180,6 +180,7 @@ macro_rules! command_list {
             async auto_remove(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
             async auto_log(limit: Option<u32>) -> Result<Vec<AutoLogDto>, CmdError>;
             async auto_forget_key() -> Result<AutoStatusDto, CmdError>;
+            async auto_probe() -> Result<AutoStatusDto, CmdError>;
         }
     };
 }
@@ -331,6 +332,7 @@ cmd!(auto_install(target: AutoTargetDto) -> AutoStatusDto => |s| auto::install(s
 cmd!(auto_remove(target: AutoTargetDto) -> AutoStatusDto => |s| auto::remove(s, target));
 cmd!(auto_log(limit: Option<u32>) -> Vec<AutoLogDto> => |s| auto::log(s, limit));
 cmd!(auto_forget_key() -> AutoStatusDto => |s| auto::forget_key(s));
+cmd!(auto_probe() -> AutoStatusDto => |s| auto::probe(s));
 cmd!(disk_free(target: String) -> u64 => |s| system::disk_free(s, &target));
 cmd!(get_ui_state() -> UiStateDto => |s| system::get_ui_state(s));
 cmd!(set_ui_state(state: UiStateDto) -> () => |s| system::set_ui_state(s, &state));

@@ -61,6 +61,10 @@ fn app_running(d: &AppDef, exes: &[String]) -> bool {
     exes.iter().any(|p| p.split('/').any(|c| c.strip_suffix(".app").is_some_and(|n| n.starts_with(d.prefix))))
 }
 
+fn running_manager(i: &Inputs, name: &str) -> bool {
+    i.running_exes.iter().any(|p| p.split('/').any(|c| c.strip_suffix(".app").is_some_and(|n| n.eq_ignore_ascii_case(name) || (name == "FontExplorer X" && n.starts_with("FontExplorer X")))))
+}
+
 pub fn build_status(i: &Inputs) -> AutoStatusDto {
     let apps = APPS
         .iter()
@@ -73,6 +77,15 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
                 AutoMethodDto::FontRequest => {
                     if !i.enabled {
                         state = AutoAppStateDto::Off;
+                    } else if i.font_request_running && i.font_request_error.as_deref() == Some("starved") {
+                        // nguồn mở được nhưng không nhận request: app khác đang nhận trước (probe, xem services/fontreq::probe)
+                        state = AutoAppStateDto::Error;
+                        let names: Vec<&str> = i.managers.iter().filter(|(n, _)| running_manager(i, n)).map(|(n, _)| n.as_str()).collect();
+                        detail = Some(if names.is_empty() {
+                            "một app khác đang nhận yêu cầu font trước Font Atlas".to_string()
+                        } else {
+                            format!("{} đang nhận yêu cầu font trước Font Atlas", names.join(", "))
+                        });
                     } else if i.font_request_running {
                         state = AutoAppStateDto::Ready;
                     } else if i.isolated {
@@ -153,12 +166,12 @@ pub fn build_status(i: &Inputs) -> AutoStatusDto {
             }
         })
         .collect();
-    let managers_running = |name: &str| i.running_exes.iter().any(|p| p.split('/').any(|c| c.strip_suffix(".app").is_some_and(|n| n.eq_ignore_ascii_case(name) || (name == "FontExplorer X" && n.starts_with("FontExplorer X")))));
+    let managers_running = |name: &str| running_manager(i, name);
     AutoStatusDto {
         enabled: i.enabled,
         broker_running: i.broker_running,
         font_request_running: i.font_request_running,
-        font_request_error: if i.font_request_running { None } else { i.font_request_error.clone() },
+        font_request_error: i.font_request_error.clone(),
         signing_key_present: i.signing_key_present,
         isolated_build: i.isolated_build,
         apps,
@@ -259,6 +272,13 @@ fn require_real_app(state: &AppState) -> Result<(), CmdError> {
 
 fn is_isolated(state: &AppState) -> bool {
     !state.system_hooks.load(std::sync::atomic::Ordering::SeqCst) || std::env::var_os("FONTATLAS_DATA_DIR").is_some()
+}
+
+/// Tự kiểm lại nguồn font request (nút "Kiểm tra lại" và khi mở Settings): một tiến trình con hỏi font ngẫu nhiên; chặn tối đa
+/// `PROBE_WAIT` (4 s). Trả trạng thái mới (`fontRequestError == "starved"` nếu app khác nhận trước).
+pub fn probe(state: &AppState) -> Result<AutoStatusDto, CmdError> {
+    crate::services::fontreq::probe_now(state);
+    status(state)
 }
 
 pub fn forget_key(state: &AppState) -> Result<AutoStatusDto, CmdError> {

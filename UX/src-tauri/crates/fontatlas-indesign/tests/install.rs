@@ -36,6 +36,11 @@ fn install_status_remove() {
     assert_eq!(r.len(), 3);
     assert!(r.iter().all(|r| r.result == Ok(TargetStatus::Installed)));
     assert!(i.status().iter().all(|(_, s)| *s == TargetStatus::Installed));
+    // không để tệp tạm `.tmp-<pid>` nằm lại sau khi cài
+    for t in i.targets() {
+        let left: Vec<_> = std::fs::read_dir(&t.dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(left, vec![SCRIPT_NAME.to_string()], "chỉ còn script, không còn tệp tạm");
+    }
     let text = std::fs::read_to_string(i.targets()[0].script_path()).unwrap();
     assert!(text.starts_with("// FontAtlas startup script 0.3.0"));
     assert!(text.contains("\"/Users/a b/Library/Application Support/com.x/broker.json\""));

@@ -12,6 +12,7 @@ Nhánh `feat/auto-activation`. Dịch vụ `services/auto.rs`, DTO `dto/auto.rs`
 | `auto_set_enabled` | `on: bool` | `AutoStatusDto` | Công tắc chung. Tắt: broker trả 503, nguồn font request trả rỗng, panel/script nằm im; không gỡ gì. Có hiệu lực ngay. |
 | `auto_install` | `target: "illustrator" \| "indesign"` | `AutoStatusDto` | Illustrator: ký + chép panel CEP. `indesign`: chép script vào MỌI phiên bản InDesign và InCopy đã chạy ít nhất một lần. Lỗi → `CmdError{code:"io"}`. |
 | `auto_remove` | `target` | `AutoStatusDto` | Gỡ sạch phần của Font Atlas; không đụng tệp/thư mục lạ. Không có gì để gỡ vẫn thành công. |
+| `auto_probe` | – | `AutoStatusDto` | Tự kiểm nguồn font request ngay (chặn ≤ 4 s, chạy trên luồng lệnh async): gọi khi mở Settings và ở nút **Kiểm tra lại**. `fontRequestError == "starved"` → NoteMark: "{App} đang nhận yêu cầu font trước Font Atlas; tắt bật font tự động trong {App} hoặc thoát {App} rồi bấm Kiểm tra lại" ({App} lấy từ `otherManagers` có `running`, hoặc `apps[].detail`). |
 | `auto_forget_key` | – | `AutoStatusDto` | Xoá khoá ký panel Illustrator của máy này (`signingKeyPresent` → false). Từ chối nếu panel còn cài (gỡ trước). |
 | `auto_log` | `limit?: u32` (mặc định 50, 1–500) | `AutoLogDto[]` mới nhất trước | Nhật ký "app nào hỏi font gì, kết quả". |
 
@@ -62,7 +63,7 @@ Photoshop, After Effects, Affinity không có nút cài: chạy theo công tắc
 - App có trên máy: tên gói `.app` hoặc thư mục `Adobe …` trong `/Applications`, `~/Applications`, khớp tiền tố ("Adobe Photoshop" khớp "Adobe Photoshop 2026"; "Affinity").
 - App đang chạy / trình quản lý khác đang chạy: `proc_listallpids` + `proc_pidpath`, lấy thành phần `.app` của đường dẫn file chạy.
 - `lastActivityMs`: dòng mới nhất của app đó trong `auto_activation_log` (500 dòng gần nhất).
-- `fontRequestError`: `null` hoặc `refused` / `timeout` / `thread` khi nguồn chưa chạy dù được phép; app tự thử lại mỗi 30 s (xem L2). UI hiện NoteMark + hướng dẫn, kết hợp `otherManagers[].running`.
+- `fontRequestError`: `null` hoặc `refused` / `timeout` / `thread` khi nguồn chưa chạy dù được phép, hoặc `starved` khi nguồn đang chạy nhưng app khác nhận font request trước (probe, xem L2); app tự thử lại mỗi 30 s (xem L2). UI hiện NoteMark + hướng dẫn, kết hợp `otherManagers[].running`.
 - `fontRequestRunning`: nguồn font request của L2 đang mở. Chỉ app thật (`lib.rs`) mở; `AppState` dựng trong test không mở (cờ `system_hooks`). Bản chạy với `FONTATLAS_DATA_DIR` cũng không mở trừ khi đặt `FONTATLAS_FONTREQ=1`.
 
 ## Kiểm

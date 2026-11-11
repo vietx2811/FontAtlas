@@ -174,8 +174,11 @@ impl StartupInstaller {
         }
         std::fs::create_dir_all(&t.dir)?;
         let tmp = t.dir.join(format!(".{SCRIPT_NAME}.tmp-{}", std::process::id()));
-        std::fs::write(&tmp, text)?;
-        std::fs::rename(&tmp, &p)?;
+        // ghi hoặc đổi tên hỏng thì dọn tệp tạm, không để `.tmp-<pid>` nằm lại trong thư mục startup scripts của InDesign
+        if let Err(e) = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, &p)) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e.into());
+        }
         Ok(TargetStatus::Installed)
     }
 

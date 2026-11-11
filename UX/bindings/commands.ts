@@ -217,6 +217,7 @@ export interface TauriCommandMap {
   auto_remove: { args: { target: AutoTargetDto }; result: AutoStatusDto };
   auto_log: { args: { limit: number | null }; result: AutoLogDto[] };
   auto_forget_key: { args: Record<string, never>; result: AutoStatusDto };
+  auto_probe: { args: Record<string, never>; result: AutoStatusDto };
 }
 
 export type CommandName = keyof TauriCommandMap;

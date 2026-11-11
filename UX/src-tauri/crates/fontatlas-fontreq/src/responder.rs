@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use fontatlas_broker::{EnsureError, EnsureRequest, EnsureResponse, FontReq, FontStatus, is_internal_name};
@@ -86,6 +86,41 @@ pub struct Responder {
     closed: Arc<AtomicBool>,
     inflight: Arc<AtomicUsize>,
     cache: Arc<Mutex<HashMap<String, Cached>>>,
+    /// Việc nền đang chạy theo key: cùng một tên hỏi lại khi việc cũ chưa xong thì CHỜ CHUNG kết quả đó, không sinh thêm luồng.
+    running: Arc<Mutex<HashMap<String, Arc<Shared>>>>,
+}
+
+/// Kết quả dùng chung của một việc nền (người hỏi đầu và các người hỏi trùng key chờ trên cùng chỗ này).
+struct Shared {
+    result: Mutex<Option<Answer>>,
+    done: Condvar,
+}
+
+/// Xong việc (kể cả `ensure` panic): đặt kết quả, đánh thức người chờ, gỡ key khỏi `running`.
+struct RunGuard {
+    running: Arc<Mutex<HashMap<String, Arc<Shared>>>>,
+    key: String,
+    shared: Arc<Shared>,
+}
+impl RunGuard {
+    fn finish(&self, a: Answer) {
+        if let Ok(mut r) = self.shared.result.lock() {
+            if r.is_none() {
+                *r = Some(a);
+            }
+        }
+        self.shared.done.notify_all();
+    }
+}
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        self.finish(Answer::Nothing); // panic: người chờ nhận rỗng
+        if let Ok(mut m) = self.running.lock() {
+            if m.get(&self.key).is_some_and(|x| Arc::ptr_eq(x, &self.shared)) {
+                m.remove(&self.key);
+            }
+        }
+    }
 }
 
 /// Giảm đếm việc nền kể cả khi `ensure` panic.
@@ -131,6 +166,7 @@ impl Responder {
             closed: Arc::new(AtomicBool::new(false)),
             inflight: Arc::new(AtomicUsize::new(0)),
             cache: Arc::new(Mutex::new(HashMap::new())),
+            running: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -163,6 +199,10 @@ impl Responder {
     }
 
     pub fn answer(&self, pid: i32, req: &Request) -> Answer {
+        // Probe tự kiểm sức khoẻ: không bao giờ tới thư viện, cache hay nhật ký; chỉ để `Observer` thấy nó đã tới.
+        if [&req.ps, &req.family].iter().filter_map(|x| x.as_deref()).any(is_probe_name) {
+            return Answer::Nothing;
+        }
         if self.closed.load(Ordering::SeqCst) || !(self.enabled)() || !req.has_name() {
             return Answer::Nothing;
         }
@@ -185,6 +225,11 @@ impl Responder {
                 None => {}
             }
         }
+        // Cùng key đang có việc nền (kể cả đã quá hạn của người hỏi trước): chờ chung, KHÔNG sinh thêm luồng.
+        let existing = self.running.lock().ok().and_then(|m| m.get(&key).cloned());
+        if let Some(sh) = existing {
+            return self.wait_shared(&sh, &key);
+        }
         if self.inflight.fetch_add(1, Ordering::SeqCst) >= MAX_INFLIGHT {
             self.inflight.fetch_sub(1, Ordering::SeqCst);
             return Answer::Nothing;
@@ -196,37 +241,54 @@ impl Responder {
             doc: None,
             fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone() }],
         };
+        let shared = Arc::new(Shared { result: Mutex::new(None), done: Condvar::new() });
+        match self.running.lock() {
+            Ok(mut m) => {
+                m.insert(key.clone(), shared.clone());
+            }
+            Err(_) => {
+                self.inflight.fetch_sub(1, Ordering::SeqCst);
+                return Answer::Nothing;
+            }
+        }
         // Việc chạy ở luồng phụ có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi VÀ hàng đợi của app khác.
         // Luồng phụ vẫn chạy nốt và ghi kết quả vào cache cho lần hỏi sau.
-        let (tx, rx) = mpsc::channel();
         let (ensure, cache, ttl, slow_ttl, k2) = (self.ensure.clone(), self.cache.clone(), self.ttl, self.slow_ttl, key.clone());
         let guard = InflightGuard(self.inflight.clone());
+        let run = RunGuard { running: self.running.clone(), key: key.clone(), shared: shared.clone() };
         let spawned = std::thread::Builder::new().name("fontatlas-fontreq-ensure".into()).spawn(move || {
             let _g = guard;
             let answer = classify(ensure(&er), &cache, &k2, ttl, slow_ttl);
-            let _ = tx.send(answer);
+            run.finish(answer);
         });
         if spawned.is_err() {
-            self.inflight.fetch_sub(1, Ordering::SeqCst);
+            // closure (và guard/run trong đó) đã bị bỏ: InflightGuard giảm đếm, RunGuard gỡ key
             return Answer::Nothing;
         }
-        // Chờ theo lát 50 ms để `close()` (app thoát) cắt ngang ngay thay vì chờ hết hạn.
+        self.wait_shared(&shared, &key)
+    }
+
+    /// Chờ kết quả của một việc nền theo lát 50 ms (để `close()` cắt ngang ngay), tối đa `deadline`.
+    fn wait_shared(&self, sh: &Shared, key: &str) -> Answer {
         let started = Instant::now();
+        let Ok(mut r) = sh.result.lock() else { return Answer::Nothing };
         loop {
-            match rx.recv_timeout(Duration::from_millis(50)) {
-                Ok(a) => return a,
-                Err(mpsc::RecvTimeoutError::Disconnected) => return Answer::Nothing,
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if self.closed.load(Ordering::SeqCst) {
-                        return Answer::Nothing;
-                    }
-                    if started.elapsed() >= self.deadline {
-                        // chậm: lần sau trả rỗng ngay trong `slow_ttl`; nếu việc nền kịp xong thì kết quả tốt của nó thắng
-                        put(&self.cache, key, Cached::Nothing(Instant::now() + self.slow_ttl), false);
-                        return Answer::Nothing;
-                    }
-                }
+            if let Some(a) = r.clone() {
+                return a;
             }
+            if self.closed.load(Ordering::SeqCst) {
+                return Answer::Nothing;
+            }
+            if started.elapsed() >= self.deadline {
+                // chậm: lần sau trả rỗng ngay trong `slow_ttl`; nếu việc nền kịp xong thì kết quả tốt của nó thắng
+                drop(r);
+                put(&self.cache, key.to_string(), Cached::Nothing(Instant::now() + self.slow_ttl), false);
+                return Answer::Nothing;
+            }
+            r = match sh.done.wait_timeout(r, Duration::from_millis(50)) {
+                Ok((g, _)) => g,
+                Err(_) => return Answer::Nothing,
+            };
         }
     }
 }
@@ -250,4 +312,19 @@ fn classify(r: Result<EnsureResponse, EnsureError>, cache: &Mutex<HashMap<String
         _ => {}
     }
     Answer::Nothing
+}
+
+/// Tiền tố tên probe tự kiểm sức khoẻ ("có ai gửi font request tới nguồn của ta không?").
+pub const PROBE_PREFIX: &str = "FontAtlasProbe-";
+
+pub fn is_probe_name(name: &str) -> bool {
+    name.starts_with(PROBE_PREFIX)
+}
+
+/// Tên probe mới, không bao giờ trùng font thật: tiền tố + pid + giờ + bộ đếm (hex).
+pub fn new_probe_name() -> String {
+    use std::sync::atomic::AtomicU64;
+    static N: AtomicU64 = AtomicU64::new(0);
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    format!("{PROBE_PREFIX}{:x}{:x}{:x}", std::process::id(), t, N.fetch_add(1, Ordering::SeqCst))
 }

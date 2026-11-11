@@ -5,7 +5,7 @@
   var CFG = null;           // {broker: "/abs/path/broker.json"}
   var last = {};            // khoá tài liệu → chữ ký danh sách font đã gửi
   var retry = {};           // khoá → số lần hỏi lại
-  var POLL_MS = 3000, RETRY_MS = 5000, MAX_RETRY = 6;
+  var RETRY_MS = 5000, MAX_RETRY = 6;
 
   function log(m) { try { cs.evalScript("$.writeln(" + JSON.stringify("[FontAtlas] " + m) + ")"); } catch (e) {} }
   function readJson(p) {
@@ -25,7 +25,11 @@
   function broker() {
     var c = config(); if (!c || !c.broker) return null;
     var b = readJson(c.broker);              // đọc lại mỗi lần: cổng và token đổi mỗi lần Font Atlas khởi động
-    return b && b.port && b.token ? b : null;
+    // như script InDesign: cổng 1..65535 và token đúng dạng (64 hex) — tệp lạ/hỏng thì coi như chưa có broker
+    var port = b && Number(b.port);
+    if (!b || !(port >= 1 && port <= 65535 && Math.floor(port) === port)) return null;
+    if (typeof b.token !== "string" || !/^[0-9a-f]{64}$/.test(b.token)) return null;
+    return { port: port, token: b.token };
   }
   function post(b, body, done) {
     var x = new XMLHttpRequest(); x.timeout = 12000;

@@ -212,6 +212,29 @@ fn font_request_error_is_reported_and_explained() {
     let ps = app(&s, "photoshop");
     assert_eq!(ps.state, AutoAppStateDto::Error);
     assert!(ps.detail.as_deref().unwrap().contains("thử lại"));
+    // nguồn mở được thì AppState xoá lỗi (services/fontreq); build_status chỉ chuyển tiếp
     i.font_request_running = true;
-    assert_eq!(build_status(&i).font_request_error, None, "đang chạy thì không còn lỗi");
+    i.font_request_error = None;
+    assert_eq!(build_status(&i).font_request_error, None);
+}
+
+#[test]
+fn starved_source_is_an_error_naming_the_running_manager() {
+    let mut i = base();
+    i.font_request_running = true;
+    i.font_request_error = Some("starved".into());
+    i.running_exes = vec!["/Applications/RightFont.app/Contents/MacOS/RightFont".into()];
+    let s = build_status(&i);
+    assert!(s.font_request_running);
+    assert_eq!(s.font_request_error.as_deref(), Some("starved"));
+    let ps = app(&s, "photoshop");
+    assert_eq!(ps.state, AutoAppStateDto::Error);
+    assert!(ps.detail.as_deref().unwrap().contains("RightFont"), "{:?}", ps.detail);
+    assert!(s.other_managers.iter().any(|m| m.name == "RightFont" && m.running));
+    // không có trình quản lý nào chạy: nói chung chung
+    i.running_exes.clear();
+    assert!(app(&build_status(&i), "photoshop").detail.is_some());
+    // tắt công tắc thì vẫn là Off
+    i.enabled = false;
+    assert_eq!(app(&build_status(&i), "photoshop").state, AutoAppStateDto::Off);
 }

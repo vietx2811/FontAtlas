@@ -280,3 +280,72 @@ fn close_cuts_a_waiting_request_short() {
     assert!(took < Duration::from_millis(600), "{took:?}");
     assert_eq!(r.answer(1, &ps("After-Regular")), Answer::Nothing, "đã đóng thì mọi request trả rỗng");
 }
+
+#[test]
+fn probe_names_never_reach_the_library() {
+    let g = rig(FontStatus::Activated, Some("/x/a.ttf"));
+    let name = fontatlas_fontreq::new_probe_name();
+    assert!(fontatlas_fontreq::is_probe_name(&name));
+    assert!(!fontatlas_fontreq::is_probe_name("Helvetica"));
+    assert!(matches!(g.r.answer(4242, &ps(&name)), Answer::Nothing));
+    let fam = Request { family: Some(name), ..Default::default() };
+    assert!(matches!(g.r.answer(4242, &fam), Answer::Nothing));
+    assert_eq!(g.calls.load(Ordering::SeqCst), 0, "probe không được hỏi thư viện");
+    assert_ne!(fontatlas_fontreq::new_probe_name(), fontatlas_fontreq::new_probe_name());
+}
+
+#[test]
+fn same_name_asked_while_work_is_running_shares_that_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("a.ttf");
+    std::fs::write(&f, b"x").unwrap();
+    let fp = f.to_string_lossy().into_owned();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
+    let r = Arc::new(
+        Responder::new(
+            move |_q: &EnsureRequest| {
+                c2.fetch_add(1, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(250));
+                Ok(resp(FontStatus::Activated, Some(&fp)))
+            },
+            || true,
+            |_: i32| None,
+        )
+        .with_deadline(Duration::from_secs(3)),
+    );
+    // hai app hỏi cùng một tên cùng lúc: một lần hỏi thư viện, cả hai nhận file
+    let hs: Vec<_> = (0..2)
+        .map(|i| {
+            let r = r.clone();
+            std::thread::spawn(move || r.answer(10 + i, &ps("Same-Regular")))
+        })
+        .collect();
+    for h in hs {
+        assert_eq!(h.join().unwrap(), Answer::Files(vec![f.clone()]));
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "không sinh thêm việc cho cùng tên");
+}
+
+#[test]
+fn slow_name_asked_again_after_slow_ttl_does_not_spawn_another_thread() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
+    let r = Responder::new(
+        move |_q: &EnsureRequest| {
+            c2.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(600));
+            Ok(resp(FontStatus::Missing, None))
+        },
+        || true,
+        |_: i32| None,
+    )
+    .with_deadline(Duration::from_millis(40))
+    .with_slow_ttl(Duration::from_millis(1));
+    for _ in 0..4 {
+        assert_eq!(r.answer(1, &ps("Crawl-Regular")), Answer::Nothing);
+        std::thread::sleep(Duration::from_millis(10)); // qua slow_ttl, việc nền vẫn đang chạy
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "việc cũ chưa xong thì không sinh luồng mới cho cùng tên");
+    assert_eq!(r.inflight(), 1);
+}

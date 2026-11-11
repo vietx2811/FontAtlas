@@ -4,8 +4,9 @@ import type { OtherManagerDto } from "./OtherManagerDto";
 
 export type AutoStatusDto = { enabled: boolean, brokerRunning: boolean, fontRequestRunning: boolean, 
 /**
- * Vì sao nguồn font request chưa chạy dù được phép (`None` = chạy hoặc cố ý không mở): `refused` (hệ thống từ chối),
- * `timeout` (không sẵn sàng trong hạn), `thread`. App tự thử lại mỗi 30 s; nguồn mở được thì trường này về `None`.
+ * Vì sao nguồn font request chưa chạy dù được phép (`None` = chạy khoẻ hoặc cố ý không mở): `refused` (hệ thống từ chối),
+ * `timeout` (không sẵn sàng trong hạn), `thread`, hoặc `starved` (nguồn MỞ ĐƯỢC nhưng app khác đang nhận font request trước:
+ * probe định kỳ + `auto_probe` thấy không có request thử nào tới; khi đó `font_request_running` vẫn `true`). App tự thử lại mỗi 30 s; nguồn mở được thì trường này về `None`.
  * Photoshop/After Effects chỉ tự bật font khi nguồn chạy. Settings nên hiện NoteMark kèm hướng dẫn (thoát app khác
  * cũng nhận font request, mở lại Font Atlas) và dùng `otherManagers[].running` để gợi ý trình quản lý đang chạy.
  */

@@ -45,7 +45,11 @@ Lead nghi chỉ một tiến trình trong phiên đăng nhập được giữ ng
 - Test: `tests/fontreq_retry.rs` (lỗi được ghi, thử lại tới khi mở được, `stop` dừng vòng thử lại) và `font_request_error_is_reported_and_explained`.
 - Test CoreText thật (`coretext_e2e`) chỉ chạy khi đặt `FONTATLAS_E2E_CORETEXT=1` (phụ thuộc trạng thái cả phiên đăng nhập; không chặn CI chung).
 
-Chưa làm được: phát hiện "bị bỏ đói" (có nguồn nhưng không ai gửi request tới vì tiến trình khác giữ trước, ví dụ hai bản Font Atlas). Bản dữ liệu riêng (QA/test) đã cố ý không mở nguồn nên tránh được trường hợp thường gặp nhất; bản thật thứ hai thì chưa có cách biết.
+Tự kiểm sức khoẻ (đã làm, theo yêu cầu Lead): app định kỳ (8 s sau khi mở nguồn, rồi mỗi 5 phút) và khi Settings gọi `auto_probe` cho một **tiến trình con** hỏi một font tên ngẫu nhiên `FontAtlasProbe-<hex>`. Con chính là binary của app chạy với `--fontatlas-font-probe <tên>` (`main` thoát ngay, không khởi động Tauri). Nguồn của ta không nhận trong 4 s → `fontRequestError = "starved"` (`fontRequestRunning` vẫn `true`), và Photoshop/AE hiện `error` kèm `detail` nêu trình quản lý đang chạy (từ `otherManagers`). Nhận lại được thì cờ `starved` tự xoá; lỗi khác không bị đụng. Tên probe không bao giờ tới thư viện, cache, nhật ký kích hoạt hay log (Responder trả rỗng trước mọi thứ; observer chỉ ghi nhận đã thấy tên).
+
+**Vì sao phải là tiến trình con (đã đo với `examples/selfprobe`):** request tạo ngay trong chính tiến trình có nguồn luôn tới nguồn của nó, kể cả khi tiến trình khác giữ nguồn và cũng nhận cùng request → probe trong tiến trình luôn báo "khoẻ" (âm tính giả). Request từ tiến trình khác thì chỉ người đăng ký trước nhận. Kiểm bằng binary app thật: `listen` giữ nguồn, `target/debug/app --fontatlas-font-probe FontAtlasProbe-x` → holder nhận đúng 1 request, con tự thoát.
+
+Chưa làm được (còn lại): tự giành lại nguồn khi bị bỏ đói (không có API; người dùng phải thoát/tắt bật font tự động trong app kia). Cũng chưa đo ca RightFont thật đăng ký trước (RightFont đang chạy trên máy này nhưng không giành request của ta lúc đo). Bản dữ liệu riêng (QA/test) đã cố ý không mở nguồn nên tránh được trường hợp thường gặp nhất; bản thật thứ hai thì chưa có cách biết.
 
 ## Quan sát lạ (cần biết)
 

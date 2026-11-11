@@ -212,3 +212,13 @@ impl AppNamer for PidAppNamer {
         crate::app_label_from_exe_path(&exe_path_of_pid(pid)?)
     }
 }
+
+/// Hỏi hệ thống một font theo tên (như một app thiết kế): dùng cho probe sức khoẻ, chạy ở TIẾN TRÌNH CON — request tạo trong
+/// chính tiến trình có nguồn sẽ được nguồn của nó nhận bất kể ai khác đang giữ nguồn (đã đo), nên không phát hiện được "bị bỏ đói".
+pub fn ask_font(name: &str) -> String {
+    use objc2_core_foundation::CFString;
+    use objc2_core_text::CTFont;
+    let n = CFString::from_str(name);
+    let f = unsafe { CTFont::with_name(&n, 12.0, std::ptr::null()) };
+    unsafe { f.post_script_name() }.to_string()
+}

@@ -35,7 +35,7 @@ function faSig() {
 function faScan(reset, budgetMs) {
   var g = $.global, st = g.__fa, t0 = new Date().getTime(), i, r;
   try {
-    if (reset || !st) st = g.__fa = { installed: null, di: 0, fi: 0, docs: [] };
+    if (reset || !st) st = g.__fa = { installed: null, di: 0, fi: 0, ri: 0, docs: [] };
     if (!st.installed) {
       st.installed = {};
       var all = app.textFonts;
@@ -49,19 +49,25 @@ function faScan(reset, budgetMs) {
       }
       var rec = st.docs[st.di], frames = d.textFrames;
       while (st.fi < frames.length) {
+        // Vị trí quét gồm cả chỉ số text run (st.ri): frame có rất nhiều run được quét tiếp ở lát sau, không cắt bớt.
+        var runs = null;
+        try { runs = frames[st.fi].textRange.textRuns; } catch (e) {}
+        var n = runs ? runs.length : 0;
+        while (st.ri < n) {
+          if (new Date().getTime() - t0 > budgetMs) return '{"ok":true,"done":false}';
+          try {
+            var f = runs[st.ri].characterAttributes.textFont, ps = f.name;
+            if (ps && !st.installed[ps] && !rec.seen[ps]) {
+              rec.seen[ps] = 1;
+              rec.fonts.push({ ps: String(ps), family: String(f.family || ""), style: String(f.style || "") });
+            }
+          } catch (e) {}
+          st.ri++;
+        }
+        st.fi++; st.ri = 0;
         if (new Date().getTime() - t0 > budgetMs) return '{"ok":true,"done":false}';
-        try {
-          var runs = frames[st.fi].textRange.textRuns;
-          for (r = 0; r < runs.length && r < 300; r++) {
-            var f = runs[r].characterAttributes.textFont, ps = f.name;
-            if (!ps || st.installed[ps] || rec.seen[ps]) continue;
-            rec.seen[ps] = 1;
-            rec.fonts.push({ ps: String(ps), family: String(f.family || ""), style: String(f.style || "") });
-          }
-        } catch (e) {}
-        st.fi++;
       }
-      st.di++; st.fi = 0;
+      st.di++; st.fi = 0; st.ri = 0;
     }
     var docs = st.docs;
     g.__fa = null;

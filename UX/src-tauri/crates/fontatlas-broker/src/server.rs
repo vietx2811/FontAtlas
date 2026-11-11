@@ -64,6 +64,9 @@ struct Shared {
     extra_origins: Vec<String>,
 }
 
+/// Chờ tối đa ngần này (tổng cho mọi worker) khi dừng server; quá hạn thì bỏ rơi luồng còn kẹt.
+const SHUTDOWN_WAIT: Duration = Duration::from_millis(1500);
+
 impl Server {
     /// Nghe `127.0.0.1:0`, sinh token, ghi `broker.json` (0600).
     pub fn start(cfg: ServerConfig, backend: Arc<dyn Backend>) -> std::io::Result<Server> {
@@ -138,8 +141,16 @@ impl Server {
 
     fn stop_inner(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        // Join CÓ HẠN rồi bỏ rơi (detach): một worker đang kẹt trong backend (thư viện chậm) không được giữ app thoát.
+        // Worker đã thấy cờ dừng nên tự thoát khi việc đang làm xong.
+        let until = std::time::Instant::now() + SHUTDOWN_WAIT;
         for w in self.workers.drain(..) {
-            let _ = w.join();
+            while !w.is_finished() && std::time::Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if w.is_finished() {
+                let _ = w.join();
+            }
         }
         BrokerFile::remove_if_mine(&self.dir, std::process::id());
     }

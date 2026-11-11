@@ -315,3 +315,43 @@ fn probe_reports_alive_even_when_switched_off() {
     b.store.lock().unwrap().set_setting(SETTING_AUTO_ACTIVATION, "0").unwrap();
     assert!(srv.probe(), "503 vì công tắc tắt vẫn là còn sống");
 }
+
+struct Hung(std::sync::atomic::AtomicBool);
+impl fontatlas_broker::Backend for Hung {
+    fn ensure(&self, _r: &fontatlas_broker::EnsureRequest) -> Result<fontatlas_broker::EnsureResponse, fontatlas_broker::EnsureError> {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        std::thread::sleep(std::time::Duration::from_secs(8));
+        Err(fontatlas_broker::EnsureError::Internal("chậm".into()))
+    }
+}
+
+#[test]
+fn shutdown_is_bounded_when_a_worker_is_stuck_in_the_backend() {
+    let dir = tempfile::tempdir().unwrap();
+    let hung = Arc::new(Hung(Default::default()));
+    let srv = Server::start(ServerConfig::new(dir.path()), hung.clone()).unwrap();
+    let (addr, token) = (srv.addr(), srv.token().to_string());
+    let h = std::thread::spawn(move || {
+        let mut s = TcpStream::connect(addr).unwrap();
+        let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+        let body = r#"{"v":1,"app":"x","fonts":[{"ps":"A-Regular"}]}"#;
+        let q = format!(
+            "POST /v1/ensure HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            addr.port(),
+            body.len()
+        );
+        let _ = s.write_all(q.as_bytes());
+        let mut sink = Vec::new();
+        let _ = s.read_to_end(&mut sink);
+    });
+    let t0 = std::time::Instant::now();
+    while !hung.0.load(std::sync::atomic::Ordering::SeqCst) && t0.elapsed() < std::time::Duration::from_secs(5) {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(hung.0.load(std::sync::atomic::Ordering::SeqCst), "backend phải đang bị kẹt");
+    let t = std::time::Instant::now();
+    srv.shutdown();
+    assert!(t.elapsed() < std::time::Duration::from_secs(4), "shutdown phải có hạn, mất {:?}", t.elapsed());
+    assert!(!dir.path().join(BROKER_FILE).exists(), "broker.json của mình đã xoá");
+    drop(h);
+}

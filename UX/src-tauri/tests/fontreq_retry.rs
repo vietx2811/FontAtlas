@@ -61,3 +61,73 @@ fn stop_ends_the_retry_loop() {
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(tries.load(Ordering::SeqCst), n, "sau stop không thử nữa");
 }
+
+mod probe {
+    use super::*;
+    use app_lib::services::fontreq::{ProbeOutcome, note_probe_seen, probe};
+
+    fn open_state(d: &std::path::Path) -> Arc<AppState> {
+        let st = state(d);
+        start_with(&st, Duration::from_secs(60), || Ok(Box::new(()) as Box<dyn std::any::Any + Send>));
+        assert!(st.fontreq.lock().unwrap().is_some());
+        st
+    }
+
+    #[test]
+    fn unknown_when_source_is_not_open_and_nothing_is_spawned() {
+        let d = tempfile::tempdir().unwrap();
+        let st = state(d.path());
+        let spawned = AtomicUsize::new(0);
+        let r = probe(&st, Duration::from_millis(50), |_| {
+            spawned.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        });
+        assert_eq!(r, ProbeOutcome::Unknown);
+        assert_eq!(spawned.load(Ordering::SeqCst), 0);
+        assert_eq!(*st.fontreq_error.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn starved_when_the_request_never_arrives_then_recovers() {
+        let d = tempfile::tempdir().unwrap();
+        let st = open_state(d.path());
+        let names = std::sync::Mutex::new(Vec::<String>::new());
+        let r = probe(&st, Duration::from_millis(80), |n| {
+            names.lock().unwrap().push(n.to_string());
+            Ok(()) // tiến trình con "hỏi" nhưng nguồn của ta không nhận
+        });
+        assert_eq!(r, ProbeOutcome::Starved);
+        assert_eq!(st.fontreq_error.lock().unwrap().as_deref(), Some("starved"));
+        assert!(fontatlas_fontreq::is_probe_name(&names.lock().unwrap()[0]), "tên probe có tiền tố riêng");
+
+        // lần sau nguồn nhận được (app kia thoát) → xoá cờ
+        let st2 = st.clone();
+        let r = probe(&st, Duration::from_secs(2), move |n| {
+            let (st3, n) = (st2.clone(), n.to_string());
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(30));
+                note_probe_seen(&st3, &n);
+            });
+            Ok(())
+        });
+        assert_eq!(r, ProbeOutcome::Reached);
+        assert_eq!(*st.fontreq_error.lock().unwrap(), None);
+    }
+
+    #[test]
+    fn spawn_failure_changes_nothing_and_other_errors_are_kept() {
+        let d = tempfile::tempdir().unwrap();
+        let st = open_state(d.path());
+        *st.fontreq_error.lock().unwrap() = Some("timeout".into());
+        assert_eq!(probe(&st, Duration::from_millis(50), |_| Err("không chạy được".into())), ProbeOutcome::Unknown);
+        assert_eq!(st.fontreq_error.lock().unwrap().as_deref(), Some("timeout"));
+        // Reached chỉ xoá "starved", không xoá lỗi khác
+        let st2 = st.clone();
+        let r = probe(&st, Duration::from_secs(2), move |n| {
+            note_probe_seen(&st2, n);
+            Ok(())
+        });
+        assert_eq!(r, ProbeOutcome::Reached);
+        assert_eq!(st.fontreq_error.lock().unwrap().as_deref(), Some("timeout"));
+    }
+}

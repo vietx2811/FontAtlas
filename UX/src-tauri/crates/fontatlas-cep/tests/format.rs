@@ -110,3 +110,17 @@ fn canonical_manifest_reproduces_a_real_signed_panel() {
     let got = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(canonical_manifest(&files).as_bytes()));
     assert_eq!(got, want, "định dạng manifest của ta lệch bản ký thật");
 }
+
+fn panel_file(p: &str) -> String {
+    std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("panel").join(p)).unwrap()
+}
+
+#[test]
+fn panel_validates_broker_json_and_scans_without_truncating_runs() {
+    let main = panel_file("main.js");
+    assert!(main.contains("[0-9a-f]{64}") && main.contains("65535"), "kiểm cổng và token như script InDesign");
+    assert_eq!(main.matches("POLL_MS").count(), 3, "chỉ một POLL_MS (20 s) được khai báo và dùng");
+    let host = panel_file("jsx/host.jsx");
+    assert!(!host.contains("r < 300"), "không cắt 300 text run");
+    assert!(host.contains("st.ri"), "vị trí quét có chỉ số run để quét tiếp theo lát");
+}

@@ -72,3 +72,7 @@ Thư viện thật của chủ app nằm dưới `~/Library/CloudStorage/` (OneD
 - Kết quả broker: tải xong thì bật bình thường; `cloud_timeout` hoặc chỉ có stub `.icloud` → `not_downloaded` (không phải lỗi cứng, tải vẫn có thể tiếp tục, hỏi lại sau); `missing_file` → `unavailable`; `cloud_download_failed` → `failed`.
 - Test: `auto_request_uses_its_own_short_download_path` (đường auto, không đụng đường thường, hết hạn thì không đăng ký gì); các test dataless của 03 cho phần còn lại.
 - CHƯA đo: Photoshop chờ callback CoreText được bao lâu (8 s là đoán, đo ở L2 với helper), và tải thật từ OneDrive (chưa chạm thư viện thật).
+
+## Để sau (review 2026-11-11, mục 4)
+
+Khi một tên PostScript có nhiều bản (nhiều hash), `pick()` hiện chọn: đang bật → `first_seen_at` mới nhất → hash nhỏ nhất. **Chưa dùng `fontRevision`** của font (bản cao hơn nên thắng khi cả hai cùng tên); cần đọc `head.fontRevision` lúc quét và lưu vào `faces`, nên để một đợt sau. Mọi ca nhiều bản vẫn được ghi `ambiguous` trong nhật ký.
