@@ -88,33 +88,36 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
 
   const inUseSame = same(current?.key, trial?.face);
-  const placeFace = useCallback(async (face: FaceKeyDto, row: FaceRowDto) => {
-    if (!combo) return;
+  const placeFace = useCallback(async (face: FaceKeyDto, row: FaceRowDto): Promise<boolean> => {
+    if (!combo) return false;
     try {
       const next = await api.setComboSlot(combo.id, role, face);
-      setData(d => (d ? { ...d, combos: d.combos.map(c => (c.id === next.id ? next : c)) } : d));
+      setData(d => (d ? { ...d, combos: d.combos.map(c => (c.id === next.id ? next : c)) } : d)); setCmpRev(n => n + 1);
       useNoticeStore.getState().push({ kind: 'info', text: t('desk.placed', { font: nameOf(row), role: roleName(role) }) });
-    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) }); }
+      return true;
+    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) }); return false; }
   }, [api, combo, role]);
   const place = useCallback(async () => { if (trial) await placeFace(trial.face, trial.row); }, [placeFace, trial]);
 
   const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) });
   const goCombo = useCallback((id: number) => { openDesk({ caseId: desk.caseId, comboId: id, role, trial: null }); }, [openDesk, desk.caseId, role]);
   const [confirmDel, setConfirmDel] = useState(false);
+  // Mọi thao tác Combo (tạo/nhân bản/đổi tên/đặt chính/xoá) đọc lại Case và làm mới bảng So sánh Combo.
+  const refreshCase = async () => { const c = await api.getCase(desk.caseId); setData(c); setCmpRev(n => n + 1); return c; };
   const comboOps = {
     go: goCombo,
-    create: () => { void api.createCombo(desk.caseId).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }).catch(fail); },
-    duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { setData(await api.getCase(desk.caseId)); goCombo(c.id); }).catch(fail); },
-    rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => setData(await api.getCase(desk.caseId))).catch(fail); },
+    create: () => { void api.createCombo(desk.caseId).then(async c => { await refreshCase(); goCombo(c.id); }).catch(fail); },
+    duplicate: () => { if (combo) void api.createCombo(desk.caseId, undefined, combo.id).then(async c => { await refreshCase(); goCombo(c.id); }).catch(fail); },
+    rename: (name: string) => { if (combo) void api.updateCombo(combo.id, { name }).then(async () => { await refreshCase(); }).catch(fail); },
     makeMain: () => { if (combo) comboOps.makeMainOf(combo.id); },
-    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { setData(await api.getCase(desk.caseId)); setCmpRev(n => n + 1); }).catch(fail); },
+    makeMainOf: (id: number) => { void api.updateCombo(id, { isMain: true }).then(async () => { await refreshCase(); }).catch(fail); },
     remove: () => setConfirmDel(true),
     removeNow: async () => {
       if (!combo || !data) return;
       const pos = data.combos.findIndex(c => c.id === combo.id);
       try {
         await api.deleteCombo(combo.id);
-        const fresh = await api.getCase(desk.caseId); setData(fresh);
+        const fresh = await refreshCase();
         const next = fresh.combos[Math.max(0, Math.min(pos - 1, fresh.combos.length - 1))];
         if (next) goCombo(next.id);
       } catch (e) { fail(e); }
@@ -144,9 +147,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     else if (e.key === 'ArrowDown' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     else if (e.key === 'Enter' && onList && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
-    else if ((e.key === '[' || e.key === ']') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
+    else if ((e.key === '[' || e.key === ']') && mode !== 'fonts' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
     else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing') { e.preventDefault(); setStripCollapsed(c => !c); }
-    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && trial && !compareReason) { e.preventDefault(); toCompare(); }
+    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && mode === 'pairing' && trial && !compareReason) { e.preventDefault(); toCompare(); }
   };
 
   const shownRoles = ROLE_ORDER.filter(r => slotOf(r) || r === role);
@@ -169,7 +172,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <FontCompare key={`${combo.id}:${role}`} api={api} role={role}
           base={current && !current.missing ? { face: current.key, row: current.row } : null}
           partner={(anchor?.row ?? null)} suggestions={cands.map(c => ({ face: c.face, row: c.row }))}
-          onPlace={f => { void placeFace(f.face, f.row); }}
+          onPlace={f => placeFace(f.face, f.row)}
           onTry={f => { setMode('pairing'); openDesk({ caseId: desk.caseId, comboId: combo.id, role, trial: f.face }); }} />
       ) : mode === 'combos' && data && combo ? (
         <ComboCompare key={cmpRev} api={api} caseId={desk.caseId} currentId={combo.id} onOpen={id => { setMode('pairing'); goCombo(id); }} onMain={id => comboOps.makeMainOf(id)} />

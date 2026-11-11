@@ -73,11 +73,13 @@
 .fa-cc th, .fa-cc td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); min-width: 190px; }
 .fa-cc thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
 .fa-cc th[data-base] { background: var(--accent-soft); }
-.fa-cc tbody th { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; min-width: 120px; position: sticky; left: 0; background: var(--panel); cursor: help; }
+.fa-cc tbody th { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; min-width: 120px; position: sticky; left: 0; background: var(--panel); }
+.fa-cc tbody th.has-tip { cursor: help; }
+.fa-cc-ico { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--accent); }
+.fa-cc-actions button[aria-disabled="true"] { opacity: .4; cursor: default; }
 .fa-cc-title { font-weight: 700; }
 .fa-cc-actions { display: flex; gap: 6px; margin-top: 4px; }
 .fa-cc-actions button { padding: 2px 8px; border-radius: var(--radius-md); color: var(--accent-ink); background: var(--accent-soft); font-size: var(--text-xs); }
-.fa-cc-actions button:disabled { opacity: .4; }
 .fa-cc-page { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }
 .fa-cc-na { color: var(--muted); }
 .fa-fc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 8px; font-size: var(--text-xs); color: var(--muted); }

@@ -6,7 +6,9 @@ import { t } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { useFontFamily } from '../detail/useFontFamily';
+import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
+import { Tooltip } from '../ui/Tooltip';
 import { TermTip, termKey, termName } from '../ui/terms';
 import { isHeadingLike } from './deskRoles';
 
@@ -17,8 +19,9 @@ const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` 
 const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
 
 /** Đọc số đo cho nhiều font; nhớ theo khoá, lỗi thì không nhớ (lần sau đọc lại). */
-function useFacesData(api: Api, faces: FaceKeyDto[]): Map<string, CompareFace | null> {
+function useFacesData(api: Api, faces: FaceKeyDto[]): { cache: Map<string, CompareFace | null>; failed: ReadonlySet<string> } {
   const cache = useRef(new Map<string, CompareFace | null>());
+  const failed = useRef(new Set<string>()); // lỗi đọc: báo ở cột, không gọi lại liên tục (chỉ thử lại khi danh sách cột đổi)
   const pending = useRef(new Set<string>());
   const alive = useRef(true);
   const [, bump] = useState(0);
@@ -27,21 +30,24 @@ function useFacesData(api: Api, faces: FaceKeyDto[]): Map<string, CompareFace | 
   useEffect(() => {
     for (const f of faces) {
       const k = keyOf(f);
-      if (cache.current.has(k) || pending.current.has(k)) continue;
+      if (cache.current.has(k) || pending.current.has(k) || failed.current.has(k)) continue;
       pending.current.add(k);
       api.getFace(f, 'vi').then(d => buildCompare([d]).faces[0] ?? null, () => undefined).then(cf => {
         pending.current.delete(k);
-        if (cf !== undefined) cache.current.set(k, cf);
+        if (cf !== undefined) cache.current.set(k, cf); else failed.current.add(k);
         if (alive.current) bump(n => n + 1);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, sig]);
-  return cache.current;
+  return { cache: cache.current, failed: failed.current };
 }
 
 function Sample({ api, row, partner, role, pageMode }: { api: Api; row: FaceRowDto; partner: FaceRowDto | null; role: ComboRoleDto; pageMode: boolean }): React.JSX.Element {
-  const fam = useFontFamily(api, row); const pfam = useFontFamily(api, partner);
+  // Font còn trên cloud: không nạp (đường nạp của Desk không qua cổng cloud) → ghi chú thay specimen.
+  const cloud = row.onCloudOnly; const pcloud = !!partner?.onCloudOnly;
+  const fam = useFontFamily(api, cloud ? null : row); const pfam = useFontFamily(api, pcloud ? null : partner);
+  if (cloud) return <div className="fa-cc-page" data-testid="fc-cloud"><NoteMark kind="info" inline text={t('cloud.note')} /> <span className="fa-cc-na">{t('fc.cloudOnly')}</span></div>;
   const css = (f: string | null, r: FaceRowDto | null) => ({ fontFamily: f ? `"${f}", var(--font-ui)` : undefined, fontWeight: r?.weightClass ?? undefined, fontStyle: r?.isItalic ? 'italic' as const : undefined });
   const heading = isHeadingLike(role);
   if (!pageMode) {
@@ -63,14 +69,21 @@ function MetricCell({ m, base }: { m: CompareMetric | undefined; base: CompareMe
 
 /** Compare Font trong Desk (06 §3.1): mốc = font đang dùng cho vai; cột ghim đứng sau mốc; sắp theo số đo; Bảng | Song bản. */
 export function FontCompare({ api, role, base, partner, suggestions, onPlace, onTry }: {
-  api: Api; role: ComboRoleDto; base: FcFace | null; partner: FaceRowDto | null; suggestions: FcFace[]; onPlace(f: FcFace): void; onTry(f: FcFace): void;
+  api: Api; role: ComboRoleDto; base: FcFace | null; partner: FaceRowDto | null; suggestions: FcFace[]; /** true = đã đặt (cột sẽ bị bỏ vì font thành mốc); false = lỗi, giữ cột. */ onPlace(f: FcFace): Promise<boolean>; onTry(f: FcFace): void;
 }): React.JSX.Element {
   const [cols, setCols] = useState<FcFace[]>(() => suggestions.slice(0, 4));
+  const touched = useRef(false); // người dùng đã thêm/bỏ cột: không seed lại từ gợi ý
+  const sugSig = suggestions.map(s => keyOf(s.face)).join('|');
+  // Gợi ý về sau khi mở (hoặc đổi vì đặt font): chưa động tới cột thì dùng gợi ý mới.
+  useEffect(() => { if (!touched.current) setCols(suggestions.slice(0, 4)); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sugSig]);
   const [pinned, setPinned] = useState<string[]>([]);
   const [sort, setSort] = useState<SortKey>('order');
   const [desc, setDesc] = useState(false);
   const [view, setView] = useState<'table' | 'pages'>('table');
-  const data = useFacesData(api, [...(base ? [base.face] : []), ...cols.map(c => c.face)]);
+  const baseKey = base ? keyOf(base.face) : null;
+  const colsNoBase = useMemo(() => cols.filter(c => keyOf(c.face) !== baseKey), [cols, baseKey]); // font vừa đặt thành mốc không được lặp thành cột
+  const { cache: data, failed } = useFacesData(api, [...(base ? [base.face] : []), ...colsNoBase.map(c => c.face)]);
   const baseData = base ? data.get(keyOf(base.face)) ?? null : null;
 
   const value = (c: FcFace): number | string | null => {
@@ -81,8 +94,8 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
     return d?.metrics[sort]?.value ?? null;
   };
   const ordered = useMemo(() => {
-    const pins = pinned.map(k => cols.find(c => keyOf(c.face) === k)).filter((c): c is FcFace => !!c);
-    const rest = cols.filter(c => !pinned.includes(keyOf(c.face)));
+    const pins = pinned.map(k => colsNoBase.find(c => keyOf(c.face) === k)).filter((c): c is FcFace => !!c);
+    const rest = colsNoBase.filter(c => !pinned.includes(keyOf(c.face)));
     if (sort !== 'order') {
       rest.sort((a, b) => {
         const x = value(a), y = value(b);
@@ -93,16 +106,24 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
     }
     return [...pins, ...rest];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cols, pinned, sort, desc, data.size]);
+  }, [colsNoBase, pinned, sort, desc, data.size]);
 
   const shown = [...(base ? [base] : []), ...ordered];
   const addable = suggestions.filter(s => !cols.some(c => keyOf(c.face) === keyOf(s.face)) && !(base && keyOf(base.face) === keyOf(s.face)));
-  const remove = (f: FcFace) => { setCols(cs => cs.filter(c => keyOf(c.face) !== keyOf(f.face))); setPinned(p => p.filter(k => k !== keyOf(f.face))); };
-  const togglePin = (f: FcFace) => setPinned(p => (p.includes(keyOf(f.face)) ? p.filter(k => k !== keyOf(f.face)) : [...p, keyOf(f.face)]));
+  const root = useRef<HTMLDivElement>(null);
+  // Nút vừa thao tác biến mất (bỏ cột, đặt xong): trả focus về Desk để phím tắt còn sống.
+  const refocus = () => requestAnimationFrame(() => (root.current?.closest('.fa-desk') as HTMLElement | null)?.focus());
+  const remove = (f: FcFace) => { touched.current = true; refocus(); setCols(cs => cs.filter(c => keyOf(c.face) !== keyOf(f.face))); setPinned(p => p.filter(k => k !== keyOf(f.face))); };
+  const togglePin = (f: FcFace) => { touched.current = true; setPinned(p => (p.includes(keyOf(f.face)) ? p.filter(k => k !== keyOf(f.face)) : [...p, keyOf(f.face)])); };
+  // Đặt vào vai thành công → font thành mốc: bỏ khỏi cột/ghim (không lặp), trả focus về Desk.
+  const place = async (f: FcFace) => {
+    const ok = await onPlace(f);
+    if (ok) { touched.current = true; setCols(cs => cs.filter(c => keyOf(c.face) !== keyOf(f.face))); setPinned(p => p.filter(k => k !== keyOf(f.face))); refocus(); }
+  };
   const dataOf = (f: FcFace) => data.get(keyOf(f.face)) ?? null;
 
   return (
-    <div className="fa-cc fa-fc" data-testid="font-compare">
+    <div ref={root} className="fa-cc fa-fc" data-testid="font-compare">
       <div className="fa-fc-bar">
         <label>{t('fc.sort')}{' '}
           <select data-testid="fc-sort" value={sort} onChange={e => setSort(e.target.value as SortKey)}>
@@ -118,7 +139,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
           <button type="button" data-testid="fc-view-pages" aria-pressed={view === 'pages'} onClick={() => setView('pages')}>{t('fc.view.pages')}</button>
         </span>
         <label>{t('fc.add')}{' '}
-          <select data-testid="fc-add" value="" disabled={addable.length === 0} onChange={e => { const f = addable.find(a => keyOf(a.face) === e.target.value); if (f) setCols(cs => [...cs, f]); }}>
+          <select data-testid="fc-add" value="" disabled={addable.length === 0} onChange={e => { const f = addable.find(a => keyOf(a.face) === e.target.value); if (f) { touched.current = true; setCols(cs => [...cs, f]); } }}>
             <option value="">{addable.length ? t('fc.add.pick') : t('fc.add.none')}</option>
             {addable.map(a => <option key={keyOf(a.face)} value={keyOf(a.face)}>{nameOf(a.row)}</option>)}
           </select>
@@ -129,15 +150,15 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
       {shown.length === 0 && <p className="fa-desk-hint">{t('desk.noCands')}</p>}
       {shown.length > 0 && (
       <table>
-        <thead><tr><th />{shown.map(c => {
+        <thead><tr><td />{shown.map(c => {
           const isBase = !!base && keyOf(c.face) === keyOf(base.face); const pin = pinned.includes(keyOf(c.face));
           return (
-            <th key={keyOf(c.face)} data-testid="fc-col" data-base={isBase || undefined} data-pinned={pin || undefined}>
-              <div className="fa-cc-title">{pin ? '📌 ' : ''}{nameOf(c.row)}{isBase && <small> · {t('compare.base')}</small>}</div>
+            <th scope="col" key={keyOf(c.face)} data-testid="fc-col" data-base={isBase || undefined} data-pinned={pin || undefined}>
+              <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}</div>
               {!isBase && (
                 <div className="fa-cc-actions">
                   <button type="button" data-testid="fc-pin" aria-pressed={pin} onClick={() => togglePin(c)}>{pin ? t('fc.unpin') : t('fc.pin')}</button>
-                  <button type="button" data-testid="fc-place" onClick={() => onPlace(c)}>{t('desk.place')}</button>
+                  <button type="button" data-testid="fc-place" onClick={() => void place(c)}>{t('desk.place')}</button>
                   <button type="button" data-testid="fc-try" onClick={() => onTry(c)}>{t('fc.try')}</button>
                   <button type="button" data-testid="fc-remove" aria-label={t('fc.remove')} onClick={() => remove(c)}>×</button>
                 </div>)}
@@ -147,13 +168,13 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
           <tr><th scope="row">{t('cc.specimen')}</th>{shown.map(c => <td key={keyOf(c.face)}><Sample api={api} row={c.row} partner={partner} role={role} pageMode={view === 'pages'} /></td>)}</tr>
           {view === 'table' && COMPARE_METRICS.map(k => (
             <tr key={k} data-metric={k}>
-              <th scope="row"><TermTip term={k}><span data-term={termKey(k)}>{termName(k)}</span></TermTip></th>
+              <th scope="row" className="has-tip"><TermTip term={k}><span data-term={termKey(k)}>{termName(k)}</span></TermTip></th>
               {shown.map(c => <MetricCell key={keyOf(c.face)} m={dataOf(c)?.metrics[k]} base={baseData?.metrics[k]} />)}
             </tr>
           ))}
           {view === 'table' && <>
-            <tr data-row="vi"><th scope="row">{t('cc.vi')}</th>{shown.map(c => { const d = dataOf(c); return <td key={keyOf(c.face)} data-testid="fc-vi">{!d ? '—' : d.vi.supports && d.vi.missing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: d.vi.missing })}</td>; })}</tr>
-            <tr data-row="license"><th scope="row">License</th>{shown.map(c => <td key={keyOf(c.face)}>{dataOf(c)?.license ?? '—'}</td>)}</tr>
+            <tr data-row="vi"><th scope="row" className="has-tip"><Tooltip label={t('cc.vi.tip')}><span>{t('cc.vi')}</span></Tooltip></th>{shown.map(c => { const d = dataOf(c); return <td key={keyOf(c.face)} data-testid="fc-vi">{!d ? '—' : d.vi.supports && d.vi.missing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: d.vi.missing })}</td>; })}</tr>
+            <tr data-row="license"><th scope="row">{t('cc.license')}</th>{shown.map(c => <td key={keyOf(c.face)}>{dataOf(c)?.license ?? '—'}</td>)}</tr>
           </>}
         </tbody>
       </table>)}

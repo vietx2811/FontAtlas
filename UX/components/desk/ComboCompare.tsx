@@ -3,6 +3,7 @@ import type { Api } from '../../api';
 import type { CaseCompareDto, ComboColumnDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
 import { t } from '../../i18n';
 import { useFontFamily } from '../detail/useFontFamily';
+import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, isHeadingLike } from './deskRoles';
@@ -15,10 +16,13 @@ const slotRow = (c: ComboDto, roles: readonly ComboRoleDto[]) => roles.map(r => 
 /** Trang thu nhỏ: tiêu đề bằng font nhóm heading, đoạn văn bằng font nhóm body của Combo. */
 function MiniPage({ api, combo }: { api: Api; combo: ComboDto }): React.JSX.Element {
   const head = slotRow(combo, ROLE_ORDER.filter(isHeadingLike)); const body = slotRow(combo, ['body', 'caption']);
-  const hf = useFontFamily(api, head); const bf = useFontFamily(api, body);
+  // Font còn trên cloud không được nạp ở đây (đường nạp của Desk không qua cổng cloud): hiện ghi chú thay vì tải.
+  const hf = useFontFamily(api, head?.onCloudOnly ? null : head); const bf = useFontFamily(api, body?.onCloudOnly ? null : body);
+  const cloud = !!head?.onCloudOnly || !!body?.onCloudOnly;
   const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
   return (
     <div className="fa-cc-page" data-testid="cc-page">
+      {cloud && <NoteMark kind="info" inline testId="cc-cloud" text={t('cloud.note')} />}
       <div style={{ ...css(hf, head), fontSize: 20, lineHeight: 1.15 }}>{t('desk.pageHeading')}</div>
       <p style={{ ...css(bf, body), fontSize: 11, lineHeight: 1.5, margin: '6px 0 0' }}>{t('desk.pageBody').slice(0, 120)}</p>
     </div>
@@ -43,12 +47,12 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
   return (
     <div className="fa-cc" data-testid="combo-compare">
       <table>
-        <thead><tr><th />{cols.map(c => (
-          <th key={c.combo.id} data-testid="cc-col" data-base={c.combo.id === currentId || undefined}>
-            <div className="fa-cc-title">{c.combo.isMain ? '★ ' : ''}{comboTitle(c.combo)}{c.combo.id === currentId && <small> · {t('compare.base')}</small>}</div>
+        <thead><tr><td />{cols.map(c => (
+          <th scope="col" key={c.combo.id} data-testid="cc-col" data-base={c.combo.id === currentId || undefined}>
+            <div className="fa-cc-title">{c.combo.isMain && <span className="fa-cc-ico" role="img" aria-label={t('combo.isMain')}><Icon name="star" size={12} /></span>}{comboTitle(c.combo)}{c.combo.id === currentId && <small> · {t('compare.base')}</small>}</div>
             <div className="fa-cc-actions">
               <button type="button" data-testid="cc-open" onClick={() => onOpen(c.combo.id)}>{t('cc.open')}</button>
-              <button type="button" data-testid="cc-main" disabled={c.combo.isMain} onClick={() => onMain(c.combo.id)}>{t('cc.useThis')}</button>
+              <button type="button" data-testid="cc-main" aria-disabled={c.combo.isMain} onClick={() => { if (!c.combo.isMain) onMain(c.combo.id); }}>{t('cc.useThis')}</button>
             </div>
           </th>))}</tr></thead>
         <tbody>
@@ -59,19 +63,19 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
               return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}{s.missing && <NoteMark inline text={t('desk.missing')} />}</> : '—'}</td>;
             })}</tr>
           ))}
-          <tr data-row="relations"><th scope="row">{t('cc.relations')}</th>{cols.map(c => (
+          <tr data-row="relations"><th scope="row" className="has-tip"><Tooltip label={t('cc.relations.tip')}><span>{t('cc.relations')}</span></Tooltip></th>{cols.map(c => (
             <td key={c.combo.id} data-testid="cc-rel">
               {c.relations.length === 0 ? <span className="fa-cc-na">{t('cc.noRelations')}</span> : c.relations.map(r => (
-                <div key={`${r.from}-${r.to}`}>{roleName(r.from)}↔{roleName(r.to)}: {r.assessment ? <span title={r.assessment.summary}>{r.assessment.labels.map(l => l.symbol).join('') || '○'}</span> : <span className="fa-cc-na">{reasonText(r.reason)}</span>}</div>
+                <div key={`${r.from}-${r.to}`}>{roleName(r.from)}↔{roleName(r.to)}: {r.assessment ? <Tooltip label={r.assessment.summary}><span tabIndex={0}>{r.assessment.labels.map(l => l.symbol).join('') || '○'}</span></Tooltip> : <span className="fa-cc-na">{reasonText(r.reason)}</span>}</div>
               ))}
             </td>))}</tr>
-          <tr data-row="vi"><th scope="row">{t('cc.vi')}</th>{cols.map(c => (
+          <tr data-row="vi"><th scope="row" className="has-tip"><Tooltip label={t('cc.vi.tip')}><span>{t('cc.vi')}</span></Tooltip></th>{cols.map(c => (
             <td key={c.combo.id} data-testid="cc-vi">
               {c.worstViMissing === null ? '—' : c.worstViMissing === 0 ? t('strip.viOk') : t('strip.viMissing', { n: c.worstViMissing })}
               {c.missingCount > 0 && <NoteMark inline kind="warn" text={t('cc.partial', { n: c.missingCount })} />}
             </td>))}</tr>
           <tr data-row="fonts"><th scope="row">{t('cc.fonts')}</th>{cols.map(c => <td key={c.combo.id}>{c.fontCount}</td>)}</tr>
-          <tr data-row="license"><th scope="row">License</th>{cols.map(c => <td key={c.combo.id}>{c.licenses.length ? c.licenses.join(' · ') : '—'}</td>)}</tr>
+          <tr data-row="license"><th scope="row">{t('cc.license')}</th>{cols.map(c => <td key={c.combo.id}>{c.licenses.length ? c.licenses.join(' · ') : '—'}</td>)}</tr>
         </tbody>
       </table>
     </div>
