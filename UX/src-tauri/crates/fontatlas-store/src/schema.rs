@@ -479,7 +479,58 @@ DROP TABLE classification_overrides;
 ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2];
+
+/// Giải quyết trùng lặp (0.3.0): sổ quyết định THEO VỊ TRÍ TỆP (`loser_path`), không theo hash — hai đường dẫn cùng nội dung
+/// (`same_file`) chung hash nên ẩn theo hash sẽ ẩn cả bản giữ. Một face bị ẩn khi MỌI vị trí còn thấy của nó đều nằm trong sổ.
+/// `dup_link_moves` ghi những gì đã chuyển từ bản thua sang bản giữ để hoàn tác đúng từng dòng (không đụng dữ liệu có sẵn).
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định.
+pub(crate) const USER_DUP_RESOLVE: &str = r#"
+CREATE TABLE dup_resolutions (
+  id          INTEGER PRIMARY KEY,
+  batch_id    TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('same_file','versions','formats')),
+  group_key   TEXT NOT NULL,
+  keeper_hash BLOB NOT NULL CHECK (length(keeper_hash) = 32),
+  keeper_face INTEGER NOT NULL,
+  keeper_path TEXT NOT NULL,
+  loser_hash  BLOB NOT NULL CHECK (length(loser_hash) = 32),
+  loser_face  INTEGER NOT NULL,
+  loser_path  TEXT NOT NULL,
+  action      TEXT NOT NULL CHECK (action IN ('hide','trash')),
+  trash_path  TEXT,
+  reason      TEXT NOT NULL,
+  was_active  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  undone_at   INTEGER,
+  -- ghi sổ TRƯỚC khi đụng tệp / activation: pending = đang làm dở (đã ẩn); done = xong
+  status      TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('pending','done')),
+  -- phạm vi activation của bản thua trước khi tắt (session|persistent), để hoàn tác bật lại đúng
+  loser_scope TEXT CHECK (loser_scope IN ('session','persistent')),
+  -- ta đã bật bản giữ giúp người dùng (nó chưa bật trước đó): hoàn tác tắt lại
+  keeper_activated INTEGER NOT NULL DEFAULT 0
+);
+-- nhóm người dùng chọn "Bỏ qua": nhớ theo (loại, khoá nhóm), có thể bỏ qua → hiện lại
+CREATE TABLE dup_ignored (
+  kind       TEXT NOT NULL CHECK (kind IN ('same_file','versions','formats')),
+  group_key  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (kind, group_key)
+) WITHOUT ROWID;
+-- thứ tự nguồn ưu tiên giữ bản trùng (nhỏ = ưu tiên hơn); NULL = chưa sắp, xếp sau theo thứ tự tạo
+ALTER TABLE sources ADD COLUMN priority INTEGER;
+CREATE UNIQUE INDEX dup_resolutions_live ON dup_resolutions(loser_path) WHERE undone_at IS NULL;
+CREATE INDEX dup_resolutions_batch ON dup_resolutions(batch_id);
+CREATE TABLE dup_link_moves (
+  resolution_id INTEGER NOT NULL REFERENCES dup_resolutions ON DELETE CASCADE,
+  tbl           TEXT NOT NULL CHECK (tbl IN ('favorites','collection_items','face_tags','case_faces','pairs','combo_slots')),
+  op            TEXT NOT NULL CHECK (op IN ('insert','update')),
+  ref_id        INTEGER NOT NULL DEFAULT 0,
+  side          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX dup_link_moves_res ON dup_link_moves(resolution_id);
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]

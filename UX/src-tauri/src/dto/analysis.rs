@@ -683,7 +683,7 @@ pub struct PairComboDto {
 
 // ---- Trùng lặp và phiên bản (D2) — chỉ báo, không xoá/di chuyển file nào ----
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
 pub enum DuplicateKindDto {
@@ -726,6 +726,16 @@ pub struct DuplicateGroupDto {
     pub faces: Vec<DuplicateMemberDto>,
     /// `versions`: có đúng một bản mới nhất xác định được (nếu false thì không face nào có `isNewest`).
     pub newest_known: bool,
+}
+
+/// Nhóm người dùng đã "Bỏ qua" (tab "Đã bỏ qua", có nút hiện lại).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct IgnoredGroupDto {
+    pub group: DuplicateGroupDto,
+    #[ts(type = "number")]
+    pub ignored_at: i64,
 }
 
 /// Số nhóm theo loại, cho sidebar ("Trùng lặp" N).

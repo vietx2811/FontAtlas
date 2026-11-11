@@ -2,6 +2,7 @@
 pub mod activation;
 pub mod analysis;
 pub mod cases;
+pub mod dup_resolve;
 pub mod events;
 pub mod langs;
 pub mod library;
