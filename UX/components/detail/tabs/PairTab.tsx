@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Api, FaceDetailDto, PairCandidateDto, PairMode, PairRole, PeekOpenResultDto } from '../../../api';
-import { t } from '../../../i18n';
+import { t, getLocale } from '../../../i18n';
 import { useNoticeStore } from '../../../store/notices';
 import { Modal } from '../../Modal';
 import '../../desk/desk.css';
@@ -35,7 +35,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
   useEffect(() => {
     let alive = true;
     setIdx(0); setError(null);
-    api.pairCandidates({ hashHex: hash, faceIndex: index }, { role, mode, projectVi, k: 12, collectionId: null, lang: 'vi' }).then(
+    api.pairCandidates({ hashHex: hash, faceIndex: index }, { role, mode, projectVi, k: 12, collectionId: null, lang: getLocale() }).then(
       c => { if (alive) setCands(c); },
       e => { if (alive) { setCands([]); setError(e?.message ?? String(e)); } },
     );

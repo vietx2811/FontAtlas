@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Api, FaceDetailDto, FaceKeyDto, FamilyStyleDto } from '../../api';
 import { parseFaceKey, useUiStore } from '../../store/ui';
 import { styleLabel } from './StyleDropdown';
+import { getLocale } from '../../i18n';
 
 type State = { detail: FaceDetailDto | null; styles: FamilyStyleDto[]; error: string | null; loading: boolean };
 
@@ -22,7 +23,7 @@ export function useFaceDetail(api: Api): State & { retry(): void; face: FaceKeyD
     let alive = true;
     setState(s => ({ ...s, error: null, loading: true }));
     (async () => {
-      const d = await api.getFace(parseFaceKey(selectedId), 'vi');
+      const d = await api.getFace(parseFaceKey(selectedId), getLocale());
       const styles = await api.getFamilyStyles(d.row.family);
       if (alive) setFamily({ id: selectedId, family: d.row.family, styles });
     })().catch(e => { if (alive) setState(s => ({ ...s, error: e?.message ?? String(e), loading: false })); });
@@ -36,7 +37,7 @@ export function useFaceDetail(api: Api): State & { retry(): void; face: FaceKeyD
   useEffect(() => {
     if (!face || !family || family.id !== selectedId) return;
     let alive = true;
-    api.getFace(face, 'vi').then(
+    api.getFace(face, getLocale()).then(
       d => { if (alive) setState({ detail: d, styles: family.styles, error: null, loading: false }); },
       e => { if (alive) setState(s => ({ ...s, error: e?.message ?? String(e), loading: false })); },
     );

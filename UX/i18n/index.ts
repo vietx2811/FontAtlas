@@ -12,6 +12,7 @@ import { DUP_I18N } from './dup';
 <<<<<<< HEAD
 import { AUTO_I18N } from './auto';
 =======
+import { ERR_I18N } from './err';
 import { SETTINGS_I18N } from './settings';
 import { DETAIL_I18N } from './detail';
 import { UI_I18N } from './ui';
@@ -37,6 +38,7 @@ export const vi = {
 <<<<<<< HEAD
   ...AUTO_I18N,
 =======
+  ...ERR_I18N,
   ...SETTINGS_I18N,
   ...DETAIL_I18N,
   ...UI_I18N,

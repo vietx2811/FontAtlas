@@ -2,7 +2,7 @@ import type { FaceExtrasDto } from '../bindings/FaceExtrasDto';
 import type { FamilyStructureDto } from '../bindings/FamilyStructureDto';
 import type { LicenseNoteDto } from '../bindings/LicenseNoteDto';
 import type { AxisReadingDto, ClassificationDto, FaceDetailDto, FaceKeyDto, FaceRowDto } from '../bindings';
-import { t } from '../i18n';
+import { t, getLocale } from '../i18n';
 
 /** Các số đo hiện trong Compare, theo thứ tự hàng. Khoá = `AxisReadingDto.key` canonical. */
 export const COMPARE_METRICS = ['x_height_em', 'cap_height_em', 'contrast', 'contrast_h', 'slant_deg', 'stress_deg', 'aperture', 'serif_foot'] as const;
@@ -61,7 +61,7 @@ export function buildCompare(details: FaceDetailDto[], failed: CompareDto['faile
 /** Triển khai chung (tauri + mock): đọc từng face bằng getFace rồi ghép. Face lỗi được ghi vào `failed`; còn < 2 face đọc được thì lỗi. */
 export async function composeCompare(api: { getFace(f: FaceKeyDto, lang: 'vi' | 'en'): Promise<FaceDetailDto> }, faces: FaceKeyDto[]): Promise<CompareDto> {
   if (faces.length < COMPARE_MIN || faces.length > COMPARE_MAX) throw new Error(`compare needs ${COMPARE_MIN}–${COMPARE_MAX} faces, got ${faces.length}`);
-  const settled = await Promise.allSettled(faces.map(f => api.getFace(f, 'vi')));
+  const settled = await Promise.allSettled(faces.map(f => api.getFace(f, getLocale())));
   const ok: FaceDetailDto[] = []; const failed: CompareDto['failed'] = [];
   settled.forEach((r, i) => { if (r.status === 'fulfilled') ok.push(r.value); else failed.push({ face: faces[i], reason: r.reason instanceof Error ? r.reason.message : String(r.reason) }); });
   if (ok.length < COMPARE_MIN) throw new Error(failed[0]?.reason ?? t('cmp.unreadable'));

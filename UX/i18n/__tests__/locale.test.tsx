@@ -78,3 +78,14 @@ describe('switching re-renders without a restart', () => {
     expect(formatDate(Date.UTC(2026, 10, 11), { dateStyle: 'medium', timeZone: 'UTC' })).toBe('Nov 11, 2026');
   });
 });
+
+describe('backend error messages', () => {
+  it('Vietnamese UI keeps the backend sentence; English UI maps the code to an English sentence', async () => {
+    const { toCmdError } = await import('../../api/tauri');
+    const raw = { code: 'not_found', message: 'không có face này trong Index' };
+    expect(toCmdError(raw).message).toBe('không có face này trong Index');
+    setLocale('en');
+    expect(toCmdError(raw).message).toBe('Couldn’t find that item.');
+    expect(toCmdError({ code: 'weird_new_code', message: 'lỗi lạ' }).message).toBe('Something went wrong (weird_new_code).');
+  });
+});
