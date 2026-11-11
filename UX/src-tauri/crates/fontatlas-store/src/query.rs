@@ -14,7 +14,10 @@ pub const MAX_LIMIT: u32 = 1000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortKey {
+    /// Không chọn sort: như Tên (Family) nhưng khi có chữ tìm vẫn xếp khớp đầu từ trước (hành vi gốc của mọi lời gọi tìm chữ).
     #[default]
+    Auto,
+    /// Tên tường minh: xếp THUẦN, không xếp hạng khớp.
     Family,
     Weight,
     Added,
@@ -276,11 +279,12 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     (w.join(" AND "), p)
 }
 
-/// `Match` (không scope): khớp đầu từ đứng trước khớp chuỗi con, rồi theo tên. Sort tường minh (Tên/Ngày/Weight) xếp THUẦN
-/// theo trường, không xếp hạng khớp. `Match` có scope (Gần đây / Đang bật) giữ thứ tự đưa vào. Trả kèm tham số.
+/// `Auto` (sort vắng mặt) và `Match` không scope: khớp đầu từ đứng trước khớp chuỗi con, rồi theo tên. Sort tường minh
+/// (Tên/Ngày/Weight) xếp THUẦN theo trường, không xếp hạng khớp. `Match` có scope (Gần đây / Đang bật) giữ thứ tự đưa vào.
+/// Trả kèm tham số.
 fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
     let rank = match q.text.as_deref().and_then(text_match) {
-        Some(TextMatch::Fts { start, word, .. }) if q.sort == SortKey::Match && !scoped => Some((
+        Some(TextMatch::Fts { start, word, .. }) if q.sort == SortKey::Auto || (q.sort == SortKey::Match && !scoped) => Some((
             "CASE WHEN f.search_text LIKE ? ESCAPE '\\' OR f.search_text LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, "
                 .to_string(),
             vec![Value::Text(start), Value::Text(word)],
@@ -294,7 +298,7 @@ fn order_by(q: &FaceQuery, scoped: bool) -> (String, Vec<Value>) {
 fn user_order(q: &FaceQuery, scoped: bool) -> String {
     let dir = if q.descending { "DESC" } else { "ASC" };
     match q.sort {
-        SortKey::Family => format!("f.family_key {dir}, f.weight_class, f.is_italic, f.face_id"),
+        SortKey::Auto | SortKey::Family => format!("f.family_key {dir}, f.weight_class, f.is_italic, f.face_id"),
         SortKey::Weight => format!("f.weight_class {dir}, f.family_key, f.face_id"),
         SortKey::Added => format!("fi.first_seen_at {dir}, f.face_id"),
         SortKey::Match if scoped => "sc.score DESC, f.family_key, f.face_id".to_string(),

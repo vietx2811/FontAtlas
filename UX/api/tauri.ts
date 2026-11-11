@@ -49,7 +49,7 @@ export function toFaceQueryDto(q: FaceQuery): FaceQueryDto {
   return {
     text: q.text?.trim() ? q.text : null, vi: q.vi ?? null, license: q.license ?? [], variable: q.variable ?? null, italic: q.italic ?? null,
     sourceIds: q.sourceIds ?? [], favoritesOnly: q.favoritesOnly ?? false, collectionId: q.collectionId ?? null, tagIds: q.tagIds ?? [],
-    includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'family', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
+    includeMissing: q.includeMissing ?? false, sort: q.sort ?? 'auto', descending: q.descending ?? false, offset: q.offset ?? 0, limit: q.limit ?? 100,
     axisFilters: [], hard: [], rawAxisRanges: q.rawAxisRanges ?? [], faceKeys: q.faceKeys ?? null,
     classes: q.classes ?? [], subclasses: q.subclasses ?? [], traits: q.traits ?? [],
     langs: q.langs ?? [], langMode: q.langMode ?? 'all', badgeLang: q.badgeLang ?? null,

@@ -215,3 +215,16 @@ fn explicit_sorts_are_pure_even_while_searching() {
     assert_eq!(desc.len(), rev.len());
     assert!(pos(&desc, "Đẹp Sans") < pos(&desc, "Adept Grotesk"), "{desc:?}");
 }
+
+#[test]
+fn absent_sort_with_text_keeps_the_original_prefix_rank() {
+    let (_d, mut s) = seeded();
+    let base = report("open_sans.ttf");
+    s.ingest(vec![item(1, "/lib/adept.ttf", &fake_report(&base, "adept", "Adept Grotesk"))], 11).unwrap();
+    // Không gửi sort (mặc định Auto): "Đẹp" khớp đầu từ vẫn đứng trước "Adept" dù Adept đứng trước theo bảng chữ cái, ở cả hai chiều.
+    for descending in [false, true] {
+        let got = fams(&s, &FaceQuery { text: Some("dep".into()), descending, ..Default::default() });
+        assert_eq!(FaceQuery::default().sort, SortKey::Auto);
+        assert_eq!(got.first().map(String::as_str), Some("Đẹp Sans"), "desc={descending}: {got:?}");
+    }
+}
