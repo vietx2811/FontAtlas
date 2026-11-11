@@ -8,6 +8,7 @@ import type { ONBOARDING_I18N } from '../onboarding';
 import type { TERM_GLOSS } from '../terms';
 import type { VIEW_I18N } from '../view';
 import type { ERR_I18N } from '../err';
+import type { DUP_I18N } from '../dup';
 import type { SETTINGS_I18N } from '../settings';
 import type { DETAIL_I18N } from '../detail';
 import type { UI_I18N } from '../ui';
@@ -15,7 +16,7 @@ import type { SIDEBAR_I18N } from '../sidebar';
 import type { FACES_I18N } from '../faces';
 
 /** Khoá khai báo trực tiếp trong i18n/index.ts (không thuộc nhóm nào có file riêng). */
-export type MainKey = Exclude<I18nKey, keyof typeof ACTIVATION_I18N | keyof typeof CLOUD_I18N | keyof typeof COMPARE_V2 | keyof typeof DESK_I18N | keyof typeof FILTER_I18N | keyof typeof FILTER_I18N_2 | keyof typeof FILTER_I18N_3 | keyof typeof FILTER_I18N_4 | keyof typeof ONBOARDING_I18N | keyof typeof TERM_GLOSS | keyof typeof VIEW_I18N | keyof typeof SIDEBAR_I18N | keyof typeof FACES_I18N | keyof typeof UI_I18N | keyof typeof DETAIL_I18N | keyof typeof SETTINGS_I18N | keyof typeof ERR_I18N>;
+export type MainKey = Exclude<I18nKey, keyof typeof ACTIVATION_I18N | keyof typeof CLOUD_I18N | keyof typeof COMPARE_V2 | keyof typeof DESK_I18N | keyof typeof FILTER_I18N | keyof typeof FILTER_I18N_2 | keyof typeof FILTER_I18N_3 | keyof typeof FILTER_I18N_4 | keyof typeof ONBOARDING_I18N | keyof typeof TERM_GLOSS | keyof typeof VIEW_I18N | keyof typeof SIDEBAR_I18N | keyof typeof FACES_I18N | keyof typeof UI_I18N | keyof typeof DETAIL_I18N | keyof typeof SETTINGS_I18N | keyof typeof ERR_I18N | keyof typeof DUP_I18N>;
 
 export const EN_MAIN: Record<MainKey, string> = {
   'anat.rawValue': 'Raw value: {v}',
@@ -219,26 +220,6 @@ export const EN_MAIN: Record<MainKey, string> = {
   'pair.block.vi.body': 'The body font is missing {n} Vietnamese characters',
   'pair.legend': '● harmony · ◐ contrast · ◆ clash · ○ unsure · ◑ weight hint',
   'pair.cut': 'Pair these holds up to 4 fonts — using the first 4 of {n}.',
-  'dup.title': 'Duplicates',
-  'dup.loading': 'Looking for duplicate fonts…',
-  'dup.error': 'Couldn’t read the duplicates list: {msg}',
-  'dup.retry': 'Try again',
-  'dup.empty': 'No duplicate fonts',
-  'dup.kind.same_file': 'Same file',
-  'dup.kind.same_file.gloss': 'one file, several paths',
-  'dup.kind.versions': 'Versions',
-  'dup.kind.versions.gloss': 'several versions of one font',
-  'dup.kind.formats': 'Formats',
-  'dup.kind.formats.gloss': 'the same font in different formats',
-  'dup.newest': 'Newest',
-  'dup.newestUnknown': 'Couldn’t tell which is newest',
-  'dup.reveal': 'Show in Finder',
-  'dup.revealFail': 'Couldn’t open Finder: {msg}',
-  'dup.open': 'Open details',
-  'dup.revision': 'rev {n}',
-  'dup.count': '{n} groups',
-  'dup.members': '{n} copies',
-  'dup.note': 'View only: the app never deletes or moves your files.',
   'compare.title': 'Compare',
   'compare.back': 'Back to Library',
   'compare.sameSize': 'Same size',

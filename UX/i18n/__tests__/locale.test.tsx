@@ -18,7 +18,7 @@ describe('locale tables', () => {
   });
   it('en values contain no Vietnamese diacritics outside the sample glyphs used as examples', () => {
     const VN = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
-    const ALLOWED = new Set(['onb.art.o1', 'onb.art.o2', 'onb.art.o5', 'onb.art.o6', 'onb.art.o7', 'term.vi_marks.gloss', 'zero.clearVi']); // mô tả chữ Việt minh hoạ
+    const ALLOWED = new Set(['onb.art.o1', 'onb.art.o2', 'onb.art.o5', 'onb.art.o6', 'onb.art.o7', 'term.vi_marks.gloss', 'zero.clearVi', 'dup.sampleText']); // mô tả chữ Việt minh hoạ
     for (const [k, v] of Object.entries(en)) if (!ALLOWED.has(k)) expect(VN.test(v), `${k}: ${v}`).toBe(false);
   });
 });
@@ -93,7 +93,7 @@ describe('backend error messages', () => {
 
 describe('key hygiene', () => {
   it('no key is declared in two groups (a later spread would silently override the earlier one)', async () => {
-    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err'].map(n => import(`../${n}.ts`)));
+    const mods = await Promise.all(['activation', 'cloud', 'compareV2', 'desk', 'filter', 'onboarding', 'terms', 'view', 'sidebar', 'faces', 'ui', 'detail', 'settings', 'err', 'dup'].map(n => import(`../${n}.ts`)));
     const { MAIN_I18N } = await import('..');
     const seen = new Map<string, string>(); const dup: string[] = [];
     const groups: Array<[string, object]> = [['main', MAIN_I18N]];
