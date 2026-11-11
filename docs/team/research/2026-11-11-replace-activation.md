@@ -76,6 +76,27 @@ Rủi ro còn lại:
 1. Mức mặc định cho RightFont/FontBase/Typeface: "Hướng dẫn" (an toàn) hay "Thay thế có cảnh báo"? Tôi đề xuất **Hướng dẫn là mặc định**, thay thế là lựa chọn thứ hai.
 2. Cho phép thử Font Book → Tắt và đo hành vi trên một font cài thủ công vào `~/Library/Fonts` (ngoài ràng buộc hiện tại) để thay dấu **[SUY]** bằng số đo?
 
+## 6. Trạng thái triển khai (cập nhật sau khi vào dev/mvp 7f1ea248)
+
+**Đã làm**
+- Backend (`fontatlas-activate`): `ConflictPolicy::Replace`, ma trận `ReplaceTier` (Replace / Guide / Protected) tính ở backend và gắn vào từng `Conflict`; kiểm tier trên đường dẫn canonical VÀ URL gốc, tính lại ngay trước khi gỡ; `/System/Library`, `/Library/Fonts`, `/Network/Library/Fonts`, `~/Library/Fonts` luôn Protected.
+- Gỡ / trả lại / khôi phục luôn dùng URL đã đăng ký gốc (từ `providers`) và đúng scope; sổ `activation_replaced` (user.db, migration cuối danh sách) ghi ngay sau mỗi lần gỡ.
+- Mọi nhánh lỗi sau khi gỡ đều trả bản cũ lại (kể cả bản do chính Font Atlas đăng ký, bật lại đúng dòng + lý do); trả lại hỏng thì giữ sổ và báo `replace_rollback_failed`.
+- Sau khi thay, so `providers(name)` với bản của ta: bản khác vẫn thắng → `Activated` + `FileResult.warning = "replace_not_effective"`, giữ sổ.
+- Danh sách xung đột người dùng đã xác nhận đi kèm lệnh (`ConfirmedConflict`); khác → `replace_conflicts_changed`, hỏi lại.
+- Bản của Font Atlas chỉ bị tắt bằng `Ask`: collection đang giữ → `replace_own_held`, không đụng lý do của collection.
+- "Khôi phục bản cũ": kiểm file còn / không phải placeholder cloud, hoàn tác từng scope nếu giữa chừng hỏng, chỉ tắt bản của ta khi không còn dòng sổ nào khác của cùng font; tắt hỏng → báo lỗi, không đánh dấu đã khôi phục. Cài đặt → Kích hoạt liệt kê các bản chưa khôi phục.
+- UI trong hộp thoại xung đột (vi + en): chọn sẵn "Thay bằng bản này" khi tier Replace và không có app lạ; app lạ → mặc định bỏ qua + xác nhận mạnh; hướng dẫn tắt trong app luôn hiện ngay dưới.
+- Test chỉ dùng FakeEngine + fixture OFL trong thư mục tạm (31 test replace, 5 test store, QA native).
+
+**Còn lại / giới hạn đã biết**
+- Sổ khôi phục **không lưu hash của file cũ**: khôi phục chỉ kiểm file còn tồn tại và đã tải về, không kiểm nội dung còn đúng là bản đã gỡ. Cần thêm cột `old_hash` (migration mới) nếu muốn kiểm.
+- Bản do chính Font Atlas đăng ký (font khác của thư viện cùng PS name) không có dòng sổ; người dùng bật lại từ thư viện. Bật lại tự động chỉ xảy ra khi bước sau của chính lượt thay hỏng.
+- Không đo trên máy thật: hành vi của RightFont/FontBase/Typeface khi bị gỡ đăng ký (có bật lại không) vẫn là **[SUY]**; cần số đo nếu chủ app đồng ý (câu hỏi 2 ở §5).
+- Cửa sổ app đang mở có thể còn dùng font cũ trong bộ nhớ đệm tới khi mở lại tài liệu (chưa đo).
+- Chuỗi tiếng Anh (`REPLACE_I18N_EN`) phải được nối vào catalog en của `feat/i18n-en`.
+- Lỗi store giữa chừng sau khi đã gỡ được xử lý (trả lại + báo) nhưng chưa có test chèn lỗi store giả.
+
 ## Phụ lục — công cụ đo
 
 ```swift
