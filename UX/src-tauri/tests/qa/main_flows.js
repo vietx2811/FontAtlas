@@ -38,7 +38,7 @@
       if (!c) bad.push(term); else if (c.querySelector('svg.fa-term-art')) art++;
       el = live(term) ?? el; fire(el, 'pointerout');
       const closed = await wait(() => !document.querySelector('[role=tooltip]'), 5000);
-      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + ')');
+      if (!closed) bad.push(term + ' (tooltip không đóng; còn thẻ: ' + [...document.querySelectorAll('[role=tooltip] [data-term-card]')].map(x => x.dataset.termCard).join(',') + '; nhãn còn trong DOM: ' + !!live(term) + '; tooltip: ' + [...document.querySelectorAll('[role=tooltip]')].map(x => (x.id || '') + '=' + (x.textContent || '').slice(0, 40) + ' desc-by:' + ([...document.querySelectorAll('[aria-describedby]')].filter(o => (o.getAttribute('aria-describedby') || '').includes(x.id)).map(o => o.tagName + '.' + o.className + '[' + (o.dataset.term || '') + ']').join('|'))).join(' ; ') + '; focus: ' + (document.activeElement?.tagName ?? '') + '.' + (document.activeElement?.className ?? '') + '; splash/inert: ' + !!document.querySelector('[data-testid=splash],[inert]') + ')');
     }
     return { n, bad, art };
   };
