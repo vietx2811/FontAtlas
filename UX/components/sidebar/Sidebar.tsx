@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
+import type { CaseSummaryDto } from '../../bindings';
 import type { ActivationReportDto } from '../../bindings';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
@@ -71,6 +72,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [sources, setSources] = useState<SourceDto[]>([]);
   const [cols, setCols] = useState<CollectionDto[]>([]);
   const [tags, setTags] = useState<TagDto[]>([]);
+  const [cases, setCases] = useState<CaseSummaryDto[]>([]);
+  const [casesOpen, setCasesOpen] = useState(true); // chỉ trong phiên (khoá mở/đóng lưu bên Rust chưa có mục Case)
   const [counts, setCounts] = useState<Counts>({ all: null, star: null, dups: null });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [nested, setNested] = useState<Nested | null>(null);
@@ -85,12 +88,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanningNow = useScanStore(s => s.scanning);
 
   const refresh = useCallback(async () => {
-    const [s, c, t, all, star, dup] = await Promise.all([
+    const [s, c, t, all, star, dup, cs] = await Promise.all([
       api.listSources(), api.listCollections(), api.listTags(),
       api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
       api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
+      api.listCases().catch(() => [] as CaseSummaryDto[]), // Case lỗi không làm hỏng thanh bên
     ]);
-    setSources(s); setCols(c); setTags(t); useTagsStore.getState().set(t);
+    setSources(s); setCols(c); setTags(t); setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); useTagsStore.getState().set(t);
     // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
     const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
     if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
@@ -134,6 +138,15 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   }, [addPath]);
   useDropPaths(onDrop);
 
+  /** Bấm Case: mở trong Pairing Desk ở Combo chính (không có Combo chính thì Combo đầu). */
+  const openCaseInDesk = async (id: number) => {
+    try {
+      const c = await api.openCase(id);
+      const combo = c.combos.find(x => x.isMain) ?? c.combos[0];
+      if (!combo) { setNotice({ text: t('side.caseEmpty') }); return; }
+      useUiStore.getState().openDesk({ caseId: c.id, comboId: combo.id, role: combo.slots[0]?.role ?? 'display', trial: null });
+    } catch (e) { warn(e); }
+  };
   const createCollection = async (name: string) => {
     setAdding(false);
     if (!name.trim()) return;
@@ -278,11 +291,20 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
           {cols.map(c => renaming === c.id
             ? <input key={c.id} className="fa-inline-input" aria-label={t('side.renameProject')} autoFocus defaultValue={c.name}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitRename(c, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(c.id, true); } }} onBlur={e => void commitRename(c, e.currentTarget.value, e.currentTarget, 'blur')} />
-            : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
+            : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} drop={{ id: c.id, name: c.name, here: cur(`col:${c.id}`) }} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
 navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
                 more={<Tooltip label={t('side.options', { name: c.name })}><button type="button" className="fa-more" aria-label={t('side.options', { name: c.name })} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
                   onClick={e => { const el = e.currentTarget; openCtx('collection', c.id, c.name)({ x: 0, y: 0, keyboard: true, el }); }}><Icon name="more" size={14} /></button></Tooltip>} />)}
         </NavSection>
+
+        {cases.length > 0 && (
+          <NavSection title={t('side.cases')} open={casesOpen} onToggle={() => setCasesOpen(o => !o)}>
+            {cases.map(c => (
+              <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`}
+                drop={{ kind: 'case', id: c.id, name: c.name, here: useUiStore.getState().desk?.caseId === c.id }} onClick={() => void openCaseInDesk(c.id)} />
+            ))}
+          </NavSection>
+        )}
 
         <NavSection title={t('side.sources')} open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (

@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
+import { useFaceDragStore } from '../../../store/faceDrag';
 import { Sidebar, SidebarToggle } from '../Sidebar';
 import { tipOf } from '../../../test/tip';
 
@@ -557,5 +558,42 @@ describe('Sidebar', () => {
       await mount(); await settle();
       expect(useUiStore.getState().filters.tagIds).toBeUndefined();
     });
+  });
+});
+
+describe('Sidebar: đích thả font (G1)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useFaceDragStore.setState({ drag: null }); });
+  it('mỗi dự án là đích thả; dự án đang xem đánh dấu "here"; rê qua khi đang kéo thì sáng lên (hợp lệ) hoặc mờ (đang xem)', async () => {
+    const api = createMockApi(); const a = await api.createCollection('Menu', null); const b = await api.createCollection('Poster', null);
+    useUiStore.setState({ view: `col:${b.id}` as never });
+    const { container } = render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    const wrapA = container.querySelector(`[data-drop-col="${a.id}"]`) as HTMLElement; const wrapB = container.querySelector(`[data-drop-col="${b.id}"]`) as HTMLElement;
+    expect(wrapA.dataset.dropName).toBe('Menu'); expect(wrapA.dataset.dropHere).toBeUndefined(); expect(wrapB.dataset.dropHere).toBe('true');
+    expect(wrapA.dataset.dropOver).toBeUndefined();
+    const rows = (await api.queryFaces({ limit: 2 })).items as never[];
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: a.id, name: 'Menu', valid: true } } }));
+    expect(wrapA.dataset.dropOver).toBe('ok'); expect(wrapA.dataset.dropArmed).toBe('true'); expect(wrapB.dataset.dropArmed).toBeUndefined();
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: b.id, name: 'Poster', valid: false } } }));
+    expect(wrapB.dataset.dropOver).toBe('no'); expect(wrapA.dataset.dropOver).toBeUndefined();
+  });
+});
+
+describe('Sidebar: nhóm Case (G1)', () => {
+  beforeEach(() => { useUiStore.setState(initial, true); useFaceDragStore.setState({ drag: null }); });
+  it('không có Case thì không có nhóm; có Case thì liệt kê, là đích thả, bấm mở Case trong Pairing Desk ở Combo chính', async () => {
+    const api = createMockApi();
+    const none = render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    expect(none.container.querySelector('[data-drop-case]')).toBeNull(); none.unmount();
+    const [r] = (await api.queryFaces({ limit: 1 })).items;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: r.faceIndex }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    const { container } = render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    const item = container.querySelector(`[data-drop-case="${res.case.id}"]`) as HTMLElement;
+    expect(item).toBeTruthy(); expect(item.dataset.dropName).toBe(res.case.name);
+    const rows = (await api.queryFaces({ limit: 2 })).items as never[];
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'case', id: res.case.id, name: res.case.name, valid: true } } }));
+    expect(item.dataset.dropOver).toBe('ok');
+    act(() => useFaceDragStore.setState({ drag: null }));
+    fireEvent.click(item.querySelector('button')!); await settle();
+    expect(useUiStore.getState().desk?.caseId).toBe(res.case.id);
   });
 });

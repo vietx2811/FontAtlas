@@ -21,6 +21,7 @@ export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
   'side.active': 'Active',
   'side.dismiss': 'Dismiss notice',
   'side.projects': 'Projects',
+  'side.cases': 'Case', 'side.caseTip': 'Open Case “{name}” in the Pairing Desk. Drag fonts here to add them to the Case.', 'side.caseEmpty': 'This Case has no Combo to open',
   'side.addProject': 'Add project',
   'side.projectName': 'Project name',
   'side.renameProject': 'Rename project',

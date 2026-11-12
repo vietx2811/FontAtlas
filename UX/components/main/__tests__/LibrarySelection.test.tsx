@@ -435,3 +435,38 @@ describe('Library multi-select', () => {
     });
   });
 });
+
+describe('Library: thêm vào dự án (G1)', () => {
+  beforeEach(() => {
+    useUiStore.setState(initial, true); useSelectionStore.getState().clear(); useFavoriteStore.setState({ overrides: new Map() }); useNoticeStore.setState({ notices: [] });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('⌥⌘P mở danh sách dự án cho font đang chọn, Enter thêm vào dự án đó; không có vùng chọn thì không làm gì', async () => {
+    const api = createMockApi(); const col = await api.createCollection('Menu', null);
+    await mount(api);
+    fireEvent.keyDown(window, { key: 'π', code: 'KeyP', altKey: true, metaKey: true }); await settle();
+    expect(screen.queryByRole('menu')).toBeNull();
+    click(cells()[0]); await settle();
+    fireEvent.keyDown(window, { key: 'π', code: 'KeyP', altKey: true, metaKey: true }); await settle();
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Menu/ })); await settle();
+    expect((await api.queryFaces({ collectionId: col.id, limit: 10 })).items).toHaveLength(1);
+    expect(useNoticeStore.getState().notices.some(n => /Đã thêm/.test(n.text))).toBe(true);
+  });
+
+  it('kéo thẻ rồi thả lên mục dự án (đích data-drop-col) thêm font vào dự án và báo có Hoàn tác', async () => {
+    const api = createMockApi(); const col = await api.createCollection('Poster', null);
+    await mount(api);
+    const drop = document.createElement('div'); drop.dataset.dropCol = String(col.id); drop.dataset.dropName = 'Poster'; document.body.appendChild(drop);
+    (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => drop;
+    const cell = cells()[1];
+    act(() => { cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); }); // jsdom không có PointerEvent: MouseEvent mang button/clientX
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 60, clientY: 60 })); });
+    expect(screen.getByTestId('drag-count').textContent).toBe('1');
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60 })); }); await settle();
+    expect((await api.queryFaces({ collectionId: col.id, limit: 10 })).items).toHaveLength(1);
+    expect(useNoticeStore.getState().notices.at(-1)?.action?.label).toBe('Hoàn tác');
+    drop.remove();
+  });
+});
