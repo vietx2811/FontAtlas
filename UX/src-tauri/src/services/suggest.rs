@@ -113,6 +113,16 @@ pub fn role_fit(state: &AppState, face: &FaceKeyDto, role: &RoleRefDto) -> Resul
 
 /// Font hợp một vai trong cả thư viện (nguồn "Hợp vai" của cột 2). Chỉ good/ok; good trước, rồi tên họ, rồi key (tất định).
 pub fn role_fit_faces(state: &AppState, role: &RoleRefDto, opts: &RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError> {
+    role_fit_faces_excluding(state, role, opts, None)
+}
+
+/// Như `role_fit_faces`, loại `exclude` (font neo) TRƯỚC khi đếm `total` và cắt trang.
+pub(crate) fn role_fit_faces_excluding(
+    state: &AppState,
+    role: &RoleRefDto,
+    opts: &RoleFitListOptsDto,
+    exclude: Option<&fontatlas_index::FaceKey>,
+) -> Result<RoleFitPageDto, CmdError> {
     let Some(r) = resolve_role(role) else {
         return Ok(RoleFitPageDto { profile: None, items: vec![], total: 0 });
     };
@@ -127,7 +137,7 @@ pub fn role_fit_faces(state: &AppState, role: &RoleRefDto, opts: &RoleFitListOpt
     let mut hits: Vec<(Fit, &FaceProfile, Vec<Reason>)> = Vec::new();
     for p in b.index.profiles() {
         let Some(m) = b.meta.get(&p.key) else { continue };
-        if m.missing || m.non_latin_primary || (opts.project_vi && p.vi_missing > 0) {
+        if m.missing || m.non_latin_primary || (opts.project_vi && p.vi_missing > 0) || exclude.is_some_and(|e| *e == p.key) {
             continue;
         }
         if allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) {

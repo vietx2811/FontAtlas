@@ -239,3 +239,96 @@ fn six_fixture_library_gives_real_partners_and_combos() {
     let c = app_lib::services::suggest_pair::suggest_combos(&st, &SuggestCombosReqDto { k: 6, seed: 7, ..Default::default() }).unwrap();
     assert!(!c.is_empty());
 }
+
+/// Thư viện lớn dựng từ 6 font mẫu (thêm vài byte cuối tệp để mỗi bản có hash riêng).
+fn big(root: &Path, n: usize) -> Arc<AppState> {
+    let st = AppState::new(AppDirs::under(&root.join("data")), Box::new(NoActivation));
+    boot::run_boot(&st);
+    let dir = root.join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..n {
+        let name = SIX[i % 6];
+        let mut bytes = std::fs::read(fixture(name)).unwrap();
+        bytes.extend_from_slice(&(i as u64).to_le_bytes());
+        let (stem, ext) = name.split_once('.').unwrap();
+        std::fs::write(dir.join(format!("{stem}_{i}.{ext}")), bytes).unwrap();
+    }
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(300)));
+    assert!(wait_rebuilt(&st, Duration::from_secs(300)));
+    st
+}
+
+#[test]
+fn fits_role_offset_beyond_100_pages_and_total_excludes_the_anchor() {
+    let d = tempfile::tempdir().unwrap();
+    let st = big(d.path(), 360);
+    let f = app_lib::services::suggest_pair::desk_suggest;
+    let a = anchor_of(&st, "Roboto");
+    let base = DeskSuggestReqDto { anchor: Some(a.clone()), limit: 100, ..Default::default() };
+    let p0 = f(&st, &base).unwrap();
+    assert!(p0.total > 200, "bộ thử phải có >200 font hợp Body, có {}", p0.total);
+    let p2 = f(&st, &DeskSuggestReqDto { offset: 200, ..base.clone() }).unwrap();
+    assert!(!p2.items.is_empty(), "offset 200 < total {} phải có dữ liệu", p0.total);
+    // gom mọi trang: đủ đúng total, không lặp, không có anchor
+    let mut seen = std::collections::HashSet::new();
+    let mut off = 0;
+    loop {
+        let p = f(&st, &DeskSuggestReqDto { offset: off, ..base.clone() }).unwrap();
+        if p.items.is_empty() {
+            break;
+        }
+        for i in &p.items {
+            assert!(i.face != a, "anchor không được xuất hiện");
+            assert!(seen.insert((i.face.hash_hex.clone(), i.face.face_index)), "lặp giữa các trang");
+        }
+        off += p.items.len() as u32;
+    }
+    assert_eq!(seen.len() as u64, p0.total, "total phải bằng số font thực sự có thể phân trang (đã trừ anchor)");
+}
+
+#[test]
+fn combos_never_put_one_face_in_two_slots_even_with_locks() {
+    let d = tempfile::tempdir().unwrap();
+    let st = big(d.path(), 60);
+    let f = app_lib::services::suggest_pair::suggest_combos;
+    let r = |n: &str| RoleRefDto { name: n.into(), profile: None, size: None };
+    // font đối tác tốt nhất của Playfair cho Body: khoá nó vào vai thứ ba rồi xem vai thứ hai có chọn trùng không
+    let a = anchor_of(&st, "Playfair Display");
+    let best = app_lib::services::suggest_pair::suggest_partners(&st, &a, &SuggestPartnersReqDto::default()).unwrap().items[0].face.clone();
+    let req = SuggestCombosReqDto { roles: vec![r("heading"), r("body"), r("caption")], locked: vec![LockedSlotDto { role: r("caption"), face: best.clone() }, LockedSlotDto { role: r("heading"), face: a.clone() }], k: 6, seed: 3, ..Default::default() };
+    let out = f(&st, &req).unwrap();
+    assert!(!out.is_empty());
+    for c in &out {
+        let mut s = std::collections::HashSet::new();
+        for sl in &c.slots {
+            assert!(s.insert((sl.face.hash_hex.clone(), sl.face.face_index)), "một font nằm ở hai slot: {:?}", sl.row.family);
+        }
+    }
+    // anchor tự chọn không được trùng font đã khoá ở vai khác
+    let req2 = SuggestCombosReqDto { roles: vec![r("heading"), r("body")], locked: vec![LockedSlotDto { role: r("body"), face: a.clone() }], k: 6, seed: 1, ..Default::default() };
+    for c in f(&st, &req2).unwrap() {
+        assert_ne!(c.slots[0].face, c.slots[1].face);
+    }
+    // cùng một font khoá ở hai vai: lỗi rõ ràng
+    let dup = SuggestCombosReqDto { locked: vec![LockedSlotDto { role: r("heading"), face: a.clone() }, LockedSlotDto { role: r("body"), face: a }], ..Default::default() };
+    assert_eq!(f(&st, &dup).unwrap_err().code, "locked_duplicate");
+}
+
+#[test]
+fn input_errors_carry_codes_not_vietnamese_text() {
+    let (_d, st) = setup();
+    let a = anchor_of(&st, "Roboto");
+    let ps = app_lib::services::suggest_pair::suggest_partners;
+    let e = ps(&st, &a, &SuggestPartnersReqDto { styles: vec!["nope".into()], ..Default::default() }).unwrap_err();
+    assert_eq!((e.code.as_str(), e.message.as_str()), ("style_unknown", "style_unknown"));
+    assert_eq!(e.detail.as_ref().and_then(|d| d.get("value")).and_then(|v| v.as_str()), Some("nope"));
+    let ds = app_lib::services::suggest_pair::desk_suggest;
+    assert_eq!(ds(&st, &DeskSuggestReqDto { source: "zzz".into(), ..Default::default() }).unwrap_err().code, "source_unknown");
+    let cs = app_lib::services::suggest_pair::suggest_combos;
+    let r = |n: &str| RoleRefDto { name: n.into(), profile: None, size: None };
+    assert_eq!(cs(&st, &SuggestCombosReqDto { roles: vec![r("Zzz lạ")], ..Default::default() }).unwrap_err().code, "role_unknown");
+    assert_eq!(cs(&st, &SuggestCombosReqDto { roles: vec![], ..Default::default() }).unwrap_err().code, "roles_invalid");
+    assert_eq!(cs(&st, &SuggestCombosReqDto { scope: "x".into(), ..Default::default() }).unwrap_err().code, "scope_unknown");
+    assert_eq!(cs(&st, &SuggestCombosReqDto { scope: "case".into(), ..Default::default() }).unwrap_err().code, "case_required");
+}
