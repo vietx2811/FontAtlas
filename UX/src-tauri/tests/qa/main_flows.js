@@ -1063,7 +1063,7 @@
 
     // 0.4.0 — G1: kéo font từ lưới vào Dự án và Case ở Sidebar, rồi Hoàn tác. Chỉ chờ theo điều kiện (có hạn).
     {
-      const setVal = (el, v) => { const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); };
+      const setVal = (el, v) => { try { if (!el) return false; const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); return true; } catch (e) { return false; } };
       const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
       await wait(() => cells().length >= 2, 15000);
@@ -1117,7 +1117,7 @@
     {
       const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
       const pressOn = (el, k, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
-      const setVal = (el, v) => { const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); };
+      const setVal = (el, v) => { try { if (!el) return false; const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); return true; } catch (e) { return false; } };
       const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
       const roleNames = () => [...document.querySelectorAll('[data-testid=desk-role]')].map(r => r.dataset.role);
       const filled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
@@ -1133,16 +1133,19 @@
       else {
         // G2: nút "+" ở ứng viên (rê chuột vào thì hiện): bấm đặt font vào vai đang chọn; có nhãn và nhận focus bàn phím.
         {
-          const row = [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('[data-testid=desk-cand-add]'));
-          const name = row?.querySelector('.fa-desk-cand-name')?.textContent ?? '';
-          row?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-          const add = row?.querySelector('[data-testid=desk-cand-add]');
-          add?.focus();
-          const focusable = document.activeElement === add;
-          const labelled = (add?.getAttribute('aria-label') ?? '').length > 0;
-          add?.click();
-          const inUse = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('.fa-desk-cand-name')?.textContent === name && li.querySelector('[data-testid=cand-inuse]')), 15000);
-          await log('desk-cand-plus', !!row && !!add && labelled && focusable && !!inUse, { name, labelled, focusable, inUse: !!inUse });
+          try {
+            const rowOf = () => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('[data-testid=desk-cand-add]') && li.querySelector('.fa-desk-cand-name')?.textContent);
+            // Máy bận: danh sách ứng viên/nút "+" có thể chưa kịp vẽ. Rê chuột lại mỗi vòng đến khi thấy hàng có nút "+".
+            const row = await wait(() => { const r = rowOf(); if (r) return r; document.querySelector('[data-testid=desk-cand]')?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true })); return null; }, 15000);
+            const name = row?.querySelector('.fa-desk-cand-name')?.textContent ?? '';
+            row?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+            const add = row?.querySelector('[data-testid=desk-cand-add]');
+            const focusable = !!add && !!(await wait(() => { add.focus(); return document.activeElement === add; }, 10000));
+            const labelled = !!add && !!(await wait(() => (add.getAttribute('aria-label') ?? '').length > 0, 10000));
+            add?.click();
+            const inUse = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('.fa-desk-cand-name')?.textContent === name && li.querySelector('[data-testid=cand-inuse]')), 15000);
+            await log('desk-cand-plus', !!row && !!add && labelled && focusable && !!inUse, { name, labelled, focusable, inUse: !!inUse, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
+          } catch (e) { await log('desk-cand-plus', false, { error: String(e && e.message || e) }); }
         }
         // G3: + Role (gợi ý tên + tên tự do), đổi tên, bỏ vai, Hoàn tác.
         {
@@ -1185,20 +1188,21 @@
           await log('picker-sources-keys', Object.keys(results).length === 5 && Object.values(results).every(v => v === 'ok' || v === 'disabled') && Object.values(results).filter(v => v === 'ok').length >= 2, results);
           pressOn(desk, '1'); await wait(() => document.querySelector('[data-testid=pick-src-pair]')?.getAttribute('aria-checked') === 'true', 8000);
           const sel = await wait(() => document.querySelector('[data-testid=pick-style]'), 8000);
-          const sigOf = () => [...document.querySelectorAll('[data-testid=desk-cand]')].map(x => x.textContent).join('|') + '#' + [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent).join('|');
-          const before = sigOf();
-          if (sel) setVal(sel, 'contrast');
-          await wait(() => document.querySelector('[data-testid=pick-style]')?.value === 'contrast', 5000);
-          // Lượt tải theo style bắt đầu sau một lần render: chờ thấy "đang tải" HOẶC danh sách đổi (không đổi thật thì hết hạn 6s rồi đi tiếp), rồi mới chờ hết tải.
-          await wait(() => document.querySelector('[data-testid=pick-loading]') || sigOf() !== before, 6000);
-          await wait(() => !document.querySelector('[data-testid=pick-loading]'), 20000);
-          await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=pick-empty], [data-testid=pick-filtered]'), 20000);
-          const tags = [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent);
-          await log('picker-pair-style', !!sel && sel.value === 'contrast' && tags.every(x => x === 'Serif + Sans'), { value: sel?.value, tags: tags.slice(0, 6), n: document.querySelectorAll('[data-testid=desk-cand]').length });
+          try {
+            const candsN = () => document.querySelectorAll('[data-testid=desk-cand]').length;
+            const tagsNow = () => [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent);
+            const settled = () => { const t = tagsNow(); const n = candsN(); return !document.querySelector('[data-testid=pick-loading]') && ((n > 0 && t.length === n && t.every(x => x === 'Serif + Sans')) || (n === 0 && document.querySelector('[data-testid=pick-empty], [data-testid=pick-filtered]'))); };
+            const set = setVal(sel, 'contrast');
+            await wait(() => document.querySelector('[data-testid=pick-style]')?.value === 'contrast', 10000);
+            // Chờ ĐÚNG trạng thái cần kiểm (mọi ứng viên có nhãn "Serif + Sans", hoặc danh sách rỗng đúng nghĩa), không đoán theo "đang tải": pick-loading chỉ hiện khi danh sách đang rỗng.
+            await wait(settled, 20000);
+            const tags = tagsNow();
+            await log('picker-pair-style', set && !!sel && document.querySelector('[data-testid=pick-style]')?.value === 'contrast' && settled(), { set, value: document.querySelector('[data-testid=pick-style]')?.value ?? null, tags: tags.slice(0, 6), n: candsN() });
+          } catch (e) { await log('picker-pair-style', false, { error: String(e && e.message || e) }); }
           const candText = [...document.querySelectorAll('[data-testid=desk-cand]')].map(li => li.textContent).join(' | ');
           const scoreLike = /(\d{1,3}\s*(%|\/\s*100|điểm|pts?|points?)\b)|\b(score|điểm)\b/i.test(candText) || !!document.querySelector('[data-testid=desk-cand] meter, [data-testid=desk-cand] progress, [data-testid*=score]');
           await log('picker-no-scores', !scoreLike, { scoreLike, sample: candText.slice(0, 160) });
-          setVal(document.querySelector('[data-testid=pick-style]'), '');
+          setVal(document.querySelector('[data-testid=pick-style]'), ''); // an toàn: không ném lỗi nếu Picker đã đổi
         }
         // G6: gợi ý combo từ tên combo; "Nhận cả combo" rồi Hoàn tác.
         {
