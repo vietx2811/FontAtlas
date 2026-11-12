@@ -50,6 +50,8 @@ impl Reason {
 #[derive(Debug, Clone)]
 pub struct Traits {
     pub class: Class,
+    /// Lớp tốt nhất bộ phân loại đoán khi `class = Uncertain` (Oswald → Sans, Pacifico → Script); dùng khi class chưa chắc.
+    pub candidate: Option<Class>,
     pub subclass: Option<String>,
     pub x_height_em: Option<f32>,
     /// x-height ÷ cap-height (≥ 0.95: chữ hoa kiểu Bebas).
@@ -69,10 +71,18 @@ pub struct Traits {
     pub has_tnum: Option<bool>,
 }
 
+impl Traits {
+    /// Class hiệu lực: class đã chắc, nếu không thì candidate của bộ phân loại, nếu không thì Uncertain.
+    fn eff(&self) -> Class {
+        if self.class == Class::Uncertain { self.candidate.unwrap_or(Class::Uncertain) } else { self.class }
+    }
+}
+
 impl Default for Traits {
     fn default() -> Self {
         Traits {
             class: Class::Uncertain,
+            candidate: None,
             subclass: None,
             x_height_em: None,
             x_height_cap: None,
@@ -141,7 +151,7 @@ fn expressive_class(c: Class) -> bool {
 
 /// 0..1: độ cá tính (dùng cho Display và `display_vs_neutral`). `None` nếu không có dữ kiện.
 fn distinctiveness(t: &Traits) -> Option<f32> {
-    if expressive_class(t.class) {
+    if expressive_class(t.eff()) {
         return Some(1.0);
     }
     // Class hay là Uncertain với font cá tính (Pacifico, Bebas): lấy thêm dấu hiệu từ số đo, cái nào mạnh nhất.
@@ -238,9 +248,9 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
         }
     }
     let unfit = match role {
-        Role::Body | Role::Caption => expressive_class(t.class) || t.class == Class::Symbol || caps_only(t),
-        Role::Label => expressive_class(t.class) || t.class == Class::Symbol,
-        Role::Heading | Role::Quote => t.class == Class::Symbol,
+        Role::Body | Role::Caption => expressive_class(t.eff()) || t.eff() == Class::Symbol || caps_only(t),
+        Role::Label => expressive_class(t.eff()) || t.eff() == Class::Symbol,
+        Role::Heading | Role::Quote => t.eff() == Class::Symbol,
         _ => false,
     };
     if unfit {
@@ -416,8 +426,8 @@ pub fn pair_style(a: &Traits, b: &Traits, ctx: &PairCtx, style: PairStyle) -> St
 
     // Kiểm chung: x-height (không áp khi một bên cá tính) và vùng "gần giống mà không giống".
     if style != PairStyle::DisplayVsNeutral
-        && !expressive_class(a.class)
-        && !expressive_class(b.class)
+        && !expressive_class(a.eff())
+        && !expressive_class(b.eff())
         && let (Some(x), Some(y)) = (a.x_height_em, b.x_height_em)
         && (x - y).abs() > 0.041
     {
@@ -435,9 +445,9 @@ pub fn pair_style(a: &Traits, b: &Traits, ctx: &PairCtx, style: PairStyle) -> St
 
     let base = match style {
         PairStyle::Contrast => {
-            if a.class == Class::Uncertain || b.class == Class::Uncertain {
+            if a.eff() == Class::Uncertain || b.eff() == Class::Uncertain {
                 Fit::Unknown
-            } else if (serifish(a.class) && b.class == Class::Sans) || (serifish(b.class) && a.class == Class::Sans) {
+            } else if (serifish(a.eff()) && b.eff() == Class::Sans) || (serifish(b.eff()) && a.eff() == Class::Sans) {
                 reasons.push(Reason::new("serif_vs_sans"));
                 Fit::Good
             } else {
@@ -546,6 +556,7 @@ pub fn traits_from_face(face: &crate::FaceReport) -> Option<Traits> {
     let m = &inp.m;
     Some(Traits {
         class: c.class,
+        candidate: c.candidate,
         subclass: c.subclass.clone(),
         x_height_em: m.x_height_em,
         x_height_cap: face.anatomy.x_height_cap.value,

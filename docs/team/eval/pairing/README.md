@@ -15,6 +15,9 @@ Kết quả mới nhất: `after.md`.
 |---|---|---|
 | Ngưỡng khởi điểm (đoán, chưa đo) | 11/16 | 8/11 |
 | Sau hiệu chuẩn | 15/16 | 10/11 |
+| Sau khi dùng `candidate` của bộ phân loại khi class Uncertain | 16/16 | 11/11 |
+
+(Hai dòng sau đều là số trên tập đã chỉnh, xem cảnh báo bên dưới. Bộ kiểm mù `blind/` được dựng bằng mô hình ở `7ff93bb0`, trước thay đổi `candidate`: chấm theo `key.json` đó, đừng dựng lại bộ mù rồi so với kết quả cũ.)
 
 ## Cách hiệu chuẩn, và giới hạn của con số này
 
@@ -27,5 +30,5 @@ Kết quả mới nhất: `after.md`.
 ## Phát hiện đáng giữ
 
 - Poppins thiếu 88 ký tự tiếng Việt, Abril Fatface và Bebas Neue thiếu 92: các cặp pairing phổ biến trên mạng hay dùng chúng, nhưng với người dùng Việt chúng không làm Body được. Mô hình bắt đúng (`vi_missing`), nên ở bộ vàng tôi thay Poppins bằng Source Sans 3.
-- Còn sai 2 dòng: Oswald + Lora (`contrast`) ra `unknown` vì class Oswald là Uncertain; Pacifico ở vai Body ra `ok` thay vì `weak` (class Uncertain nên không có `class_unfit`). Cả hai cùng gốc: phân loại chưa nhận ra font cá tính/condensed. Để sau khi xử lý nợ `tailed_l_sans`/Uncertain.
+- Hai dòng sai ở lần chạy trước (Oswald + Lora ra `unknown`; Pacifico vai Body ra `ok`) cùng gốc là class Uncertain. Đã sửa trong mô hình: khi class Uncertain thì dùng `candidate` của bộ phân loại (Oswald → Sans, Pacifico → Script); không có candidate thì vẫn `unknown`, không đoán. Trường mới `Traits.candidate`.
 - Lý do `distinctiveness_low` vẫn hiện ở Playfair Display (điểm cá tính 0.70, dưới ngưỡng 0.75 của lý do) dù mức là good: cần UI hiểu lý do là "điểm yếu nhất" chứ không phải "vì sao bị hạ".
