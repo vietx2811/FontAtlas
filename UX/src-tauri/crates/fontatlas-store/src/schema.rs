@@ -528,6 +528,18 @@ ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 "#;
 
 
+/// Font vừa xem (0.4.0, G5 nguồn "Recent"): cục bộ, tối đa `RECENT_MAX` dòng, mỗi face một dòng (xem lại thì đẩy lên đầu).
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định.
+pub(crate) const USER_RECENT_FACES: &str = r#"
+CREATE TABLE recent_faces (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  viewed_at  INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+CREATE INDEX recent_faces_viewed ON recent_faces(viewed_at DESC);
+"#;
+
 /// Giải quyết trùng lặp (0.3.0): sổ quyết định THEO VỊ TRÍ TỆP (`loser_path`), không theo hash — hai đường dẫn cùng nội dung
 /// (`same_file`) chung hash nên ẩn theo hash sẽ ẩn cả bản giữ. Một face bị ẩn khi MỌI vị trí còn thấy của nó đều nằm trong sổ.
 /// `dup_link_moves` ghi những gì đã chuyển từ bản thua sang bản giữ để hoàn tác đúng từng dòng (không đụng dữ liệu có sẵn).
@@ -594,7 +606,7 @@ CREATE TABLE activation_replaced (
 CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_RECENT_FACES];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
