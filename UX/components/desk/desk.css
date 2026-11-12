@@ -144,7 +144,7 @@
 .fa-comboname { position: relative; display: inline-flex; }
 .fa-comboname-input { width: 200px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); color: var(--fg); font: inherit; font-size: 15px; font-weight: 600; }
 .fa-comboname-input:focus { border-color: var(--accent); outline: none; }
-.fa-cs { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: min(880px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 10px 30px rgba(0, 0, 0, .2); font-size: var(--text-sm); }
+.fa-cs { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: min(880px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 10px 30px rgba(0, 0, 0, .2); font-size: var(--text-sm); }
 .fa-cs header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
 .fa-cs header label { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: var(--text-xs); }
 .fa-cs header button { margin-left: auto; color: var(--accent-ink); }
