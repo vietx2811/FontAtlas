@@ -73,7 +73,6 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const [cols, setCols] = useState<CollectionDto[]>([]);
   const [tags, setTags] = useState<TagDto[]>([]);
   const [cases, setCases] = useState<CaseSummaryDto[]>([]);
-  const [casesOpen, setCasesOpen] = useState(true); // chỉ trong phiên (khoá mở/đóng lưu bên Rust chưa có mục Case)
   const [counts, setCounts] = useState<Counts>({ all: null, star: null, dups: null });
   const [notice, setNotice] = useState<Notice | null>(null);
   const [nested, setNested] = useState<Nested | null>(null);
@@ -298,7 +297,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </NavSection>
 
         {cases.length > 0 && (
-          <NavSection title={t('side.cases')} open={casesOpen} onToggle={() => setCasesOpen(o => !o)}>
+          <NavSection title={t('side.cases')} open={open.case} onToggle={() => toggleSection('case')}>
             {cases.map(c => (
               <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`}
                 drop={{ kind: 'case', id: c.id, name: c.name, here: useUiStore.getState().desk?.caseId === c.id }} onClick={() => void openCaseInDesk(c.id)} />
