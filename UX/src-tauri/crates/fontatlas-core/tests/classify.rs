@@ -219,6 +219,23 @@ fn one_sided_tail_foot_without_top_flag_is_not_a_serif() {
 }
 
 #[test]
+fn tailed_l_humanist_sans_with_no_flare_and_no_flag_is_sans() {
+    // Số đo thật (google/fonts@47d54ca1): Bellota (1.60, 1.00, 0.00), Mooli (1.63, 1.00, 0.00), Ruluko (1.37, 1.00, 0.00):
+    // chân chỉ do đuôi chữ l, không loe đối xứng, không cờ trên ⇒ Sans (trước: Uncertain vì không có phiếu nào).
+    for (n, foot) in [("bellota", 1.6045), ("mooli", 1.6328), ("ruluko", 1.3684)] {
+        let c = classify(&synthetic(n, foot, 1.0, 0.0));
+        assert_eq!(c.class, Class::Sans, "{n}: {:?}", c.signals);
+    }
+}
+
+#[test]
+fn small_foot_serifs_with_flag_or_flare_stay_serif_after_the_tail_rule() {
+    // Cormorant Upright (1.22, 1.00, 1.39): flare thấp nhưng cờ trên rất rõ; Marcellus (1.26, 1.29, 0.13): vẫn không thành Sans
+    assert_eq!(best(&classify(&synthetic("cormorant upright", 1.2183, 1.004, 1.3923))), Class::Serif);
+    assert_ne!(classify(&synthetic("marcellus", 1.2643, 1.2935, 0.1282)).class, Class::Sans);
+}
+
+#[test]
 fn flat_foot_with_strong_top_flag_is_ambiguous_not_a_confident_sans() {
     // semi-serif / italic serif: foot ~1.0 nhưng cờ trên 0.9 (Libre Baskerville Italic): Sans chỉ nặng 1.0 ⇒ không còn Sans 2.0
     let c = classify(&synthetic("acme italic", 1.04, 1.0, 0.93));

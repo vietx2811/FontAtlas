@@ -148,6 +148,21 @@ fn expressive_faces_the_classifier_leaves_uncertain_still_read_as_display() {
 }
 
 #[test]
+fn an_uncertain_class_falls_back_to_the_classifier_candidate() {
+    // Oswald: class Uncertain nhưng candidate Sans ⇒ vẫn dùng được cho phong cách tương phản serif + sans.
+    let oswald = Traits { class: Class::Uncertain, candidate: Some(Class::Sans), x_height_em: Some(0.50), ..Traits::default() };
+    let r = pair_style(&old_serif(), &oswald, &PairCtx::default(), PairStyle::Contrast);
+    assert_ne!(r.fit, Fit::Unknown);
+    assert!(r.reasons.iter().any(|x| x.code == "serif_vs_sans"), "{:?}", r.reasons);
+    // Không có candidate ⇒ vẫn Unknown (không đoán)
+    let blank = Traits { class: Class::Uncertain, ..Traits::default() };
+    assert_eq!(pair_style(&old_serif(), &blank, &PairCtx::default(), PairStyle::Contrast).fit, Fit::Unknown);
+    // Pacifico: Uncertain + candidate Script ⇒ không làm chữ thân
+    let pac = Traits { class: Class::Uncertain, candidate: Some(Class::Script), ..roboto_like() };
+    assert_eq!(role_fit(&pac, Role::Body).fit, Fit::Weak);
+}
+
+#[test]
 fn numerals_require_tabular_figures() {
     let mut t = roboto_like();
     t.has_tnum = Some(false);

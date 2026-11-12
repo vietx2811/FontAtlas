@@ -24,3 +24,17 @@ cargo run --release -p fontatlas-eval --bin classify_eval -- \
 | **test (895 họ, giữ ra ngoài)** | trước → sau | 637 → 639 | 224 → 225 | 34 → 31 | 94.9 → 95.4% |
 
 `before_*.csv` / `after_*.csv`: mỗi dòng một họ (số đo, đáp án, dự đoán); bản "trước" không có cột `flare`, `head`.
+
+## 0.4.0·A3b: chân một phía → Sans (tailed_l_sans)
+
+Luật mới trong `classify.rs`: khi `serif_foot` > 1.6 (hoặc 1.2–1.6 không có flare/cờ) mà `serif_flare` < 1.15 và `serif_head` < 0.05, bỏ phiếu Sans 1.5 (trước: không phiếu nào, ra Uncertain). Chỉ áp cho chữ văn bản: `spacing` ≥ 0.12 và `bounce` < 0.04 (bản đầu không có điều kiện này làm 5 script đúng thành Uncertain: Edu AU VIC WA NT Dots, Ephesis, Licorice, Ole, The Girl Next Door).
+
+| Tập | | đúng | Uncertain | sai |
+|---|---|---|---|---|
+| Regular, 1722 họ có đáp án (`classify`) | core-0.9.0 | 1208 | 461 | 53 |
+| | + luật chân một phía | 1213 | 456 | 53 |
+| taxonomy v2, `all` (nay 229 họ) | trước | 140 | 42 | 13 |
+| | sau | 148 | 38 | 13 |
+
+Đổi trạng thái (1722 họ): Aboreto, Bellota, Genos, Mooli, Ruluko Uncertain → Sans (đều đúng); Redaction 70 Uncertain → Sans (không có đáp án). Không họ nào mất. Fixture `tailed_l_sans`: 0/4 → 3/4 (còn Port Lligat Sans: flare 1.32 và cờ 0.20 là bằng chứng serif yếu, nên Uncertain).
+Ngưỡng `spacing`/`bounce` chọn sau khi thấy 5 script bị ảnh hưởng, trên cùng tập: là số trên tập đã chỉnh.
