@@ -61,7 +61,7 @@ import glob, json, os, statistics, sys, time
 ci, queue, lock = sys.argv[1:]
 fmt = lambda s: "%dh%02dm" % (s // 3600, s % 3600 // 60) if s >= 3600 else "%dm%02ds" % (s // 60, s % 60)
 # Ước lượng: trung vị thời gian của các lượt đủ (có QA) gần đây nhất; chỉ là gợi ý, máy tải nặng có thể gấp đôi.
-runs = sorted(glob.glob(ci + "/runs/*/summary.json"), key=os.path.getmtime, reverse=True)
+runs = sorted([f for f in glob.glob(ci + "/runs/*/summary.json") if "." not in os.path.basename(os.path.dirname(f))], key=os.path.getmtime, reverse=True)
 secs = []
 for f in runs[:12]:
     try:
@@ -117,7 +117,7 @@ if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo
 # Một lần chạy một lúc: target/ và node_modules dùng chung. Hàng đợi FIFO giữ thứ tự giữa các lần chạy.
 if [ $PRIO = 1 ] && [ "${FONTATLAS_CI_PRIORITY:-}" != 1 ]; then echo "--priority chỉ dành cho Lead (đặt FONTATLAS_CI_PRIORITY=1)"; exit 2; fi
 TICKET=""
-cleanup() { [ -n "$TICKET" ] && rm -f "$TICKET"; if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi; }
+cleanup() { [ -n "${SAMPLER_PID:-}" ] && kill "$SAMPLER_PID" 2>/dev/null; [ -n "$TICKET" ] && rm -f "$TICKET"; if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi; }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 if [ $WAIT = 1 ]; then
@@ -182,9 +182,31 @@ if [ $QAONLY = 1 ]; then
   exit $rc
 fi
 
-OUT="$CI/runs/$SHA"; rm -rf "$OUT"; mkdir -p "$OUT"
+OUT="$CI/runs/$SHA"
+# Giữ log lượt trước: <sha> -> <sha>.1 (cũ nhất bị dồn sang .2, .3; quá .3 thì xoá).
+if [ -d "$OUT" ]; then
+  rm -rf "$OUT.3"; for i in 2 1; do [ -d "$OUT.$i" ] && mv "$OUT.$i" "$OUT.$((i+1))"; done
+  mv "$OUT" "$OUT.1"
+fi
+mkdir -p "$OUT"
 LOAD_START="$(loadavg)"
 START=$(date +%s)
+
+# Sampler (chỉ đọc, không kill/renice ai): mỗi 30 s ghi tải máy, 3 tiến trình ngốn CPU nhất (pid:tên@thư mục) và dòng
+# Compiling/Running mới nhất vào $OUT/sampler.tsv. Dừng bằng chính PID của nó khi lượt kết thúc.
+sampler() {
+  while :; do
+    local top="" p cwd cur
+    while read -r p pc cm; do
+      cwd="$(lsof -a -d cwd -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+      top="$top${top:+ | }$p:${cm##*/}($pc%)@${cwd:-?}"
+    done < <(ps -axo pid=,pcpu=,comm= -r | head -3)
+    cur="$(cat "$OUT"/*.log 2>/dev/null | grep -E 'Compiling|Running|Doc-tests' | tail -1 | cut -c1-90)"
+    printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$(loadavg | awk '{print $1}' | tr -d ,)" "$top" "$cur" >> "$OUT/sampler.tsv"
+    sleep "${FONTATLAS_CI_SAMPLE_SECS:-30}"
+  done
+}
+sampler & SAMPLER_PID=$!
 STEPS=(); FAILED=(); CACHED=()
 mkdir -p "$CI/cache"
 echo "local CI · $SHORT ($REF) · log: $OUT"
@@ -291,20 +313,38 @@ CACHE_STR="${CACHED[*]:-}"
 DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 LOAD_END="$(loadavg)"
-export LOAD_START LOAD_END CACHE_STR
+kill "$SAMPLER_PID" 2>/dev/null; wait "$SAMPLER_PID" 2>/dev/null; SAMPLER_PID=""
+SAMPLER_STR="$(python3 - "$OUT/sampler.tsv" 2>/dev/null <<'PY2'
+import sys, collections
+try: rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1])]
+except OSError: rows = []
+loads = [float(r[1]) for r in rows if len(r) > 1 and r[1].replace(".", "", 1).isdigit()]
+tops = collections.Counter(r[2].split(" | ")[0].split(":", 1)[1].split("(")[0] for r in rows if len(r) > 2 and ":" in r[2])
+if loads: print("samples=%d max_load=%.1f avg_load=%.1f top=%s" % (len(loads), max(loads), sum(loads) / len(loads), tops.most_common(1)[0][0] if tops else "?"))
+PY2
+)"
+export SAMPLER_STR LOAD_START LOAD_END CACHE_STR
 python3 - "$OUT/summary.json" "$SHA" "$TREE" "$REF" "$RESULT" "$TOTAL" "$DATE" "$QA" $STEP_STR <<'PY'
 import json, os, sys
 out, sha, tree, ref, result, total, date, qa, *steps = sys.argv[1:]
 json.dump({"sha": sha, "tree": tree, "ref": ref, "result": result, "seconds": int(total), "date": date,
-           "qa": qa == "1", "load_start": os.environ.get("LOAD_START"), "load_end": os.environ.get("LOAD_END"), "cached": os.environ.get("CACHE_STR", "").split(), "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
+           "qa": qa == "1", "load_start": os.environ.get("LOAD_START"), "load_end": os.environ.get("LOAD_END"), "cached": os.environ.get("CACHE_STR", "").split(), "sampler": os.environ.get("SAMPLER_STR", ""), "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
           open(out, "w"), indent=2)
 PY
 
 # Dòng đầu note là thứ hook pre-push đọc: "<pass|fail> tree=<tree> qa=<0|1>".
-git --git-dir="$REPO" notes --ref=ci add -f -m "$RESULT tree=$TREE qa=$QA
-$DATE $(hostname -s) ${TOTAL}s
+NOTE_BODY="$DATE $(hostname -s) ${TOTAL}s
 $STEP_STR
-cache: ${CACHE_STR:-none}" "$SHA" >/dev/null
+cache: ${CACHE_STR:-none}"
+OLD_NOTE="$(git --git-dir="$REPO" notes --ref=ci show "$SHA" 2>/dev/null | head -1)"
+if [ "$RESULT" = fail ] && [ "${OLD_NOTE#pass tree=$TREE }" != "$OLD_NOTE" ]; then
+  # Chạy lại một cây đã PASS mà đỏ: giữ PASS (hook pre-push đọc dòng đầu), ghi lượt đỏ thành dòng phụ; log ở runs/$SHA.
+  git --git-dir="$REPO" notes --ref=ci append -m "rerun-fail: $DATE ${TOTAL}s (${FAILED[*]}) — giữ PASS cũ, log: runs/$SHA" "$SHA" >/dev/null
+  echo "(giữ note PASS cũ của cây này; lượt đỏ ghi ở dòng phụ + runs/$SHA)"
+else
+  git --git-dir="$REPO" notes --ref=ci add -f -m "$RESULT tree=$TREE qa=$QA
+$NOTE_BODY" "$SHA" >/dev/null
+fi
 
 echo "──"
 if [ $RESULT = pass ]; then echo "PASS $SHORT trong ${TOTAL}s"; else echo "FAIL $SHORT trong ${TOTAL}s: ${FAILED[*]}"; fi
