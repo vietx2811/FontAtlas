@@ -28,3 +28,7 @@ path = "src/bin/refbuild.rs"
 [[bin]]
 name = "classify_eval"
 path = "src/bin/classify_eval.rs"
+
+[[bin]]
+name = "pairing_eval"
+path = "src/bin/pairing_eval.rs"

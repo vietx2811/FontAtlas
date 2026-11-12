@@ -3,11 +3,11 @@
 # secondary: "class/subclass" của lớp thứ hai khi font lai (chỉ để hiển thị/tìm kiếm, không tính vào độ đúng class chính).
 # source: "GF tag" = nhãn suy từ tag Google Fonts điểm >= 50 (docs/team/eval/gf-tags-families.csv); "tay" = gán tay, lý do ở cột note.
 # quality: gf = tag Google khớp; visual = gán tay sau khi xem glyph; weak = gán tay/tag nhiễu, ranh giới mờ hoặc taxonomy xếp M (không dùng làm cổng).
-# boundary: nhãn nhóm ranh giới cho fixture riêng (tailed_l_sans, small_serif_risk), rỗng nếu không.
+# boundary: nhãn nhóm ranh giới cho fixture riêng (tailed_l_sans, small_serif_risk, small_foot_serif), rỗng nếu không.
 # gf_dir: thư mục trong repo google/fonts (license/gf_dir). Chỉ họ OFL. Font tải lại bằng docs/team/eval/taxonomy_v2/fetch_fonts.sh (có checksum).
 # Cặp tune/test KHÔNG ghi ở đây: dùng fontatlas_embed::family_split(family) như các eval khác.
 id,family,class,subclass,secondary,license,gf_dir,source,quality,boundary,gf_tags,note
-T001,Alegreya,serif,venetian_oldstyle,,ofl,alegreya,GF tag,gf,,/Serif/Humanist Venetian,GF Serif/Humanist Venetian
+T001,Alegreya,serif,venetian_oldstyle,,ofl,alegreya,GF tag,gf,small_foot_serif,/Serif/Humanist Venetian,GF Serif/Humanist Venetian
 T002,Caudex,serif,venetian_oldstyle,,ofl,caudex,GF tag,gf,,/Serif/Humanist Venetian,GF Serif/Humanist Venetian
 T003,Montaga,serif,venetian_oldstyle,,ofl,montaga,GF tag,gf,,/Serif/Humanist Venetian,GF Serif/Humanist Venetian
 T004,Neuton,serif,venetian_oldstyle,,ofl,neuton,GF tag,gf,,/Serif/Humanist Venetian,GF Serif/Humanist Venetian
@@ -232,3 +232,7 @@ T222,UnifrakturCook,blackletter,,,ofl,unifrakturcook,GF tag,gf,,/Theme/Blacklett
 T223,New Rocker,blackletter,,,ofl,newrocker,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
 T224,Germania One,blackletter,,,ofl,germaniaone,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
 T225,Texturina,blackletter,,,ofl,texturina,GF tag,gf,,/Theme/Blackletter,GF Theme/Blackletter
+T226,Cormorant Upright,serif,,,ofl,cormorantupright,tay,visual,small_foot_serif,,"chân nhỏ nhọn và cờ serif trên-trái; core-0.8.0 cho Uncertain vì serif_foot ≈ 1.2 rơi vào vùng chết; chỉ gán class"
+T227,Sahitya,serif,,,ofl,sahitya,tay,visual,small_foot_serif,,"chân nhỏ kiểu oldstyle (serif_foot ≈ 1.2); chỉ gán class"
+T228,DM Serif Display,serif,,,ofl,dmserifdisplay,tay,visual,small_foot_serif,,"chân bracket nhỏ trên nét rất đậm (foot ≈ 1.56, contrast cao); chỉ gán class"
+T229,DM Serif Text,serif,,,ofl,dmseriftext,tay,visual,small_foot_serif,,"như DM Serif Display ở cỡ chữ văn bản (foot ≈ 1.7); chỉ gán class"

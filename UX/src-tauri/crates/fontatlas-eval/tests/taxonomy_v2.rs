@@ -118,6 +118,16 @@ fn fonts_manifest_lists_exactly_the_families_in_the_table() {
 }
 
 #[test]
+fn small_foot_serif_fixture_group_has_five_ofl_serifs() {
+    let g: Vec<_> = labels()
+        .into_iter()
+        .filter(|l| l.boundary.as_deref() == Some("small_foot_serif"))
+        .collect();
+    assert!(g.len() >= 5, "{} họ", g.len());
+    assert!(g.iter().all(|l| l.class == "serif" && l.license == "ofl"));
+}
+
+#[test]
 fn old_classifier_maps_to_new_taxonomy() {
     let p = |c: &str, s: Option<&str>, t: &[&str]| {
         let t: Vec<String> = t.iter().map(|x| x.to_string()).collect();

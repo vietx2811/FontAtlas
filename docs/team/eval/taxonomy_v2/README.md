@@ -75,3 +75,20 @@ Test `every_subclass_has_five_families_except_the_documented_gaps` bắt buộc 
 Xem `baseline_old_classifier.md`. Điểm cần nhớ khi so sánh:
 - Ánh xạ: `humanist_oldstyle` → `venetian_oldstyle` (nên `garalde` luôn tính sai), `serif/slab` → class `slab` không subclass, `script/handwritten` → `handwriting/casual_print`, trait stencil/inline_outline/pixel → Display.
 - Classifier cũ không có `Handwriting`, `Display` (chỉ qua trait), `shaded_3d`, `flared`, `squarish`, `signature`…: các ô này ở baseline gần như bằng 0 là do thiếu loại, không phải do đo sai.
+
+## Nhóm ranh giới `small_foot_serif` (0.4.0·A3, 2026-11-12)
+
+Năm họ OFL có serif chân nhỏ (bracket/loe/chân nhọn), nhãn class `serif`: Alegreya, Cormorant Upright, Sahitya, DM Serif Display, DM Serif Text.
+Phép đo chân nhỏ (`serif_flare`, `serif_head`) đã có từ core-0.9.0 (xem `docs/team/plans/2026-11-11-classify-small-serif.md`); 9 họ BeauType `serif_foot` = 1.00 là số đo đúng (không chân), không phải lỗi đo.
+
+| Họ | serif_foot | flare | head | core-0.8.0 | core-0.9.0 |
+|---|---|---|---|---|---|
+| Alegreya | 1.20 | 2.70 | 0.90 | Uncertain | Serif |
+| Cormorant Upright | 1.22 | 1.00 | 1.39 | Uncertain | Serif |
+| Sahitya | 1.21 | 2.70 | 0.90 | Uncertain | Serif |
+| DM Serif Display | 1.56 | 1.62 | 0.33 | Uncertain | Serif |
+| DM Serif Text | 1.71 | 1.67 | 0.36 | Serif | Serif |
+
+Đúng class: 1/5 → 5/5 ("trước" lấy từ `docs/team/eval/classify-small-serif/before_core-0.8.0_regular.csv`). Chạy lại `classify_eval --taxonomy-v2` trên `fonts.sha256` mới (977 dòng, khớp checksum).
+
+Còn nợ (đo được, chưa sửa): bốn họ `tailed_l_sans` (Bellota, Mooli, Port Lligat Sans, Ruluko) ra Uncertain thay vì Sans; cần thêm tín hiệu tách chân nhọn khỏi đuôi chữ l (ví dụ độ cong đáy).
