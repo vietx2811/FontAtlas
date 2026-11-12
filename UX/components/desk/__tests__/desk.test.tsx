@@ -233,6 +233,34 @@ describe('DetailStrip (slice 2)', () => {
     unmount();
   });
 
+  it('A4: card shows the Vietnamese ring x/total, Glyphs and the Variable tag with axis ranges; Glyphs row has a delta against the one in use', async () => {
+    const api = createMockApi();
+    const real = api.getFace.bind(api);
+    let n = 0;
+    vi.spyOn(api, 'getFace').mockImplementation(async (f, lang) => {
+      const d = await real(f, lang); const k = n++ % 2; // lượt 1: đang dùng, lượt 2: đang thử (mỗi font đọc một lần)
+      return { ...d, file: { ...d.file, numGlyphs: k === 0 ? 1000 : 1200 }, vietnamese: { ...d.vietnamese, total: 186, missing: k === 0 ? [] : Array.from({ length: 12 }, () => 'ặ'), supports: k === 0 },
+        metadata: { ...d.metadata, variableAxes: k === 1 ? [{ tag: 'wght', min: 100, default: 400, max: 900 }, { tag: 'wdth', min: 75, default: 100, max: 125 }, { tag: 'opsz', min: 8, default: 14, max: 144 }] : [] } };
+    });
+    const r = (await rows(api)).find(x => x.family === 'Playfair Display')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    useUiStore.getState().openDesk({ caseId: res.case.id, comboId: res.comboId, role: 'body', trial: null });
+    const trialRow = (await rows(api)).find(x => x.family === 'Fraunces')!;
+    const { unmount } = render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: 'display', trial: { hashHex: trialRow.hashHex, faceIndex: trialRow.faceIndex } }} />); await settle();
+    const use = screen.getAllByTestId('strip-card-use').at(-1)!; const tr = screen.getAllByTestId('strip-card-try').at(-1)!;
+    expect(use.querySelector('[data-testid=vi-ring]')?.textContent).toBe('186/186');
+    expect(tr.querySelector('[data-testid=vi-ring]')?.textContent).toBe('174/186');
+    expect(tr.querySelector('[data-testid=vi-ring]')?.getAttribute('data-tone')).toBe('mid'); // thiếu 12 ký tự: hổ phách, không xanh
+    expect(use.querySelector('[data-testid=vi-ring]')?.getAttribute('data-tone')).toBe('ok');
+    expect(use.querySelector('[data-testid=strip-glyphs]')?.textContent).toMatch(/1[.,\s]?000 Glyphs/);
+    expect(tr.querySelector('[data-testid=strip-glyphs-dg]')?.textContent).toMatch(/Δ \+200/);
+    expect(tr.querySelector('[data-testid=strip-variable]')?.textContent).toMatch(/wght 100–900 · wdth 75–125/);
+    expect(tr.querySelector('[data-testid=strip-variable]')?.textContent).toMatch(/\+1/);
+    expect(use.querySelector('[data-testid=strip-variable]')).toBeNull();
+    expect(screen.getAllByTestId('strip-glyphs-delta').at(-1)?.textContent).toMatch(/^\+20%$/);
+    unmount();
+  });
+
   it('I collapses and reopens the strip', async () => {
     await mounted();
     const desk = screen.getByTestId('pairing-desk');

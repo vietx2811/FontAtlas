@@ -8,6 +8,8 @@ import { numberText, unitText } from '../detail/tabs/measurements';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip, termKey, termName } from '../ui/terms';
 import { Tooltip } from '../ui/Tooltip';
+import { ViRing } from '../ui/ViRing';
+import type { VariableAxisDto } from '../../bindings';
 
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
@@ -38,17 +40,39 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
   return { a: get(ik), b: get(tk), loading: busy(ik) || busy(tk), aLoading: busy(ik), bLoading: busy(tk) };
 }
 
-function Card({ title, row, face, tone }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try' }): React.JSX.Element {
+const nf = (n: number) => new Intl.NumberFormat(getLocale() === 'vi' ? 'vi-VN' : 'en-US').format(n);
+const axisText = (a: VariableAxisDto) => `${a.tag} ${a.min}–${a.max}`;
+const MAX_AXES_INLINE = 2;
+
+/** Tag Variable với các trục min–max (A4). Font static → không có. */
+function VariableTag({ axes }: { axes: VariableAxisDto[] }): React.JSX.Element {
+  const shown = axes.slice(0, MAX_AXES_INLINE); const more = axes.length - shown.length;
+  return (
+    <TermTip term="variable_font" extra={axes.length ? t('strip.varTip', { axes: axes.map(axisText).join(' · ') }) : undefined}>
+      <span className="fa-dstrip-var" data-testid="strip-variable">{termName('variable_font')}{shown.length > 0 && <> <small>{shown.map(axisText).join(' · ')}{more > 0 && ` ${t('strip.varMore', { n: more })}`}</small></>}</span>
+    </TermTip>
+  );
+}
+
+function Card({ title, row, face, tone, baseGlyphs }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try'; baseGlyphs?: number | null }): React.JSX.Element {
   const vi = face?.vi;
+  const glyphs = face?.glyphs ?? null;
+  const dg = tone === 'try' && glyphs !== null && baseGlyphs != null ? glyphs - baseGlyphs : null;
+  const variable = row?.isVariable || (face?.variableAxes?.length ?? 0) > 0;
   return (
     <div className="fa-dstrip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
       <h3>{title}</h3>
       {row ? <>
-        <div className="fa-dstrip-name">{nameOf(row)}</div>
+        <div className="fa-dstrip-name">{nameOf(row)}{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
         <div className="fa-dstrip-meta">
-          {face?.designer && <span>{face.designer}</span>}
-          {face?.license && <span>{face.license}</span>}
-          {vi && <span data-vi={vi.supports && vi.missing === 0 ? 'ok' : 'warn'}>{vi.supports && vi.missing === 0 ? t('strip.viOk') : tn('strip.viMissing', { n: vi.missing })}</span>}
+          {face?.designer && <Tooltip label="Designer"><span>{face.designer}</span></Tooltip>}
+          {face?.foundry && face.foundry !== face.designer && <Tooltip label="Foundry"><span>{face.foundry}</span></Tooltip>}
+          {face?.version && <Tooltip label="Version"><span>{face.version}</span></Tooltip>}
+          {face?.license && <Tooltip label="License"><span>{face.license}</span></Tooltip>}
+          {glyphs !== null && (
+            <TermTip term="glyph"><span data-testid="strip-glyphs">{nf(glyphs)} {t('strip.glyphsRow')}{dg !== null && dg !== 0 && <b className={`fa-dstrip-dg ${dg > 0 ? 'up' : 'down'}`} data-testid="strip-glyphs-dg"> Δ {dg > 0 ? '+' : '−'}{nf(Math.abs(dg))}</b>}</span></TermTip>
+          )}
+          {variable && <VariableTag axes={face?.variableAxes ?? []} />}
           {vi?.stackedMarksOverflow && <NoteMark inline kind="warn" text={t('compare.viWarn')} />}
         </div>
       </> : <p className="fa-dstrip-empty">{tone === 'try' ? t('strip.tryHint') : t('desk.roleEmpty')}</p>}
@@ -81,7 +105,7 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
       {!collapsed && (
         <div className="fa-dstrip-body">
           <Card title={t('desk.inUse')} row={inUse} face={a} tone="use" />
-          <Card title={t('desk.trying')} row={showTrial ? trial : null} face={b} tone="try" />
+          <Card title={t('desk.trying')} row={showTrial ? trial : null} face={b} tone="try" baseGlyphs={a?.glyphs ?? null} />
           <table className="fa-dstrip-table" data-testid="strip-metrics" aria-busy={!!loading}>
             <thead><tr><th>{t('strip.metrics')}</th><th>{t('desk.inUse')}</th><th>{t('desk.trying')}</th><th><Tooltip label={t('strip.deltaTip')}><span data-testid="strip-delta-head">Δ</span></Tooltip></th></tr></thead>
             <tbody>
@@ -97,6 +121,13 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
                   </tr>
                 );
               })}
+              <tr data-metric="glyphs" data-testid="strip-glyphs-row">
+                <th scope="row"><TermTip term="glyph"><span>{t('strip.glyphsRow')}</span></TermTip></th>
+                <td className={a?.glyphs == null && !aLoading ? 'na' : undefined}>{a?.glyphs != null ? <b>{nf(a.glyphs)}</b> : aLoading ? <i className="sk-i" aria-hidden /> : t('compare.na')}</td>
+                {showTrial ? <td className={b?.glyphs == null && !bLoading ? 'na' : undefined}>{b?.glyphs != null ? <b>{nf(b.glyphs)}</b> : bLoading ? <i className="sk-i" aria-hidden /> : t('compare.na')}</td> : <td className="na">—</td>}
+                {(() => { const d = a?.glyphs != null && b?.glyphs != null && showTrial && a.glyphs > 0 ? deltaOf('glyphs', { key: 'glyphs', value: b.glyphs, unit: null, quality: 'measured', reason: null, percentile: null }, { key: 'glyphs', value: a.glyphs, unit: null, quality: 'measured', reason: null, percentile: null }) : null; const dt = d ? deltaText(d) : null;
+                  return <td className={`dl ${dt?.tone ?? 'zero'}`} data-testid="strip-glyphs-delta">{dt ? dt.text.replace(/^Δ\s*/, '') : '—'}</td>; })()}
+              </tr>
             </tbody>
           </table>
         </div>
