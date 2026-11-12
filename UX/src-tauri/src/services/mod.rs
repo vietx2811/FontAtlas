@@ -29,4 +29,5 @@ pub mod pairs;
 pub mod scan;
 pub mod settings;
 pub mod sources;
+pub mod suggest;
 pub mod system;
