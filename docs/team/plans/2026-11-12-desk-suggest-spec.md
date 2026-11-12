@@ -242,7 +242,7 @@ Khoá bắt đầu `pick.` (Picker) và `cs.` (combo suggest). Thuật ngữ gi�
 | cs.vi.ok | đủ tiếng Việt | full Vietnamese |
 | cs.vi.miss | thiếu {chars} | missing {chars} |
 
-Lý do (`why.{code}`) do UI dịch từ mã backend trả; danh sách mã chốt cùng 08/04. Tên phong cách pair (Superfamily, Serif + Sans, Display + Text, Keep one change one, Rule-breaking…) và nhãn ●◐◆○ do 04 chốt trong G4, UI chỉ hiển thị id → chuỗi.
+Lý do (`why.{code}`) do UI dịch từ mã backend trả; danh sách mã chốt cùng 08/04. Tên phong cách pair (Superfamily, Serif + Sans, Display + Text, Keep one change one…) và nhãn ●◐◆○ do 04 chốt trong G4, UI chỉ hiển thị id → chuỗi.
 
 ---
 
