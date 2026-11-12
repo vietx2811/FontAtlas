@@ -90,6 +90,7 @@ export type { FileOutcomeDto } from './FileOutcomeDto';
 export type { FileResultDto } from './FileResultDto';
 export type { FitDto } from './FitDto';
 export type { FontManagerDto } from './FontManagerDto';
+export type { GlassProbeDto } from './GlassProbeDto';
 export type { GroupWeightsDto } from './GroupWeightsDto';
 export type { IgnoredGroupDto } from './IgnoredGroupDto';
 export type { InstanceDto } from './InstanceDto';

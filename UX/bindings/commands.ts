@@ -50,6 +50,7 @@ import type { FaceQueryDto } from './FaceQueryDto';
 import type { FamilyGroupDto } from './FamilyGroupDto';
 import type { FamilyStyleDto } from './FamilyStyleDto';
 import type { FontManagerDto } from './FontManagerDto';
+import type { GlassProbeDto } from './GlassProbeDto';
 import type { IgnoredGroupDto } from './IgnoredGroupDto';
 import type { LangCoverageDto } from './LangCoverageDto';
 import type { LangDto } from './LangDto';
@@ -253,6 +254,7 @@ export interface TauriCommandMap {
   clear_preview_cache: { args: Record<string, never>; result: null };
   activation_caps: { args: Record<string, never>; result: ActivationCapsDto };
   set_window_glass: { args: { on: boolean }; result: boolean };
+  glass_probe: { args: { resize: number[] | null }; result: GlassProbeDto };
   auto_status: { args: Record<string, never>; result: AutoStatusDto };
   auto_set_enabled: { args: { on: boolean }; result: AutoStatusDto };
   auto_install: { args: { target: AutoTargetDto }; result: AutoStatusDto };
