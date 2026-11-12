@@ -51,10 +51,37 @@ queue_list() { ls -1 "$QUEUE" 2>/dev/null | LC_ALL=C sort; }
 
 if [ $STATUS = 1 ]; then
   reap
-  if [ -d "$LOCK" ]; then echo "đang chạy: pid $(cat "$LOCK/pid" 2>/dev/null || echo ?)"; else echo "khoá rảnh"; fi
-  n=0
-  while read -r t; do [ -n "$t" ] || continue; n=$((n+1)); printf '%2d. %s  (pid %s)\n' "$n" "$t" "$(ticket_pid "$t")"; done < <(queue_list)
-  [ $n -eq 0 ] && echo "hàng đợi trống"
+  python3 - "$CI" "$QUEUE" "$LOCK" <<'PY'
+import glob, json, os, statistics, sys, time
+ci, queue, lock = sys.argv[1:]
+fmt = lambda s: "%dh%02dm" % (s // 3600, s % 3600 // 60) if s >= 3600 else "%dm%02ds" % (s // 60, s % 60)
+# Ước lượng: trung vị thời gian của các lượt đủ (có QA) gần đây nhất; chỉ là gợi ý, máy tải nặng có thể gấp đôi.
+runs = sorted(glob.glob(ci + "/runs/*/summary.json"), key=os.path.getmtime, reverse=True)
+secs = []
+for f in runs[:12]:
+    try:
+        d = json.load(open(f))
+        if d.get("qa") and d.get("seconds"): secs.append(d["seconds"])
+    except Exception: pass
+est = int(statistics.median(secs)) if secs else None
+now = time.time(); wait = 0
+if os.path.isdir(lock):
+    pid = open(lock + "/pid").read().strip() if os.path.exists(lock + "/pid") else "?"
+    info = open(lock + "/info").read().split() if os.path.exists(lock + "/info") else []
+    if len(info) >= 3:
+        el = int(now - int(info[0])); left = max(est - el, 0) if est else None
+        print("đang chạy: pid %s · %s (%s) · đã %s%s" % (pid, info[1], info[2][:9], fmt(el), " · còn ~" + fmt(left) if left is not None else ""))
+        wait = left or 0
+    else: print("đang chạy: pid %s" % pid)
+else: print("khoá rảnh")
+names = sorted(os.listdir(queue))
+for i, t in enumerate(names, 1):
+    ns = int(t[1:21]); pid = t.split("-")[1]; ref = t.split("-", 2)[2]
+    print("%2d. %s%s · %s · pid %s · chờ %s · ước lượng bắt đầu sau ~%s" % (i, ref, " [PRIORITY]" if t[0] == "P" else "", time.strftime("%H:%M", time.localtime(ns / 1e9)), pid, fmt(int(now - ns / 1e9)), fmt(int(wait)) if est or wait else "?"))
+    if est: wait += est
+if not names: print("hàng đợi trống")
+if est: print("(ước lượng một lượt đủ ~%s, trung vị %d lượt gần nhất)" % (fmt(est), len(secs)))
+PY
   exit 0
 fi
 
@@ -94,6 +121,7 @@ else
   fi
 fi
 echo $$ > "$LOCK/pid"
+echo "$(date +%s) $REF $SHA" > "$LOCK/info"
 [ -n "${FONTATLAS_CI_TEST_HOLD:-}" ] && { echo "đã có khoá"; sleep "$FONTATLAS_CI_TEST_HOLD"; exit 0; }   # chỉ cho tools/ci/test_queue.sh
 
 # Worktree riêng, giữ lại giữa các lần chạy để target/ còn nóng.

@@ -10,7 +10,7 @@ run() { FONTATLAS_CI_TEST_HOLD=$2 bash $CI HEAD ${3:-} > "$FONTATLAS_CI_HOME/$1.
 
 # 1) FIFO: A giữ khoá, B rồi C xếp hàng; thứ tự xong phải A < B < C.
 run A 3 & sleep 1; run B 2 & sleep 1; run C 1 & sleep 1
-out="$(bash $CI --status)"; check "status liệt kê 2 vé" "$(grep -c 'pid' <<<"$out")" 3
+out="$(bash $CI --status)"; check "status liệt kê giữ khoá + 2 vé" "$(grep -c "pid" <<<"$out")" 3; check "status có ước lượng chờ" "$(grep -c "ước lượng bắt đầu" <<<"$out")" 2
 wait
 a=$(cat "$FONTATLAS_CI_HOME/A.end"); b=$(cat "$FONTATLAS_CI_HOME/B.end"); c=$(cat "$FONTATLAS_CI_HOME/C.end")
 check "FIFO A<B<C" "$([ "$a" -le "$b" ] && [ "$b" -le "$c" ] && echo yes)" yes
