@@ -68,6 +68,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 }
 
 import { createMockCases } from './mockCases';
+import { createMockSuggest } from './mockSuggest';
 import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
@@ -151,9 +152,11 @@ export function createMockApi(o: MockOptions = {}): Api {
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
 
   const caseApi = createMockCases(k => byKey.get(keyOf(k)));
+  const suggestApi = createMockSuggest({ rows: () => rows, caseFaces: async id => (await caseApi.getCase(id)).faces.map(f => f.key) });
   return {
     ...lib,
     ...caseApi,
+    ...suggestApi,
     async briefStarter(brief) {
       // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
       const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };
