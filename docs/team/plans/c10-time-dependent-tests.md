@@ -40,3 +40,10 @@ Còn ~54 chỗ `thread::sleep`/`time::sleep` trong `tests/` cần xét từng ch
 92, 119, 125, 165, 171, 189, 196, 229, 231, 283, 286, 299, 307, 314, 554, 673, 890, 895, 940, 952, 955–956, 961, 966, 972, 975 (có kiểm kết quả ngay sau); các chỗ còn lại chỉ chờ trước `snap`
 (chụp ảnh, ít rủi ro đỏ). Cách sửa: thay bằng `wait(() => điều kiện)` có hạn ≥ 8 s như đã làm cho `sidebar-context-menu`.
 Lần đỏ gần nhất (CI 0.3.1): script dừng sớm trong khối Pairing Desk (sau `desk-is-the-only-page`) khi máy tải ~21 — chưa rõ chỗ treo; cần log theo từng bước để khoanh.
+
+## Cập nhật (cuối lô 1)
+- vitest, 4 bản song song sau sửa BootGate + outro: 0 / 0 / 1 / 0 test đỏ trên 1358 (từ 18 / 7 / 8 / 4). Test đỏ còn lại (Onboarding O6) đã sửa: `click` chờ nút, O6 dùng `findByText`.
+- Rust: đã bỏ cận trên thời gian đo thật ở `store/concurrency` (giữ khoá bằng latch, hỏng thì `busy_timeout` làm unwrap hỏng), `fontreq/responder` (việc nền chốt bằng latch),
+  `services/access` và `activate/paths` (cờ `finished`: lúc hàm trả về, việc treo chưa xong), cận dưới 300 ms vẫn giữ. Các cận còn lại (embed, langs, review_fixes, analysis, broker, coretext)
+  nới thành 20–60 s chỉ để bắt treo; điều kiện thật là trạng thái. Hạn chế: `responder` mất kiểm "lần trả lời thứ hai không chờ thêm" (trước đây < 50 ms); còn kiểm `calls == 1` và việc nền bị chốt.
+- QA `main_flows.js`: khối Pairing Desk (ArrowDown/`i`/`[`/Combo mới) đổi `sleep` cố định sang `wait` theo điều kiện. Chưa chạy native QA (chỉ qua khoá CI). Còn ~35 chỗ `sleep` rồi đọc kết quả ở các khối khác (danh sách ở mục 3).
