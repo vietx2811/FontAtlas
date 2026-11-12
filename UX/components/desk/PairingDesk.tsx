@@ -13,6 +13,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorRoles, isHeadingLike, presetKey, roleLabel } from './deskRoles';
 import { RoleList } from './RoleList';
 import { PickerBar } from './PickerBar';
+import { ComboNameSuggest } from './ComboSuggest';
 import { SOURCES, guessProfile, keepClasses, loadSource, type PickItem, type PickSource, type Profile } from './pickerSources';
 import { ComboCompare } from './ComboCompare';
 import { ComboStepper } from './ComboStepper';
@@ -55,6 +56,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const [passSet, setPassSet] = useState<Set<string> | null>(null);
   const [profiles, setProfiles] = useState<Record<string, Profile | null>>({});
   const root = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const activation = useActivationFlow(api);
   const [confirmAll, setConfirmAll] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -210,6 +212,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     else if (e.key === 'ArrowDown' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
     else if (e.key === 'Enter' && onList && !tgt.closest('button') && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'n' || e.key === 'N') && mode !== 'fonts') { e.preventDefault(); nameRef.current?.focus(); }
     else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const src = SOURCES[Number(e.key) - 1]; if (!disabledSources[src]) chooseSource(src); }
     else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); setViOnly(v => !v); }
     else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'p' || e.key === 'P') && trial) { e.preventDefault(); void togglePin(trial); }
@@ -247,6 +250,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
           <button type="button" data-testid="mode-fonts" aria-pressed={mode === 'fonts'} onClick={() => setMode('fonts')}>{t('desk.mode.fonts')}</button>
           <button type="button" data-testid="mode-combos" aria-pressed={mode === 'combos'} onClick={() => setMode('combos')}>{t('desk.mode.combos')}</button>
         </span>
+        {data && combo && <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} />}
         {data && combo && <ComboStepper data={data} combo={combo} ops={comboOps} />}
       </header>
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}

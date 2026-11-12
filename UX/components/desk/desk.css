@@ -139,3 +139,28 @@
 .fa-desk-cand-pin[aria-pressed="true"] { color: var(--accent-ink); }
 .fa-desk-cand-pin[aria-disabled="true"] { cursor: default; }
 .fa-desk-cands li { padding-right: 64px; }
+
+/* Ô tên combo + popover gợi ý (G6) */
+.fa-comboname { position: relative; display: inline-flex; }
+.fa-comboname-input { width: 200px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); color: var(--fg); font: inherit; font-size: 15px; font-weight: 600; }
+.fa-comboname-input:focus { border-color: var(--accent); outline: none; }
+.fa-cs { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: min(880px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 10px 30px rgba(0, 0, 0, .2); font-size: var(--text-sm); }
+.fa-cs header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.fa-cs header label { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: var(--text-xs); }
+.fa-cs header button { margin-left: auto; color: var(--accent-ink); }
+.fa-cs-intent { margin: 0 0 8px; color: var(--muted); }
+.fa-cs-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.fa-cs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fa-cs-grid[data-stale="true"] { opacity: .6; }
+.fa-cs-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; min-width: 0; }
+.fa-cs-card[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fa-cs-h { font-size: 20px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-cs-p { font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-cs-meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-2xs); }
+.fa-cs-meta span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-cs-meta button { opacity: 0; width: 22px; height: 22px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); }
+.fa-cs-card:hover .fa-cs-meta button, .fa-cs-card:focus-within .fa-cs-meta button, .fa-cs-card[aria-selected="true"] .fa-cs-meta button { opacity: 1; }
+.fa-cs-why { color: var(--muted); font-size: var(--text-2xs); }
+.fa-cs-take { align-self: flex-start; padding: 3px 10px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+@media (max-width: 1100px) { .fa-cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .fa-cs-grid { grid-template-columns: 1fr; } }
