@@ -7,7 +7,8 @@ import { setSplashOpen } from '../../splash/splashState';
 import { setLocale } from '../../../i18n';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
-const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name })); }); await settle(); };
+// Chờ nút xuất hiện (máy bận: bước chưa kịp vẽ) rồi mới bấm.
+const click = async (name: string | RegExp) => { const btn = await screen.findByRole('button', { name }); await act(async () => { fireEvent.click(btn); }); await settle(); };
 
 async function mount(opts: Parameters<typeof createMockApi>[0] = { firstRun: true }, extra: Partial<React.ComponentProps<typeof Onboarding>> = {}) {
   const api = createMockApi(opts);
@@ -148,7 +149,7 @@ describe('Onboarding', () => {
     const api = createMockApi({ firstRun: true, initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
     await api.setOnboardingStep('o6');
     render(<Onboarding api={api} onDone={() => {}} animated={false} />); await settle();
-    expect(screen.getByText('Đang kiểm tra tệp…')).toBeTruthy();
+    expect(await screen.findByText('Đang kiểm tra tệp…')).toBeTruthy(); // chờ theo điều kiện: model sync xong sau vài lượt khi máy bận
     expect(screen.getByTestId('model-spinner')).toBeTruthy();
     const { useModelStore } = await import('../../../store/model');
     act(() => useModelStore.setState(s => ({ model: { ...s.model!, state: 'paused', lastError: { code: 'tls', message: 'ONBOARD_TLS_DETAIL' } } })));
