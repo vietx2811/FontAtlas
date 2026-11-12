@@ -10,7 +10,8 @@ import { useFontFamily } from '../detail/useFontFamily';
 import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
-import { ROLE_ORDER, anchorPairRole, anchorRoles, isHeadingLike } from './deskRoles';
+import { ROLE_ORDER, anchorPairRole, anchorRoles, isHeadingLike, roleLabel } from './deskRoles';
+import { RoleList } from './RoleList';
 import { ComboCompare } from './ComboCompare';
 import { ComboStepper } from './ComboStepper';
 import { FontCompare } from './FontCompare';
@@ -23,7 +24,7 @@ const nameOf = (r: FaceRowDto | null): string => (r ? `${r.family}${r.subfamily 
 const keyStr = (f: FaceKeyDto | null | undefined) => (f ? `${f.hashHex}:${f.faceIndex}` : '');
 /** Số font từ đó hỏi xác nhận trước khi bật hàng loạt (spec C6). */
 const CONFIRM_ACTIVATE_FROM = 200;
-const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
+const roleName = roleLabel;
 type Trial = { face: FaceKeyDto; row: FaceRowDto; summary: string; fromPeek?: boolean };
 
 /** Pairing Desk (lát 1 của 2b): cột vai · Cuộn chọn (nguồn Ghép) · trang mẫu. */
@@ -159,7 +160,14 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   };
 
   const runActivateAll = async () => { setConfirmAll(false); setActivating(true); try { await activation.activateCase(desk.caseId); } finally { setActivating(false); } };
-  const shownRoles = ROLE_ORDER.filter(r => slotOf(r) || r === role);
+  // Vai theo thứ tự đã lưu; Combo chưa lưu vai nào thì dùng bộ mặc định (các vai đã có font) và luôn có vai đang chọn.
+  const shownRoles: ComboRoleDto[] = (() => {
+    if (!combo) return [role];
+    const list: ComboRoleDto[] = combo.roles.length ? [...combo.roles] : ROLE_ORDER.filter(r => slotOf(r));
+    for (const s of combo.slots) if (!list.includes(s.role)) list.push(s.role);
+    if (!list.some(r => r.toLowerCase() === role.toLowerCase())) list.push(role);
+    return list;
+  })();
 
   return (
     <div ref={root} className="fa-desk" data-testid="pairing-desk" tabIndex={-1} onKeyDown={onKey}>
@@ -193,20 +201,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
       <div className="fa-desk-body">
         <section className="fa-desk-roles" aria-label={t('desk.roles')}>
           <h2>{t('desk.roles')}</h2>
-          <ul>
-            {shownRoles.map(r => {
-              const s = slotOf(r);
-              return (
-                <li key={r}><button type="button" className="fa-desk-role" data-testid="desk-role" data-role={r} aria-pressed={r === role} onClick={() => selectRole(r)}>
-                  <Tooltip label={t(`role.${r}.gloss` as 'role.display.gloss')}><span className="fa-desk-role-name" data-term={`role.${r}`}>{roleName(r)}</span></Tooltip>
-                  {s
-                    ? <FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle>
-                    : <span className="fa-desk-role-empty">{t('desk.roleEmpty')}</span>}
-                  {s?.missing && <NoteMark inline text={t('desk.missing')} />}
-                </button></li>
-              );
-            })}
-          </ul>
+          {combo && <RoleList api={api} combo={combo} roles={shownRoles} role={role} onSelect={selectRole}
+            onCombo={(c, sel) => { setData(d => (d ? { ...d, combos: d.combos.map(x => (x.id === c.id ? c : x)) } : d)); setCmpRev(n => n + 1); if (sel && sel !== role) openDesk({ caseId: desk.caseId, comboId: c.id, role: sel, trial: null }); }}
+            onRenamed={(from, to) => { if (from === role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: to, trial: null }); }} />}
         </section>
         <section className="fa-desk-picker" aria-label={t('desk.picker')}>
           <h2>{t('desk.picker')} · {roleName(role)} <small>{t('desk.source.pair')}</small></h2>

@@ -107,6 +107,43 @@ describe('PairingDesk', () => {
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Đã đặt .* vào vai Body/);
   });
 
+  it('G3: + Role adds a free-named role, selects it; a duplicate (any case) is refused with a message; a suggestion chip adds the preset key', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    fireEvent.click(screen.getByTestId('role-add')); await settle();
+    fireEvent.change(screen.getByTestId('role-add-input'), { target: { value: '  Tagline ' } });
+    fireEvent.keyDown(screen.getByTestId('role-add-input'), { key: 'Enter' }); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].roles).toContain('Tagline');
+    expect(useUiStore.getState().desk?.role).toBe('Tagline'); // vai mới được chọn (Desk mở lại ở vai đó)
+    fireEvent.click(screen.getByTestId('role-add')); await settle();
+    fireEvent.change(screen.getByTestId('role-add-input'), { target: { value: 'TAGLINE' } });
+    fireEvent.keyDown(screen.getByTestId('role-add-input'), { key: 'Enter' }); await settle();
+    expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /đã có vai tên «TAGLINE»/.test(n.text))).toBe(true);
+    expect(screen.getByTestId('role-add-input')).toBeTruthy(); // giữ ô để sửa tên
+    fireEvent.click(screen.getAllByTestId('role-suggest').find(b => b.dataset.role === 'label')!); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].roles).toContain('label');
+  });
+
+  it('G3: remove a role (font stays in the Case) and Undo brings back the role, its font and its position; reorder and rename work', async () => {
+    const { api, res } = await seeded();
+    await api.addComboRole(res.comboId, 'caption'); await api.addComboRole(res.comboId, 'Tagline');
+    await mount(api, res);
+    const rolesNow = async () => (await api.getCase(res.case.id)).combos[0].roles;
+    const start = await rolesNow(); expect(start.length).toBeGreaterThanOrEqual(2);
+    const first = start[0];
+    const row = (r: string) => screen.getAllByTestId('desk-role').find(b => b.dataset.role === r)!.closest('li')!;
+    fireEvent.click(row(first).querySelector('[data-testid=role-down]')!); await settle();
+    expect((await rolesNow())[1]).toBe(first); // đổi thứ tự
+    const order = await rolesNow(); const victim = order[0];
+    fireEvent.click(row(victim).querySelector('[data-testid=role-remove]')!); await settle();
+    expect(await rolesNow()).not.toContain(victim);
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.action?.label).toBe('Hoàn tác');
+    n.action!.run(); await settle();
+    expect(await rolesNow()).toEqual(order);
+    fireEvent.click(row(victim).querySelector('[data-testid=role-rename-btn]')!); await settle();
+    const input = screen.getByTestId('role-rename') as HTMLInputElement; fireEvent.change(input, { target: { value: 'Hero' } }); fireEvent.keyDown(input, { key: 'Enter' }); await settle();
+    expect(await rolesNow()).toContain('Hero'); expect(await rolesNow()).not.toContain(victim);
+  });
+
   it('the peek trial leads the list and is marked', async () => {
     const api = createMockApi();
     const rs = await rows(api);

@@ -89,3 +89,17 @@
 .fa-fc-d.up { color: var(--accent-ink); } .fa-fc-d.down { color: var(--muted); }
 .fa-fc th[data-pinned] { box-shadow: inset 0 2px 0 var(--accent); }
 .fa-cloud-skeleton { display: block; height: 18px; width: 70%; margin-bottom: 6px; border-radius: 4px; background: var(--border); opacity: .6; }
+
+.fa-desk-roleitem { position: relative; }
+.fa-desk-roleact { position: absolute; top: 4px; right: 4px; display: none; gap: 2px; }
+.fa-desk-roleitem:hover .fa-desk-roleact, .fa-desk-roleitem:focus-within .fa-desk-roleact { display: flex; }
+.fa-desk-roleact button { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); background: var(--card); line-height: 1; }
+.fa-desk-roleact button:hover:not(:disabled) { background: var(--chrome-active); color: var(--fg); }
+.fa-desk-roleact button:disabled { opacity: .35; cursor: default; }
+.fa-desk-role-custom { text-transform: none; letter-spacing: 0; cursor: default; }
+.fa-desk-roleinput { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--card); color: var(--fg); font: inherit; }
+.fa-desk-roleadd { margin-top: 6px; }
+.fa-desk-addrole { padding: 4px 10px; border-radius: var(--radius-md); color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
+.fa-desk-rolesug { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.fa-desk-rolesug button { padding: 2px 8px; border: 1px solid var(--border); border-radius: 10px; font-size: var(--text-xs); color: var(--muted); }
+.fa-desk-rolesug button:hover { background: var(--chrome-active); color: var(--fg); }
