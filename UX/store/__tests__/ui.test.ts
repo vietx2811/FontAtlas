@@ -78,12 +78,12 @@ describe('persistence', () => {
 
   it('hydrates from get_ui_state', async () => {
     const api = createMockApi();
-    await api.setUiState({ sidebarCollapsed: true, openSections: ['col'], layout: 'list', sampleSize: 50, infoExpanded: true });
+    await api.setUiState({ sidebarCollapsed: true, openSections: ['col'], closedSections: [], layout: 'list', sampleSize: 50, infoExpanded: true });
     const s = createUiStore();
     await s.getState().hydrate(api);
     const st = s.getState();
     expect([st.sidebarCollapsed, st.layout, st.sampleSize, st.infoExpanded]).toEqual([true, 'list', 50, true]);
-    expect(st.openSections).toEqual({ col: true, src: false, tag: false });
+    expect(st.openSections).toEqual({ col: true, src: false, tag: false, case: true });
   });
 
   it('debounces writes through set_ui_state and ignores non-persisted fields', async () => {
@@ -142,5 +142,23 @@ describe('recent views persistence (ui.recent_views)', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][0]).toBe('ui.recent_views');
     expect(JSON.parse(spy.mock.calls[0][1]).map((r: { face: string }) => r.face)).toEqual(['b:0', 'a:0']);
+  });
+});
+
+describe('nhóm Case: mở/đóng được lưu (closedSections)', () => {
+  it('dữ liệu cũ không có closedSections → Case mở; đóng rồi lưu closedSections=[case]; mở lại thì rỗng', async () => {
+    const api = createMockApi();
+    const old = { sidebarCollapsed: false, openSections: ['col', 'src', 'tag'], layout: 'grid', sampleSize: 34, infoExpanded: false }; // lưu trước khi có nhóm Case
+    await api.setUiState(old as never);
+    const s = createUiStore(); await s.getState().hydrate(api);
+    expect(s.getState().openSections.case).toBe(true);
+    vi.useFakeTimers();
+    s.getState().toggleSection('case');
+    await vi.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
+    expect((await api.getUiState()).closedSections).toEqual(['case']);
+    s.getState().toggleSection('case');
+    await vi.advanceTimersByTimeAsync(PERSIST_DEBOUNCE_MS + 50);
+    expect((await api.getUiState()).closedSections).toEqual([]);
+    vi.useRealTimers();
   });
 });

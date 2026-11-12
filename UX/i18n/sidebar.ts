@@ -20,6 +20,7 @@ export const SIDEBAR_I18N = {
   'side.active': 'Đang bật',
   'side.dismiss': 'Đóng thông báo',
   'side.projects': 'Dự án',
+  'side.cases': 'Case', 'side.caseTip': 'Mở Case «{name}» trong Pairing Desk. Kéo font vào đây để thêm vào Case.', 'side.caseEmpty': 'Case này chưa có Combo nào để mở',
   'side.addProject': 'Thêm dự án',
   'side.projectName': 'Tên dự án',
   'side.renameProject': 'Đổi tên dự án',

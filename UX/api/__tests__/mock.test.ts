@@ -63,7 +63,7 @@ describe('mock api', () => {
 
   it('persists ui state and activation toggles', async () => {
     const api = createMockApi();
-    await api.setUiState({ sidebarCollapsed: true, openSections: ['col'], layout: 'list', sampleSize: 50, infoExpanded: true });
+    await api.setUiState({ sidebarCollapsed: true, openSections: ['col'], closedSections: [], layout: 'list', sampleSize: 50, infoExpanded: true });
     expect((await api.getUiState()).layout).toBe('list');
     const r = (await api.queryFaces({})).items[0];
     await api.activationActivate([key(r)]);

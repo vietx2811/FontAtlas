@@ -76,4 +76,9 @@ export const FACES_I18N = {
   'grid.loadFail': 'Lỗi tải thư viện: {msg}',
   'grid.noMatch': 'Không có font nào khớp',
   'notice.dismiss': 'Đóng thông báo',
+  'dnd.dropTo': 'Thả để thêm vào «{name}»', 'dnd.here': 'Đang xem «{name}»: font đã ở đây',
+  'dnd.undo': 'Hoàn tác', 'dnd.allThere': 'Đã có sẵn trong «{name}»: không thêm gì',
+  'dnd.addedSome': 'Đã thêm {what} vào «{name}» ({k} font đã có sẵn)', 'dnd.addFail': 'Không thêm được vào «{name}»: {msg}',
+  'dnd.undone': 'Đã hoàn tác: gỡ {what} khỏi «{name}»', 'dnd.undoFail': 'Không hoàn tác được: {msg}',
+  'dnd.addTo': 'Thêm vào…', 'dnd.addTo.tip': 'Thêm font đang chọn vào dự án (như kéo thả vào thanh bên)',
 } as const;
