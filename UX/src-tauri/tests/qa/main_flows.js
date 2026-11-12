@@ -300,6 +300,28 @@
       radioOf(/^(Sáng|Light)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'light', 8000);
       await log('settings-theme-radio-dark', darkApplied && document.documentElement.dataset.theme === 'light', { darkApplied, after: document.documentElement.dataset.theme });
     }
+    // 0.4.0 — Cài đặt: "Xoá danh sách font vừa xem" (Dữ liệu) và công tắc "Tự phát hiện thay đổi trên ổ cloud" (Thư viện và nguồn).
+    {
+      const goto = async name => { const b = [...document.querySelectorAll('.fa-set-nav button')].find(x => x.textContent.trim() === name); b?.click(); return !!b; };
+      const recentN = async () => (await inv('recent_views', { limit: 50 })).length;
+      const had = await recentN();
+      const nav1 = await goto('Dữ liệu');
+      const clr = await wait(() => document.querySelector('[data-testid=clear-recent]'), 10000);
+      clr?.click();
+      const toast = await wait(() => [...document.querySelectorAll('.fa-toast')].find(x => /Đã xoá danh sách font vừa xem/.test(x.textContent)), 8000);
+      let left = -1; for (let i = 0; i < 40 && left !== 0; i++) { left = await recentN(); if (left !== 0) await sleep(250); }
+      await log('settings-clear-recent', nav1 && !!clr && !!toast && left === 0, { had, left, toast: !!toast });
+      const nav2 = await goto('Thư viện và nguồn');
+      const sw = await wait(() => [...document.querySelectorAll('[role=switch]')].find(x => x.getAttribute('aria-label') === 'Tự phát hiện thay đổi trên ổ cloud'), 10000);
+      const watch = async () => (await inv('get_settings', {})).cloudWatch;
+      const w0 = await watch();
+      sw?.click();
+      let w1 = w0; for (let i = 0; i < 40 && w1 === w0; i++) { await sleep(250); w1 = await watch(); }
+      const aria1 = sw?.getAttribute('aria-checked');
+      sw?.click();
+      let w2 = w1; for (let i = 0; i < 40 && w2 === w1; i++) { await sleep(250); w2 = await watch(); }
+      await log('settings-cloud-watch', nav2 && !!sw && w1 === !w0 && w2 === w0 && aria1 === String(w1), { w0, w1, w2, aria1 });
+    }
     // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
     {
       [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Bật font tự động|Auto-activation)/.test(b.textContent))?.click();
@@ -1013,6 +1035,170 @@
         pressOn(deskEl(), 'Escape');
         await wait(() => !deskEl(), 8000);
         await log('desk-esc-leaves', !deskEl() && !!cells().length > 0, { dbg0, dbg1: dbg(), desk: !!deskEl(), cells: cells().length });
+      }
+    }
+
+    // 0.4.0 — G1: kéo font từ lưới vào Dự án và Case ở Sidebar, rồi Hoàn tác. Chỉ chờ theo điều kiện (có hạn).
+    {
+      const setVal = (el, v) => { const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); };
+      const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+      await wait(() => cells().length >= 2, 15000);
+      const proj = await inv('create_collection', { name: 'QA kéo thả', color: null });
+      const cse = await inv('create_case', { name: 'QA Case kéo', brief: null, settings: null });
+      window.dispatchEvent(new Event('focus'));
+      const navCol = await wait(() => document.querySelector(`[data-drop-col="${proj.id}"]`), 15000);
+      const navCase = await wait(() => document.querySelector(`[data-drop-case="${cse.id}"]`), 15000);
+      const pick2 = async () => { const cs2 = cells(); cs2[0]?.click(); await wait(() => cells()[0]?.getAttribute('aria-selected') === 'true', 5000); cs2[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true })); return !!(await wait(() => /^2 đã chọn$/.test(document.querySelector('[data-testid=selection-count]')?.textContent ?? ''), 5000)); };
+      const ptr = (type, x, y, extra = {}) => new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, ...extra });
+      const dragTo = async target => {
+        const cr = cells()[0].getBoundingClientRect(), tr = target.getBoundingClientRect();
+        const sx = cr.left + cr.width / 2, sy = cr.top + cr.height / 2, tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+        cells()[0].dispatchEvent(ptr('pointerdown', sx, sy));
+        window.dispatchEvent(ptr('pointermove', sx + 12, sy + 12));
+        window.dispatchEvent(ptr('pointermove', tx, ty));
+        const layer = await wait(() => document.querySelector('[data-testid=drag-layer]'), 5000);
+        const info = { layer: !!layer, count: layer?.querySelector('[data-testid=drag-count]')?.textContent ?? null, over: layer?.dataset.over ?? null };
+        window.dispatchEvent(ptr('pointerup', tx, ty));
+        return info;
+      };
+      const two = await pick2();
+      if (!navCol || !two) await log('drag-to-project', false, { navCol: !!navCol, two });
+      else {
+        const colCount = async () => (await inv('list_collections', {})).find(c => c.id === proj.id)?.itemCount ?? -1;
+        const info = await dragTo(navCol);
+        let n1 = -1; for (let i = 0; i < 40 && n1 !== 2; i++) { n1 = await colCount(); if (n1 !== 2) await sleep(250); }
+        const u = await wait(() => toastUndo('QA kéo thả'), 8000);
+        await log('drag-to-project', n1 === 2 && info.layer && info.count === '2' && info.over === 'ok' && !document.querySelector('[data-testid=drag-layer]') && !!u, { n1, info, undo: !!u });
+        u?.click();
+        let n2 = -1; for (let i = 0; i < 40 && n2 !== 0; i++) { n2 = await colCount(); if (n2 !== 0) await sleep(250); }
+        await log('drag-to-project-undo', n2 === 0, { n2 });
+      }
+      const two2 = await pick2();
+      if (!navCase || !two2) await log('drag-to-case', false, { navCase: !!navCase, two2 });
+      else {
+        const caseFaces = async () => (await inv('get_case', { id: cse.id })).faces.length;
+        const info = await dragTo(navCase);
+        let n1 = -1; for (let i = 0; i < 40 && n1 !== 2; i++) { n1 = await caseFaces(); if (n1 !== 2) await sleep(250); }
+        const u = await wait(() => toastUndo('QA Case kéo'), 8000);
+        await log('drag-to-case', n1 === 2 && info.layer && info.count === '2' && info.over === 'ok' && !!u, { n1, info, undo: !!u });
+        u?.click();
+        let n2 = -1; for (let i = 0; i < 40 && n2 !== 0; i++) { n2 = await caseFaces(); if (n2 !== 0) await sleep(250); }
+        await log('drag-to-case-undo', n2 === 0, { n2 });
+      }
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }
+
+    // 0.4.0 — Desk: "+" ở ứng viên (G2), + Role / đổi tên / bỏ vai / Hoàn tác (G3), Picker 5 nguồn bằng phím 1–5 và phong cách pair (G4/G5),
+    // gợi ý combo "Nhận cả combo" rồi Hoàn tác (G6). Mọi chờ đều theo điều kiện.
+    {
+      const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
+      const pressOn = (el, k, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+      const setVal = (el, v) => { const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); };
+      const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
+      const roleNames = () => [...document.querySelectorAll('[data-testid=desk-role]')].map(r => r.dataset.role);
+      const filled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
+      [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+      const cellP = await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 15000); cellP?.click();
+      const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000); pairTab?.click();
+      const openBtn = await wait(() => document.querySelector('[data-testid=open-desk]'), 15000); openBtn?.click();
+      const desk = await wait(() => deskEl(), 15000);
+      await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 20000);
+      if (!desk) await log('desk-040-opens', false, 'không mở được Desk');
+      else {
+        // G2: nút "+" ở ứng viên (rê chuột vào thì hiện): bấm đặt font vào vai đang chọn; có nhãn và nhận focus bàn phím.
+        {
+          const row = [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('[data-testid=desk-cand-add]'));
+          const name = row?.querySelector('.fa-desk-cand-name')?.textContent ?? '';
+          row?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+          const add = row?.querySelector('[data-testid=desk-cand-add]');
+          add?.focus();
+          const focusable = document.activeElement === add;
+          const labelled = (add?.getAttribute('aria-label') ?? '').length > 0;
+          add?.click();
+          const inUse = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('.fa-desk-cand-name')?.textContent === name && li.querySelector('[data-testid=cand-inuse]')), 15000);
+          await log('desk-cand-plus', !!row && !!add && labelled && focusable && !!inUse, { name, labelled, focusable, inUse: !!inUse });
+        }
+        // G3: + Role (gợi ý tên + tên tự do), đổi tên, bỏ vai, Hoàn tác.
+        {
+          const before = roleNames();
+          const addBtn = document.querySelector('[data-testid=role-add]'); addBtn?.click();
+          const inp = await wait(() => document.querySelector('[data-testid=role-add-input]'), 8000);
+          const sugN = document.querySelectorAll('[data-testid=role-suggest]').length;
+          if (inp) { setVal(inp, 'Nhãn QA'); pressOn(inp, 'Enter'); }
+          const made = await wait(() => roleNames().find(r => r === 'Nhãn QA'), 15000);
+          await log('desk-role-add', !!inp && sugN > 0 && !!made, { before: before.length, after: roleNames().length, sugN });
+          const li = r => [...document.querySelectorAll('li.fa-desk-roleitem')].find(x => x.querySelector(`[data-testid=desk-role][data-role="${r}"]`));
+          li('Nhãn QA')?.querySelector('[data-testid=role-rename-btn]')?.click();
+          const ren = await wait(() => document.querySelector('[data-testid=role-rename]'), 8000);
+          if (ren) { setVal(ren, 'Nhãn QA 2'); pressOn(ren, 'Enter'); }
+          const renamed = await wait(() => roleNames().includes('Nhãn QA 2') && !roleNames().includes('Nhãn QA'), 15000);
+          await log('desk-role-rename', !!ren && !!renamed, { roles: roleNames() });
+          const posBefore = roleNames().indexOf('Nhãn QA 2');
+          li('Nhãn QA 2')?.querySelector('[data-testid=role-remove]')?.click();
+          const gone = await wait(() => !roleNames().includes('Nhãn QA 2'), 15000);
+          const u = await wait(() => toastUndo('Nhãn QA 2'), 8000);
+          await log('desk-role-remove', !!gone && !!u, { gone: !!gone, undo: !!u });
+          u?.click();
+          const back = await wait(() => roleNames().includes('Nhãn QA 2'), 15000);
+          await log('desk-role-remove-undo', !!back && roleNames().indexOf('Nhãn QA 2') === posBefore, { posBefore, pos: roleNames().indexOf('Nhãn QA 2') });
+        }
+        // G4/G5: Picker 5 nguồn, đổi bằng phím 1–5; chọn phong cách pair; KHÔNG có số điểm nào hiện ra.
+        {
+          const SRC = ['pair', 'role', 'sim', 'pin', 'recent'];
+          const results = {};
+          for (let i = 0; i < 5; i++) {
+            const b = document.querySelector(`[data-testid=pick-src-${SRC[i]}]`);
+            if (!b) { results[SRC[i]] = 'missing'; continue; }
+            if (b.getAttribute('aria-disabled') === 'true') { results[SRC[i]] = 'disabled'; continue; }
+            pressOn(desk, String(i + 1));
+            const ok = await wait(() => document.querySelector(`[data-testid=pick-src-${SRC[i]}]`)?.getAttribute('aria-checked') === 'true', 8000);
+            const checked = [...document.querySelectorAll('[data-testid^=pick-src-]')].filter(x => x.getAttribute('aria-checked') === 'true').length;
+            results[SRC[i]] = ok && checked === 1 ? 'ok' : `fail(checked=${checked})`;
+            await wait(() => !document.querySelector('[data-testid=pick-loading]'), 15000);
+          }
+          await log('picker-sources-keys', Object.keys(results).length === 5 && Object.values(results).every(v => v === 'ok' || v === 'disabled') && Object.values(results).filter(v => v === 'ok').length >= 2, results);
+          pressOn(desk, '1'); await wait(() => document.querySelector('[data-testid=pick-src-pair]')?.getAttribute('aria-checked') === 'true', 8000);
+          const sel = await wait(() => document.querySelector('[data-testid=pick-style]'), 8000);
+          if (sel) setVal(sel, 'contrast');
+          await wait(() => document.querySelector('[data-testid=pick-style]')?.value === 'contrast', 5000);
+          await wait(() => !document.querySelector('[data-testid=pick-loading]'), 20000);
+          await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=pick-empty], [data-testid=pick-filtered]'), 20000);
+          const tags = [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent);
+          await log('picker-pair-style', !!sel && sel.value === 'contrast' && tags.every(x => x === 'Serif + Sans'), { value: sel?.value, tags: tags.slice(0, 6), n: document.querySelectorAll('[data-testid=desk-cand]').length });
+          const candText = [...document.querySelectorAll('[data-testid=desk-cand]')].map(li => li.textContent).join(' | ');
+          const scoreLike = /(\d{1,3}\s*(%|\/\s*100|điểm|pts?|points?)\b)|\b(score|điểm)\b/i.test(candText) || !!document.querySelector('[data-testid=desk-cand] meter, [data-testid=desk-cand] progress, [data-testid*=score]');
+          await log('picker-no-scores', !scoreLike, { scoreLike, sample: candText.slice(0, 160) });
+          setVal(document.querySelector('[data-testid=pick-style]'), '');
+        }
+        // G6: gợi ý combo từ tên combo; "Nhận cả combo" rồi Hoàn tác.
+        {
+          const snapDesk = () => ({ label: document.querySelector('[data-testid=combo-label]')?.textContent ?? '', filled: filled(), roles: roleNames().join('|') });
+          const before = snapDesk();
+          const name = document.querySelector('[data-testid=combo-name]');
+          name?.click(); name?.focus();
+          const pop = await wait(() => document.querySelector('[data-testid=combo-suggest]'), 8000);
+          if (name) setVal(name, 'Editorial');
+          await wait(() => document.querySelectorAll('[data-testid=cs-card]').length > 0 || document.querySelector('[data-testid=cs-empty], [data-testid=cs-error], [role=alert]'), 25000);
+          const cards = document.querySelectorAll('[data-testid=cs-card]').length;
+          const empty = !!document.querySelector('[data-testid=cs-empty]');
+          if (!pop) await log('combo-suggest-take-all', false, 'popover không mở');
+          else if (!cards) await log('combo-suggest-take-all', empty, { note: 'thư viện fixture chưa đủ để gợi ý combo (cs-empty)', empty });
+          else {
+            document.querySelector('[data-testid=cs-take-all]')?.click();
+            const u = await wait(() => toastUndo('Editorial') ?? toastUndo('Combo'), 15000);
+            await wait(() => { const s = snapDesk(); return s.label !== before.label || s.filled !== before.filled || s.roles !== before.roles; }, 15000);
+            const after = snapDesk();
+            await log('combo-suggest-take-all', !!u && (after.label !== before.label || after.filled !== before.filled || after.roles !== before.roles), { before, after, undo: !!u });
+            u?.click();
+            await wait(() => { const s = snapDesk(); return s.label === before.label && s.filled === before.filled; }, 15000);
+            const undone = snapDesk();
+            await log('combo-suggest-undo', undone.label === before.label && undone.filled === before.filled, { before, undone });
+          }
+          pressOn(document.querySelector('[data-testid=combo-name]') ?? desk, 'Escape');
+        }
+        pressOn(deskEl() ?? desk, 'Escape');
+        await wait(() => !deskEl(), 8000);
       }
     }
 
