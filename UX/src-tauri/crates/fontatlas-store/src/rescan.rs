@@ -80,6 +80,13 @@ fn is_font(p: &Path) -> bool {
         .is_some_and(|e| FONT_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)))
 }
 
+/// Các font còn là placeholder trên ổ cloud (chưa tải về) dưới `root`, sắp theo đường dẫn. Cùng bộ đi cây với lần quét
+/// (không theo symlink, bỏ mục ẩn); chỉ `stat`, KHÔNG mở file nên không kích hoạt tải. Stub iCloud kiểu cũ (`.Tên.ttf.icloud`)
+/// trả về bằng tên thật `Tên.ttf` (file thật chưa tồn tại).
+pub fn cloud_placeholders(root: &Path) -> Vec<PathBuf> {
+    walk_fonts_report(root, &os_placeholder).2.into_iter().map(|(p, _)| p).collect()
+}
+
 /// Đi cây thư mục: không theo symlink, bỏ mục ẩn, bỏ thư mục không đọc được; sắp theo đường dẫn.
 pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
     walk_fonts_report(root, &os_placeholder).0

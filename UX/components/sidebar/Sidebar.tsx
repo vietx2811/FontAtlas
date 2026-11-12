@@ -3,6 +3,8 @@ import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } f
 import type { ActivationReportDto } from '../../bindings';
 import { applyTheme, savedTheme, syncNativeTheme } from '../../theme';
 import { useScanStore } from '../../store/scan';
+import { CloudDownloadControl } from './CloudDownload';
+import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from '../../store/cloudDownload';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
@@ -21,6 +23,7 @@ import { Modal } from '../Modal';
 import { CONFIRM_ACTIVATE_FROM, CONFIRM_DEACTIVATE_FROM, buildSidebarMenu, type SidebarMenuKind } from './sidebarMenu';
 import { NoteMark } from '../ui/noteMark';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
+import { focusLibraryGrid } from '../sources/focusLibrary';
 import { useActivationFlow } from '../activation/useActivationFlow';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; onOpenSettings?: () => void };
@@ -59,6 +62,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanned = useScanStore(s => s.written);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
+  const dlRuns = useCloudDownloadStore(s => s.runs);
   const cloudNow = Object.values(cloud).reduce((a, b) => a + b, 0);
   const addRequest = useUiStore(s => s.addFolderRequest);
   const cmpSession = useUiStore(s => s.compareSession);
@@ -221,8 +225,11 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     return buildSidebarMenu(c.kind, {
       open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
       sourceAvailable: src?.available, hasPath: !!src?.path, scanning: scanningNow,
-      reveal: () => { if (src?.path) api.revealLocation(src.path).catch(warn); },
+      reveal: () => { if (src) api.revealSource(src.id).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
+      cloudSource: !!src && (!!src.cloudProvider || notDownloadedOf(src, cloud) > 0), cloudLeft: src ? notDownloadedOf(src, cloud) : 0, downloading: !!src && src.id in dlRuns,
+      downloadCloud: () => { if (src) void downloadSourceToMac(api, src); },
+      cancelDownload: () => { if (src) void cancelSourceDownload(api, src.id); },
       removeSource: () => { if (src) setRemovingSrc(src); },
       rename: () => { if (col) setRenaming(col.id); },
       colActive: c.colActive, colSize: col?.itemCount,
@@ -288,9 +295,10 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
-              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s)
+              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns
                 ? <>
                     {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
+                    {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && <div className="fa-cloud fa-cloud-dl"><CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} /></div>}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
                   </>
                 : undefined} />
@@ -320,9 +328,9 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </div>
       </div>
     </nav>
-    {removingSrc && <RemoveSourceDialog api={api} source={removingSrc} onClose={() => setRemovingSrc(null)}
+    {removingSrc && <RemoveSourceDialog api={api} source={removingSrc} onClose={() => { setRemovingSrc(null); focusLibraryGrid(); }}
       onRemoved={rep => {
-        const s = removingSrc; setRemovingSrc(null);
+        const s = removingSrc; setRemovingSrc(null); focusLibraryGrid();
         if (useUiStore.getState().view === `src:${s.id}`) setView('all');
         useNoticeStore.getState().push({ kind: 'info', text: t('rmsrc.done', { name: s.name, n: rep.removedLocations }) });
         useUiStore.getState().bumpLibrary(true);

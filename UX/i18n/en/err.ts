@@ -12,6 +12,7 @@ export const EN_ERR: Record<keyof typeof ERR_I18N, string> = {
   'err.migration': 'Couldn’t upgrade the library data.',
   'err.bad_hash': 'The font identifier isn’t valid.',
   'err.legacy': 'Couldn’t read the old data.',
+  'err.source_unavailable': 'The source’s folder isn’t reachable right now (the drive isn’t connected, or the folder was renamed or moved).',
   'err.nested_source': 'This folder overlaps an existing source.',
   'err.permission_denied': 'macOS didn’t allow access to this folder.',
   'err.timeout': 'The folder didn’t open within a few seconds (it may be waiting for permission).',

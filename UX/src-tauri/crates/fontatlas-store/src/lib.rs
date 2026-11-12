@@ -35,7 +35,7 @@ pub use error::StoreError;
 pub use fold::vi_fold;
 pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyPreview, LegacyResolve, legacy_preview};
 pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, ScannedFile};
-pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, PlaceholderProbe, RescanStats, RescanStatus, ScanPhase, ScanProgress, is_dataless, os_placeholder, walk_fonts};
+pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, PlaceholderProbe, RescanStats, RescanStatus, ScanPhase, ScanProgress, cloud_placeholders, is_dataless, os_placeholder, walk_fonts};
 pub use rescan::SourceRemovalReport;
 pub use query::{ClassAxis, ClassHistogram, DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, FamilyGroup, LangFilter, LangHit, MAX_LIMIT, SortKey, ViFilter, WIDTH_PCT, width_pct_span};
 pub use langs::{LangCount, LangPending, LangProgress, LangRow};

@@ -59,6 +59,22 @@ pub fn reveal_in_finder(
     reveal(&path).map_err(|e| CmdError::new("io", e).with_detail(serde_json::json!({ "source": "app", "op": "reveal" })))
 }
 
+/// Mở Finder tại thư mục của MỘT nguồn. Đường dẫn lấy từ Store theo `source_id` (webview không truyền path tuỳ ý).
+/// Nguồn không có thư mục (hoặc thư mục không còn, vd ổ chưa mount / ổ cloud đang tắt) → `source_unavailable`, KHÔNG mở gì.
+pub fn reveal_source(state: &AppState, source_id: i64, reveal: &dyn Fn(&StdPath) -> Result<(), String>) -> Result<(), CmdError> {
+    let src = state.with_user(|u| Ok(u.source(source_id)?))?;
+    let unavailable = |why: &str| {
+        CmdError::new("source_unavailable", format!("thư mục của nguồn “{}” hiện không truy cập được ({why})", src.name))
+            .with_detail(serde_json::json!({ "sourceId": source_id, "name": src.name }))
+    };
+    let Some(path) = src.path.as_deref() else { return Err(unavailable("nguồn không có thư mục")) };
+    let root = StdPath::new(path);
+    if !crate::services::sources::root_available(path) {
+        return Err(unavailable("ổ chưa kết nối hoặc thư mục đã bị đổi tên"));
+    }
+    reveal(root).map_err(|e| CmdError::new("io", e).with_detail(serde_json::json!({ "source": "app", "op": "reveal" })))
+}
+
 /// Mở Finder tại MỘT đường dẫn cụ thể của nhóm same_file. Chỉ nhận đường dẫn đang có trong Store (so nguyên văn, hoặc sau
 /// khi chuẩn hoá bằng `canonicalize` nếu tệp còn trên đĩa); đường dẫn lạ → `invalid_arg`: webview không được mở đường
 /// dẫn tuỳ ý.

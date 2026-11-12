@@ -8,7 +8,7 @@ use crate::dto::library::{RemoveSourceReportDto, SourceDto};
 use crate::error::CmdError;
 use crate::state::AppState;
 
-fn root_available(p: &str) -> bool {
+pub(crate) fn root_available(p: &str) -> bool {
     let p = Path::new(p);
     p.is_dir() && std::fs::read_dir(p).is_ok()
 }

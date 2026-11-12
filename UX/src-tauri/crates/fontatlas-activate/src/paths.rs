@@ -1,6 +1,7 @@
 //! Đường dẫn: canonical, trạng thái file (thiếu / iCloud chưa tải), đoán chủ sở hữu font trùng tên.
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -86,6 +87,8 @@ pub enum EnsureLocalError {
     StillCloudOnly,
     /// Chỉ có stub `.x.ttf.icloud` (kiểu iCloud cũ), không có file thật để đọc.
     PlaceholderStub,
+    /// Người dùng huỷ giữa chừng (chỉ khi gọi bản có cờ huỷ): không phải lỗi của ổ cloud.
+    Cancelled,
 }
 
 impl EnsureLocalError {
@@ -96,6 +99,7 @@ impl EnsureLocalError {
             EnsureLocalError::Timeout => "cloud_timeout",
             EnsureLocalError::Io(_) | EnsureLocalError::StillCloudOnly => "cloud_download_failed",
             EnsureLocalError::PlaceholderStub => "cloud_stub",
+            EnsureLocalError::Cancelled => "cancelled",
         }
     }
 
@@ -106,6 +110,7 @@ impl EnsureLocalError {
             EnsureLocalError::Io(m) => format!("không tải được font từ ổ cloud: {m}"),
             EnsureLocalError::StillCloudOnly => "font vẫn chưa về máy sau khi tải".into(),
             EnsureLocalError::PlaceholderStub => "font mới có bản giữ chỗ iCloud, chưa có file để tải".into(),
+            EnsureLocalError::Cancelled => "đã huỷ".into(),
         }
     }
 }
@@ -120,7 +125,13 @@ pub fn ensure_local(p: &Path, timeout: Duration) -> Result<(), EnsureLocalError>
 /// Như `ensure_local`, nhưng `hold` (vd giấy phép của cổng tải) được chuyển vào luồng đọc và chỉ nhả khi lần đọc thật sự
 /// kết thúc — kể cả khi người gọi đã hết hạn và bỏ đi — để số lần tải thật không vượt giới hạn của cổng.
 pub fn ensure_local_holding<H: Send + 'static>(p: &Path, timeout: Duration, hold: H) -> Result<(), EnsureLocalError> {
-    ensure_local_hold_by(p, timeout, probe_file, read_first_byte, hold)
+    ensure_local_hold_by(p, timeout, probe_file, read_first_byte, hold, None)
+}
+
+/// Như `ensure_local_holding` nhưng dừng trong khoảng 100 ms sau khi `cancel` bật (trả `Cancelled`) thay vì chờ hết `timeout`.
+/// Lần đọc đang chạy trên luồng riêng vẫn chạy nốt và giữ `hold` tới khi xong.
+pub fn ensure_local_holding_cancellable<H: Send + 'static>(p: &Path, timeout: Duration, hold: H, cancel: &AtomicBool) -> Result<(), EnsureLocalError> {
+    ensure_local_hold_by(p, timeout, probe_file, read_first_byte, hold, Some(cancel))
 }
 
 fn read_first_byte(p: &Path) -> std::io::Result<()> {
@@ -138,7 +149,7 @@ pub(crate) fn ensure_local_by(
     probe: impl Fn(&Path) -> FileProbe,
     fetch: impl FnOnce(&Path) -> std::io::Result<()> + Send + 'static,
 ) -> Result<(), EnsureLocalError> {
-    ensure_local_hold_by(p, timeout, probe, fetch, ())
+    ensure_local_hold_by(p, timeout, probe, fetch, (), None)
 }
 
 pub(crate) fn ensure_local_hold_by<H: Send + 'static>(
@@ -147,7 +158,9 @@ pub(crate) fn ensure_local_hold_by<H: Send + 'static>(
     probe: impl Fn(&Path) -> FileProbe,
     fetch: impl FnOnce(&Path) -> std::io::Result<()> + Send + 'static,
     hold: H,
+    cancel: Option<&AtomicBool>,
 ) -> Result<(), EnsureLocalError> {
+    let cancelled = || cancel.is_some_and(|c| c.load(Ordering::SeqCst));
     match probe(p) {
         FileProbe::Ready => return Ok(()),
         FileProbe::Missing => return Err(EnsureLocalError::Missing),
@@ -163,7 +176,16 @@ pub(crate) fn ensure_local_hold_by<H: Send + 'static>(
             let _ = tx.send(fetch(&path));
         })
         .map_err(|e| EnsureLocalError::Io(e.to_string()))?;
-    match rx.recv_timeout(timeout) {
+    // chờ theo lát 100 ms để bắt cờ huỷ; hết `deadline` vẫn là Timeout như trước
+    let received = loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match rx.recv_timeout(left.min(Duration::from_millis(100))) {
+            Err(mpsc::RecvTimeoutError::Timeout) if cancelled() => return Err(EnsureLocalError::Cancelled),
+            Err(mpsc::RecvTimeoutError::Timeout) if left > Duration::from_millis(100) => continue,
+            other => break other,
+        }
+    };
+    match received {
         Ok(Ok(())) => {}
         Ok(Err(e)) if e.kind() == std::io::ErrorKind::NotFound && !p.exists() => return Err(EnsureLocalError::PlaceholderStub),
         Ok(Err(e)) => return Err(EnsureLocalError::Io(e.to_string())),
@@ -176,6 +198,9 @@ pub(crate) fn ensure_local_hold_by<H: Send + 'static>(
             FileProbe::Ready => return Ok(()),
             FileProbe::Missing => return Err(EnsureLocalError::Missing),
             FileProbe::NotDownloaded => {}
+        }
+        if cancelled() {
+            return Err(EnsureLocalError::Cancelled);
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if left.is_zero() {
@@ -416,6 +441,7 @@ mod tests {
                 Ok(())
             },
             DropFlag(Arc::clone(&dropped)),
+            None,
         );
         assert_eq!(r, Err(EnsureLocalError::Timeout));
         assert!(!dropped.load(Ordering::SeqCst), "người gọi đã bỏ cuộc nhưng lần tải thật vẫn chạy → chưa được nhả chỗ");
@@ -427,7 +453,7 @@ mod tests {
     fn hold_is_released_when_the_file_is_already_local_and_when_it_is_missing() {
         for probe in [FileProbe::Ready, FileProbe::Missing] {
             let dropped = Arc::new(AtomicBool::new(false));
-            let _ = ensure_local_hold_by(Path::new("/x.ttf"), Duration::from_secs(1), move |_| probe, |_| Ok(()), DropFlag(Arc::clone(&dropped)));
+            let _ = ensure_local_hold_by(Path::new("/x.ttf"), Duration::from_secs(1), move |_| probe, |_| Ok(()), DropFlag(Arc::clone(&dropped)), None);
             assert!(dropped.load(Ordering::SeqCst), "{probe:?}: không có lần tải nào → nhả ngay");
         }
     }
@@ -439,6 +465,51 @@ mod tests {
         assert_eq!(EnsureLocalError::StillCloudOnly.code(), "cloud_download_failed");
         assert_eq!(EnsureLocalError::Missing.code(), "missing_file");
         assert_eq!(EnsureLocalError::PlaceholderStub.code(), "cloud_stub");
+        assert_eq!(EnsureLocalError::Cancelled.code(), "cancelled");
+    }
+
+    #[test]
+    fn cancel_stops_a_long_wait_within_a_fraction_of_a_second_and_the_read_keeps_its_hold() {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let local = Arc::new(AtomicBool::new(false));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            c.store(true, Ordering::SeqCst);
+        });
+        let t = Instant::now();
+        let r = ensure_local_hold_by(
+            Path::new("/x.ttf"),
+            Duration::from_secs(120), // hạn chót rất dài: huỷ phải cắt ngang
+            probe_flag(&local),
+            |_| {
+                std::thread::sleep(Duration::from_millis(600)); // đọc kẹt
+                Ok(())
+            },
+            DropFlag(Arc::clone(&dropped)),
+            Some(&cancel),
+        );
+        assert_eq!(r, Err(EnsureLocalError::Cancelled));
+        assert!(t.elapsed() < Duration::from_secs(2), "huỷ dừng nhanh: {:?}", t.elapsed());
+        assert!(!dropped.load(Ordering::SeqCst), "lần đọc thật còn chạy → còn giữ chỗ");
+        std::thread::sleep(Duration::from_millis(900));
+        assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn cancel_also_cuts_the_wait_for_the_dataless_flag_to_clear() {
+        let local = Arc::new(AtomicBool::new(false)); // không bao giờ về máy
+        let cancel = Arc::new(AtomicBool::new(false));
+        let c = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(200));
+            c.store(true, Ordering::SeqCst);
+        });
+        let t = Instant::now();
+        let r = ensure_local_hold_by(Path::new("/x.ttf"), Duration::from_secs(60), probe_flag(&local), |_| Ok(()), (), Some(&cancel));
+        assert_eq!(r, Err(EnsureLocalError::Cancelled));
+        assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
     }
 
     #[test]

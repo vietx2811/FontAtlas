@@ -114,6 +114,19 @@ describe('Settings', () => {
       expect(screen.getAllByTestId('source-row')[0].textContent).not.toMatch(/chưa tải về/);
     });
 
+    it('a source with files in the cloud has a Tải về máy button in its row; local and unplugged ones do not', async () => {
+      const api = createMockApi();
+      const dl = vi.spyOn(api, 'sourceDownloadCloud');
+      await mount({}, api);
+      await go('Thư viện và nguồn');
+      const rows = screen.getAllByTestId('source-row');
+      expect(within(rows[0]).queryByTestId('cloud-dl-start')).toBeNull();
+      expect(within(rows[2]).queryByTestId('cloud-dl-start')).toBeNull();
+      await act(async () => { fireEvent.click(within(rows[1]).getByTestId('cloud-dl-start')); });
+      await settle();
+      expect(dl).toHaveBeenCalledWith(2, expect.any(Function));
+    });
+
     it('a cloud source shows the same hint as the sidebar; a local one does not', async () => {
       await mount();
       await go('Thư viện và nguồn');

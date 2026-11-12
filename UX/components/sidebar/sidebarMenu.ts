@@ -8,6 +8,8 @@ export type SidebarMenuCtx = {
   open(): void;
   /** Nguồn */
   sourceAvailable?: boolean; hasPath?: boolean; scanning?: boolean; reveal?(): void; rescan?(): void; removeSource?(): void;
+  /** Nguồn trên ổ cloud: số font chưa tải về, đang tải hay không, hành động Tải về máy / Huỷ. */
+  cloudSource?: boolean; cloudLeft?: number; downloading?: boolean; downloadCloud?(): void; cancelDownload?(): void;
   /** Dự án */
   rename?(): void; activateAll?(): void; /** Số font trong dự án (itemCount). */ colSize?: number; deactivateAll?(): void; /** Số font ĐANG BẬT trong dự án; chưa biết (đang đếm) → undefined. */ colActive?: number; remove?(): void;
   /** Thẻ */
@@ -30,6 +32,12 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
       open(c),
       { id: 'reveal', label: t('smenu.reveal'), disabled: !c.sourceAvailable || !c.hasPath, reason: t('smenu.reveal.off'), onSelect: c.reveal },
       { id: 'rescan', label: t('smenu.rescan'), disabled: !!c.scanning || !c.sourceAvailable, reason: c.scanning ? t('smenu.rescan.busy') : t('smenu.reveal.off'), onSelect: c.rescan },
+      ...(c.cloudSource ? [{
+        id: 'download', label: c.downloading ? t('cdl.menu.cancel') : t('cdl.menu'),
+        disabled: !c.sourceAvailable || (!c.downloading && !(c.cloudLeft && c.cloudLeft > 0)),
+        reason: !c.sourceAvailable ? t('smenu.reveal.off') : t('cdl.menu.none'),
+        onSelect: c.downloading ? c.cancelDownload : c.downloadCloud,
+      }] : []),
       sep,
       { id: 'remove', label: t('smenu.removeSource'), danger: true, disabled: !!c.scanning, reason: t('smenu.removeSource.busy'), onSelect: c.removeSource },
     ];
