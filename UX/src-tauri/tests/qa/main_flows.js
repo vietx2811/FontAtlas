@@ -89,7 +89,7 @@
         await log('onb-add-another-later', rows() >= r0 + 3, { after: rows() });
         await wait(() => btn('+ Thêm thư mục'));
         picks.push(['__QA_DIR__/A/']); btn('+ Thêm thư mục').click();
-        await sleep(1500);
+        await wait(() => rows() === r0 + 3, 15000); await sleep(200); // chờ theo điều kiện, không theo số giây
         const fb = document.querySelector('.fa-onb-feedback, [role=alert]')?.textContent ?? '';
         await log('onb-duplicate-kept', rows() === r0 + 3, { after: rows(), feedback: fb.slice(0, 140) });
         const names = [...document.querySelectorAll('.fa-onb-sources > li:not(.empty)')].map(li => li.textContent.replace(/\s+/g, ' ').slice(0, 80));
@@ -118,6 +118,7 @@
       if (b === true) break;
       b.click(); await sleep(700);
     }
+    await wait(() => !document.querySelector('.fa-onb'), 15000);
     await log('onb-finished', !document.querySelector('.fa-onb'), '');
     // THƯ VIỆN
     const cells = () => [...document.querySelectorAll('[role=gridcell][data-face-id]')];
@@ -226,9 +227,9 @@
       const after = total();
       await log('advanced-weight-filters-grid', !!sum && /Weight/.test(sum.textContent) && after > 0 && after < base, { base, after, summary: sum?.textContent });
       document.querySelector('[data-axis=weight_class] [data-testid=rs-track]')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      await sleep(900);
+      await wait(() => !document.querySelector('[data-testid=filter-summary]') && total() === base, 10000);
       await log('advanced-weight-dblclick-resets', !document.querySelector('[data-testid=filter-summary]') && total() === base, { total: total(), base });
-      key(document, { key: 'Escape' }); await sleep(300);
+      key(document, { key: 'Escape' }); await wait(() => !document.querySelector('[data-testid=advanced-sheet]'), 8000);
       await log('advanced-esc-closes', !document.querySelector('[data-testid=advanced-sheet]'), null);
       // LỌC NGÔN NGỮ (Hyperglot): chọn Tiếng Việt "đủ" → lưới còn font đủ dấu, mọi badge là vie/full; ảnh picker (dark)
       {
@@ -280,10 +281,10 @@
       await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
       const undoBtn = await wait(() => [...document.querySelectorAll('.fa-toast button')].find(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim())), 5000);
       await log('backspace-drops-last-group', selected && !document.querySelector('[data-testid=filter-summary]') && !!undoBtn, { selected, left: !!document.querySelector('[data-testid=filter-summary]'), undo: !!undoBtn });
-      undoBtn?.click(); await sleep(900);
+      undoBtn?.click(); await wait(() => !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, 10000);
       await log('toast-undo-restores', !!document.querySelector('[data-testid=filter-summary]') && total() === withFilter, { total: total(), withFilter });
       // dọn: bỏ lọc để các bước sau chạy trên thư viện đầy đủ
-      key(sinput ?? document, { key: 'Backspace', metaKey: true }); await sleep(600);
+      key(sinput ?? document, { key: 'Backspace', metaKey: true }); await wait(() => !document.querySelector('[data-testid=filter-summary]'), 10000);
       await log('summary-clear-all', !document.querySelector('[data-testid=filter-summary]'), null);
     }
     // CÀI ĐẶT → SIDEBAR
@@ -296,7 +297,7 @@
       radioOf(/^(Tối|Dark)$/)?.click(); await sleep(900);
       await snap('settings-dark-real');
       const darkApplied = document.documentElement.dataset.theme === 'dark';
-      radioOf(/^(Sáng|Light)$/)?.click(); await sleep(700);
+      radioOf(/^(Sáng|Light)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'light', 8000);
       await log('settings-theme-radio-dark', darkApplied && document.documentElement.dataset.theme === 'light', { darkApplied, after: document.documentElement.dataset.theme });
     }
     // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
@@ -670,7 +671,7 @@
     const themeBefore = await nativeTheme();
     themeBtn?.click(); await sleep(400);
     const css1 = document.documentElement.dataset.theme, native1 = await nativeTheme();
-    themeBtn?.click(); await sleep(400);
+    themeBtn?.click(); await wait(() => document.documentElement.dataset.theme !== css1, 8000); await sleep(300);
     const css2 = document.documentElement.dataset.theme, native2 = await nativeTheme();
     await log('native-theme-follows', css1 === native1 && css2 === native2, { themeBefore, css1, native1, css2, native2 });
     // Phân loại: chip ở đầu panel + lọc theo class bằng facet thật
@@ -956,16 +957,21 @@
         const filled = nFilled();
         await log('desk-enter-places', filled >= 2, { filled });
         const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
-        pressOn(desk, 'ArrowDown'); await sleep(900);
+        pressOn(desk, 'ArrowDown');
+        await wait(() => document.querySelectorAll('[data-testid=strip-delta]').length === 8, 15000); await sleep(200);
         const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
         await log('desk-strip-delta', deltas.length === 8 && (nCand < 2 || deltas.some(x => /^[+−]|±0/.test(x))), { nCand, deltas });
-        pressOn(desk, 'i'); await sleep(150);
-        const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i'); await sleep(150);
+        pressOn(desk, 'i');
+        await wait(() => document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true', 8000);
+        const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i');
+        await wait(() => document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed !== 'true', 8000);
         await log('desk-strip-collapses', collapsed && !!document.querySelector('[data-testid=strip-metrics]'), { collapsed });
         document.querySelector('[data-testid=combo-label]')?.click(); await sleep(200);
-        [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent))?.click(); await sleep(700);
+        [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent))?.click();
+        await wait(() => /Combo 2\/2/.test(document.querySelector('[data-testid=combo-label]')?.textContent ?? ''), 8000);
         const l2 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
-        pressOn(deskEl(), '['); await sleep(500);
+        pressOn(deskEl(), '[');
+        await wait(() => /Combo 1\/2/.test(document.querySelector('[data-testid=combo-label]')?.textContent ?? ''), 8000);
         const l1 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
         await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
         document.querySelector('[data-testid=mode-combos]')?.click();

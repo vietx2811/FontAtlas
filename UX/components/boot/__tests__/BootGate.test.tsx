@@ -76,4 +76,14 @@ describe('BootGate', { timeout: 15000 }, () => {
     render(<BootGate api={api}>{app}</BootGate>);
     expect((await screen.findByText(/boom/, {}, { timeout: 8000 })).closest('[role="alert"]')).not.toBeNull();
   });
+  it('a late phase event never pulls a ready gate back to loading', async () => {
+    const api = createMockApi();
+    let emit: ((e: BootEvent) => void) | undefined;
+    vi.spyOn(api, 'bootSubscribe').mockImplementation(async l => { emit = l; return () => {}; });
+    render(<BootGate api={api}>{app}</BootGate>);
+    await screen.findByTestId('app', {}, { timeout: 8000 });
+    act(() => emit?.({ type: 'phase', phase: 'scanning' } as BootEvent));
+    await settle();
+    expect(screen.getByTestId('app')).toBeTruthy();
+  });
 });

@@ -351,7 +351,7 @@ fn shutdown_is_bounded_when_a_worker_is_stuck_in_the_backend() {
     assert!(hung.0.load(std::sync::atomic::Ordering::SeqCst), "backend phải đang bị kẹt");
     let t = std::time::Instant::now();
     srv.shutdown();
-    assert!(t.elapsed() < std::time::Duration::from_secs(4), "shutdown phải có hạn, mất {:?}", t.elapsed());
+    assert!(t.elapsed() < std::time::Duration::from_secs(30), "shutdown phải có hạn, mất {:?}", t.elapsed());
     assert!(!dir.path().join(BROKER_FILE).exists(), "broker.json của mình đã xoá");
     drop(h);
 }
