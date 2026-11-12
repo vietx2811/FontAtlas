@@ -1,7 +1,10 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach } from 'vitest';
 import { resetChosenForTests, setLocale } from '../i18n/locale';
+
+// Máy bận (CI, nhiều phiên song song) làm waitFor/findBy mặc định 1 s hụt: chờ có hạn dài, test đạt vẫn trả về ngay khi điều kiện đúng.
+configure({ asyncUtilTimeout: 8000 });
 
 // Vitest không bật globals → Testing Library không tự dọn DOM giữa các test.
 afterEach(() => cleanup());

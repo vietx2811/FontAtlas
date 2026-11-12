@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { CmdError } from '../../../api';
@@ -345,14 +345,14 @@ describe('Onboarding', () => {
       await api.setOnboardingStep('end');
       const onDone = vi.fn();
       const save = vi.spyOn(api, 'setOnboardingStep');
-      render(<Onboarding api={api} onDone={onDone} outroMs={50} />);
+      // Biên rộng: outro 1500 ms, kiểm "chưa gọi" ngay sau thao tác (máy bận cũng chỉ mất vài trăm ms), rồi chờ có hạn dài tới khi gọi.
+      render(<Onboarding api={api} onDone={onDone} outroMs={1500} />);
       await settle();
       await click('Vào thư viện'); await click('Bắt đầu');
       expect(save).toHaveBeenLastCalledWith('done');
       expect(screen.getByTestId('onb-outro')).toBeTruthy();
       expect(onDone).not.toHaveBeenCalled();
-      await act(async () => { await new Promise(r => setTimeout(r, 120)); });
-      expect(onDone).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1), { timeout: 8000 });
     });
 
     it('"Bỏ qua hướng dẫn" skips the outro', async () => {
