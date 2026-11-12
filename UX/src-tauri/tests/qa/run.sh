@@ -6,6 +6,17 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
 test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
+# QA phải chạy qua CI cục bộ (khoá + hàng đợi) và đúng bundle của SHA đang checkout: bundle nằm ở target/ DÙNG CHUNG nên run khác có thể đã ghi đè nó.
+# Chạy lại riêng: bash tools/ci/local_ci.sh <ref> --qa-only. Bỏ qua kiểm (chỉ khi tự biết mình đang làm gì): FONTATLAS_QA_NO_GUARD=1.
+if [ "${FONTATLAS_QA_NO_GUARD:-}" != 1 ]; then
+  [ "${FONTATLAS_CI_RUN:-}" = 1 ] || { echo "run.sh phải chạy qua khoá CI: bash tools/ci/local_ci.sh <ref> --qa-only (hoặc FONTATLAS_QA_NO_GUARD=1)"; exit 1; }
+  STAMP="$UX/src-tauri/target/debug/bundle/.built-sha"   # ghi bởi local_ci sau khi build xong
+  WANT="$(git -C "$UX" rev-parse HEAD 2>/dev/null || true)"
+  HAVE="$(cat "$STAMP" 2>/dev/null || true)"
+  echo "bundle SHA: ${HAVE:-không có}; mã nguồn SHA: ${WANT:-?}"
+  [ -n "$WANT" ] && [ "$HAVE" = "$WANT" ] || { echo "bundle không khớp SHA đang checkout → từ chối chạy QA (build lại: bash tools/ci/local_ci.sh <ref>)"; exit 1; }
+fi
+echo "tải máy: $(uptime | sed 's/.*load averages*: //')"
 # Chỉ MỘT lượt QA native tại một thời điểm trên máy: font đăng ký phiên (CoreText) của app đang chạy là toàn người dùng, nên lượt QA khác
 # (CI cục bộ, worktree khác) làm font của mình thành "đã có sẵn · ứng dụng khác" và dọn không sạch (conflict-clean left:5, available-*).
 LOCK="${FONTATLAS_QA_LOCK:-/tmp/fontatlas-native-qa.lock}"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI chạy trên máy Mac của dự án, thay cho GitHub Actions.
 #
-#   bash tools/ci/local_ci.sh [ref] [--no-qa] [--no-wait] [--priority]
+#   bash tools/ci/local_ci.sh [ref] [--no-qa] [--qa-only] [--no-wait] [--priority]
 #   bash tools/ci/local_ci.sh --status
 #
 # - ref mặc định là dev/mvp. Kiểm đúng commit đã commit (checkout sạch trong ~/.fontatlas-ci/worktree),
@@ -12,19 +12,22 @@
 #   Hook pre-push (tools/ci/install_hook.sh) đọc note này để chặn push dev/mvp và main chưa xanh.
 # - Hàng đợi FIFO (mặc định --wait): mỗi lần chạy lấy một vé ~/.fontatlas-ci/queue/<Q|P><thời gian>-<pid>-<ref>, chỉ chạy khi vé đứng đầu
 #   và khoá rảnh. Vé của tiến trình đã chết tự bị dọn. --no-wait: gặp khoá bận thì thoát mã 3 (hành vi cũ). --status: in hàng đợi.
+#   --qa-only: chỉ chạy lại native QA trên bundle debug ĐÃ build của đúng SHA (từ chối nếu bundle không khớp); cũng đi qua hàng đợi/khoá,
+#   không ghi git note. Native QA (run.sh) từ chối chạy ngoài local_ci hoặc khi bundle không khớp SHA.
 #   --priority (chỉ Lead, cần FONTATLAS_CI_PRIORITY=1) xếp vé đứng trước mọi vé thường.
 # - Không đụng thư viện thật: QA dùng FONTATLAS_DATA_DIR tạm, chỉ chạy bản debug.
 set -uo pipefail
 
-REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0
+REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0; QAONLY=0
 for a in "$@"; do
   case "$a" in
     --no-qa) QA=0 ;;
+    --qa-only) QAONLY=1 ;;
     --wait) WAIT=1 ;;
     --no-wait) WAIT=0 ;;
     --priority) PRIO=1 ;;
     --status) STATUS=1 ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) REF="$a" ;;
   esac
 done
@@ -111,7 +114,22 @@ if [ -n "$CI_TARGET" ] && [ ! -L UX/src-tauri/target ]; then
 fi
 git clean -ffdxq -e UX/src-tauri/target -e UX/node_modules
 
+export FONTATLAS_CI_RUN=1   # run.sh từ chối chạy khi không có biến này (tức là ngoài khoá CI)
+STAMP="UX/src-tauri/target/debug/bundle/.built-sha"   # SHA của bundle debug đã build; run.sh so với HEAD của checkout
+loadavg() { uptime | sed 's/.*load averages*: //'; }
+
+if [ $QAONLY = 1 ]; then
+  [ "$(cat "$WT/$STAMP" 2>/dev/null)" = "$SHA" ] || { echo "bundle debug không phải của $SHORT (stamp: $(cat "$WT/$STAMP" 2>/dev/null || echo không có)) → chạy đủ: bash tools/ci/local_ci.sh $REF"; exit 2; }
+  OUT="$CI/runs/$SHA"; mkdir -p "$OUT"; LOG="$OUT/native-qa.rerun-$(date +%Y%m%d-%H%M%S).log"
+  echo "native QA lại · $SHORT ($REF) · tải $(loadavg) · log: $LOG"
+  caffeinate -dimsu bash UX/src-tauri/tests/qa/run.sh > "$LOG" 2>&1; rc=$?
+  tail -n 40 "$LOG"; echo "──"; echo "tải khi xong: $(loadavg)"
+  [ $rc = 0 ] && echo "PASS native-qa $SHORT (không ghi git note)" || echo "FAIL native-qa $SHORT"
+  exit $rc
+fi
+
 OUT="$CI/runs/$SHA"; rm -rf "$OUT"; mkdir -p "$OUT"
+LOAD_START="$(loadavg)"
 START=$(date +%s)
 STEPS=(); FAILED=()
 echo "local CI · $SHORT ($REF) · log: $OUT"
@@ -156,8 +174,11 @@ if [ $QA = 0 ]; then
 elif [ $FRONT = 0 ]; then
   skip native-qa "frontend đỏ"
 else
-  if step tauri-debug-build UX cargo tauri build --debug --bundles app; then
+  rm -f "$WT/$STAMP"   # build hỏng/bị ngắt thì không để lại stamp của bundle cũ
+  build_debug() { cargo tauri build --debug --bundles app && echo "$SHA" > "$WT/$STAMP"; }
+  if step tauri-debug-build UX build_debug; then
     # caffeinate: màn hình ngủ thì WebKit treo trang và QA chạy hết giờ.
+    echo "tải máy: $(loadavg)"
     step native-qa . caffeinate -dimsu bash UX/src-tauri/tests/qa/run.sh
   else
     skip native-qa "build debug đỏ"
@@ -169,11 +190,13 @@ if [ ${#FAILED[@]} -eq 0 ]; then RESULT=pass; else RESULT=fail; fi
 STEP_STR="$(IFS=' '; echo "${STEPS[*]}")"
 DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+LOAD_END="$(loadavg)"
+export LOAD_START LOAD_END
 python3 - "$OUT/summary.json" "$SHA" "$TREE" "$REF" "$RESULT" "$TOTAL" "$DATE" "$QA" $STEP_STR <<'PY'
-import json, sys
+import json, os, sys
 out, sha, tree, ref, result, total, date, qa, *steps = sys.argv[1:]
 json.dump({"sha": sha, "tree": tree, "ref": ref, "result": result, "seconds": int(total), "date": date,
-           "qa": qa == "1", "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
+           "qa": qa == "1", "load_start": os.environ.get("LOAD_START"), "load_end": os.environ.get("LOAD_END"), "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
           open(out, "w"), indent=2)
 PY
 
