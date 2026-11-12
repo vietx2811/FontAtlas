@@ -1162,8 +1162,12 @@
           await log('picker-sources-keys', Object.keys(results).length === 5 && Object.values(results).every(v => v === 'ok' || v === 'disabled') && Object.values(results).filter(v => v === 'ok').length >= 2, results);
           pressOn(desk, '1'); await wait(() => document.querySelector('[data-testid=pick-src-pair]')?.getAttribute('aria-checked') === 'true', 8000);
           const sel = await wait(() => document.querySelector('[data-testid=pick-style]'), 8000);
+          const sigOf = () => [...document.querySelectorAll('[data-testid=desk-cand]')].map(x => x.textContent).join('|') + '#' + [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent).join('|');
+          const before = sigOf();
           if (sel) setVal(sel, 'contrast');
           await wait(() => document.querySelector('[data-testid=pick-style]')?.value === 'contrast', 5000);
+          // Lượt tải theo style bắt đầu sau một lần render: chờ thấy "đang tải" HOẶC danh sách đổi (không đổi thật thì hết hạn 6s rồi đi tiếp), rồi mới chờ hết tải.
+          await wait(() => document.querySelector('[data-testid=pick-loading]') || sigOf() !== before, 6000);
           await wait(() => !document.querySelector('[data-testid=pick-loading]'), 20000);
           await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=pick-empty], [data-testid=pick-filtered]'), 20000);
           const tags = [...document.querySelectorAll('[data-testid=cand-style]')].map(x => x.textContent);
