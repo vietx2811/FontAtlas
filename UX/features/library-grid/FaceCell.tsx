@@ -9,6 +9,7 @@ import { NoteMark } from '../../components/ui/noteMark';
 import { t, useLocale } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
+import { beginFaceDrag } from '../../store/faceDrag';
 import { useCardFields } from '../../store/cardFields';
 import { cssSize, previewBox, type FaceRow, type PxBucket } from './types';
 import { ownFontStack, useLoadedFamily } from './useLoadedFamily';
@@ -172,6 +173,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
       role="gridcell" tabIndex={0} aria-selected={selected} className="fa-cell" data-layout={layout}
       data-face-id={row.faceId} data-state={shownState} data-shown-url={shownUrl} style={{ height: boxHeight }}
       onClick={pick}
+      onPointerDown={e => beginFaceDrag(e, row)} onDragStart={e => e.preventDefault()}
       onContextMenu={onContextMenu ? e => { e.preventDefault(); onContextMenu(row, index, { x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); } : undefined}
       onKeyDown={e => {
         if (e.target !== e.currentTarget) return;

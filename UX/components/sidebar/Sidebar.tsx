@@ -278,7 +278,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
           {cols.map(c => renaming === c.id
             ? <input key={c.id} className="fa-inline-input" aria-label={t('side.renameProject')} autoFocus defaultValue={c.name}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitRename(c, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endRename(c.id, true); } }} onBlur={e => void commitRename(c, e.currentTarget.value, e.currentTarget, 'blur')} />
-            : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
+            : <NavItem key={c.id} swatch={c.color} label={c.name} count={c.itemCount} drop={{ id: c.id, name: c.name, here: cur(`col:${c.id}`) }} current={cur(`col:${c.id}`)} onClick={() => setView(`col:${c.id}`)}
 navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRename={() => setRenaming(c.id)} context={ctx?.kind === 'collection' && ctx.id === c.id}
                 more={<Tooltip label={t('side.options', { name: c.name })}><button type="button" className="fa-more" aria-label={t('side.options', { name: c.name })} aria-haspopup="menu" aria-expanded={ctx?.kind === 'collection' && ctx.id === c.id}
                   onClick={e => { const el = e.currentTarget; openCtx('collection', c.id, c.name)({ x: 0, y: 0, keyboard: true, el }); }}><Icon name="more" size={14} /></button></Tooltip>} />)}
