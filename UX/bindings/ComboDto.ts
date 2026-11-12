@@ -5,4 +5,12 @@ export type ComboDto = { id: number, caseId: number,
 /**
  * 1-based, liên tục.
  */
-idx: number, name: string, isMain: boolean, note: string | null, slots: Array<ComboSlotDto>, };
+idx: number, name: string, isMain: boolean, note: string | null, 
+/**
+ * Vai CÓ font (đã đặt). Vai rỗng giữ chỗ chỉ có tên trong `roles`.
+ */
+slots: Array<ComboSlotDto>, 
+/**
+ * Mọi vai của Combo theo thứ tự hiển thị, kể cả vai rỗng giữ chỗ. Rỗng = chưa có vai nào (giao diện tự dùng bộ mặc định).
+ */
+roles: Array<string>, };

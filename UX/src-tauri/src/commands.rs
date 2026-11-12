@@ -137,6 +137,10 @@ macro_rules! command_list {
             async delete_combo(id: i64) -> Result<(), CmdError>;
             async reorder_combos(case_id: i64, ids: Vec<i64>) -> Result<(), CmdError>;
             async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
+            async add_combo_role(combo_id: i64, name: String) -> Result<ComboDto, CmdError>;
+            async remove_combo_role(combo_id: i64, role: ComboRoleDto) -> Result<ComboDto, CmdError>;
+            async rename_combo_role(combo_id: i64, role: ComboRoleDto, new_name: String) -> Result<ComboDto, CmdError>;
+            async reorder_combo_roles(combo_id: i64, roles: Vec<ComboRoleDto>) -> Result<ComboDto, CmdError>;
             async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
             async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
             async brief_starter(brief: BriefDto, case_id: Option<i64>) -> Result<BriefStarterDto, CmdError>;
@@ -392,6 +396,10 @@ cmd!(update_combo(id: i64, patch: ComboPatchDto) -> ComboDto => |s| cases::updat
 cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
 cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
 cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
+cmd!(add_combo_role(combo_id: i64, name: String) -> ComboDto => |s| cases::add_combo_role(s, combo_id, &name));
+cmd!(remove_combo_role(combo_id: i64, role: ComboRoleDto) -> ComboDto => |s| cases::remove_combo_role(s, combo_id, &role));
+cmd!(rename_combo_role(combo_id: i64, role: ComboRoleDto, new_name: String) -> ComboDto => |s| cases::rename_combo_role(s, combo_id, &role, &new_name));
+cmd!(reorder_combo_roles(combo_id: i64, roles: Vec<ComboRoleDto>) -> ComboDto => |s| cases::reorder_combo_roles(s, combo_id, &roles));
 cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
 cmd!(brief_starter(brief: BriefDto, case_id: Option<i64>) -> BriefStarterDto => |s| brief::brief_starter(s, &brief, case_id));
 cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));

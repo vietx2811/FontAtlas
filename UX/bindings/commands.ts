@@ -177,6 +177,10 @@ export interface TauriCommandMap {
   delete_combo: { args: { id: number }; result: null };
   reorder_combos: { args: { caseId: number; ids: number[] }; result: null };
   set_combo_slot: { args: { comboId: number; role: ComboRoleDto; face: FaceKeyDto | null; note: string | null; style: unknown | null }; result: ComboDto };
+  add_combo_role: { args: { comboId: number; name: string }; result: ComboDto };
+  remove_combo_role: { args: { comboId: number; role: ComboRoleDto }; result: ComboDto };
+  rename_combo_role: { args: { comboId: number; role: ComboRoleDto; newName: string }; result: ComboDto };
+  reorder_combo_roles: { args: { comboId: number; roles: ComboRoleDto[] }; result: ComboDto };
   create_combos: { args: { caseId: number; combos: NewComboDto[] }; result: ComboDto[] };
   case_compare: { args: { caseId: number; comboIds: number[]; lang: LangDto }; result: CaseCompareDto };
   brief_starter: { args: { brief: BriefDto; caseId: number | null }; result: BriefStarterDto };

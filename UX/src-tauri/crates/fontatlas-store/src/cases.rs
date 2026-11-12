@@ -9,7 +9,9 @@ use crate::open::{Store, now_ms};
 pub const MAX_CASE_FACES: usize = 500;
 pub const MAX_COMBOS: usize = 50;
 pub const TRASH_DAYS: i64 = 30;
-/// Vai hợp lệ trong một Combo (khớp CHECK của `combo_slots.role`).
+/// 7 vai gợi sẵn (khoá ổn định, dữ liệu cũ dùng chúng). Vai trong Combo nay là chuỗi tuỳ ý (G3); danh sách này chỉ cho thứ tự mặc định.
+pub const MAX_ROLE_CHARS: usize = 40;
+pub const MAX_ROLES_PER_COMBO: usize = 30;
 pub const ROLES: [&str; 7] = ["display", "heading", "subheading", "body", "caption", "accent", "quote"];
 const ORIGINS: [&str; 4] = ["added", "pinned", "brief", "peek"];
 
@@ -62,7 +64,10 @@ pub struct ComboRow {
     pub name: String,
     pub is_main: bool,
     pub note: Option<String>,
+    /// Vai CÓ font (đã đặt).
     pub slots: Vec<SlotRow>,
+    /// Mọi vai của Combo theo thứ tự hiển thị, kể cả vai rỗng giữ chỗ.
+    pub roles: Vec<String>,
 }
 
 /// `Option<Option<_>>`: `None` = giữ nguyên, `Some(None)` = xoá.
@@ -130,8 +135,30 @@ impl Drop for Atomic<'_> {
     }
 }
 
-fn check_role(role: &str) -> Result<(), StoreError> {
-    if ROLES.contains(&role) { Ok(()) } else { Err(StoreError::Invalid(format!("vai không hợp lệ: {role}"))) }
+fn role_err(code: &'static str, msg: String) -> StoreError {
+    StoreError::Role { code, msg }
+}
+
+/// Tên vai: trim, 1–40 ký tự, không ký tự điều khiển.
+pub fn clean_role(role: &str) -> Result<String, StoreError> {
+    let n = role.trim();
+    if n.is_empty() || n.chars().count() > MAX_ROLE_CHARS || n.chars().any(char::is_control) {
+        return Err(role_err("role_name_invalid", format!("tên vai rỗng, quá dài (≤ {MAX_ROLE_CHARS}) hoặc có ký tự điều khiển")));
+    }
+    Ok(n.to_string())
+}
+
+/// So tên vai không phân biệt hoa thường (Unicode).
+pub fn same_role(a: &str, b: &str) -> bool {
+    a == b || a.to_lowercase() == b.to_lowercase()
+}
+
+/// Thứ tự mặc định của một vai mới: preset theo vị trí trong `ROLES`, tuỳ ý xếp sau mọi vai hiện có.
+fn next_ord(existing: &[(String, i64)], role: &str) -> i64 {
+    if let Some(i) = ROLES.iter().position(|r| same_role(r, role)) {
+        return i as i64;
+    }
+    existing.iter().map(|(_, o)| *o).max().map_or(ROLES.len() as i64, |m| m.max(ROLES.len() as i64 - 1) + 1)
 }
 
 fn check_json(label: &str, s: &str) -> Result<(), StoreError> {
@@ -341,14 +368,14 @@ impl Store {
         Ok((added, already))
     }
 
-    /// Bỏ font khỏi Case (kèm mọi vai đang dùng font đó trong Combo của Case). Trả số font đã bỏ.
+    /// Bỏ font khỏi Case (các vai đang dùng font đó trong Combo của Case thành vai rỗng giữ chỗ). Trả số font đã bỏ.
     pub fn remove_from_case(&mut self, case_id: i64, keys: &[FaceKey]) -> Result<usize, StoreError> {
         self.case(case_id)?;
         let tx = Atomic::begin(&self.conn)?;
         let mut n = 0;
         for k in keys {
             tx.execute(
-                "DELETE FROM u.combo_slots WHERE hash = ?2 AND face_index = ?3
+                "UPDATE u.combo_slots SET hash = NULL, face_index = NULL WHERE hash = ?2 AND face_index = ?3
                    AND combo_id IN (SELECT id FROM u.combos WHERE case_id = ?1)",
                 params![case_id, &k.hash[..], k.face_index],
             )?;
@@ -378,7 +405,8 @@ impl Store {
         replace: bool,
     ) -> Result<PeekOutcome, StoreError> {
         check_json("settings", settings)?;
-        check_role(anchor_role)?;
+        let anchor_role = clean_role(anchor_role)?;
+        let anchor_role = anchor_role.as_str();
         self.conn.execute_batch("SAVEPOINT peek_open")?;
         let run = |s: &mut Store| -> Result<PeekOutcome, StoreError> {
             let (case_id, created) = match case_id {
@@ -397,7 +425,7 @@ impl Store {
                 Some(id) => id,
                 None => s.create_combo(case_id, None, None)?,
             };
-            let held = s.combo(combo_id)?.slots.into_iter().find(|x| x.role == anchor_role).map(|x| x.key);
+            let held = s.combo(combo_id)?.slots.into_iter().find(|x| same_role(&x.role, anchor_role)).map(|x| x.key);
             let occupied = match held {
                 Some(k) if k != *anchor && !replace => Some(k),
                 _ => {
@@ -447,19 +475,28 @@ impl Store {
 
     // ---- Combo ----
 
-    fn slots_of(&self, combo_id: i64) -> Result<Vec<SlotRow>, StoreError> {
+    fn slots_of(&self, combo_id: i64) -> Result<(Vec<SlotRow>, Vec<String>), StoreError> {
         let mut st = self
             .conn
             .prepare("SELECT role, ord, hash, face_index, note, style FROM u.combo_slots WHERE combo_id = ?1 ORDER BY ord, role")?;
         let rows = st.query_map([combo_id], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Vec<u8>>(2)?, r.get::<_, u32>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, String>(5)?))
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<Vec<u8>>>(2)?, r.get::<_, Option<u32>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, String>(5)?))
         })?;
-        let mut out = Vec::new();
+        let (mut slots, mut roles) = (Vec::new(), Vec::new());
         for r in rows {
             let (role, ord, h, face_index, note, style) = r?;
-            out.push(SlotRow { role, ord, key: FaceKey { hash: hash_from_blob(h)?, face_index }, note, style });
+            roles.push(role.clone());
+            if let (Some(h), Some(face_index)) = (h, face_index) {
+                slots.push(SlotRow { role, ord, key: FaceKey { hash: hash_from_blob(h)?, face_index }, note, style });
+            }
         }
-        Ok(out)
+        Ok((slots, roles))
+    }
+
+    fn role_rows(&self, combo_id: i64) -> Result<Vec<(String, i64)>, StoreError> {
+        let mut st = self.conn.prepare("SELECT role, ord FROM u.combo_slots WHERE combo_id = ?1 ORDER BY ord, role")?;
+        let v = st.query_map([combo_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(v)
     }
 
     pub fn combos(&self, case_id: i64) -> Result<Vec<ComboRow>, StoreError> {
@@ -467,11 +504,11 @@ impl Store {
             .conn
             .prepare("SELECT id, case_id, idx, name, is_main, note FROM u.combos WHERE case_id = ?1 ORDER BY idx")?;
         let rows = st.query_map([case_id], |r| {
-            Ok(ComboRow { id: r.get(0)?, case_id: r.get(1)?, idx: r.get(2)?, name: r.get(3)?, is_main: r.get::<_, i64>(4)? != 0, note: r.get(5)?, slots: vec![] })
+            Ok(ComboRow { id: r.get(0)?, case_id: r.get(1)?, idx: r.get(2)?, name: r.get(3)?, is_main: r.get::<_, i64>(4)? != 0, note: r.get(5)?, slots: vec![], roles: vec![] })
         })?;
         let mut out = rows.collect::<rusqlite::Result<Vec<_>>>()?;
         for c in &mut out {
-            c.slots = self.slots_of(c.id)?;
+            (c.slots, c.roles) = self.slots_of(c.id)?;
         }
         Ok(out)
     }
@@ -529,7 +566,7 @@ impl Store {
         )?;
         let id = tx.last_insert_rowid();
         let put = |ord: i64, role: &str, k: &FaceKey, note: Option<&str>, style: &str| -> Result<(), StoreError> {
-            check_role(role)?;
+            let role = clean_role(role)?;
             tx.execute(
                 "INSERT OR REPLACE INTO u.combo_slots(combo_id,role,ord,hash,face_index,note,style) VALUES (?1,?2,?3,?4,?5,?6,?7)",
                 params![id, role, ord, &k.hash[..], k.face_index, note, style],
@@ -541,18 +578,28 @@ impl Store {
             Ok(())
         };
         if let Some(s) = &src {
-            for sl in &s.slots {
-                put(sl.ord, &sl.role, &sl.key, sl.note.as_deref(), &sl.style)?;
+            // nhân bản cả vai rỗng giữ chỗ, giữ thứ tự
+            for (role, ord) in self.role_rows(s.id)? {
+                match s.slots.iter().find(|x| x.role == role) {
+                    Some(sl) => put(ord, &sl.role, &sl.key, sl.note.as_deref(), &sl.style)?,
+                    None => {
+                        tx.execute(
+                            "INSERT OR REPLACE INTO u.combo_slots(combo_id,role,ord,hash,face_index,note,style) VALUES (?1,?2,?3,NULL,NULL,NULL,'{}')",
+                            params![id, role, ord],
+                        )?;
+                    }
+                }
             }
         }
-        let mut seen_roles: Vec<&str> = Vec::new();
+        let mut seen_roles: Vec<String> = Vec::new();
         for (role, k) in slots {
-            if seen_roles.contains(&role.as_str()) {
-                return Err(StoreError::Invalid(format!("vai trùng trong một Combo: {role}")));
+            let role = clean_role(role)?;
+            if seen_roles.iter().any(|r| same_role(r, &role)) {
+                return Err(role_err("role_duplicate", format!("vai trùng trong một Combo: {role}")));
             }
+            let ord = next_ord(&seen_roles.iter().map(|r| (r.clone(), 0)).collect::<Vec<_>>(), &role);
+            put(ord, &role, k, None, "{}")?;
             seen_roles.push(role);
-            let ord = ROLES.iter().position(|r| r == role).unwrap_or(0) as i64;
-            put(ord, role, k, None, "{}")?;
         }
         let total: i64 = tx.query_row("SELECT count(*) FROM u.case_faces WHERE case_id = ?1", [case_id], |r| r.get(0))?;
         if total as usize > MAX_CASE_FACES {
@@ -640,18 +687,26 @@ impl Store {
         Ok(())
     }
 
-    /// Đặt (`Some`) hoặc bỏ (`None`) font ở một vai. Font tự được thêm vào Case.
+    /// Đặt (`Some`) hoặc bỏ (`None`) font ở một vai; vai chưa có thì được tạo. `None` chỉ gỡ font, VAI Ở LẠI (rỗng giữ chỗ):
+    /// muốn bỏ hẳn vai thì `remove_combo_role`. Font tự được thêm vào Case.
     pub fn set_combo_slot(&mut self, combo_id: i64, role: &str, face: Option<&FaceKey>, note: Option<&str>, style: Option<&str>) -> Result<ComboRow, StoreError> {
-        check_role(role)?;
         if let Some(s) = style {
             check_json("style", s)?;
         }
         let combo = self.live_combo(combo_id)?;
+        let existing = self.role_rows(combo_id)?;
+        let (role, is_new) = match existing.iter().find(|(r, _)| same_role(r, role)) {
+            Some((r, _)) => (r.clone(), false),
+            None => (clean_role(role)?, true),
+        };
+        if is_new && existing.len() >= MAX_ROLES_PER_COMBO {
+            return Err(role_err("role_limit", format!("Combo tối đa {MAX_ROLES_PER_COMBO} vai")));
+        }
+        let ord = existing.iter().find(|(r, _)| *r == role).map(|(_, o)| *o).unwrap_or_else(|| next_ord(&existing, &role));
         let tx = Atomic::begin(&self.conn)?;
         let now = now_ms();
         match face {
             Some(k) => {
-                let ord = ROLES.iter().position(|r| *r == role).unwrap_or(0) as i64;
                 let prev = combo.slots.iter().find(|s| s.role == role);
                 tx.execute(
                     "INSERT INTO u.combo_slots(combo_id,role,ord,hash,face_index,note,style) VALUES (?1,?2,?3,?4,?5,?6,?7)
@@ -673,11 +728,103 @@ impl Store {
                 }
             }
             None => {
-                tx.execute("DELETE FROM u.combo_slots WHERE combo_id=?1 AND role=?2", params![combo_id, role])?;
+                tx.execute(
+                    "INSERT INTO u.combo_slots(combo_id,role,ord,hash,face_index,note,style) VALUES (?1,?2,?3,NULL,NULL,NULL,'{}')
+                     ON CONFLICT(combo_id,role) DO UPDATE SET hash=NULL, face_index=NULL",
+                    params![combo_id, role, ord],
+                )?;
             }
         }
         tx.execute("UPDATE u.combos SET updated_at = ?2 WHERE id = ?1", params![combo_id, now])?;
         tx.execute("UPDATE u.cases SET updated_at = ?2 WHERE id = ?1", params![combo.case_id, now])?;
+        tx.commit()?;
+        self.combo(combo_id)
+    }
+
+    fn touch_combo(&self, tx: &Atomic, combo: &ComboRow) -> Result<(), StoreError> {
+        let now = now_ms();
+        tx.execute("UPDATE u.combos SET updated_at = ?2 WHERE id = ?1", params![combo.id, now])?;
+        tx.execute("UPDATE u.cases SET updated_at = ?2 WHERE id = ?1", params![combo.case_id, now])?;
+        Ok(())
+    }
+
+    /// Thêm vai rỗng giữ chỗ ở cuối. Trùng tên (không phân biệt hoa thường) → `role_duplicate`.
+    pub fn add_combo_role(&mut self, combo_id: i64, name: &str) -> Result<ComboRow, StoreError> {
+        let name = clean_role(name)?;
+        let combo = self.live_combo(combo_id)?;
+        let existing = self.role_rows(combo_id)?;
+        if existing.iter().any(|(r, _)| same_role(r, &name)) {
+            return Err(role_err("role_duplicate", format!("Combo đã có vai {name}")));
+        }
+        if existing.len() >= MAX_ROLES_PER_COMBO {
+            return Err(role_err("role_limit", format!("Combo tối đa {MAX_ROLES_PER_COMBO} vai")));
+        }
+        // thêm vào CUỐI hiển thị, kể cả khi tên trùng một preset (preset thêm tay không nhảy lên đầu)
+        let ord = existing.iter().map(|(_, o)| *o).max().map_or(0, |m| m + 1);
+        let tx = Atomic::begin(&self.conn)?;
+        tx.execute(
+            "INSERT INTO u.combo_slots(combo_id,role,ord,hash,face_index,note,style) VALUES (?1,?2,?3,NULL,NULL,NULL,'{}')",
+            params![combo_id, name, ord],
+        )?;
+        self.touch_combo(&tx, &combo)?;
+        tx.commit()?;
+        self.combo(combo_id)
+    }
+
+    /// Bỏ hẳn một vai (kể cả font đang đặt ở đó; font vẫn nằm trong Case).
+    pub fn remove_combo_role(&mut self, combo_id: i64, role: &str) -> Result<ComboRow, StoreError> {
+        let combo = self.live_combo(combo_id)?;
+        let existing = self.role_rows(combo_id)?;
+        let Some((stored, _)) = existing.iter().find(|(r, _)| same_role(r, role.trim())) else {
+            return Err(role_err("role_not_found", format!("Combo không có vai {role}")));
+        };
+        let tx = Atomic::begin(&self.conn)?;
+        tx.execute("DELETE FROM u.combo_slots WHERE combo_id=?1 AND role=?2", params![combo_id, stored])?;
+        self.touch_combo(&tx, &combo)?;
+        tx.commit()?;
+        self.combo(combo_id)
+    }
+
+    /// Đổi tên vai (giữ font, ghi chú, kiểu và vị trí). Tên mới trùng vai KHÁC → `role_duplicate`; chỉ đổi hoa/thường của chính nó thì được.
+    pub fn rename_combo_role(&mut self, combo_id: i64, role: &str, new_name: &str) -> Result<ComboRow, StoreError> {
+        let new_name = clean_role(new_name)?;
+        let combo = self.live_combo(combo_id)?;
+        let existing = self.role_rows(combo_id)?;
+        let Some((stored, _)) = existing.iter().find(|(r, _)| same_role(r, role.trim())) else {
+            return Err(role_err("role_not_found", format!("Combo không có vai {role}")));
+        };
+        if existing.iter().any(|(r, _)| r != stored && same_role(r, &new_name)) {
+            return Err(role_err("role_duplicate", format!("Combo đã có vai {new_name}")));
+        }
+        let tx = Atomic::begin(&self.conn)?;
+        tx.execute("UPDATE u.combo_slots SET role=?3 WHERE combo_id=?1 AND role=?2", params![combo_id, stored, new_name])?;
+        self.touch_combo(&tx, &combo)?;
+        tx.commit()?;
+        self.combo(combo_id)
+    }
+
+    /// Sắp lại thứ tự vai: `roles` phải đúng bằng tập vai hiện có (mỗi vai một lần, không phân biệt hoa thường) → `role_set_mismatch` nếu khác.
+    pub fn reorder_combo_roles(&mut self, combo_id: i64, roles: &[String]) -> Result<ComboRow, StoreError> {
+        let combo = self.live_combo(combo_id)?;
+        let existing = self.role_rows(combo_id)?;
+        let mut order: Vec<String> = Vec::new();
+        for r in roles {
+            let Some((stored, _)) = existing.iter().find(|(e, _)| same_role(e, r.trim())) else {
+                return Err(role_err("role_set_mismatch", format!("vai {r} không có trong Combo")));
+            };
+            if order.contains(stored) {
+                return Err(role_err("role_set_mismatch", format!("vai {r} xuất hiện hai lần")));
+            }
+            order.push(stored.clone());
+        }
+        if order.len() != existing.len() {
+            return Err(role_err("role_set_mismatch", "danh sách vai phải gồm đủ mọi vai hiện có".into()));
+        }
+        let tx = Atomic::begin(&self.conn)?;
+        for (i, r) in order.iter().enumerate() {
+            tx.execute("UPDATE u.combo_slots SET ord=?3 WHERE combo_id=?1 AND role=?2", params![combo_id, r, i as i64])?;
+        }
+        self.touch_combo(&tx, &combo)?;
         tx.commit()?;
         self.combo(combo_id)
     }

@@ -5,47 +5,10 @@ use ts_rs::TS;
 
 use crate::dto::library::{FaceKeyDto, FaceQueryDto, FaceRowDto};
 
-/// Vai trong một Combo. Giọng ①②③ do giao diện suy ra từ vai.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export, rename_all = "snake_case")]
-pub enum ComboRoleDto {
-    Display,
-    Heading,
-    Subheading,
-    Body,
-    Caption,
-    Accent,
-    Quote,
-}
-
-impl ComboRoleDto {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ComboRoleDto::Display => "display",
-            ComboRoleDto::Heading => "heading",
-            ComboRoleDto::Subheading => "subheading",
-            ComboRoleDto::Body => "body",
-            ComboRoleDto::Caption => "caption",
-            ComboRoleDto::Accent => "accent",
-            ComboRoleDto::Quote => "quote",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<ComboRoleDto> {
-        [
-            ComboRoleDto::Display,
-            ComboRoleDto::Heading,
-            ComboRoleDto::Subheading,
-            ComboRoleDto::Body,
-            ComboRoleDto::Caption,
-            ComboRoleDto::Accent,
-            ComboRoleDto::Quote,
-        ]
-        .into_iter()
-        .find(|r| r.as_str() == s)
-    }
-}
+/// Vai trong một Combo: chuỗi tuỳ ý (0.4.0 G3), 1–40 ký tự, không phân biệt hoa thường trong cùng Combo.
+/// 7 khoá gợi sẵn: `display`, `heading`, `subheading`, `body`, `caption`, `accent`, `quote` (giao diện tự dịch tên hiển thị;
+/// vai tuỳ ý hiện nguyên chuỗi). Giọng ①②③ do giao diện suy ra từ vai.
+pub type ComboRoleDto = String;
 
 /// Font vào Case bằng cách nào.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
@@ -219,7 +182,10 @@ pub struct ComboDto {
     pub name: String,
     pub is_main: bool,
     pub note: Option<String>,
+    /// Vai CÓ font (đã đặt). Vai rỗng giữ chỗ chỉ có tên trong `roles`.
     pub slots: Vec<ComboSlotDto>,
+    /// Mọi vai của Combo theo thứ tự hiển thị, kể cả vai rỗng giữ chỗ. Rỗng = chưa có vai nào (giao diện tự dùng bộ mặc định).
+    pub roles: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]

@@ -26,7 +26,7 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     const m2 = await api.createCombo(c.id, 'Lạnh');
     const m3 = await api.createCombo(c.id, undefined, m1.id);
     expect([m1.isMain, m2.isMain, m3.idx]).toEqual([true, false, 3]);
-    await expect(api.setComboSlot(m1.id, 'nope' as never, a)).rejects.toMatchObject({ code: 'invalid_arg' });
+    await expect(api.setComboSlot(m1.id, '  ', a)).rejects.toMatchObject({ code: 'role_name_invalid' });
     const withSlots = await api.setComboSlot(m1.id, 'body', b);
     const heading = await api.setComboSlot(withSlots.id, 'heading', a, 'neo', { weight: 700 });
     expect(heading.slots.map(s => s.role)).toEqual(['heading', 'body']);
@@ -49,7 +49,7 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     const api = createMockApi();
     const [a, b] = mockRows().slice(0, 2).map(key);
     const c = await api.createCase();
-    await expect(api.createCombos(c.id, [{ name: 'ok', slots: [{ role: 'body', face: a }] }, { name: null, slots: [{ role: 'x' as never, face: b }] }])).rejects.toBeInstanceOf(CmdError);
+    await expect(api.createCombos(c.id, [{ name: 'ok', slots: [{ role: 'body', face: a }] }, { name: null, slots: [{ role: '  ', face: b }] }])).rejects.toBeInstanceOf(CmdError);
     expect(await api.getCase(c.id)).toMatchObject({ faces: [], combos: [] });
     const [m] = await api.createCombos(c.id, [{ name: null, slots: [{ role: 'body', face: a }, { role: 'heading', face: b }] }]);
     expect(m.isMain).toBe(true);
@@ -124,7 +124,7 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     expect(col.relations.find(r => r.to === 'body')).toMatchObject({ assessment: null, reason: 'missing_font' });
     expect(col.relations.find(r => r.to === 'caption')?.assessment).not.toBeNull();
     await expect(api.createCase('x'.repeat(121))).rejects.toMatchObject({ code: 'invalid_arg' });
-    await expect(api.createCombos(c.id, [{ name: null, slots: [{ role: 'body', face: a }, { role: 'body', face: b }] }])).rejects.toMatchObject({ code: 'invalid_arg' });
+    await expect(api.createCombos(c.id, [{ name: null, slots: [{ role: 'body', face: a }, { role: 'body', face: b }] }])).rejects.toMatchObject({ code: 'role_duplicate' });
     await api.deleteCase(c.id);
     await expect(api.setComboSlot(m.id, 'accent', a)).rejects.toMatchObject({ code: 'not_found' });
   });
@@ -139,5 +139,67 @@ describe('mock Case/Combo api (mirrors backend user.db v6)', () => {
     expect(r.combos.every(c => c.heading.family !== c.body.family)).toBe(true);
     const empty = await api.briefStarter({ uses: [], tones: [], needs, text: null });
     expect(empty.notes.map(n => n.code)).toContain('no_terms');
+  });
+  describe('custom combo roles (G3, mirrors user.db v11)', () => {
+    const setup = async () => {
+      const api = createMockApi();
+      const [a, b] = mockRows().slice(0, 2).map(key);
+      const c = await api.createCase('Poster');
+      const m = await api.createCombo(c.id);
+      return { api, a, b, c, m };
+    };
+
+    it('setComboSlot creates a custom role; add/remove/rename/reorder return the combo and keep order', async () => {
+      const { api, a, b, m } = await setup();
+      let r = await api.setComboSlot(m.id, 'Label', a);
+      expect(r.roles).toEqual(['Label']);
+      r = await api.setComboSlot(m.id, 'display', b);
+      expect(r.roles).toEqual(['display', 'Label']);
+      r = await api.addComboRole(m.id, '  Numerals ');
+      expect(r.roles).toEqual(['display', 'Label', 'Numerals']);
+      expect(r.slots.map(s => s.role)).toEqual(['display', 'Label']);
+      r = await api.renameComboRole(m.id, 'label', 'Nhãn nhỏ');
+      expect(r.roles).toEqual(['display', 'Nhãn nhỏ', 'Numerals']);
+      expect(r.slots[1]).toMatchObject({ role: 'Nhãn nhỏ' });
+      r = await api.reorderComboRoles(m.id, ['numerals', 'DISPLAY', 'nhãn nhỏ']);
+      expect(r.roles).toEqual(['Numerals', 'display', 'Nhãn nhỏ']);
+      expect(r.slots.map(s => s.role)).toEqual(['display', 'Nhãn nhỏ']);
+      r = await api.removeComboRole(m.id, 'DISPLAY');
+      expect(r.roles).toEqual(['Numerals', 'Nhãn nhỏ']);
+      expect((await api.getCase(m.caseId)).faces).toHaveLength(2); // font vẫn trong Case
+    });
+
+    it('clearing a font keeps the role as a placeholder', async () => {
+      const { api, a, m } = await setup();
+      await api.setComboSlot(m.id, 'Quote 2', a);
+      const r = await api.setComboSlot(m.id, 'Quote 2', null);
+      expect([r.slots.length, r.roles]).toEqual([0, ['Quote 2']]);
+    });
+
+    it('errors carry codes: name, duplicate (case-insensitive), not found, set mismatch, limit', async () => {
+      const { api, a, m } = await setup();
+      await api.addComboRole(m.id, 'Tiêu đề');
+      await expect(api.addComboRole(m.id, '')).rejects.toMatchObject({ code: 'role_name_invalid' });
+      await expect(api.addComboRole(m.id, 'x'.repeat(41))).rejects.toMatchObject({ code: 'role_name_invalid' });
+      await expect(api.addComboRole(m.id, 'TIÊU ĐỀ')).rejects.toMatchObject({ code: 'role_duplicate' });
+      await api.addComboRole(m.id, 'Hai');
+      await expect(api.renameComboRole(m.id, 'Hai', 'tiêu đề')).rejects.toMatchObject({ code: 'role_duplicate' });
+      await expect(api.renameComboRole(m.id, 'ma', 'X')).rejects.toMatchObject({ code: 'role_not_found' });
+      await expect(api.removeComboRole(m.id, 'ma')).rejects.toMatchObject({ code: 'role_not_found' });
+      await expect(api.reorderComboRoles(m.id, ['Hai'])).rejects.toMatchObject({ code: 'role_set_mismatch' });
+      await expect(api.reorderComboRoles(m.id, ['Hai', 'Hai'])).rejects.toMatchObject({ code: 'role_set_mismatch' });
+      for (let i = 0; i < 28; i++) await api.addComboRole(m.id, `Vai ${i}`);
+      await expect(api.addComboRole(m.id, 'Thừa')).rejects.toMatchObject({ code: 'role_limit' });
+      await expect(api.setComboSlot(m.id, 'Thừa', a)).rejects.toMatchObject({ code: 'role_limit' });
+    });
+
+    it('duplicating a combo carries placeholders; createCombos rejects case-insensitive duplicates', async () => {
+      const { api, a, b, c, m } = await setup();
+      await api.setComboSlot(m.id, 'Label', a);
+      await api.addComboRole(m.id, 'Trống');
+      const dup = await api.createCombo(c.id, 'Bản sao', m.id);
+      expect([dup.roles, dup.slots.length]).toEqual([['Label', 'Trống'], 1]);
+      await expect(api.createCombos(c.id, [{ name: null, slots: [{ role: 'A', face: a }, { role: 'a', face: b }] }])).rejects.toMatchObject({ code: 'role_duplicate' });
+    });
   });
 });
