@@ -12,6 +12,8 @@ import { useInk } from '../ui/inkLines';
 import { NoteMark } from '../ui/noteMark';
 import { graphemes, missingList, useMissingChars } from './glyphCoverage';
 import { barFill, deltaOf, deltaText, xhOk, type BarScale } from './compareMath';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 export const SAMPLE_VI = 'ỮẶỆỖỞ ươ';
 export const PLACEHOLDER = 'Hxg';
@@ -59,11 +61,12 @@ export const overlayStyleOf = (selected: readonly CompareFace[], base: CompareFa
   for (const f of selected) m.set(f, f === base ? 'solid' : OVERLAY_STYLES[Math.min(k++, OVERLAY_STYLES.length - 1)]);
   return m;
 };
-export const faceName = (f: CompareFace): string => `${f.row.family} ${f.row.subfamily ?? ''}`.trim();
+export const faceName = (f: CompareFace): string => faceLabel(f.row);
 const OV = { W: 520, H: 108, Y: 80, SZ: 72 } as const;
 
 /** Vùng Overlay chung: các font được chọn (≤ 4) chồng lên nhau chung baseline. Mốc vẽ đặc; font khác vẽ nét. Đường đứt = x-height ĐO TỪ CHỮ đang vẽ của font chính (mốc, nếu mốc được chọn). */
 export function OverlayPanel({ api, base, selected, scale }: { api: Api; base: CompareFace; selected: readonly CompareFace[]; scale(f: CompareFace): number }): React.JSX.Element {
+  useNameClashes();
   const styles = overlayStyleOf(selected, base);
   const primary = selected.includes(base) ? base : selected[0];
   return (
@@ -79,7 +82,7 @@ export function OverlayPanel({ api, base, selected, scale }: { api: Api; base: C
         {selected.map(f => (
           <li key={`${f.face.hashHex}:${f.face.faceIndex}`} data-style={styles.get(f)}>
             <svg width="26" height="10" aria-hidden="true"><line x1="1" x2="25" y1="5" y2="5" className={`ov-${styles.get(f)} sw`} /></svg>
-            <span>{faceName(f)}{f === base ? ` · ${t('compare.base')}` : ''}</span>
+            <span>{faceName(f)}<ClashNote faceId={f.row.faceId} inline />{f === base ? ` · ${t('compare.base')}` : ''}</span>
           </li>
         ))}
       </ul>

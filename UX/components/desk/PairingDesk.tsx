@@ -20,10 +20,12 @@ import { ComboStepper } from './ComboStepper';
 import { FontCompare } from './FontCompare';
 import { DetailStrip } from './DetailStrip';
 import './desk.css';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 const faceOf = (r: { hashHex: string; faceIndex: number }): FaceKeyDto => ({ hashHex: r.hashHex, faceIndex: r.faceIndex });
 const same = (a: FaceKeyDto | null | undefined, b: FaceKeyDto | null | undefined) => !!a && !!b && a.hashHex === b.hashHex && a.faceIndex === b.faceIndex;
-const nameOf = (r: FaceRowDto | null): string => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
+const nameOf = (r: FaceRowDto | null): string => (r ? faceLabel(r) : '—');
 const keyStr = (f: FaceKeyDto | null | undefined) => (f ? `${f.hashHex}:${f.faceIndex}` : '');
 /** Số font từ đó hỏi xác nhận trước khi bật hàng loạt (spec C6). */
 const CONFIRM_ACTIVATE_FROM = 200;
@@ -32,6 +34,7 @@ type Trial = PickItem;
 
 /** Pairing Desk (lát 1 của 2b): cột vai · Cuộn chọn (nguồn Ghép) · trang mẫu. */
 export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React.JSX.Element {
+  useNameClashes();
   const closeDesk = useUiStore(s => s.closeDesk);
   const openDesk = useUiStore(s => s.openDesk);
   const openCompare = useUiStore(s => s.openCompare);
@@ -287,7 +290,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
               return (
               <li key={`${c.face.hashHex}:${c.face.faceIndex}`} role="option" aria-selected={i === idx} data-testid="desk-cand" data-trial={c.fromPeek ? 'peek' : undefined}
                 onPointerEnter={() => setIdx(i)} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
-                <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle>
+                <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
                 {c.row.supportsVi === false && c.row.viMissing > 0 && <NoteMark inline kind="warn" text={tn('strip.viMissing', { n: c.row.viMissing })} />}
@@ -319,8 +322,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
             <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
           </div>
           <div className="fa-desk-strip">
-            {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b></span>}
-            {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}</span>}
+            {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b><ClashNote faceId={trial.row.faceId} inline /></span>}
+            {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}<ClashNote faceId={current.row.faceId} inline /></span>}
             <button type="button" className="fa-desk-place" data-testid="desk-place" aria-disabled={!trial || inUseSame} onClick={() => { if (trial && !inUseSame) void place(); }}>↵ {t('desk.place')}</button>
           </div>
           <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />

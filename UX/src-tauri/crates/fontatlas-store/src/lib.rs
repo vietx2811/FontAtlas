@@ -10,6 +10,7 @@ mod error;
 mod fold;
 mod ingest;
 mod langs;
+mod name_clash;
 mod legacy;
 mod open;
 mod overrides;
@@ -39,6 +40,7 @@ pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, Scan
 pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, PlaceholderProbe, RescanStats, RescanStatus, ScanPhase, ScanProgress, cloud_placeholders, is_dataless, os_placeholder, walk_fonts};
 pub use rescan::SourceRemovalReport;
 pub use query::{ClassAxis, ClassHistogram, DEFAULT_LIMIT, FacePage, FaceQuery, FaceRow, FamilyGroup, LangFilter, LangHit, MAX_LIMIT, SortKey, ViFilter, WIDTH_PCT, width_pct_span};
+pub use name_clash::NameClash;
 pub use langs::{LangCount, LangPending, LangProgress, LangRow};
 pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;

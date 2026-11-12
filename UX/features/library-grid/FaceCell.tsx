@@ -6,6 +6,8 @@ import type { FontFaceLoader } from './fontFaceLoader';
 import { PreviewHttpError, type PreviewBlobs } from './previewBlobs';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { NoteMark } from '../../components/ui/noteMark';
+import { ClashNote } from '../../components/ui/ClashNote';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { t, useLocale } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
 import { useUiStore } from '../../store/ui';
@@ -54,6 +56,7 @@ type Props = {
 export type PickMods = { meta: boolean; shift: boolean };
 
 function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSelect, onStale, fontSize, layout = 'grid', active = false, activeScope, onToggleActive, favorite, onToggleFavorite, boxHeight, index = 0, onPick, onContextMenu }: Props): React.JSX.Element {
+  useNameClashes();
   const fields = useCardFields(s => s.fields);
   useLocale(); // memo: vẽ lại khi đổi ngôn ngữ
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
@@ -134,7 +137,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
 
   const shownState: CellState = live ? 'live' : state;
   const shownUrl = mode === 'mask' ? shown?.src ?? '' : imgShown ?? '';
-  const name = `${row.family}${row.subfamily ? ` ${row.subfamily}` : ''}`;
+  const name = faceLabel(row);
   const missing = row.viMissing > 0;
   const format = fileFormat(row.path);
   const pick = (e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }) => {
@@ -197,6 +200,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         : state === 'error'
           ? <NoteMark kind="warn" className="fa-note-cloud" testId="cloud-error-note" text={t(CLOUD_ERR_KEY[errCode] ?? 'cloud.errFailed')} />
           : <NoteMark kind="info" className="fa-note-cloud" testId="cloud-only-note" text={t('cloud.note')} />)}
+      <ClashNote faceId={row.faceId} className="fa-note-clash" />
       <Tooltip label={favorite ? t('cell.unfavTip') : t('cell.favTip')}>
         <button type="button" className="fa-star" aria-label={t('cell.favTip')} aria-pressed={!!favorite}
           onClick={e => { e.stopPropagation(); onToggleFavorite?.(row); }} onKeyDown={e => e.stopPropagation()}>

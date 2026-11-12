@@ -1,7 +1,7 @@
 export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisStatsDto, AxisHistogramDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto, LangListDto, LangItemDto, LangCoverageDto, LangBadgeDto, LangFilterDto } from '../bindings';
 // Kiểu IPC: lấy từ UX/bindings (ts-rs, sinh từ Rust). File này chỉ đặt lại tên cho gọn và thêm kiểu phía giao diện.
 import type {
-  PreviewCacheInfoDto, ProblemDto,
+  PreviewCacheInfoDto, ProblemDto, NameClashDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
   ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
@@ -19,7 +19,7 @@ export type {
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
   AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
 };
-export type { PreviewCacheInfoDto, ProblemDto };
+export type { PreviewCacheInfoDto, ProblemDto, NameClashDto };
 export type ModelState = ModelStatusDto['state'];
 export type PairRole = PairRoleDto;
 export type PairMode = PairModeDto;

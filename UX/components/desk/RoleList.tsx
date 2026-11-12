@@ -8,8 +8,10 @@ import { FaceTitle } from '../ui/FaceTitle';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { SUGGESTED_ROLES, presetKey, roleGloss, roleLabel } from './deskRoles';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
-const nameOf = (r: { family: string; subfamily: string | null } | null): string => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
+const nameOf = (r: { faceId: number; family: string; subfamily: string | null } | null): string => (r ? faceLabel(r) : '—');
 const say = (kind: 'info' | 'error', text: string, action?: { label: string; run(): void }) => void useNoticeStore.getState().push({ kind, text, action });
 
 /** Tên người dùng gõ → tên lưu: trùng preset (kể cả tên đã dịch) thì lưu khoá preset để vi/en cùng đọc được. */
@@ -30,6 +32,7 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
   api: Api; combo: ComboDto; /** Vai hiển thị theo thứ tự (gồm vai chỉ có ở giao diện khi Combo chưa lưu vai nào). */ roles: readonly ComboRoleDto[]; role: ComboRoleDto;
   onSelect(r: ComboRoleDto): void; onCombo(c: ComboDto, selectRole?: ComboRoleDto): void; onRenamed(from: ComboRoleDto, to: ComboRoleDto): void;
 }): React.JSX.Element {
+  useNameClashes();
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<ComboRoleDto | null>(null);
   const [draft, setDraft] = useState('');
@@ -106,7 +109,7 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
                     ? <Tooltip label={gloss}><span className="fa-desk-role-name" data-term={`role.${presetKey(r)}`}>{roleLabel(r)}</span></Tooltip>
                     : <span className="fa-desk-role-name fa-desk-role-custom">{r}</span>}
                   {s
-                    ? <FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle>
+                    ? <><FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle><ClashNote faceId={s.row.faceId} inline /></>
                     : <span className="fa-desk-role-empty">{t('desk.roleEmpty')}</span>}
                   {s?.missing && <NoteMark inline text={t('desk.missing')} />}
                 </button>}

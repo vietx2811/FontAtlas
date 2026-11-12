@@ -593,3 +593,12 @@ fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
     assert_eq!(st.cloud_watch.watching().len(), 1);
     st.cloud_watch.shutdown();
 }
+
+#[test]
+fn name_clashes_command_is_empty_when_names_differ_and_reads_only() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["oswald_vf.ttf", "roboto.ttf", "open_sans.ttf"]);
+    assert!(library::name_clashes(&st).unwrap().is_empty());
+    // chỉ đọc: file trên đĩa không đổi
+    assert_eq!(std::fs::read(dir.join("oswald_vf.ttf")).unwrap(), std::fs::read(core_fixture("oswald_vf.ttf")).unwrap());
+}

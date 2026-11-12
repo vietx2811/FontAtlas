@@ -10,9 +10,11 @@ import { TermTip, termKey, termName } from '../ui/terms';
 import { Tooltip } from '../ui/Tooltip';
 import { ViRing } from '../ui/ViRing';
 import type { VariableAxisDto } from '../../bindings';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
-const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
+const nameOf = (r: FaceRowDto) => faceLabel(r);
 
 /** Đọc số đo của hai font (đang dùng + đang thử), nhớ theo khoá để ↑↓ không đọc lại. Lỗi một font → null cho lần này, KHÔNG nhớ (lần sau đọc lại). */
 export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKeyDto | null) {
@@ -55,6 +57,7 @@ function VariableTag({ axes }: { axes: VariableAxisDto[] }): React.JSX.Element {
 }
 
 function Card({ title, row, face, tone, baseGlyphs }: { title: string; row: FaceRowDto | null; face: CompareFace | null | undefined; tone: 'use' | 'try'; baseGlyphs?: number | null }): React.JSX.Element {
+  useNameClashes();
   const vi = face?.vi;
   const glyphs = face?.glyphs ?? null;
   const dg = tone === 'try' && glyphs !== null && baseGlyphs != null ? glyphs - baseGlyphs : null;
@@ -63,7 +66,7 @@ function Card({ title, row, face, tone, baseGlyphs }: { title: string; row: Face
     <div className="fa-dstrip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
       <h3>{title}</h3>
       {row ? <>
-        <div className="fa-dstrip-name">{nameOf(row)}{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
+        <div className="fa-dstrip-name">{nameOf(row)}<ClashNote faceId={row.faceId} inline />{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
         <div className="fa-dstrip-meta">
           {face?.designer && <Tooltip label="Designer"><span>{face.designer}</span></Tooltip>}
           {face?.foundry && face.foundry !== face.designer && <Tooltip label="Foundry"><span>{face.foundry}</span></Tooltip>}

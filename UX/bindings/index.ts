@@ -116,6 +116,7 @@ export type { MetadataDto } from './MetadataDto';
 export type { ModelEvent } from './ModelEvent';
 export type { ModelState } from './ModelState';
 export type { ModelStatusDto } from './ModelStatusDto';
+export type { NameClashDto } from './NameClashDto';
 export type { NewComboDto } from './NewComboDto';
 export type { NewPairDto } from './NewPairDto';
 export type { NewSlotDto } from './NewSlotDto';
