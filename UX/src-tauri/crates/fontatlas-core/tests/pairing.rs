@@ -8,13 +8,14 @@ fn roboto_like() -> Traits {
     Traits {
         class: Class::Sans,
         subclass: Some("neo_grotesque".into()),
-        x_height_em: Some(0.52),
-        aperture: Some(85.0),
-        aperture_e: Some(0.45),
-        contrast: Some(1.4),
-        stem: Some(0.15),
-        spacing: Some(0.11),
-        width: Some(1.0),
+        x_height_em: Some(0.53),
+        x_height_cap: Some(0.74),
+        aperture: Some(90.0),
+        aperture_e: Some(0.25),
+        contrast: Some(1.3),
+        stem: Some(0.16),
+        spacing: Some(0.17),
+        width: Some(0.92),
         vi_missing: Some(0),
         has_tnum: Some(true),
         ..Traits::default()
@@ -26,8 +27,9 @@ fn didone_display() -> Traits {
         class: Class::Serif,
         subclass: Some("didone".into()),
         x_height_em: Some(0.46),
+        x_height_cap: Some(0.68),
         aperture: Some(55.0),
-        aperture_e: Some(0.30),
+        aperture_e: Some(0.20),
         contrast: Some(9.0),
         stem: Some(0.10),
         spacing: Some(0.07),
@@ -41,12 +43,13 @@ fn old_serif() -> Traits {
     Traits {
         class: Class::Serif,
         subclass: Some("garalde".into()),
-        x_height_em: Some(0.48),
+        x_height_em: Some(0.49),
+        x_height_cap: Some(0.70),
         aperture: Some(80.0),
-        aperture_e: Some(0.40),
+        aperture_e: Some(0.28),
         contrast: Some(2.6),
-        stem: Some(0.14),
-        spacing: Some(0.12),
+        stem: Some(0.17),
+        spacing: Some(0.10),
         width: Some(1.0),
         vi_missing: Some(0),
         ..Traits::default()
@@ -109,6 +112,39 @@ fn caption_needs_more_than_body() {
     t.stem = Some(0.08);
     assert_eq!(role_fit(&t, Role::Body).fit, Fit::Good);
     assert_ne!(role_fit(&t, Role::Caption).fit, Fit::Good);
+}
+
+#[test]
+fn expressive_faces_the_classifier_leaves_uncertain_still_read_as_display() {
+    // Số đo thật: Bebas Neue (chữ hoa, class Sans) và Pacifico (script, class Uncertain).
+    let bebas = Traits {
+        class: Class::Sans,
+        x_height_em: Some(0.70),
+        x_height_cap: Some(1.0),
+        contrast: Some(1.1),
+        stem: Some(0.14),
+        aperture_e: Some(0.31),
+        spacing: Some(0.076),
+        vi_missing: Some(0),
+        ..Traits::default()
+    };
+    assert_eq!(role_fit(&bebas, Role::Display).fit, Fit::Good);
+    let b = role_fit(&bebas, Role::Body);
+    assert_eq!(b.fit, Fit::Weak);
+    assert!(codes(&b).contains(&"class_unfit"));
+    let pacifico = Traits {
+        class: Class::Uncertain,
+        x_height_em: Some(0.47),
+        x_height_cap: Some(0.54),
+        contrast: Some(2.7),
+        stem: Some(0.358),
+        aperture_e: Some(0.027),
+        spacing: Some(0.0),
+        vi_missing: Some(0),
+        ..Traits::default()
+    };
+    assert_eq!(role_fit(&pacifico, Role::Display).fit, Fit::Good);
+    assert_ne!(role_fit(&pacifico, Role::Body).fit, Fit::Good);
 }
 
 #[test]
@@ -237,6 +273,21 @@ fn nearly_the_same_but_not_the_same_family_warns() {
     let same = PairCtx { embed_cos: Some(0.7), same_family_root: true, ..PairCtx::default() };
     let r2 = pair_style(&old_serif(), &roboto_like(), &same, PairStyle::Contrast);
     assert!(!r2.warnings.iter().any(|w| w.code == "too_close_not_same"));
+}
+
+#[test]
+fn traits_from_a_real_face_classify_and_measure() {
+    let raw = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/dm_serif_display.ttf")).unwrap();
+    let rep = fontatlas_core::analyze_bytes(raw).unwrap();
+    let t = fontatlas_core::pairing::traits_from_face(&rep.faces[0]).unwrap();
+    assert_eq!(t.class, Class::Serif);
+    assert!(t.x_height_em.is_some() && t.contrast.is_some());
+    assert!(t.vi_missing.is_some());
+    // Hạng Good chỉ khi đủ tiếng Việt; thiếu thì trần Ok kèm mã vi_missing (đúng thiết kế).
+    let d = role_fit(&t, Role::Display);
+    let expect = if t.vi_missing == Some(0) { Fit::Good } else { Fit::Ok };
+    assert_eq!(d.fit, expect, "vi_missing={:?} {:?}", t.vi_missing, d.reasons);
+    assert_eq!(d.reasons.iter().any(|r| r.code == "vi_missing"), t.vi_missing != Some(0));
 }
 
 #[test]

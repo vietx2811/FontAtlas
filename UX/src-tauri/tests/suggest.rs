@@ -132,3 +132,28 @@ fn recent_views_record_order_dedupe_and_clear() {
     assert_eq!(suggest::clear_recent_views(&st).unwrap(), 3);
     assert!(suggest::recent_views(&st, 10).unwrap().is_empty());
 }
+
+#[test]
+fn user_class_override_changes_the_fit() {
+    use app_lib::services::analysis;
+    let (_d, st) = setup();
+    let k = key(&find(&st, "Roboto"));
+    let before = suggest::role_fit(&st, &k, &role("Body")).unwrap();
+    assert_ne!(before.fit, FitDto::Weak);
+    analysis::set_classification_override(&st, &app_lib::dto::analysis::ClassificationOverrideDto { face: k.clone(), class: "blackletter".into(), subclass: None }).unwrap();
+    let after = suggest::role_fit(&st, &k, &role("Body")).unwrap();
+    assert_eq!(after.fit, FitDto::Weak, "người dùng nói blackletter: không hợp Body");
+    assert!(after.reasons.iter().any(|r| r.code == "class_unfit"));
+    // danh sách theo vai cũng theo class đã sửa
+    let page = suggest::role_fit_faces(&st, &role("Body"), &RoleFitListOptsDto { limit: 100, ..Default::default() }).unwrap();
+    assert!(page.items.iter().all(|h| h.row.family != "Roboto"));
+}
+
+#[test]
+fn numerals_without_tnum_data_is_never_weak_for_that_reason() {
+    let (_d, st) = setup();
+    let k = key(&find(&st, "Roboto"));
+    let x = suggest::role_fit(&st, &k, &role("Numerals")).unwrap();
+    assert!(x.reasons.iter().all(|r| r.code != "tnum_missing"));
+    assert!(x.reasons.iter().any(|r| r.code == "tnum_unknown") || x.reasons.len() == 3);
+}

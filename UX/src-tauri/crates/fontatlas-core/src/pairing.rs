@@ -52,6 +52,8 @@ pub struct Traits {
     pub class: Class,
     pub subclass: Option<String>,
     pub x_height_em: Option<f32>,
+    /// x-height ÷ cap-height (≥ 0.95: chữ hoa kiểu Bebas).
+    pub x_height_cap: Option<f32>,
     pub aperture: Option<f32>,
     pub aperture_e: Option<f32>,
     pub contrast: Option<f32>,
@@ -73,6 +75,7 @@ impl Default for Traits {
             class: Class::Uncertain,
             subclass: None,
             x_height_em: None,
+            x_height_cap: None,
             aperture: None,
             aperture_e: None,
             contrast: None,
@@ -141,7 +144,19 @@ fn distinctiveness(t: &Traits) -> Option<f32> {
     if expressive_class(t.class) {
         return Some(1.0);
     }
-    t.contrast.map(|c| ((c - 2.0) / 6.0).clamp(0.0, 1.0))
+    // Class hay là Uncertain với font cá tính (Pacifico, Bebas): lấy thêm dấu hiệu từ số đo, cái nào mạnh nhất.
+    let parts = [
+        t.contrast.map(|c| (c - 2.0) / 4.0),
+        t.stem.map(|s| (s - 0.22) / 0.12),
+        t.aperture_e.map(|a| (0.12 - a) / 0.08),
+        t.x_height_cap.map(|r| if r >= 0.95 { 0.8 } else { 0.0 }),
+    ];
+    parts.into_iter().flatten().reduce(f32::max).map(|v| v.clamp(0.0, 1.0))
+}
+
+/// Chữ hoa kiểu Bebas: "x-height" bằng chiều cao chữ hoa (không có chữ thường thật).
+fn caps_only(t: &Traits) -> bool {
+    t.x_height_cap.is_some_and(|r| r >= 0.95)
 }
 
 fn level(score: f32) -> Fit {
@@ -157,24 +172,25 @@ fn level(score: f32) -> Fit {
 pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
     let mut cs: Vec<Crit> = match role {
         Role::Body => vec![
-            crit("x_height", 3.0, t.x_height_em, 0.46, 0.54, 0.08, "x_height_low", "x_height_high"),
-            crit("aperture", 2.0, t.aperture, 70.0, 100.0, 25.0, "aperture_low", "aperture_high"),
-            crit("aperture_e", 2.0, t.aperture_e, 0.30, 0.70, 0.15, "aperture_low", "aperture_high"),
+            // Vùng đích hiệu chuẩn theo phân vị 10–90 của 1722 họ OFL (Serif+Sans, mặt Regular), docs/team/eval/pairing/README.md.
+            crit("x_height", 3.0, t.x_height_em, 0.46, 0.56, 0.08, "x_height_low", "x_height_high"),
+            crit("aperture", 2.0, t.aperture, 66.0, 110.0, 25.0, "aperture_low", "aperture_high"),
+            crit("aperture_e", 2.0, t.aperture_e, 0.17, 0.37, 0.10, "aperture_low", "aperture_high"),
             crit("contrast", 2.0, t.contrast, 1.0, 3.5, 3.0, "contrast_low", "contrast_high"),
-            crit("spacing", 1.0, t.spacing, 0.08, 0.16, 0.06, "spacing_tight", "spacing_loose"),
-            crit("stem", 1.0, t.stem, 0.11, 0.22, 0.06, "stem_light", "stem_heavy"),
+            crit("spacing", 1.0, t.spacing, 0.08, 0.20, 0.06, "spacing_tight", "spacing_loose"),
+            crit("stem", 1.0, t.stem, 0.13, 0.20, 0.05, "stem_light", "stem_heavy"),
         ],
         Role::Caption => vec![
-            crit("x_height", 3.0, t.x_height_em, 0.50, 0.58, 0.06, "x_height_low", "x_height_high"),
-            crit("aperture", 2.0, t.aperture, 70.0, 100.0, 25.0, "aperture_low", "aperture_high"),
-            crit("contrast", 2.0, t.contrast, 1.0, 3.5, 3.0, "contrast_low", "contrast_high"),
-            crit("spacing", 2.0, t.spacing, 0.10, 0.18, 0.06, "spacing_tight", "spacing_loose"),
-            crit("stem", 2.0, t.stem, 0.12, 0.22, 0.05, "stem_light", "stem_heavy"),
+            crit("x_height", 3.0, t.x_height_em, 0.50, 0.60, 0.06, "x_height_low", "x_height_high"),
+            crit("aperture", 2.0, t.aperture, 75.0, 110.0, 25.0, "aperture_low", "aperture_high"),
+            crit("contrast", 2.0, t.contrast, 1.0, 3.0, 3.0, "contrast_low", "contrast_high"),
+            crit("spacing", 2.0, t.spacing, 0.10, 0.22, 0.06, "spacing_tight", "spacing_loose"),
+            crit("stem", 2.0, t.stem, 0.14, 0.22, 0.05, "stem_light", "stem_heavy"),
         ],
         Role::Heading => vec![
-            crit("stem", 2.0, t.stem, 0.10, 0.30, 0.08, "stem_light", "stem_heavy"),
+            crit("stem", 2.0, t.stem, 0.12, 0.30, 0.08, "stem_light", "stem_heavy"),
             crit("contrast", 2.0, t.contrast, 1.0, 6.0, 4.0, "contrast_low", "contrast_high"),
-            crit("spacing", 1.0, t.spacing, 0.05, 0.15, 0.06, "spacing_tight", "spacing_loose"),
+            crit("spacing", 1.0, t.spacing, 0.05, 0.22, 0.06, "spacing_tight", "spacing_loose"),
         ],
         Role::Display => vec![
             Crit {
@@ -186,21 +202,21 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
                 value: distinctiveness(t),
                 lo: 0.7,
             },
-            crit("spacing", 1.0, t.spacing, 0.04, 0.14, 0.06, "spacing_tight", "spacing_loose"),
+            crit("spacing", 1.0, t.spacing, 0.0, 0.20, 0.06, "spacing_tight", "spacing_loose"),
         ],
         Role::Quote => vec![
-            crit("x_height", 1.0, t.x_height_em, 0.42, 0.54, 0.08, "x_height_low", "x_height_high"),
+            crit("x_height", 1.0, t.x_height_em, 0.42, 0.56, 0.08, "x_height_low", "x_height_high"),
             crit("contrast", 2.0, t.contrast, 1.5, 5.0, 3.0, "contrast_low", "contrast_high"),
-            crit("spacing", 1.0, t.spacing, 0.07, 0.16, 0.06, "spacing_tight", "spacing_loose"),
+            crit("spacing", 1.0, t.spacing, 0.06, 0.18, 0.06, "spacing_tight", "spacing_loose"),
         ],
         Role::Label => vec![
-            crit("aperture", 2.0, t.aperture, 70.0, 100.0, 25.0, "aperture_low", "aperture_high"),
-            crit("stem", 2.0, t.stem, 0.12, 0.25, 0.06, "stem_light", "stem_heavy"),
-            crit("width", 1.0, t.width, 0.80, 1.10, 0.20, "width_narrow", "width_wide"),
+            crit("aperture", 2.0, t.aperture, 66.0, 110.0, 25.0, "aperture_low", "aperture_high"),
+            crit("stem", 2.0, t.stem, 0.13, 0.26, 0.06, "stem_light", "stem_heavy"),
+            crit("width", 1.0, t.width, 0.70, 1.10, 0.20, "width_narrow", "width_wide"),
         ],
         Role::Numerals => vec![
-            crit("stem", 2.0, t.stem, 0.10, 0.25, 0.06, "stem_light", "stem_heavy"),
-            crit("spacing", 1.0, t.spacing, 0.08, 0.16, 0.06, "spacing_tight", "spacing_loose"),
+            crit("stem", 2.0, t.stem, 0.12, 0.26, 0.06, "stem_light", "stem_heavy"),
+            crit("spacing", 1.0, t.spacing, 0.08, 0.20, 0.06, "spacing_tight", "spacing_loose"),
         ],
     };
 
@@ -222,7 +238,8 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
         }
     }
     let unfit = match role {
-        Role::Body | Role::Caption | Role::Label => expressive_class(t.class) || t.class == Class::Symbol,
+        Role::Body | Role::Caption => expressive_class(t.class) || t.class == Class::Symbol || caps_only(t),
+        Role::Label => expressive_class(t.class) || t.class == Class::Symbol,
         Role::Heading | Role::Quote => t.class == Class::Symbol,
         _ => false,
     };
@@ -517,4 +534,31 @@ pub fn pair_style(a: &Traits, b: &Traits, ctx: &PairCtx, style: PairStyle) -> St
     };
     let fit = if base == Fit::Unknown { base } else { base.min(cap) };
     StyleFit { fit, reasons, warnings }
+}
+
+/// Dựng `Traits` từ báo cáo phân tích một face (phân loại bằng `classify_v2`). `has_tnum` để `None`: chưa có số đo.
+pub fn traits_from_face(face: &crate::FaceReport) -> Option<Traits> {
+    use crate::classify::{ClassifyInput, classify_v2};
+    let meta = serde_json::to_value(&face.metadata).ok()?;
+    let an = serde_json::to_value(&face.anatomy).ok()?;
+    let inp = ClassifyInput::from_json(&meta, &an);
+    let c = classify_v2(&inp);
+    let m = &inp.m;
+    Some(Traits {
+        class: c.class,
+        subclass: c.subclass.clone(),
+        x_height_em: m.x_height_em,
+        x_height_cap: face.anatomy.x_height_cap.value,
+        aperture: m.aperture,
+        aperture_e: m.aperture_e,
+        contrast: m.contrast,
+        stem: m.stem,
+        spacing: m.spacing,
+        width: m.width,
+        stress_deg: m.stress_abs,
+        a_storeys: m.a_storeys,
+        g_storeys: m.g_storeys,
+        vi_missing: Some(face.vietnamese.missing.len() as u32),
+        has_tnum: None,
+    })
 }

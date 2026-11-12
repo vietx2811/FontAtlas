@@ -11,6 +11,7 @@ use crate::dto::suggest::*;
 use crate::error::CmdError;
 use crate::index_bundle::IndexBundle;
 use crate::services::analysis::{bundle, dto_key, ix_of, rows_of};
+use crate::services::library::{EffMap, effective_classes};
 use crate::state::AppState;
 
 fn axis(p: &FaceProfile, a: AxisId) -> Option<f32> {
@@ -23,13 +24,16 @@ fn reading(r: &fontatlas_index::Reading) -> Option<f32> {
 }
 
 /// Số đo của một face cho mô hình G4. Số đo `Failed` → `None` (mô hình bỏ tiêu chí, không đoán).
-/// Class = phân loại TỰ ĐỘNG (chưa áp ghi đè của người dùng); `has_tnum` chưa có trong Index nên để `None`.
-pub(crate) fn traits_of(b: &IndexBundle, p: &FaceProfile) -> Traits {
+/// Class = phân loại HIỆU LỰC (ghi đè của người dùng > tự động, `eff` từ `library::effective_classes`).
+/// `has_tnum` chưa có trong Index nên để `None` (mô hình bỏ cổng tnum, không hạ Numerals).
+pub(crate) fn traits_of(b: &IndexBundle, p: &FaceProfile, eff: &EffMap) -> Traits {
     let m = b.meta.get(&p.key);
+    let e = m.and_then(|m| eff.get(&m.face_id));
     Traits {
-        class: m.and_then(|m| Class::parse(&m.auto_class)).unwrap_or(Class::Uncertain),
-        subclass: m.and_then(|m| m.auto_subclass.clone()),
+        class: e.and_then(|e| Class::parse(&e.class)).unwrap_or(Class::Uncertain),
+        subclass: e.and_then(|e| e.sub.clone()),
         x_height_em: axis(p, AxisId::XHeightEm),
+        x_height_cap: axis(p, AxisId::XHeightCap),
         aperture: axis(p, AxisId::Aperture),
         aperture_e: axis(p, AxisId::ApertureE),
         contrast: axis(p, AxisId::Contrast),
@@ -79,6 +83,14 @@ pub(crate) fn resolve_role(r: &RoleRefDto) -> Option<Role> {
         }))
 }
 
+/// Chưa đọc được `tnum` từ Index: nói rõ cổng này chưa kiểm (không hạ mức, không loại font).
+fn with_tnum_note(r: Role, mut why: Vec<WhyDto>) -> Vec<WhyDto> {
+    if r == Role::Numerals && why.len() < 3 && !why.iter().any(|w| w.code == "tnum_missing") {
+        why.push(WhyDto { code: "tnum_unknown".into(), params: vec![] });
+    }
+    why
+}
+
 fn unknown_role() -> RoleFitDto {
     RoleFitDto {
         fit: FitDto::Unknown,
@@ -94,8 +106,9 @@ pub fn role_fit(state: &AppState, face: &FaceKeyDto, role: &RoleRefDto) -> Resul
         return Ok(unknown_role());
     };
     let p = b.index.profile(&key).ok_or_else(|| CmdError::not_found("face"))?;
-    let x = pairing::role_fit(&traits_of(&b, p), r);
-    Ok(RoleFitDto { fit: fit_dto(x.fit), profile: Some(role_id(r)), reasons: x.reasons.iter().map(reason_dto).collect() })
+    let eff = effective_classes(state)?;
+    let x = pairing::role_fit(&traits_of(&b, p, &eff), r);
+    Ok(RoleFitDto { fit: fit_dto(x.fit), profile: Some(role_id(r)), reasons: with_tnum_note(r, x.reasons.iter().map(reason_dto).collect()) })
 }
 
 /// Font hợp một vai trong cả thư viện (nguồn "Hợp vai" của cột 2). Chỉ good/ok; good trước, rồi tên họ, rồi key (tất định).
@@ -104,6 +117,7 @@ pub fn role_fit_faces(state: &AppState, role: &RoleRefDto, opts: &RoleFitListOpt
         return Ok(RoleFitPageDto { profile: None, items: vec![], total: 0 });
     };
     let b = bundle(state)?;
+    let eff = effective_classes(state)?;
     let allowed: Option<HashSet<fontatlas_index::FaceKey>> = opts
         .filter
         .as_ref()
@@ -119,7 +133,7 @@ pub fn role_fit_faces(state: &AppState, role: &RoleRefDto, opts: &RoleFitListOpt
         if allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) {
             continue;
         }
-        let x = pairing::role_fit(&traits_of(&b, p), r);
+        let x = pairing::role_fit(&traits_of(&b, p, &eff), r);
         if matches!(x.fit, Fit::Good | Fit::Ok) {
             hits.push((x.fit, p, x.reasons));
         }
@@ -135,7 +149,7 @@ pub fn role_fit_faces(state: &AppState, role: &RoleRefDto, opts: &RoleFitListOpt
     let items = page
         .into_iter()
         .filter_map(|(fit, p, reasons)| {
-            Some(RoleFitHitDto { face: dto_key(&p.key), row: rows.get(&p.key)?.clone(), fit: fit_dto(fit), reasons: reasons.iter().map(reason_dto).collect() })
+            Some(RoleFitHitDto { face: dto_key(&p.key), row: rows.get(&p.key)?.clone(), fit: fit_dto(fit), reasons: with_tnum_note(r, reasons.iter().map(reason_dto).collect()) })
         })
         .collect();
     Ok(RoleFitPageDto { profile: Some(role_id(r)), items, total })
