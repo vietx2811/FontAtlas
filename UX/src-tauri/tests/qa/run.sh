@@ -22,7 +22,18 @@ trap release_lock EXIT
 # Dọn đăng ký font còn sót từ lượt QA trước bị ngắt giữa chừng (persistent scope sống qua tiến trình). Chỉ file dưới thư mục QA có qa.js.
 sweep_qa_fonts() { command -v swift >/dev/null && swift "$HERE/unregister_qa_fonts.swift" 2>/dev/null || true; }
 sweep_qa_fonts
-QA="$(mktemp -d)"; F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
+# Thư mục tạm của QA (ảnh chụp + dữ liệu, ~40 MB/lượt) đặt ở ổ dữ liệu khi có, không ở ổ hệ thống (đang thiếu chỗ).
+QA_BASE="${FONTATLAS_QA_TMP:-}"
+[ -z "$QA_BASE" ] && [ -d /Volumes/VXData/Users/VietX ] && QA_BASE="/Volumes/VXData/Users/VietX/fontatlas-tmp/qa"
+if [ -n "$QA_BASE" ]; then
+  mkdir -p "$QA_BASE"
+  # Dọn lượt QA cũ hơn 7 ngày, chỉ thư mục có qa.js do chính script này tạo.
+  find "$QA_BASE" -maxdepth 1 -name 'qa.*' -type d -mtime +7 -exec test -f '{}/qa.js' \; -exec rm -rf '{}' + 2>/dev/null || true
+  QA="$(mktemp -d "$QA_BASE/qa.XXXXXX")"
+else
+  QA="$(mktemp -d)"
+fi
+F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
 mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/data"
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
 cp "$F"/{playfair_display,libre_baskerville,libre_baskerville_italic_vf,fira_sans_regular}.ttf "$QA/B/"
