@@ -58,3 +58,33 @@ describe('G7 tên trùng VF ↔ static', () => {
     expect(t('clash.static.tip')).toMatch(/shares a PostScript name/);
   });
 });
+
+describe('G7 nạp lại danh sách trùng tên', () => {
+  it('nạp khi bắt đầu và mỗi khi thư viện đổi (xoá nguồn → bumpLibrary)', async () => {
+    const { startScanSync } = await import('../../../store/scan');
+    const { useUiStore } = await import('../../../store/ui');
+    let calls = 0;
+    const api = { scanSubscribe: async () => () => {}, scanStatus: async () => ({ running: false, paused: false }), nameClashes: async () => { calls++; return [{ vfFaceId: 9, staticFaceIds: [8], psNames: ['X-Regular'], exact: true }]; } } as never;
+    const stop = await startScanSync(api);
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(calls).toBe(1);
+    expect(useNameClashStore.getState().vf[9]).toBeDefined();
+    act(() => useUiStore.getState().bumpLibrary(true));
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(calls).toBe(2);
+    stop();
+    act(() => useUiStore.getState().bumpLibrary());
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    expect(calls).toBe(2);
+  });
+});
+
+describe('G7 một nhãn một luật', () => {
+  it('faceLabel dùng chung: VF trùng có hậu tố, còn lại giữ "Họ Kiểu"', async () => {
+    const { faceLabel } = await import('../../../store/nameClash');
+    act(() => useNameClashStore.getState().set([{ vfFaceId: 1, staticFaceIds: [2], psNames: ['A-Regular'], exact: true }]));
+    expect(faceLabel({ faceId: 1, family: 'A', subfamily: 'Regular' })).toBe('A Regular VF');
+    expect(faceLabel({ faceId: 2, family: 'A', subfamily: 'Regular' })).toBe('A Regular');
+    expect(faceLabel({ faceId: 3, family: 'B', subfamily: null })).toBe('B');
+  });
+});

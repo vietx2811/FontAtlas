@@ -5,6 +5,7 @@ import { openPrivacySettings } from '../privacy';
 import { useNoticeStore } from './notices';
 import { t } from '../i18n';
 import { refreshNameClashes } from './nameClash';
+import { useUiStore } from './ui';
 
 export const BUMP_THROTTLE_MS = 1500;
 
@@ -32,6 +33,8 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const bumpNow = () => { clearTimeout(timer); timer = undefined; last = Date.now(); store.getState().bump(); };
   void refreshNameClashes(api);
+  // Xoá nguồn, giải quyết trùng…: mọi nơi đổi thư viện đều bump `libraryRev` → nạp lại danh sách trùng tên.
+  const offRev = useUiStore.subscribe((s, prev) => { if (s.libraryRev !== prev.libraryRev) void refreshNameClashes(api); });
   const bumpSoon = () => {
     const wait = BUMP_THROTTLE_MS - (Date.now() - last);
     if (wait <= 0) bumpNow(); else if (!timer) timer = setTimeout(bumpNow, wait);
@@ -64,5 +67,5 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     const st = await api.scanStatus();
     if (st.running) store.setState({ scanning: true, paused: st.paused });
   } catch (e) { console.warn('scan_status failed', e); }
-  return () => { off(); clearTimeout(timer); };
+  return () => { off(); offRev(); clearTimeout(timer); };
 }

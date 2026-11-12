@@ -7,9 +7,11 @@ import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, isHeadingLike, roleGloss, roleLabel } from './deskRoles';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 const comboTitle = (c: { idx: number; name: string | null }): string => `${t('combo.label')} ${c.idx}${c.name && c.name !== `Combo ${c.idx}` ? ` · ${c.name}` : ''}`;
-const nameOf = (r: FaceRowDto | null) => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
+const nameOf = (r: FaceRowDto | null) => (r ? faceLabel(r) : '—');
 const roleName = roleLabel;
 const slotRow = (c: ComboDto, roles: readonly ComboRoleDto[]) => roles.map(r => c.slots.find(s => s.role === r)).find(s => s && !s.missing)?.row ?? null;
 
@@ -37,6 +39,7 @@ const reasonText = (r: string | null) => (r ? t(`cc.reason.${r}` as 'cc.reason.m
 
 /** Compare Combo (06 §3.2): mỗi cột một Combo của Case, mốc = Combo đang dùng; hàng Specimen · Giọng · Quan hệ · VI thấp nhất · Số font · License. */
 export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: Api; caseId: number; currentId: number; onOpen(id: number): void; onMain(id: number): void }): React.JSX.Element {
+  useNameClashes();
   const [data, setData] = useState<CaseCompareDto | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -64,7 +67,7 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
           {[...ROLE_ORDER.filter(r => cols.some(c => c.combo.slots.some(s => s.role === r))), ...[...new Set(cols.flatMap(c => c.combo.slots.map(s => s.role)))].filter(r => !ROLE_ORDER.includes(r))].map(r => (
             <tr key={r} data-role={r}><th scope="row">{roleGloss(r) ? <Tooltip label={roleGloss(r)}><span data-term={`role.${r}`}>{roleName(r)}</span></Tooltip> : <span>{roleName(r)}</span>}</th>{cols.map(c => {
               const s = c.combo.slots.find(x => x.role === r);
-              return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}{s.missing && <NoteMark inline text={t('desk.missing')} />}</> : '—'}</td>;
+              return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}<ClashNote faceId={s.row.faceId} inline />{s.missing && <NoteMark inline text={t('desk.missing')} />}</> : '—'}</td>;
             })}</tr>
           ))}
           <tr data-row="relations"><th scope="row" className="has-tip"><Tooltip label={t('cc.relations.tip')}><span>{t('cc.relations')}</span></Tooltip></th>{cols.map(c => (

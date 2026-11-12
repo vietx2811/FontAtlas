@@ -39,4 +39,20 @@ export function useNameClashRole(faceId: number | undefined): { role: NameClashR
 }
 
 /** Tên hiển thị: bản VF trùng tên thêm hậu tố " VF" (chỉ hiển thị, không đổi tên thật). */
-export const vfDisplayName = (name: string, role: NameClashRole | undefined): string => (role === 'vf' && !/\bVF$/.test(name) ? `${name} VF` : name);
+export const vfDisplayName = (name: string, role: NameClashRole | undefined): string => (role === 'vf' && !/\bVF$/.test(name) ? `${name} VF`.trim() : name);
+
+/** Vai của một face (đọc ngay, không đăng ký cập nhật): dùng trong hàm thuần; component gọi `useNameClashes()` để vẽ lại khi danh sách đổi. */
+export function clashRoleOf(faceId: number): NameClashRole | undefined {
+  const s = useNameClashStore.getState();
+  return s.vf[faceId] ? 'vf' : s.st[faceId] ? 'static' : undefined;
+}
+
+/** MỘT luật cho nhãn font ở mọi nơi hiện tên: "Họ Kiểu", thêm " VF" nếu là bản VF trùng tên static. */
+export const faceLabel = (r: { faceId: number; family: string; subfamily: string | null }): string =>
+  vfDisplayName(`${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`, clashRoleOf(r.faceId));
+
+/** Đăng ký cập nhật danh sách trùng tên để component vẽ lại khi `faceLabel`/`clashRoleOf` đổi kết quả. */
+export function useNameClashes(): void {
+  useNameClashStore(s => s.vf);
+  useNameClashStore(s => s.st);
+}

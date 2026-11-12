@@ -10,10 +10,12 @@ import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, isHeadingLike, presetKey, roleLabel } from './deskRoles';
 import { guessProfile, whyText } from './pickerSources';
 import { INTENTS, intentName, matchIntent, type Intent } from './intents';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 export const STYLE_IDS = ['contrast', 'superfamily', 'same_structure', 'same_era', 'display_vs_neutral', 'harmony'] as const;
 const SUGGEST_DEBOUNCE_MS = 300;
-const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
+const nameOf = (r: FaceRowDto) => faceLabel(r);
 const kOf = (k: FaceKeyDto) => `${k.hashHex}:${k.faceIndex}`;
 const say = (kind: 'info' | 'error', text: string, action?: { label: string; run(): void }) => void useNoticeStore.getState().push({ kind, text, action });
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -33,6 +35,7 @@ type Ops = { refresh(): Promise<CaseDto>; go(id: number): void };
 
 /** Ô tên combo + popover "Gợi ý combo" (G6). Tên đã gõ giữ nguyên khi đóng; mọi lần nhận có hoàn tác. */
 export function ComboNameSuggest({ api, data, combo, ops, nameRef }: { api: Api; data: CaseDto; combo: ComboDto; ops: Ops; nameRef: React.RefObject<HTMLInputElement | null> }): React.JSX.Element {
+  useNameClashes();
   const sample = useUiStore(s => s.sample);
   const savedName = combo.name && combo.name !== `Combo ${combo.idx}` ? combo.name : '';
   const [draft, setDraft] = useState(savedName);
@@ -162,7 +165,7 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef }: { api: Api;
                 {s.slots.map((sl, k) => (
                   <div key={sl.role.name} className="fa-cs-slot">
                     <Sample api={api} row={sl.row} heading={isHeadingLike(sl.role.name) && k === 0} text={isHeadingLike(sl.role.name) ? headText : bodyText} />
-                    <div className="fa-cs-meta"><span>{roleLabel(sl.role.name)} · {nameOf(sl.row)}{sl.locked ? ' 🔒' : ''}</span>
+                    <div className="fa-cs-meta"><span>{roleLabel(sl.role.name)} · {nameOf(sl.row)}<ClashNote faceId={sl.row.faceId} inline />{sl.locked ? ' 🔒' : ''}</span>
                       {!sl.locked && <Tooltip label={t('cs.takeRole', { role: roleLabel(sl.role.name) })}><button type="button" data-testid="cs-take-role" aria-label={t('cs.takeRole', { role: roleLabel(sl.role.name) })} onClick={e => { e.stopPropagation(); void takeRole(s, k); }}>＋</button></Tooltip>}</div>
                   </div>
                 ))}

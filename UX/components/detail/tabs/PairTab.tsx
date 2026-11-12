@@ -15,12 +15,15 @@ import { Tooltip } from '../../ui/Tooltip';
 import { TermOrTip, termKey } from '../../ui/terms';
 import { AXIS_META } from './AnatomyTab';
 import { PARAGRAPH } from './SpecimenTab';
+import { faceLabel, useNameClashes } from '../../../store/nameClash';
+import { ClashNote } from '../../ui/ClashNote';
 
 const modes = (): Array<[PairMode, string]> => [['safe', t('pair.gate.safe')], ['controlled', t('pair.gate.controlled')], ['experimental', t('pair.gate.experimental')]];
 
 type Props = { api: Api; detail: FaceDetailDto; css: CSSProperties };
 
 export function PairTab({ api, detail, css }: Props): React.JSX.Element {
+  useNameClashes();
   const sample = useUiStore(s => s.sample);
   const setPanelTab = useUiStore(s => s.setPanelTab);
   const faceActions = useFaceActions();
@@ -108,7 +111,7 @@ export function PairTab({ api, detail, css }: Props): React.JSX.Element {
             <p className="fa-pair-body" data-testid="pair-body" style={{ ...bodyCss, fontSize: 14, lineHeight: 1.55, margin: 0 }}>{PARAGRAPH}</p>
           </div>
           <p className="fa-pair-name" {...faceMenuProps(faceActions, [cand.row])}>
-            <FaceTitle api={api} face={cand.row} className="fa-pair-title">{cand.row.family}{cand.row.subfamily ? ` ${cand.row.subfamily}` : ''}</FaceTitle> · {role === 'heading' ? t('pt.asBody') : t('pt.asHeading')}
+            <FaceTitle api={api} face={cand.row} className="fa-pair-title">{faceLabel(cand.row)}</FaceTitle><ClashNote faceId={cand.row.faceId} inline /> · {role === 'heading' ? t('pt.asBody') : t('pt.asHeading')}
           </p>
           <p data-testid="pair-summary" className="fa-pair-summary">{cand.summary}</p>
           <ul className="fa-pair-labels">
