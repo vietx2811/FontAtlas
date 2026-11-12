@@ -19,7 +19,7 @@ use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
 use crate::dto::preview::*;
-use crate::dto::settings::FontManagerDto;
+use crate::dto::settings::{FontManagerDto, GlassProbeDto};
 use crate::dto::suggest::*;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
@@ -43,6 +43,8 @@ pub const SYNC_OK: &[&str] = &[
     "scan_status",
     "preview_info",
     "activation_caps",
+    "set_window_glass",
+    "glass_probe",
 ];
 
 /// Danh sách lệnh (nguồn duy nhất). Cú pháp mỗi dòng: `async|sync tên(đối số: kiểu, …) -> kiểu_kết_quả;`
@@ -198,6 +200,8 @@ macro_rules! command_list {
             async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
             async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
+            sync set_window_glass(on: bool) -> Result<bool, CmdError>;
+            sync glass_probe(resize: Option<Vec<f64>>) -> Result<GlassProbeDto, CmdError>;
             async auto_status() -> Result<AutoStatusDto, CmdError>;
             async auto_set_enabled(on: bool) -> Result<AutoStatusDto, CmdError>;
             async auto_install(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
@@ -649,6 +653,27 @@ pub async fn scan_subscribe(
 #[tauri::command]
 pub fn activation_caps(state: State<'_, Arc<AppState>>) -> Result<ActivationCapsDto, CmdError> {
     Ok(activation::caps(&state))
+}
+
+/// Bật/tắt kính thật (Liquid Glass) sau webview, dành cho màn hướng dẫn. Trả `true` khi kính đang hiện;
+/// `false` = không có (macOS cũ, không phải macOS, hoặc đã tắt) và vibrancy `sidebar` được giữ/trả lại.
+#[tauri::command]
+pub fn set_window_glass(on: bool) -> Result<bool, CmdError> {
+    Ok(crate::glass::apply(on))
+}
+
+/// QA bản debug: đo lớp kính/vibrancy của cửa sổ chính; `resize` = [rộng, cao] logic để đổi cỡ cửa sổ trước khi đo. Bản release không có thân đo (trả `debug_only`).
+#[tauri::command]
+pub fn glass_probe(resize: Option<Vec<f64>>) -> Result<GlassProbeDto, CmdError> {
+    #[cfg(all(debug_assertions, target_os = "macos"))]
+    {
+        crate::glass::probe(match resize.as_deref() { Some([w, h]) => Some((*w, *h)), _ => None }).ok_or_else(|| CmdError::internal("không đọc được contentView"))
+    }
+    #[cfg(not(all(debug_assertions, target_os = "macos")))]
+    {
+        let _ = resize;
+        Err(CmdError::new("debug_only", "chỉ có trong bản debug trên macOS"))
+    }
 }
 
 /// Kiểm kỷ luật async trên `table` và mã nguồn `src` của commands.rs; trả danh sách vi phạm.

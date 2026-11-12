@@ -22,6 +22,8 @@ export interface Api extends LibraryApi {
   bootSubscribe(onEvent: (e: BootEvent) => void): Promise<Unsubscribe>;
   onboardingState(): Promise<OnboardingDto>;
   setOnboardingStep(step: string | null): Promise<void>;
+  /** Bật/tắt kính thật (Liquid Glass) sau webview cho màn hướng dẫn. Trả true khi kính đang hiện; false = không có (giữ vibrancy). */
+  setWindowGlass(on: boolean): Promise<boolean>;
   legacyImport(): Promise<LegacyStateDto>;
   legacyRetry(): Promise<LegacyStateDto>;
   // Nguồn và quét

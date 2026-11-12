@@ -139,3 +139,19 @@ pub struct OnboardingDto {
     pub keep_active_on_exit: bool,
     pub font_managers: Vec<FontManagerDto>,
 }
+
+/// QA bản debug: số lớp kính / vibrancy trong contentView của cửa sổ chính và khung kính so với contentView.
+/// Bản release không có đo đạc (lệnh trả lỗi `debug_only`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct GlassProbeDto {
+    pub glass_count: u32,
+    pub visual_effect_count: u32,
+    /// [x, y, rộng, cao] của lớp kính đầu tiên (rỗng nếu không có).
+    pub glass_frame: Vec<f64>,
+    /// [rộng, cao] của bounds contentView.
+    pub content_bounds: Vec<f64>,
+    /// Tên lớp các subview trực tiếp của contentView (từ dưới lên), để chẩn đoán.
+    pub subviews: Vec<String>,
+}

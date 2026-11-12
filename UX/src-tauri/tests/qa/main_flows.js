@@ -75,7 +75,26 @@
     let foldersDone = false;
     for (let i = 0; i < 60 && document.querySelector('.fa-onb'); i++) {
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? '';
-      await sleep(600); await snap('onb-' + String(i).padStart(2, '0'));
+      await sleep(600);
+      // Mỗi bước chụp cả tối lẫn sáng (ép theme như các bước *-light khác), rồi trả theme về như cũ.
+      { const root = document.documentElement; const was = root.dataset.theme;
+        root.dataset.theme = 'dark'; await sleep(250); await snap('onb-' + String(i).padStart(2, '0'));
+        root.dataset.theme = 'light'; await sleep(250); await snap('onb-' + String(i).padStart(2, '0') + '-light');
+        if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was; await sleep(150); }
+      if (i === 0) {
+        // Kính thật (NSGlassEffectView): trong onboarding đúng 1 lớp, vibrancy sidebar đã gỡ, khung kính == bounds contentView, và vẫn khớp sau khi đổi cỡ cửa sổ / đổi theme.
+        const probe = async resize => { try { return await inv('glass_probe', { resize: resize ?? null }); } catch (e) { return { error: String(e && e.message || e) }; } };
+        const same = p => p.glassFrame && p.glassFrame.length === 4 && Math.abs(p.glassFrame[2] - p.contentBounds[0]) < 1.5 && Math.abs(p.glassFrame[3] - p.contentBounds[1]) < 1.5 && Math.abs(p.glassFrame[0]) < 1.5 && Math.abs(p.glassFrame[1]) < 1.5;
+        let p0 = await probe(); for (let k = 0; k < 20 && !p0.error && !(p0.glassCount === 1 && p0.visualEffectCount === 0); k++) { await sleep(250); p0 = await probe(); }
+        await log('onb-glass-present', !p0.error && p0.glassCount === 1 && p0.visualEffectCount === 0 && same(p0), p0);
+        const p1 = await probe([1180, 800]); await sleep(700); const p1b = await probe();
+        await log('onb-glass-follows-resize', !p1.error && !p1b.error && p1b.glassCount === 1 && same(p1b) && Math.abs(p1b.contentBounds[0] - 1180) < 2, p1b);
+        const root = document.documentElement; const was = root.dataset.theme;
+        for (const th of ['light', 'dark']) { root.dataset.theme = th; await sleep(300); }
+        const p2 = await probe(); if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was;
+        if (!p0.error) { await probe([p0.contentBounds[0], p0.contentBounds[1]]); await sleep(500); } // trả cỡ cửa sổ về như cũ cho các bước sau
+        await log('onb-glass-survives-theme', !p2.error && p2.glassCount === 1 && same(p2), p2);
+      }
       const add = btn('+ Thêm thư mục');
       if (add && !foldersDone) {
         const rows = () => document.querySelectorAll('.fa-onb-sources > li:not(.empty)').length;
@@ -120,6 +139,10 @@
     }
     await wait(() => !document.querySelector('.fa-onb'), 15000);
     await log('onb-finished', !document.querySelector('.fa-onb'), '');
+    { // Rời onboarding: kính phải biến mất và vibrancy sidebar trở lại (không sót NSGlassEffectView dưới webview).
+      let pe; for (let k = 0; k < 20; k++) { try { pe = await inv('glass_probe', { resize: null }); } catch (e) { pe = { error: String(e && e.message || e) }; } if (!pe.error && pe.glassCount === 0 && pe.visualEffectCount === 1) break; await sleep(250); }
+      await log('onb-glass-gone-after', !pe.error && pe.glassCount === 0 && pe.visualEffectCount === 1, pe);
+    }
     // THƯ VIỆN
     const cells = () => [...document.querySelectorAll('[role=gridcell][data-face-id]')];
     await wait(() => cells().length >= 10, 120000);

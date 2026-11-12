@@ -48,7 +48,7 @@ libc = "0.2"
 objc2 = "0.6"
 block2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSError", "NSProcessInfo", "NSString", "NSFileManager", "NSURL"] }
-objc2-app-kit = { version = "0.3", features = ["NSImage"] }
+objc2-app-kit = { version = "0.3", features = ["NSImage", "NSVisualEffectView", "NSGlassEffectView", "NSView", "NSWindow", "NSResponder", "NSGraphics"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "WKWebViewConfiguration", "WKPreferences", "block2", "objc2-app-kit"] }
 
 [dev-dependencies]
