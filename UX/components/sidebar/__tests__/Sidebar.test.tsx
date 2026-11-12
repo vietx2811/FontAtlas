@@ -596,4 +596,13 @@ describe('Sidebar: nhóm Case (G1)', () => {
     fireEvent.click(item.querySelector('button')!); await settle();
     expect(useUiStore.getState().desk?.caseId).toBe(res.case.id);
   });
+  it('Case/dự án tạo ngoài luồng thanh bên hiện ra khi cửa sổ lấy lại focus', async () => {
+    const api = createMockApi();
+    const { container } = render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    expect(container.querySelector('[data-drop-case]')).toBeNull();
+    const [r] = (await api.queryFaces({ limit: 1 })).items;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: r.faceIndex }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    act(() => { window.dispatchEvent(new Event('focus')); }); await settle();
+    expect(container.querySelector(`[data-drop-case="${res.case.id}"]`)).toBeTruthy();
+  });
 });
