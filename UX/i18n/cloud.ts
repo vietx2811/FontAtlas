@@ -19,7 +19,7 @@ export const CLOUD_I18N = {
   'cdl.menu.cancel': 'Huỷ tải về máy',
   'cdl.menu.none': 'Không còn font nào chưa tải về',
   'cdl.btn': 'Tải về máy',
-  'cdl.tip': 'Yêu cầu hệ thống tải các font của nguồn này về máy (tối đa 4 cùng lúc), rồi quét lại để chúng hiện ra trong thư viện.',
+  'cdl.tip': 'Yêu cầu hệ thống tải các font của nguồn này về máy (vài font cùng lúc, chừa chỗ cho xem trước), rồi quét lại để chúng hiện ra trong thư viện.',
   'cdl.running': 'Đang tải {done}/{total}',
   'cdl.starting': 'Đang chuẩn bị tải…',
   'cdl.cancel': 'Huỷ',

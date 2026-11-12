@@ -20,7 +20,7 @@ export const EN_CLOUD: Record<keyof typeof CLOUD_I18N, string> = {
   'cdl.menu.cancel': 'Cancel download',
   'cdl.menu.none': 'Nothing left to download',
   'cdl.btn': 'Download now',
-  'cdl.tip': 'Asks macOS to download this source’s fonts to this Mac (up to 4 at a time), then rescans so they appear in your library.',
+  'cdl.tip': 'Asks macOS to download this source’s fonts to this Mac (a few at a time, leaving room for previews), then rescans so they appear in your library.',
   'cdl.running': 'Downloading {done}/{total}',
   'cdl.starting': 'Getting ready…',
   'cdl.cancel': 'Cancel',

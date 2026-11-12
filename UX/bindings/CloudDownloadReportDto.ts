@@ -14,6 +14,6 @@ total: number, downloaded: number, failed: number,
  */
 cancelled: boolean, 
 /**
- * Đã xếp quét lại nguồn để font mới tải hiện ra.
+ * Đã THẬT SỰ xếp quét lại nguồn (nguồn đang quét thì là một lượt nữa sau lượt hiện tại) để font mới tải hiện ra.
  */
 rescanQueued: boolean, firstFailureCode: string | null, };

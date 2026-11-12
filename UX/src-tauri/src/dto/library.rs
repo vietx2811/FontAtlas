@@ -625,7 +625,7 @@ pub struct CloudDownloadReportDto {
     pub failed: u32,
     /// Bị huỷ giữa chừng (font chưa kịp xử lý = `total - downloaded - failed`).
     pub cancelled: bool,
-    /// Đã xếp quét lại nguồn để font mới tải hiện ra.
+    /// Đã THẬT SỰ xếp quét lại nguồn (nguồn đang quét thì là một lượt nữa sau lượt hiện tại) để font mới tải hiện ra.
     pub rescan_queued: bool,
     pub first_failure_code: Option<String>,
 }

@@ -249,7 +249,7 @@ fn reveal_source_opens_the_source_folder_from_the_store_and_refuses_unknown_or_u
 
 /// Giả lập "Tải về máy" không cần ổ cloud thật: stub iCloud kiểu cũ `.Tên.ttf.icloud` trong thư mục tạm được
 /// `cloud_placeholders` coi là chưa tải; hàm tải giả chép fixture OFL vào tên thật rồi xoá stub (như hệ điều hành làm).
-fn fake_os_download(p: &Path, _permit: app_lib::services::cloud::Permit) -> Result<(), fontatlas_activate::EnsureLocalError> {
+fn fake_os_download(p: &Path, _permit: app_lib::services::cloud::Permit, _cancel: &std::sync::atomic::AtomicBool) -> Result<(), fontatlas_activate::EnsureLocalError> {
     let name = p.file_name().unwrap().to_str().unwrap();
     std::fs::copy(core_fixture(name), p).map_err(|e| fontatlas_activate::EnsureLocalError::Io(e.to_string()))?;
     let _ = std::fs::remove_file(p.with_file_name(format!(".{name}.icloud")));
@@ -285,11 +285,11 @@ fn download_source_failures_are_reported_by_code_and_do_not_hide_the_other_files
     let id = sources::list_sources(&st).unwrap()[0].id;
     std::fs::write(dir.join(".open_sans.ttf.icloud"), b"").unwrap();
     std::fs::write(dir.join(".libre_baskerville.ttf.icloud"), b"").unwrap();
-    let fetch = |p: &Path, permit: app_lib::services::cloud::Permit| {
+    let fetch = |p: &Path, permit: app_lib::services::cloud::Permit, c: &std::sync::atomic::AtomicBool| {
         if p.ends_with("open_sans.ttf") {
             return Err(fontatlas_activate::EnsureLocalError::Timeout);
         }
-        fake_os_download(p, permit)
+        fake_os_download(p, permit, c)
     };
     let r = cloud_download::download_source_with(&st, id, &fetch, &mut |_| {}).unwrap();
     assert_eq!((r.downloaded, r.failed), (1, 1));
@@ -303,7 +303,7 @@ fn download_source_refuses_unknown_unmounted_and_already_running_sources() {
     let d = tempfile::tempdir().unwrap();
     let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
     let id = sources::list_sources(&st).unwrap()[0].id;
-    let never = |_: &Path, _p: app_lib::services::cloud::Permit| -> Result<(), fontatlas_activate::EnsureLocalError> { panic!("không được tải") };
+    let never = |_: &Path, _p: app_lib::services::cloud::Permit, _c: &std::sync::atomic::AtomicBool| -> Result<(), fontatlas_activate::EnsureLocalError> { panic!("không được tải") };
     assert_eq!(cloud_download::download_source_with(&st, id + 99, &never, &mut |_| {}).unwrap_err().code, "not_found");
     assert!(!st.cloud_jobs.is_running(id + 99), "lỗi sớm vẫn nhả đăng ký");
     // đang chạy → busy; huỷ được lần đang chạy
@@ -313,10 +313,10 @@ fn download_source_refuses_unknown_unmounted_and_already_running_sources() {
     let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
     let go_rx = std::sync::Mutex::new(go_rx);
     let h = std::thread::spawn(move || {
-        let fetch = |p: &Path, permit: app_lib::services::cloud::Permit| {
+        let fetch = |p: &Path, permit: app_lib::services::cloud::Permit, c: &std::sync::atomic::AtomicBool| {
             started_tx.send(()).unwrap();
             go_rx.lock().unwrap().recv().unwrap();
-            fake_os_download(p, permit)
+            fake_os_download(p, permit, c)
         };
         cloud_download::download_source_with(&st2, id, &fetch, &mut |_| {})
     });
@@ -332,6 +332,35 @@ fn download_source_refuses_unknown_unmounted_and_already_running_sources() {
     std::fs::rename(&dir, d.path().join("Fonts-gone")).unwrap();
     let e = cloud_download::download_source_with(&st, id, &never, &mut |_| {}).unwrap_err();
     assert_eq!(e.code, "source_unavailable");
+}
+
+/// Tải xong khi nguồn ĐANG được quét: lượt quét hiện tại có thể đã đi qua chỗ vừa đổi, nên phải xếp thêm một lượt SAU nó,
+/// và báo cáo chỉ nói `rescanQueued` khi thật sự đã xếp.
+#[test]
+fn download_during_a_scan_queues_a_follow_up_scan_and_reports_it_truthfully() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    std::fs::write(dir.join(".open_sans.ttf.icloud"), b"").unwrap();
+    // giữ lượt quét hiện tại lại (tạm dừng) để chắc chắn nguồn đang là `current` lúc tải xong
+    st.scans.pause(&st);
+    st.scans.enqueue(&st, &[id]);
+    let t = std::time::Instant::now();
+    while !st.scans.is_current(id) && t.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(st.scans.is_current(id), "nguồn đang được quét");
+    assert!(!st.scans.is_queued(id));
+    let r = cloud_download::download_source_with(&st, id, &fake_os_download, &mut |_| {}).unwrap();
+    assert_eq!((r.downloaded, r.rescan_queued), (1, true));
+    assert!(st.scans.is_queued(id), "có lượt quét thứ hai chờ sau lượt hiện tại");
+    // gọi thêm lần nữa không xếp trùng
+    assert!(st.scans.enqueue_follow_up(&st, &[id]));
+    st.scans.resume(&st);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(!st.scans.is_queued(id));
+    let names: Vec<_> = all(&st).items.iter().map(|r| r.family.clone()).collect();
+    assert!(names.iter().any(|f| f.contains("Open Sans")), "font vừa tải hiện ra sau lượt quét thứ hai: {names:?}");
 }
 
 #[test]
