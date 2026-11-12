@@ -1,0 +1,8 @@
+.fa-viring { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; cursor: help; }
+.fa-viring svg { flex: none; }
+.fa-viring circle { fill: none; stroke-width: 2; }
+.fa-viring .trk { stroke: var(--border); }
+.fa-viring[data-tone="ok"] .val { stroke: var(--ok, #2e7d32); }
+.fa-viring[data-tone="mid"] .val { stroke: #d97706; }
+.fa-viring[data-tone="low"] .val { stroke: var(--danger, #c0392b); }
+.fa-viring[data-tone="low"] .n { color: var(--danger, #c0392b); }

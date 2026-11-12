@@ -43,7 +43,14 @@
 .fa-dstrip-card { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 0; }
 .fa-dstrip-card[data-tone="try"] { background: var(--accent-soft); }
 .fa-dstrip-card h3 { margin: 0 0 4px; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-.fa-dstrip-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-dstrip-name { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-dstrip-name .fa-viring { margin-left: auto; font-weight: 500; font-size: var(--text-xs); flex: none; }
+.fa-dstrip-var { padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); cursor: help; }
+.fa-dstrip-var small { font-size: var(--text-2xs); }
+.fa-dstrip-dg.up { color: var(--ok, #2e7d32); }
+.fa-dstrip-dg.down { color: var(--danger, #c0392b); }
+.fa-dstrip-meta [data-testid="strip-glyphs"] { cursor: help; }
+.fa-dstrip-table .sk-i { display: inline-block; height: 10px; width: 40px; border-radius: 3px; background: var(--border); opacity: .6; }
 .fa-dstrip-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; color: var(--muted); font-size: var(--text-xs); }
 .fa-dstrip-meta [data-vi="warn"] { color: var(--danger, #c0392b); }
 .fa-dstrip-empty { margin: 0; color: var(--muted); }

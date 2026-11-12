@@ -7,7 +7,7 @@ export const DESK_I18N = {
   'desk.noAnchor': 'Chưa có font ở vai đối diện để ghép. Đặt một font vào vai {role} trước.', 'desk.noCands': 'Không có ứng viên ở mức ghép này',
   'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
   'strip.title': 'Chi tiết', 'strip.metrics': 'Số đo', 'strip.compare': 'Đưa vào Compare', 'strip.expand': 'Mở dải chi tiết', 'strip.collapse': 'Thu dải chi tiết',
-  'strip.tryHint': 'Rê chuột lên một ứng viên để xem chênh lệch', 'strip.viOk': 'Đủ tiếng Việt', 'strip.viMissing': 'Thiếu {n} ký tự VI',
+  'strip.tryHint': 'Rê chuột lên một ứng viên để xem chênh lệch', 'strip.viOk': 'Đủ tiếng Việt', 'strip.viMissing': 'Thiếu {n} ký tự VI', 'strip.viRing': 'Tiếng Việt: {ok}/{total} ký tự', 'strip.glyphsRow': 'Glyphs', 'strip.varTip': 'Trục Variable: {axes}', 'strip.varMore': '+{n} trục nữa',
   'combo.new': 'Combo mới', 'combo.duplicate': 'Nhân bản Combo', 'combo.rename': 'Đổi tên Combo', 'combo.makeMain': 'Đặt làm Combo chính', 'combo.isMain': 'Đã là Combo chính',
   'combo.delete': 'Xoá Combo', 'combo.lastOne': 'Case cần ít nhất một Combo', 'combo.prev': 'Combo trước', 'combo.next': 'Combo sau', 'combo.save': 'Lưu',
   'cc.open':'Mở trong Pairing','cc.useThis':'Dùng combo này','cc.specimen':'Specimen','cc.relations':'Quan hệ giữa các giọng','cc.noRelations':'Cần ít nhất hai font khác nhau','cc.vi':'VI thấp nhất','cc.fonts':'Số font','cc.partial':'{n} vai thiếu font: số liệu chỉ tính phần còn lại',
