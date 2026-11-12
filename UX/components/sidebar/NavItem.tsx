@@ -9,15 +9,15 @@ type Props = {
   unavailable?: boolean; title?: string; kbd?: string; onClick(): void;
   /** Chuột phải, phím Menu hoặc ⇧F10; `rect` có khi mở bằng bàn phím. Không có → không chặn menu hệ thống. */
   onContextMenu?(at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void; onRename?(): void; /** Khoá để tìm lại nút (trả focus sau khi đổi tên). */ navId?: string; /** Mục đang được menu nhắm tới. */ context?: boolean; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
-  /** Mục nhận font thả vào (dự án). `here` = đang xem chính mục này: không thả được. */ drop?: { id: number; name: string; here: boolean };
+  /** Mục nhận font thả vào (dự án). `here` = đang xem chính mục này: không thả được. */ drop?: { kind?: 'col' | 'case'; id: number; name: string; here: boolean };
 };
 
 export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub, onContextMenu, onRename, context, navId, drop }: Props): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
-  const over = useFaceDragStore(s => (drop && s.drag?.over?.kind === 'col' && s.drag.over.id === drop.id ? (s.drag.over.valid ? 'ok' : 'no') : undefined));
+  const over = useFaceDragStore(s => (drop && s.drag?.over?.kind === (drop.kind ?? 'col') && s.drag.over.id === drop.id ? (s.drag.over.valid ? 'ok' : 'no') : undefined));
   const dragging = useFaceDragStore(s => !!drop && s.drag !== null);
   return (
-    <div className="fa-nav-wrap" data-drop-col={drop?.id} data-drop-name={drop?.name} data-drop-here={drop?.here ? 'true' : undefined} data-drop-over={over} data-drop-armed={dragging && !drop?.here ? 'true' : undefined}>
+    <div className="fa-nav-wrap" data-drop-col={drop && (drop.kind ?? 'col') === 'col' ? drop.id : undefined} data-drop-case={drop?.kind === 'case' ? drop.id : undefined} data-drop-name={drop?.name} data-drop-here={drop?.here ? 'true' : undefined} data-drop-over={over} data-drop-armed={dragging && !drop?.here ? 'true' : undefined}>
       {/* Thanh bên thu gọn chỉ còn icon → luôn có tooltip; khi mở rộng chỉ hiện nếu có chú thích riêng (đường dẫn, trạng thái). */}
       <Tooltip label={title ?? label} disabled={!collapsed && title === undefined}>
       <button type="button" className={`fa-nav${unavailable ? ' fa-ejected' : ''}`} aria-current={current ? 'true' : undefined}

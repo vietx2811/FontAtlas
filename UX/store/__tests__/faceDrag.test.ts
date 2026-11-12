@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { beginFaceDrag, cancelFaceDrag, registerFaceDropHandler, useFaceDragStore } from '../faceDrag';
+import { beginFaceDrag, cancelFaceDrag, registerFaceDropHandler, targetAt, useFaceDragStore } from '../faceDrag';
 import { useSelectionStore } from '../selection';
 import { createMockApi } from '../../api/mock';
-import { dropFacesIntoCollection } from '../../components/dnd/dropFaces';
+import { dropFacesInto, dropFacesIntoCollection } from '../../components/dnd/dropFaces';
 import { useNoticeStore } from '../notices';
 import type { FaceRow } from '../../features/library-grid/types';
 
@@ -99,5 +99,26 @@ describe('G1 dropFacesIntoCollection', () => {
     vi.spyOn(api, 'addToCollection').mockRejectedValue(new Error('boom'));
     await dropFacesIntoCollection(api, [a], { id: 999, name: 'Z' });
     expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error', text: expect.stringMatching(/Không thêm được vào «Z»: boom/) });
+  });
+});
+
+describe('G1 thả vào Case', () => {
+  beforeEach(() => useNoticeStore.setState({ notices: [] }));
+  it('targetAt nhận data-drop-case', () => {
+    document.body.innerHTML = '<div data-drop-case="4" data-drop-name="Poster"></div>';
+    const el = document.querySelector('div');
+    (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => el;
+    expect(targetAt(1, 1)).toEqual({ kind: 'case', id: 4, name: 'Poster', valid: true });
+  });
+  it('thêm vào Case chỉ phần chưa có; Hoàn tác chỉ gỡ phần vừa thêm', async () => {
+    const api = createMockApi(); const [a, b] = await rowsOf(api);
+    const res = await api.openCaseFromPeek({ face: { hashHex: a.hashHex, faceIndex: a.faceIndex }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    await dropFacesInto(api, [a, b], { kind: 'case', id: res.case.id, name: res.case.name });
+    const inCase = async () => (await api.getCase(res.case.id)).faces.map(f => `${f.key.hashHex}:${f.key.faceIndex}`).sort();
+    expect(await inCase()).toEqual([`${a.hashHex}:${a.faceIndex}`, `${b.hashHex}:${b.faceIndex}`].sort());
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toMatch(/vào «?Case /);
+    n.action!.run(); await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
+    expect(await inCase()).toEqual([`${a.hashHex}:${a.faceIndex}`]);
   });
 });
