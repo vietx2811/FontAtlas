@@ -29,8 +29,12 @@ fn reading(r: &fontatlas_index::Reading) -> Option<f32> {
 pub(crate) fn traits_of(b: &IndexBundle, p: &FaceProfile, eff: &EffMap) -> Traits {
     let m = b.meta.get(&p.key);
     let e = m.and_then(|m| eff.get(&m.face_id));
+    let class = e.and_then(|e| Class::parse(&e.class)).unwrap_or(Class::Uncertain);
+    // Candidate chỉ có nghĩa khi lớp vẫn Uncertain (ghi đè của người dùng thì bỏ).
+    let candidate = if class == Class::Uncertain { m.and_then(|m| m.auto_candidate.as_deref()).and_then(Class::parse) } else { None };
     Traits {
-        class: e.and_then(|e| Class::parse(&e.class)).unwrap_or(Class::Uncertain),
+        class,
+        candidate,
         subclass: e.and_then(|e| e.sub.clone()),
         x_height_em: axis(p, AxisId::XHeightEm),
         x_height_cap: axis(p, AxisId::XHeightCap),
