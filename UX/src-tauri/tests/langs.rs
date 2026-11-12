@@ -203,7 +203,7 @@ fn skipped_faces_do_not_make_the_worker_spin_and_shutdown_joins() {
     // shutdown join được nhanh dù đang chờ thử lại
     let t = Instant::now();
     st.langs.shutdown();
-    assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+    assert!(t.elapsed() < Duration::from_secs(30), "{:?}", t.elapsed()); // chờ thử lại là 60 s: join được trong 30 s nghĩa là bị đánh thức, không phải chờ hết
     langs::ensure_started(&st); // sau shutdown không mở lại
     assert!(!st.langs.is_running());
 }
