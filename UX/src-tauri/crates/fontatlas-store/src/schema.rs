@@ -529,7 +529,8 @@ ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 
 
 /// Font vừa xem (0.4.0, G5 nguồn "Recent"): cục bộ, tối đa `RECENT_MAX` dòng, mỗi face một dòng (xem lại thì đẩy lên đầu).
-/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định.
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định. Phân số 0.4.0 (Lead): v11 = G3 combo roles (03), v12 = bảng này;
+/// trên nhánh này (chưa có v11 của 03) nó đang đứng ở vị trí 11, khi gom phải chèn migration của 03 TRƯỚC mục này.
 pub(crate) const USER_RECENT_FACES: &str = r#"
 CREATE TABLE recent_faces (
   hash       BLOB NOT NULL CHECK (length(hash) = 32),
