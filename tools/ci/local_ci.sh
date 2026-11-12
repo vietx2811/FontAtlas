@@ -99,9 +99,18 @@ SHORT="${SHA:0:9}"
 
 # Khoá cache theo nội dung: hash (đường dẫn + blob) của đúng phần đầu vào, không phụ thuộc commit.
 tree_hash() { local ex="$1"; shift; git --git-dir="$REPO" ls-tree -r "$SHA" -- "$@" | { if [ -n "$ex" ]; then grep -Ev "$ex"; else cat; fi; } | shasum | cut -c1-16; }
-RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/' UX/src-tauri UX/bindings)-$(rustc -V 2>/dev/null | shasum | cut -c1-6)"
-FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)-$(node -v 2>/dev/null | shasum | cut -c1-6)"
-BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY" | shasum | cut -c1-16)"
+# Đầu vào NGOÀI UX/src-tauri mà test Rust đọc: docs/team/eval (include_str!/đọc lúc chạy trong fontatlas-eval), UX/bindings (so với bindings sinh ra),
+# UX/python-sidecar và UX/binaries (tests/config.rs khẳng định chúng không tồn tại). test_cache.sh có chốt cảnh báo khi xuất hiện đường dẫn ngoài mới.
+# Phiên bản công cụ lấy trong UX/src-tauri (rust-toolchain.toml ghim bản rustc ở đó).
+compute_keys() {
+  local tc fe; tc="$(cd "${1:-$PWD}/UX/src-tauri" 2>/dev/null && { rustc -V; cargo -V; cargo clippy -V; } 2>&1 | shasum | cut -c1-8)"
+  fe="$( { node -v; npm -v; } 2>&1 | shasum | cut -c1-8)"
+  local tauri; tauri="$(cargo tauri -V 2>&1 | shasum | cut -c1-8)"
+  RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
+  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)-$fe"
+  BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri" | shasum | cut -c1-16)"
+}
+compute_keys "$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo "bundle=$BUNDLE_KEY"; exit 0; fi
 
 # Một lần chạy một lúc: target/ và node_modules dùng chung. Hàng đợi FIFO giữ thứ tự giữa các lần chạy.
@@ -153,9 +162,11 @@ if [ -n "$CI_TARGET" ] && [ ! -L UX/src-tauri/target ]; then
   ln -s "$CI_TARGET" UX/src-tauri/target || exit 2
 fi
 touch "$CI/.metadata_never_index" ${CI_TARGET:+"$CI_TARGET/.metadata_never_index"}   # Spotlight không index target/ và worktree (không đổi cấu hình hệ thống)
-export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(( $(sysctl -n hw.ncpu 2>/dev/null || echo 8) * 2 / 3 ))}"   # chừa CPU cho máy/worker khác; ghi đè bằng CARGO_BUILD_JOBS
+JOBS=$(( $(sysctl -n hw.ncpu 2>/dev/null || echo 8) * 2 / 3 )); [ $JOBS -ge 1 ] || JOBS=1
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$JOBS}"   # chừa CPU cho máy/worker khác; ghi đè bằng CARGO_BUILD_JOBS
 git clean -ffdxq -e UX/src-tauri/target -e UX/node_modules
 
+compute_keys "$WT"   # công cụ đúng như trong checkout của SHA (rust-toolchain.toml)
 export FONTATLAS_CI_RUN=1   # run.sh từ chối chạy khi không có biến này (tức là ngoài khoá CI)
 STAMP="UX/src-tauri/target/debug/bundle/.built-sha"   # SHA của bundle debug đã build; run.sh so với HEAD của checkout
 loadavg() { uptime | sed 's/.*load averages*: //'; }
@@ -218,19 +229,29 @@ fi
 # Chỉ chạy lib/bin/tests; riêng crate nào CÓ khối ``` trong doc comment thì vẫn chạy `cargo test --doc` cho crate đó.
 doc_crates() {
   local root="${1:-$WT/UX/src-tauri}" f d
-  for f in $(grep -rlE '^[[:space:]]*(///|//!)[[:space:]]*```' --include='*.rs' "$root" 2>/dev/null | grep -v '/target/'); do
+  # Có thể thừa (chạy --doc cho crate không cần) nhưng không sót: ``` trong ///, //!, /** */, /*! */, #[doc = "..."], #![doc = include_str!(...)].
+  grep -rlE '^[[:space:]]*(///|//!)[[:space:]]*```|#!?\[doc[[:space:]]*=|/\*[*!]' --include='*.rs' "$root" 2>/dev/null | grep -v '/target/' | while IFS= read -r f; do
+    grep -qE '```|include_str!' "$f" || continue
     d="$(dirname "$f")"; while [ "$d" != "/" ] && [ ! -f "$d/Cargo.toml" ]; do d="$(dirname "$d")"; done
-    sed -n 's/^name *= *"\(.*\)"/\1/p' "$d/Cargo.toml" | head -1
+    [ -f "$d/src/lib.rs" ] || grep -q '^\[lib\]' "$d/Cargo.toml" || continue   # crate chỉ có bin: không có doc-test
+    awk '/^\[package\]/{p=1;next} /^\[/{p=0} p && /^name[[:space:]]*=/{gsub(/^name[[:space:]]*=[[:space:]]*"|"[[:space:]]*$/,""); print; exit}' "$d/Cargo.toml"
   done | sort -u
 }
 rust_tests() {
   env UPDATE_BINDINGS=1 cargo test --workspace --locked --lib --bins --tests 2>&1 | python3 "$WT/tools/ci/ts_filter.py" || return 1
+  # Kiểm lệch bindings NGAY trong đơn vị cache của cargo-test: bindings chỉ được sinh lại ở bước này, nên "PASS" của cargo-test chỉ được cache khi bindings cũng khớp.
+  git -C "$WT" diff --exit-code -- UX/bindings || { echo "bindings-drift: UX/bindings lệch so với bản sinh ra"; return 1; }
   local c; for c in $(doc_crates); do echo "doc-tests (có ví dụ trong doc comment): $c"; cargo test --doc --locked -p "$c" || return 1; done
 }
 
 if [ $FRONT = 1 ]; then
   cstep cargo-test "$RUST_KEY" UX/src-tauri rust_tests
-  cstep bindings-drift "$RUST_KEY" . git diff --exit-code -- UX/bindings
+  # drift chỉ được SKIP khi cargo-test cũng được lấy từ cache (cùng một đơn vị, xem rust_tests); nếu cargo-test chạy thật thì drift chạy thật.
+  if [ "${#CACHED[@]}" -gt 0 ] && printf '%s\n' "${CACHED[@]}" | grep -q '^cargo-test='; then
+    printf 'SKIP        %s  (cache, cùng đơn vị với cargo-test)\n' bindings-drift; STEPS+=("bindings-drift:ok:0"); CACHED+=("bindings-drift=unit")
+  else
+    step bindings-drift . git diff --exit-code -- UX/bindings
+  fi
   cstep clippy "$RUST_KEY" UX/src-tauri cargo clippy --workspace --all-targets --locked -- -D warnings
 else
   skip cargo-test "thiếu UX/dist"; skip bindings-drift "thiếu UX/dist"; skip clippy "thiếu UX/dist"
