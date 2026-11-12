@@ -35,6 +35,14 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   const [step, setStep] = useState<Step>('o1');
   const [working, setWorking] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Kính thật của macOS (Liquid Glass) sau mảng trái trong suốt, chỉ trong lúc hướng dẫn; rời đi thì trả lại vibrancy sidebar.
+  const [glass, setGlass] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api.setWindowGlass(true).then(on => { if (alive) setGlass(on); }, () => undefined);
+    return () => { alive = false; void api.setWindowGlass(false).catch(() => undefined); };
+  }, [api]);
+  const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const reload = useCallback(async () => { const s = await api.onboardingState(); setState(s); return s; }, [api]);
 
   useEffect(() => {
@@ -74,8 +82,8 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
     return () => document.removeEventListener('keydown', on);
   }, [phase]);
 
-  if (!state) return <div className="fa-onb"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? t('onb.loadFail', { msg: loadError }) : t('onb.loading')}</p>{loadError && <button type="button" onClick={() => location.reload()}>{t('onb.retry')}</button>}</main></div>;
-  if (phase === 'outro') return <div className="fa-onb" ref={root} data-phase="outro"><Outro ms={hold ? 1e9 : outroMs} onDone={onDone} /></div>;
+  if (!state) return <div className="fa-onb" data-loading="true" data-native={native} data-glass={glass}><section className="fa-onb-left"><main className="fa-onb-body"><p role={loadError ? "alert" : "status"}>{loadError ? t('onb.loadFail', { msg: loadError }) : t('onb.loading')}</p>{loadError && <button type="button" onClick={() => location.reload()}>{t('onb.retry')}</button>}</main></section></div>;
+  if (phase === 'outro') return <div className="fa-onb" ref={root} data-phase="outro" data-native={native} data-glass={glass}><Outro ms={hold ? 1e9 : outroMs} onDone={onDone} /></div>;
   const steps = visibleSteps(state);
   // Số chấm cố định suốt hướng dẫn: bước quét (o4) luôn có chấm, kể cả trước khi thêm nguồn,
   // để chấm không tăng giữa chừng. Màn "Xong" tô hết.
@@ -86,28 +94,35 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   const ctx = { api, state, reload, next, finish, stage, pickFolders: pickFolder ? async () => { const p = await pickFolder(); return p ? [p] : []; } : pickFolders, setWorking };
 
   return (
-    <div className="fa-onb" ref={root} data-step={step}>
-      <header className="fa-onb-top">
-        {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>{t('onb.back')}</button> : <span />}
-        <div className="fa-onb-dots" role="group" aria-label={t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}>
-          {dots.map((d, i) => <i key={d} data-on={i <= idx} data-now={i === idx} aria-hidden />)}
-        </div>
-        <span />
-      </header>
-      <span id="onb-keys-desc" className="sr-only">{t('onb.keys.aria')}</span>
-      <main className="fa-onb-body" aria-describedby="onb-keys-desc">
-        <Illustration step={step} slotRef={setStage} />
-        <div className="fa-onb-pane">
-          {step === 'o1' && <O1 {...ctx} />}
-          {step === 'o2' && <O2 {...ctx} />}
-          {step === 'o3' && <O3 {...ctx} />}
-          {step === 'o4' && <O4 {...ctx} />}
-          {step === 'o5' && <O5 {...ctx} />}
-          {step === 'o6' && <O6 {...ctx} />}
-          {step === 'o7' && <O7 {...ctx} />}
-          {step === 'end' && <End {...ctx} />}
-        </div>
-      </main>
+    <div className="fa-onb" ref={root} data-step={step} data-native={native} data-glass={glass}>
+      <div className="fa-onb-drag" data-tauri-drag-region aria-hidden />
+      <section className="fa-onb-left">
+        <header className="fa-onb-top">
+          {back ? <button type="button" className="fa-onb-back" disabled={working} onClick={() => go(back)}>{t('onb.back')}</button> : <span />}
+          <div className="fa-onb-dots" role="group" aria-label={t('onb.step', { n: Math.min(idx + 1, dots.length), total: dots.length })}>
+            {dots.map((d, i) => <i key={d} data-on={i <= idx} data-now={i === idx} aria-hidden />)}
+          </div>
+          <span />
+        </header>
+        <span id="onb-keys-desc" className="sr-only">{t('onb.keys.aria')}</span>
+        <main className="fa-onb-body" aria-describedby="onb-keys-desc">
+          <div className="fa-onb-pane">
+            {step === 'o1' && <O1 {...ctx} />}
+            {step === 'o2' && <O2 {...ctx} />}
+            {step === 'o3' && <O3 {...ctx} />}
+            {step === 'o4' && <O4 {...ctx} />}
+            {step === 'o5' && <O5 {...ctx} />}
+            {step === 'o6' && <O6 {...ctx} />}
+            {step === 'o7' && <O7 {...ctx} />}
+            {step === 'end' && <End {...ctx} />}
+          </div>
+        </main>
+      </section>
+      {/* Mảng phải: minh hoạ phủ kín, đổi theo bước (key = bước → vào cảnh mới có chuyển cảnh nhẹ). */}
+      <div className="fa-onb-art">
+        <div className="fa-onb-art-bg" aria-hidden />
+        <Illustration key={step} step={step} slotRef={setStage} />
+      </div>
     </div>
   );
 }

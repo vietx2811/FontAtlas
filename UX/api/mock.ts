@@ -490,6 +490,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       });
     },
     async setOnboardingStep(step) { uiSettings.set('onboarding_step', step ?? ''); },
+    async setWindowGlass() { return false; }, // trình duyệt/mock: không có kính native
     async legacyImport() { legacy = { ...legacyState(), imported: { fonts: 1240, sources: 2, collections: 3, recoveredCollections: 0, badTags: 0, skippedSources: 0 } }; return ok(legacy); },
     async legacyRetry() { return ok(legacyState()); },
     async scanStatus() { return ok({ running: scanning, paused: false, currentSourceId: null, queued: [] }); },

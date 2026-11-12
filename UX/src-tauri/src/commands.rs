@@ -43,6 +43,7 @@ pub const SYNC_OK: &[&str] = &[
     "scan_status",
     "preview_info",
     "activation_caps",
+    "set_window_glass",
 ];
 
 /// Danh sách lệnh (nguồn duy nhất). Cú pháp mỗi dòng: `async|sync tên(đối số: kiểu, …) -> kiểu_kết_quả;`
@@ -198,6 +199,7 @@ macro_rules! command_list {
             async preview_cache_info() -> Result<PreviewCacheInfoDto, CmdError>;
             async clear_preview_cache() -> Result<(), CmdError>;
             sync activation_caps() -> Result<ActivationCapsDto, CmdError>;
+            sync set_window_glass(on: bool) -> Result<bool, CmdError>;
             async auto_status() -> Result<AutoStatusDto, CmdError>;
             async auto_set_enabled(on: bool) -> Result<AutoStatusDto, CmdError>;
             async auto_install(target: AutoTargetDto) -> Result<AutoStatusDto, CmdError>;
@@ -649,6 +651,13 @@ pub async fn scan_subscribe(
 #[tauri::command]
 pub fn activation_caps(state: State<'_, Arc<AppState>>) -> Result<ActivationCapsDto, CmdError> {
     Ok(activation::caps(&state))
+}
+
+/// Bật/tắt kính thật (Liquid Glass) sau webview, dành cho màn hướng dẫn. Trả `true` khi kính đang hiện;
+/// `false` = không có (macOS cũ, không phải macOS, hoặc đã tắt) và vibrancy `sidebar` được giữ/trả lại.
+#[tauri::command]
+pub fn set_window_glass(on: bool) -> Result<bool, CmdError> {
+    Ok(crate::glass::apply(on))
 }
 
 /// Kiểm kỷ luật async trên `table` và mã nguồn `src` của commands.rs; trả danh sách vi phạm.

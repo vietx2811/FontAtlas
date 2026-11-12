@@ -252,6 +252,7 @@ export interface TauriCommandMap {
   preview_cache_info: { args: Record<string, never>; result: PreviewCacheInfoDto };
   clear_preview_cache: { args: Record<string, never>; result: null };
   activation_caps: { args: Record<string, never>; result: ActivationCapsDto };
+  set_window_glass: { args: { on: boolean }; result: boolean };
   auto_status: { args: Record<string, never>; result: AutoStatusDto };
   auto_set_enabled: { args: { on: boolean }; result: AutoStatusDto };
   auto_install: { args: { target: AutoTargetDto }; result: AutoStatusDto };

@@ -94,6 +94,7 @@ export function createTauriApi(): Api {
     bootSubscribe: onEvent => subscribe('boot_subscribe', onEvent),
     onboardingState: () => call('onboarding_state'),
     setOnboardingStep: step => none(call('set_onboarding_step', { step })),
+    setWindowGlass: on => call('set_window_glass', { on }),
     legacyImport: () => call('legacy_import'),
     legacyRetry: () => call('legacy_retry'),
     // Nguồn, quét

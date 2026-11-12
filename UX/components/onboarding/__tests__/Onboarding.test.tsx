@@ -370,8 +370,27 @@ describe('Onboarding', () => {
       expect(document.querySelector('.fa-onb-top')!.textContent).not.toMatch(/Bước|Esc|←|→/);
       expect(document.querySelectorAll('.fa-onb-dots i').length).toBeGreaterThanOrEqual(6);
       expect(screen.getByRole('group', { name: /^Bước 1\/\d$/ })).toBeTruthy();
-      expect(document.querySelector('.fa-onb-body > .fa-stage')).toBeTruthy();
-      expect(document.querySelector('.fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+      // Hai mảng: TRÁI = nội dung (trên kính), PHẢI = minh hoạ phủ kín; hình không nằm trong mảng chữ.
+      expect(document.querySelector('.fa-onb > .fa-onb-art > .fa-stage')).toBeTruthy();
+      expect(document.querySelector('.fa-onb-left .fa-stage')).toBeNull();
+      expect(document.querySelector('.fa-onb > .fa-onb-left .fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+    });
+
+    it('asks the window for real glass behind the left pane while onboarding, and gives it back on leave', async () => {
+      const api = createMockApi({ firstRun: true });
+      const calls: boolean[] = [];
+      api.setWindowGlass = async on => { calls.push(on); return on; };
+      const { unmount } = render(<Onboarding api={api} onDone={() => undefined} animated={false} />);
+      await waitFor(() => expect(document.querySelector('.fa-onb')!.getAttribute('data-glass')).toBe('true'));
+      expect(calls).toEqual([true]);
+      unmount();
+      expect(calls).toEqual([true, false]);
+    });
+
+    it('without native glass (browser, older macOS) the left pane keeps a solid theme background', async () => {
+      await mount();
+      expect(document.querySelector('.fa-onb')!.getAttribute('data-glass')).toBe('false');
+      expect(document.querySelector('.fa-onb')!.getAttribute('data-native')).toBe('false');
     });
 
     it('the last step shows the shortcuts overlay BEFORE the outro; Esc skips it and finishes', async () => {

@@ -7,6 +7,7 @@ pub mod hub;
 pub mod index_bundle;
 pub mod services;
 pub mod state;
+pub mod glass;
 pub mod trash;
 
 use tauri::Manager;
@@ -133,6 +134,7 @@ pub fn run() {
             let dirs = resolve_dirs(app.handle())?;
             let state = AppState::new(dirs, platform_api());
             app.manage(state.clone());
+            crate::glass::init(app.handle());
             state.system_hooks.store(true, std::sync::atomic::Ordering::SeqCst);
             crate::services::boot::start(state);
             // QA nội bộ (chỉ bản debug): chạy một tệp JS trong webview thật để đi các luồng chính
