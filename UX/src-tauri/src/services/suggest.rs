@@ -49,7 +49,6 @@ pub(crate) fn traits_of(b: &IndexBundle, p: &FaceProfile, eff: &EffMap) -> Trait
         g_storeys: reading(&p.g_storeys),
         vi_missing: Some(p.vi_missing as u32),
         has_tnum: None,
-        ..Traits::default()
     }
 }
 
