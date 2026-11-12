@@ -1098,13 +1098,15 @@
       const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
       const roleNames = () => [...document.querySelectorAll('[data-testid=desk-role]')].map(r => r.dataset.role);
       const filled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wait(() => !document.querySelector('[data-testid=drag-layer]'), 5000);
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
       const cellP = await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 15000); cellP?.click();
       const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000); pairTab?.click();
       const openBtn = await wait(() => document.querySelector('[data-testid=open-desk]'), 15000); openBtn?.click();
       const desk = await wait(() => deskEl(), 15000);
       await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 20000);
-      if (!desk) await log('desk-040-opens', false, 'không mở được Desk');
+      if (!desk) await log('desk-040-opens', false, { why: 'không mở được Desk', cellP: !!cellP, pairTab: !!pairTab, openBtn: !!openBtn, dragLayer: !!document.querySelector('[data-testid=drag-layer]'), sel: document.querySelector('[data-testid=selection-count]')?.textContent ?? null });
       else {
         // G2: nút "+" ở ứng viên (rê chuột vào thì hiện): bấm đặt font vào vai đang chọn; có nhãn và nhận focus bàn phím.
         {
