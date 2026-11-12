@@ -26,7 +26,7 @@ use crate::error::CmdError;
 use crate::services::{
     activation, analysis, auto, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
     preview,
-    settings, sources, suggest, system,
+    settings, sources, suggest, suggest_pair, system,
 };
 use crate::state::AppState;
 
@@ -105,6 +105,9 @@ macro_rules! command_list {
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
             async role_fit(face: FaceKeyDto, role: RoleRefDto) -> Result<RoleFitDto, CmdError>;
             async role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError>;
+            async suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError>;
+            async desk_suggest(req: DeskSuggestReqDto) -> Result<DeskPageDto, CmdError>;
+            async suggest_combos(req: SuggestCombosReqDto) -> Result<Vec<ComboSuggestionDto>, CmdError>;
             async record_view(face: FaceKeyDto) -> Result<(), CmdError>;
             async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
             async clear_recent_views() -> Result<u32, CmdError>;
@@ -361,6 +364,9 @@ cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
 cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role));
 cmd!(role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> RoleFitPageDto => |s| suggest::role_fit_faces(s, &role, &opts));
+cmd!(suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> PartnerPageDto => |s| suggest_pair::suggest_partners(s, &anchor, &req));
+cmd!(desk_suggest(req: DeskSuggestReqDto) -> DeskPageDto => |s| suggest_pair::desk_suggest(s, &req));
+cmd!(suggest_combos(req: SuggestCombosReqDto) -> Vec<ComboSuggestionDto> => |s| suggest_pair::suggest_combos(s, &req));
 cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
 cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
 cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));

@@ -48,7 +48,7 @@ pub(crate) fn traits_of(b: &IndexBundle, p: &FaceProfile, eff: &EffMap) -> Trait
     }
 }
 
-fn fit_dto(f: Fit) -> FitDto {
+pub(crate) fn fit_dto(f: Fit) -> FitDto {
     match f {
         Fit::Unknown => FitDto::Unknown,
         Fit::Weak => FitDto::Weak,
@@ -64,7 +64,7 @@ pub(crate) fn reason_dto(r: &Reason) -> WhyDto {
     }
 }
 
-fn role_id(r: Role) -> String {
+pub(crate) fn role_id(r: Role) -> String {
     serde_json::to_value(r).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default()
 }
 
@@ -84,7 +84,7 @@ pub(crate) fn resolve_role(r: &RoleRefDto) -> Option<Role> {
 }
 
 /// Chưa đọc được `tnum` từ Index: nói rõ cổng này chưa kiểm (không hạ mức, không loại font).
-fn with_tnum_note(r: Role, mut why: Vec<WhyDto>) -> Vec<WhyDto> {
+pub(crate) fn with_tnum_note(r: Role, mut why: Vec<WhyDto>) -> Vec<WhyDto> {
     if r == Role::Numerals && why.len() < 3 && !why.iter().any(|w| w.code == "tnum_missing") {
         why.push(WhyDto { code: "tnum_unknown".into(), params: vec![] });
     }

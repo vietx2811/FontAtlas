@@ -157,3 +157,85 @@ fn numerals_without_tnum_data_is_never_weak_for_that_reason() {
     assert!(x.reasons.iter().all(|r| r.code != "tnum_missing"));
     assert!(x.reasons.iter().any(|r| r.code == "tnum_unknown") || x.reasons.len() == 3);
 }
+
+fn anchor_of(st: &AppState, fam: &str) -> FaceKeyDto {
+    key(&find(st, fam))
+}
+
+#[test]
+fn partners_are_ranked_deterministically_and_explain_themselves() {
+    let (_d, st) = setup();
+    let a = anchor_of(&st, "Playfair Display");
+    let req = SuggestPartnersReqDto { limit: 100, ..Default::default() };
+    let x = app_lib::services::suggest_pair::suggest_partners(&st, &a, &req).unwrap();
+    let y = app_lib::services::suggest_pair::suggest_partners(&st, &a, &req).unwrap();
+    assert_eq!(x, y);
+    assert_eq!(x.items.len() as u64, x.total);
+    for it in &x.items {
+        assert_ne!(it.gate, "blocked");
+        assert!(!it.styles.is_empty());
+        assert!(matches!(it.role_fit, FitDto::Good | FitDto::Ok));
+        assert!(it.row.family != "Playfair Display" || it.face != a);
+        assert!(it.reasons.len() <= 4 && it.reasons.iter().all(|r| !r.code.contains(' ')));
+    }
+    let v = serde_json::to_value(&x).unwrap();
+    assert!(!v.to_string().contains("\"score\""));
+    // một phong cách cụ thể: mọi kết quả đều khớp nó
+    let one = SuggestPartnersReqDto { styles: vec!["contrast".into()], limit: 100, ..Default::default() };
+    let c = app_lib::services::suggest_pair::suggest_partners(&st, &a, &one).unwrap();
+    assert!(c.items.iter().all(|i| i.styles.contains(&"contrast".to_string())));
+    // phong cách lạ → lỗi rõ ràng
+    let bad = SuggestPartnersReqDto { styles: vec!["nope".into()], ..Default::default() };
+    assert!(app_lib::services::suggest_pair::suggest_partners(&st, &a, &bad).is_err());
+}
+
+#[test]
+fn desk_sources_fits_role_similar_pinned() {
+    let (_d, st) = setup();
+    let a = anchor_of(&st, "Roboto");
+    let fits = app_lib::services::suggest_pair::desk_suggest(&st, &DeskSuggestReqDto { anchor: Some(a.clone()), ..Default::default() }).unwrap();
+    assert!(fits.items.iter().all(|i| i.face != a), "không gợi ý lại chính font neo");
+    assert!(fits.items.iter().all(|i| matches!(i.fit, Some(FitDto::Good | FitDto::Ok))));
+    let sim = app_lib::services::suggest_pair::desk_suggest(&st, &DeskSuggestReqDto { source: "similar".into(), anchor: Some(a.clone()), ..Default::default() }).unwrap();
+    assert!(!sim.items.is_empty() && sim.items.iter().all(|i| i.face != a));
+    assert!(sim.items.iter().all(|i| i.reasons.iter().all(|r| r.code.starts_with("similar_") || r.code == "image_close")));
+    // similar thiếu anchor / nguồn lạ / pinned thiếu case: lỗi, không panic
+    for bad in [DeskSuggestReqDto { source: "similar".into(), ..Default::default() }, DeskSuggestReqDto { source: "zzz".into(), ..Default::default() }, DeskSuggestReqDto { source: "pinned".into(), ..Default::default() }] {
+        assert!(app_lib::services::suggest_pair::desk_suggest(&st, &bad).is_err());
+    }
+}
+
+#[test]
+fn combos_stable_by_seed_one_per_title_family_and_respect_locks() {
+    let (_d, st) = setup();
+    let req = SuggestCombosReqDto { k: 6, seed: 7, ..Default::default() };
+    let f = app_lib::services::suggest_pair::suggest_combos;
+    let a = f(&st, &req).unwrap();
+    assert_eq!(a, f(&st, &req).unwrap(), "cùng seed cùng kết quả");
+    assert!(a.len() <= 6);
+    let mut fams = std::collections::HashSet::new();
+    for c in &a {
+        assert!(fams.insert(c.slots[0].row.family.clone()), "tối đa 1 gợi ý mỗi family tiêu đề");
+        assert_eq!(c.slots.len(), 2);
+        assert_ne!(c.slots[0].face, c.slots[1].face);
+        assert!(c.reasons.len() <= 4);
+    }
+    // khoá font tiêu đề: mọi gợi ý giữ nguyên font đó
+    let lock = LockedSlotDto { role: req.roles[0].clone(), face: anchor_of(&st, "Playfair Display") };
+    let l = f(&st, &SuggestCombosReqDto { locked: vec![lock.clone()], ..req.clone() }).unwrap();
+    assert!(l.iter().all(|c| c.slots[0].face == lock.face && c.slots[0].locked));
+    // lỗi đầu vào
+    assert!(f(&st, &SuggestCombosReqDto { roles: vec![], ..req.clone() }).is_err());
+    assert!(f(&st, &SuggestCombosReqDto { scope: "case".into(), ..req.clone() }).is_err());
+    assert!(f(&st, &SuggestCombosReqDto { roles: vec![RoleRefDto { name: "Zzz lạ".into(), profile: None, size: None }], ..req }).is_err());
+}
+
+#[test]
+fn six_fixture_library_gives_real_partners_and_combos() {
+    let (_d, st) = setup();
+    let a = anchor_of(&st, "Playfair Display");
+    let p = app_lib::services::suggest_pair::suggest_partners(&st, &a, &SuggestPartnersReqDto { limit: 100, ..Default::default() }).unwrap();
+    assert!(p.total >= 1, "Playfair Display (serif tương phản) phải có đối tác body trong 6 font mẫu");
+    let c = app_lib::services::suggest_pair::suggest_combos(&st, &SuggestCombosReqDto { k: 6, seed: 7, ..Default::default() }).unwrap();
+    assert!(!c.is_empty());
+}
