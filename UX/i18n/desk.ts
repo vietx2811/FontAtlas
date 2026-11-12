@@ -162,4 +162,12 @@ export const DESK_I18N = {
   'intent.brand': 'Brand, Nhận diện',
   'intent.packaging': 'Packaging, Menu',
   'intent.poster': 'Poster, Campaign',
+  'pick.style': 'Phong cách pair',
+  'pick.style.auto': 'Tự động (mọi phong cách, xếp theo mức)',
+  'pick.fit.good': 'Hợp tốt',
+  'pick.fit.ok': 'Tạm được',
+  'pick.fit.weak': 'Yếu',
+  'pick.fit.unknown': 'Chưa đo',
+  'pick.gate.controlled': 'Có kiểm soát',
+  'pick.gate.experimental': 'Thử nghiệm',
 } as const;

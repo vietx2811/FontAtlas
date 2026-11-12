@@ -265,4 +265,12 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'intent.brand': 'Brand, Identity',
   'intent.packaging': 'Packaging, Menu',
   'intent.poster': 'Poster, Campaign',
+  'pick.style': 'Pairing style',
+  'pick.style.auto': 'Auto (all styles, ranked by fit)',
+  'pick.fit.good': 'Good fit',
+  'pick.fit.ok': 'OK fit',
+  'pick.fit.weak': 'Weak fit',
+  'pick.fit.unknown': 'Not measured',
+  'pick.gate.controlled': 'Controlled',
+  'pick.gate.experimental': 'Experimental',
 };

@@ -50,6 +50,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const srcByRole = useRef(new Map<string, PickSource>());
   const [source, setSourceState] = useState<PickSource>(() => (desk.trial ? 'pair' : 'role'));
   const setSource = useCallback((s: PickSource, r?: string) => { srcByRole.current.set(r ?? desk.role, s); setSourceState(s); }, [desk.role]);
+  const [pairStyle, setPairStyle] = useState('');
   const [classes, setClasses] = useState<string[]>([]);
   const [viOnly, setViOnly] = useState(false);
   const viInit = useRef(false);
@@ -94,7 +95,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     let alive = true; setCandError(null); setLoading(true);
     const slotCur = slotOf(role);
     const run = async (src: PickSource): Promise<Trial[]> => {
-      const list = await loadSource(api, src, { role, profile, anchor: anchor?.key ?? null, current: slotCur && !slotCur.missing ? slotCur.key : null, caseId: desk.caseId, projectVi: vi0, mode: mode0 });
+      const list = await loadSource(api, src, { role, profile, anchor: anchor?.key ?? null, anchorRole: anchor?.role ?? null, style: pairStyle, current: slotCur && !slotCur.missing ? slotCur.key : null, caseId: desk.caseId, projectVi: vi0, mode: mode0 });
       if (src !== 'pair' || !(desk.trial && desk.role === role)) return list;
       const r = await api.queryFaces({ faceKeys: [desk.trial], limit: 1 }).catch(() => null);
       const p: Trial | null = r?.items[0] ? { face: desk.trial, row: r.items[0], summary: '', fromPeek: true } : null;
@@ -116,7 +117,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, ready, mode0, vi0, anchorKey, role, trialKey, source, profile, classes, retry, currentKey]);
+  }, [api, ready, mode0, vi0, anchorKey, role, trialKey, source, profile, classes, retry, currentKey, pairStyle]);
 
   const cands = useMemo(() => all.filter(c => c.fromPeek || ((!viOnly || c.row.supportsVi) && (!passSet || passSet.has(keyStr(c.face))))), [all, viOnly, passSet]);
   const hiddenN = all.length - cands.length;
@@ -272,7 +273,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         </section>
         <section className="fa-desk-picker" aria-label={t('desk.picker')}>
           <h2>{t('pick.title', { role: roleName(role) })}</h2>
-          <PickerBar source={source} onSource={chooseSource} disabled={disabledSources} counts={{ pin: pinnedKeys.size }} classes={classes} onClasses={setClasses} viOnly={viOnly} onViOnly={setViOnly}
+          <PickerBar source={source} onSource={chooseSource} pairStyle={pairStyle} onPairStyle={setPairStyle} disabled={disabledSources} counts={{ pin: pinnedKeys.size }} classes={classes} onClasses={setClasses} viOnly={viOnly} onViOnly={setViOnly}
             shown={cands.length} hidden={hiddenN} profile={profile} profileGuess={profileGuess} showProfile={source === 'role' && !presetKey(role)}
             onProfile={p => setProfiles(m => ({ ...m, [role]: p }))} clearRecent={() => { void api.clearRecentViews().then(() => { setAll([]); setIdx(-1); useNoticeStore.getState().push({ kind: 'info', text: t('pick.recent.cleared') }); }, fail); }} />
           {source === 'pair' && !anchor && <p className="fa-desk-hint" data-testid="desk-noanchor">{t('desk.noAnchor', { role: roleName(anchorRoles(role)[0]) })}</p>}
@@ -290,6 +291,12 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
                 {c.row.supportsVi === false && c.row.viMissing > 0 && <NoteMark inline kind="warn" text={tn('strip.viMissing', { n: c.row.viMissing })} />}
+                {(c.styles?.length || c.fit || c.gate) && source === 'pair' && (
+                  <span className="fa-desk-cand-tags" data-testid="cand-tags">
+                    {c.styles?.[0] && <span data-testid="cand-style">{t(`style.${c.styles[0]}` as 'style.contrast')}</span>}
+                    {c.fit && c.fit !== 'unknown' && <span data-testid="cand-fit" data-fit={c.fit}>{t(`pick.fit.${c.fit}` as 'pick.fit.good')}</span>}
+                    {c.gate && c.gate !== 'safe' && <span data-testid="cand-gate">{t(`pick.gate.${c.gate}` as 'pick.gate.controlled')}</span>}
+                  </span>)}
                 {c.summary && <Tooltip label={c.summary}><span className="fa-desk-cand-why" data-testid="cand-why">{c.summary}</span></Tooltip>}
                 <Tooltip label={pinned ? t('pick.unpin') : t('pick.pin')} shortcut="P">
                   <button type="button" className="fa-desk-cand-pin" data-testid="desk-cand-pin" aria-pressed={pinned} aria-label={pinned ? t('pick.unpin') : t('pick.pin')}

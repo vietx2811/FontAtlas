@@ -204,6 +204,19 @@ describe('PairingDesk', () => {
     expect((await api.getCase(res.case.id)).faces.length).toBe(2);
   });
 
+  it('G4/G5: Pairs asks suggest_partners with no style by default ("Tự động"), a chosen style narrows it, rows show style and fit labels without numbers', async () => {
+    const { api, desk } = await pickMount('body');
+    const spy = vi.spyOn(api, 'suggestPartners');
+    fireEvent.keyDown(desk, { key: '1' }); await settle();
+    expect(spy).toHaveBeenCalled(); expect(spy.mock.calls.at(-1)![1].styles).toEqual([]);
+    const row = screen.getAllByTestId('desk-cand').find(c => c.querySelector('[data-testid=cand-style]'))!;
+    expect(row.querySelector('[data-testid=cand-style]')!.textContent).toMatch(/Serif \+ Sans|Superfamily|Same structure/);
+    expect(row.textContent).not.toMatch(/\d\.\d|%/);
+    fireEvent.change(screen.getAllByTestId('pick-style').at(-1)!, { target: { value: 'harmony' } }); await settle();
+    expect(spy.mock.calls.at(-1)![1].styles).toEqual(['harmony']);
+    expect(screen.getAllByTestId('cand-style').every(x => x.textContent === 'Harmony')).toBe(true);
+  });
+
   it('G5: class chips and the Vietnamese switch filter the list, survive a source change, and "Xoá lọc" resets them', async () => {
     const { api, desk } = await pickMount('body');
     const spy = vi.spyOn(api, 'queryFaces');

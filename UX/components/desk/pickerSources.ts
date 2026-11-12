@@ -6,7 +6,8 @@ import { anchorPairRole } from './deskRoles';
 
 export const SOURCES = ['pair', 'role', 'sim', 'pin', 'recent'] as const;
 export type PickSource = typeof SOURCES[number];
-export type PickItem = { face: FaceKeyDto; row: FaceRowDto; /** Câu "vì sao" đã dịch (≤ 1 dòng). */ summary: string; fit?: FitDto | null; pinned?: boolean; fromPeek?: boolean };
+export type PickItem = { face: FaceKeyDto; row: FaceRowDto; /** Câu "vì sao" đã dịch (≤ 1 dòng). */ summary: string; fit?: FitDto | null; pinned?: boolean; fromPeek?: boolean;
+  /** Nguồn Ghép (G4): phong cách pair của dòng, mức hợp phong cách, cổng (safe/controlled/experimental). Chỉ nhãn, không số. */ styles?: string[]; styleFit?: FitDto; gate?: string };
 export const PROFILES = ['body', 'caption', 'heading', 'display', 'quote', 'label', 'numerals'] as const;
 export type Profile = typeof PROFILES[number];
 
@@ -22,12 +23,27 @@ export type RoleCtx = { role: ComboRoleDto; profile: Profile | null };
 export const roleRef = (c: RoleCtx): RoleRefDto => ({ name: c.role, profile: c.profile, size: null });
 
 const CLAMP = 100;
-export type LoadCtx = { role: ComboRoleDto; profile: Profile | null; anchor: FaceKeyDto | null; current: FaceKeyDto | null; caseId: number; projectVi: boolean; mode: 'safe' | 'controlled' | 'experimental' | string };
+/** Vai → RoleRef cho backend khi nhận ra (preset hoặc có hồ sơ); vai lạ → null (nguồn Ghép lùi về pair_candidates). */
+function knownRole(name: string, profile: Profile | null = null): RoleRefDto | null {
+  const k = name.trim().toLowerCase();
+  if (PRESET.includes(k)) return { name: k, profile: null, size: null };
+  const p = profile ?? guessProfile(name);
+  return p ? { name, profile: p, size: null } : null;
+}
+const PRESET = ['display', 'heading', 'subheading', 'body', 'caption', 'accent', 'quote', 'label', 'numerals'];
+export type LoadCtx = { /** Vai của font neo (nguồn Ghép). */ anchorRole?: ComboRoleDto | null; /** Phong cách pair đang chọn; '' = Tự động (mọi phong cách, xếp theo mức). */ style?: string; role: ComboRoleDto; profile: Profile | null; anchor: FaceKeyDto | null; current: FaceKeyDto | null; caseId: number; projectVi: boolean; mode: 'safe' | 'controlled' | 'experimental' | string };
 
 export async function loadSource(api: Api, src: PickSource, c: LoadCtx): Promise<PickItem[]> {
   const target = roleRef(c);
   if (src === 'pair') {
     if (!c.anchor) return [];
+    const aRef = c.anchorRole ? knownRole(c.anchorRole) : null; const tRef = knownRole(c.role, c.profile);
+    if (aRef && tRef) {
+      // Ghép theo vai + phong cách pair (G4). Cổng theo chế độ của Case: safe = chỉ an toàn; controlled = + có kiểm soát; còn lại mọi cổng.
+      const page = await api.suggestPartners(c.anchor, { anchorRole: aRef, targetRole: tRef, styles: c.style ? [c.style] : [], projectVi: c.projectVi, limit: CLAMP, offset: 0, filter: null });
+      const allow = c.mode === 'safe' ? ['safe'] : c.mode === 'controlled' ? ['safe', 'controlled'] : ['safe', 'controlled', 'experimental'];
+      return page.items.filter(p => allow.includes(p.gate)).map(p => ({ face: p.face, row: p.row, fit: p.roleFit, styles: p.styles, styleFit: p.styleFit, gate: p.gate, summary: [...p.reasons, ...p.warnings].map(whyText).filter(Boolean).slice(0, 2).join(' · ') }));
+    }
     const r = await api.pairCandidates(c.anchor, { role: anchorPairRole(c.role), mode: c.mode as never, projectVi: c.projectVi, k: 20, collectionId: null, lang: getLocale() });
     return r.filter(x => !(x.face.hashHex === c.anchor!.hashHex && x.face.faceIndex === c.anchor!.faceIndex)).map(x => ({ face: x.face, row: x.row, summary: x.summary }));
   }

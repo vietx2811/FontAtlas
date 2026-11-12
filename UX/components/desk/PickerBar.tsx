@@ -8,8 +8,9 @@ export const PICK_CLASSES = ['sans', 'serif', 'mono', 'slab', 'script', 'handwri
 const profileName = (p: Profile) => t(p === 'label' ? 'pick.profile.label.name' : (`pick.profile.${p}` as 'pick.profile.body'));
 
 /** Đầu Picker (G5): nguồn (chọn một), hồ sơ vai khi cần, chip class, "Đủ tiếng Việt", đếm và xoá lọc. */
-export function PickerBar({ source, onSource, disabled, counts, classes, onClasses, viOnly, onViOnly, shown, hidden, profile, profileGuess, onProfile, showProfile, clearRecent }: {
-  source: PickSource; onSource(s: PickSource): void; /** Nguồn mờ đi + lý do (tooltip). */ disabled: Partial<Record<PickSource, string>>; counts: Partial<Record<PickSource, number>>;
+const PAIR_STYLES = ['contrast', 'superfamily', 'same_structure', 'same_era', 'display_vs_neutral', 'harmony'] as const;
+export function PickerBar({ source, onSource, pairStyle, onPairStyle, disabled, counts, classes, onClasses, viOnly, onViOnly, shown, hidden, profile, profileGuess, onProfile, showProfile, clearRecent }: {
+  source: PickSource; onSource(s: PickSource): void; pairStyle: string; onPairStyle(s: string): void; /** Nguồn mờ đi + lý do (tooltip). */ disabled: Partial<Record<PickSource, string>>; counts: Partial<Record<PickSource, number>>;
   classes: string[]; onClasses(c: string[]): void; viOnly: boolean; onViOnly(v: boolean): void; shown: number; hidden: number;
   profile: Profile | null; profileGuess: Profile | null; onProfile(p: Profile | null): void; showProfile: boolean; clearRecent?: () => void;
 }): React.JSX.Element {
@@ -26,6 +27,13 @@ export function PickerBar({ source, onSource, disabled, counts, classes, onClass
           return <Tooltip key={s} label={why ?? t(`pick.src.${s}.gloss` as 'pick.src.pair.gloss')}>{btn}</Tooltip>;
         })}
       </div>
+      {source === 'pair' && (
+        <label className="fa-pick-profile" data-testid="pick-style-row"><span>{t('pick.style')}</span>
+          <select data-testid="pick-style" value={pairStyle} aria-label={t('pick.style')} onChange={e => onPairStyle(e.target.value)}>
+            <option value="">{t('pick.style.auto')}</option>{PAIR_STYLES.map(s => <option key={s} value={s}>{t(`style.${s}` as 'style.contrast')}</option>)}
+          </select>
+        </label>
+      )}
       {showProfile && (
         <label className="fa-pick-profile" data-testid="pick-profile-row">
           <span>{profile === null && profileGuess === null ? t('pick.profile.hint') : profile === null ? t('pick.profile.guess', { profile: profileName(profileGuess!) }) : t('pick.profile.label')}</span>
