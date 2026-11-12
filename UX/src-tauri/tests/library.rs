@@ -5,7 +5,7 @@ use std::time::Duration;
 use app_lib::dto::analysis::ClassificationOverrideDto;
 use app_lib::dto::library::*;
 use app_lib::services::activation::NoActivation;
-use app_lib::services::{analysis, boot, cases, library, sources, system};
+use app_lib::services::{analysis, boot, cases, cloud_download, library, sources, system};
 use app_lib::state::{AppDirs, AppState};
 
 fn core_fixture(name: &str) -> PathBuf {
@@ -219,6 +219,119 @@ fn reveal_missing_path_is_not_found() {
     assert!(seen.lock().unwrap().as_ref().unwrap().starts_with(&dir));
     let unknown = FaceKeyDto { hash_hex: "cd".repeat(32), face_index: 0 };
     assert_eq!(system::reveal_in_finder(&st, &unknown, &|_| Ok(())).unwrap_err().code, "not_found");
+}
+
+#[test]
+fn reveal_source_opens_the_source_folder_from_the_store_and_refuses_unknown_or_unmounted() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    let seen = std::sync::Mutex::new(Vec::new());
+    let open = |p: &Path| {
+        seen.lock().unwrap().push(p.to_path_buf());
+        Ok(())
+    };
+    system::reveal_source(&st, id, &open).unwrap();
+    assert_eq!(*seen.lock().unwrap(), vec![dir.clone()], "mở đúng thư mục nguồn lưu trong Store");
+    // id lạ → not_found, không mở gì
+    assert_eq!(system::reveal_source(&st, id + 99, &open).unwrap_err().code, "not_found");
+    // thư mục không còn (ổ cloud/ổ rời chưa mount) → mã riêng, không mở gì, kèm sourceId để UI nói rõ
+    let gone = d.path().join("Fonts-gone");
+    std::fs::rename(&dir, &gone).unwrap();
+    let e = system::reveal_source(&st, id, &open).unwrap_err();
+    assert_eq!(e.code, "source_unavailable");
+    assert_eq!(e.detail.as_ref().unwrap()["sourceId"], id);
+    assert_eq!(seen.lock().unwrap().len(), 1, "không mở Finder khi thư mục không còn");
+    // lỗi của opener được gói thành `io`
+    std::fs::rename(&gone, &dir).unwrap();
+    assert_eq!(system::reveal_source(&st, id, &|_| Err("no finder".into())).unwrap_err().code, "io");
+}
+
+/// Giả lập "Tải về máy" không cần ổ cloud thật: stub iCloud kiểu cũ `.Tên.ttf.icloud` trong thư mục tạm được
+/// `cloud_placeholders` coi là chưa tải; hàm tải giả chép fixture OFL vào tên thật rồi xoá stub (như hệ điều hành làm).
+fn fake_os_download(p: &Path, _permit: app_lib::services::cloud::Permit) -> Result<(), fontatlas_activate::EnsureLocalError> {
+    let name = p.file_name().unwrap().to_str().unwrap();
+    std::fs::copy(core_fixture(name), p).map_err(|e| fontatlas_activate::EnsureLocalError::Io(e.to_string()))?;
+    let _ = std::fs::remove_file(p.with_file_name(format!(".{name}.icloud")));
+    Ok(())
+}
+
+#[test]
+fn download_source_materializes_placeholders_then_rescans_so_the_fonts_appear() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    for n in ["open_sans.ttf", "libre_baskerville.ttf"] {
+        std::fs::write(dir.join(format!(".{n}.icloud")), b"").unwrap();
+    }
+    let before = all(&st).total;
+    let mut seen = Vec::new();
+    let r = cloud_download::download_source_with(&st, id, &fake_os_download, &mut |p| seen.push(p)).unwrap();
+    assert_eq!((r.total, r.downloaded, r.failed, r.cancelled, r.rescan_queued), (2, 2, 0, false, true));
+    assert_eq!(seen.first().map(|p| (p.done, p.total)), Some((0, 2)), "báo tổng ngay từ đầu");
+    assert_eq!(seen.last().map(|p| p.done), Some(2));
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(all(&st).total > before, "quét lại xong thì font mới tải hiện ra");
+    assert!(!st.cloud_jobs.is_running(id), "xong thì nhả đăng ký");
+    // không còn gì để tải: báo 0, không quét lại vô ích
+    let again = cloud_download::download_source_with(&st, id, &fake_os_download, &mut |_| {}).unwrap();
+    assert_eq!((again.total, again.rescan_queued), (0, false));
+}
+
+#[test]
+fn download_source_failures_are_reported_by_code_and_do_not_hide_the_other_files() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    std::fs::write(dir.join(".open_sans.ttf.icloud"), b"").unwrap();
+    std::fs::write(dir.join(".libre_baskerville.ttf.icloud"), b"").unwrap();
+    let fetch = |p: &Path, permit: app_lib::services::cloud::Permit| {
+        if p.ends_with("open_sans.ttf") {
+            return Err(fontatlas_activate::EnsureLocalError::Timeout);
+        }
+        fake_os_download(p, permit)
+    };
+    let r = cloud_download::download_source_with(&st, id, &fetch, &mut |_| {}).unwrap();
+    assert_eq!((r.downloaded, r.failed), (1, 1));
+    assert_eq!(r.first_failure_code.as_deref(), Some("cloud_timeout"));
+    assert!(r.rescan_queued, "có font về máy là quét lại");
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+}
+
+#[test]
+fn download_source_refuses_unknown_unmounted_and_already_running_sources() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    let never = |_: &Path, _p: app_lib::services::cloud::Permit| -> Result<(), fontatlas_activate::EnsureLocalError> { panic!("không được tải") };
+    assert_eq!(cloud_download::download_source_with(&st, id + 99, &never, &mut |_| {}).unwrap_err().code, "not_found");
+    assert!(!st.cloud_jobs.is_running(id + 99), "lỗi sớm vẫn nhả đăng ký");
+    // đang chạy → busy; huỷ được lần đang chạy
+    std::fs::write(dir.join(".open_sans.ttf.icloud"), b"").unwrap();
+    let st2 = Arc::clone(&st);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    let go_rx = std::sync::Mutex::new(go_rx);
+    let h = std::thread::spawn(move || {
+        let fetch = |p: &Path, permit: app_lib::services::cloud::Permit| {
+            started_tx.send(()).unwrap();
+            go_rx.lock().unwrap().recv().unwrap();
+            fake_os_download(p, permit)
+        };
+        cloud_download::download_source_with(&st2, id, &fetch, &mut |_| {})
+    });
+    started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(cloud_download::download_source_with(&st, id, &never, &mut |_| {}).unwrap_err().code, "busy");
+    assert!(cloud_download::cancel_download(&st, id));
+    go_tx.send(()).unwrap();
+    let r = h.join().unwrap().unwrap();
+    assert_eq!(r.downloaded, 1, "file đang tải chạy nốt");
+    assert!(!cloud_download::cancel_download(&st, id), "hết chạy thì không còn gì để huỷ");
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    // thư mục không còn → source_unavailable
+    std::fs::rename(&dir, d.path().join("Fonts-gone")).unwrap();
+    let e = cloud_download::download_source_with(&st, id, &never, &mut |_| {}).unwrap_err();
+    assert_eq!(e.code, "source_unavailable");
 }
 
 #[test]

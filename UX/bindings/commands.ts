@@ -24,6 +24,8 @@ import type { CaseSettingsDto } from './CaseSettingsDto';
 import type { CaseSummaryDto } from './CaseSummaryDto';
 import type { ClassFacetDto } from './ClassFacetDto';
 import type { ClassificationOverrideDto } from './ClassificationOverrideDto';
+import type { CloudDownloadProgressDto } from './CloudDownloadProgressDto';
+import type { CloudDownloadReportDto } from './CloudDownloadReportDto';
 import type { CollectionDto } from './CollectionDto';
 import type { ComboDto } from './ComboDto';
 import type { ComboPatchDto } from './ComboPatchDto';
@@ -101,6 +103,8 @@ export interface TauriCommandMap {
   remove_source: { args: { sourceId: number }; result: RemoveSourceReportDto };
   remove_source_preview: { args: { sourceId: number }; result: RemoveSourceReportDto };
   rescan_sources: { args: { sourceIds: number[] | null }; result: null };
+  source_download_cloud: { args: { sourceId: number; onProgress: Channel<CloudDownloadProgressDto> }; result: CloudDownloadReportDto };
+  source_download_cancel: { args: { sourceId: number }; result: boolean };
   scan_pause: { args: Record<string, never>; result: null };
   scan_resume: { args: Record<string, never>; result: null };
   scan_cancel: { args: Record<string, never>; result: null };
@@ -155,6 +159,7 @@ export interface TauriCommandMap {
   source_priority: { args: Record<string, never>; result: number[] };
   set_source_priority: { args: { ids: number[] }; result: number[] };
   reveal_location: { args: { path: string }; result: null };
+  reveal_source: { args: { sourceId: number }; result: null };
   language_list: { args: { q: FaceQueryDto }; result: LangListDto };
   lang_coverage: { args: { faceId: number; code: string }; result: LangCoverageDto };
   compare_faces: { args: { faces: FaceKeyDto[]; opts: CompareOptsDto }; result: CompareDto };

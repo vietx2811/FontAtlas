@@ -601,3 +601,31 @@ impl Default for UiStateDto {
         }
     }
 }
+
+/// Tiến độ "Tải về máy" của một nguồn (gửi qua channel). `done` = đã xử lý (tải xong + lỗi).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CloudDownloadProgressDto {
+    pub done: u32,
+    pub total: u32,
+    /// Trong `done`, số font không tải được.
+    pub failed: u32,
+}
+
+/// Kết quả "Tải về máy". Lỗi từng file không làm hỏng các file còn lại; `firstFailureCode` giúp giao diện nói rõ vì sao
+/// (`cloud_timeout` | `cloud_download_failed` | `cloud_stub` | `missing_file` | `cloud_busy`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CloudDownloadReportDto {
+    /// Số font chưa tải lúc bắt đầu.
+    pub total: u32,
+    pub downloaded: u32,
+    pub failed: u32,
+    /// Bị huỷ giữa chừng (font chưa kịp xử lý = `total - downloaded - failed`).
+    pub cancelled: bool,
+    /// Đã xếp quét lại nguồn để font mới tải hiện ra.
+    pub rescan_queued: bool,
+    pub first_failure_code: Option<String>,
+}
