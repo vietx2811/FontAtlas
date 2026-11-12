@@ -142,6 +142,8 @@ describe('PairingDesk', () => {
     fireEvent.click(row(victim).querySelector('[data-testid=role-rename-btn]')!); await settle();
     const input = screen.getByTestId('role-rename') as HTMLInputElement; fireEvent.change(input, { target: { value: 'Hero' } }); fireEvent.keyDown(input, { key: 'Enter' }); await settle();
     expect(await rolesNow()).toContain('Hero'); expect(await rolesNow()).not.toContain(victim);
+  });
+
   it('G2: the + button on a candidate places that font in the selected role; click on the row alone does not', async () => {
     const { api, res } = await seeded(); await mount(api, res);
     const spy = vi.spyOn(api, 'setComboSlot');
