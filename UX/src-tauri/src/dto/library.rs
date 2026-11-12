@@ -585,6 +585,8 @@ pub struct FamilyStyleDto {
 pub struct UiStateDto {
     pub sidebar_collapsed: bool,
     pub open_sections: Vec<String>,
+    /// Nhóm thanh bên đã đóng, cho nhóm MỚI mặc định mở (Case): dữ liệu cũ không có trường này nên nhóm đó vẫn mở.
+    pub closed_sections: Vec<String>,
     pub layout: String,
     pub sample_size: u32,
     pub info_expanded: bool,
@@ -595,6 +597,7 @@ impl Default for UiStateDto {
         UiStateDto {
             sidebar_collapsed: false,
             open_sections: vec!["col".into(), "src".into(), "tag".into()],
+            closed_sections: vec![],
             layout: "grid".into(),
             sample_size: 34,
             info_expanded: false,

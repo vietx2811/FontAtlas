@@ -59,10 +59,10 @@ fn case_lifecycle_through_services() {
     // Combo + vai
     let m = cases::create_combo(&st, c.id, None, None).unwrap();
     assert!(m.is_main && m.name == "Combo 1");
-    let m = cases::set_combo_slot(&st, m.id, ComboRoleDto::Heading, Some(&playfair), Some("neo"), Some(&serde_json::json!({"weight": 700}))).unwrap();
-    let m = cases::set_combo_slot(&st, m.id, ComboRoleDto::Body, Some(&sans), None, None).unwrap();
+    let m = cases::set_combo_slot(&st, m.id, "heading".to_string(), Some(&playfair), Some("neo"), Some(&serde_json::json!({"weight": 700}))).unwrap();
+    let m = cases::set_combo_slot(&st, m.id, "body".to_string(), Some(&sans), None, None).unwrap();
     assert_eq!(m.slots.len(), 2);
-    assert_eq!(m.slots[0].role, ComboRoleDto::Heading);
+    assert_eq!(m.slots[0].role, "heading");
     assert_eq!(m.slots[0].style["weight"], 700);
     assert!(m.slots.iter().all(|s| s.row.is_some()));
     let c = cases::get_case(&st, c.id).unwrap();
@@ -72,12 +72,12 @@ fn case_lifecycle_through_services() {
     let made = cases::create_combos(
         &st,
         c.id,
-        &[NewComboDto { name: Some("Lạnh".into()), slots: vec![NewSlotDto { role: ComboRoleDto::Display, face: roboto.clone() }] }],
+        &[NewComboDto { name: Some("Lạnh".into()), slots: vec![NewSlotDto { role: "display".to_string(), face: roboto.clone() }] }],
     )
     .unwrap();
     assert_eq!(made.len(), 1);
     let bad_face = FaceKeyDto { hash_hex: "zz".into(), face_index: 0 };
-    assert!(cases::create_combos(&st, c.id, &[NewComboDto { name: None, slots: vec![NewSlotDto { role: ComboRoleDto::Body, face: bad_face }] }]).is_err());
+    assert!(cases::create_combos(&st, c.id, &[NewComboDto { name: None, slots: vec![NewSlotDto { role: "body".to_string(), face: bad_face }] }]).is_err());
     assert_eq!(cases::get_case(&st, c.id).unwrap().combos.len(), 2);
 
     // cập nhật Case
@@ -146,12 +146,12 @@ fn case_compare_columns_relations_and_limits() {
             NewComboDto {
                 name: Some("Ba giọng".into()),
                 slots: vec![
-                    NewSlotDto { role: ComboRoleDto::Body, face: roboto.clone() },
-                    NewSlotDto { role: ComboRoleDto::Heading, face: playfair.clone() },
-                    NewSlotDto { role: ComboRoleDto::Caption, face: sans.clone() },
+                    NewSlotDto { role: "body".to_string(), face: roboto.clone() },
+                    NewSlotDto { role: "heading".to_string(), face: playfair.clone() },
+                    NewSlotDto { role: "caption".to_string(), face: sans.clone() },
                 ],
             },
-            NewComboDto { name: Some("Một font".into()), slots: vec![NewSlotDto { role: ComboRoleDto::Heading, face: roboto.clone() }, NewSlotDto { role: ComboRoleDto::Body, face: roboto.clone() }] },
+            NewComboDto { name: Some("Một font".into()), slots: vec![NewSlotDto { role: "heading".to_string(), face: roboto.clone() }, NewSlotDto { role: "body".to_string(), face: roboto.clone() }] },
             NewComboDto { name: Some("Trống".into()), slots: vec![] },
         ],
     )
@@ -161,8 +161,8 @@ fn case_compare_columns_relations_and_limits() {
     let a = &cmp.columns[0];
     assert_eq!(a.font_count, 3);
     assert_eq!(a.relations.len(), 2, "giọng ① (heading) so với body và caption");
-    assert!(a.relations.iter().all(|r| r.from == ComboRoleDto::Heading));
-    assert_eq!(a.relations.iter().map(|r| r.to).collect::<Vec<_>>(), vec![ComboRoleDto::Body, ComboRoleDto::Caption]);
+    assert!(a.relations.iter().all(|r| r.from == "heading"));
+    assert_eq!(a.relations.iter().map(|r| r.to.clone()).collect::<Vec<_>>(), vec!["body".to_string(), "caption".to_string()]);
     assert!(a.relations.iter().all(|r| r.reason.is_none() && r.assessment.as_ref().is_some_and(|x| !x.labels.is_empty() && !x.summary.is_empty())));
     assert_eq!(a.missing_count, 0);
     assert!(a.worst_vi_missing.is_some());
@@ -195,13 +195,13 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     )
     .unwrap();
     assert!(r.created);
-    assert_eq!((r.anchor_role, r.other_role), (ComboRoleDto::Display, ComboRoleDto::Body));
+    assert_eq!((r.anchor_role.as_str(), r.other_role.as_str()), ("display", "body"));
     assert_eq!(r.trial.as_ref(), Some(&roboto));
     assert_eq!(r.case.settings, settings, "mang theo mức ghép và lựa chọn tiếng Việt");
     let combo = r.case.combos.iter().find(|c| c.id == r.combo_id).unwrap();
     assert!(combo.is_main);
     assert_eq!(combo.slots.len(), 1, "ứng viên KHÔNG được đặt vào vai");
-    assert_eq!((combo.slots[0].role, &combo.slots[0].key), (ComboRoleDto::Display, &playfair));
+    assert_eq!((combo.slots[0].role.as_str(), &combo.slots[0].key), ("display", &playfair));
     let origins: Vec<_> = r.case.faces.iter().map(|f| (f.key.clone(), f.origin)).collect();
     assert!(origins.contains(&(playfair.clone(), CaseOriginDto::Peek)) && origins.contains(&(roboto.clone(), CaseOriginDto::Peek)));
 
@@ -216,7 +216,7 @@ fn pair_from_peek_anchors_font_and_carries_settings_and_trial() {
     assert_eq!(r2.case.combos.len(), 1);
     assert_eq!(r2.combo_id, r.combo_id);
     assert_eq!(r2.case.combos[0].slots.len(), 2);
-    assert_eq!((r2.anchor_role, r2.other_role, r2.trial), (ComboRoleDto::Body, ComboRoleDto::Display, None));
+    assert_eq!((r2.anchor_role.as_str(), r2.other_role.as_str(), r2.trial), ("body", "display", None));
     assert_eq!(r2.case.settings, settings, "Case có sẵn giữ cài đặt, peek không ghi đè");
     // case_id không tồn tại
     let bad = cases::open_case_from_peek(&st, &PeekOpenDto { face: sans, as_role: PeekRoleDto::Body, candidate: None, case_id: Some(9999), settings: CaseSettingsDto::default(), replace: false });
@@ -435,14 +435,14 @@ fn case_compare_reports_missing_fonts_instead_of_swallowing_them() {
         c.id,
         &[
             NewComboDto { name: Some("Giữa thiếu".into()), slots: vec![
-                NewSlotDto { role: ComboRoleDto::Heading, face: playfair.clone() },
-                NewSlotDto { role: ComboRoleDto::Body, face: ghost.clone() },
-                NewSlotDto { role: ComboRoleDto::Caption, face: sans.clone() },
+                NewSlotDto { role: "heading".to_string(), face: playfair.clone() },
+                NewSlotDto { role: "body".to_string(), face: ghost.clone() },
+                NewSlotDto { role: "caption".to_string(), face: sans.clone() },
             ] },
             NewComboDto { name: Some("Neo thiếu".into()), slots: vec![
-                NewSlotDto { role: ComboRoleDto::Display, face: ghost.clone() },
-                NewSlotDto { role: ComboRoleDto::Body, face: roboto.clone() },
-                NewSlotDto { role: ComboRoleDto::Caption, face: sans.clone() },
+                NewSlotDto { role: "display".to_string(), face: ghost.clone() },
+                NewSlotDto { role: "body".to_string(), face: roboto.clone() },
+                NewSlotDto { role: "caption".to_string(), face: sans.clone() },
             ] },
         ],
     )
@@ -451,17 +451,17 @@ fn case_compare_reports_missing_fonts_instead_of_swallowing_them() {
     let a = &cmp.columns[0];
     assert_eq!(a.missing_count, 1, "một vai thiếu font — không được báo sạch");
     assert_eq!(a.relations.len(), 2);
-    let body = a.relations.iter().find(|r| r.to == ComboRoleDto::Body).unwrap();
+    let body = a.relations.iter().find(|r| r.to == "body").unwrap();
     assert!(body.assessment.is_none() && body.reason.as_deref() == Some("missing_font"));
-    assert!(a.relations.iter().find(|r| r.to == ComboRoleDto::Caption).unwrap().assessment.is_some());
+    assert!(a.relations.iter().find(|r| r.to == "caption").unwrap().assessment.is_some());
     assert!(a.combo.slots.iter().any(|s| s.missing) && a.combo.slots.iter().filter(|s| s.missing).count() == 1);
     // neo thiếu: lấy vai kế tiếp còn font làm neo, vẫn trả quan hệ còn lại
     let b = &cmp.columns[1];
     assert_eq!(b.missing_count, 1);
-    let anchor_role = b.relations.iter().map(|r| r.from).next().unwrap();
-    assert_eq!(anchor_role, ComboRoleDto::Body, "neo = vai đầu còn font");
-    assert!(b.relations.iter().any(|r| r.to == ComboRoleDto::Caption && r.assessment.is_some()));
-    assert!(b.relations.iter().any(|r| r.to == ComboRoleDto::Display && r.reason.as_deref() == Some("missing_font")));
+    let anchor_role = b.relations.iter().map(|r| r.from.clone()).next().unwrap();
+    assert_eq!(anchor_role, "body", "neo = vai đầu còn font");
+    assert!(b.relations.iter().any(|r| r.to == "caption" && r.assessment.is_some()));
+    assert!(b.relations.iter().any(|r| r.to == "display" && r.reason.as_deref() == Some("missing_font")));
     // CaseFaceDto cũng báo missing
     let full = cases::get_case(&st, c.id).unwrap();
     assert!(full.faces.iter().find(|f| f.key == ghost).unwrap().missing);
@@ -478,9 +478,9 @@ fn peek_does_not_overwrite_an_occupied_role_without_replace() {
     assert!(r1.occupied.is_none());
     let r2 = cases::open_case_from_peek(&st, &req(&roboto, false)).unwrap();
     let occ = r2.occupied.clone().expect("vai display đã có Playfair");
-    assert_eq!((occ.role, &occ.key), (ComboRoleDto::Display, &playfair));
+    assert_eq!((occ.role.as_str(), &occ.key), ("display", &playfair));
     assert!(occ.row.is_some());
-    let slot = |r: &PeekOpenResultDto| r.case.combos[0].slots.iter().find(|s| s.role == ComboRoleDto::Display).unwrap().key.clone();
+    let slot = |r: &PeekOpenResultDto| r.case.combos[0].slots.iter().find(|s| s.role == "display").unwrap().key.clone();
     assert_eq!(slot(&r2), playfair, "chưa đồng ý ⇒ không đổi");
     let r3 = cases::open_case_from_peek(&st, &req(&roboto, true)).unwrap();
     assert!(r3.occupied.is_none());
@@ -514,4 +514,31 @@ fn brief_starter_with_unreadable_case_is_an_error_not_a_silent_fallback() {
     let c = cases::create_case(&st, None, None, None).unwrap();
     cases::delete_case(&st, c.id).unwrap();
     assert_eq!(brief::brief_starter(&st, &BriefDto::default(), Some(c.id)).unwrap_err().code, "not_found");
+}
+
+#[test]
+fn custom_combo_roles_through_services_carry_codes_and_order() {
+    let td = tempfile::tempdir().unwrap();
+    let st = state(td.path());
+    let roboto = key_of(&st, "roboto");
+    let playfair = key_of(&st, "playfair");
+    let c = cases::create_case(&st, Some("G3"), None, None).unwrap();
+    let m = cases::create_combo(&st, c.id, None, None).unwrap();
+    assert!(m.roles.is_empty());
+    let m = cases::set_combo_slot(&st, m.id, "Label".to_string(), Some(&roboto), None, None).unwrap();
+    assert_eq!((m.roles.clone(), m.slots.len()), (vec!["Label".to_string()], 1));
+    let m = cases::add_combo_role(&st, m.id, "Numerals").unwrap();
+    assert_eq!(m.roles, vec!["Label", "Numerals"]);
+    assert_eq!(cases::add_combo_role(&st, m.id, "label").unwrap_err().code, "role_duplicate");
+    assert_eq!(cases::add_combo_role(&st, m.id, " ").unwrap_err().code, "role_name_invalid");
+    assert_eq!(cases::remove_combo_role(&st, m.id, "zzz").unwrap_err().code, "role_not_found");
+    let m = cases::set_combo_slot(&st, m.id, "numerals".to_string(), Some(&playfair), None, None).unwrap();
+    assert_eq!(m.slots.iter().map(|s| (s.role.as_str(), s.row.is_some())).collect::<Vec<_>>(), vec![("Label", true), ("Numerals", true)]);
+    let m = cases::reorder_combo_roles(&st, m.id, &["Numerals".to_string(), "Label".to_string()]).unwrap();
+    assert_eq!(m.slots[0].role, "Numerals");
+    assert_eq!(cases::reorder_combo_roles(&st, m.id, &["Label".to_string()]).unwrap_err().code, "role_set_mismatch");
+    let m = cases::rename_combo_role(&st, m.id, "Label", "Nhãn").unwrap();
+    assert_eq!(m.roles, vec!["Numerals", "Nhãn"]);
+    let m = cases::remove_combo_role(&st, m.id, "Numerals").unwrap();
+    assert_eq!((m.roles, m.slots.len()), (vec!["Nhãn".to_string()], 1));
 }

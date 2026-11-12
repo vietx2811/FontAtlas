@@ -89,3 +89,16 @@ describe('empty lists', () => {
     expect(find(e, 'tag').items!.map(x => x.type ?? 'item')).toEqual(['item']);
   });
 });
+
+describe('Thêm vào… liệt kê Case (G1)', () => {
+  const rows = [makeRow(1)];
+  it('có Case thì thêm nhóm Case sau "Dự án mới…"; chọn một Case gọi addToCase; không có addToCase hoặc không có Case thì không có nhóm', () => {
+    const addToCase = vi.fn(); const base = actions();
+    const withCase = projectEntries(rows, ctx({ cases: [{ id: 3, name: 'Poster', faceCount: 4 }], actions: { ...base, addToCase } }));
+    const ids = withCase.map(e => (e as { id?: string }).id);
+    expect(ids.slice(-3)).toEqual(['sep-case', 'lbl-case', 'case-3']);
+    (withCase.at(-1) as { onSelect(): void }).onSelect(); expect(addToCase).toHaveBeenCalledWith(rows, 3, 'Poster');
+    expect(projectEntries(rows, ctx({ cases: [{ id: 3, name: 'Poster', faceCount: 4 }] })).some(e => (e as { id?: string }).id === 'case-3')).toBe(false);
+    expect(projectEntries(rows, ctx({ cases: [], actions: { ...base, addToCase } })).some(e => (e as { id?: string }).id === 'lbl-case')).toBe(false);
+  });
+});

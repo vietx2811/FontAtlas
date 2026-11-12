@@ -23,7 +23,7 @@ export { defaultSample };
 export type View = 'all' | 'star' | 'recent' | 'active' | 'dups' | `col:${string}` | `src:${string}`;
 export type RecentView = { face: string; at: number };
 export type PanelTab = 'spec' | 'vi' | 'anat' | 'sim' | 'pair';
-export type SectionKey = 'col' | 'src' | 'tag';
+export type SectionKey = 'col' | 'src' | 'tag' | 'case';
 /** Phiên so sánh sống ngoài màn Compare (rời trang không mất): tập font, các cột pin (theo thứ tự pin), và overlay. */
 export type CompareSession = { faces: FaceKeyDto[]; pinned: string[]; overlayOn: boolean; overlayIds: string[] };
 
@@ -177,16 +177,19 @@ export const dropTags = (f: LibraryFilters): LibraryFilters => { const { tagIds:
 export const singleTagId = (f: LibraryFilters): number | null => (f.tagIds?.length === 1 ? f.tagIds[0] : null);
 
 const SECTIONS: SectionKey[] = ['col', 'src', 'tag'];
+/** Nhóm mới mặc định mở: lưu phần đã ĐÓNG (`closedSections`) để dữ liệu cũ không có trường này vẫn mở. */
+const DEFAULT_OPEN: SectionKey[] = ['case'];
 const toDto = (s: UiState): UiStateDto => ({
   sidebarCollapsed: s.sidebarCollapsed,
   openSections: SECTIONS.filter(k => s.openSections[k]),
+  closedSections: DEFAULT_OPEN.filter(k => !s.openSections[k]),
   layout: s.layout,
   sampleSize: s.sampleSize,
   infoExpanded: s.infoExpanded,
 });
 const fromDto = (d: UiStateDto): Pick<UiState, 'sidebarCollapsed' | 'openSections' | 'layout' | 'sampleSize' | 'infoExpanded'> => ({
   sidebarCollapsed: d.sidebarCollapsed,
-  openSections: { col: d.openSections.includes('col'), src: d.openSections.includes('src'), tag: d.openSections.includes('tag') },
+  openSections: { col: d.openSections.includes('col'), src: d.openSections.includes('src'), tag: d.openSections.includes('tag'), case: !(d.closedSections ?? []).includes('case') },
   layout: d.layout === 'list' ? 'list' : 'grid',
   sampleSize: Math.min(SAMPLE_MAX, Math.max(SAMPLE_MIN, d.sampleSize)),
   infoExpanded: d.infoExpanded,

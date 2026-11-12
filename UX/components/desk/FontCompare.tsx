@@ -10,13 +10,13 @@ import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { TermTip, termKey, termName } from '../ui/terms';
-import { isHeadingLike } from './deskRoles';
+import { isHeadingLike, roleLabel } from './deskRoles';
 
 export type FcFace = { face: FaceKeyDto; row: FaceRowDto };
 type SortKey = 'order' | 'name' | 'vi' | (typeof COMPARE_METRICS)[number];
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
-const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
+const roleName = roleLabel;
 
 /** Đọc số đo cho nhiều font; nhớ theo khoá, lỗi thì không nhớ (lần sau đọc lại). */
 function useFacesData(api: Api, faces: FaceKeyDto[]): { cache: Map<string, CompareFace | null>; failed: ReadonlySet<string> } {

@@ -6,16 +6,17 @@ import type { FaceKeyDto, FaceRowDto } from '../bindings';
 import { comboAssessment } from './mockAnalysis';
 
 const ROLES: ComboRoleDto[] = ['display', 'heading', 'subheading', 'body', 'caption', 'accent', 'quote'];
-const MAX_FACES = 500, MAX_COMBOS = 50, MAX_NAME = 120;
+const MAX_FACES = 500, MAX_COMBOS = 50, MAX_NAME = 120, MAX_ROLE = 40, MAX_ROLES = 30;
 const kOf = (k: FaceKeyDto) => `${k.hashHex}:${k.faceIndex}`;
 
 type Slot = { role: ComboRoleDto; key: FaceKeyDto; note: string | null; style: unknown };
-type Combo = { id: number; caseId: number; idx: number; name: string; isMain: boolean; note: string | null; slots: Slot[] };
+// `roles` = mọi vai theo thứ tự (kể cả vai rỗng giữ chỗ); `slots` = vai CÓ font. Cùng ngữ nghĩa với user.db v11 (combo_slots).
+type Combo = { id: number; caseId: number; idx: number; name: string; isMain: boolean; note: string | null; slots: Slot[]; roles: { name: string; ord: number }[] };
 type Case = Omit<CaseDto, 'faces' | 'combos'> & { faces: Map<string, { key: FaceKeyDto; origin: CaseOriginDto; note: string | null; addedAt: number }>; combos: Combo[] };
 
 type CaseApi = Pick<Api,
   'createCase' | 'listCases' | 'openCase' | 'getCase' | 'updateCase' | 'deleteCase' | 'restoreCase' | 'addToCase' | 'removeFromCase' |
-  'caseCompare' | 'openCaseFromPeek' | 'createCombo' | 'updateCombo' | 'deleteCombo' | 'reorderCombos' | 'setComboSlot' | 'createCombos'>;
+  'caseCompare' | 'openCaseFromPeek' | 'createCombo' | 'updateCombo' | 'deleteCombo' | 'reorderCombos' | 'setComboSlot' | 'createCombos' | 'addComboRole' | 'removeComboRole' | 'renameComboRole' | 'reorderComboRoles'>;
 
 export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined): CaseApi {
   const cases = new Map<number, Case>();
@@ -25,9 +26,23 @@ export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined
   const comboOf = (id: number) => { for (const c of cases.values()) { const b = c.combos.find(x => x.id === id); if (b) { if (c.deletedAt != null) throw new CmdError('not_found', `Case #${c.id} đã xoá`); return { c, b }; } } throw new CmdError('not_found', `Combo #${id}`); };
   const invalid = (m: string) => new CmdError('invalid_arg', m);
   const cleanName = (n: string, what: string) => { const t = n.trim(); if (!t || [...t].length > MAX_NAME) throw invalid(`tên ${what} rỗng hoặc quá dài (≤ ${MAX_NAME})`); return t; };
+  const sameRole = (a: string, b: string) => a === b || a.toLowerCase() === b.toLowerCase();
+  const roleErr = (code: string, m: string) => new CmdError(code, m);
+  const cleanRole = (n: string) => { const t = n.trim(); if (!t || [...t].length > MAX_ROLE || /\p{Cc}/u.test(t)) throw roleErr('role_name_invalid', `tên vai rỗng, quá dài (≤ ${MAX_ROLE}) hoặc có ký tự điều khiển`); return t; };
+  const orderedRoles = (b: Combo) => [...b.roles].sort((x, y) => x.ord - y.ord || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+  const nextOrd = (b: Combo, name: string) => { const i = ROLES.findIndex(r => sameRole(r, name)); if (i >= 0) return i; return b.roles.length ? Math.max(ROLES.length - 1, ...b.roles.map(r => r.ord)) + 1 : ROLES.length; };
+  /** Tên vai đã có (đúng chữ đã lưu) hoặc tạo mới: kiểm tên + giới hạn. */
+  const ensureRole = (b: Combo, name: string): string => {
+    const have = b.roles.find(r => sameRole(r.name, name.trim()));
+    if (have) return have.name;
+    const t = cleanRole(name);
+    if (b.roles.length >= MAX_ROLES) throw roleErr('role_limit', `Combo tối đa ${MAX_ROLES} vai`);
+    b.roles.push({ name: t, ord: nextOrd(b, t) });
+    return t;
+  };
   const isMissing = (k: FaceKeyDto) => { const r = rowOf(k); return !r || r.missing; };
   const slotDto = (s: Slot) => ({ role: s.role, key: { ...s.key }, row: rowOf(s.key) ?? null, missing: isMissing(s.key), note: s.note, style: s.style });
-  const comboDto = (b: Combo): ComboDto => ({ id: b.id, caseId: b.caseId, idx: b.idx, name: b.name, isMain: b.isMain, note: b.note, slots: [...b.slots].sort((x, y) => ROLES.indexOf(x.role) - ROLES.indexOf(y.role)).map(slotDto) });
+  const comboDto = (b: Combo): ComboDto => ({ id: b.id, caseId: b.caseId, idx: b.idx, name: b.name, isMain: b.isMain, note: b.note, slots: orderedRoles(b).flatMap(r => b.slots.filter(s => s.role === r.name)).map(slotDto), roles: orderedRoles(b).map(r => r.name) });
   const dto = (c: Case): CaseDto => ({ ...c, faces: [...c.faces.values()].map(f => ({ key: { ...f.key }, origin: f.origin, note: f.note, addedAt: f.addedAt, row: rowOf(f.key) ?? null, missing: isMissing(f.key) })), combos: c.combos.map(comboDto) });
   const bump = (c: Case) => { c.updatedAt = now(); };
   const open = (c: Case) => { c.openedAt = Math.max(now(), ...[...cases.values()].map(x => x.openedAt + 1)); };
@@ -42,7 +57,7 @@ export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined
   const newCombo = (c: Case, name: string | null, from: Combo | null): Combo => {
     if (c.combos.length >= MAX_COMBOS) throw invalid(`Case tối đa ${MAX_COMBOS} Combo`);
     const idx = c.combos.length + 1;
-    const b: Combo = { id: ++comboSeq, caseId: c.id, idx, name: name == null ? `Combo ${idx}` : cleanName(name, 'Combo'), isMain: c.combos.length === 0, note: null, slots: from ? from.slots.map(s => ({ ...s })) : [] };
+    const b: Combo = { id: ++comboSeq, caseId: c.id, idx, name: name == null ? `Combo ${idx}` : cleanName(name, 'Combo'), isMain: c.combos.length === 0, note: null, slots: from ? from.slots.map(s => ({ ...s })) : [], roles: from ? from.roles.map(r => ({ ...r })) : [] };
     c.combos.push(b);
     return b;
   };
@@ -126,24 +141,73 @@ export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined
       bump(c);
     },
     async setComboSlot(comboId, role, face, note, style) {
-      if (!ROLES.includes(role)) throw invalid(`vai không hợp lệ: ${role}`);
       const { c, b } = comboOf(comboId);
-      if (face) {
-        const prev = b.slots.find(s => s.role === role);
-        addFace(c, face, 'added');
-        b.slots = [...b.slots.filter(s => s.role !== role), { role, key: { ...face }, note: note ?? prev?.note ?? null, style: style ?? prev?.style ?? {} }];
-      } else b.slots = b.slots.filter(s => s.role !== role);
+      const snapRoles = b.roles.map(r => ({ ...r }));
+      try {
+        role = ensureRole(b, role);
+        if (face) {
+          const prev = b.slots.find(s => s.role === role);
+          addFace(c, face, 'added');
+          b.slots = [...b.slots.filter(s => s.role !== role), { role, key: { ...face }, note: note ?? prev?.note ?? null, style: style ?? prev?.style ?? {} }];
+        } else b.slots = b.slots.filter(s => s.role !== role); // chỉ gỡ font: vai ở lại (rỗng giữ chỗ)
+      } catch (e) { b.roles = snapRoles; throw e; }
+      bump(c);
+      return comboDto(b);
+    },
+    async addComboRole(comboId, name) {
+      const { c, b } = comboOf(comboId);
+      const t = cleanRole(name);
+      if (b.roles.some(r => sameRole(r.name, t))) throw roleErr('role_duplicate', `Combo đã có vai ${t}`);
+      if (b.roles.length >= MAX_ROLES) throw roleErr('role_limit', `Combo tối đa ${MAX_ROLES} vai`);
+      b.roles.push({ name: t, ord: b.roles.length ? Math.max(...b.roles.map(r => r.ord)) + 1 : 0 });
+      bump(c);
+      return comboDto(b);
+    },
+    async removeComboRole(comboId, role) {
+      const { c, b } = comboOf(comboId);
+      const have = b.roles.find(r => sameRole(r.name, role.trim()));
+      if (!have) throw roleErr('role_not_found', `Combo không có vai ${role}`);
+      b.roles = b.roles.filter(r => r !== have);
+      b.slots = b.slots.filter(s => s.role !== have.name);
+      bump(c);
+      return comboDto(b);
+    },
+    async renameComboRole(comboId, role, newName) {
+      const { c, b } = comboOf(comboId);
+      const t = cleanRole(newName);
+      const have = b.roles.find(r => sameRole(r.name, role.trim()));
+      if (!have) throw roleErr('role_not_found', `Combo không có vai ${role}`);
+      if (b.roles.some(r => r !== have && sameRole(r.name, t))) throw roleErr('role_duplicate', `Combo đã có vai ${t}`);
+      b.slots.forEach(s => { if (s.role === have.name) s.role = t; });
+      have.name = t;
+      bump(c);
+      return comboDto(b);
+    },
+    async reorderComboRoles(comboId, roles) {
+      const { c, b } = comboOf(comboId);
+      const order: { name: string; ord: number }[] = [];
+      for (const r of roles) {
+        const have = b.roles.find(x => sameRole(x.name, r.trim()));
+        if (!have) throw roleErr('role_set_mismatch', `vai ${r} không có trong Combo`);
+        if (order.includes(have)) throw roleErr('role_set_mismatch', `vai ${r} xuất hiện hai lần`);
+        order.push(have);
+      }
+      if (order.length !== b.roles.length) throw roleErr('role_set_mismatch', 'danh sách vai phải gồm đủ mọi vai hiện có');
+      order.forEach((r, i) => { r.ord = i; });
       bump(c);
       return comboDto(b);
     },
     async createCombos(caseId, combos) {
       const c = live(caseId);
-      const snap = { combos: c.combos.map(b => ({ ...b, slots: [...b.slots] })), faces: new Map(c.faces) };
+      const snap = { combos: c.combos.map(b => ({ ...b, slots: [...b.slots], roles: b.roles.map(r => ({ ...r })) })), faces: new Map(c.faces) };
       try {
         return combos.map(nc => {
           const b = newCombo(c, nc.name, null);
-          if (new Set(nc.slots.map(x => x.role)).size !== nc.slots.length) throw invalid('vai trùng trong một Combo');
-          nc.slots.forEach(s => { if (!ROLES.includes(s.role)) throw invalid(`vai không hợp lệ: ${s.role}`); addFace(c, s.face, 'added'); b.slots.push({ role: s.role, key: { ...s.face }, note: null, style: {} }); });
+          nc.slots.forEach(s => {
+            if (b.roles.some(r => sameRole(r.name, s.role.trim()))) throw roleErr('role_duplicate', `vai trùng trong một Combo: ${s.role}`);
+            const role = ensureRole(b, s.role);
+            addFace(c, s.face, 'added'); b.slots.push({ role, key: { ...s.face }, note: null, style: {} });
+          });
           return comboDto(b);
         });
       } catch (e) { c.combos = snap.combos; c.faces = snap.faces; throw e; }
@@ -177,7 +241,7 @@ export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined
       if (p.caseId != null) c = live(p.caseId);
       else if (live0) c = live0;
       else { c = cases.get((await api.createCase('Case 1', undefined, p.settings)).id)!; created = true; }
-      const before = { faces: new Map(c.faces), combos: c.combos.map(b => ({ ...b, slots: [...b.slots] })) };
+      const before = { faces: new Map(c.faces), combos: c.combos.map(b => ({ ...b, slots: [...b.slots], roles: b.roles.map(r => ({ ...r })) })) };
       try {
         addFace(c, p.face, 'peek');
         if (p.candidate) addFace(c, p.candidate, 'peek');
@@ -192,7 +256,7 @@ export function createMockCases(rowOf: (k: FaceKeyDto) => FaceRowDto | undefined
       const held = main.slots.find(s => s.role === role);
       let occupied = null;
       if (held && kOf(held.key) !== kOf(p.face) && !p.replace) occupied = { role, key: { ...held.key }, row: rowOf(held.key) ?? null };
-      else main.slots = [...main.slots.filter(s => s.role !== role), { role, key: { ...p.face }, note: null, style: {} }];
+      else { ensureRole(main, role); main.slots = [...main.slots.filter(s => s.role !== role), { role, key: { ...p.face }, note: null, style: {} }]; }
       bump(c); open(c);
       return { case: dto(c), comboId: main.id, anchorRole: role, otherRole: role === 'display' ? 'body' : 'display', trial: p.candidate ?? null, created, occupied };
     },

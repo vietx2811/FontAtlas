@@ -77,4 +77,9 @@ export const EN_FACES: Record<keyof typeof FACES_I18N, string> = {
   'grid.loadFail': 'Couldn’t load the library: {msg}',
   'grid.noMatch': 'No fonts match',
   'notice.dismiss': 'Dismiss notice',
+  'dnd.dropTo': 'Drop to add to “{name}”', 'dnd.here': 'Viewing “{name}”: the fonts are already here',
+  'dnd.undo': 'Undo', 'dnd.allThere': 'Already in “{name}”: nothing added',
+  'dnd.addedSome': 'Added {what} to “{name}” ({k} already there)', 'dnd.addFail': 'Couldn’t add to “{name}”: {msg}',
+  'dnd.undone': 'Undone: removed {what} from “{name}”', 'dnd.undoFail': 'Couldn’t undo: {msg}',
+  'dnd.addTo': 'Add to…', 'dnd.addTo.tip': 'Add the selected fonts to a project (same as dragging onto the sidebar)',
 };

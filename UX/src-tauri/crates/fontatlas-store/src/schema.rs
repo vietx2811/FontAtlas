@@ -528,6 +528,19 @@ ALTER TABLE classification_overrides_tx RENAME TO classification_overrides;
 "#;
 
 
+/// Font vừa xem (0.4.0, G5 nguồn "Recent"): cục bộ, tối đa `RECENT_MAX` dòng, mỗi face một dòng (xem lại thì đẩy lên đầu).
+/// SỐ PHIÊN BẢN do vị trí trong `USER_MIGRATIONS` quyết định. Phân số 0.4.0 (Lead): v11 = G3 combo roles (03), v12 = bảng này;
+/// trên nhánh này (chưa có v11 của 03) nó đang đứng ở vị trí 11, khi gom phải chèn migration của 03 TRƯỚC mục này.
+pub(crate) const USER_RECENT_FACES: &str = r#"
+CREATE TABLE recent_faces (
+  hash       BLOB NOT NULL CHECK (length(hash) = 32),
+  face_index INTEGER NOT NULL,
+  viewed_at  INTEGER NOT NULL,
+  PRIMARY KEY (hash, face_index)
+) WITHOUT ROWID;
+CREATE INDEX recent_faces_viewed ON recent_faces(viewed_at DESC);
+"#;
+
 /// Giải quyết trùng lặp (0.3.0): sổ quyết định THEO VỊ TRÍ TỆP (`loser_path`), không theo hash — hai đường dẫn cùng nội dung
 /// (`same_file`) chung hash nên ẩn theo hash sẽ ẩn cả bản giữ. Một face bị ẩn khi MỌI vị trí còn thấy của nó đều nằm trong sổ.
 /// `dup_link_moves` ghi những gì đã chuyển từ bản thua sang bản giữ để hoàn tác đúng từng dòng (không đụng dữ liệu có sẵn).
@@ -594,7 +607,29 @@ CREATE TABLE activation_replaced (
 CREATE INDEX activation_replaced_pending ON activation_replaced(hash) WHERE restored_at IS NULL;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION];
+/// Vai Combo tuỳ ý (0.4.0 G3). `combo_slots.role` bỏ CHECK 7 khoá cố định (SQLite không sửa được CHECK: dựng lại bảng),
+/// tên 1–40 ký tự, so khớp không phân biệt hoa thường (COLLATE NOCASE ở khoá chính; tên có dấu do tầng code so bằng Unicode).
+/// Vai rỗng giữ chỗ: `hash`/`face_index` NULL cùng lúc. Dữ liệu cũ giữ nguyên (7 khoá preset vẫn là chuỗi `display`…`quote`).
+/// Số phiên bản do vị trí trong `USER_MIGRATIONS` quyết định.
+pub(crate) const USER_COMBO_ROLES: &str = r#"
+ALTER TABLE combo_slots RENAME TO combo_slots_v6;
+CREATE TABLE combo_slots (
+  combo_id   INTEGER NOT NULL REFERENCES combos ON DELETE CASCADE,
+  role       TEXT NOT NULL COLLATE NOCASE CHECK (length(role) BETWEEN 1 AND 40),
+  ord        INTEGER NOT NULL DEFAULT 0,
+  hash       BLOB CHECK (hash IS NULL OR length(hash) = 32),
+  face_index INTEGER,
+  note       TEXT,
+  style      TEXT NOT NULL DEFAULT '{}',
+  CHECK ((hash IS NULL) = (face_index IS NULL)),
+  PRIMARY KEY (combo_id, role)
+) WITHOUT ROWID;
+INSERT INTO combo_slots (combo_id, role, ord, hash, face_index, note, style)
+  SELECT combo_id, role, ord, hash, face_index, note, style FROM combo_slots_v6;
+DROP TABLE combo_slots_v6;
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
@@ -612,6 +647,17 @@ pub fn create_user_pre_taxonomy_for_test(path: &Path) {
 pub fn create_user_pre_replaced_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user pre-replaced");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_REPLACED).expect("replaced migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+
+/// Chỉ cho test: user.db ngay TRƯỚC migration vai Combo tuỳ ý (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_combo_roles_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-combo-roles");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_COMBO_ROLES).expect("combo roles migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }

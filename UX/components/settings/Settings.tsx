@@ -244,6 +244,10 @@ function Data({ api }: { api: Api }) {
         <p className="fa-set-note" data-testid="cache-info">{cache ? tn('set.data.cacheInfo', { mb: Math.round(cache.bytes / MB), n: cache.entries }) : '…'}</p>
         <button type="button" onClick={async () => { await api.clearPreviewCache(); await load(); }}>{t('set.data.clearCache')}</button>
       </div>
+      <div className="fa-set-group" data-testid="recent-views"><span>{t('set.data.recent')}</span>
+        <p className="fa-set-note">{t('set.data.recentNote')}</p>
+        <button type="button" data-testid="clear-recent" onClick={async () => { await api.clearRecentViews(); useNoticeStore.getState().push({ kind: 'info', text: t('pick.recent.cleared') }); }}>{t('pick.recent.clear')}</button>
+      </div>
       <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? t('set.data.noProblems') : tn('set.data.problems', { n: problems.length })}</span>
         {problems.length > 0 && <>
           <ul className="fa-set-note">{problems.slice(0, 5).map(p => <li key={`${p.hashHex}${p.faceIndex}`}>{p.code}{p.path ? ` · ${p.path.split('/').pop()}` : ''}</li>)}</ul>

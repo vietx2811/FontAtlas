@@ -20,12 +20,13 @@ use crate::dto::library::*;
 use crate::dto::model::*;
 use crate::dto::preview::*;
 use crate::dto::settings::FontManagerDto;
+use crate::dto::suggest::*;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
     activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
     preview,
-    settings, sources, system,
+    settings, sources, suggest, suggest_pair, system,
 };
 use crate::state::AppState;
 
@@ -104,6 +105,14 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
+            async role_fit(face: FaceKeyDto, role: RoleRefDto) -> Result<RoleFitDto, CmdError>;
+            async role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError>;
+            async suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError>;
+            async desk_suggest(req: DeskSuggestReqDto) -> Result<DeskPageDto, CmdError>;
+            async suggest_combos(req: SuggestCombosReqDto) -> Result<Vec<ComboSuggestionDto>, CmdError>;
+            async record_view(face: FaceKeyDto) -> Result<(), CmdError>;
+            async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
+            async clear_recent_views() -> Result<u32, CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
@@ -140,6 +149,10 @@ macro_rules! command_list {
             async delete_combo(id: i64) -> Result<(), CmdError>;
             async reorder_combos(case_id: i64, ids: Vec<i64>) -> Result<(), CmdError>;
             async set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> Result<ComboDto, CmdError>;
+            async add_combo_role(combo_id: i64, name: String) -> Result<ComboDto, CmdError>;
+            async remove_combo_role(combo_id: i64, role: ComboRoleDto) -> Result<ComboDto, CmdError>;
+            async rename_combo_role(combo_id: i64, role: ComboRoleDto, new_name: String) -> Result<ComboDto, CmdError>;
+            async reorder_combo_roles(combo_id: i64, roles: Vec<ComboRoleDto>) -> Result<ComboDto, CmdError>;
             async create_combos(case_id: i64, combos: Vec<NewComboDto>) -> Result<Vec<ComboDto>, CmdError>;
             async case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> Result<CaseCompareDto, CmdError>;
             async brief_starter(brief: BriefDto, case_id: Option<i64>) -> Result<BriefStarterDto, CmdError>;
@@ -356,6 +369,14 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(axis_histogram(q: FaceQueryDto, bins: u32) -> Vec<AxisHistogramDto> => |s| analysis::axis_histograms(s, &q, bins));
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
+cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role));
+cmd!(role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> RoleFitPageDto => |s| suggest::role_fit_faces(s, &role, &opts));
+cmd!(suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> PartnerPageDto => |s| suggest_pair::suggest_partners(s, &anchor, &req));
+cmd!(desk_suggest(req: DeskSuggestReqDto) -> DeskPageDto => |s| suggest_pair::desk_suggest(s, &req));
+cmd!(suggest_combos(req: SuggestCombosReqDto) -> Vec<ComboSuggestionDto> => |s| suggest_pair::suggest_combos(s, &req));
+cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
+cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
+cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
@@ -404,6 +425,10 @@ cmd!(update_combo(id: i64, patch: ComboPatchDto) -> ComboDto => |s| cases::updat
 cmd!(delete_combo(id: i64) -> () => |s| cases::delete_combo(s, id));
 cmd!(reorder_combos(case_id: i64, ids: Vec<i64>) -> () => |s| cases::reorder_combos(s, case_id, &ids));
 cmd!(set_combo_slot(combo_id: i64, role: ComboRoleDto, face: Option<FaceKeyDto>, note: Option<String>, style: Option<serde_json::Value>) -> ComboDto => |s| cases::set_combo_slot(s, combo_id, role, face.as_ref(), note.as_deref(), style.as_ref()));
+cmd!(add_combo_role(combo_id: i64, name: String) -> ComboDto => |s| cases::add_combo_role(s, combo_id, &name));
+cmd!(remove_combo_role(combo_id: i64, role: ComboRoleDto) -> ComboDto => |s| cases::remove_combo_role(s, combo_id, &role));
+cmd!(rename_combo_role(combo_id: i64, role: ComboRoleDto, new_name: String) -> ComboDto => |s| cases::rename_combo_role(s, combo_id, &role, &new_name));
+cmd!(reorder_combo_roles(combo_id: i64, roles: Vec<ComboRoleDto>) -> ComboDto => |s| cases::reorder_combo_roles(s, combo_id, &roles));
 cmd!(case_compare(case_id: i64, combo_ids: Vec<i64>, lang: LangDto) -> CaseCompareDto => |s| cases::case_compare(s, case_id, &combo_ids, lang));
 cmd!(brief_starter(brief: BriefDto, case_id: Option<i64>) -> BriefStarterDto => |s| brief::brief_starter(s, &brief, case_id));
 cmd!(open_case_from_peek(peek: PeekOpenDto) -> PeekOpenResultDto => |s| cases::open_case_from_peek(s, &peek));

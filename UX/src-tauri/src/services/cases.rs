@@ -52,17 +52,16 @@ fn combo_dto(c: ComboRow, rows: &HashMap<FaceKey, FaceRowDto>) -> ComboDto {
         slots: c
             .slots
             .into_iter()
-            .filter_map(|s| {
-                Some(ComboSlotDto {
-                    role: ComboRoleDto::parse(&s.role)?,
-                    missing: rows.get(&s.key).is_none_or(|r| r.missing),
-                    row: rows.get(&s.key).cloned(),
-                    key: FaceKeyDto::from(&s.key),
-                    note: s.note,
-                    style: serde_json::from_str(&s.style).unwrap_or(Value::Null),
-                })
+            .map(|s| ComboSlotDto {
+                role: s.role,
+                missing: rows.get(&s.key).is_none_or(|r| r.missing),
+                row: rows.get(&s.key).cloned(),
+                key: FaceKeyDto::from(&s.key),
+                note: s.note,
+                style: serde_json::from_str(&s.style).unwrap_or(Value::Null),
             })
             .collect(),
+        roles: c.roles,
     }
 }
 
@@ -244,7 +243,27 @@ pub fn set_combo_slot(
 ) -> Result<ComboDto, CmdError> {
     let key = face.map(FaceKey::try_from).transpose()?;
     let style = style.map(json_of).transpose()?;
-    state.with_user(|u| Ok(u.set_combo_slot(combo_id, role.as_str(), key.as_ref(), note, style.as_deref()).map(|_| ())?))?;
+    state.with_user(|u| Ok(u.set_combo_slot(combo_id, &role, key.as_ref(), note, style.as_deref()).map(|_| ())?))?;
+    combo_by_id(state, combo_id)
+}
+
+pub fn add_combo_role(state: &AppState, combo_id: i64, name: &str) -> Result<ComboDto, CmdError> {
+    state.with_user(|u| Ok(u.add_combo_role(combo_id, name).map(|_| ())?))?;
+    combo_by_id(state, combo_id)
+}
+
+pub fn remove_combo_role(state: &AppState, combo_id: i64, role: &str) -> Result<ComboDto, CmdError> {
+    state.with_user(|u| Ok(u.remove_combo_role(combo_id, role).map(|_| ())?))?;
+    combo_by_id(state, combo_id)
+}
+
+pub fn rename_combo_role(state: &AppState, combo_id: i64, role: &str, new_name: &str) -> Result<ComboDto, CmdError> {
+    state.with_user(|u| Ok(u.rename_combo_role(combo_id, role, new_name).map(|_| ())?))?;
+    combo_by_id(state, combo_id)
+}
+
+pub fn reorder_combo_roles(state: &AppState, combo_id: i64, roles: &[String]) -> Result<ComboDto, CmdError> {
+    state.with_user(|u| Ok(u.reorder_combo_roles(combo_id, roles).map(|_| ())?))?;
     combo_by_id(state, combo_id)
 }
 
@@ -254,7 +273,7 @@ pub fn create_combos(state: &AppState, case_id: i64, combos: &[NewComboDto]) -> 
         let slots = c
             .slots
             .iter()
-            .map(|s| Ok((s.role.as_str().to_string(), FaceKey::try_from(&s.face)?)))
+            .map(|s| Ok((s.role.clone(), FaceKey::try_from(&s.face)?)))
             .collect::<Result<Vec<_>, CmdError>>()?;
         new.push(NewCombo { name: c.name.clone(), slots });
     }
@@ -300,7 +319,7 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
         if let Some(first) = anchor {
             for other in combo.slots.iter().filter(|s| s.key != first.key && s.role != first.role) {
                 if other.missing {
-                    relations.push(none(first.role, other.role, "missing_font", None));
+                    relations.push(none(first.role.clone(), other.role.clone(), "missing_font", None));
                     continue;
                 }
                 let opts = PairOptsDto {
@@ -312,9 +331,9 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
                     lang,
                 };
                 relations.push(match crate::services::analysis::assess_pair(state, &first.key, &other.key, &opts) {
-                    Ok(a) => ComboRelationDto { from: first.role, to: other.role, assessment: Some(a), reason: None, reason_detail: None },
-                    Err(e) if e.code == "not_found" => none(first.role, other.role, "not_analyzed", None),
-                    Err(e) => none(first.role, other.role, "unavailable", Some(e.message)),
+                    Ok(a) => ComboRelationDto { from: first.role.clone(), to: other.role.clone(), assessment: Some(a), reason: None, reason_detail: None },
+                    Err(e) if e.code == "not_found" => none(first.role.clone(), other.role.clone(), "not_analyzed", None),
+                    Err(e) => none(first.role.clone(), other.role.clone(), "unavailable", Some(e.message)),
                 });
             }
         }
@@ -344,8 +363,8 @@ pub fn case_compare(state: &AppState, case_id: i64, combo_ids: &[i64], lang: cra
 /// Ứng viên đang xem chỉ được thêm vào Case (origin `peek`) và trả lại làm `trial`, KHÔNG ghi vào vai.
 pub fn open_case_from_peek(state: &AppState, p: &PeekOpenDto) -> Result<PeekOpenResultDto, CmdError> {
     let (anchor_role, other_role) = match p.as_role {
-        PeekRoleDto::Heading => (ComboRoleDto::Display, ComboRoleDto::Body),
-        PeekRoleDto::Body => (ComboRoleDto::Body, ComboRoleDto::Display),
+        PeekRoleDto::Heading => ("display".to_string(), "body".to_string()),
+        PeekRoleDto::Body => ("body".to_string(), "display".to_string()),
     };
     let anchor = FaceKey::try_from(&p.face)?;
     let cand = p.candidate.as_ref().map(FaceKey::try_from).transpose()?;
@@ -353,7 +372,7 @@ pub fn open_case_from_peek(state: &AppState, p: &PeekOpenDto) -> Result<PeekOpen
     // một khối nguyên tử trong store: lỗi giữa chừng thì không để lại Case/Combo/font nào
     let out = state.with_user(|u| Ok(u.peek_open(p.case_id, &settings, &anchor, cand.as_ref(), anchor_role.as_str(), p.replace)?))?;
     let occupied = match out.occupied {
-        Some(k) => Some(PeekOccupiedDto { role: anchor_role, row: rows_of(state, &[k])?.remove(&k), key: FaceKeyDto::from(&k) }),
+        Some(k) => Some(PeekOccupiedDto { role: anchor_role.clone(), row: rows_of(state, &[k])?.remove(&k), key: FaceKeyDto::from(&k) }),
         None => None,
     };
     Ok(PeekOpenResultDto { case: load(state, out.case_id)?, combo_id: out.combo_id, anchor_role, other_role, trial: p.candidate.clone(), created: out.created, occupied })

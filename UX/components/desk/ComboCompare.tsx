@@ -6,11 +6,11 @@ import { useFontStatus } from '../detail/useFontFamily';
 import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
-import { ROLE_ORDER, isHeadingLike } from './deskRoles';
+import { ROLE_ORDER, isHeadingLike, roleGloss, roleLabel } from './deskRoles';
 
 const comboTitle = (c: { idx: number; name: string | null }): string => `${t('combo.label')} ${c.idx}${c.name && c.name !== `Combo ${c.idx}` ? ` · ${c.name}` : ''}`;
 const nameOf = (r: FaceRowDto | null) => (r ? `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}` : '—');
-const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
+const roleName = roleLabel;
 const slotRow = (c: ComboDto, roles: readonly ComboRoleDto[]) => roles.map(r => c.slots.find(s => s.role === r)).find(s => s && !s.missing)?.row ?? null;
 
 /** Trang thu nhỏ: tiêu đề bằng font nhóm heading, đoạn văn bằng font nhóm body của Combo. */
@@ -61,8 +61,8 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
           </th>))}</tr></thead>
         <tbody>
           <tr><th scope="row">{t('cc.specimen')}</th>{cols.map(c => <td key={c.combo.id}><MiniPage api={api} combo={c.combo} /></td>)}</tr>
-          {ROLE_ORDER.filter(r => cols.some(c => c.combo.slots.some(s => s.role === r))).map(r => (
-            <tr key={r} data-role={r}><th scope="row"><Tooltip label={t(`role.${r}.gloss` as 'role.display.gloss')}><span data-term={`role.${r}`}>{roleName(r)}</span></Tooltip></th>{cols.map(c => {
+          {[...ROLE_ORDER.filter(r => cols.some(c => c.combo.slots.some(s => s.role === r))), ...[...new Set(cols.flatMap(c => c.combo.slots.map(s => s.role)))].filter(r => !ROLE_ORDER.includes(r))].map(r => (
+            <tr key={r} data-role={r}><th scope="row">{roleGloss(r) ? <Tooltip label={roleGloss(r)}><span data-term={`role.${r}`}>{roleName(r)}</span></Tooltip> : <span>{roleName(r)}</span>}</th>{cols.map(c => {
               const s = c.combo.slots.find(x => x.role === r);
               return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}{s.missing && <NoteMark inline text={t('desk.missing')} />}</> : '—'}</td>;
             })}</tr>

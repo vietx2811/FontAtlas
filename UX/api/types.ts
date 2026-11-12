@@ -40,7 +40,7 @@ export class CmdError extends Error {
 export type SimilarQuery = { k?: number; useImage?: boolean; viOnly?: boolean; weights?: GroupWeightsDto; sourceIds?: number[]; weightRange?: [number, number] | null };
 
 export const DEFAULT_UI_STATE: UiStateDto = {
-  sidebarCollapsed: false, openSections: ['col', 'src', 'tag'], layout: 'grid', sampleSize: 34, infoExpanded: false,
+  sidebarCollapsed: false, openSections: ['col', 'src', 'tag'], closedSections: [], layout: 'grid', sampleSize: 34, infoExpanded: false,
 };
 
 /** Lệnh model/embed có Channel dùng chung kiểu callback phía giao diện. */

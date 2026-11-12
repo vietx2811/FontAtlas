@@ -179,6 +179,21 @@ fn ui_state_roundtrip_and_size_cap() {
 }
 
 #[test]
+fn ui_state_old_json_without_closed_sections_keeps_new_groups_open() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    // Dữ liệu lưu trước khi có nhóm Case: không có `closedSections`.
+    system::set_setting(&st, "ui.state", r#"{"sidebarCollapsed":true,"openSections":["col","tag"],"layout":"list","sampleSize":40,"infoExpanded":true}"#).unwrap();
+    let ui = system::get_ui_state(&st).unwrap();
+    assert!(ui.closed_sections.is_empty());
+    assert_eq!(ui.open_sections, vec!["col", "tag"]);
+    assert!(ui.sidebar_collapsed && ui.info_expanded && ui.layout == "list");
+    let closed = UiStateDto { closed_sections: vec!["case".into()], ..Default::default() };
+    system::set_ui_state(&st, &closed).unwrap();
+    assert_eq!(system::get_ui_state(&st).unwrap(), closed);
+}
+
+#[test]
 fn get_set_setting_only_ui_keys_and_64k_cap() {
     let d = tempfile::tempdir().unwrap();
     let st = booted(d.path());

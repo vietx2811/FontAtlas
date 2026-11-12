@@ -9,6 +9,8 @@ import type {
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto,
 } from './types';
 
+import type { DeskSuggestReqDto, DeskPageDto, SuggestPartnersReqDto, PartnerPageDto, SuggestCombosReqDto, ComboSuggestionDto, RoleRefDto, RoleFitDto, RecentViewDto } from '../bindings';
+
 export * from './types';
 
 export type ActivateOptions = { scope?: ScopeDto | null; proceed?: boolean; onProgress?(p: ProgressDto): void };
@@ -101,9 +103,33 @@ export interface Api extends LibraryApi {
   updateCombo(id: number, patch: Partial<ComboPatchDto>): Promise<ComboDto>;
   deleteCombo(id: number): Promise<void>;
   reorderCombos(caseId: number, ids: number[]): Promise<void>;
-  /** `face` null = bỏ font khỏi vai. */
+  /** Đặt font vào vai; vai chưa có thì được tạo. `face` null = chỉ gỡ font, VAI Ở LẠI (rỗng giữ chỗ): muốn bỏ vai thì `removeComboRole`.
+   *  Vai là chuỗi tuỳ ý (1–40 ký tự, không phân biệt hoa thường trong Combo); 7 khoá preset vẫn dùng như cũ.
+   *  Lỗi: `role_name_invalid`, `role_limit` (tối đa 30 vai). */
   setComboSlot(comboId: number, role: ComboRoleDto, face: FaceKeyDto | null, note?: string, style?: unknown): Promise<ComboDto>;
+  /** Thêm vai rỗng giữ chỗ ở cuối `roles`. Lỗi: `role_name_invalid`, `role_duplicate`, `role_limit`. */
+  addComboRole(comboId: number, name: string): Promise<ComboDto>;
+  /** Bỏ hẳn vai (kèm font đang đặt ở đó; font vẫn ở trong Case). Lỗi: `role_not_found`. */
+  removeComboRole(comboId: number, role: ComboRoleDto): Promise<ComboDto>;
+  /** Đổi tên vai, giữ font/ghi chú/kiểu/vị trí. Lỗi: `role_not_found`, `role_name_invalid`, `role_duplicate`. */
+  renameComboRole(comboId: number, role: ComboRoleDto, newName: string): Promise<ComboDto>;
+  /** Sắp lại thứ tự: `roles` phải đúng bằng tập `ComboDto.roles` hiện có. Lỗi: `role_set_mismatch`. */
+  reorderComboRoles(comboId: number, roles: ComboRoleDto[]): Promise<ComboDto>;
   createCombos(caseId: number, combos: NewComboDto[]): Promise<ComboDto[]>;
+  /** G5: nguồn của Picker. `source` ∈ fits_role | similar | pinned (Pairs dùng `suggestPartners`). Lỗi: `source_unknown`, `anchor_required`, `case_required`, `role_unknown`. */
+  deskSuggest(req: DeskSuggestReqDto): Promise<DeskPageDto>;
+  /** G5: gợi ý đối tác theo vai + phong cách pair (G4). `styles` rỗng = mọi phong cách. Lỗi: `style_unknown`. */
+  suggestPartners(anchor: FaceKeyDto, req: SuggestPartnersReqDto): Promise<PartnerPageDto>;
+  /** G6: gợi ý combo từ thư viện. Cùng `seed` cùng kết quả. Lỗi: `style_unknown`, `roles_invalid`, `locked_role_unknown`, `locked_duplicate`, `scope_unknown`, `case_required`. */
+  suggestCombos(req: SuggestCombosReqDto): Promise<ComboSuggestionDto[]>;
+  /** Mức hợp vai của một font cho một vai (G4). */
+  roleFit(face: FaceKeyDto, role: RoleRefDto): Promise<RoleFitDto>;
+  /** Font vừa xem (lưu ở backend, sống qua các lần mở app). */
+  recentViews(limit: number): Promise<RecentViewDto[]>;
+  /** Ghi một lần xem (mở Detail/Desk, không ghi khi lướt lưới). */
+  recordView(face: FaceKeyDto): Promise<void>;
+  /** Xoá danh sách font vừa xem; trả số dòng đã xoá. */
+  clearRecentViews(): Promise<number>;
   /** Compare Combo: cột = Combo, kèm quan hệ giữa giọng ① và các vai khác. `comboIds` rỗng = mọi Combo (≤ 8). */
   caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
   /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */

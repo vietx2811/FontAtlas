@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Api, CollectionDto, FaceKeyDto, TagDto } from '../../api';
+import type { CaseSummaryDto } from '../../bindings';
+import { dropFacesInto } from '../dnd/dropFaces';
 import type { FaceRow } from '../../features/library-grid/types';
 import { useNoticeStore } from '../../store/notices';
 import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '../../store/selection';
@@ -50,7 +52,7 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
   const flow = useActivationFlow(api);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [prompt, setPrompt] = useState<PromptState | null>(null);
-  const [data, setData] = useState<{ cols: CollectionDto[]; tags: TagDto[] } | null>(null);
+  const [data, setData] = useState<{ cols: CollectionDto[]; tags: TagDto[]; cases: CaseSummaryDto[] } | null>(null);
   const active = useUiStore(s => s.active);
   const flowRef = useRef(flow); flowRef.current = flow;
   const anchorRef = useRef<MenuAnchor>({ x: 0, y: 0 });
@@ -64,9 +66,9 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     if (!menuRows) return;
     let alive = true;
     setData(null);
-    Promise.all([api.listCollections(), api.listTags()]).then(
-      ([cols, tags]) => { if (alive) setData({ cols, tags }); },
-      e => { if (alive) { setData({ cols: [], tags: [] }); say('error', t('faces.listFail', { msg: errText(e) })); } },
+    Promise.all([api.listCollections(), api.listTags(), api.listCases().catch(() => [] as CaseSummaryDto[])]).then(
+      ([cols, tags, cases]) => { if (alive) setData({ cols, tags, cases }); },
+      e => { if (alive) { setData({ cols: [], tags: [], cases: [] }); say('error', t('faces.listFail', { msg: errText(e) })); } },
     );
     return () => { alive = false; };
   }, [menuRows, api]);
@@ -115,6 +117,7 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
     pairWith: r => { const ui = useUiStore.getState(); ui.select(faceKey(r)); ui.setPanelTab('pair'); },
     setFavorite: (rows, on) => void setFavorite(rows, on),
     addToProject: (rows, id, name) => void addToProject(rows, id, name),
+    addToCase: (rows, id, name) => void dropFacesInto(api, rows, { kind: 'case', id, name }),
     newProject: rows => setPrompt({ kind: 'project', rows, anchor: anchorRef.current }),
     tag: (rows, id, name) => {
       api.tagFaces(id, rows.map(keyOf)).then(
@@ -170,7 +173,7 @@ export function FaceActionsProvider({ api, children }: { api: Api; children: Rea
   const entries = menu && (() => {
     const ctx = {
       view: useUiStore.getState().view, isFavorite, isActive: (r: FaceRow) => active.has(r.hashHex),
-      collections: data?.cols ?? null, tags: data?.tags ?? null, actions,
+      collections: data?.cols ?? null, cases: data?.cases ?? null, tags: data?.tags ?? null, actions,
     };
     return menu.kind === 'projects' ? projectEntries(menu.rows, ctx) : buildFaceMenu(menu.rows, ctx);
   })();
