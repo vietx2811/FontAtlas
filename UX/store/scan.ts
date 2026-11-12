@@ -4,6 +4,7 @@ import type { Api } from '../api';
 import { openPrivacySettings } from '../privacy';
 import { useNoticeStore } from './notices';
 import { t } from '../i18n';
+import { refreshNameClashes } from './nameClash';
 
 export const BUMP_THROTTLE_MS = 1500;
 
@@ -30,6 +31,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const bumpNow = () => { clearTimeout(timer); timer = undefined; last = Date.now(); store.getState().bump(); };
+  void refreshNameClashes(api);
   const bumpSoon = () => {
     const wait = BUMP_THROTTLE_MS - (Date.now() - last);
     if (wait <= 0) bumpNow(); else if (!timer) timer = setTimeout(bumpNow, wait);
@@ -43,7 +45,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     else if (e.type === 'facesAdded') bumpSoon();
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); bumpNow(); } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
+    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); bumpNow(); void refreshNameClashes(api); } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
     else if (e.type === 'failed') {
       set({ scanning: false });
       const d = e.error.detail as { source?: string; op?: string; reason?: string } | null;

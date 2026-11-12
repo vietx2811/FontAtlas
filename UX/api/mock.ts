@@ -72,7 +72,7 @@ import { createMockSuggest } from './mockSuggest';
 import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
-import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
+import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto, NameClashDto } from './types';
 export type MockOptions = { auto?: MockAutoOptions; latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
@@ -125,6 +125,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const scanListeners = new Set<(e: ScanEvent) => void>();
   let scanning = false;
   let cacheBytes = 12 * 1024 * 1024;
+  const mockNameClashes: NameClashDto[] = [];
   let onboarded = !o.firstRun;
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
@@ -472,6 +473,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async previewCacheInfo() { return ok({ bytes: cacheBytes, entries: cacheBytes ? 340 : 0 }); },
     async clearPreviewCache() { cacheBytes = 0; },
     async listProblems() { return []; },
+    async nameClashes() { return mockNameClashes; },
     async retryProblems() { return 0; },
     // Khởi động, onboarding, quét
     async startupStatus() { return ok(boot()); },

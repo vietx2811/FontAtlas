@@ -201,6 +201,7 @@ export function createTauriApi(): Api {
     previewCacheInfo: () => call('preview_cache_info'),
     clearPreviewCache: () => none(call('clear_preview_cache')),
     listProblems: () => call('list_problems'),
+    nameClashes: () => call('name_clashes'),
     retryProblems: () => call('retry_problems'),
     // Cài đặt
     getSetting: key => call('get_setting', { key }),

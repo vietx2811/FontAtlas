@@ -88,6 +88,7 @@ macro_rules! command_list {
             async tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> Result<(), CmdError>;
             async list_problems() -> Result<Vec<ProblemDto>, CmdError>;
+            async name_clashes() -> Result<Vec<NameClashDto>, CmdError>;
             async retry_problems() -> Result<u32, CmdError>;
             async reveal_in_finder(face: FaceKeyDto) -> Result<(), CmdError>;
             async backup_user_db() -> Result<String, CmdError>;
@@ -345,6 +346,7 @@ cmd!(delete_tag(id: i64) -> u32 => |s| library::delete_tag(s, id));
 cmd!(tag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::tag_faces(s, tag_id, &faces));
 cmd!(untag_faces(tag_id: i64, faces: Vec<FaceKeyDto>) -> () => |s| library::untag_faces(s, tag_id, &faces));
 cmd!(list_problems() -> Vec<ProblemDto> => |s| library::list_problems(s));
+cmd!(name_clashes() -> Vec<NameClashDto> => |s| library::name_clashes(s));
 cmd!(retry_problems() -> u32 => |s| library::retry_problems(s));
 cmd!(reveal_in_finder(face: FaceKeyDto) -> () => |s| system::reveal_in_finder(s, &face, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())

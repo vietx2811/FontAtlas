@@ -57,6 +57,7 @@ import type { LangListDto } from './LangListDto';
 import type { LegacyStateDto } from './LegacyStateDto';
 import type { ModelEvent } from './ModelEvent';
 import type { ModelStatusDto } from './ModelStatusDto';
+import type { NameClashDto } from './NameClashDto';
 import type { NewComboDto } from './NewComboDto';
 import type { NewPairDto } from './NewPairDto';
 import type { OnboardingDto } from './OnboardingDto';
@@ -140,6 +141,7 @@ export interface TauriCommandMap {
   tag_faces: { args: { tagId: number; faces: FaceKeyDto[] }; result: null };
   untag_faces: { args: { tagId: number; faces: FaceKeyDto[] }; result: null };
   list_problems: { args: Record<string, never>; result: ProblemDto[] };
+  name_clashes: { args: Record<string, never>; result: NameClashDto[] };
   retry_problems: { args: Record<string, never>; result: number };
   reveal_in_finder: { args: { face: FaceKeyDto }; result: null };
   backup_user_db: { args: Record<string, never>; result: string };

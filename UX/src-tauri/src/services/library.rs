@@ -528,6 +528,11 @@ pub fn untag_faces(state: &AppState, tag_id: i64, faces: &[FaceKeyDto]) -> Resul
     state.with_user(|u| Ok(u.untag_faces(tag_id, &keys).map(|_| ())?))
 }
 
+/// G7: các cặp VF↔static trùng tên PostScript (chỉ đọc library).
+pub fn name_clashes(state: &AppState) -> Result<Vec<NameClashDto>, CmdError> {
+    state.with_store(|s| Ok(s.name_clashes()?.into_iter().map(Into::into).collect()))
+}
+
 pub fn list_problems(state: &AppState) -> Result<Vec<ProblemDto>, CmdError> {
     state.with_store(|s| Ok(s.problem_files()?.into_iter().map(Into::into).collect()))
 }
