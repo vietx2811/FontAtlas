@@ -70,6 +70,8 @@ export const EN_SETTINGS: Record<keyof typeof SETTINGS_I18N, string> = {
   'set.data.cache': 'Preview cache',
   'set.data.cacheInfo': '{mb} MB · {n} entries',
   'set.data.clearCache': 'Clear cache',
+  'set.data.recent': 'Recently viewed fonts',
+  'set.data.recentNote': 'This list stays on your Mac and feeds the “Recent” source in the Pairing Desk.',
   'set.data.noProblems': 'No fonts have problems',
   'set.data.problems': '{n} fonts have problems',
   'set.data.retryAll': 'Retry all',

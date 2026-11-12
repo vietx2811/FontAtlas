@@ -470,3 +470,16 @@ describe('Library: thêm vào dự án (G1)', () => {
     drop.remove();
   });
 });
+
+describe('Library: ghi lần xem (G5 Recent)', () => {
+  it('chọn thẻ ghi một lần xem; lướt (rê chuột) thì không', async () => {
+    useUiStore.setState(initial, true); useSelectionStore.getState().clear();
+    const api = createMockApi(); const spy = vi.spyOn(api, 'recordView');
+    await mount(api);
+    fireEvent.pointerEnter(cells()[0]); fireEvent.mouseOver(cells()[0]); await settle();
+    expect(spy).not.toHaveBeenCalled();
+    click(cells()[0]); await settle();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect((await api.recentViews(5)).length).toBe(1);
+  });
+});

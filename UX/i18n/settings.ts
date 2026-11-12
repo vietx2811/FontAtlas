@@ -69,6 +69,7 @@ export const SETTINGS_I18N = {
   'set.data.cache': 'Bộ nhớ đệm preview',
   'set.data.cacheInfo': '{mb} MB · {n} mục',
   'set.data.clearCache': 'Xoá bộ nhớ đệm',
+  'set.data.recent': 'Font vừa xem', 'set.data.recentNote': 'Danh sách này nằm trên máy bạn, dùng cho nguồn «Vừa xem» trong Pairing Desk.',
   'set.data.noProblems': 'Không có font nào có vấn đề',
   'set.data.problems': '{n} font có vấn đề',
   'set.data.retryAll': 'Thử lại tất cả',

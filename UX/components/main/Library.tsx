@@ -129,7 +129,13 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'grant') void openPrivacySettings();
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };
+  // Mở Detail (chọn thẻ) ghi một lần xem cho nguồn "Vừa xem" của Desk; lướt lưới không ghi. Lỗi ghi không ảnh hưởng thao tác.
   const onSelect = useCallback((row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); }, [select]);
+  useEffect(() => {
+    if (!selectedKey) return;
+    const [hashHex, idx] = selectedKey.split(':');
+    if (hashHex && idx !== undefined && Number.isFinite(Number(idx))) void api.recordView({ hashHex, faceIndex: Number(idx) }).catch(() => undefined);
+  }, [selectedKey, api]);
   const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
