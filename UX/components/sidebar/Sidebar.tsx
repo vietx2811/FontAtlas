@@ -104,6 +104,12 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
+  // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
+  useEffect(() => {
+    const onFocus = () => { refresh().catch(() => undefined); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
 
   const addPath = useCallback(async (path: string) => {
     try {
