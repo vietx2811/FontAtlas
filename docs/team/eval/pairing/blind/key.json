@@ -1,0 +1,752 @@
+[
+  {
+    "id": "c01",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "trirong",
+      "spacegrotesk"
+    ],
+    "names": [
+      "Trirong",
+      "Space Grotesk"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c02",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "wixmadefordisplay",
+      "noticiatext"
+    ],
+    "names": [
+      "Wix Madefor Display",
+      "Noticia Text"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c03",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "davidlibre",
+      "baloothambi2"
+    ],
+    "names": [
+      "David Libre",
+      "Baloo Thambi 2"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c04",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "manuale",
+      "thasadith"
+    ],
+    "names": [
+      "Manuale",
+      "Thasadith"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c05",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "mitr",
+      "beaurivage"
+    ],
+    "names": [
+      "Mitr",
+      "Beau Rivage"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c06",
+    "kind": "model",
+    "style": "display_vs_neutral",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "fruktur",
+      "lexendpeta"
+    ],
+    "names": [
+      "Fruktur",
+      "Lexend Peta"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c07",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "anybody",
+      "playwritezaguides"
+    ],
+    "names": [
+      "Anybody",
+      "Playwrite ZA Guides"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "ok",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c08",
+    "kind": "model",
+    "style": "superfamily",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "bigshoulderstext",
+      "bigshouldersdisplay"
+    ],
+    "names": [
+      "Big Shoulders Text",
+      "Big Shoulders Display"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "good",
+      "superfamily": "good"
+    }
+  },
+  {
+    "id": "c09",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "playwritebr",
+      "publicsans"
+    ],
+    "names": [
+      "Playwrite BR",
+      "Public Sans"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c10",
+    "kind": "model",
+    "style": "same_structure",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "hubotsans",
+      "lexendtera"
+    ],
+    "names": [
+      "Hubot Sans",
+      "Lexend Tera"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "good",
+      "same_structure": "good",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c11",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "handjet",
+      "platypi"
+    ],
+    "names": [
+      "Handjet",
+      "Platypi"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c12",
+    "kind": "model",
+    "style": "same_structure",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "mavenprovfbeta",
+      "nunito"
+    ],
+    "names": [
+      "Maven Pro VF Beta",
+      "Nunito"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "good",
+      "same_structure": "good",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c13",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "playwritevn",
+      "playwritefrtradguides"
+    ],
+    "names": [
+      "Playwrite VN",
+      "Playwrite FR Trad Guides"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c14",
+    "kind": "model",
+    "style": "superfamily",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "robotocondensed",
+      "robotomono"
+    ],
+    "names": [
+      "Roboto Condensed",
+      "Roboto Mono"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "good",
+      "superfamily": "good"
+    }
+  },
+  {
+    "id": "c15",
+    "kind": "model",
+    "style": "same_structure",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "cuprum",
+      "trispace"
+    ],
+    "names": [
+      "Cuprum",
+      "Trispace"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "good",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c16",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "redditsanscondensed",
+      "jetbrainsmono"
+    ],
+    "names": [
+      "Reddit Sans Condensed",
+      "JetBrains Mono"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "good",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c17",
+    "kind": "model",
+    "style": "same_era",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "livvic",
+      "finlandicatext"
+    ],
+    "names": [
+      "Livvic",
+      "Finlandica Text"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "good",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c18",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "carattere",
+      "bigshouldersstenciltextsc"
+    ],
+    "names": [
+      "Carattere",
+      "Big Shoulders Stencil Text SC"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "ok",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c19",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "krub",
+      "alexbrush"
+    ],
+    "names": [
+      "Krub",
+      "Alex Brush"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c20",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "rowdies",
+      "playwriteca"
+    ],
+    "names": [
+      "Rowdies",
+      "Playwrite CA"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c21",
+    "kind": "model",
+    "style": "same_era",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "raleway",
+      "geologica"
+    ],
+    "names": [
+      "Raleway",
+      "Geologica"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "good",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c22",
+    "kind": "model",
+    "style": "display_vs_neutral",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "playwritearguides",
+      "zalandosans"
+    ],
+    "names": [
+      "Playwrite AR Guides",
+      "Zalando Sans"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c23",
+    "kind": "model",
+    "style": "display_vs_neutral",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "cherrybombone",
+      "luxuriousroman"
+    ],
+    "names": [
+      "Cherry Bomb One",
+      "Luxurious Roman"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c24",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "gelasio",
+      "monda"
+    ],
+    "names": [
+      "Gelasio",
+      "Monda"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "ok",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c25",
+    "kind": "model",
+    "style": "same_era",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "lunasima",
+      "ibmplexsanscondensed"
+    ],
+    "names": [
+      "Lunasima",
+      "IBM Plex Sans Condensed"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "good",
+      "same_structure": "ok",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c26",
+    "kind": "model",
+    "style": "display_vs_neutral",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "chonburi",
+      "wixmadefortext"
+    ],
+    "names": [
+      "Chonburi",
+      "Wix Madefor Text"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c27",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "twinklestar",
+      "aronesans"
+    ],
+    "names": [
+      "Twinkle Star",
+      "AR One Sans"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c28",
+    "kind": "model",
+    "style": "display_vs_neutral",
+    "roles": [
+      "Display",
+      "Body"
+    ],
+    "fonts": [
+      "caramel",
+      "merriweathersans"
+    ],
+    "names": [
+      "Caramel",
+      "Merriweather Sans"
+    ],
+    "model_fits": {
+      "contrast": "weak",
+      "display_vs_neutral": "good",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c29",
+    "kind": "control",
+    "style": "random",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "ibmplexmono",
+      "lemonadavfbeta"
+    ],
+    "names": [
+      "IBM Plex Mono",
+      "Lemonada"
+    ],
+    "model_fits": {
+      "contrast": "unknown",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "unknown",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  },
+  {
+    "id": "c30",
+    "kind": "model",
+    "style": "contrast",
+    "roles": [
+      "Heading",
+      "Body"
+    ],
+    "fonts": [
+      "brygada1918",
+      "sarabun"
+    ],
+    "names": [
+      "Brygada 1918",
+      "Sarabun"
+    ],
+    "model_fits": {
+      "contrast": "good",
+      "display_vs_neutral": "weak",
+      "harmony": "unknown",
+      "same_era": "weak",
+      "same_structure": "weak",
+      "superfamily": "weak"
+    }
+  }
+]

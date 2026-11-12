@@ -429,6 +429,9 @@ fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
             let one_sided = m.serif_flare.is_some_and(|f| f < 1.15) && m.serif_head.is_some_and(|h| h < 0.05);
             if !one_sided {
                 v.add("measure", format!("serif_foot {sf:.2} > 1,6"), Class::Serif, 2.0);
+            } else if text_spacing(m) {
+                // đuôi chữ l (Bellota, Mooli…): không có chân đối xứng và không có cờ trên → thiên về Sans, vừa đủ để thắng khi không có tín hiệu khác
+                v.add("measure", format!("serif_foot {sf:.2} > 1,6 nhưng chỉ một phía (đuôi chữ l), không loe, không cờ trên"), Class::Sans, 1.5);
             }
         } else if sf < 1.2 {
             // chân nhọn: rộng ~0 ngay tại baseline nên `serif_foot` đo thấp dù có cờ/chân loe → không kết luận Sans
@@ -443,6 +446,9 @@ fn gather(i: &ClassifyInput, nm: &Nm) -> Votes {
         } else if small_foot_ev > 0.0 {
             // vùng giữa 1.2–1.6: serif chân nhỏ. Cờ trên-trái và độ loe quyết định; tên (Neue/Grotesk) chỉ nặng 0.8.
             v.add("measure", format!("chân nhỏ: serif_foot {sf:.2}, loe {flare:.2}, cờ {head:.2}"), Class::Serif, small_foot_ev);
+        } else if m.serif_flare.is_some_and(|f| f < 1.15) && m.serif_head.is_some_and(|h| h < 0.05) && text_spacing(m) {
+            // 1.2–1.6 mà không loe đối xứng và không cờ trên (Ruluko): chân chỉ do đuôi chữ l, không phải serif
+            v.add("measure", format!("serif_foot {sf:.2} (1,2–1,6) không loe, không cờ trên"), Class::Sans, 1.5);
         }
     }
     if let Some(p) = p.filter(|p| p[0] == 2) {
@@ -602,6 +608,12 @@ const MONOLINE_MAX: f32 = 1.08;
 const SMALL_FOOT_FLARE: f32 = 1.3;
 const SMALL_FOOT_STRONG: f32 = 1.5;
 /// Bằng chứng serif chân nhỏ từ độ loe của chân (`serif_flare`) và cờ trên-trái (`serif_head`). 0 = không có.
+/// Giãn chữ và độ nảy của chữ văn bản: chữ viết tay/script có spacing < 0.1 hoặc bounce ≥ 0.05, nên luật "chân một phía → Sans"
+/// không áp cho chúng (đo trên 1722 họ: không có luật này 5 họ Sans đúng thành Uncertain; thiếu điều kiện này 5 script đúng thành Uncertain).
+fn text_spacing(m: &Metrics) -> bool {
+    m.spacing.is_none_or(|s| s >= 0.12) && m.bounce.is_none_or(|b| b < 0.04)
+}
+
 fn small_foot_weight(flare: f32, head: f32) -> f32 {
     if flare > 1.6 || head >= SMALL_HEAD_STRONG {
         2.0
