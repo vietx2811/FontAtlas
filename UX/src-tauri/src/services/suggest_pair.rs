@@ -25,7 +25,7 @@ fn parse_styles(ids: &[String]) -> Result<Vec<PairStyle>, CmdError> {
     if ids.is_empty() {
         return Ok(PairStyle::ALL.to_vec());
     }
-    ids.iter().map(|s| PairStyle::from_id(s).ok_or_else(|| CmdError::invalid_arg(format!("phong cách lạ: {s}")))).collect()
+    ids.iter().map(|s| PairStyle::from_id(s).ok_or_else(|| coded("style_unknown", s))).collect()
 }
 
 fn gate_rank(g: Gate) -> u8 {
@@ -143,8 +143,13 @@ impl Scan<'_> {
     }
 }
 
+/// Lỗi đầu vào theo MÃ (`err.<code>` do frontend dịch vi/en); không viết câu tiếng Việt ở backend. `detail.value` = giá trị gây lỗi.
+fn coded(code: &str, value: &str) -> CmdError {
+    CmdError::new(code, code).with_detail(serde_json::json!({ "value": value }))
+}
+
 fn need_role(r: &RoleRefDto) -> Result<Role, CmdError> {
-    resolve_role(r).ok_or_else(|| CmdError::invalid_arg(format!("vai không nhận ra: {}", r.name)))
+    resolve_role(r).ok_or_else(|| coded("role_unknown", &r.name))
 }
 
 pub fn suggest_partners(state: &AppState, anchor: &FaceKeyDto, req: &SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError> {
@@ -164,6 +169,7 @@ pub fn suggest_partners(state: &AppState, anchor: &FaceKeyDto, req: &SuggestPart
     let page: Vec<&Cand> = all.iter().skip(req.offset as usize).take(req.limit.clamp(1, 100) as usize).collect();
     let keys: Vec<IxKey> = page.iter().map(|c| c.p.key.clone()).collect();
     let rows = rows_of(state, &b, &keys)?;
+    // Thiếu hàng lưới (face vừa bị xoá khỏi thư viện giữa chừng) thì bỏ mục đó: trang có thể ngắn hơn `limit`, chấp nhận được.
     let items = page
         .into_iter()
         .filter_map(|c| {
@@ -192,20 +198,15 @@ pub fn desk_suggest(state: &AppState, req: &DeskSuggestReqDto) -> Result<DeskPag
     let limit = req.limit.clamp(1, 100) as usize;
     let (items, total) = match req.source.as_str() {
         "fits_role" => {
-            let o = RoleFitListOptsDto { project_vi: req.project_vi, limit: 100, offset: 0, filter: req.filter.clone() };
-            let page = crate::services::suggest::role_fit_faces(state, &req.target_role, &o)?;
-            let anchor = req.anchor.as_ref().map(|a| (a.hash_hex.clone(), a.face_index));
-            let all: Vec<DeskItemDto> = page
-                .items
-                .into_iter()
-                .filter(|h| anchor.as_ref().is_none_or(|a| *a != (h.face.hash_hex.clone(), h.face.face_index)))
-                .map(|h| DeskItemDto { face: h.face, row: h.row, fit: Some(h.fit), reasons: h.reasons, pinned: false })
-                .collect();
-            let t = page.total;
-            (all.into_iter().skip(req.offset as usize).take(limit).collect::<Vec<_>>(), t)
+            // Loại anchor TRƯỚC khi đếm và phân trang, để total và offset khớp với những gì người dùng thật sự thấy.
+            let ex = req.anchor.as_ref().and_then(|a| crate::services::analysis::bundle(state).ok().and_then(|b| ix_of(&b, a).ok()));
+            let o = RoleFitListOptsDto { project_vi: req.project_vi, limit: req.limit, offset: req.offset, filter: req.filter.clone() };
+            let page = crate::services::suggest::role_fit_faces_excluding(state, &req.target_role, &o, ex.as_ref())?;
+            let items = page.items.into_iter().map(|h| DeskItemDto { face: h.face, row: h.row, fit: Some(h.fit), reasons: h.reasons, pinned: false }).collect();
+            (items, page.total)
         }
         "similar" => {
-            let a = req.anchor.as_ref().ok_or_else(|| CmdError::invalid_arg("nguồn similar cần anchor"))?;
+            let a = req.anchor.as_ref().ok_or_else(|| coded("anchor_required", "similar"))?;
             let o = SimilarOptsDto { k: 100, vi_only: req.project_vi, ..Default::default() };
             let allowed = req.filter.as_ref().map(|q| matching_keys(state, q)).transpose()?;
             let hits = crate::services::analysis::similar(state, a, &o)?;
@@ -229,7 +230,7 @@ pub fn desk_suggest(state: &AppState, req: &DeskSuggestReqDto) -> Result<DeskPag
             (items, t)
         }
         "pinned" => {
-            let id = req.case_id.ok_or_else(|| CmdError::invalid_arg("nguồn pinned cần caseId"))?;
+            let id = req.case_id.ok_or_else(|| coded("case_required", "pinned"))?;
             let case = crate::services::cases::get_case(state, id)?;
             let b = bundle(state)?;
             let eff = effective_classes(state)?;
@@ -257,7 +258,7 @@ pub fn desk_suggest(state: &AppState, req: &DeskSuggestReqDto) -> Result<DeskPag
             let t = v.len() as u64;
             (v.into_iter().skip(req.offset as usize).take(limit).collect(), t)
         }
-        other => return Err(CmdError::invalid_arg(format!("nguồn lạ: {other}"))),
+        other => return Err(coded("source_unknown", other)),
     };
     Ok(DeskPageDto { source: req.source.clone(), items, total })
 }
@@ -280,7 +281,7 @@ const MAX_ANCHORS: usize = 12;
 
 pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec<ComboSuggestionDto>, CmdError> {
     if req.roles.is_empty() || req.roles.len() > 6 {
-        return Err(CmdError::invalid_arg("cần 1–6 vai"));
+        return Err(coded("roles_invalid", &req.roles.len().to_string()));
     }
     let styles = parse_styles(&req.styles)?;
     let k_out = req.k.clamp(3, 6) as usize;
@@ -291,7 +292,7 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
     let name_of = |r: &RoleRefDto| r.name.trim().to_lowercase();
     let mut locked: HashMap<usize, IxKey> = HashMap::new();
     for l in &req.locked {
-        let i = req.roles.iter().position(|r| name_of(r) == name_of(&l.role)).ok_or_else(|| CmdError::invalid_arg(format!("khoá vai không có trong roles: {}", l.role.name)))?;
+        let i = req.roles.iter().position(|r| name_of(r) == name_of(&l.role)).ok_or_else(|| coded("locked_role_unknown", &l.role.name))?;
         locked.insert(i, ix_of(&b, &l.face)?);
     }
     let allowed: Option<HashSet<IxKey>> = match (req.scope.as_str(), req.case_id) {
@@ -302,10 +303,18 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
                 .map(|f| IxKey { hash: f.key.hash_hex.clone(), index: f.key.face_index })
                 .collect(),
         ),
-        ("case", None) => return Err(CmdError::invalid_arg("scope=case cần caseId")),
+        ("case", None) => return Err(coded("case_required", "case")),
         ("library", _) | ("", _) => None,
-        (o, _) => return Err(CmdError::invalid_arg(format!("scope lạ: {o}"))),
+        (o, _) => return Err(coded("scope_unknown", o)),
     };
+
+    // Mọi font khoá đều bị chiếm trước: không vai nào khác (kể cả neo tự chọn) được lấy lại. Một font khoá ở hai vai là lỗi.
+    let mut locked_keys: HashSet<IxKey> = HashSet::new();
+    for (i, k) in &locked {
+        if !locked_keys.insert(k.clone()) {
+            return Err(coded("locked_duplicate", &req.roles[*i].name));
+        }
+    }
 
     // Neo = vai đầu: tối đa 1 face mỗi family, good trước ok, trong cùng mức xáo theo seed (tất định).
     let anchors: Vec<&FaceProfile> = if let Some(k) = locked.get(&0) {
@@ -314,7 +323,7 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
         let mut pool: Vec<(Fit, u64, &FaceProfile)> = Vec::new();
         for p in b.index.profiles() {
             let Some(m) = b.meta.get(&p.key) else { continue };
-            if m.missing || m.non_latin_primary || (req.project_vi && p.vi_missing > 0) || allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) {
+            if m.missing || m.non_latin_primary || (req.project_vi && p.vi_missing > 0) || allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) || locked_keys.contains(&p.key) {
                 continue;
             }
             let f = pairing::role_fit(&traits_of(&b, p, &eff), roles[0]).fit;
@@ -329,7 +338,8 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
 
     let mut out: Vec<(Fit, Fit, u64, ComboSuggestionDto)> = Vec::new();
     for a in anchors {
-        let mut used: HashSet<IxKey> = HashSet::from([a.key.clone()]);
+        let mut used: HashSet<IxKey> = locked_keys.clone();
+        used.insert(a.key.clone());
         let mut picks: Vec<(usize, &FaceProfile, Fit, bool)> = vec![(0, a, pairing::role_fit(&traits_of(&b, a, &eff), roles[0]).fit, locked.contains_key(&0))];
         let (mut style, mut reasons, mut warnings, mut style_fit) = (None, Vec::<WhyDto>::new(), Vec::<WhyDto>::new(), Fit::Good);
         let mut ok = true;
