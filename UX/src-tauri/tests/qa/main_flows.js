@@ -948,7 +948,7 @@
         document.documentElement.dataset.theme = 'light'; await sleep(250); await snap('font-desk-light');
         pressOn(desk, 'Enter');
         const nFilled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
-        await wait(() => nFilled() >= 2, 6000);
+        await wait(() => nFilled() >= 2, 20000); // ứng viên nạp bất đồng bộ: máy tải thì chậm hơn 6 s
         const filled = nFilled();
         await log('desk-enter-places', filled >= 2, { filled });
         const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
@@ -971,7 +971,7 @@
         await log('desk-compare-combos', ccCols === 2 && document.querySelector('[data-testid=cc-col]')?.dataset.base === 'true' && document.querySelectorAll('[data-testid=cc-rel]').length === 2, { ccCols });
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-combos-' + th); }
         document.querySelector('[data-testid=mode-fonts]')?.click();
-        await wait(() => !!document.querySelector('[data-testid=font-compare]'), 8000);
+        await wait(() => document.querySelectorAll('[data-testid=fc-col]').length > 0, 20000); // cột nạp sau khi khung hiện
         await sleep(500);
         await log('desk-compare-fonts', !!document.querySelector('[data-testid=font-compare]') && document.querySelectorAll('tr[data-metric]').length >= 4 && !!document.querySelector('[data-testid=fc-sort]'), { cols: document.querySelectorAll('[data-testid=fc-col]').length });
         for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-fonts-' + th); }
