@@ -152,7 +152,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     if (e.key === 'Escape') { e.preventDefault(); leave(); }
     else if (e.key === 'ArrowDown' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-    else if (e.key === 'Enter' && onList && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if (e.key === 'Enter' && onList && !tgt.closest('button') && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if ((e.key === '+' || e.key === '=') && onList && !tgt.closest('button') && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
     else if ((e.key === '[' || e.key === ']') && mode !== 'fonts' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
     else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing') { e.preventDefault(); setStripCollapsed(c => !c); }
     else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && mode === 'pairing' && trial && !compareReason) { e.preventDefault(); toCompare(); }
@@ -219,6 +220,12 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
                 onPointerEnter={() => setIdx(i)} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
                 <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle>
                 {c.summary && <span className="fa-desk-cand-sum">{c.summary}</span>}
+                {!same(current?.key, c.face) && (
+                  <Tooltip label={t('desk.candAdd', { role: roleName(role) })} shortcut="+">
+                    <button type="button" className="fa-desk-cand-add" data-testid="desk-cand-add" aria-label={t('desk.candAdd', { role: roleName(role) })}
+                      onClick={e => { e.stopPropagation(); setIdx(i); void placeFace(c.face, c.row); }} onDoubleClick={e => e.stopPropagation()}>+</button>
+                  </Tooltip>
+                )}
               </li>
             ))}
           </ul>

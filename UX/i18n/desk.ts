@@ -2,8 +2,8 @@
 export const DESK_I18N = {
   'desk.title': 'Pairing Desk', 'desk.back': 'Thư viện', 'desk.backTip': 'Về Thư viện', 'desk.case': 'Case',
   'desk.roles': 'Vai · font', 'desk.roleEmpty': 'Chưa có font', 'desk.missing': 'Font đã đổi hoặc bị xoá khỏi thư viện',
-  'desk.picker': 'Cuộn chọn', 'desk.pickerHint': '↑↓ thử · Enter đặt · Esc về Thư viện', 'desk.source.pair': 'Ghép',
-  'desk.trying': 'Đang thử', 'desk.inUse': 'Đang dùng', 'desk.place': 'Đặt vào vai', 'desk.placed': 'Đã đặt {font} vào vai {role}',
+  'desk.picker': 'Cuộn chọn', 'desk.pickerHint': '↑↓ thử · Enter hoặc + đặt · Esc về Thư viện', 'desk.source.pair': 'Ghép',
+  'desk.trying': 'Đang thử', 'desk.inUse': 'Đang dùng', 'desk.candAdd': 'Thêm vào vai {role}', 'desk.place': 'Đặt vào vai', 'desk.placed': 'Đã đặt {font} vào vai {role}',
   'desk.noAnchor': 'Chưa có font ở vai đối diện để ghép. Đặt một font vào vai {role} trước.', 'desk.noCands': 'Không có ứng viên ở mức ghép này',
   'desk.loadFail': 'Không mở được Case: {msg}', 'desk.candFail': 'Không tải được ứng viên: {msg}',
   'strip.title': 'Chi tiết', 'strip.metrics': 'Số đo', 'strip.compare': 'Đưa vào Compare', 'strip.expand': 'Mở dải chi tiết', 'strip.collapse': 'Thu dải chi tiết',

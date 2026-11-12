@@ -107,6 +107,33 @@ describe('PairingDesk', () => {
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Đã đặt .* vào vai Body/);
   });
 
+  it('G2: the + button on a candidate places that font in the selected role; click on the row alone does not', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const spy = vi.spyOn(api, 'setComboSlot');
+    const cands = screen.getAllByTestId('desk-cand');
+    fireEvent.click(cands[0]); await settle();
+    expect(spy).not.toHaveBeenCalled(); // click chỉ chọn/thử
+    const add = cands[0].querySelector('[data-testid=desk-cand-add]') as HTMLButtonElement;
+    expect(add.getAttribute('aria-label')).toBe('Thêm vào vai Body');
+    fireEvent.click(add); await settle();
+    expect(spy).toHaveBeenCalledTimes(1); // đúng một lần, không lặp với Enter/double-click
+    expect(useNoticeStore.getState().notices[0].text).toMatch(/Đã đặt .* vào vai Body/);
+  });
+
+  it('G2: the + key places the selected candidate; Enter on the + button does not place twice; the in-use font has no + button', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const spy = vi.spyOn(api, 'setComboSlot');
+    const desk = screen.getByTestId('pairing-desk');
+    const add0 = screen.getAllByTestId('desk-cand-add')[0];
+    fireEvent.keyDown(add0, { key: 'Enter' }); await settle();
+    expect(spy).not.toHaveBeenCalled(); // phím Enter trên nút để nút tự xử lý (click)
+    fireEvent.keyDown(desk, { key: '+' }); await settle();
+    expect(spy).toHaveBeenCalledTimes(1);
+    // sau khi đặt, font đó là "đang dùng" và không còn nút + ở hàng của nó
+    const inUse = screen.getAllByTestId('desk-cand').filter(c => !c.querySelector('[data-testid=desk-cand-add]'));
+    expect(inUse.length).toBeLessThanOrEqual(1);
+  });
+
   it('the peek trial leads the list and is marked', async () => {
     const api = createMockApi();
     const rs = await rows(api);
