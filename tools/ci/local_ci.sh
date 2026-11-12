@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI chạy trên máy Mac của dự án, thay cho GitHub Actions.
 #
-#   bash tools/ci/local_ci.sh [ref] [--no-qa] [--qa-only] [--no-wait] [--priority]
+#   bash tools/ci/local_ci.sh [ref] [--no-qa] [--qa-only] [--no-cache] [--print-keys] [--no-wait] [--priority]
 #   bash tools/ci/local_ci.sh --status
 #
 # - ref mặc định là dev/mvp. Kiểm đúng commit đã commit (checkout sạch trong ~/.fontatlas-ci/worktree),
@@ -14,20 +14,25 @@
 #   và khoá rảnh. Vé của tiến trình đã chết tự bị dọn. --no-wait: gặp khoá bận thì thoát mã 3 (hành vi cũ). --status: in hàng đợi.
 #   --qa-only: chỉ chạy lại native QA trên bundle debug ĐÃ build của đúng SHA (từ chối nếu bundle không khớp); cũng đi qua hàng đợi/khoá,
 #   không ghi git note. Native QA (run.sh) từ chối chạy ngoài local_ci hoặc khi bundle không khớp SHA.
+#   Cache kết quả PASS theo hash NỘI DUNG đầu vào (Rust: UX/src-tauri trừ tests/qa/ + UX/bindings + rustc; frontend: UX trừ src-tauri + node):
+#   trùng hash với một lượt đã PASS thì bước đó in "SKIP (cache <sha>)", ghi vào git note. Native QA và vite-build luôn chạy. --no-cache ép
+#   chạy đủ (dùng khi phát hành). --print-keys in các khoá hash rồi thoát.
 #   --priority (chỉ Lead, cần FONTATLAS_CI_PRIORITY=1) xếp vé đứng trước mọi vé thường.
 # - Không đụng thư viện thật: QA dùng FONTATLAS_DATA_DIR tạm, chỉ chạy bản debug.
 set -uo pipefail
 
-REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0; QAONLY=0
+REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0; QAONLY=0; CACHE=1; PRINTKEYS=0
 for a in "$@"; do
   case "$a" in
     --no-qa) QA=0 ;;
     --qa-only) QAONLY=1 ;;
+    --no-cache) CACHE=0 ;;
+    --print-keys) PRINTKEYS=1 ;;
     --wait) WAIT=1 ;;
     --no-wait) WAIT=0 ;;
     --priority) PRIO=1 ;;
     --status) STATUS=1 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) REF="$a" ;;
   esac
 done
@@ -92,6 +97,13 @@ SHA="$(git --git-dir="$REPO" rev-parse --verify "$REF^{commit}")" || { echo "kh�
 TREE="$(git --git-dir="$REPO" rev-parse "$SHA^{tree}")"
 SHORT="${SHA:0:9}"
 
+# Khoá cache theo nội dung: hash (đường dẫn + blob) của đúng phần đầu vào, không phụ thuộc commit.
+tree_hash() { local ex="$1"; shift; git --git-dir="$REPO" ls-tree -r "$SHA" -- "$@" | { if [ -n "$ex" ]; then grep -Ev "$ex"; else cat; fi; } | shasum | cut -c1-16; }
+RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/' UX/src-tauri UX/bindings)-$(rustc -V 2>/dev/null | shasum | cut -c1-6)"
+FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)-$(node -v 2>/dev/null | shasum | cut -c1-6)"
+BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY" | shasum | cut -c1-16)"
+if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo "bundle=$BUNDLE_KEY"; exit 0; fi
+
 # Một lần chạy một lúc: target/ và node_modules dùng chung. Hàng đợi FIFO giữ thứ tự giữa các lần chạy.
 if [ $PRIO = 1 ] && [ "${FONTATLAS_CI_PRIORITY:-}" != 1 ]; then echo "--priority chỉ dành cho Lead (đặt FONTATLAS_CI_PRIORITY=1)"; exit 2; fi
 TICKET=""
@@ -140,6 +152,8 @@ if [ -n "$CI_TARGET" ] && [ ! -L UX/src-tauri/target ]; then
   if [ -e UX/src-tauri/target ]; then echo "UX/src-tauri/target vẫn là thư mục thật; xoá nó để chuyển sang $CI_TARGET"; exit 2; fi
   ln -s "$CI_TARGET" UX/src-tauri/target || exit 2
 fi
+touch "$CI/.metadata_never_index" ${CI_TARGET:+"$CI_TARGET/.metadata_never_index"}   # Spotlight không index target/ và worktree (không đổi cấu hình hệ thống)
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(( $(sysctl -n hw.ncpu 2>/dev/null || echo 8) * 2 / 3 ))}"   # chừa CPU cho máy/worker khác; ghi đè bằng CARGO_BUILD_JOBS
 git clean -ffdxq -e UX/src-tauri/target -e UX/node_modules
 
 export FONTATLAS_CI_RUN=1   # run.sh từ chối chạy khi không có biến này (tức là ngoài khoá CI)
@@ -159,7 +173,8 @@ fi
 OUT="$CI/runs/$SHA"; rm -rf "$OUT"; mkdir -p "$OUT"
 LOAD_START="$(loadavg)"
 START=$(date +%s)
-STEPS=(); FAILED=()
+STEPS=(); FAILED=(); CACHED=()
+mkdir -p "$CI/cache"
 echo "local CI · $SHORT ($REF) · log: $OUT"
 
 # step <tên> <thư mục> <lệnh...>: ghi log, in một dòng kết quả, không dừng cả lượt khi một bước đỏ.
@@ -172,6 +187,16 @@ step() {
   else printf 'FAIL %5ss  %s  (tail %s)\n' "$dt" "$name" "$OUT/$name.log"; tail -n 15 "$OUT/$name.log" | sed 's/^/     │ /'; STEPS+=("$name:fail:$dt"); FAILED+=("$name"); fi
   return $rc
 }
+# cstep <tên> <khoá> <thư mục> <lệnh...>: như step, nhưng nếu một lượt trước đã PASS với cùng khoá nội dung thì bỏ qua.
+cstep() {
+  local name="$1" key="$2"; shift 2
+  local f="$CI/cache/$name-$key" from
+  if [ $CACHE = 1 ] && [ -s "$f" ]; then
+    from="$(cut -c1-9 "$f")"
+    printf 'SKIP        %s  (cache %s)\n' "$name" "$from"; STEPS+=("$name:ok:0"); CACHED+=("$name=$from"); return 0
+  fi
+  step "$name" "$@" && git --git-dir="$REPO" rev-parse "$SHA" > "$f"
+}
 skip() { printf 'SKIP        %s  (%s)\n' "$1" "$2"; STEPS+=("$1:skip:0"); }
 
 npm_install() {
@@ -182,17 +207,31 @@ npm_install() {
 
 step npm-ci UX npm_install && FRONT=1 || FRONT=0
 if [ $FRONT = 1 ]; then
-  step vite-build UX npx vite build || FRONT=0
-  step tsc UX npx tsc --noEmit
-  step vitest UX npm test
+  step vite-build UX npx vite build || FRONT=0   # luôn chạy: tạo UX/dist cho cargo và bản build debug (2 s)
+  cstep tsc "$FRONT_KEY" UX npx tsc --noEmit
+  cstep vitest "$FRONT_KEY" UX npm test
 else
   skip vite-build "npm ci đỏ"; skip tsc "npm ci đỏ"; skip vitest "npm ci đỏ"
 fi
 
+# Doc-tests: cargo test --workspace chạy rustdoc cho TỪNG crate dù có 0 ví dụ (~9 phút/crate khi máy tải, ~2 giờ cho 13 crate).
+# Chỉ chạy lib/bin/tests; riêng crate nào CÓ khối ``` trong doc comment thì vẫn chạy `cargo test --doc` cho crate đó.
+doc_crates() {
+  local root="${1:-$WT/UX/src-tauri}" f d
+  for f in $(grep -rlE '^[[:space:]]*(///|//!)[[:space:]]*```' --include='*.rs' "$root" 2>/dev/null | grep -v '/target/'); do
+    d="$(dirname "$f")"; while [ "$d" != "/" ] && [ ! -f "$d/Cargo.toml" ]; do d="$(dirname "$d")"; done
+    sed -n 's/^name *= *"\(.*\)"/\1/p' "$d/Cargo.toml" | head -1
+  done | sort -u
+}
+rust_tests() {
+  env UPDATE_BINDINGS=1 cargo test --workspace --locked --lib --bins --tests 2>&1 | python3 "$WT/tools/ci/ts_filter.py" || return 1
+  local c; for c in $(doc_crates); do echo "doc-tests (có ví dụ trong doc comment): $c"; cargo test --doc --locked -p "$c" || return 1; done
+}
+
 if [ $FRONT = 1 ]; then
-  step cargo-test UX/src-tauri env UPDATE_BINDINGS=1 cargo test --workspace --locked
-  step bindings-drift . git diff --exit-code -- UX/bindings
-  step clippy UX/src-tauri cargo clippy --workspace --all-targets --locked -- -D warnings
+  cstep cargo-test "$RUST_KEY" UX/src-tauri rust_tests
+  cstep bindings-drift "$RUST_KEY" . git diff --exit-code -- UX/bindings
+  cstep clippy "$RUST_KEY" UX/src-tauri cargo clippy --workspace --all-targets --locked -- -D warnings
 else
   skip cargo-test "thiếu UX/dist"; skip bindings-drift "thiếu UX/dist"; skip clippy "thiếu UX/dist"
 fi
@@ -202,9 +241,19 @@ if [ $QA = 0 ]; then
 elif [ $FRONT = 0 ]; then
   skip native-qa "frontend đỏ"
 else
-  rm -f "$WT/$STAMP"   # build hỏng/bị ngắt thì không để lại stamp của bundle cũ
-  build_debug() { cargo tauri build --debug --bundles app && echo "$SHA" > "$WT/$STAMP"; }
-  if step tauri-debug-build UX build_debug; then
+  BKEY="${STAMP%.built-sha}.built-key"   # khoá nội dung của bundle (Rust + frontend, không tính tests/qa)
+  APPBIN="$WT/UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
+  build_debug() { cargo tauri build --debug --bundles app && echo "$BUNDLE_KEY" > "$WT/$BKEY" && echo "$SHA" > "$WT/$STAMP"; }
+  BUILD_OK=0
+  if [ $CACHE = 1 ] && [ -x "$APPBIN" ] && [ "$(cat "$WT/$BKEY" 2>/dev/null)" = "$BUNDLE_KEY" ]; then
+    # Cùng nội dung đầu vào ⇒ bundle y hệt: chỉ cập nhật stamp sang SHA này để run.sh chấp nhận.
+    echo "$SHA" > "$WT/$STAMP"; printf 'SKIP        tauri-debug-build  (bundle cùng nội dung, key %s)\n' "$BUNDLE_KEY"
+    STEPS+=("tauri-debug-build:ok:0"); CACHED+=("tauri-debug-build=bundle"); BUILD_OK=1
+  else
+    rm -f "$WT/$STAMP" "$WT/$BKEY"   # build hỏng/bị ngắt thì không để lại stamp của bundle cũ
+    step tauri-debug-build UX build_debug && BUILD_OK=1
+  fi
+  if [ $BUILD_OK = 1 ]; then
     # caffeinate: màn hình ngủ thì WebKit treo trang và QA chạy hết giờ.
     echo "tải máy: $(loadavg)"
     step native-qa . caffeinate -dimsu bash UX/src-tauri/tests/qa/run.sh
@@ -216,22 +265,24 @@ fi
 TOTAL=$(( $(date +%s) - START ))
 if [ ${#FAILED[@]} -eq 0 ]; then RESULT=pass; else RESULT=fail; fi
 STEP_STR="$(IFS=' '; echo "${STEPS[*]}")"
+CACHE_STR="${CACHED[*]:-}"
 DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 LOAD_END="$(loadavg)"
-export LOAD_START LOAD_END
+export LOAD_START LOAD_END CACHE_STR
 python3 - "$OUT/summary.json" "$SHA" "$TREE" "$REF" "$RESULT" "$TOTAL" "$DATE" "$QA" $STEP_STR <<'PY'
 import json, os, sys
 out, sha, tree, ref, result, total, date, qa, *steps = sys.argv[1:]
 json.dump({"sha": sha, "tree": tree, "ref": ref, "result": result, "seconds": int(total), "date": date,
-           "qa": qa == "1", "load_start": os.environ.get("LOAD_START"), "load_end": os.environ.get("LOAD_END"), "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
+           "qa": qa == "1", "load_start": os.environ.get("LOAD_START"), "load_end": os.environ.get("LOAD_END"), "cached": os.environ.get("CACHE_STR", "").split(), "steps": [dict(zip(("name", "status", "seconds"), s.split(":"))) for s in steps]},
           open(out, "w"), indent=2)
 PY
 
 # Dòng đầu note là thứ hook pre-push đọc: "<pass|fail> tree=<tree> qa=<0|1>".
 git --git-dir="$REPO" notes --ref=ci add -f -m "$RESULT tree=$TREE qa=$QA
 $DATE $(hostname -s) ${TOTAL}s
-$STEP_STR" "$SHA" >/dev/null
+$STEP_STR
+cache: ${CACHE_STR:-none}" "$SHA" >/dev/null
 
 echo "──"
 if [ $RESULT = pass ]; then echo "PASS $SHORT trong ${TOTAL}s"; else echo "FAIL $SHORT trong ${TOTAL}s: ${FAILED[*]}"; fi
