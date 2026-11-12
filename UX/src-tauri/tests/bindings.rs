@@ -516,6 +516,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 keep_active_on_exit: false,
                 rescan_on_launch: true,
                 cloud_preview_download: true,
+                cloud_watch: true,
             }),
         ),
         ("ui_state", v(&UiStateDto::default())),

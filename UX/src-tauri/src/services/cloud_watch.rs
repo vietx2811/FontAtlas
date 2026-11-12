@@ -107,6 +107,8 @@ struct Watch {
 
 /// Các luồng theo dõi: mỗi nguồn cloud đang bật một watcher; một luồng gom và xếp quét.
 pub struct CloudWatch {
+    /// Chỉ cho test: coi mọi thư mục là ổ cloud (thư mục tạm không nằm dưới CloudStorage).
+    all_cloud: std::sync::atomic::AtomicBool,
     quiet: Duration,
     max_wait: Duration,
     inner: Mutex<Inner>,
@@ -131,7 +133,12 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 impl CloudWatch {
     pub fn with_timing(quiet: Duration, max_wait: Duration) -> Self {
-        CloudWatch { quiet, max_wait, inner: Mutex::new(Inner::default()) }
+        CloudWatch { all_cloud: Default::default(), quiet, max_wait, inner: Mutex::new(Inner::default()) }
+    }
+
+    #[doc(hidden)]
+    pub fn treat_all_as_cloud_for_test(&self, on: bool) {
+        self.all_cloud.store(on, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Các nguồn đang được theo dõi (cho test/chẩn đoán).
@@ -144,16 +151,19 @@ impl CloudWatch {
     /// Đồng bộ danh sách watcher với nguồn hiện tại: nguồn thư mục đang bật nằm trên ổ cloud (và đang truy cập được) có
     /// watcher; nguồn bị tắt/xoá/ngắt kết nối thì dừng. Gọi lại bao nhiêu lần cũng được.
     pub fn sync(&self, state: &Arc<AppState>) {
-        self.sync_with(state, &|p| cloud_provider_of(p).is_some());
+        let all = self.all_cloud.load(std::sync::atomic::Ordering::SeqCst);
+        self.sync_with(state, &|p| all || cloud_provider_of(p).is_some());
     }
 
     /// Như `sync` nhưng `is_cloud` do bên gọi quyết (test dùng thư mục tạm, không có ổ cloud thật).
     pub fn sync_with(&self, state: &Arc<AppState>, is_cloud: &dyn Fn(&Path) -> bool) {
+        // công tắc "Tự phát hiện thay đổi trên ổ cloud" (mặc định bật); tắt = không nguồn nào được theo dõi
+        let enabled = state.with_user(|u| Ok(u.setting(crate::services::keys::CLOUD_WATCH)?)).ok().flatten().is_none_or(|v| v != "0" && v != "false");
         let want: HashMap<i64, PathBuf> = state
             .with_user(|u| Ok(u.sources()?))
             .unwrap_or_default()
             .into_iter()
-            .filter(|s| s.kind == SourceKind::Directory && s.enabled)
+            .filter(|s| enabled && s.kind == SourceKind::Directory && s.enabled)
             .filter_map(|s| s.path.map(|p| (s.id, PathBuf::from(p))))
             .filter(|(_, p)| is_cloud(p) && crate::services::sources::root_available(&p.to_string_lossy()))
             .collect();

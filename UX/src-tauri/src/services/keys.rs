@@ -6,6 +6,8 @@ pub const ANALYZER_SEEN: &str = "analyzer_version_seen";
 pub const RESCAN_ON_LAUNCH: &str = "rescan_on_launch";
 /// Tự tải font còn trên ổ cloud khi thẻ vào khung nhìn để vẽ preview (mặc định bật).
 pub const CLOUD_PREVIEW_DOWNLOAD: &str = "cloud_preview_download";
+/// Tự phát hiện thay đổi trên thư mục nguồn cloud (FSEvents → quét lại). Mặc định bật.
+pub const CLOUD_WATCH: &str = "cloud_watch";
 pub const UI_LANG: &str = "ui_lang";
 pub const SAMPLE_TEXT: &str = "sample_text";
 pub const PROJECT_VI_DEFAULT: &str = "project_vi_default";

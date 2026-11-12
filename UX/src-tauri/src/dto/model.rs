@@ -92,6 +92,8 @@ pub struct SettingsDto {
     pub rescan_on_launch: bool,
     /// Tự tải font trên ổ cloud để xem trước (thẻ đang hiện). Tắt: bỏ qua bản chưa tải về, không đọc file dataless.
     pub cloud_preview_download: bool,
+    /// Tự phát hiện thay đổi trên ổ cloud (theo dõi thư mục nguồn cloud rồi quét lại). Tắt: dừng mọi watcher ngay.
+    pub cloud_watch: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, TS)]
@@ -106,4 +108,5 @@ pub struct SettingsPatchDto {
     pub keep_active_on_exit: Option<bool>,
     pub rescan_on_launch: Option<bool>,
     pub cloud_preview_download: Option<bool>,
+    pub cloud_watch: Option<bool>,
 }

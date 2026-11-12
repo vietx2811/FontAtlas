@@ -552,3 +552,29 @@ fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources
     assert!(w.watching().is_empty(), "nguồn đã xoá thì dừng theo dõi");
     w.shutdown();
 }
+
+#[test]
+fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
+    use app_lib::dto::model::SettingsPatchDto;
+    use app_lib::services::settings;
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["open_sans.ttf"]);
+    assert!(settings::get_settings(&st).unwrap().cloud_watch, "mặc định BẬT");
+    st.cloud_watch.treat_all_as_cloud_for_test(true);
+    st.cloud_watch.sync(&st);
+    assert_eq!(st.cloud_watch.watching().len(), 1);
+
+    let off = settings::set_settings(&st, SettingsPatchDto { cloud_watch: Some(false), ..Default::default() }).unwrap();
+    assert!(!off.cloud_watch);
+    assert!(st.cloud_watch.watching().is_empty(), "tắt = dừng mọi watcher ngay, không chờ khởi động lại");
+    st.cloud_watch.sync(&st); // các lần đồng bộ sau (thêm nguồn, mở app) cũng không bật lại khi đang tắt
+    assert!(st.cloud_watch.watching().is_empty());
+
+    let on = settings::set_settings(&st, SettingsPatchDto { cloud_watch: Some(true), ..Default::default() }).unwrap();
+    assert!(on.cloud_watch);
+    assert_eq!(st.cloud_watch.watching().len(), 1, "bật lại = đồng bộ lại ngay");
+    // đổi công tắc khác không đụng tới watcher
+    settings::set_settings(&st, SettingsPatchDto { rescan_on_launch: Some(false), ..Default::default() }).unwrap();
+    assert_eq!(st.cloud_watch.watching().len(), 1);
+    st.cloud_watch.shutdown();
+}
