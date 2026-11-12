@@ -74,13 +74,12 @@ Một lệnh, bốn nguồn; UI gọi lười theo tab đang mở:
 
 ```
 deskSuggest(ctx: { anchor?: {face, role}, caseId?, targetRole, filter?: FaceQueryDto (classes…), limit, offset },
-            source: "similar" | "fits_role" | "pinned" | "recent") -> DeskSourcePageDto
+            source: "similar" | "fits_role" | "pinned")  // recent: client-side -> DeskSourcePageDto
 DeskSourcePageDto { source, items: [ { face, row, reasons: [ReasonDto], badge?: "pinned"|"in_combo" } ], total }
 ```
 - `similar`: `similar_families` với `useImage=true`; lý do = trục `same` nổi bật (`similar_axis`) và `image_close` khi so bằng embedding. Không có model embed thì dự phòng theo trục (`similar_works_without_model` đã có test).
 - `fits_role`: có anchor → `suggestPartners` `style:"any"`; không anchor → quét thư viện theo `roleFit` (cần mức vai tính sẵn, mục 5).
 - `pinned`: face của Case (`CaseDto.faces`) kèm `roleFit` cho `targetRole`; face `missing` đánh dấu, không loại.
-- `recent`: cần lưu mới (4.1).
 - Lọc nhanh theo class dùng `FaceQueryDto.classes` đã có.
 
 ### 3.4 `suggestCombos` (G6): dựng combo từ thư viện
@@ -95,7 +94,7 @@ ComboSuggestionDto {
   interpreted: { matchedTerms[], unknownWords[], usedBrief: bool }
 }
 ```
-- Hiểu ý định: tên combo → `describe` (từ điển hiện có, không LLM) → `AxisFilterDto` cho vai Display/Heading; vai Body dùng hồ sơ vai mặc định. Tên không nhận ra (ví dụ "Menu nhà hàng") → bảng ý định nhỏ do 08 giữ trong `data/` (tên/mục đích → phong cách pair + gợi ý class), mở rộng dần. Từ không hiểu trả về `interpreted.unknownWords`, **không** đoán.
+- Hiểu ý định: tên combo → `describe` (từ điển hiện có, không LLM) → `AxisFilterDto` cho vai Display/Heading; vai Body dùng hồ sơ vai mặc định. Tên không nhận ra (ví dụ "Menu nhà hàng") → việc nhận ra ý đồ từ tên chạy ở client (`intents.ts`, spec 01); backend chỉ nhận `styles` + `roles` + `locked`, không đoán ý đồ.
 - Dựng: chọn neo Display theo bộ lọc ý định; mỗi neo chạy `suggestPartners` cho các vai còn lại (cắt sớm: ≤ 12 neo × ≤ 5 đối tác), ghép, loại combo trùng face hoặc `Blocked`, xếp lexicographic (gate → số clash → fit → tên), trả ≤ `limit`.
 - Nhận cả combo hay từng vai: UI dùng `slots[]`, backend không ghi gì. Ghi vào Case vẫn qua `create_combo`/`add_slot` hiện có.
 - Có `caseId`: ưu tiên face đã pin (`pinned_in_case`).
@@ -103,7 +102,7 @@ ComboSuggestionDto {
 ## 4. Dữ liệu mới và mã lý do
 
 ### 4.1 Font vừa xem
-Bảng `recent_faces(face_id, viewed_at)` trong user DB (migration mới), giữ 50 dòng mới nhất, ghi khi mở Detail/Desk, **không** ghi khi lướt lưới. Lệnh `recordView(face)` và `deskSuggest(source="recent")`. Cục bộ hoàn toàn, xoá được trong Settings (NoteMark về riêng tư). Chờ Lead xác nhận có lưu.
+Client-side (`recentViews` trong ui store), backend **không** lưu và không có `recordView`. Nguồn `recent` của `deskSuggest` bỏ; UI tự ghép. (Đã chỉnh theo spec 01, d381297d.)
 
 ### 4.2 `ReasonDto`
 ```
@@ -124,12 +123,12 @@ Mã dự kiến (frontend dịch vi/en, thuật ngữ font có TermTip):
 1. **04**: hồ sơ vai (tiêu chí, ngưỡng), danh sách `PairStyle` và điều kiện thoả từng phong cách, số đo analyzer mới nếu có (độ dễ đọc cỡ nhỏ). 3.1/3.2 sẽ theo mô hình của 04.
 2. **01**: spec cột 2 (bốn tab, lọc class) và G6; tab ánh xạ vào 3.3, nêu rõ nếu cần thêm nguồn.
 3. **03**: G3 lưu vai tuỳ ý. `ComboRoleDto` hiện là enum đóng; chuyển sang chuỗi tự do thì 3.1 và 3.4 dùng `DeskRole`. Cần thống nhất kiểu.
-4. **Lead quyết**: (a) không điểm số, chỉ mức `fit` + cổng, có chấp nhận không; (b) có lưu "font vừa xem" cục bộ không; (c) bảng ý định tên combo do 08 giữ trong `data/`, có cần 01 duyệt từ vựng không.
+4. **Lead quyết**: (a) không điểm số, chỉ mức `fit` + cổng, có chấp nhận không; (b) [đã giải quyết: Recent ở client, bảng ý đồ ở client].
 
 ## 7. Thứ tự làm sau khi được duyệt
 
 1. Bench nền (N = 2k/5k/10k) cho `pair_candidates_gated` và `similar_families`.
 2. `ReasonDto` + test khoá vi/en; `roleFit` (3.1) theo mô hình 04.
-3. `suggestPartners` (3.2), rồi `deskSuggest` bốn nguồn (3.3); `recordView` + migration.
-4. `suggestCombos` (3.4) và bảng ý định.
+3. `suggestPartners` (3.2), rồi `deskSuggest` ba nguồn (3.3).
+4. `suggestCombos` (3.4): nhận `styles`, `roles`, `locked`, `seed`; tối đa 1 gợi ý mỗi family tiêu đề; ổn định theo seed (xếp hạng tất định, xáo có seed chỉ trong nhóm hạng bằng nhau); `viStatus` trả count + ≤ 8 ký tự.
 Mỗi bước: test Rust, clippy, đo thời gian; QA native khi UI nối vào.
