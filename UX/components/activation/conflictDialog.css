@@ -18,3 +18,10 @@
 .fa-radio input[type="radio"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fa-radio input[type="radio"]:disabled { opacity: .4; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .fa-radio input[type="radio"]::after { transition: none; } }
+/* Phần thay thế thu gọn: một dòng "Chi tiết…" mở ra cảnh báo, scope và hướng dẫn. */
+.fa-conf-more { font-size: 12px; color: var(--muted); }
+.fa-conf-more > summary { cursor: pointer; min-height: 24px; display: flex; align-items: center; }
+.fa-conf-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.fa-conf-more p { margin: 4px 0; }
+.fa-conf-warn { margin: 2px 0; font-size: 12px; color: var(--muted); }
+.fa-conf-guide { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
