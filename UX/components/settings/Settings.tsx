@@ -152,6 +152,8 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
       <Switch label={t('set.rescanLaunch')} on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
       <Switch label={t('cloud.switch')} on={s.cloudPreviewDownload} onChange={v => void patch({ cloudPreviewDownload: v })} />
       <p className="fa-set-note">{t('cloud.switch.note')}</p>
+      <Switch label={t('cloud.watch')} on={s.cloudWatch} onChange={v => void patch({ cloudWatch: v })} />
+      <p className="fa-set-note">{t('cloud.watch.note')}</p>
       <p className="fa-set-note">
         <TermTip term="dataless"><span data-term="dataless" tabIndex={0} className="fa-termword">dataless</span></TermTip>
         {' · '}

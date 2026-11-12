@@ -19,7 +19,22 @@ export type EmptyCtx = { view: View; tag: string | null; query: string; viOnly: 
 export function cloudHint(s: SourceDto): string | null {
   if (!s.cloudProvider || s.cloudOnlyCount <= 0 || s.faceCount <= 0) return null;
   const pct = Math.min(100, Math.round((s.cloudOnlyCount / s.faceCount) * 100));
-  return t('cloud.sourceHint', { pct: pct === 0 ? '<1' : String(pct) });
+  return t('cloud.sourceHint', { pct: pct === 0 ? '<1' : String(pct), action: keepActionOf(s.cloudProvider) });
+}
+
+/**
+ * Tên mục menu Finder giữ thư mục luôn nằm trên máy, theo từng dịch vụ (tên do dịch vụ đặt, nên giữ nguyên tiếng Anh).
+ * Font Atlas KHÔNG tự đặt cờ này: đó là quyết định về dung lượng ổ của người dùng, và đặt nó là ghi vào thư mục của họ.
+ */
+export function keepActionOf(provider: string | null): string {
+  switch (provider) {
+    case 'one_drive': return 'Always Keep on This Device';
+    case 'google_drive': return 'Available offline';
+    case 'dropbox': return 'Make available offline';
+    case 'box': return 'Make Available Offline';
+    case 'icloud': return 'Keep Downloaded';
+    default: return 'Always keep on this device'; // dịch vụ File Provider khác: tên chung
+  }
 }
 
 export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}): number => cloud[s.id] ?? s.lastScan?.notDownloaded ?? 0;

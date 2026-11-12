@@ -6,6 +6,7 @@ import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Settings, SETTINGS_GROUPS } from '../Settings';
 import { tipOf } from '../../../test/tip';
+import { setLocale, t } from '../../../i18n';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const initial = useUiStore.getState();
@@ -134,6 +135,23 @@ describe('Settings', () => {
       expect(within(rows[1]).getByTestId('cloud-hint')).toBeTruthy();
       expect(await tipOf(within(rows[1]).getByTestId('cloud-hint'))).toMatch(/^90% font của nguồn này chưa tải về máy/);
       expect(within(rows[0]).queryByTestId('cloud-hint')).toBeNull();
+    });
+
+    it('"Tự phát hiện thay đổi trên ổ cloud" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
+      const { api } = await mount();
+      await go('Thư viện và nguồn');
+      const sw = screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' });
+      expect(sw.getAttribute('aria-checked')).toBe('true');
+      expect(document.body.textContent).toMatch(/tự quét lại thư mục đó sau vài giây/);
+      const set = vi.spyOn(api, 'setSettings');
+      fireEvent.click(sw);
+      await settle();
+      expect(set).toHaveBeenLastCalledWith({ cloudWatch: false });
+      expect(screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' }).getAttribute('aria-checked')).toBe('false');
+      setLocale('en');
+      expect(t('cloud.watch')).toBe('Detect changes on cloud drives automatically');
+      expect(t('cloud.watch.note')).toMatch(/rescans that folder/);
+      setLocale('vi');
     });
 
     it('"Tự tải font trên cloud để xem trước" is on by default, is saved when switched, and explains dataless / Always keep', async () => {

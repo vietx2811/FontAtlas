@@ -8,4 +8,8 @@ uiLang: string | null, sampleText: string, projectViDefault: boolean, keepActive
 /**
  * Tự tải font trên ổ cloud để xem trước (thẻ đang hiện). Tắt: bỏ qua bản chưa tải về, không đọc file dataless.
  */
-cloudPreviewDownload: boolean, };
+cloudPreviewDownload: boolean, 
+/**
+ * Tự phát hiện thay đổi trên ổ cloud (theo dõi thư mục nguồn cloud rồi quét lại). Tắt: dừng mọi watcher ngay.
+ */
+cloudWatch: boolean, };

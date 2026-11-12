@@ -75,7 +75,7 @@ const similarOpts = (o: SimilarQuery = {}) => ({
 const settingsPatch = (p: Partial<Record<keyof SettingsPatchDto, unknown>>): SettingsPatchDto => ({
   embedEnabled: (p.embedEnabled as boolean) ?? null, licenseNoticeAck: (p.licenseNoticeAck as boolean) ?? null, uiLang: (p.uiLang as string) ?? null,
   sampleText: (p.sampleText as string) ?? null, projectViDefault: (p.projectViDefault as boolean) ?? null, keepActiveOnExit: (p.keepActiveOnExit as boolean) ?? null,
-  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null, cloudPreviewDownload: (p.cloudPreviewDownload as boolean) ?? null,
+  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null, cloudPreviewDownload: (p.cloudPreviewDownload as boolean) ?? null, cloudWatch: (p.cloudWatch as boolean) ?? null,
 });
 
 export function createTauriApi(): Api {

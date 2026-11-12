@@ -33,6 +33,7 @@ pub fn get_settings(state: &AppState) -> Result<SettingsDto, CmdError> {
             keep_active_on_exit: u.setting(SETTING_ACTIVATION_KEEP)?.as_deref() == Some("1"),
             rescan_on_launch: flag(u, keys::RESCAN_ON_LAUNCH, true)?,
             cloud_preview_download: flag(u, keys::CLOUD_PREVIEW_DOWNLOAD, true)?,
+            cloud_watch: flag(u, keys::CLOUD_WATCH, true)?,
         })
     })
 }
@@ -70,8 +71,14 @@ pub fn set_settings(state: &Arc<AppState>, p: SettingsPatchDto) -> Result<Settin
         if let Some(v) = p.cloud_preview_download {
             u.set_setting(keys::CLOUD_PREVIEW_DOWNLOAD, b(v))?;
         }
+        if let Some(v) = p.cloud_watch {
+            u.set_setting(keys::CLOUD_WATCH, b(v))?;
+        }
         Ok(())
     })?;
+    if p.cloud_watch.is_some() {
+        state.cloud_watch.sync(state); // tắt: dừng mọi watcher ngay; bật: đồng bộ lại
+    }
     if let Some(v) = p.keep_active_on_exit {
         crate::services::activation::set_keep(state, v)?;
     }

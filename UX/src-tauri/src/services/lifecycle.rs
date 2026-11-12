@@ -6,6 +6,7 @@ pub fn on_exit(state: &AppState) {
     // đặt cờ huỷ cho cả ba hàng đợi trước, rồi mới chờ: tổng thời gian ≈ một lượt chờ, không cộng dồn
     crate::services::fontreq::stop(state);
     crate::services::broker::stop(state);
+    state.cloud_watch.shutdown(); // trước hàng đợi quét: không xếp quét mới khi đang tắt
     state.scans.request_shutdown();
     crate::services::model::cancel_download(state);
     state.embed.request_stop();
