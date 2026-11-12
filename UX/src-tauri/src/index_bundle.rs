@@ -35,6 +35,8 @@ pub struct FaceMeta {
     pub auto_confidence: f32,
     /// Class phụ tự động (hybrid): `(class, subclass)`.
     pub auto_secondary: Option<(String, Option<String>)>,
+    /// Lớp bộ phân loại đoán khi `auto_class` = uncertain (G4 dùng cho role_fit/pair_style).
+    pub auto_candidate: Option<String>,
     /// Tag hình thái tự động (stencil, rounded…).
     pub auto_traits: Vec<String>,
     /// name ID 5 (chuỗi phiên bản).
@@ -128,6 +130,7 @@ impl IndexBundle {
                     auto_class: auto.class.snake().into(),
                     auto_subclass: auto.subclass,
                     auto_confidence: auto.confidence,
+                    auto_candidate: auto.candidate.map(|c| c.snake().to_string()),
                     auto_secondary: auto.secondary.as_ref().map(|x| (x.class.snake().to_string(), x.subclass.clone())),
                     auto_traits: auto.traits.clone(),
                     version: m.get("version").and_then(Value::as_str).map(String::from),
