@@ -130,7 +130,7 @@ pub fn materialize(path: &Path, timeout: Duration, permit: Permit, cancel: &Atom
         timeout,
         permit,
         cancel,
-        |p, t, hold, c| fontatlas_activate::ensure_local_holding_cancellable(p, t, hold, c),
+        fontatlas_activate::ensure_local_holding_cancellable::<Arc<Permit>>,
         request_ubiquitous_download,
         fontatlas_activate::probe_file,
     )
