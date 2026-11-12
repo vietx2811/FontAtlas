@@ -346,6 +346,29 @@ describe('R3/R6/R7 + activate-case commands', () => {
     expect(last().args).toMatchObject({ caseId: 5, scope: null, proceed: true });
   });
 
+  it('revealSource / sourceDownloadCloud / sourceDownloadCancel use the source id (no free-form path) and the reports come back as-is', async () => {
+    const api = createTauriApi();
+    await api.revealSource(4);
+    expect(last()).toEqual({ cmd: 'reveal_source', args: { sourceId: 4 } });
+    const rep = { total: 3, downloaded: 2, failed: 1, cancelled: false, rescanQueued: true, firstFailureCode: 'cloud_timeout' };
+    reply = cmd => (cmd === 'source_download_cloud' ? rep : true);
+    expect(await api.sourceDownloadCloud(4, () => {})).toEqual(rep);
+    expect(last().cmd).toBe('source_download_cloud');
+    expect(Object.keys(last().args).sort()).toEqual(['onProgress', 'sourceId']);
+    expect(await api.sourceDownloadCancel(4)).toBe(true);
+    expect(last()).toEqual({ cmd: 'source_download_cancel', args: { sourceId: 4 } });
+  });
+
+  it('source_unavailable keeps its code, with an English sentence in the English UI', async () => {
+    const api = createTauriApi();
+    reply = () => ({ __reject: { code: 'source_unavailable', message: 'Thư mục của nguồn “X” hiện không truy cập được', detail: { sourceId: 4 } } });
+    const e = await api.revealSource(4).catch(x => x);
+    expect(e).toBeInstanceOf(CmdError);
+    expect(e.code).toBe('source_unavailable');
+    expect(e.detail).toEqual({ sourceId: 4 });
+    expect(toCmdError({ code: 'source_unavailable', message: 'x' }).message).toBe('x'); // vi: giữ câu của backend
+  });
+
   it('a duplicate tag name surfaces as CmdError conflict', async () => {
     reply = () => ({ __reject: { code: 'conflict', message: 'trùng tên', detail: null } });
     await expect(createTauriApi().renameTag(1, 'x')).rejects.toMatchObject({ code: 'conflict' });

@@ -6,6 +6,7 @@ import { restoreReplaced } from '../activation/restoreReplaced';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
+import { CloudDownloadControl } from '../sidebar/CloudDownload';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
 import { chooseLocale, t, useLocale, tn } from '../../i18n';
@@ -140,6 +141,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
           <li key={x.id} data-testid="source-row">
             <div className="who"><strong>{x.name}{cloudHint(x) && <NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(x)!} />}</strong><span className="path">{x.path}</span></div>
             <span className="meta">{tn('set.src.meta', { n: x.faceCount, state: state(x) })}{notDownloadedOf(x, cloud) > 0 ? t('set.src.notDl', { n: notDownloadedOf(x, cloud) }) : ''}</span>
+            <CloudDownloadControl api={api} source={x} notDownloaded={notDownloadedOf(x, cloud)} />
             {x.id in access && <button type="button" onClick={() => void openPrivacySettings()}>{t('set.src.grant')}</button>}
             <button type="button" onClick={() => void api.rescanSources([x.id])}>{x.id in access ? t('set.src.retry') : t('set.src.rescan')}</button>
             <button type="button" className="danger" onClick={() => setRemoving(x)}>{t('set.src.remove')}</button>

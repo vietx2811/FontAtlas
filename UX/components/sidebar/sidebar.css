@@ -82,6 +82,9 @@
 .fa-cloud, .fa-scan-cloud { display: flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--muted); cursor: help; }
 .fa-cloud { padding: 0 9px 4px 40px; margin-top: -2px; }
 .fa-scan-cloud { margin-left: 4px; }
+.fa-cloud-dl { cursor: default; gap: 8px; margin-top: 0; }
+.fa-cloud-dl button { color: var(--accent-ink); font-size: var(--text-xs); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+.fa-cloud-dl button:disabled { opacity: .6; text-decoration: none; }
 .fa-scan { flex-wrap: wrap; }
 .fa-side[data-collapsed="true"] .fa-cloud { display: none; }
 
