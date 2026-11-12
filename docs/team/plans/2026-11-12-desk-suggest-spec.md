@@ -223,6 +223,8 @@ Khoá bắt đầu `pick.` (Picker) và `cs.` (combo suggest). Thuật ngữ gi�
 | pick.place | Đặt | Place |
 | pick.inUse | Đang dùng | In use |
 | pick.needAnchor | Đặt một font vào vai {role} trước | Place a font in {role} first |
+| pick.profile.hint | Chọn hồ sơ vai để xem font hợp vai | Pick a role profile to see fonts that fit |
+| pick.profile.guess | Đoán: {profile} (đổi được) | Guess: {profile} (you can change it) |
 | pick.keys | ↑↓ thử · ↵ đặt · 1–5 nguồn · / lọc | ↑↓ try · ↵ place · 1–5 source · / filter |
 | cs.name.ph | Đặt tên combo… (vd Editorial) | Name this combo… (e.g. Editorial) |
 | cs.title | Gợi ý combo cho "{name}" | Combo ideas for "{name}" |
