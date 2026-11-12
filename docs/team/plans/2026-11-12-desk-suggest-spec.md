@@ -1,6 +1,6 @@
 # Spec G5 + G6: gợi ý và chọn lựa trong Pairing Desk (0.4.0)
 
-Soạn: 01 (Product & Research), 2026-11-12. **Trạng thái: chờ Lead duyệt, chưa ai code.**
+Soạn: 01 (Product & Research), 2026-11-12. **Trạng thái: Lead đã duyệt (2026-11-12) kèm 5 quyết định ở mục 9. 05 và 08 được bắt đầu code.**
 Liên quan: kế hoạch `docs/team/plans/2026-11-12-v0.4.0-plan.md` (G2, G3, G4, G5, G6), nghiên cứu `docs/team/research/2026-11-12-desk-suggest.md`, thiết kế cũ `docs/design/font-desk/04_spec.md` §2.4 và `06_v3_pairing_compare.md` §2.
 Người dùng: graphic designer, art director, layout artist. Tính năng tên "Pairing Desk", đơn vị "Case". Thuật ngữ font giữ tiếng Anh, luôn có TermTip.
 
@@ -68,7 +68,7 @@ Chưa kiểm được: nội dung bài Typewolf, cách FontBase làm "smart pair
 | **Đã ghim / Pinned** | Những font tôi đã ghim vào Case này | Danh sách font của Case (`CaseDto.faces`) | Có |
 | **Vừa xem / Recent** | Font tôi vừa mở xem ở thư viện | `recentViews` (store) → `query_faces({faceKeys})` | Có |
 
-- **Mặc định khi mở vai:** Pairs nếu vai đối diện có font; nếu không, Role fit; nếu Role fit chưa có (mục 7) thì Pinned. Nhớ lựa chọn cuối **theo vai** trong phiên Desk.
+- **Mặc định (Lead chốt):** khi đã chọn một vai thì mở **Role fit**; chưa chọn vai thì mở **Pairs**. Nếu Role fit chưa có dữ liệu (mục 7) thì dùng Pairs, rồi Pinned. Nhớ lựa chọn cuối **theo vai** trong phiên Desk.
 - **Similar** cần font đang đặt ở vai. Nếu vai trống: nguồn mờ đi với tooltip "Đặt một font vào vai này trước".
 - Similar **không** hiện nhãn ●◐◆ (đó là nhãn của ghép); hiện "giống {n}%" và khác biệt chính ("rộng hơn", "x-height thấp hơn") do BE trả (đã có `summary` kiểu này ở phía Pairs).
 - Mọi nguồn **loại** font `missing` (ổ rút, file mất) khỏi gợi ý, trừ Pinned: Pinned vẫn hiện, có NoteMark "Không khả dụng" và nút Đặt bị khoá.
@@ -291,34 +291,31 @@ Mọi thứ cục bộ, không gọi mạng. DTO mới sinh bindings như thư�
 
 ## 8. Phụ lục A: bảng ý đồ khởi điểm
 
-| Id | Từ khoá vi / en | Bộ vai | Phong cách G4 (id) |
-|---|---|---|---|
-| editorial | editorial, tạp chí, báo, magazine, article | Display, Heading, Body, Caption, Quote | `contrast`, `display_vs_neutral` |
-| tech | tech startup, công nghệ, app, saas | Heading, Body, Label | `superfamily`, `same_structure` |
-| menu | menu, thực đơn, nhà hàng, restaurant | Display, Heading, Body, Numerals | `display_vs_neutral`, `contrast` |
-| poster | poster, áp phích, flyer | Display, Heading, Body | `display_vs_neutral`, `harmony` |
-| brand | brand, thương hiệu, identity | Display, Heading, Body | `superfamily`, `contrast` |
-| wedding | wedding, thiệp, cưới, invitation | Display, Heading, Body | `display_vs_neutral` |
-| report | báo cáo, report, annual | Heading, Body, Caption, Numerals | `superfamily`, `same_structure` |
-| packaging | bao bì, packaging, nhãn | Display, Heading, Caption | `display_vs_neutral`, `harmony` |
+| Id | Ý đồ chủ app (vi / en) | Tên phụ nhận được (không phân biệt hoa thường, bỏ dấu) | Bộ vai | Phong cách G4 (id) |
+|---|---|---|---|---|
+| ui | UI / UI | app, ứng dụng, giao diện, web, website, dashboard, saas, tech startup, công nghệ, product | Heading, Body, Label | `superfamily`, `same_structure` |
+| editorial | Editorial, Tạp chí / Editorial, Magazine | magazine, báo, article, bài dài, sách, book, longform, newsletter | Display, Heading, Body, Caption, Quote | `contrast`, `display_vs_neutral` |
+| brand | Brand, Nhận diện / Brand, Identity | thương hiệu, identity, logo, brand book, branding, guideline | Display, Heading, Body | `superfamily`, `contrast` |
+| packaging | Packaging, Menu / Packaging, Menu | bao bì, nhãn, label, thực đơn, nhà hàng, restaurant, cafe, F&B, bao bì sản phẩm | Display, Heading, Caption, Numerals | `display_vs_neutral`, `contrast` |
+| poster | Poster, Campaign / Poster, Campaign | áp phích, flyer, banner, quảng cáo, ads, chiến dịch, key visual, KV | Display, Heading, Body | `display_vs_neutral`, `harmony` |
 
-Id phong cách (theo 04, `docs/team/research/2026-11-12-g4-role-fit-and-pair-styles.md`): `contrast` (Serif + Sans), `superfamily`, `same_structure` (Keep one change one), `same_era`, `display_vs_neutral` (Display + Text), `harmony`. **"Rule-breaking" bỏ khỏi bảng**: mô hình chưa có và chưa có số đo; đưa lại khi 04 định nghĩa cách chấm. Bảy hồ sơ vai của 04: Body, Caption, Heading, Display, Quote, Label, Numerals; "Price/Giá" nay là vai tuỳ ý ánh xạ về Numerals.
+Năm ý đồ này là **toàn bộ bảng khởi điểm** (Lead chốt). Tên khác (wedding, report…) chưa có ý đồ riêng: rơi vào nhánh "chưa nhận ra" (mục 3.2); thêm sau nếu chủ app dùng nhiều. Mỗi ý đồ có tên hiển thị vi + en và danh sách tên phụ vi + en trong `intents.ts`.
 
-**Vai tuỳ ý (G3) và Role fit (chốt câu hỏi 4):** dùng bảng đồng nghĩa, không hỏi người dùng. Khởi điểm: Subhead/Tagline/Title → Heading · Eyebrow/Tag/Button → Label · Price/Giá/Số → Numerals · Pull quote/Trích dẫn → Quote · Note/Footnote/Chú thích → Caption · Hero/Headline/Tiêu đề lớn → Display · Paragraph/Nội dung → Body. Tên lạ: UI gửi kèm gợi ý cỡ (`text|heading|display`) nếu có, không thì `fit: unknown`. 05 và 08 mở rộng bảng được.
+Id phong cách (theo 04, `docs/team/research/2026-11-12-g4-role-fit-and-pair-styles.md`): `contrast` (Serif + Sans), `superfamily`, `same_structure` (Keep one change one), `same_era`, `display_vs_neutral` (Display + Text), `harmony`. **"Rule-breaking" bỏ khỏi bảng**: mô hình chưa có và chưa có số đo; đưa lại khi 04 định nghĩa cách chấm. Bảy hồ sơ vai của 04: Body, Caption, Heading, Display, Quote, Label, Numerals; "Price/Giá" là vai tuỳ ý, người dùng chọn hồ sơ Numerals.
 
-Bảng này là *gợi ý khởi điểm để 05 dựng và test*; người dùng GD/AD nên được hỏi thêm tên ý đồ họ hay đặt (câu hỏi 3 bên dưới).
+**Vai tuỳ ý (G3) và Role fit (Lead chốt, thay đề xuất trước):** người dùng **chọn hồ sơ vai gần nhất** cho vai tuỳ ý (menu 7 hồ sơ ngay trên vai, hoặc trong hộp "+ Role"); chưa chọn thì `fit: unknown` và Picker hiện dòng gợi ý "Chọn hồ sơ vai để xem font hợp vai" kèm menu. Bảng đồng nghĩa của 04 chỉ dùng để **đoán sẵn** hồ sơ (người dùng thấy và đổi được), không tự áp ngầm. Khởi điểm bảng đoán: Subhead/Tagline/Title → Heading · Eyebrow/Tag/Button → Label · Price/Giá/Số → Numerals · Pull quote/Trích dẫn → Quote · Note/Footnote/Chú thích → Caption · Hero/Headline/Tiêu đề lớn → Display · Paragraph/Nội dung → Body. Tên lạ: không đoán, `fit: unknown` tới khi người dùng chọn hồ sơ; UI gửi hồ sơ đã chọn (hoặc cỡ `text|heading|display`) cho backend. 05 và 08 mở rộng bảng được.
 
----
 
-## 9. Câu hỏi cần Lead / chủ app quyết
-
-1. **Số nguồn:** năm nguồn có nhiều quá cho cột 300 px? Phương án rút: gộp Recent vào Pinned thành "Của tôi" (hai nhóm con). *Đề xuất giữ năm; kiểm với bản thật, rút nếu chật.*
-2. **Nhận cả combo khi combo đang có font:** đề xuất tạo combo mới (an toàn). Chủ app có muốn thay thế tại chỗ không?
-3. **Tên ý đồ:** chủ app hay đặt tên combo thế nào ("Editorial", "Tech startup", "Menu nhà hàng" là ví dụ của chủ app)? Cần 10 tên thật để dựng bảng Phụ lục A đúng nghề.
-4. ~~Vai tuỳ ý và Role fit~~ — **đã thống nhất với 04**: bảng đồng nghĩa, không hỏi (Phụ lục A).
-5. **Phạm vi gợi ý combo:** mặc định cả thư viện hay chỉ font trong Case? Đề xuất cả thư viện (vì Case thường còn ít font), có công tắc thu hẹp.
 
 ---
+
+## 9. Quyết định của Lead (đã duyệt)
+
+1. **Giữ 5 nguồn.** Mặc định mở Role fit khi đã chọn vai, ngược lại Pairs.
+2. **Nhận cả combo khi combo đã có font: tạo combo MỚI**, không thay tại chỗ, kèm toast hoàn tác.
+3. **Ý đồ chủ app hay dùng:** UI, Editorial/Tạp chí, Brand/Nhận diện, Packaging/Menu, Poster/Campaign. Đã vào Phụ lục A (có vi + en, thêm tên phụ).
+4. **Vai tuỳ ý (G3):** người dùng chọn hồ sơ vai gần nhất; chưa chọn thì `fit = unknown`, có gợi ý chọn hồ sơ.
+5. **Phạm vi mặc định: cả thư viện** (công tắc "Chỉ font trong Case" để thu hẹp).
 
 ## 10. Tiêu chí nghiệm thu (cho 05/08 và bước rà của 01)
 
