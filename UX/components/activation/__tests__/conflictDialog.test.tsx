@@ -10,7 +10,7 @@ import { ConflictDialog } from '../ActivationDialogs';
 import { groupByFamily, groupNote, isSameFile, ownerNote, toItems } from '../conflictModel';
 import { useActivationFlow } from '../useActivationFlow';
 
-const c = (over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath: '/Users/u/Library/Fonts/FontBase/BT/x.ttf', owner: 'user_installed', sameFile: false, replaceTier: 'protected', ...over });
+const c = (over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath: '/Users/u/Library/Fonts/FontBase/BT/x.ttf', owner: 'user_installed', sameFile: false, replaceTier: 'protected', variable: false, existingVariable: null, ...over });
 const initial = useUiStore.getState();
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 

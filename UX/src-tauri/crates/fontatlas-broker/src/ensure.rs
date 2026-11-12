@@ -195,25 +195,29 @@ fn lock(m: &Mutex<Store>) -> MutexGuard<'_, Store> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Nhiều bản khác nội dung (hash) cùng tên: ưu tiên bản ĐANG BẬT (người dùng/collection đã chọn), rồi bản thấy sau cùng
-/// (`first_seen_at` lớn nhất), rồi hash nhỏ nhất cho tất định. Font revision (head.fontRevision) chưa được lưu trong thư
-/// viện nên chưa dùng được. Trả (bản chọn, số bản khác nhau).
-fn pick(s: &Store, cands: Vec<FaceKey>, active: &std::collections::HashSet<[u8; 32]>) -> Result<(Option<FaceKey>, usize), EnsureError> {
+/// Nhiều bản khác nội dung (hash) cùng tên: ưu tiên bản ĐANG BẬT (người dùng/collection đã chọn); rồi bản khớp family + style
+/// app đã gửi; rồi bản **static trước variable** (G7); rồi bản thấy sau cùng (`first_seen_at` lớn nhất); rồi hash nhỏ nhất
+/// cho tất định. Hai tiêu chí giữa là SUY LUẬN, chưa đo trên app Adobe: app chỉ gửi tên PostScript nên không biết tài liệu
+/// cần VF hay static; chọn static vì tên PostScript của static luôn chỉ đúng một kiểu, còn tra theo PostScript ra VF khi cả hai
+/// cùng bật (02, 2026-11-12). Font revision (head.fontRevision) chưa được lưu trong thư viện nên chưa dùng được.
+/// Trả (bản chọn, số bản khác nhau).
+fn pick(s: &Store, cands: Vec<FaceKey>, active: &std::collections::HashSet<[u8; 32]>, family: &str, style: &str) -> Result<(Option<FaceKey>, usize), EnsureError> {
     let mut distinct: Vec<[u8; 32]> = cands.iter().map(|k| k.hash).collect();
     distinct.sort();
     distinct.dedup();
-    let mut best: Option<(bool, i64, FaceKey)> = None;
+    let mut best: Option<((bool, bool, bool, i64), FaceKey)> = None;
     for k in cands {
-        let rank = (active.contains(&k.hash), s.file_first_seen(&k.hash).map_err(EnsureError::internal)?);
+        let (variable, matched) = s.face_pick_traits(&k, family, style).map_err(EnsureError::internal)?;
+        let rank = (active.contains(&k.hash), matched, !variable, s.file_first_seen(&k.hash).map_err(EnsureError::internal)?);
         let better = match &best {
             None => true,
-            Some((a, t, cur)) => (rank.0, rank.1) > (*a, *t) || ((rank.0, rank.1) == (*a, *t) && (k.hash, k.face_index) < (cur.hash, cur.face_index)),
+            Some((cur_rank, cur)) => rank > *cur_rank || (rank == *cur_rank && (k.hash, k.face_index) < (cur.hash, cur.face_index)),
         };
         if better {
-            best = Some((rank.0, rank.1, k));
+            best = Some((rank, k));
         }
     }
-    Ok((best.map(|b| b.2), distinct.len()))
+    Ok((best.map(|b| b.1), distinct.len()))
 }
 
 /// Lõi của broker: không biết gì về HTTP.
@@ -247,7 +251,7 @@ pub fn ensure_in_library(
                     cands = s.faces_by_family_style(fam, nonempty(&f.style).unwrap_or("")).map_err(EnsureError::internal)?;
                 }
             }
-            let (hit, distinct) = pick(&s, cands, &active)?;
+            let (hit, distinct) = pick(&s, cands, &active, nonempty(&f.family).unwrap_or(""), nonempty(&f.style).unwrap_or(""))?;
             if distinct > 1 {
                 ambiguous.push((idx, distinct));
             }

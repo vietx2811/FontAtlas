@@ -186,6 +186,8 @@ macro_rules! command_list {
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
+            async activation_vf_policy() -> Result<VfPolicyDto, CmdError>;
+            async activation_set_vf_policy(policy: VfPolicyDto) -> Result<(), CmdError>;
             async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
             async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
             async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
@@ -542,6 +544,8 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
     })
 });
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
+cmd!(activation_vf_policy() -> VfPolicyDto => |s| activation::vf_policy(s));
+cmd!(activation_set_vf_policy(policy: VfPolicyDto) -> () => |s| activation::set_vf_policy(s, policy));
 cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => |s| activation::availability(s, &faces));
 cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
 

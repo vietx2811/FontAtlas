@@ -15,7 +15,7 @@ import { useActivationFlow } from '../useActivationFlow';
 /** Stand-in for the backend's matrix (fontatlas-activate::replace_tier): the UI only echoes what the backend says. */
 const tierOf = (owner: ConflictDto['owner'], path: string): ConflictDto['replaceTier'] =>
   /^(\/System\/Library|\/Library\/Fonts|\/Users\/[^/]+\/Library\/Fonts)\//.test(path) || owner === 'system' || owner === 'user_installed' ? 'protected' : owner === 'adobe_fonts' || owner === 'suitcase' ? 'guide' : 'replace';
-const c = (owner: ConflictDto['owner'], existingPath: string, over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath, owner, sameFile: false, replaceTier: tierOf(owner, existingPath), ...over });
+const c = (owner: ConflictDto['owner'], existingPath: string, over: Partial<ConflictDto> = {}): ConflictDto => ({ postscriptName: 'X-Regular', existingPath, owner, sameFile: false, replaceTier: tierOf(owner, existingPath), variable: false, existingVariable: null, ...over });
 const item = (conflicts: ConflictDto[]) => ({ family: 'Oswald', style: 'Regular', conflicts });
 const initial = useUiStore.getState();
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };

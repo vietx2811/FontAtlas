@@ -438,6 +438,33 @@ pub fn set_scope(state: &AppState, faces: &[FaceKeyDto], scope: ScopeDto) -> Res
     Ok(finish(state, r))
 }
 
+/// Setting user.db: lựa chọn đã nhớ cho cặp VF↔static (G7). Thiếu / giá trị lạ = hỏi mỗi lần.
+pub const SETTING_VF_POLICY: &str = "activation_vf_policy";
+
+pub fn vf_policy(state: &AppState) -> Result<VfPolicyDto, CmdError> {
+    state.with_user(|u| Ok(vf_policy_of(u.setting(SETTING_VF_POLICY)?.as_deref())))
+}
+
+fn vf_policy_of(raw: Option<&str>) -> VfPolicyDto {
+    match raw {
+        Some("vf") => VfPolicyDto::Vf,
+        Some("static") => VfPolicyDto::Static,
+        Some("both") => VfPolicyDto::Both,
+        _ => VfPolicyDto::Ask,
+    }
+}
+
+/// `Ask` xoá lựa chọn đã nhớ (không ghi chuỗi "ask": bản cũ đọc setting này sẽ coi là hỏi mỗi lần).
+pub fn set_vf_policy(state: &AppState, policy: VfPolicyDto) -> Result<(), CmdError> {
+    let v = match policy {
+        VfPolicyDto::Ask => "",
+        VfPolicyDto::Vf => "vf",
+        VfPolicyDto::Static => "static",
+        VfPolicyDto::Both => "both",
+    };
+    state.with_user(|u| Ok(u.set_setting(SETTING_VF_POLICY, v)?))
+}
+
 /// Bật/tắt giữ font kích hoạt sau khi thoát: ghi setting, đổi scope các font đang bật, đánh dấu đã onboarding.
 pub fn set_keep(state: &AppState, on: bool) -> Result<(), CmdError> {
     state.with_user(|u| {

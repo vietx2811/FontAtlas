@@ -101,6 +101,7 @@ import type { SuggestPartnersReqDto } from './SuggestPartnersReqDto';
 import type { SystemTagGroupDto } from './SystemTagGroupDto';
 import type { TagDto } from './TagDto';
 import type { UiStateDto } from './UiStateDto';
+import type { VfPolicyDto } from './VfPolicyDto';
 
 /** Tên lệnh snake_case; khoá đối số camelCase; `Channel` nhận sự kiện đẩy. */
 export interface TauriCommandMap {
@@ -239,6 +240,8 @@ export interface TauriCommandMap {
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_all: { args: { onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_set_keep: { args: { on: boolean }; result: null };
+  activation_vf_policy: { args: Record<string, never>; result: VfPolicyDto };
+  activation_set_vf_policy: { args: { policy: VfPolicyDto }; result: null };
   activation_availability: { args: { faces: FaceKeyDto[] }; result: AvailabilityDto[] };
   activation_set_scope: { args: { faces: FaceKeyDto[]; scope: ScopeDto }; result: ActivationReportDto };
   activation_subscribe: { args: { onEvent: Channel<ActivationEvent> }; result: null };

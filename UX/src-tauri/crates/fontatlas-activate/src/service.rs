@@ -17,7 +17,7 @@ use fontatlas_store::{
 use serde::Serialize;
 
 use crate::engine::{ActivationEngine, Scope};
-use crate::paths::{
+use crate::paths::{is_variable_font, 
     CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, probe_file, replace_tier, same_content,
 };
 use crate::types::{ConfirmedConflict, 
@@ -374,6 +374,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         old_path: Option<&Path>,
     ) -> Result<Vec<Conflict>, ActivationError> {
         let mut out: Vec<Conflict> = vec![];
+        let variable = is_variable_font(path).unwrap_or(false);
         let mut push = |ps: &str, p: &Path, owner: Owner| {
             let existing = path_str(p);
             if !out.iter().any(|c| c.postscript_name == ps && c.existing_path == existing) {
@@ -382,7 +383,15 @@ impl<E: ActivationEngine> ActivationService<E> {
                     .borrow_mut()
                     .entry((path.to_path_buf(), p.to_path_buf()))
                     .or_insert_with(|| same_content(path, p));
-                out.push(Conflict { postscript_name: ps.to_string(), existing_path: existing, owner, same_file, replace_tier: tier_of(owner, p, &batch.home) });
+                out.push(Conflict {
+                    postscript_name: ps.to_string(),
+                    existing_path: existing,
+                    owner,
+                    same_file,
+                    replace_tier: tier_of(owner, p, &batch.home),
+                    variable,
+                    existing_variable: if same_file { None } else { is_variable_font(p) },
+                });
             }
         };
         for name in names {

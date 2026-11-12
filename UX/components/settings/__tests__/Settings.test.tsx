@@ -254,6 +254,21 @@ describe('Settings', () => {
       expect(within(screen.getByTestId('replaced-list')).getByText('Chưa có bản cũ nào bị thay.')).toBeTruthy();
     });
 
+    it('VF/static pairs: asks every time by default; a picked default is saved and shown again on reopening', async () => {
+      const api = createMockApi();
+      await mount({}, api);
+      await go('Kích hoạt font');
+      const box = screen.getByTestId('vf-policy');
+      expect(within(box).getByText('Cặp variable ↔ static trùng tên')).toBeTruthy();
+      expect((within(box).getByRole('radio', { name: 'Hỏi mỗi lần' }) as HTMLInputElement).checked).toBe(true);
+      await act(async () => { fireEvent.click(within(box).getByRole('radio', { name: 'Luôn dùng bản static' })); });
+      await settle();
+      expect(await api.activationVfPolicy()).toBe('static');
+      await act(async () => { fireEvent.click(within(box).getByRole('radio', { name: 'Hỏi mỗi lần' })); });
+      await settle();
+      expect(await api.activationVfPolicy()).toBe('ask');
+    });
+
     it('"when FontAtlas quits" is saved; other font managers are information only', async () => {
       const { api } = await mount();
       await go('Kích hoạt font');

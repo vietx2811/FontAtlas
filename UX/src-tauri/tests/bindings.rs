@@ -732,6 +732,8 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         owner: fa::Owner::RightFont,
         same_file: false,
         replace_tier: fa::ReplaceTier::Replace,
+        variable: false,
+        existing_variable: Some(true),
     };
     use fa::FileOutcome as F;
     let outcomes = vec![
