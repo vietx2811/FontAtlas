@@ -592,6 +592,7 @@ fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
     settings::set_settings(&st, SettingsPatchDto { rescan_on_launch: Some(false), ..Default::default() }).unwrap();
     assert_eq!(st.cloud_watch.watching().len(), 1);
     st.cloud_watch.shutdown();
+}
 
 #[test]
 fn name_clashes_command_is_empty_when_names_differ_and_reads_only() {
