@@ -52,4 +52,6 @@ check "FAIL không ghi cache" "$([ -e "$CI/cache/demo-k2" ] && echo yes || echo 
 # Chốt cảnh báo: đường dẫn trèo ra ngoài UX/src-tauri (>= 3 cấp ../ từ crate) chưa nằm trong khoá Rust của local_ci.sh. Xuất hiện đường mới → thêm vào RUST_KEY.
 outside="$(grep -rnE '(\.\./){3,}' --include='*.rs' UX/src-tauri | grep -v '/target/' | grep -v 'docs/team/eval' | grep -v 'safe_name' | grep -v '#\[path' || true)"
 check "không có đường dẫn ngoài src-tauri nào ngoài docs/team/eval" "$outside" ""
+ts_in="$(grep -rhoE "['\"][./]*src-tauri/[^'\"]*['\"]" --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=src-tauri UX | sort -u | grep -v 'target/release' | grep -vE 'Cargo.toml|tauri.conf.json|face_row.json' || true)"
+check "frontend không đọc file nào khác trong src-tauri (ngoài những file đã vào khoá frontend)" "$ts_in" ""
 exit $fail

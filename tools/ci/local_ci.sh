@@ -107,7 +107,8 @@ compute_keys() {
   fe="$( { node -v; npm -v; } 2>&1 | shasum | cut -c1-8)"
   local tauri; tauri="$(cargo tauri -V 2>&1 | shasum | cut -c1-8)"
   RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
-  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)-$fe"
+  # Frontend còn đọc 3 file trong src-tauri (fixture face_row.json, Cargo.toml, tauri.conf.json): đưa vào khoá frontend.
+  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json)-$fe"
   BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri" | shasum | cut -c1-16)"
 }
 compute_keys "$(git rev-parse --show-toplevel 2>/dev/null)"
