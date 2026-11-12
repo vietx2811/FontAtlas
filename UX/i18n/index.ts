@@ -4,6 +4,7 @@ import { COMPARE_V2 } from './compareV2';
 import { ACTIVATION_I18N } from './activation';
 import { CLOUD_I18N } from './cloud';
 import { REPLACE_I18N } from './replace';
+import { VFPAIR_I18N } from './vfpair';
 import { ONBOARDING_I18N } from './onboarding';
 import { FILTER_I18N, FILTER_I18N_2, FILTER_I18N_3, FILTER_I18N_4 } from './filter';
 import { DESK_I18N } from './desk';
@@ -107,6 +108,7 @@ export const vi = {
   ...ONBOARDING_I18N,
   ...DUP_I18N,
   ...REPLACE_I18N,
+  ...VFPAIR_I18N,
   ...AUTO_I18N,
   ...LIBRARY_I18N,
   ...MAIN_I18N,

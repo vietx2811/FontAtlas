@@ -7,7 +7,7 @@ import type {
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
-  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 } from '../bindings';
 import type { FacePage, FaceQuery, FaceRow } from '../features/library-grid/types';
 
@@ -17,7 +17,7 @@ export type {
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
-  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 };
 export type { PreviewCacheInfoDto, ProblemDto, NameClashDto };
 export type ModelState = ModelStatusDto['state'];

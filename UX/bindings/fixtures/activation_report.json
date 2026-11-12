@@ -79,10 +79,12 @@
         "conflicts": [
           {
             "existingPath": "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf",
+            "existingVariable": true,
             "owner": "right_font",
             "postscriptName": "LibreBaskerville-Regular",
             "replaceTier": "replace",
-            "sameFile": false
+            "sameFile": false,
+            "variable": false
           }
         ],
         "kind": "needs_confirmation"

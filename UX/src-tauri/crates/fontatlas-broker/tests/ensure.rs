@@ -292,3 +292,88 @@ fn the_version_the_user_already_activated_wins_over_a_newer_one() {
     assert_eq!(rows.len(), 1, "không bật thêm bản thứ hai");
     assert_eq!(rows[0].hash, first.hash);
 }
+
+/// Thư viện có VF thật (Oswald, PostScript `Oswald-Regular`) và một font static có tên PostScript VÁ cho trùng (Roboto, đổi
+/// `Roboto-Regular` → `Oswald-Regular`, cùng độ dài nên không lệch bảng). Họ/kiểu của static vẫn là Roboto / Regular.
+fn vf_and_static_with_one_ps() -> (Env, fontatlas_broker::OwnedBackend<fontatlas_activate::FakeEngine>) {
+    let (env, b) = backend(&["oswald_vf.ttf"]);
+    let mut bytes = std::fs::read(fixture(ROBOTO)).unwrap();
+    let (a, w): (&[u8], &[u8]) = (b"Roboto-Regular", b"Oswald-Regular");
+    let utf16 = |s: &[u8]| s.iter().flat_map(|c| [0u8, *c]).collect::<Vec<u8>>();
+    let mut patched = 0;
+    for (from, to) in [(a.to_vec(), w.to_vec()), (utf16(a), utf16(w))] {
+        let mut i = 0;
+        while i + from.len() <= bytes.len() {
+            if bytes[i..i + from.len()] == from[..] {
+                bytes[i..i + from.len()].copy_from_slice(&to);
+                patched += 1;
+                i += from.len();
+            } else {
+                i += 1;
+            }
+        }
+    }
+    assert!(patched >= 1, "không vá được tên PostScript trong fixture");
+    std::fs::write(env.fonts.join("static_oswald_ps.ttf"), bytes).unwrap();
+    let mut s = b.store.lock().unwrap();
+    let src = s.sources().unwrap()[0].id;
+    s.rescan_source(src).unwrap();
+    teach(b.service.engine(), &s);
+    drop(s);
+    (env, b)
+}
+
+fn the_only_active(b: &fontatlas_broker::OwnedBackend<fontatlas_activate::FakeEngine>) -> std::path::PathBuf {
+    let regs = b.service.engine().registrations();
+    assert_eq!(regs.len(), 1, "{regs:?}");
+    regs[0].0.clone()
+}
+
+#[test]
+fn vf_and_static_with_one_ps_name_prefer_the_static_when_only_the_ps_name_is_known() {
+    let (env, b) = vf_and_static_with_one_ps();
+    assert_eq!(b.store.lock().unwrap().faces_by_postscript("Oswald-Regular").unwrap().len(), 2, "cả VF và static đều có tên này");
+    let r = b.ensure(&req("photoshop", vec![ps("Oswald-Regular")])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::Activated);
+    assert_eq!(the_only_active(&b), canon(&env.fonts.join("static_oswald_ps.ttf")));
+    let log = b.store.lock().unwrap().recent_auto_log(10).unwrap();
+    assert!(log.iter().any(|l| l.outcome == "ambiguous"), "vẫn ghi `ambiguous ×2`: {log:?}");
+}
+
+#[test]
+fn a_family_and_style_match_beats_static_first() {
+    let (env, b) = vf_and_static_with_one_ps();
+    // app gửi cả PostScript lẫn họ/kiểu của VF (Oswald / Regular) → bản khớp họ/kiểu thắng dù là VF
+    let want = FontReq { ps: Some("Oswald-Regular".into()), family: Some("Oswald".into()), style: Some("Regular".into()) };
+    assert_eq!(status(&b.ensure(&req("illustrator", vec![want])).unwrap(), 0), FontStatus::Activated);
+    assert_eq!(the_only_active(&b), canon(&env.fonts.join("oswald_vf.ttf")));
+}
+
+#[test]
+fn the_copy_already_on_wins_over_static_first() {
+    let (env, b) = vf_and_static_with_one_ps();
+    let vf = {
+        let s = b.store.lock().unwrap();
+        s.faces_by_postscript("Oswald-Regular").unwrap().into_iter().find(|k| s.face_pick_traits(k, "", "").unwrap().0).unwrap()
+    };
+    b.service.activate_faces(&b.store, &[vf], Some(Scope::Persistent), Default::default(), &mut |_| {}).unwrap();
+    let r = b.ensure(&req("photoshop", vec![ps("Oswald-Regular")])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::AlreadyActive, "bản người dùng đã bật không bị đổi");
+    assert_eq!(the_only_active(&b), canon(&env.fonts.join("oswald_vf.ttf")));
+}
+
+#[test]
+fn pick_traits_tell_variable_and_family_style_apart() {
+    let (_env, b) = vf_and_static_with_one_ps();
+    let s = b.store.lock().unwrap();
+    let keys = s.faces_by_postscript("Oswald-Regular").unwrap();
+    let t = |k: &fontatlas_store::FaceKey, f: &str, st: &str| s.face_pick_traits(k, f, st).unwrap();
+    let vf = keys.iter().find(|k| t(k, "", "").0).unwrap();
+    let st = keys.iter().find(|k| !t(k, "", "").0).unwrap();
+    assert_eq!(t(vf, "Oswald", "Regular"), (true, true));
+    assert_eq!(t(vf, "oswald", ""), (true, true), "family không phân biệt hoa thường, style rỗng = Regular");
+    assert_eq!(t(vf, "Roboto", "Regular"), (true, false));
+    assert_eq!(t(st, "Roboto", "Regular"), (false, true));
+    assert_eq!(t(st, "", ""), (false, false), "không gửi family thì không bản nào 'khớp'");
+    assert_eq!(t(&fontatlas_store::FaceKey { hash: [9; 32], face_index: 0 }, "x", "y"), (false, false), "face lạ");
+}

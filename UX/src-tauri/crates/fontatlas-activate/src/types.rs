@@ -122,6 +122,11 @@ pub struct Conflict {
     pub same_file: bool,
     /// Ma trận "Thay thế" cho bản này, tính ở backend trên đường dẫn đã canonical hoá (UI dùng nguyên, không tự đoán).
     pub replace_tier: ReplaceTier,
+    /// File sắp bật (trong thư viện) là font variable (có bảng `fvar`).
+    pub variable: bool,
+    /// Bản đang cài là font variable? `None` = không đọc được (chưa tải, không phải sfnt). Một cặp VF↔static trùng PostScript:
+    /// `existing_variable == Some(!variable)` (G7: UI hỏi "dùng VF / dùng static / giữ cả hai").
+    pub existing_variable: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

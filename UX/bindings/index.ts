@@ -202,6 +202,7 @@ export type { TrashEligibilityDto } from './TrashEligibilityDto';
 export type { UiStateDto } from './UiStateDto';
 export type { VarAxisMatchDto } from './VarAxisMatchDto';
 export type { VariableAxisDto } from './VariableAxisDto';
+export type { VfPolicyDto } from './VfPolicyDto';
 export type { ViFilterDto } from './ViFilterDto';
 export type { VietnameseDto } from './VietnameseDto';
 export type { WhyDto } from './WhyDto';

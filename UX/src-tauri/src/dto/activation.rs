@@ -176,6 +176,24 @@ pub struct ConflictDto {
     pub same_file: bool,
     /// Ma trận "Thay thế" do backend tính (đã canonical hoá đường dẫn): UI dùng nguyên, không tự đoán.
     pub replace_tier: ReplaceTierDto,
+    /// File trong thư viện là font variable (VF).
+    pub variable: bool,
+    /// Bản đang cài là VF? `null` = không đọc được. Cặp VF↔static: `existingVariable === !variable` (G7).
+    pub existing_variable: Option<bool>,
+}
+
+/// Lựa chọn đã nhớ cho cặp VF↔static trùng tên PostScript (G7). `Ask` = hỏi mỗi lần (mặc định).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum VfPolicyDto {
+    Ask,
+    /// Luôn dùng bản VF (tắt bản static trùng tên của Font Atlas, hoặc không bật bản static).
+    Vf,
+    /// Luôn dùng bản static.
+    Static,
+    /// Luôn giữ cả hai (kèm cảnh báo: app thiết kế sẽ thấy hai mục trùng tên).
+    Both,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -245,7 +263,7 @@ impl From<&fa::FileOutcome> for FileOutcomeDto {
             F::NeedsConfirmation { conflicts } => Self::NeedsConfirmation {
                 conflicts: conflicts
                     .iter()
-                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file, replace_tier: c.replace_tier.into() })
+                    .map(|c| ConflictDto { postscript_name: c.postscript_name.clone(), existing_path: c.existing_path.clone(), owner: c.owner.into(), same_file: c.same_file, replace_tier: c.replace_tier.into(), variable: c.variable, existing_variable: c.existing_variable })
                     .collect(),
             },
             F::HeldByCollections { collection_ids } => Self::HeldByCollections { collection_ids: collection_ids.clone() },

@@ -39,14 +39,19 @@ pub fn rescan(env: &Env) {
 /// khớp với kiểm tra hash của service) và các face có PS name cho trước — để có hai file khác hash mà cùng
 /// PS name, hoặc một "TTC" nhiều face.
 pub fn ingest_fake(env: &Env, file_name: &str, seed: &str, ps_names: &[&str]) -> [u8; 32] {
+    ingest_fake_from(env, file_name, seed, ps_names, "libre_baskerville.ttf")
+}
+
+/// Như `ingest_fake` nhưng nền là fixture `base` (vd `oswald_vf.ttf`: font variable thật).
+pub fn ingest_fake_from(env: &Env, file_name: &str, seed: &str, ps_names: &[&str], base: &str) -> [u8; 32] {
     let extra = env.dir.path().join("extra");
     std::fs::create_dir_all(&extra).unwrap();
     let path = extra.join(file_name);
-    let mut bytes = std::fs::read(fixture("libre_baskerville.ttf")).unwrap();
+    let mut bytes = std::fs::read(fixture(base)).unwrap();
     bytes.extend_from_slice(seed.as_bytes());
     std::fs::write(&path, &bytes).unwrap();
     let hash = *blake3::hash(&bytes).as_bytes();
-    let mut r = fontatlas_core::analyze_path(&fixture("libre_baskerville.ttf")).unwrap();
+    let mut r = fontatlas_core::analyze_path(&fixture(base)).unwrap();
     r.hash_hex = blake3::hash(&bytes).to_hex().to_string();
     let base = r.faces[0].clone();
     r.faces = ps_names
