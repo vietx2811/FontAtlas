@@ -157,7 +157,7 @@ Mở khi: ô tên nhận focus (click, hoặc phím `N` ở Desk), hoặc `↓` 
 - **Không nhận ra** (vd "Dự án 7"): vẫn gợi ý, dòng ghi "Chưa nhận ra ý đồ, gợi ý theo các cặp phổ biến" và bộ vai lấy từ combo đang mở (nếu rỗng: Heading + Body). Tên không bao giờ là điều kiện bắt buộc.
 - Gõ dở thì khớp tiền tố sau 300 ms, huỷ yêu cầu cũ khi gõ tiếp.
 
-**Dựng gợi ý** (BE, mục 7): từ **font của người dùng** (mặc định cả thư viện; công tắc "Chỉ font trong Case" cho phạm vi hẹp). Mỗi gợi ý = bộ (vai → font) + phong cách pair + 1–2 câu lý do + trạng thái VI. Sắp theo điểm tổng (hợp vai + hợp ghép) nhưng **không hiện số điểm**; chỉ hiện nhãn ●◐◆○ đã dùng ở Desk. Đa dạng: tối đa 1 gợi ý mỗi family tiêu đề, để 3–6 thẻ không giống nhau.
+**Dựng gợi ý** (BE, mục 7): từ **font của người dùng** (mặc định cả thư viện; công tắc "Chỉ font trong Case" cho phạm vi hẹp). Mỗi gợi ý = bộ (vai → font) + phong cách pair + 1–2 câu lý do + trạng thái VI. Sắp theo thứ tự backend trả (xếp hạng tất định), **không có và không hiện số điểm**; chỉ hiện nhãn ●◐◆○ đã dùng ở Desk. Đa dạng: tối đa 1 gợi ý mỗi family tiêu đề, để 3–6 thẻ không giống nhau.
 
 **Nhận:**
 
@@ -242,7 +242,7 @@ Khoá bắt đầu `pick.` (Picker) và `cs.` (combo suggest). Thuật ngữ gi�
 | cs.vi.ok | đủ tiếng Việt | full Vietnamese |
 | cs.vi.miss | thiếu {chars} | missing {chars} |
 
-Tên phong cách pair (Superfamily, Serif + Sans, Display + Text, Keep one change one, Rule-breaking…) và nhãn ●◐◆○ do 04 chốt trong G4, UI chỉ hiển thị id → chuỗi.
+Lý do (`why.{code}`) do UI dịch từ mã backend trả; danh sách mã chốt cùng 08/04. Tên phong cách pair (Superfamily, Serif + Sans, Display + Text, Keep one change one, Rule-breaking…) và nhãn ●◐◆○ do 04 chốt trong G4, UI chỉ hiển thị id → chuỗi.
 
 ---
 
@@ -266,19 +266,22 @@ Tên phong cách pair (Superfamily, Serif + Sans, Display + Text, Keep one chang
 
 Mọi thứ cục bộ, không gọi mạng. DTO mới sinh bindings như thường (`bindings-drift` phải sạch).
 
+**Nguyên tắc (08 đề xuất, 01 nhận):** backend trả **mã + tham số**, frontend dịch vi/en (khoá `why.*`). **Không có điểm tổng** trong DTO (đã có test `no_score_field`); thứ tự mảng là xếp hạng. Khi UI cần nhãn thì dùng `fit: good|ok|weak|unknown` theo từng tiêu chí. Chi tiết DTO cuối cùng nằm ở `docs/team/plans/2026-11-12-desk-suggest-api-contract.md` (nhánh `feat/desk-suggest-api`, 08); nếu hai bản lệch thì bản của 08 thắng.
+
 **7.1 `role_fit(role, opts) -> Vec<RoleFitDto>`** (G5, nguồn Role fit; 04 mô hình, 08 API)
 
-- Vào: `role` (vai, kể cả vai tuỳ ý của G3 → nhóm vai gần nhất), `projectVi`, `k ≤ 100`, `classes?`, `collectionId?`, `lang`.
-- Ra mỗi dòng: `face`, `row`, `score` (nội bộ, UI không hiện số), `labels` (≤ 2 nhãn đã dùng), `reason` (1 câu, đã bản địa hoá), `insufficientData`.
+- Vào: `role` (vai; vai tuỳ ý của G3 được ánh xạ về nhóm display-like / text-like, không nhận ra thì `fit: unknown`), `projectVi`, `k ≤ 100`, `classes?`, `collectionId?`, `lang`.
+- Ra mỗi dòng: `face`, `row`, `fit` theo từng tiêu chí của vai (không số), `reason: {code, params}`, `insufficientData`. Mảng đã xếp theo hạng.
 - Tiêu chí theo vai (G4): Body cần x-height, aperture, đọc cỡ nhỏ, đủ VI; Display cho phép contrast cao, nét đặc trưng.
+- Không có anchor nên quét O(N); mục tiêu < 200 ms ở 5.000 face (08 xác nhận bằng bench).
 
 **7.2 `suggest_combos(req) -> Vec<ComboSuggestionDto>`** (G6; 08)
 
-- Vào: `intent?` (id từ bảng ý đồ, hoặc null), `styles?` (id phong cách G4), `roles` (bộ vai cần dựng), `locked` (`[{role, face}]`), `scope` (`library` | `case`), `caseId`, `projectVi`, `k` (3–6), `seed`, `lang`.
-- Ra mỗi gợi ý: `slots: [{role, face, row}]`, `style` (id), `reasons: [string]`, `viStatus` (`full` | `partial` + danh sách ký tự thiếu), `warnings` (cổng va chạm đã có của Pairs), `seed`.
-- Quy tắc: chỉ font có trong thư viện và không `missing`; tối đa 1 gợi ý mỗi family tiêu đề; kết quả **ổn định theo seed** (cùng seed cùng kết quả, để test được); thời gian mục tiêu < 400 ms ở thư viện 5.000 family (08 xác nhận).
+- Vào: `styles?` (id phong cách G4), `roles` (bộ vai cần dựng), `locked` (`[{role, face}]`, coi là neo cố định, chỉ dựng vai còn lại), `scope` (`library` | `case`), `caseId`, `projectVi`, `k` (3–6), `seed`, `lang`. **Không gửi tên ý đồ**: nhận ra ý đồ chạy ở client (`intents.ts`), backend không đoán từ khoá; `intent` chỉ là id tuỳ chọn để ghi `reason`.
+- Ra mỗi gợi ý: `slots: [{role, face, row}]`, `style` (id), `reasons: [{code, params}]`, `vi: {status: full|partial, missingCount, missing: [≤ 8 ký tự đầu]}`, `warnings` (mã sẵn: `clashes`, `body_warnings`), `seed`.
+- Quy tắc: chỉ font trong thư viện và không `missing`; tối đa 1 gợi ý mỗi family của slot đầu; **ổn định theo seed** (xếp hạng tất định, seed chỉ xáo trong nhóm hạng bằng nhau); < 400 ms ở 5.000 family nhờ giới hạn ≤ 12 neo × ≤ 5 đối tác mỗi vai (chưa đo trên thư viện thật).
 
-**7.3 Không cần lệnh mới:** Pairs (`pair_candidates`), Similar (`similar_families`), Pinned (`CaseDto.faces` + `query_faces`), Recent (`recentViews`), nhận cả combo (`create_combos` + `set_combo_slot`), hoàn tác (hệ undo sẵn của Desk, nếu chưa bọc được thì 05 báo).
+**7.3 Không cần lệnh mới:** Recent là client-side (`recentViews`, không có lệnh backend); Pairs (`pair_candidates`), Similar (`similar_families`), Pinned (`CaseDto.faces` + `query_faces`), Recent (`recentViews`), nhận cả combo (`create_combos` + `set_combo_slot`), hoàn tác (hệ undo sẵn của Desk, nếu chưa bọc được thì 05 báo).
 
 **7.4 Lưu lựa chọn:** nguồn cuối theo vai và bộ lọc class lưu trong `CaseDto.view_state` (BE chỉ lưu, đã có). Không lưu tên ý đồ.
 
