@@ -4,6 +4,26 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.3.1] — 2026-11-12
+
+Bản sửa lỗi cho nguồn font trên ổ cloud, hộp thoại xung đột và kiểm thử.
+
+### Sửa
+- **Hiện trong Finder cho Source:** mở đúng thư mục Source. Trước đây báo "invalid" với mọi Source. Ổ chưa kết nối thì báo bằng lời dễ hiểu.
+- **Tải về máy (Download now)** cho Source trên ổ cloud (iCloud, OneDrive, Google Drive, Dropbox):
+  - Có ở menu Source, cạnh dòng "N chưa tải về" ở thanh bên và trong Cài đặt.
+  - Tối đa 4 file cùng lúc (dùng chung giới hạn với xem trước), có tiến độ, huỷ trong khoảng một giây.
+  - Tải xong app quét lại đúng Source đó; đang quét dở thì xếp thêm một lượt.
+- **Hộp thoại xung đột kích hoạt** gọn hơn: luôn có một dòng cảnh báo hiển thị, chi tiết thì gập lại.
+- **⌘A** chọn được trong thư viện ngay sau khi đóng hộp thoại Gỡ nguồn.
+
+### Kiểm thử
+- Native QA chờ theo điều kiện thay vì chờ cố định, nên không còn đỏ giả khi máy bận.
+- Hai test tải model không còn phụ thuộc thời gian.
+
+### Lưu ý
+- "Tải về máy" đã kiểm bằng thư mục tạm và file cloud giả lập, chưa kiểm trên ổ cloud thật.
+
 ## [0.3.0] — 2026-11-12
 
 Bản lớn: bật font tự động khi app thiết kế cần, tiếng Anh, giải quyết trùng lặp, thay bản đang bật bởi app khác, phân loại mới và nhiều cải tiến thư viện.
