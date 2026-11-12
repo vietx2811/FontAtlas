@@ -361,13 +361,15 @@ mod tests {
     #[test]
     fn ensure_local_times_out_instead_of_hanging() {
         let local = Arc::new(AtomicBool::new(false));
-        let t = Instant::now();
-        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(150), probe_flag(&local), |_| {
+        let finished = Arc::new(AtomicBool::new(false));
+        let f2 = finished.clone();
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(150), probe_flag(&local), move |_| {
             std::thread::sleep(Duration::from_secs(5)); // ổ cloud không phản hồi
+            f2.store(true, Ordering::SeqCst);
             Ok(())
         });
         assert_eq!(r, Err(EnsureLocalError::Timeout));
-        assert!(t.elapsed() < Duration::from_secs(2), "phải trả về đúng hạn, không đợi fetch: {:?}", t.elapsed());
+        assert!(!finished.load(Ordering::SeqCst), "phải trả về đúng hạn, không đợi fetch");
     }
 
     #[test]
@@ -388,7 +390,7 @@ mod tests {
         let t = Instant::now();
         let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(400), probe_flag(&local), |_| Ok(()));
         assert_eq!(r, Err(EnsureLocalError::StillCloudOnly));
-        assert!(t.elapsed() >= Duration::from_millis(300) && t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+        assert!(t.elapsed() >= Duration::from_millis(300), "{:?}", t.elapsed()); // chỉ cận dưới: không phụ thuộc tải máy
     }
 
     #[test]

@@ -68,7 +68,6 @@ pub fn to_error(root: &Path, a: &Access) -> Option<CmdError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
 
     fn tmp(name: &str) -> std::path::PathBuf {
         let d = std::env::temp_dir().join(format!("fa-access-{}-{name}", std::process::id()));
@@ -97,13 +96,16 @@ mod tests {
 
     #[test]
     fn a_blocked_open_times_out_instead_of_hanging() {
-        let t = Instant::now();
-        let a = probe_with(Path::new("/x"), Duration::from_millis(60), |_| {
-            std::thread::sleep(Duration::from_millis(1500));
+        // Thứ tự sự kiện thay cho đo giờ: lúc probe trả về, lần mở treo vẫn chưa xong.
+        let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let f2 = finished.clone();
+        let a = probe_with(Path::new("/x"), Duration::from_millis(60), move |_| {
+            std::thread::sleep(Duration::from_secs(5));
+            f2.store(true, std::sync::atomic::Ordering::SeqCst);
             Ok(())
         });
         assert_eq!(a, Access::TimedOut);
-        assert!(t.elapsed() < Duration::from_millis(900), "phải trả về sớm, không đợi luồng treo: {:?}", t.elapsed());
+        assert!(!finished.load(std::sync::atomic::Ordering::SeqCst), "phải trả về sớm, không đợi luồng treo");
     }
 
     #[cfg(unix)]

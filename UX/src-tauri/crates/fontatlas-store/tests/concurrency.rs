@@ -1,7 +1,6 @@
 mod common;
 use common::*;
 use fontatlas_store::{FaceKey, Store};
-use std::time::{Duration, Instant};
 
 fn key(n: u8) -> FaceKey {
     FaceKey { hash: [n; 32], face_index: 0 }
@@ -39,22 +38,23 @@ fn user_only_handle_unaffected_by_ingest_lock() {
     let dir = d.path().to_path_buf();
     let lib = dir.join(fontatlas_store::LIBRARY_FILE);
     let (tx, rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
     // Kết nối ghi library.db KHÔNG attach user.db (như luồng ingest chỉ chạm library): giữ khoá ghi 1 s.
     // (BEGIN IMMEDIATE trên kết nối có attach khoá cả user.db trong lúc giữ; lô ingest ngắn nên chấp nhận.)
     let holder = std::thread::spawn(move || {
         let c = rusqlite::Connection::open(lib).unwrap();
         c.execute_batch("BEGIN IMMEDIATE; INSERT INTO meta(key,value) VALUES('lock','1');").unwrap();
         tx.send(()).unwrap();
-        std::thread::sleep(Duration::from_secs(1));
+        done_rx.recv().unwrap(); // giữ khoá tới khi vòng ghi user.db xong (latch, không đo giờ)
         c.execute_batch("COMMIT").unwrap();
     });
     rx.recv().unwrap();
     let mut u = Store::open_user_only(&dir).unwrap();
+    // Khoá library.db còn giữ suốt vòng này: nếu ghi user.db bị chặn bởi nó thì busy_timeout hết (5 s) và unwrap hỏng. Không đo giờ.
     for i in 0..50u8 {
-        let t = Instant::now();
-        u.set_favorite(&key(i), true).unwrap();
-        assert!(t.elapsed() < Duration::from_millis(200), "lần {i}: {:?}", t.elapsed());
+        u.set_favorite(&key(i), true).unwrap_or_else(|e| panic!("lần {i}: ghi user.db bị khoá library chặn: {e}"));
     }
+    done_tx.send(()).unwrap();
     holder.join().unwrap();
 }
 
@@ -101,10 +101,9 @@ fn library_only_writer_does_not_lock_user_db() {
     let lib = Store::open_library_only(d.path()).unwrap();
     lib.conn().execute_batch("BEGIN IMMEDIATE; INSERT INTO meta(key,value) VALUES('lock','1');").unwrap();
     let mut u = Store::open_user_only(d.path()).unwrap();
+    // Khoá library còn giữ suốt vòng này (COMMIT sau cùng): bị chặn thì busy_timeout hết và unwrap hỏng. Không đo giờ.
     for i in 0..50u8 {
-        let t = Instant::now();
-        u.set_favorite(&key(i), true).unwrap();
-        assert!(t.elapsed() < Duration::from_millis(200), "lần {i}: {:?}", t.elapsed());
+        u.set_favorite(&key(i), true).unwrap_or_else(|e| panic!("lần {i}: ghi user.db bị khoá library chặn: {e}"));
     }
     lib.conn().execute_batch("COMMIT").unwrap();
     assert!(lib.source(1).is_err(), "kết nối chỉ library không có bảng u.*");
