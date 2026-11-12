@@ -484,3 +484,71 @@ fn removing_a_source_keeps_faces_that_live_in_another_source() {
     assert_eq!((r.removed_locations, r.faces_left_without_location, r.active_fonts), (1, 0, 0), "face còn ở nguồn kia");
     assert_eq!(all(&st).total, 1);
 }
+
+// ---- A2: theo dõi thư mục cloud (FSEvents) — chỉ thư mục tạm, `is_cloud` giả ----
+
+fn wait_until(what: &str, secs: u64, mut f: impl FnMut() -> bool) {
+    let t0 = std::time::Instant::now();
+    while t0.elapsed() < Duration::from_secs(secs) {
+        if f() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    panic!("hết {secs}s chờ: {what}");
+}
+
+#[test]
+fn cloud_watch_rescans_the_source_after_a_font_appears_and_disappears() {
+    use app_lib::services::cloud_watch::CloudWatch;
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
+    assert_eq!(all(&st).total, 1);
+    // test dùng thời gian rút ngắn; trong app mặc định là QUIET 2 s / MAX 30 s
+    let w = CloudWatch::with_timing(Duration::from_millis(300), Duration::from_secs(3));
+    w.sync_with(&st, &|_| true);
+    assert_eq!(w.watching().len(), 1);
+    std::thread::sleep(Duration::from_millis(600)); // cho luồng FSEvents sẵn sàng
+
+    std::fs::copy(core_fixture("roboto.ttf"), dir.join("roboto.ttf")).unwrap();
+    wait_until("font mới tự hiện", 30, || all(&st).total == 2);
+
+    std::fs::remove_file(dir.join("roboto.ttf")).unwrap();
+    wait_until("font xoá tự biến mất", 30, || all(&st).total == 1);
+    w.shutdown();
+}
+
+#[test]
+fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources() {
+    use app_lib::services::cloud_watch::CloudWatch;
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
+    let w = CloudWatch::with_timing(Duration::from_millis(200), Duration::from_secs(2));
+    w.sync_with(&st, &|_| false);
+    assert!(w.watching().is_empty(), "không phải ổ cloud thì không theo dõi");
+    w.sync_with(&st, &|_| true);
+    assert_eq!(w.watching().len(), 1);
+    std::thread::sleep(Duration::from_millis(600));
+    let queued = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let q2 = queued.clone();
+    st.hubs.scan.subscribe(Box::new(move |e| {
+        if matches!(e, app_lib::dto::events::ScanEvent::Queued { .. }) {
+            q2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }));
+    std::fs::write(dir.join("notes.txt"), b"x").unwrap();
+    std::fs::write(dir.join(".DS_Store"), b"x").unwrap();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 0, "file không phải font không gây quét");
+    // một cụm 30 thay đổi font chỉ ra đúng MỘT lượt quét
+    for i in 0..30 {
+        std::fs::copy(core_fixture("roboto.ttf"), dir.join(format!("r{i}.ttf"))).unwrap();
+    }
+    wait_until("có lượt quét", 30, || queued.load(std::sync::atomic::Ordering::SeqCst) >= 1);
+    std::thread::sleep(Duration::from_millis(1200));
+    assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 1, "cụm sự kiện được gom thành một lượt");
+    sources::remove_source(&st, 1).unwrap();
+    w.sync_with(&st, &|_| true);
+    assert!(w.watching().is_empty(), "nguồn đã xoá thì dừng theo dõi");
+    w.shutdown();
+}

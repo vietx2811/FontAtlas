@@ -245,7 +245,7 @@ describe('Sidebar', () => {
       expect(hints).toHaveLength(1);
       const tip = await tipOf(hints[0]);
       expect(tip).toMatch(/^90% font của nguồn này chưa tải về máy/);
-      expect(tip).toMatch(/Always keep on this device/);
+      expect(tip).toMatch(/Always Keep on This Device/);
     });
 
     it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
