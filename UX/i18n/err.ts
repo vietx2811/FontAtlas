@@ -11,6 +11,7 @@ export const ERR_I18N = {
   'err.migration': 'Không nâng cấp được dữ liệu thư viện.',
   'err.bad_hash': 'Mã định danh font không hợp lệ.',
   'err.legacy': 'Không đọc được dữ liệu cũ.',
+  'err.source_unavailable': 'Thư mục của nguồn hiện không truy cập được (ổ chưa kết nối, hoặc thư mục đã bị đổi tên/di chuyển).',
   'err.nested_source': 'Thư mục này lồng với một nguồn có sẵn.',
   'err.permission_denied': 'macOS không cho phép đọc thư mục này.',
   'err.timeout': 'Không mở được thư mục sau vài giây (có thể đang chờ cấp quyền).',

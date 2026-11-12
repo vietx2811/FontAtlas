@@ -87,6 +87,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const mockConfidence = (r: FaceRow) => (classOver.has(keyOf(r)) ? 1 : mockAutoClass(r.family).class === 'uncertain' ? 0 : mockAutoClass(r.family).confidence);
   const sourceOf = (r: FaceRow) => Number(/src(\d)/.exec(r.path ?? '')?.[1] ?? 1);
 
+  const cloudFetched = new Set<number>();
+  const cloudRuns = new Map<number, boolean>();
   let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
@@ -232,7 +234,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     fontUrl: () => null,
 
     // nguồn cloud trong mock: 9/10 font còn là placeholder (để QA và chụp ảnh gợi ý "Always keep on this device")
-    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), cloudOnlyCount: s.cloudProvider ? Math.round(countOf(s.id) * 0.9) : 0, lastScan: s.lastScan ?? lastScanOf(s.id) }))),
+    listSources: () => ok(sources.map(s => ({ ...s, faceCount: countOf(s.id), cloudOnlyCount: s.cloudProvider && !cloudFetched.has(s.id) ? Math.round(countOf(s.id) * 0.9) : 0, lastScan: s.lastScan ?? lastScanOf(s.id) }))),
     async addSource(path) {
       const hit = sources.find(s => s.path && (path === s.path || path.startsWith(`${s.path}/`) || s.path.startsWith(`${path}/`)));
       if (hit) throw new CmdError('nested_source', 'nested source', { existingId: hit.id, existingPath: hit.path });
@@ -248,6 +250,27 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async removeSource(id) { const r = await this.removeSourcePreview(id); sources = sources.filter(s => s.id !== id); return r; },
     async rescanSources() {},
+    async revealSource(id) {
+      const s = sources.find(x => x.id === id);
+      if (!s) throw new CmdError('not_found', 'source');
+      if (!s.available || !s.path) throw new CmdError('source_unavailable', 'source unavailable', { sourceId: id, name: s.name });
+    },
+    async sourceDownloadCloud(id, onProgress) {
+      const s = sources.find(x => x.id === id);
+      if (!s) throw new CmdError('not_found', 'source');
+      if (!s.available) throw new CmdError('source_unavailable', 'source unavailable', { sourceId: id, name: s.name });
+      if (cloudRuns.has(id)) throw new CmdError('busy', 'already downloading');
+      const total = s.cloudProvider && !cloudFetched.has(id) ? Math.round(countOf(id) * 0.9) : 0;
+      cloudRuns.set(id, false);
+      let done = 0;
+      onProgress?.({ done, total, failed: 0 });
+      while (done < total && !cloudRuns.get(id)) { await Promise.resolve(); done += 1; onProgress?.({ done, total, failed: 0 }); }
+      const cancelled = done < total;
+      cloudRuns.delete(id);
+      if (!cancelled && total > 0) cloudFetched.add(id);
+      return { total, downloaded: done, failed: 0, cancelled, rescanQueued: done > 0, firstFailureCode: null };
+    },
+    async sourceDownloadCancel(id) { if (!cloudRuns.has(id)) return false; cloudRuns.set(id, true); return true; },
 
     async getFamilyStyles(family) {
       const out: FamilyStyleDto[] = rows.filter(r => r.family === family).map(r => ({ face: { hashHex: r.hashHex, faceIndex: r.faceIndex }, subfamily: r.subfamily, weight: r.weightClass, italic: r.isItalic, instance: null }));

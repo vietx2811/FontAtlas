@@ -23,7 +23,7 @@ use crate::dto::settings::FontManagerDto;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, auto, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
+    activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
     preview,
     settings, sources, system,
 };
@@ -61,6 +61,8 @@ macro_rules! command_list {
             async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
+            async source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadProgressDto>) -> Result<CloudDownloadReportDto, CmdError>;
+            async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
             async scan_cancel() -> Result<(), CmdError>;
@@ -115,6 +117,7 @@ macro_rules! command_list {
             async source_priority() -> Result<Vec<i64>, CmdError>;
             async set_source_priority(ids: Vec<i64>) -> Result<Vec<i64>, CmdError>;
             async reveal_location(path: String) -> Result<(), CmdError>;
+            async reveal_source(source_id: i64) -> Result<(), CmdError>;
             async language_list(q: FaceQueryDto) -> Result<LangListDto, CmdError>;
             async lang_coverage(face_id: i64, code: String) -> Result<LangCoverageDto, CmdError>;
             async compare_faces(faces: Vec<FaceKeyDto>, opts: CompareOptsDto) -> Result<CompareDto, CmdError>;
@@ -357,6 +360,15 @@ cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandida
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
 }));
+cmd!(reveal_source(source_id: i64) -> () => |s| system::reveal_source(s, source_id, &|p| {
+    tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
+}));
+cmd!(source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadProgressDto>) -> CloudDownloadReportDto => |s| {
+    cloud_download::download_source(s, source_id, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(source_download_cancel(source_id: i64) -> bool => |s| Ok(cloud_download::cancel_download(s, source_id)));
 cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));
 cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
 cmd!(duplicate_groups(q: FaceQueryDto) -> Vec<DuplicateGroupDto> => |s| duplicates::duplicate_groups(s, &q));

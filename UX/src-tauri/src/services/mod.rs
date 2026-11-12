@@ -14,6 +14,7 @@ pub mod fontreq;
 pub mod indesign;
 pub mod brief;
 pub mod cloud;
+pub mod cloud_download;
 pub mod cases;
 pub mod compare;
 pub mod embed;

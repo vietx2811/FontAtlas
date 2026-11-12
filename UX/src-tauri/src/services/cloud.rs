@@ -1,7 +1,8 @@
 //! Tải font từ ổ cloud để xem trước: cổng giới hạn đồng thời, hạn chót, dùng chung một lần tải cho cùng một file.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use fontatlas_activate::EnsureLocalError;
@@ -47,9 +48,35 @@ impl CloudGate {
         Some(Permit { gate: Arc::clone(self) })
     }
 
+    /// Như `acquire` nhưng bỏ chờ trong ≤ 100 ms sau khi `cancel` bật (trả None).
+    pub fn acquire_unless(self: &Arc<Self>, wait: Duration, cancel: &AtomicBool) -> Option<Permit> {
+        let deadline = Instant::now() + wait;
+        let mut busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
+        while *busy >= self.max {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() || cancel.load(Ordering::SeqCst) {
+                return None;
+            }
+            let (g, _) = self.freed.wait_timeout(busy, left.min(Duration::from_millis(100))).unwrap_or_else(|e| e.into_inner());
+            busy = g;
+        }
+        if cancel.load(Ordering::SeqCst) {
+            return None;
+        }
+        *busy += 1;
+        Some(Permit { gate: Arc::clone(self) })
+    }
+
     pub fn in_flight(&self) -> usize {
         *self.busy.lock().unwrap_or_else(|e| e.into_inner())
     }
+}
+
+/// Cổng DUY NHẤT của cả app cho mọi lần tải font cloud (xem trước lẫn "Tải về máy"): tổng số lần tải thật không vượt
+/// `MAX_CLOUD_DOWNLOADS` dù có bao nhiêu nguồn đang tải.
+pub fn global_gate() -> &'static Arc<CloudGate> {
+    static GATE: OnceLock<Arc<CloudGate>> = OnceLock::new();
+    GATE.get_or_init(|| CloudGate::new(MAX_CLOUD_DOWNLOADS))
 }
 
 impl Drop for Permit {
@@ -111,6 +138,7 @@ impl Default for CloudDownloader {
             fontatlas_store::is_dataless,
             fontatlas_activate::ensure_local_holding,
         )
+        .gate(Arc::clone(global_gate()))
     }
 }
 
@@ -136,6 +164,12 @@ impl CloudDownloader {
     /// Gọi đúng một lần sau khi một font vừa được tải về thành công (ghi cờ `cloud_only` ngay, không đợi lần quét sau).
     pub fn on_local(mut self, f: impl Fn(&Path) + Send + Sync + 'static) -> Self {
         self.on_local = Box::new(f);
+        self
+    }
+
+    /// Dùng cổng chung thay cổng riêng (bản chạy thật dùng `global_gate()`).
+    pub fn gate(mut self, g: Arc<CloudGate>) -> Self {
+        self.gate = g;
         self
     }
 

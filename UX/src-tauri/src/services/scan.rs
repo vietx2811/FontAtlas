@@ -43,14 +43,24 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl ScanManager {
     /// Thêm vào hàng đợi (bỏ id đang chạy hoặc đã có trong hàng). Không chặn.
     pub fn enqueue(&self, state: &Arc<AppState>, ids: &[i64]) {
+        self.enqueue_with(state, ids, false);
+    }
+
+    /// Như `enqueue` nhưng id đang được quét VẪN được xếp thêm một lượt SAU lượt hiện tại (lượt hiện tại có thể đã đi qua
+    /// phần vừa thay đổi, vd file vừa tải về máy). Id đã nằm sẵn trong hàng thì không xếp trùng. Trả `false` khi đang tắt app.
+    pub fn enqueue_follow_up(&self, state: &Arc<AppState>, ids: &[i64]) -> bool {
+        self.enqueue_with(state, ids, true)
+    }
+
+    fn enqueue_with(&self, state: &Arc<AppState>, ids: &[i64], follow_up: bool) -> bool {
         if self.inner.shutdown.load(Ordering::SeqCst) {
-            return;
+            return false;
         }
         let mut spawn = false;
         {
             let mut q = lock(&self.inner.q);
             for &id in ids {
-                if q.current != Some(id) && !q.queue.contains(&id) {
+                if (follow_up || q.current != Some(id)) && !q.queue.contains(&id) {
                     q.queue.push_back(id);
                     state.hubs.scan.emit(ScanEvent::Queued { source_id: id });
                 }
@@ -67,6 +77,17 @@ impl ScanManager {
                 *lock(&self.inner.worker) = Some(h);
             }
         }
+        true
+    }
+
+    /// Nguồn đang là lượt quét hiện tại (không tính hàng đợi).
+    pub fn is_current(&self, id: i64) -> bool {
+        lock(&self.inner.q).current == Some(id)
+    }
+
+    /// Nguồn đang nằm trong hàng chờ (chưa chạy).
+    pub fn is_queued(&self, id: i64) -> bool {
+        lock(&self.inner.q).queue.contains(&id)
     }
 
     pub fn enqueue_all_directories(&self, state: &Arc<AppState>) -> Result<(), CmdError> {

@@ -65,6 +65,8 @@ pub struct AppState {
     pub boot: RwLock<BootStatusDto>,
     pub hubs: Hubs,
     pub scans: ScanManager,
+    /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
+    pub cloud_jobs: crate::services::cloud_download::CloudJobs,
     pub index: IndexSlot,
     pub rebuild: RebuildState,
     pub deps: Deps,
@@ -103,6 +105,7 @@ impl AppState {
             boot: RwLock::new(BootStatusDto::default()),
             hubs: Hubs::default(),
             scans: ScanManager::default(),
+            cloud_jobs: Default::default(),
             index: RwLock::new(None),
             rebuild: RebuildState::default(),
             deps,

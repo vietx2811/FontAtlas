@@ -41,6 +41,8 @@ export type { ClassSecondaryDto } from './ClassSecondaryDto';
 export type { ClassSignalDto } from './ClassSignalDto';
 export type { ClassificationDto } from './ClassificationDto';
 export type { ClassificationOverrideDto } from './ClassificationOverrideDto';
+export type { CloudDownloadProgressDto } from './CloudDownloadProgressDto';
+export type { CloudDownloadReportDto } from './CloudDownloadReportDto';
 export type { CmdError } from './CmdError';
 export type { CollectionDto } from './CollectionDto';
 export type { ComboColumnDto } from './ComboColumnDto';

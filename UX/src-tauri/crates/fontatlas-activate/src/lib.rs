@@ -17,7 +17,7 @@ pub use engine::{ActivationEngine, Scope};
 pub use fake::FakeEngine;
 #[cfg(target_os = "macos")]
 pub use mac::MacCoreTextEngine;
-pub use paths::{in_protected_font_dir, replace_tier, CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, ensure_local_holding, probe_file};
+pub use paths::{in_protected_font_dir, replace_tier, CLOUD_DOWNLOAD_TIMEOUT, EnsureLocalError, FileProbe, canonical_path, classify_owner, ensure_local, ensure_local_holding, ensure_local_holding_cancellable, probe_file};
 pub use reconcile::{AutoDeactivated, ReconcileReport};
 pub use service::{ActivationService, Availability};
 pub use types::{
