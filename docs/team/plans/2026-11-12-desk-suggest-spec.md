@@ -291,16 +291,20 @@ Mọi thứ cục bộ, không gọi mạng. DTO mới sinh bindings như thư�
 
 ## 8. Phụ lục A: bảng ý đồ khởi điểm
 
-| Id | Từ khoá vi / en | Bộ vai | Phong cách ưu tiên (id G4, 04 xác nhận) |
+| Id | Từ khoá vi / en | Bộ vai | Phong cách G4 (id) |
 |---|---|---|---|
-| editorial | editorial, tạp chí, báo, magazine, article | Display, Heading, Body, Caption, Quote | Serif + Sans, Display + Text |
-| tech | tech startup, công nghệ, app, saas | Heading, Body, Label | Superfamily, Keep one change one |
-| menu | menu, thực đơn, nhà hàng, restaurant | Display, Heading, Body, Price (tuỳ ý) | Display + Text, Serif + Sans |
-| poster | poster, áp phích, flyer | Display, Subhead, Body | Display + Text, Rule-breaking |
-| brand | brand, thương hiệu, identity | Display, Heading, Body | Superfamily, Serif + Sans |
-| wedding | wedding, thiệp, cưới, invitation | Display, Subhead, Body | Display + Text |
-| report | báo cáo, report, annual | Heading, Subhead, Body, Caption, Numerals | Superfamily, Keep one change one |
-| packaging | bao bì, packaging, nhãn | Display, Heading, Caption | Display + Text, Rule-breaking |
+| editorial | editorial, tạp chí, báo, magazine, article | Display, Heading, Body, Caption, Quote | `contrast`, `display_vs_neutral` |
+| tech | tech startup, công nghệ, app, saas | Heading, Body, Label | `superfamily`, `same_structure` |
+| menu | menu, thực đơn, nhà hàng, restaurant | Display, Heading, Body, Numerals | `display_vs_neutral`, `contrast` |
+| poster | poster, áp phích, flyer | Display, Heading, Body | `display_vs_neutral`, `harmony` |
+| brand | brand, thương hiệu, identity | Display, Heading, Body | `superfamily`, `contrast` |
+| wedding | wedding, thiệp, cưới, invitation | Display, Heading, Body | `display_vs_neutral` |
+| report | báo cáo, report, annual | Heading, Body, Caption, Numerals | `superfamily`, `same_structure` |
+| packaging | bao bì, packaging, nhãn | Display, Heading, Caption | `display_vs_neutral`, `harmony` |
+
+Id phong cách (theo 04, `docs/team/research/2026-11-12-g4-role-fit-and-pair-styles.md`): `contrast` (Serif + Sans), `superfamily`, `same_structure` (Keep one change one), `same_era`, `display_vs_neutral` (Display + Text), `harmony`. **"Rule-breaking" bỏ khỏi bảng**: mô hình chưa có và chưa có số đo; đưa lại khi 04 định nghĩa cách chấm. Bảy hồ sơ vai của 04: Body, Caption, Heading, Display, Quote, Label, Numerals; "Price/Giá" nay là vai tuỳ ý ánh xạ về Numerals.
+
+**Vai tuỳ ý (G3) và Role fit (chốt câu hỏi 4):** dùng bảng đồng nghĩa, không hỏi người dùng. Khởi điểm: Subhead/Tagline/Title → Heading · Eyebrow/Tag/Button → Label · Price/Giá/Số → Numerals · Pull quote/Trích dẫn → Quote · Note/Footnote/Chú thích → Caption · Hero/Headline/Tiêu đề lớn → Display · Paragraph/Nội dung → Body. Tên lạ: UI gửi kèm gợi ý cỡ (`text|heading|display`) nếu có, không thì `fit: unknown`. 05 và 08 mở rộng bảng được.
 
 Bảng này là *gợi ý khởi điểm để 05 dựng và test*; người dùng GD/AD nên được hỏi thêm tên ý đồ họ hay đặt (câu hỏi 3 bên dưới).
 
@@ -311,7 +315,7 @@ Bảng này là *gợi ý khởi điểm để 05 dựng và test*; người dù
 1. **Số nguồn:** năm nguồn có nhiều quá cho cột 300 px? Phương án rút: gộp Recent vào Pinned thành "Của tôi" (hai nhóm con). *Đề xuất giữ năm; kiểm với bản thật, rút nếu chật.*
 2. **Nhận cả combo khi combo đang có font:** đề xuất tạo combo mới (an toàn). Chủ app có muốn thay thế tại chỗ không?
 3. **Tên ý đồ:** chủ app hay đặt tên combo thế nào ("Editorial", "Tech startup", "Menu nhà hàng" là ví dụ của chủ app)? Cần 10 tên thật để dựng bảng Phụ lục A đúng nghề.
-4. **Vai tuỳ ý (G3) và Role fit:** vai tên tự do ("Giá", "Eyebrow") ánh xạ về nhóm vai gần nhất bằng bảng đồng nghĩa hay hỏi người dùng một lần? Cần 04 và 05 thống nhất.
+4. ~~Vai tuỳ ý và Role fit~~ — **đã thống nhất với 04**: bảng đồng nghĩa, không hỏi (Phụ lục A).
 5. **Phạm vi gợi ý combo:** mặc định cả thư viện hay chỉ font trong Case? Đề xuất cả thư viện (vì Case thường còn ít font), có công tắc thu hẹp.
 
 ---
