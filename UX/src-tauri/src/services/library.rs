@@ -153,7 +153,7 @@ pub(crate) struct EffClass {
     /// Class phụ (hybrid) của phân loại TỰ ĐỘNG; ghi đè không có.
     pub secondary: Option<(String, Option<String>)>,
 }
-type EffMap = std::sync::Arc<std::collections::HashMap<i64, EffClass>>;
+pub(crate) type EffMap = std::sync::Arc<std::collections::HashMap<i64, EffClass>>;
 static CLASS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 type EffCache = Option<(std::sync::Weak<crate::index_bundle::IndexBundle>, u64, EffMap)>;
 static EFF_CACHE: std::sync::Mutex<EffCache> = std::sync::Mutex::new(None);

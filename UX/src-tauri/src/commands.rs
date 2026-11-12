@@ -20,12 +20,13 @@ use crate::dto::library::*;
 use crate::dto::model::*;
 use crate::dto::preview::*;
 use crate::dto::settings::FontManagerDto;
+use crate::dto::suggest::*;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
     activation, analysis, auto, boot, brief, cases, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
     preview,
-    settings, sources, system,
+    settings, sources, suggest, suggest_pair, system,
 };
 use crate::state::AppState;
 
@@ -102,6 +103,14 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
+            async role_fit(face: FaceKeyDto, role: RoleRefDto) -> Result<RoleFitDto, CmdError>;
+            async role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError>;
+            async suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError>;
+            async desk_suggest(req: DeskSuggestReqDto) -> Result<DeskPageDto, CmdError>;
+            async suggest_combos(req: SuggestCombosReqDto) -> Result<Vec<ComboSuggestionDto>, CmdError>;
+            async record_view(face: FaceKeyDto) -> Result<(), CmdError>;
+            async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
+            async clear_recent_views() -> Result<u32, CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
@@ -357,6 +366,14 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(axis_histogram(q: FaceQueryDto, bins: u32) -> Vec<AxisHistogramDto> => |s| analysis::axis_histograms(s, &q, bins));
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
+cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role));
+cmd!(role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> RoleFitPageDto => |s| suggest::role_fit_faces(s, &role, &opts));
+cmd!(suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> PartnerPageDto => |s| suggest_pair::suggest_partners(s, &anchor, &req));
+cmd!(desk_suggest(req: DeskSuggestReqDto) -> DeskPageDto => |s| suggest_pair::desk_suggest(s, &req));
+cmd!(suggest_combos(req: SuggestCombosReqDto) -> Vec<ComboSuggestionDto> => |s| suggest_pair::suggest_combos(s, &req));
+cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
+cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
+cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
