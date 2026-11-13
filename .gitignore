@@ -78,3 +78,16 @@ UX/features/library-grid/perf/wk
 *.zip
 *.dmg
 /release/
+
+# Ảnh chụp màn hình / ảnh thiết kế không đưa lên repo công khai (giữ ở /Volumes/VXData/Users/VietX/fontatlas-shots)
+docs/**/*.png
+docs/**/*.jpg
+docs/**/*.jpeg
+docs/**/*.gif
+docs/**/*.webp
+docs/**/*.tif
+docs/**/*.tiff
+docs/**/*.heic
+docs/**/*.mov
+docs/**/*.mp4
+/*.png
