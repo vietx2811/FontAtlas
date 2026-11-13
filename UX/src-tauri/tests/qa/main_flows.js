@@ -74,7 +74,7 @@
     } else await log('splash-skip', true, 'đã tự kết thúc trước khi kiểm');
     await wait(() => document.querySelector('.fa-onb, .fa-lib'), 90000);
     // ONBOARDING
-    let foldersDone = false;
+    let foldersDone = false; let tipsDone = false; // màn Xong chỉ kiểm bảng phím tắt MỘT lần (sau khi đóng bảng, h1 vẫn là Xong trong lúc outro chạy)
     for (let i = 0; i < 60 && document.querySelector('.fa-onb'); i++) {
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? '';
       await settle(600); // animation chuyển bước onboarding kết thúc trước khi chụp
@@ -121,7 +121,8 @@
         const go = await wait(() => btn('Tiếp tục'));
         go?.click(); await wait(() => { const hn = document.querySelector('.fa-onb h1')?.textContent ?? ''; return (hn !== '' && hn !== h1) || !document.querySelector('.fa-onb'); }, 8000); continue; // h1 rỗng = đang chuyển cảnh, chưa phải bước kế
       }
-      if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
+      if (h1 === 'Xong' && !tipsDone && !document.querySelector('[role=dialog]')) {
+        tipsDone = true;
         // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
         await wait(() => document.querySelector('.fa-stage svg.fa-bp'), 8000); // màn Xong vẽ xong ô minh hoạ
         const vb = document.querySelector('.fa-stage svg.fa-bp')?.getAttribute('viewBox');
