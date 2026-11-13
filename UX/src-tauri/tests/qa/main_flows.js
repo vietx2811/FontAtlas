@@ -1234,12 +1234,16 @@
             const fontOf = r => roleBtn(r)?.querySelector('.fa-desk-role-font')?.textContent ?? '';
             const roles = roleNames(); const target = roles[0];
             const was = fontOf(target);
-            const cand = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => !li.querySelector('[data-testid=cand-inuse]') && li.querySelector('.fa-desk-cand-name')?.textContent), 15000);
+            const freeCand = () => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => !li.querySelector('[data-testid=cand-inuse]') && li.querySelector('.fa-desk-cand-name')?.textContent);
+            // Nguồn "Ghép" có thể chỉ còn đúng font vừa đặt ở bước "+": chuyển sang nguồn "Hợp vai" (nhiều font hơn) nếu không còn ứng viên khác.
+            let cand = await wait(freeCand, 6000);
+            const candsBefore = document.querySelectorAll('[data-testid=desk-cand]').length;
+            if (!cand) { document.querySelector('[data-testid=pick-src-role]')?.click(); cand = await wait(freeCand, 15000); }
             const name = cand?.querySelector('.fa-desk-cand-name')?.textContent ?? '';
             const over1 = cand && roleBtn(target) ? await drag(cand, roleBtn(target).closest('li')) : null;
             const placed = await wait(() => fontOf(target) === name && name !== was, 15000);
             const uP = await wait(() => toastUndo(name), 8000);
-            await log('desk-drag-cand-to-role', !!placed && over1 === 'ok' && !!uP, { target, was, name, now: fontOf(target), over1, undo: !!uP });
+            await log('desk-drag-cand-to-role', !!placed && over1 === 'ok' && !!uP, { target, was, name, now: fontOf(target), over1, undo: !!uP, candsBefore, candsNow: document.querySelectorAll('[data-testid=desk-cand]').length, src: document.querySelector('[data-testid=pick-src-role]')?.getAttribute('aria-checked') });
             uP?.click();
             await log('desk-drag-cand-to-role-undo', !!(await wait(() => fontOf(target) === was, 15000)), { was, now: fontOf(target) });
             // đổi chỗ: cần hai vai đều có font
