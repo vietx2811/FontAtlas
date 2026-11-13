@@ -42,6 +42,10 @@ export function modelErrorText(error: ErrorInfoDto): string {
     network: t('mdl.err.network'),
     io: t('mdl.err.io'),
     checksum: t('mdl.err.checksum'),
+    model_file: t('mdl.err.model_file'),
+    resources: t('mdl.err.resources'),
+    inference: t('mdl.err.inference'),
+    store: t('mdl.err.store'),
     cancelled: t('mdl.err.cancelled'),
   };
   return messages[error.code] ?? t('mdl.err.generic');
@@ -67,7 +71,7 @@ const MB = 1024 * 1024;
 const act = <I extends ModelAction>(id: I, key: Parameters<typeof t>[0]) => ({ id, get label(): string { return t(key); } });
 const A = {
   download: act('download', 'mdl.a.download'), resumeDl: act('download', 'mdl.a.resumeDl'), stop: act('stop', 'mdl.a.stop'),
-  retryDl: act('download', 'mdl.a.retry'), retry: act('retry', 'mdl.a.retry'), redownload: act('redownload', 'mdl.a.retry'),
+  retryDl: act('download', 'mdl.a.retry'), retry: act('retry', 'mdl.a.retry'), redownload: act('redownload', 'mdl.a.redownload'),
   remove: act('remove', 'mdl.a.remove'), pause: act('pause', 'mdl.a.pause'), resume: act('resume', 'mdl.a.resume'),
 } as const satisfies Record<string, { id: ModelAction; label: string }>;
 
@@ -87,7 +91,7 @@ export function deriveModelUi(i: ModelUiInput): ModelUi {
     return { ...base, code: 'E2', text, actions: [A.stop], progress: ratio };
   }
   if (err === 'cancelled') return { ...base, code: 'E3', text: modelErrorText(m.lastError!), detail: m.lastError!.message, actions: [A.resumeDl] };
-  if (m.state === 'checksum_mismatch' || err === 'checksum') return { ...base, code: 'E5', text: modelErrorText({ code: 'checksum', message: '' }), severity: 'error', actions: [A.redownload], detail: m.lastError?.message };
+  if (m.state === 'checksum_mismatch' || err === 'checksum' || err === 'model_file') return { ...base, code: 'E5', text: modelErrorText({ code: err === 'model_file' ? 'model_file' : 'checksum', message: '' }), severity: 'error', actions: [A.redownload], detail: m.lastError?.message };
   if (m.lastError) return { ...base, code: 'E4', text: modelErrorText(m.lastError), severity: 'error', actions: [A.retryDl], detail: m.lastError.message };
   if (m.state === 'paused') return { ...base, code: 'E3', text: t('mdl.paused'), actions: [A.resumeDl], progress: m.totalBytes > 0 ? m.doneBytes / m.totalBytes : null };
   if (m.state === 'corrupt') return { ...base, code: 'E6', text: t('mdl.corrupt'), severity: 'error', actions: [A.redownload, A.remove] };
@@ -95,7 +99,13 @@ export function deriveModelUi(i: ModelUiInput): ModelUi {
   if (m.state !== 'ready') return { ...base, code: 'E0', text: null };
 
   const ready = { ...base, imageReady: true };
-  if (e?.loadError) return { ...ready, code: 'E7', text: t('mdl.loadError'), severity: 'error', actions: [A.retry], detail: e.loadError };
+  // Lỗi nạp/chạy model (mã từ 04): mỗi nhóm một câu "chuyện gì" + "làm gì" và đúng nút. disabled/cancelled không phải lỗi.
+  if (e?.loadError && e.loadError !== 'disabled' && e.loadError !== 'cancelled') {
+    const code = e.loadError;
+    if (code === 'model_file' || code === 'checksum') return { ...ready, code: 'E7', text: modelErrorText({ code, message: '' }), severity: 'error', actions: [A.redownload], detail: code };
+    if (code === 'resources' || code === 'inference' || code === 'store' || code === 'io') return { ...ready, code: 'E7', text: modelErrorText({ code, message: '' }), severity: 'error', actions: [A.retry], detail: code };
+    return { ...ready, code: 'E7', text: t('mdl.loadError'), severity: 'error', actions: [A.retry], detail: code };
+  }
   if (e && e.running) {
     const total = e.done + e.pending + e.failed;
     if (e.paused) return { ...ready, code: 'E9', text: t('mdl.embPaused', { done: fmtInt(e.done), total: fmtInt(total) }), actions: [A.resume], progress: e.done / total };
