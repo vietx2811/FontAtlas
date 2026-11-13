@@ -198,8 +198,9 @@ sampler() {
   while :; do
     local top="" p cwd cur
     while read -r p pc cm; do
-      cwd="$(lsof -a -d cwd -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
-      top="$top${top:+ | }$p:${cm##*/}($pc%)@${cwd:-?}"
+      # cwd chỉ cho tiến trình dev (cargo/rustc/rustdoc/node/app); app khác (Illustrator, Preview…) chỉ tên + %CPU để không lộ thư mục tài liệu.
+      case "${cm##*/}" in cargo|rustc|rustdoc|node|app) cwd="@$(lsof -a -d cwd -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)";; *) cwd="";; esac
+      top="$top${top:+ | }$p:${cm##*/}($pc%)$cwd"
     done < <(ps -axo pid=,pcpu=,comm= -r | head -3)
     cur="$(cat "$OUT"/*.log 2>/dev/null | grep -E 'Compiling|Running|Doc-tests' | tail -1 | cut -c1-90)"
     printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$(loadavg | awk '{print $1}' | tr -d ,)" "$top" "$cur" >> "$OUT/sampler.tsv"
