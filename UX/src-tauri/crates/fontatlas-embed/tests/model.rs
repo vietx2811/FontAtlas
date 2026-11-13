@@ -1236,6 +1236,14 @@ fn sliding_window_bounds_in_flight_and_reorder_buffer() {
     assert!((1..=2).contains(&before), "{before} chunks finished before the delayed one");
 }
 
+#[test]
+fn broken_safetensors_header_is_a_model_file_error() {
+    // file model hỏng → người dùng cần tải lại, khác với lỗi nội bộ `inference`
+    let r = fontatlas_embed::vision_header(b"khong phai json");
+    assert!(matches!(r, Err(EmbedError::ModelFile(_))), "{r:?}");
+    assert_eq!(r.unwrap_err().code(), "model_file");
+}
+
 /// Server nhận kết nối rồi im lặng: không bao giờ đọc request hay trả header.
 struct Silent {
     url: String,

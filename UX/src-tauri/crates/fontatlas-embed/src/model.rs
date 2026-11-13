@@ -63,7 +63,7 @@ fn sha_hex(h: Sha256) -> String {
 }
 
 fn bad(m: &str) -> EmbedError {
-    EmbedError::Model(format!("safetensors: {m}"))
+    EmbedError::ModelFile(format!("safetensors: {m}"))
 }
 
 /// Thứ tự trường cố định (khớp file đã ghim: data_offsets, dtype, shape).
