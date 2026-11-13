@@ -1,0 +1,4 @@
+fail tree=fd8b9da280809ad27ad7e9dcdbaaa084dd7feb0f qa=1
+2026-11-13T11:47:58Z vxmacmini 349s
+npm-ci:ok:0 vite-build:ok:13 tsc:ok:0 vitest:ok:0 cargo-test:ok:0 bindings-drift:ok:0 clippy:ok:0 tauri-debug-build:ok:0 native-qa:fail:336
+cache: tsc=1b64934b0 vitest=1b64934b0 cargo-test=cbb5aff41 bindings-drift=unit clippy=cbb5aff41 tauri-debug-build=bundle
