@@ -148,6 +148,7 @@ export type { ProblemDto } from './ProblemDto';
 export type { ProgressDto } from './ProgressDto';
 export type { RawAxisRangeDto } from './RawAxisRangeDto';
 export type { ReasonDto } from './ReasonDto';
+export type { RebuildLibraryReportDto } from './RebuildLibraryReportDto';
 export type { RecentViewDto } from './RecentViewDto';
 export type { ReconcileReportDto } from './ReconcileReportDto';
 export type { RemoveSourceReportDto } from './RemoveSourceReportDto';

@@ -74,6 +74,7 @@ import type { PreviewInfoDto } from './PreviewInfoDto';
 import type { PreviewItemDto } from './PreviewItemDto';
 import type { ProblemDto } from './ProblemDto';
 import type { ProgressDto } from './ProgressDto';
+import type { RebuildLibraryReportDto } from './RebuildLibraryReportDto';
 import type { RecentViewDto } from './RecentViewDto';
 import type { RemoveSourceReportDto } from './RemoveSourceReportDto';
 import type { ReplacedEntryDto } from './ReplacedEntryDto';
@@ -117,6 +118,7 @@ export interface TauriCommandMap {
   remove_source: { args: { sourceId: number }; result: RemoveSourceReportDto };
   remove_source_preview: { args: { sourceId: number }; result: RemoveSourceReportDto };
   rescan_sources: { args: { sourceIds: number[] | null }; result: null };
+  rebuild_library: { args: Record<string, never>; result: RebuildLibraryReportDto };
   source_download_cloud: { args: { sourceId: number; onProgress: Channel<CloudDownloadProgressDto> }; result: CloudDownloadReportDto };
   source_download_cancel: { args: { sourceId: number }; result: boolean };
   scan_pause: { args: Record<string, never>; result: null };

@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto, VfPolicyDto,
 } from './types';
 
@@ -39,6 +39,13 @@ export interface Api extends LibraryApi {
   /** Số liệu thật cho câu xác nhận gỡ nguồn — chỉ đọc. */
   removeSourcePreview(sourceId: number): Promise<RemoveSourceReportDto>;
   rescanSources(sourceIds?: number[]): Promise<void>;
+  /**
+   * "Dựng lại thư viện" (Cài đặt ▸ Dữ liệu, CẦN hộp xác nhận): dừng mọi lần quét, xoá toàn bộ dữ liệu thư viện (font, vị trí,
+   * phân tích, embedding, ngôn ngữ) rồi quét lại mọi nguồn. KHÔNG đụng dữ liệu người dùng (Dự án, Collection, Tag, Yêu thích,
+   * nguồn, ghi đè phân loại; gán theo hash nên khớp lại khi font quay về). Font hiện dần khi quét; phân tích và embedding
+   * tính lại ở nền nên có thể mất lâu với thư viện lớn. Ném CmdError('busy') nếu có nguồn chưa dừng quét kịp.
+   */
+  rebuildLibrary(): Promise<RebuildLibraryReportDto>;
   /** Mở Finder tại thư mục của nguồn (đường dẫn lấy từ Store). Ném CmdError('source_unavailable') khi thư mục không còn (ổ chưa mount). */
   revealSource(sourceId: number): Promise<void>;
   /**

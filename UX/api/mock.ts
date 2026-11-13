@@ -254,6 +254,11 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async removeSource(id) { const r = await this.removeSourcePreview(id); sources = sources.filter(s => s.id !== id); return r; },
     async rescanSources() {},
+    async rebuildLibrary() {
+      const n = sources.length;
+      for (const s of sources) simulateScan(s.id);
+      return { filesRemoved: rows.length, facesRemoved: rows.length, locationsRemoved: rows.length, sourcesQueued: n };
+    },
     async revealSource(id) {
       const s = sources.find(x => x.id === id);
       if (!s) throw new CmdError('not_found', 'source');

@@ -53,6 +53,16 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
             return snapshot(state);
         }
     };
+    let mut store = store;
+    // lần gỡ nguồn bị ngắt giữa hai DB (crash/mất điện) để lại vị trí mồ côi: dọn. Bỏ qua khi user.db vừa bị thay
+    // (hỏng → bản mới) hoặc library vừa dựng lại, vì lúc đó danh sách nguồn không còn đáng tin để so.
+    if report.user_backup.is_none() && !report.library_recreated {
+        match store.sweep_orphan_locations() {
+            Ok(n) if n > 0 => log::warn!("dọn {n} vị trí file mồ côi của nguồn đã gỡ dở"),
+            Ok(_) => {}
+            Err(e) => log::warn!("dọn vị trí mồ côi lỗi: {e}"),
+        }
+    }
     let _ = state.store.set(Mutex::new(store));
     let _ = state.user.set(Mutex::new(user));
     if let Ok(mut b) = state.boot.write() {

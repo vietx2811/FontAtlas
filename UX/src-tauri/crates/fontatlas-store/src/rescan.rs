@@ -75,6 +75,7 @@ pub struct RescanStats {
     pub failed: usize,
     pub missing: usize,
     /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
+    #[serde(skip)]
     pub purged: usize,
     pub unreadable: Vec<(String, String)>,
 }

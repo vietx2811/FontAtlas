@@ -602,3 +602,51 @@ fn name_clashes_command_is_empty_when_names_differ_and_reads_only() {
     // chỉ đọc: file trên đĩa không đổi
     assert_eq!(std::fs::read(dir.join("oswald_vf.ttf")).unwrap(), std::fs::read(core_fixture("oswald_vf.ttf")).unwrap());
 }
+
+#[test]
+fn rebuild_library_clears_the_library_keeps_user_data_and_the_rescan_brings_fonts_back() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let rows = all(&st).items;
+    let a = key_of(&rows[0]);
+    library::set_favorite(&st, &a, true).unwrap();
+    let tag = library::create_tag(&st, "retro").unwrap();
+    library::tag_faces(&st, tag.id, std::slice::from_ref(&a)).unwrap();
+    let case = cases::create_case(&st, Some("Dự án"), None, None).unwrap();
+    cases::add_to_case(&st, Some(case.id), std::slice::from_ref(&a), None).unwrap();
+
+    let r = sources::rebuild_library(&st).unwrap();
+    assert_eq!((r.files_removed, r.locations_removed, r.sources_queued), (2, 2, 1));
+    assert!(r.faces_removed >= 2);
+    // nguồn và dữ liệu người dùng còn nguyên ngay sau khi xoá
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1);
+    assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 1);
+
+    // quét lại chạy ngầm: font trở về, yêu thích/Dự án khớp lại theo hash
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert_eq!(all(&st).total, 2);
+    let fav = library::query_faces(&st, &FaceQueryDto { favorites_only: true, ..Default::default() }).unwrap();
+    assert_eq!((fav.total, fav.items[0].hash_hex.clone()), (1, a.hash_hex.clone()));
+    assert!(!cases::get_case(&st, case.id).unwrap().faces[0].missing);
+}
+
+#[test]
+fn boot_sweeps_locations_left_behind_by_an_interrupted_source_removal() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["roboto.ttf"]);
+    let src = sources::list_sources(&st).unwrap()[0].id;
+    // mô phỏng crash sau khi u.sources đã commit và trước khi xoá vị trí
+    st.with_store(|s| {
+        let _ = s.remove_source_with(src, &mut || Err(fontatlas_store::StoreError::Invalid("crash".into())));
+        Ok(())
+    })
+    .unwrap();
+    let n = st.with_store(|s| Ok(s.conn().query_row("SELECT count(*) FROM file_locations", [], |r| r.get::<_, i64>(0)).unwrap())).unwrap();
+    assert_eq!(n, 1, "vị trí mồ côi còn lại sau crash");
+    drop(st);
+
+    let st = booted(d.path());
+    let n = st.with_store(|s| Ok(s.conn().query_row("SELECT count(*) FROM file_locations", [], |r| r.get::<_, i64>(0)).unwrap())).unwrap();
+    assert_eq!(n, 0, "khởi động lại dọn vị trí mồ côi");
+    assert_eq!(all(&st).total, 0);
+}

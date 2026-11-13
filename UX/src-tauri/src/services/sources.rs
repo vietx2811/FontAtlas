@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use fontatlas_store::{Source, SourceKind, StoreError, cloud_provider_of};
 
-use crate::dto::library::{RemoveSourceReportDto, SourceDto};
+use crate::dto::library::{RebuildLibraryReportDto, RemoveSourceReportDto, SourceDto};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -90,6 +90,29 @@ pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceRepor
     crate::services::activation::reconcile_now(state, false);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
     Ok(report)
+}
+
+/// "Dựng lại thư viện": dừng mọi lần quét, xoá dữ liệu library.db (user.db và nguồn giữ nguyên), rồi quét lại mọi nguồn
+/// thư mục. Font trả về dần; phân tích/embedding tính lại ở nền. `busy` nếu có lần quét chưa dừng kịp.
+pub fn rebuild_library(state: &Arc<AppState>) -> Result<RebuildLibraryReportDto, CmdError> {
+    let ids: Vec<i64> = state.with_user(|u| Ok(u.sources()?.into_iter().map(|s| s.id).collect()))?;
+    for id in &ids {
+        if !state.scans.forget(*id) {
+            return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
+        }
+    }
+    let r = state.with_store(|s| Ok(s.rebuild_library()?))?;
+    let _ = crate::services::preview::bump_generation(state);
+    let dirs = crate::services::scan::directory_source_ids(state)?;
+    state.scans.enqueue(state, &dirs);
+    crate::services::activation::reconcile_now(state, false);
+    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    Ok(RebuildLibraryReportDto {
+        files_removed: r.files,
+        faces_removed: r.faces,
+        locations_removed: r.locations,
+        sources_queued: dirs.len() as u32,
+    })
 }
 
 /// `None` = mọi nguồn thư mục.

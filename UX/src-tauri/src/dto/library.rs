@@ -126,6 +126,18 @@ impl From<fontatlas_store::SourceRemovalReport> for RemoveSourceReportDto {
     }
 }
 
+/// Kết quả "Dựng lại thư viện": những gì đã xoá khỏi library.db và số nguồn xếp quét lại.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RebuildLibraryReportDto {
+    pub files_removed: u32,
+    pub faces_removed: u32,
+    pub locations_removed: u32,
+    /// Số nguồn thư mục đã xếp hàng quét lại (font trả về dần khi quét).
+    pub sources_queued: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]

@@ -64,6 +64,7 @@ macro_rules! command_list {
             async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
+            async rebuild_library() -> Result<RebuildLibraryReportDto, CmdError>;
             async source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadProgressDto>) -> Result<CloudDownloadReportDto, CmdError>;
             async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
             async scan_pause() -> Result<(), CmdError>;
@@ -605,6 +606,11 @@ pub async fn remove_source_preview(
     source_id: i64,
 ) -> Result<RemoveSourceReportDto, CmdError> {
     blocking(&state, move |s| sources::remove_source_preview(s, source_id)).await
+}
+
+#[tauri::command]
+pub async fn rebuild_library(state: State<'_, Arc<AppState>>) -> Result<RebuildLibraryReportDto, CmdError> {
+    blocking(&state, sources::rebuild_library).await
 }
 
 #[tauri::command]

@@ -860,6 +860,7 @@ fn dto_serializes_like_core() {
         analyzed: 3,
         failed: 4,
         missing: 6,
+        purged: 0,
         unreadable: vec![("a".into(), "io: x".into())],
     };
     assert_eq!(
