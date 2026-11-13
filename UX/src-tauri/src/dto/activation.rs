@@ -86,6 +86,13 @@ pub enum ReasonDto {
     },
     /// Một app thiết kế (photoshop, illustrator, indesign…) đã xin font này.
     Auto { app: String },
+    /// B5: một app gắn với Case này đang chạy.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    CaseApp {
+        #[ts(type = "number")]
+        collection_id: i64,
+    },
 }
 
 impl From<&ActivationReason> for ReasonDto {
@@ -94,6 +101,7 @@ impl From<&ActivationReason> for ReasonDto {
             ActivationReason::Manual => ReasonDto::Manual,
             ActivationReason::Collection(id) => ReasonDto::Collection { collection_id: *id },
             ActivationReason::Auto(app) => ReasonDto::Auto { app: app.slug().to_string() },
+            ActivationReason::CaseApp(id) => ReasonDto::CaseApp { collection_id: *id },
         }
     }
 }
@@ -487,5 +495,62 @@ impl ReconcileReportDto {
     /// Có gì đáng báo cho giao diện không.
     pub fn is_notable(&self) -> bool {
         !self.auto_deactivated.is_empty() || !self.auto_deactivate_failed.is_empty() || self.reregistered + self.moved + self.missing + self.not_downloaded + self.failed > 0
+    }
+}
+
+/// B5: một app gắn với Case. `bundle_id` là khoá; `name` chỉ để hiển thị.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CaseAppDto {
+    pub bundle_id: String,
+    pub name: String,
+}
+
+/// B5: app đã cài (quét `/Applications`, `~/Applications`) để người dùng chọn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct InstalledAppDto {
+    pub bundle_id: String,
+    pub name: String,
+    pub path: String,
+    /// App đang chạy lúc quét.
+    pub running: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum AppSetEventKindDto {
+    On,
+    Off,
+}
+
+/// B5: sự kiện cho toast "Illustrator opened · 12 fonts on for <Case>".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AppSetEventDto {
+    #[ts(type = "number")]
+    pub collection_id: i64,
+    pub kind: AppSetEventKindDto,
+    pub changed: u32,
+    pub conflicts: u32,
+    pub failed: u32,
+}
+
+impl From<&fontatlas_activate::AppSetEvent> for AppSetEventDto {
+    fn from(e: &fontatlas_activate::AppSetEvent) -> Self {
+        AppSetEventDto {
+            collection_id: e.collection_id,
+            kind: match e.kind {
+                fontatlas_activate::AppSetEventKind::On => AppSetEventKindDto::On,
+                fontatlas_activate::AppSetEventKind::Off => AppSetEventKindDto::Off,
+            },
+            changed: e.changed as u32,
+            conflicts: e.conflicts as u32,
+            failed: e.failed as u32,
+        }
     }
 }

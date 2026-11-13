@@ -265,6 +265,13 @@ impl<E: ActivationEngine> ActivationService<E> {
         self.run(store, keys, ActivationReason::Auto(app), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
     }
 
+    /// B5: bật font của Case vì một app gắn với Case vừa chạy. Lý do `caseapp:<id>`, scope session, xung đột → không bật
+    /// (không có ai để hỏi giữa lúc đang làm việc trong app khác). Font đã bật persistent chỉ thêm lý do.
+    pub fn activate_case_app(&self, store: &Mutex<Store>, collection_id: i64) -> Result<ActivationReport, ActivationError> {
+        let keys = relock(store).collection_faces(collection_id)?;
+        self.run(store, &keys, ActivationReason::CaseApp(collection_id), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
+    }
+
     pub fn activate_collection(
         &self,
         store: &Mutex<Store>,
@@ -448,7 +455,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         // font còn là placeholder trên ổ cloud: tải về trước (có hạn chót), không bao giờ treo; lỗi trả về rõ ràng
         let mut located = locate(&target);
         if let Located::NotDownloaded(p) = &located {
-            let fetch = if matches!(reason, ActivationReason::Auto(_)) { &self.ensure_local_auto } else { &self.ensure_local };
+            let fetch = if matches!(reason, ActivationReason::Auto(_) | ActivationReason::CaseApp(_)) { &self.ensure_local_auto } else { &self.ensure_local };
             match fetch(p) {
                 Ok(()) => {
                     // file vừa về máy: ghi cờ cloud_only=0 ngay (giao diện, hàng phân tích lại dựa vào cờ này)
