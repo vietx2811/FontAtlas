@@ -9,6 +9,7 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
+import { useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -57,6 +58,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const view = useUiStore(s => s.view);
   const tag = useUiStore(s => { const id = singleTagId(s.filters); return id === null ? null : String(id); });
   const open = useUiStore(s => s.openSections);
+  const dragOver = useFaceDragStore(s => s.drag?.over ?? null);
+  const dragging = useFaceDragStore(s => s.drag !== null);
+  const tagOver = (id: number) => (dragOver?.kind === 'tag' && dragOver.id === id ? (dragOver.valid ? 'ok' : 'no') : undefined);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
@@ -285,7 +289,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="all" label={t('side.all')} count={counts.all} current={cur('all')} onClick={() => setView('all')} />
         <NavItem icon="star" label={t('side.favorites')} count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />
-        <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} />
+        <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} drop={{ kind: 'active', id: 0, name: t('side.active'), here: false }} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
         {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} />}
 
@@ -339,7 +343,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endTagRename(t.id, true); } }}
                   onBlur={e => void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'blur')} />
               : (
-              <button key={t.id} data-tag-id={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
+              <button key={t.id} data-tag-id={t.id} data-drop-tag={isSystemTag(t.name) ? undefined : t.id} data-drop-name={t.name} data-drop-over={tagOver(t.id)} data-drop-armed={dragging && !isSystemTag(t.name) ? 'true' : undefined} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
                 onContextMenu={e => { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); }}
                 onKeyDown={e => { if (e.key === 'F2' && !isSystemTag(t.name)) { e.preventDefault(); setRenamingTag(t.id); } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
             ))}

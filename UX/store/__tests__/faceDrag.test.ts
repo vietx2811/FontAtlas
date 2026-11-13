@@ -110,6 +110,12 @@ describe('G1 thả vào Case', () => {
     (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => el;
     expect(targetAt(1, 1)).toEqual({ kind: 'case', id: 4, name: 'Poster', valid: true });
   });
+  it('targetAt nhận data-drop-active và data-drop-tag', () => {
+    document.body.innerHTML = '<div id="a" data-drop-active="0" data-drop-name="Đang bật"></div><div id="t" data-drop-tag="9" data-drop-name="Logo"></div>';
+    const at = (id: string) => { const el = document.getElementById(id); (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => el; return targetAt(1, 1); };
+    expect(at('a')).toEqual({ kind: 'active', id: 0, name: 'Đang bật', valid: true });
+    expect(at('t')).toEqual({ kind: 'tag', id: 9, name: 'Logo', valid: true });
+  });
   it('thêm vào Case chỉ phần chưa có; Hoàn tác chỉ gỡ phần vừa thêm', async () => {
     const api = createMockApi(); const [a, b] = await rowsOf(api);
     const res = await api.openCaseFromPeek({ face: { hashHex: a.hashHex, faceIndex: a.faceIndex }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });

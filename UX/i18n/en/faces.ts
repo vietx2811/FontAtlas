@@ -81,5 +81,8 @@ export const EN_FACES: Record<keyof typeof FACES_I18N, string> = {
   'dnd.undo': 'Undo', 'dnd.allThere': 'Already in “{name}”: nothing added',
   'dnd.addedSome': 'Added {what} to “{name}” ({k} already there)', 'dnd.addFail': 'Couldn’t add to “{name}”: {msg}',
   'dnd.undone': 'Undone: removed {what} from “{name}”', 'dnd.undoFail': 'Couldn’t undo: {msg}',
+  'dnd.tagAllThere': 'Already tagged “{name}”: nothing added', 'dnd.tagSome': 'Tagged {what} with “{name}” ({k} already had it)', 'dnd.tagUndone': 'Undone: removed tag “{name}” from {what}',
+  'dnd.activeDone': 'Activated {what}', 'dnd.activeAllThere': 'These fonts are already active: nothing to do', 'dnd.activeMissing': 'Can’t activate: the font file isn’t on this Mac',
+  'dnd.dropTag': 'Drop to tag “{name}”', 'dnd.dropActive': 'Drop to activate',
   'dnd.addTo': 'Add to…', 'dnd.addTo.tip': 'Add the selected fonts to a project (same as dragging onto the sidebar)',
 };

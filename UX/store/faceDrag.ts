@@ -1,11 +1,12 @@
 // Kéo font từ lưới thư viện thả vào mục thanh bên (G1). Kéo bằng con trỏ (pointer events), không dùng HTML5 DnD:
 // ổn định trong WebView của Tauri (nơi sự kiện kéo-thả file của hệ điều hành có thể chặn DnD của trang) và cho phép
-// vẽ "con trỏ báo số font" tuỳ ý. Điểm thả là phần tử có `data-drop-col` (xem NavItem).
+// vẽ "con trỏ báo số font" tuỳ ý. Điểm thả là phần tử có `data-drop-col` / `-case` / `-active` / `-tag` (xem NavItem và Sidebar).
 import { create } from 'zustand';
 import type { FaceRow } from '../features/library-grid/types';
 import { useSelectionStore, rowKey } from './selection';
 
-export type DropTarget = { kind: 'col' | 'case'; id: number; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
+export type DropKind = 'col' | 'case' | 'active' | 'tag';
+export type DropTarget = { kind: DropKind; id: number; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
 export type FaceDragState = { rows: readonly FaceRow[]; x: number; y: number; over: DropTarget | null };
 type Store = { drag: FaceDragState | null };
 export const useFaceDragStore = create<Store>()(() => ({ drag: null }));
@@ -19,10 +20,11 @@ export function registerFaceDropHandler(h: DropHandler): () => void { handler = 
 export const DRAG_THRESHOLD = 5;
 
 export function targetAt(x: number, y: number, doc: Document = document): DropTarget | null {
-  const el = doc.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-col], [data-drop-case]');
+  const el = doc.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-col], [data-drop-case], [data-drop-active], [data-drop-tag]');
   if (!el) return null;
-  const kind = el.dataset.dropCase !== undefined ? 'case' : 'col';
-  const id = Number(kind === 'case' ? el.dataset.dropCase : el.dataset.dropCol);
+  const kind: DropKind = el.dataset.dropCase !== undefined ? 'case' : el.dataset.dropActive !== undefined ? 'active' : el.dataset.dropTag !== undefined ? 'tag' : 'col';
+  const raw = kind === 'case' ? el.dataset.dropCase : kind === 'active' ? el.dataset.dropActive : kind === 'tag' ? el.dataset.dropTag : el.dataset.dropCol;
+  const id = Number(raw);
   if (!Number.isFinite(id)) return null;
   return { kind, id, name: el.dataset.dropName ?? '', valid: el.dataset.dropHere !== 'true' };
 }

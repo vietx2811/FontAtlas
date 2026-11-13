@@ -469,6 +469,41 @@ describe('Library: thêm vào dự án (G1)', () => {
     expect(useNoticeStore.getState().notices.at(-1)?.action?.label).toBe('Hoàn tác');
     drop.remove();
   });
+
+  const dragCellTo = (cell: HTMLElement, drop: HTMLElement) => {
+    (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => drop;
+    act(() => { cell.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 60, clientY: 60 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60 })); });
+  };
+
+  it('thả thẻ lên một thẻ (data-drop-tag) gắn thẻ, Hoàn tác gỡ đúng phần vừa gắn', async () => {
+    const api = createMockApi(); const tg = await api.createTag('Logo');
+    await mount(api);
+    const drop = document.createElement('div'); drop.dataset.dropTag = String(tg.id); drop.dataset.dropName = 'Logo'; document.body.appendChild(drop);
+    dragCellTo(cells()[1], drop); await settle();
+    expect((await api.queryFaces({ tagIds: [tg.id], limit: 10 })).items).toHaveLength(1);
+    const n = useNoticeStore.getState().notices.at(-1);
+    expect(n?.action?.label).toBe('Hoàn tác');
+    act(() => n?.action?.run()); await settle();
+    expect((await api.queryFaces({ tagIds: [tg.id], limit: 10 })).items).toHaveLength(0);
+    dragCellTo(cells()[1], drop); await settle(); dragCellTo(cells()[1], drop); await settle(); // thả lần hai: đã có thẻ → không gắn thêm
+    expect(useNoticeStore.getState().notices.at(-1)?.text).toMatch(/Đã có thẻ/);
+    drop.remove();
+  });
+
+  it('thả thẻ lên "Đang bật" (data-drop-active) bật font; Hoàn tác tắt lại', async () => {
+    const api = createMockApi();
+    await mount(api);
+    const drop = document.createElement('div'); drop.dataset.dropActive = '0'; drop.dataset.dropName = 'Đang bật'; document.body.appendChild(drop);
+    dragCellTo(cells()[1], drop); await settle();
+    expect(useUiStore.getState().active.size).toBe(1);
+    const n = useNoticeStore.getState().notices.at(-1);
+    expect(n?.text).toMatch(/Đã bật/); expect(n?.action?.label).toBe('Hoàn tác');
+    act(() => n?.action?.run()); await settle();
+    expect(useUiStore.getState().active.size).toBe(0);
+    drop.remove();
+  });
 });
 
 describe('Library: ghi lần xem (G5 Recent)', () => {

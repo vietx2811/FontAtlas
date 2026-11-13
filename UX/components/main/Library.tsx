@@ -17,7 +17,7 @@ import { useGroupShortcut } from './useGroupShortcut';
 import { faceKey, singleTagId, toGridQuery, useUiStore } from '../../store/ui';
 import { cancelFaceDrag, registerFaceDropHandler } from '../../store/faceDrag';
 import { DragLayer } from '../dnd/DragLayer';
-import { dropFacesInto } from '../dnd/dropFaces';
+import { dropFacesOn } from '../dnd/dropFaces';
 
 type Props = { api: Api; width?: number; height?: number };
 
@@ -115,9 +115,9 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
 
   // G1: thả font vào một dự án ở thanh bên (xem dropFaces.ts).
   useEffect(() => {
-    const off = registerFaceDropHandler((rows, target) => void dropFacesInto(api, rows, target));
+    const off = registerFaceDropHandler((rows, target) => void dropFacesOn(api, rows, target, { setActive: actions?.setActive }));
     return () => { off(); cancelFaceDrag(); };
-  }, [api]);
+  }, [api, actions]);
 
   const filtered = !!(filters.variable != null || filters.italic != null || filters.rawAxisRanges?.length || familyScope);
   const empty: Empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud, filtered, familyName: familyScope?.name });
