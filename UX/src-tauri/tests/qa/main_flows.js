@@ -119,7 +119,7 @@
         await snap('onb-folders-3');
         foldersDone = true;
         const go = await wait(() => btn('Tiếp tục'));
-        go?.click(); await wait(() => (document.querySelector('.fa-onb h1')?.textContent ?? '') !== h1 || !document.querySelector('.fa-onb'), 8000); continue;
+        go?.click(); await wait(() => { const hn = document.querySelector('.fa-onb h1')?.textContent ?? ''; return (hn !== '' && hn !== h1) || !document.querySelector('.fa-onb'); }, 8000); continue; // h1 rỗng = đang chuyển cảnh, chưa phải bước kế
       }
       if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
         // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
@@ -139,7 +139,7 @@
       const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);
       if (!b) { await log('onb-stuck', false, h1); break; }
       if (b === true) break;
-      b.click(); await wait(() => (document.querySelector('.fa-onb h1')?.textContent ?? '') !== h1 || !document.querySelector('.fa-onb') || document.querySelector('[role=dialog]'), 4000); // sang bước kế (h1 đổi) hoặc onboarding đóng
+      b.click(); await wait(() => { const hn = document.querySelector('.fa-onb h1')?.textContent ?? ''; return (hn !== '' && hn !== h1) || !document.querySelector('.fa-onb') || document.querySelector('[role=dialog]'); }, 4000); // h1 rỗng = đang chuyển cảnh: chờ bước kế vẽ h1 để không bỏ lỡ màn Xong; // sang bước kế (h1 đổi) hoặc onboarding đóng
     }
     await wait(() => !document.querySelector('.fa-onb'), 15000);
     await log('onb-finished', !document.querySelector('.fa-onb'), '');
@@ -1002,9 +1002,10 @@
         await wait(() => nFilled() >= 2, 20000); // ứng viên nạp bất đồng bộ: máy tải thì chậm hơn 6 s
         const filled = nFilled();
         await log('desk-enter-places', filled >= 2, { filled });
+        await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=pick-empty]'), 20000); // máy tải: danh sách ứng viên về muộn
         const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
-        pressOn(desk, 'ArrowDown');
-        await wait(() => document.querySelectorAll('[data-testid=strip-delta]').length === 8, 15000);
+        const deltaOk = () => { const d = [...document.querySelectorAll('[data-testid=strip-delta]')].map(x => x.textContent); return d.length === 8 && (nCand < 2 || d.some(x => /^[+−]|±0/.test(x))); };
+        for (let k = 0; k < 3 && !deltaOk(); k++) { pressOn(desk, 'ArrowDown'); await wait(deltaOk, 8000); } // phím có thể rơi khi Desk đang vẽ lại: bấm lại tối đa 3 lần
         const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
         await log('desk-strip-delta', deltas.length === 8 && (nCand < 2 || deltas.some(x => /^[+−]|±0/.test(x))), { nCand, deltas });
         pressOn(desk, 'i');
@@ -1042,11 +1043,11 @@
             if (sel && sel.options.length > 1) { sel.value = sel.options[1].value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
             await wait(() => document.querySelectorAll('[data-testid=fc-col]').length >= 2, 5000);
           }
-          const placeBtn = document.querySelector('[data-testid=fc-place]');
+          const placeBtn = await wait(() => { const b = document.querySelector('[data-testid=fc-place]'); return b && (b.closest('th')?.querySelector('.fa-cc-title')?.textContent ?? '').trim() ? b : null; }, 10000); // nút "Đặt" và tên cột vẽ xong
           const pname = placeBtn?.closest('th')?.querySelector('.fa-cc-title')?.textContent?.trim() ?? '';
           {
-          placeBtn?.click();
-          await wait(() => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && (f.querySelector('.fa-cc-title')?.textContent ?? '').includes(pname); }, 8000);
+          const isPlaced = () => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && (f.querySelector('.fa-cc-title')?.textContent ?? '').includes(pname); };
+          for (let k = 0; k < 3 && !isPlaced(); k++) { (document.querySelector('[data-testid=fc-place]') ?? placeBtn)?.click(); await wait(isPlaced, 6000); } // bấm lại nếu lượt vẽ lại nuốt cú bấm
           const titles = [...document.querySelectorAll('[data-testid=fc-col] .fa-cc-title')].map(x => x.textContent.replace(/\s*·\s*mốc$/, '').trim());
           await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && titles[0] === pname && new Set(titles).size === titles.length, { pname, titles: titles.length, first: titles[0] });
           }
