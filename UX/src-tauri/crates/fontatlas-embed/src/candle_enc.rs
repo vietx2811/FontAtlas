@@ -62,41 +62,6 @@ fn run_error(e: candle_core::Error) -> EmbedError {
     }
 }
 
-#[cfg(test)]
-mod classify_tests {
-    use super::*;
-    use candle_core::Error as CE;
-
-    fn oom_io() -> CE {
-        CE::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, "cấp phát"))
-    }
-
-    #[test]
-    fn resource_exhaustion_is_recognised_through_wrappers() {
-        assert!(is_resource_error(&oom_io()));
-        assert!(is_resource_error(&oom_io().with_path("/m.safetensors")));
-        assert!(is_resource_error(&CE::Msg("Command buffer had following error: Insufficient Memory (kIOGPU...)".into())));
-        assert!(is_resource_error(&CE::Msg("Failed to create metal resource: buffer".into())));
-        assert!(!is_resource_error(&CE::Msg("shape mismatch in matmul".into())));
-        assert!(!is_resource_error(&CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"))));
-    }
-
-    #[test]
-    fn loading_failures_blame_the_file_unless_resources_ran_out() {
-        let nf = CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"));
-        assert!(matches!(load_error(nf), EmbedError::ModelFile(_)));
-        assert!(matches!(load_error(CE::Msg("cannot find tensor x".into())), EmbedError::ModelFile(_)));
-        assert!(matches!(load_error(oom_io()), EmbedError::Resources(_)));
-    }
-
-    #[test]
-    fn running_failures_are_internal_unless_resources_ran_out() {
-        assert!(matches!(run_error(CE::Msg("shape mismatch in matmul".into())), EmbedError::Model(_)));
-        assert!(matches!(run_error(oom_io()), EmbedError::Resources(_)));
-        assert!(matches!(run_error(CE::Msg("Insufficient Memory".into())), EmbedError::Resources(_)));
-    }
-}
-
 fn metal_works() -> bool {
     let Ok(d) = Device::new_metal(0) else { return false };
     Tensor::ones((4, 4), DType::F32, &d)
@@ -177,5 +142,40 @@ impl Encode for CandleEncoder {
 
     fn raw_dim(&self) -> usize {
         self.raw_dim
+    }
+}
+
+#[cfg(test)]
+mod classify_tests {
+    use super::*;
+    use candle_core::Error as CE;
+
+    fn oom_io() -> CE {
+        CE::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, "cấp phát"))
+    }
+
+    #[test]
+    fn resource_exhaustion_is_recognised_through_wrappers() {
+        assert!(is_resource_error(&oom_io()));
+        assert!(is_resource_error(&oom_io().with_path("/m.safetensors")));
+        assert!(is_resource_error(&CE::Msg("Command buffer had following error: Insufficient Memory (kIOGPU...)".into())));
+        assert!(is_resource_error(&CE::Msg("Failed to create metal resource: buffer".into())));
+        assert!(!is_resource_error(&CE::Msg("shape mismatch in matmul".into())));
+        assert!(!is_resource_error(&CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"))));
+    }
+
+    #[test]
+    fn loading_failures_blame_the_file_unless_resources_ran_out() {
+        let nf = CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"));
+        assert!(matches!(load_error(nf), EmbedError::ModelFile(_)));
+        assert!(matches!(load_error(CE::Msg("cannot find tensor x".into())), EmbedError::ModelFile(_)));
+        assert!(matches!(load_error(oom_io()), EmbedError::Resources(_)));
+    }
+
+    #[test]
+    fn running_failures_are_internal_unless_resources_ran_out() {
+        assert!(matches!(run_error(CE::Msg("shape mismatch in matmul".into())), EmbedError::Model(_)));
+        assert!(matches!(run_error(oom_io()), EmbedError::Resources(_)));
+        assert!(matches!(run_error(CE::Msg("Insufficient Memory".into())), EmbedError::Resources(_)));
     }
 }
