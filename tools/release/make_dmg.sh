@@ -11,6 +11,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 CMD="$HERE/Cài Font Atlas.command"
 
 [ -d "$APP" ] || { echo "không thấy app: $APP"; exit 1; }
+[ -s "$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt" ] || { echo "app thiếu Contents/Resources/THIRD-PARTY-NOTICES.txt (chạy tools/release/third_party_notices.sh, commit, build lại)"; exit 1; }
 VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT

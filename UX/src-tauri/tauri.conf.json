@@ -62,7 +62,8 @@
         "Resources/en.lproj/InfoPlist.strings": "resources/en.lproj/InfoPlist.strings",
         "Resources/vi.lproj/InfoPlist.strings": "resources/vi.lproj/InfoPlist.strings",
         "Resources/NOTICE-hyperglot.md": "resources/NOTICE-hyperglot.md",
-        "Resources/LICENSE-hyperglot.txt": "resources/LICENSE-hyperglot.txt"
+        "Resources/LICENSE-hyperglot.txt": "resources/LICENSE-hyperglot.txt",
+      "Resources/THIRD-PARTY-NOTICES.txt": "resources/THIRD-PARTY-NOTICES.txt"
       }
     }
   }

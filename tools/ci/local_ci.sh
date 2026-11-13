@@ -202,8 +202,10 @@ sampler() {
       case "${cm##*/}" in cargo|rustc|rustdoc|node|app) cwd="@$(lsof -a -d cwd -p "$p" -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)";; *) cwd="";; esac
       top="$top${top:+ | }$p:${cm##*/}($pc%)$cwd"
     done < <(ps -axo pid=,pcpu=,comm= -r | head -3)
+    # Tiến trình build luôn được ghi (kể cả khi không vào top 3): cargo/rustc/rustdoc/ld/cc/node với %CPU và trạng thái (R chạy, U chờ I/O, S ngủ).
+    dev="$(ps -axo pid=,pcpu=,state=,comm= | awk '{n=$4; sub(".*/","",n); if (n ~ /^(cargo|rustc|rustdoc|ld|cc|node)$/) printf "%s:%s(%s%%,%s) ", $1, n, $2, substr($3,1,1)}')"
     cur="$(cat "$OUT"/*.log 2>/dev/null | grep -E 'Compiling|Running|Doc-tests' | tail -1 | cut -c1-90)"
-    printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$(loadavg | awk '{print $1}' | tr -d ,)" "$top" "$cur" >> "$OUT/sampler.tsv"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$(loadavg | awk '{print $1}' | tr -d ,)" "$top" "$cur" "$dev" >> "$OUT/sampler.tsv"
     sleep "${FONTATLAS_CI_SAMPLE_SECS:-30}"
   done
 }
