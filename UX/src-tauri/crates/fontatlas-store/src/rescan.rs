@@ -10,7 +10,7 @@ use rusqlite::params;
 use serde::Serialize;
 
 use crate::error::StoreError;
-use crate::ingest::{Analysis, IngestItem, ScannedFile, parse_hash};
+use crate::ingest::{Analysis, FaceKey, IngestItem, ScannedFile, parse_hash};
 use crate::open::{Store, now_ms};
 
 /// `pipeline_state.version` đặt khi placeholder đổi size/mtime: kết quả cũ không còn đáng tin, phân tích lại khi tải về.
@@ -234,6 +234,20 @@ pub struct SourceRemovalReport {
     pub tags_affected: u32,
     /// Số font của nguồn đang BẬT; không tự tắt, người dùng tắt ở "Đang bật".
     pub active_fonts: u32,
+}
+
+/// Kết quả nhập MỘT file font lẻ ([`Store::import_files`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileImportOutcome {
+    Imported,
+    /// Đã có vị trí ở một nguồn (không đổi gì).
+    AlreadyKnown,
+    /// Placeholder trên ổ cloud, chưa tải về.
+    NotDownloaded,
+    /// Không còn/không phải file font.
+    Missing,
+    /// Không đọc được (ổ rút, bị khoá…) hoặc lỗi I/O.
+    Unreadable,
 }
 
 /// Số liệu của [`Store::rebuild_library`]: những gì đã bị xoá khỏi library.db.
@@ -634,6 +648,124 @@ impl Store {
         }
         tx.commit()?;
         Ok(report)
+    }
+
+    /// G8: nhập đúng các file font này (không quét thư mục) vào nguồn `source_id` — dùng cho nguồn `loose`. File đã có vị trí ở
+    /// BẤT KỲ nguồn nào thì giữ nguyên (không cướp vị trí của nguồn khác) và báo `AlreadyKnown`.
+    pub fn import_files(&mut self, source_id: i64, paths: &[PathBuf]) -> Result<Vec<(PathBuf, FileImportOutcome)>, StoreError> {
+        let started = now_ms();
+        let mut out: Vec<(PathBuf, FileImportOutcome)> = Vec::new();
+        let mut todo: Vec<ScannedFile> = Vec::new();
+        for p in paths {
+            let known: i64 = self.conn.query_row("SELECT count(*) FROM file_locations WHERE path=?1", [p.to_string_lossy()], |r| r.get(0))?;
+            if known > 0 {
+                out.push((p.clone(), FileImportOutcome::AlreadyKnown));
+                continue;
+            }
+            let Ok(m) = std::fs::metadata(p) else {
+                out.push((p.clone(), FileImportOutcome::Missing));
+                continue;
+            };
+            if !m.is_file() || !is_font(p) {
+                out.push((p.clone(), FileImportOutcome::Missing));
+                continue;
+            }
+            if os_placeholder(p, &m) {
+                out.push((p.clone(), FileImportOutcome::NotDownloaded));
+                continue;
+            }
+            let ns = |t: std::io::Result<std::time::SystemTime>| t.ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_nanos() as i64);
+            todo.push(ScannedFile { path: p.clone(), size: m.len(), mtime_ns: ns(m.modified()).unwrap_or(0), created_ns: ns(m.created()) });
+        }
+        let mut items: Vec<IngestItem> = Vec::new();
+        let mut to_analyze: Vec<(ScannedFile, [u8; 32])> = Vec::new();
+        for f in todo {
+            match hash_file(&f.path) {
+                Err(_) => out.push((f.path.clone(), FileImportOutcome::Unreadable)),
+                Ok(h) => {
+                    let fresh: i64 = self.conn.query_row(
+                        "SELECT count(*) FROM pipeline_state WHERE hash=?1 AND face_index=-1 AND stage='load' AND status IN ('done','failed') AND version=?2",
+                        params![&h[..], ANALYZER_VERSION],
+                        |r| r.get(0),
+                    )?;
+                    if fresh > 0 {
+                        items.push(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known });
+                    } else {
+                        to_analyze.push((f, h));
+                    }
+                }
+            }
+        }
+        let paths: Vec<PathBuf> = to_analyze.iter().map(|(f, _)| f.path.clone()).collect();
+        for ((f, h), (_, res)) in to_analyze.into_iter().zip(analyze_paths(&paths)) {
+            match res {
+                Ok(r) => items.push(IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) }),
+                Err(CoreError::Io(_)) => out.push((f.path.clone(), FileImportOutcome::Unreadable)),
+                Err(e) => items.push(IngestItem {
+                    source_id,
+                    file: f,
+                    hash: h,
+                    analysis: Analysis::Failed { code: e.code().to_string(), detail: e.to_string() },
+                }),
+            }
+        }
+        for it in &items {
+            out.push((it.file.path.clone(), FileImportOutcome::Imported));
+        }
+        self.ingest(items, started)?;
+        Ok(out)
+    }
+
+    /// Đồng bộ cờ `missing`/`cloud_only` của các vị trí thuộc nguồn KHÔNG có thư mục (loose): stat từng file, không đọc nội dung.
+    /// Trả số vị trí đổi trạng thái.
+    pub fn refresh_file_source(&mut self, source_id: i64) -> Result<usize, StoreError> {
+        let rows: Vec<(i64, String, i64, i64)> = {
+            let mut st = self.conn.prepare("SELECT location_id, path, missing, cloud_only FROM file_locations WHERE source_id=?1")?;
+            st.query_map([source_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?
+        };
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let mut changed = 0;
+        for (id, path, missing, cloud) in rows {
+            let p = Path::new(&path);
+            let (m, c) = match std::fs::metadata(p) {
+                Ok(md) if md.is_file() => (0, i64::from(os_placeholder(p, &md))),
+                _ => (1, cloud),
+            };
+            if (m, c) != (missing, cloud) {
+                tx.execute("UPDATE file_locations SET missing=?2, cloud_only=?3 WHERE location_id=?1", params![id, m, c])?;
+                changed += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    /// Face (chưa missing) của các vị trí: khớp CHÍNH XÁC `exact` hoặc nằm dưới thư mục `prefixes` (không kèm dấu phân cách cuối).
+    /// Trả (đường dẫn vị trí, face), sắp theo đường dẫn rồi `face_index`.
+    pub fn faces_at(&self, exact: &[String], prefixes: &[String]) -> Result<Vec<(String, FaceKey)>, StoreError> {
+        let mut out: Vec<(String, FaceKey)> = Vec::new();
+        let mut st = self.conn.prepare(
+            "SELECT l.path, fi.hash, f.face_index FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+               JOIN faces f ON f.file_id = fi.file_id
+              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) = ?2 || '/'))
+              ORDER BY l.path, f.face_index",
+        )?;
+        let mut run = |exact: &str, prefix: &str| -> Result<(), StoreError> {
+            let rows = st.query_map(params![exact, prefix], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
+            for row in rows {
+                let (path, hash, face_index) = row?;
+                let hash: [u8; 32] = hash.try_into().map_err(|_| StoreError::BadHash("hash không đủ 32 byte".into()))?;
+                out.push((path, FaceKey { hash, face_index }));
+            }
+            Ok(())
+        };
+        for e in exact {
+            run(e, "")?;
+        }
+        for p in prefixes {
+            run("\u{0}", p)?;
+        }
+        Ok(out)
     }
 
     /// Xoá file không còn vị trí nào (vị trí `missing` vẫn giữ file). Không đụng `u`.

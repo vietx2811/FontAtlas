@@ -18,6 +18,10 @@ pub enum SourceKind {
     GoogleFonts,
     AdobeFonts,
     Community,
+    /// G8: font lẻ nhập từng file (thả file font ngoài mọi nguồn); không có thư mục, không quét, không theo dõi.
+    Loose,
+    /// G7b: bản sao đổi tên do Font Atlas tạo; nguồn hệ thống ẩn.
+    Derived,
 }
 
 impl SourceKind {
@@ -28,6 +32,8 @@ impl SourceKind {
             SourceKind::GoogleFonts => "google_fonts",
             SourceKind::AdobeFonts => "adobe_fonts",
             SourceKind::Community => "community",
+            SourceKind::Loose => "loose",
+            SourceKind::Derived => "derived",
         }
     }
     pub fn parse(s: &str) -> Option<SourceKind> {
@@ -37,6 +43,8 @@ impl SourceKind {
             "google_fonts" => SourceKind::GoogleFonts,
             "adobe_fonts" => SourceKind::AdobeFonts,
             "community" => SourceKind::Community,
+            "loose" => SourceKind::Loose,
+            "derived" => SourceKind::Derived,
             _ => return None,
         })
     }
