@@ -1,3 +1,5 @@
 pass tree=ccab823789a65a554e9929493a624e1dea814109 qa=1
 2026-11-11T23:44:46Z vxmacmini 6789s
 npm-ci:ok:0 vite-build:ok:2 tsc:ok:3 vitest:ok:12 cargo-test:ok:5782 bindings-drift:ok:0 clippy:ok:446 tauri-debug-build:ok:230 native-qa:ok:314
+
+rerun-fail: 2026-11-13T14:19:50Z 2143s (cargo-test) — giữ PASS cũ, log: runs/d6c655043cc892f336988833ce6e3ee0cdb84316
