@@ -171,5 +171,20 @@ pub fn run() {
             {
                 crate::services::lifecycle::on_exit(&state);
             }
+            // Link `fontatlas://` (macOS gửi khi app đang chạy hoặc vừa được mở bởi link): chỉ xếp hàng
+            // rồi báo giao diện; không bao giờ tự làm gì với nội dung link.
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = &event
+                && let Some(state) = app.try_state::<std::sync::Arc<AppState>>()
+            {
+                let any = urls.iter().fold(false, |acc, u| crate::services::figma::enqueue_link(&state, u.as_str()) | acc);
+                if any {
+                    use tauri::Emitter;
+                    let _ = app.emit("figma-import-pending", ());
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.set_focus();
+                    }
+                }
+            }
         });
 }

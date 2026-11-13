@@ -120,3 +120,24 @@ fn resolve_200_items_is_fast_on_a_360_face_library() {
     assert!(t.elapsed() < Duration::from_millis(50), "200 mục mất {:?}", t.elapsed());
     assert_eq!(out.len(), 200);
 }
+
+#[test]
+fn opened_links_queue_until_the_frontend_takes_them_and_bad_ones_queue_a_coded_error() {
+    let d = tempfile::tempdir().unwrap();
+    let st = AppState::new(AppDirs::under(&d.path().join("data")), Box::new(NoActivation));
+    assert!(figma::take_pending_imports(&st).is_empty());
+    // Mở lạnh: link tới trước khi giao diện sẵn sàng → phải còn nguyên chờ lấy.
+    assert!(figma::enqueue_link(&st, &link(JSON)));
+    assert!(figma::enqueue_link(&st, "fontatlas://fonts?v=9&d=e30"));
+    assert!(!figma::enqueue_link(&st, "https://example.com/x"), "không phải scheme của ta: bỏ qua, không xếp");
+    assert!(!figma::enqueue_link(&st, "file:///etc/passwd"));
+    let got = figma::take_pending_imports(&st);
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0].import.as_ref().unwrap().items.len(), 2);
+    assert_eq!(got[1].error.as_deref(), Some("import_version"));
+    assert!(figma::take_pending_imports(&st).is_empty(), "lấy xong là rỗng");
+    for _ in 0..30 {
+        figma::enqueue_link(&st, &link(JSON));
+    }
+    assert_eq!(figma::take_pending_imports(&st).len(), figma::PENDING_MAX, "hàng đợi có trần");
+}

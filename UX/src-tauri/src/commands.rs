@@ -118,6 +118,7 @@ macro_rules! command_list {
             async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
             async clear_recent_views() -> Result<u32, CmdError>;
             async parse_figma_import(text: String) -> Result<FigmaImportDto, CmdError>;
+            async take_pending_imports() -> Result<Vec<PendingImportDto>, CmdError>;
             async resolve_fonts(items: Vec<FontNameDto>) -> Result<Vec<FontMatchDto>, CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
@@ -389,6 +390,7 @@ cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
 cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
 cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));
 cmd!(parse_figma_import(text: String) -> FigmaImportDto => |_s| figma::parse_figma_import(&text));
+cmd!(take_pending_imports() -> Vec<PendingImportDto> => |s| Ok(figma::take_pending_imports(s)));
 cmd!(resolve_fonts(items: Vec<FontNameDto>) -> Vec<FontMatchDto> => |s| figma::resolve_fonts(s, &items));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {

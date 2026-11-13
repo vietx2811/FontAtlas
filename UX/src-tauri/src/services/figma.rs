@@ -135,3 +135,29 @@ pub fn resolve_fonts(state: &AppState, items: &[FontNameDto]) -> Result<Vec<Font
         })
         .collect())
 }
+
+/// Số link chờ tối đa (link thừa bị bỏ; không để một vòng lặp bên ngoài làm đầy bộ nhớ).
+pub const PENDING_MAX: usize = 10;
+
+/// Nhận một URL do hệ điều hành chuyển tới. Trả `false` (không xếp) nếu không phải scheme `fontatlas://`:
+/// scheme khác không bao giờ được xử lý ở đây. Link sai định dạng vẫn xếp, kèm mã lỗi, để giao diện báo.
+pub fn enqueue_link(state: &AppState, url: &str) -> bool {
+    if !url.trim_start().to_ascii_lowercase().starts_with("fontatlas://") {
+        return false;
+    }
+    let item = match parse_figma_import(url.trim_start()) {
+        Ok(import) => PendingImportDto { import: Some(import), error: None },
+        Err(e) => PendingImportDto { import: None, error: Some(e.code) },
+    };
+    if let Ok(mut q) = state.pending_imports.lock()
+        && q.len() < PENDING_MAX
+    {
+        q.push(item);
+    }
+    true
+}
+
+/// Giao diện gọi lúc khởi động (mở lạnh) và mỗi khi nhận sự kiện `figma-import-pending`.
+pub fn take_pending_imports(state: &AppState) -> Vec<PendingImportDto> {
+    state.pending_imports.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default()
+}

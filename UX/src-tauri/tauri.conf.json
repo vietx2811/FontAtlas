@@ -65,5 +65,12 @@
         "Resources/LICENSE-hyperglot.txt": "resources/LICENSE-hyperglot.txt"
       }
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["fontatlas"]
+      }
+    }
   }
 }

@@ -145,6 +145,7 @@ export type { PeekOccupiedDto } from './PeekOccupiedDto';
 export type { PeekOpenDto } from './PeekOpenDto';
 export type { PeekOpenResultDto } from './PeekOpenResultDto';
 export type { PeekRoleDto } from './PeekRoleDto';
+export type { PendingImportDto } from './PendingImportDto';
 export type { PlanItemDto } from './PlanItemDto';
 export type { PlanMemberDto } from './PlanMemberDto';
 export type { PreviewCacheInfoDto } from './PreviewCacheInfoDto';

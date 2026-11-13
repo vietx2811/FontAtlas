@@ -72,6 +72,7 @@ import type { PairTheseOptsDto } from './PairTheseOptsDto';
 import type { PartnerPageDto } from './PartnerPageDto';
 import type { PeekOpenDto } from './PeekOpenDto';
 import type { PeekOpenResultDto } from './PeekOpenResultDto';
+import type { PendingImportDto } from './PendingImportDto';
 import type { PreviewCacheInfoDto } from './PreviewCacheInfoDto';
 import type { PreviewInfoDto } from './PreviewInfoDto';
 import type { PreviewItemDto } from './PreviewItemDto';
@@ -173,6 +174,7 @@ export interface TauriCommandMap {
   recent_views: { args: { limit: number }; result: RecentViewDto[] };
   clear_recent_views: { args: Record<string, never>; result: number };
   parse_figma_import: { args: { text: string }; result: FigmaImportDto };
+  take_pending_imports: { args: Record<string, never>; result: PendingImportDto[] };
   resolve_fonts: { args: { items: FontNameDto[] }; result: FontMatchDto[] };
   save_png: { args: { suggestedName: string; pngBase64: string }; result: string | null };
   duplicate_groups: { args: { q: FaceQueryDto }; result: DuplicateGroupDto[] };

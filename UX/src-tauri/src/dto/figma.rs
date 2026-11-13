@@ -65,3 +65,13 @@ pub struct FontMatchDto {
     /// Đã xếp hạng, tối đa 5 (xem `FACES_MAX`).
     pub faces: Vec<FaceMatchDto>,
 }
+
+/// Link `fontatlas://` đã nhận (mở lạnh hoặc khi app đang chạy), chờ giao diện lấy. Đúng một trong hai trường có giá trị.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct PendingImportDto {
+    pub import: Option<FigmaImportDto>,
+    /// Mã lỗi (`err.<mã>`) khi link không hợp lệ.
+    pub error: Option<String>,
+}
