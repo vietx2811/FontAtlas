@@ -157,6 +157,40 @@ describe('PairingDesk', () => {
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Đã đặt .* vào vai Body/);
   });
 
+  const dragTo = (from: HTMLElement, drop: Element) => {
+    (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => drop;
+    act(() => { from.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 60, clientY: 60 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60 })); });
+  };
+
+  it('G8: kéo ứng viên thả lên một vai đặt font vào vai đó, Hoàn tác trả vai về như cũ', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const display = screen.getAllByTestId('desk-role').find(b => b.dataset.role === 'display')!.closest('li')!;
+    const before = (await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key;
+    const cand = screen.getAllByTestId('desk-cand').find(c => !c.querySelector('[data-testid=cand-inuse]'))!;
+    dragTo(cand, display); await settle();
+    const after = (await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key;
+    expect(after).not.toEqual(before);
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toMatch(/Đã đặt .* vào vai/); expect(n.action?.label).toBe('Hoàn tác');
+    n.action!.run(); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key).toEqual(before);
+  });
+
+  it('G8: kéo vai này thả lên vai kia đổi chỗ hai font, Hoàn tác đổi lại', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    fireEvent.click(screen.getAllByTestId('desk-cand')[0].querySelector('[data-testid=desk-cand-add]')!); await settle();
+    const slots = async () => Object.fromEntries((await api.getCase(res.case.id)).combos[0].slots.map(s => [s.role, s.key.hashHex]));
+    const was = await slots(); expect(Object.keys(was).sort()).toEqual(['body', 'display']);
+    const btn = (r: string) => screen.getAllByTestId('desk-role').find(b => b.dataset.role === r)!;
+    dragTo(btn('display'), btn('body').closest('li')!); await settle();
+    expect(await slots()).toEqual({ display: was.body, body: was.display });
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/Đã đổi chỗ/);
+    n.action!.run(); await settle();
+    expect(await slots()).toEqual(was);
+  });
+
   it('G2: the + key places the selected candidate; Enter on the + button does not place twice; the in-use font has no + button', async () => {
     const { api, res } = await seeded(); await mount(api, res);
     const spy = vi.spyOn(api, 'setComboSlot');

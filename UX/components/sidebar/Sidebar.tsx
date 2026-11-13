@@ -291,7 +291,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />
         <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} drop={{ kind: 'active', id: 0, name: t('side.active'), here: false }} />
         {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
-        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} />}
+        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} drop={{ kind: 'compare', id: 0, name: t('compare.session', { n: cmpSession.faces.length }), here: false }} />}
 
         {notice && (
           <div className="fa-notice" role="status">

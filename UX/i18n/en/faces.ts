@@ -85,5 +85,8 @@ export const EN_FACES: Record<keyof typeof FACES_I18N, string> = {
   'dnd.activeDone': 'Activated {what}', 'dnd.activeAllThere': 'These fonts are already active: nothing to do', 'dnd.activeMissing': 'Can’t activate: the font file isn’t on this Mac',
   'dnd.dropTag': 'Drop to tag “{name}”', 'dnd.dropActive': 'Drop to activate',
   'dnd.moveTo': 'Drop to move to “{name}”', 'dnd.moved': 'Moved {what} to “{name}”', 'dnd.moveUndone': 'Undone: put {what} back in the original project', 'dnd.moveFail': 'Couldn’t move to “{name}”: {msg}',
+  'dnd.compareAdded': 'Added {what} to Compare', 'dnd.compareSome': 'Added {what} to Compare ({k} already there or no room)', 'dnd.compareAllThere': 'These fonts are already in Compare', 'dnd.compareFull': 'Compare is full ({n} fonts): nothing added', 'dnd.compareUndone': 'Undone: removed {what} from Compare', 'dnd.dropCompare': 'Drop to add to Compare',
+  'dnd.dropRole': 'Drop to put in the “{role}” role', 'dnd.dropSwap': 'Drop to swap with the “{role}” role', 'dnd.hereRole': 'This font is already in this role',
+  'dnd.rolePlaced': 'Put {font} in the {role} role', 'dnd.roleSame': '{font} is already the {role}', 'dnd.roleSwapped': 'Swapped the {a} and {b} roles', 'dnd.roleUndone': 'Undone: the {role} role is back as it was', 'dnd.roleFail': 'Couldn’t put it in the {role} role: {msg}',
   'dnd.addTo': 'Add to…', 'dnd.addTo.tip': 'Add the selected fonts to a project (same as dragging onto the sidebar)',
 };

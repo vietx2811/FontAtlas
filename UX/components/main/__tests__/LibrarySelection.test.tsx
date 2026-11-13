@@ -521,6 +521,21 @@ describe('Library: thêm vào dự án (G1)', () => {
     drop.remove();
   });
 
+  it('thả thẻ lên So sánh (data-drop-compare) thêm vào phiên So sánh; font đã có thì bỏ qua; Hoàn tác gỡ phần vừa thêm', async () => {
+    const api = createMockApi();
+    const [f0, f1] = (await api.queryFaces({ limit: 5 })).items;
+    useUiStore.getState().openCompare([f0, f1]); useUiStore.getState().closeCompare();
+    await mount(api);
+    const drop = document.createElement('div'); drop.dataset.dropCompare = '0'; drop.dataset.dropName = 'So sánh'; document.body.appendChild(drop);
+    dragCellTo(cells()[3], drop); await settle(); // thẻ thứ tư: chưa có trong phiên So sánh (hai thẻ đầu)
+    const size = () => useUiStore.getState().compareSession!.faces.length;
+    expect(size()).toBe(3);
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/vào So sánh/); expect(n.action?.label).toBe('Hoàn tác');
+    act(() => n.action!.run()); await settle();
+    expect(size()).toBe(2);
+    drop.remove();
+  });
+
   it('thả thẻ lên "Đang bật" (data-drop-active) bật font; Hoàn tác tắt lại', async () => {
     const api = createMockApi();
     await mount(api);

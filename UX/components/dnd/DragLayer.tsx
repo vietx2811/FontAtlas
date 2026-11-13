@@ -15,7 +15,7 @@ export function DragLayer(): React.JSX.Element | null {
       <span className="fa-draglayer-n" data-testid="drag-count">{formatNumber(n)}</span>
       <span className="fa-draglayer-t">
         {n === 1 ? faceName(drag.rows[0]) : tn('faces.nFonts', { n: formatNumber(n) })}
-        {over && <small>{over.valid ? (over.kind === 'active' ? t('dnd.dropActive') : over.kind === 'tag' ? t('dnd.dropTag', { name: over.name }) : t(drag.move ? 'dnd.moveTo' : 'dnd.dropTo', { name: over.name })) : t('dnd.here', { name: over.name })}</small>}
+        {over && <small>{over.valid ? (over.kind === 'active' ? t('dnd.dropActive') : over.kind === 'compare' ? t('dnd.dropCompare') : over.kind === 'role' ? (drag.fromRole ? t('dnd.dropSwap', { role: over.name }) : t('dnd.dropRole', { role: over.name })) : over.kind === 'tag' ? t('dnd.dropTag', { name: over.name }) : t(drag.move ? 'dnd.moveTo' : 'dnd.dropTo', { name: over.name })) : t('dnd.here', { name: over.name })}</small>}
       </span>
     </div>,
     document.body,

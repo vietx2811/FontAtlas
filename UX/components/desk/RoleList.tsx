@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { beginFaceDrag, useFaceDragStore } from '../../store/faceDrag';
+import type { FaceRow } from '../../features/library-grid/types';
 import type { Api } from '../../api';
 import { CmdError } from '../../api';
 import type { ComboDto, ComboRoleDto } from '../../bindings';
@@ -33,6 +35,7 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
   onSelect(r: ComboRoleDto): void; onCombo(c: ComboDto, selectRole?: ComboRoleDto): void; onRenamed(from: ComboRoleDto, to: ComboRoleDto): void;
 }): React.JSX.Element {
   useNameClashes();
+  const drag = useFaceDragStore(d => d.drag);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<ComboRoleDto | null>(null);
   const [draft, setDraft] = useState('');
@@ -98,12 +101,14 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
       {roles.map(r => {
         const s = slotOf(r); const i = stored.indexOf(r); const gloss = roleGloss(r);
         return (
-          <li key={r} className="fa-desk-roleitem">
+          <li key={r} className="fa-desk-roleitem" data-drop-role={r} data-drop-name={roleLabel(r)} data-drop-here={drag?.fromRole === r ? 'true' : undefined}
+            data-drop-armed={drag ? 'true' : undefined} data-drop-over={drag?.over?.kind === 'role' && drag.over.role === r ? (drag.over.valid ? 'ok' : 'no') : undefined}>
             {renaming === r
               ? <input className="fa-desk-roleinput" data-testid="role-rename" aria-label={t('role.rename', { role: roleLabel(r) })} autoFocus defaultValue={roleLabel(r)} maxLength={40}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void rename(r, e.currentTarget.value); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setRenaming(null); } }}
                   onBlur={e => { if (renaming === r) void rename(r, e.currentTarget.value); }} />
               : <button type="button" className="fa-desk-role" data-testid="desk-role" data-role={r} aria-pressed={r === role} onClick={() => onSelect(r)}
+                  onPointerDown={s && !s.missing ? e => beginFaceDrag(e, s.row as unknown as FaceRow, { solo: true, fromRole: r, ownButton: true }) : undefined}
                   onKeyDown={e => { if (e.key === 'F2') { e.preventDefault(); if (inStore(r)) setRenaming(r); } }}>
                   {gloss
                     ? <Tooltip label={gloss}><span className="fa-desk-role-name" data-term={`role.${presetKey(r)}`}>{roleLabel(r)}</span></Tooltip>

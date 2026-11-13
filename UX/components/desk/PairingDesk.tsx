@@ -12,6 +12,9 @@ import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorRoles, isHeadingLike, presetKey, roleLabel } from './deskRoles';
 import { RoleList } from './RoleList';
+import { useDeskDrop } from './useDeskDrop';
+import { beginFaceDrag } from '../../store/faceDrag';
+import type { FaceRow } from '../../features/library-grid/types';
 import { PickerBar } from './PickerBar';
 import { ComboNameSuggest } from './ComboSuggest';
 import { SOURCES, guessProfile, keepClasses, loadSource, type PickItem, type PickSource, type Profile } from './pickerSources';
@@ -157,6 +160,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) }); return false; }
   }, [api, combo, role]);
   const place = useCallback(async () => { if (trial) await placeFace(trial.face, trial.row); }, [placeFace, trial]);
+  useDeskDrop(api, combo ?? null, next => { setData(d => (d ? { ...d, combos: d.combos.map(c => (c.id === next.id ? next : c)) } : d)); setCmpRev(n => n + 1); });
 
   const fail = (e: unknown) => useNoticeStore.getState().push({ kind: 'error', text: t('desk.opFail', { msg: e instanceof Error ? e.message : String(e) }) });
   const goCombo = useCallback((id: number) => { openDesk({ caseId: desk.caseId, comboId: id, role, trial: null }); }, [openDesk, desk.caseId, role]);
@@ -289,7 +293,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
               const inUse = same(current?.key, c.face); const pinned = pinnedKeys.has(keyStr(c.face)); const unavailable = c.row.missing;
               return (
               <li key={`${c.face.hashHex}:${c.face.faceIndex}`} role="option" aria-selected={i === idx} data-testid="desk-cand" data-trial={c.fromPeek ? 'peek' : undefined}
-                onPointerEnter={() => setIdx(i)} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
+                onPointerEnter={() => setIdx(i)} onPointerDown={e => beginFaceDrag(e, c.row as unknown as FaceRow, { solo: true })} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
                 <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}

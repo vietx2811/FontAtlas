@@ -5,28 +5,30 @@ import { create } from 'zustand';
 import type { FaceRow } from '../features/library-grid/types';
 import { useSelectionStore, rowKey } from './selection';
 
-export type DropKind = 'col' | 'case' | 'active' | 'tag';
-export type DropTarget = { kind: DropKind; id: number; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
+export type DropKind = 'col' | 'case' | 'active' | 'tag' | 'compare' | 'role';
+export type DropTarget = { kind: DropKind; id: number; /** Chỉ `role`: tên vai (khoá lưu) của ô nhận. */ role?: string; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
 /** `moveFrom` = id Dự án đang xem làm nguồn kéo (null: kéo từ nơi không phải Dự án, không có gì để chuyển khỏi); `move` = đang giữ ⌘ (chuyển thay vì thêm). */
-export type FaceDragState = { rows: readonly FaceRow[]; x: number; y: number; over: DropTarget | null; moveFrom: number | null; move: boolean };
+export type FaceDragState = { rows: readonly FaceRow[]; x: number; y: number; over: DropTarget | null; moveFrom: number | null; move: boolean; /** Kéo từ một vai trong Pairing Desk (đổi chỗ font giữa hai vai). */ fromRole?: string };
 type Store = { drag: FaceDragState | null };
 export const useFaceDragStore = create<Store>()(() => ({ drag: null }));
 
 /** `moveFrom`: Dự án nguồn cần gỡ font khỏi khi người dùng giữ ⌘ lúc thả (chuyển); null = chỉ thêm. */
-export type DropHandler = (rows: readonly FaceRow[], target: DropTarget, opts: { moveFrom: number | null }) => void;
-let handler: DropHandler | null = null;
-let sourceOf: () => number | null = () => null;
+export type DropHandler = (rows: readonly FaceRow[], target: DropTarget, opts: { moveFrom: number | null; fromRole?: string }) => void;
+/** Ngăn xếp nơi nhận: màn nào đang trên cùng (Pairing Desk phủ lên Library) nhận lượt thả; gỡ đăng ký thì màn dưới nhận lại. */
+const stack: Array<{ h: DropHandler; source: () => number | null }> = [];
 /** Nơi nhận thao tác thả (Library đăng ký, có `api`) và cách biết Dự án đang xem (nguồn kéo). Trả hàm gỡ đăng ký. */
-export function registerFaceDropHandler(h: DropHandler, source: () => number | null = () => null): () => void { handler = h; sourceOf = source; return () => { if (handler === h) { handler = null; sourceOf = () => null; } }; }
+export function registerFaceDropHandler(h: DropHandler, source: () => number | null = () => null): () => void { const e = { h, source }; stack.push(e); return () => { const i = stack.indexOf(e); if (i >= 0) stack.splice(i, 1); }; }
 
 /** Quá ngưỡng này (px) mới coi là kéo; dưới ngưỡng vẫn là bấm chọn bình thường. */
 export const DRAG_THRESHOLD = 5;
 
 export function targetAt(x: number, y: number, doc: Document = document): DropTarget | null {
-  const el = doc.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-col], [data-drop-case], [data-drop-active], [data-drop-tag]');
+  const el = doc.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop-col], [data-drop-case], [data-drop-active], [data-drop-tag], [data-drop-compare], [data-drop-role]');
   if (!el) return null;
-  const kind: DropKind = el.dataset.dropCase !== undefined ? 'case' : el.dataset.dropActive !== undefined ? 'active' : el.dataset.dropTag !== undefined ? 'tag' : 'col';
-  const raw = kind === 'case' ? el.dataset.dropCase : kind === 'active' ? el.dataset.dropActive : kind === 'tag' ? el.dataset.dropTag : el.dataset.dropCol;
+  const d = el.dataset;
+  const kind: DropKind = d.dropCase !== undefined ? 'case' : d.dropActive !== undefined ? 'active' : d.dropTag !== undefined ? 'tag' : d.dropCompare !== undefined ? 'compare' : d.dropRole !== undefined ? 'role' : 'col';
+  if (kind === 'role') return { kind, id: 0, role: d.dropRole ?? '', name: d.dropName ?? '', valid: d.dropHere !== 'true' };
+  const raw = kind === 'case' ? d.dropCase : kind === 'active' ? d.dropActive : kind === 'tag' ? d.dropTag : kind === 'compare' ? d.dropCompare : d.dropCol;
   const id = Number(raw);
   if (!Number.isFinite(id)) return null;
   return { kind, id, name: el.dataset.dropName ?? '', valid: el.dataset.dropHere !== 'true' };
@@ -37,21 +39,27 @@ let cancel: (() => void) | null = null;
 export function cancelFaceDrag(): void { cancel?.(); }
 
 /** Gọi từ `onPointerDown` của thẻ font. Chuột trái / bút / chạm; bỏ qua khi bấm vào nút con (chấm bật, sao…). */
-export function beginFaceDrag(e: { button: number; clientX: number; clientY: number; pointerId: number; target: EventTarget | null }, row: FaceRow): void {
+export type BeginOpts = {
+  /** Kéo từ vai này trong Desk. */ fromRole?: string;
+  /** Chỉ mang đúng thẻ này, bỏ qua vùng chọn của lưới (ứng viên/vai trong Desk). */ solo?: boolean;
+  /** Điểm bấm chính nó là một nút (hàng vai): vẫn cho kéo, chỉ bỏ qua nút con. */ ownButton?: boolean;
+};
+export function beginFaceDrag(e: { button: number; clientX: number; clientY: number; pointerId: number; target: EventTarget | null; currentTarget?: EventTarget | null }, row: FaceRow, o: BeginOpts = {}): void {
   if (e.button !== 0 || cancel) return;
-  if ((e.target as Element | null)?.closest?.('button, input, a, select, textarea')) return;
+  const hit = (e.target as Element | null)?.closest?.('button, input, a, select, textarea');
+  if (hit && !(o.ownButton && hit === e.currentTarget)) return;
   const sx = e.clientX, sy = e.clientY;
   let dragging = false;
   let rows: readonly FaceRow[] = [];
   let lastX = sx, lastY = sy, meta = false;
-  const moveFrom = sourceOf();
-  const set = (x: number, y: number) => useFaceDragStore.setState({ drag: { rows, x, y, over: targetAt(x, y), moveFrom, move: meta && moveFrom !== null } });
+  const moveFrom = o.solo || o.fromRole ? null : (stack.at(-1)?.source() ?? null);
+  const set = (x: number, y: number) => useFaceDragStore.setState({ drag: { rows, x, y, over: targetAt(x, y), moveFrom, move: meta && moveFrom !== null, fromRole: o.fromRole } });
   const onMove = (ev: PointerEvent) => {
     if (!dragging) {
       if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < DRAG_THRESHOLD) return;
       // Kéo thẻ đang nằm trong vùng chọn → kéo cả vùng chọn; kéo thẻ ngoài vùng chọn → chỉ thẻ đó.
       const sel = useSelectionStore.getState().rows;
-      rows = sel.has(rowKey(row)) ? [...sel.values()] : [row];
+      rows = !o.solo && sel.has(rowKey(row)) ? [...sel.values()] : [row];
       dragging = true;
       document.body.dataset.faceDragging = 'true';
     }
@@ -83,7 +91,8 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
     end();
     if (!was) return;
     swallowClick();
-    if (target?.valid && handler) handler(picked, target, { moveFrom: mv });
+    const top = stack.at(-1);
+    if (target?.valid && top) top.h(picked, target, { moveFrom: mv, fromRole: o.fromRole });
   };
   const abort = () => { const was = dragging; end(); if (was) swallowClick(); };
   const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && dragging) { ev.stopPropagation(); ev.preventDefault(); abort(); } };

@@ -84,5 +84,8 @@ export const FACES_I18N = {
   'dnd.activeDone': 'Đã bật {what}', 'dnd.activeAllThere': 'Các font này đã bật: không làm gì', 'dnd.activeMissing': 'Không bật được: file font đang không có trên máy',
   'dnd.dropTag': 'Thả để gắn thẻ «{name}»', 'dnd.dropActive': 'Thả để bật',
   'dnd.moveTo': 'Thả để chuyển sang «{name}»', 'dnd.moved': 'Đã chuyển {what} sang «{name}»', 'dnd.moveUndone': 'Đã hoàn tác: đưa {what} về dự án cũ', 'dnd.moveFail': 'Không chuyển được sang «{name}»: {msg}',
+  'dnd.compareAdded': 'Đã thêm {what} vào So sánh', 'dnd.compareSome': 'Đã thêm {what} vào So sánh ({k} font đã có hoặc không còn chỗ)', 'dnd.compareAllThere': 'Các font này đã có trong So sánh', 'dnd.compareFull': 'So sánh đã đủ {n} font: không thêm được', 'dnd.compareUndone': 'Đã hoàn tác: gỡ {what} khỏi So sánh', 'dnd.dropCompare': 'Thả để thêm vào So sánh',
+  'dnd.dropRole': 'Thả để đặt vào vai «{role}»', 'dnd.dropSwap': 'Thả để đổi chỗ với vai «{role}»', 'dnd.hereRole': 'Font này đang ở vai này',
+  'dnd.rolePlaced': 'Đã đặt {font} vào vai {role}', 'dnd.roleSame': '{font} đã ở vai {role}', 'dnd.roleSwapped': 'Đã đổi chỗ vai {a} và {b}', 'dnd.roleUndone': 'Đã hoàn tác: vai {role} trở lại như cũ', 'dnd.roleFail': 'Không đặt được vào vai {role}: {msg}',
   'dnd.addTo': 'Thêm vào…', 'dnd.addTo.tip': 'Thêm font đang chọn vào dự án (như kéo thả vào thanh bên)',
 } as const;

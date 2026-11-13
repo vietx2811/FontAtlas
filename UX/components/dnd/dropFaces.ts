@@ -3,7 +3,7 @@ import type { FaceRow } from '../../features/library-grid/types';
 import { formatNumber, t, tn } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { dropFromSelection, rowKey } from '../../store/selection';
-import { useUiStore } from '../../store/ui';
+import { COMPARE_MAX, faceKey, useUiStore } from '../../store/ui';
 import { faceName } from '../faces/faceMenuModel';
 import type { DropTarget } from '../../store/faceDrag';
 
@@ -91,9 +91,28 @@ async function dropFacesOnActive(rows: readonly FaceRow[], extras: DropExtras): 
   say('info', t('dnd.activeDone', { what: what(done) }), { label: t('dnd.undo'), run: () => void setActive(done, false) });
 }
 
+/** Thả font lên mục So sánh ở thanh bên: thêm vào phiên So sánh đang mở (tối đa COMPARE_MAX); Hoàn tác gỡ đúng phần vừa thêm. */
+function dropFacesOnCompare(rows: readonly FaceRow[]): void {
+  const ui = useUiStore.getState();
+  const added: FaceRow[] = [];
+  let full = false;
+  for (const r of rows) {
+    if (ui.compareSession?.faces.some(f => faceKey(f) === faceKey(r))) continue;
+    if (useUiStore.getState().addCompareFace(r)) added.push(r); else if ((useUiStore.getState().compareSession?.faces.length ?? 0) >= COMPARE_MAX) { full = true; break; }
+  }
+  if (!added.length) { say('info', full ? t('dnd.compareFull', { n: COMPARE_MAX }) : t('dnd.compareAllThere')); return; }
+  const skipped = rows.length - added.length;
+  say('info', skipped > 0 ? t('dnd.compareSome', { what: what(added), k: skipped }) : t('dnd.compareAdded', { what: what(added) }), {
+    label: t('dnd.undo'),
+    run: () => { for (const r of added) useUiStore.getState().removeCompareFace(faceKey(r)); say('info', t('dnd.compareUndone', { what: what(added) })); },
+  });
+}
+
 /** Cửa vào chung của lượt thả font từ lưới: chọn bộ xử lý theo loại đích. */
 export function dropFacesOn(api: Api, rows: readonly FaceRow[], target: DropTarget, extras: DropExtras = {}, opts: { moveFrom?: number | null } = {}): Promise<void> {
   if (target.kind === 'active') return dropFacesOnActive(rows, extras);
   if (target.kind === 'tag') return dropFacesOnTag(api, rows, target);
+  if (target.kind === 'compare') { dropFacesOnCompare(rows); return Promise.resolve(); }
+  if (target.kind === 'role') return Promise.resolve(); // vai combo do Pairing Desk tự nhận (useDeskDrop)
   return dropFacesInto(api, rows, { kind: target.kind, id: target.id, name: target.name }, opts);
 }
