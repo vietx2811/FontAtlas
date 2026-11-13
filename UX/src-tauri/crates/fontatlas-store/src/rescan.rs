@@ -17,6 +17,9 @@ use crate::open::{Store, now_ms};
 pub const CLOUD_STALE_MARK: &str = "cloud-stale";
 pub const FONT_EXTENSIONS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
 pub const INGEST_BATCH: usize = 256;
+/// Vị trí `missing` quá hạn này (kể từ lần cuối thấy file) bị dọn khi quét xong: file đã xoá khỏi đĩa thật sự.
+/// Trong thời gian ân hạn vị trí vẫn được giữ để file chuyển chỗ/ổ cắm lại khớp theo hash.
+pub const MISSING_RETENTION_MS: i64 = 30 * 24 * 3600 * 1000;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +74,8 @@ pub struct RescanStats {
     pub analyzed: usize,
     pub failed: usize,
     pub missing: usize,
+    /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
+    pub purged: usize,
     pub unreadable: Vec<(String, String)>,
 }
 
@@ -228,6 +233,14 @@ pub struct SourceRemovalReport {
     pub tags_affected: u32,
     /// Số font của nguồn đang BẬT; không tự tắt, người dùng tắt ở "Đang bật".
     pub active_fonts: u32,
+}
+
+/// Số liệu của [`Store::rebuild_library`]: những gì đã bị xoá khỏi library.db.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RebuildReport {
+    pub files: u32,
+    pub faces: u32,
+    pub locations: u32,
 }
 
 fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
@@ -514,6 +527,8 @@ impl Store {
             stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
         }
         tx.commit()?;
+        // quét trọn vẹn → tự dọn: vị trí missing quá hạn, file/face mồ côi, dữ liệu dẫn xuất không còn file
+        stats.purged = self.gc_missing(MISSING_RETENTION_MS)?;
         Ok(stats)
     }
 
@@ -531,19 +546,80 @@ impl Store {
         removal_report(&self.conn, source_id)
     }
 
-    /// Gỡ nguồn (thao tác người dùng): vị trí của nguồn, bản ghi `u.sources`, rồi dọn rác (`gc`).
+    /// Gỡ nguồn (thao tác người dùng): bản ghi `u.sources`, vị trí file của nguồn, rồi dọn rác (`gc`).
     ///
     /// **Dữ liệu người dùng KHÔNG bị đụng**: Dự án (Case/Combo), Collection, Tag, Yêu thích, ghi đè phân loại, cặp
     /// font khoá theo `(hash, face_index)` ở user.db, không phụ thuộc nguồn. Font chỉ có ở nguồn này sẽ `missing`
     /// (Dự án) hoặc ẩn khỏi lưới nhưng còn trong Collection/Tag; thêm lại nguồn ⇒ khớp lại theo hash. Font đang bật
     /// không bị tự tắt. Trả số liệu đã tính TRƯỚC khi xoá.
+    ///
+    /// Hai DB ở chế độ WAL nên KHÔNG có giao dịch nguyên tử chung: mỗi bước là một giao dịch riêng, theo thứ tự cố
+    /// định `u.sources` → `file_locations`. Crash giữa hai bước chỉ để lại vị trí mồ côi (`source_id` không còn trong
+    /// `u.sources`), không bao giờ để nguồn "còn tên mà hết font"; [`Store::sweep_orphan_locations`] dọn lại ở lần
+    /// khởi động sau (và ở mọi lần gỡ nguồn kế tiếp). Chạy lại `remove_source` cho cùng id cũng an toàn (idempotent).
     pub fn remove_source(&mut self, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
+        self.remove_source_with(source_id, &mut || Ok(()))
+    }
+
+    /// Như `remove_source`, `between` chạy giữa hai giao dịch (test mô phỏng crash bằng cách trả `Err`).
+    pub fn remove_source_with(
+        &mut self,
+        source_id: i64,
+        between: &mut dyn FnMut() -> Result<(), StoreError>,
+    ) -> Result<SourceRemovalReport, StoreError> {
+        let report = removal_report(&self.conn, source_id)?;
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        let report = removal_report(&tx, source_id)?;
-        tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
         tx.execute("DELETE FROM u.sources WHERE source_id=?1", [source_id])?;
         tx.commit()?;
+        between()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
+        tx.commit()?;
+        self.sweep_orphan_locations()?;
+        Ok(report)
+    }
+
+    /// Xoá vị trí file của nguồn không còn trong `u.sources` (dấu vết của lần gỡ bị ngắt giữa chừng), rồi `gc`.
+    /// Cần kết nối có `u` (không chạy trên `open_library_only`). Trả số vị trí đã xoá.
+    pub fn sweep_orphan_locations(&mut self) -> Result<usize, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let n = tx.execute(
+            "DELETE FROM file_locations WHERE source_id NOT IN (SELECT source_id FROM u.sources)",
+            [],
+        )?;
+        tx.commit()?;
         self.gc()?;
+        Ok(n)
+    }
+
+    /// Dọn vị trí `missing` mà lần cuối thấy file đã quá `retention_ms`, rồi `gc`. Trả số vị trí đã dọn.
+    pub fn gc_missing(&mut self, retention_ms: i64) -> Result<usize, StoreError> {
+        let cutoff = now_ms() - retention_ms;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let n = tx.execute("DELETE FROM file_locations WHERE missing=1 AND last_seen_at < ?1", [cutoff])?;
+        tx.commit()?;
+        self.gc()?;
+        Ok(n)
+    }
+
+    /// Dựng lại thư viện từ đầu: xoá file/face/vị trí và mọi dữ liệu dẫn xuất tính cục bộ (phân tích, embedding, ngôn ngữ,
+    /// trạng thái pipeline) trong MỘT giao dịch library.db (crash giữa chừng = chưa đổi gì). KHÔNG đụng user.db
+    /// (Dự án, Collection, Tag, Yêu thích, nguồn…) và dữ liệu cộng đồng; font trả lại bằng quét lại các nguồn.
+    pub fn rebuild_library(&mut self) -> Result<RebuildReport, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let count = |t: &str| -> Result<u32, StoreError> {
+            Ok(tx.query_row(&format!("SELECT count(*) FROM {t}"), [], |r| r.get::<_, i64>(0))? as u32)
+        };
+        let report = RebuildReport { files: count("files")?, faces: count("faces")?, locations: count("file_locations")? };
+        tx.execute("DELETE FROM file_locations", [])?;
+        tx.execute("DELETE FROM files", [])?; // faces theo ON DELETE CASCADE (trigger cập nhật FTS)
+        for t in ["analyses", "embeddings"] {
+            tx.execute(&format!("DELETE FROM {t} WHERE source <> 'community'"), [])?;
+        }
+        for t in ["pipeline_state", "face_langs", "face_lang_state"] {
+            tx.execute(&format!("DELETE FROM {t}"), [])?;
+        }
+        tx.commit()?;
         Ok(report)
     }
 
@@ -561,7 +637,9 @@ impl Store {
                 [],
             )?;
         }
-        tx.execute("DELETE FROM pipeline_state WHERE hash NOT IN (SELECT hash FROM files)", [])?;
+        for t in ["pipeline_state", "face_langs", "face_lang_state"] {
+            tx.execute(&format!("DELETE FROM {t} WHERE hash NOT IN (SELECT hash FROM files)"), [])?;
+        }
         tx.commit()?;
         Ok(n)
     }
