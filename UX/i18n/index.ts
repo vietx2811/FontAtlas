@@ -13,6 +13,7 @@ import { DUP_I18N } from './dup';
 import { AUTO_I18N } from './auto';
 import { LIBRARY_I18N } from './library';
 import { ERR_I18N } from './err';
+import { FIGMA_I18N } from './figma';
 import { SETTINGS_I18N } from './settings';
 import { DETAIL_I18N } from './detail';
 import { UI_I18N } from './ui';
@@ -100,6 +101,7 @@ export const vi = {
   ...DESK_I18N,
   ...VIEW_I18N,
   ...ERR_I18N,
+  ...FIGMA_I18N,
   ...SETTINGS_I18N,
   ...DETAIL_I18N,
   ...UI_I18N,
