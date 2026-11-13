@@ -368,7 +368,7 @@
     const ownNames = () => cells().map(key).filter(n => n && n.dataset.ownFont);
     await wait(() => cells().length >= 10, 30000);
     await wait(() => ownNames().length >= 3, 30000);
-    await sleep(100); await snap('cards-own-font');
+    await settle(100); await snap('cards-own-font');
     const ownFams = ownNames().slice(0, 6).map(n => ({ text: n.textContent, family: getComputedStyle(n).fontFamily.slice(0, 40), differs: getComputedStyle(n).fontFamily !== uiFont, hasFallback: /Inter|var\(--font-ui\)|-apple-system/.test(getComputedStyle(n).fontFamily) || getComputedStyle(n).fontFamily.split(',').length > 1 }));
     await log('card-names-own-font', ownFams.length >= 3 && ownFams.every(f => f.differs), { loaded: ownNames().length, of: cells().length, ownFams });
     // Tooltip: rê chuột vào chấm tiếng Việt của thẻ đầu, rồi vào nút Cài đặt
@@ -378,12 +378,12 @@
     const tipFor = el => () => { const x = tip(); return x && el.getAttribute('aria-describedby')?.split(' ').includes(x.id) ? x : null; };
     const closed = () => wait(() => !tip(), 5000);
     const t1 = await wait(tipFor(vi0), 20000);
-    const t1Text = t1?.textContent; await sleep(100); await snap('tooltip-badge');
+    const t1Text = t1?.textContent; await settle(100); await snap('tooltip-badge');
     unhover(vi0); await closed();
     const gear = document.querySelector('button[aria-label="Cài đặt"]');
     hover(gear);
     const t2 = await wait(tipFor(gear), 20000);
-    const t2Text = t2?.textContent; await sleep(100); await snap('tooltip-settings');
+    const t2Text = t2?.textContent; await settle(100); await snap('tooltip-settings');
     unhover(gear); await closed();
     await log('tooltip-hover', !!t1 && !!t2 && /Cài đặt/.test(t2Text) && /⌘,/.test(t2Text) && !tip(), { badge: t1Text, gear: t2Text, leftover: !!tip(), nativeTitles: document.querySelectorAll('[title]').length });
     // Đa chọn: click + ⌘-click. Đo lưới so với panel chi tiết trước/sau khi panel mở và thanh chọn xuất hiện.
@@ -402,16 +402,16 @@
     const rafTicks = ms => new Promise(res => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < ms) requestAnimationFrame(f); }; requestAnimationFrame(f); setTimeout(() => res(n), ms + 100); });
     const cs = cells();
     const m0 = measure('before-panel');
-    cs[0].click(); await sleep(300);
+    cs[0].click(); await sleep(300); // CÓ CHỦ Ý theo thời gian: đo lưới ở +300ms/+800ms sau khi panel mở để bắt đè lấn nhất thời trong lúc animation
     const m1 = measure('panel-open+300ms');
-    await sleep(500);
+    await sleep(500); // (tiếp) mốc +800ms
     const m1b = measure('panel-open+800ms');
     cs[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
     const bar = await wait(() => document.querySelector('[data-testid=selection-count]'), 5000);
-    await sleep(100); await snap('selection-bar');
+    await settle(100); await snap('selection-bar');
     await log('cmd-click-two', /^2 đã chọn$/.test(bar?.textContent ?? ''), { bar: bar?.textContent, selected: cells().filter(c => c.getAttribute('aria-selected') === 'true').length });
     const m2 = measure('bar-shown');
-    await sleep(500);
+    await sleep(500); // CÓ CHỦ Ý theo thời gian: mốc +500ms sau khi thanh chọn hiện (lưới không được bị đè)
     const m3 = measure('bar-shown+500ms');
     const ticks = await rafTicks(500);
     const m4 = measure('after-raf');
@@ -500,9 +500,9 @@
       await log('active-family', famOn && stOff.length === 0 && famBtn()?.getAttribute('aria-pressed') === 'false', { styleCount, onCount: st.length, famOn, offCount: stOff.length });
       // Dark: ảnh panel + thẻ đang bật.
       sw().click(); await waitActive(x => x.length === 1);
-      const themeAct = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400);
+      const themeAct = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await settle(400);
       await snap('active-peek-dark');
-      if (themeAct) document.documentElement.dataset.theme = themeAct; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      if (themeAct) document.documentElement.dataset.theme = themeAct; else document.documentElement.removeAttribute('data-theme');
       sw().click(); const fin = await waitActive(x => x.length === 0);
       await log('active-clean', fin.length === 0, { left: fin.map(x => [x.hashHex.slice(0, 8), x.scope]) });
     }
@@ -512,13 +512,13 @@
     compareBtn?.click();
     const tbl = await wait(() => document.querySelector('.cmp-tbl'), 30000);
     await wait(() => document.querySelectorAll('.cmp-tbl .cmp-metric, .cmp-tbl .cmp-na').length >= 8, 30000);
-    await sleep(600); await snap('compare-open');
+    await settle(600); await snap('compare-open');
     const colHeads = [...document.querySelectorAll('.cmp-tbl .ch')];
     const metricCells = document.querySelectorAll('.cmp-tbl .cmp-metric').length;
     const ovlCount = 2; // Overlay không còn là hàng; kiểm ở các bước overlay bên dưới
     const crashed = /Lỗi giao diện/.test(document.body.textContent ?? '');
     const sizeBefore = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
-    btn('Match x-height')?.click(); await sleep(300);
+    btn('Match x-height')?.click(); await wait(() => [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize).join('|') !== sizeBefore.join('|'), 5000);
     const sizeAfter = [...document.querySelectorAll('.cmp-line')].map(x => x.style.fontSize);
     const xhRow = [...document.querySelectorAll('.cmp-tbl .row')].find(r => /x-height/.test(r.querySelector('.rh')?.textContent ?? ''));
     const xhVals = [...(xhRow?.querySelectorAll('.cmp-val b') ?? [])].map(b => b.textContent);
@@ -534,11 +534,11 @@
     await log('compare-sticky-property-col', rhCs.position === 'sticky' && rhCs.left === '0px' && tblCs.overflowX !== 'hidden' && parseFloat(rhCs.zIndex) >= 2, { pos: rhCs.position, left: rhCs.left, tblOverflow: tblCs.overflowX, z: rhCs.zIndex });
     // H2: pin
     const namesBefore = heads().map(headName);
-    ariaBtn('Pin cột', heads()[1])?.click(); await sleep(300);
+    ariaBtn('Pin cột', heads()[1])?.click(); await wait(() => heads()[0]?.dataset.pinned === 'true', 5000);
     const afterPin = heads().map(headName);
     await snap('compare-v2-pinned');
     await log('compare-pin', afterPin[0] === namesBefore[1] && heads()[0].dataset.pinned === 'true' && heads()[1].classList.contains('base') && /mốc/.test(heads()[1].textContent), { namesBefore, afterPin });
-    ariaBtn('Bỏ pin', heads()[0])?.click(); await sleep(300);
+    ariaBtn('Bỏ pin', heads()[0])?.click(); await wait(() => heads()[0]?.dataset.pinned !== 'true', 5000);
     // H3: + thêm font, × bỏ
     const addBtn = [...document.querySelectorAll('.cmp-tbl button')].find(b => b.getAttribute('aria-label') === 'Thêm font');
     addBtn?.click();
@@ -580,34 +580,34 @@
     await log('compare-png-missing-note', !!pngMiss && pngMiss.texts.some(x => /^Thiếu: /.test(x)), { notes: pngMiss?.texts.filter(x => /Thiếu/.test(x)) });
     // Esc của bộ gõ (isComposing/229) trong ô specimen không đóng màn Compare
     const ed = document.querySelector('.cmp-edit'); ed.focus();
-    ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 229, isComposing: true, bubbles: true, cancelable: true })); await sleep(300);
+    ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 229, isComposing: true, bubbles: true, cancelable: true })); await settle(150); // kiểm PHỦ ĐỊNH (màn phải còn mở): cho handler Esc một nhịp để (nếu sai) đóng màn
     await log('compare-esc-ime-stays-open', !!document.querySelector('.cmp-tbl') && document.activeElement === ed, { open: !!document.querySelector('.cmp-tbl') });
-    ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(200); // Esc thường trong ô: chỉ blur, màn vẫn mở
+    ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await wait(() => document.activeElement !== ed, 3000); await settle(100); // Esc thường trong ô: chỉ blur, màn vẫn mở (phủ định: thêm một nhịp)
     await log('compare-esc-in-field-blurs', document.activeElement !== ed && !!document.querySelector('.cmp-tbl'), {});
-    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Chữ Việt đẹp — Ấn tượng'); await sleep(300);
+    setVal(document.querySelector('.cmp-edit'), prevSample ?? 'Chữ Việt đẹp — Ấn tượng'); await wait(() => document.querySelector('.cmp-edit')?.value === (prevSample ?? 'Chữ Việt đẹp — Ấn tượng'), 3000);
     // H7: hàng Vietnamese có TermTip "Stacked diacritics" + chữ "dấu chồng"; ký tự dấu chồng được đánh dấu
     const viHead = document.querySelector('[data-row="specimen.vi"]');
     await log('compare-vi-row', /Vietnamese/.test(viHead?.querySelector('b')?.textContent ?? '') && viHead?.querySelector('[data-term="vi_marks"]')?.textContent === 'Stacked diacritics' && /dấu chồng/.test(viHead?.textContent ?? '') && document.querySelectorAll('.cmp-vi [data-stacked="true"]').length >= 5, { head: viHead?.textContent, stacked: document.querySelectorAll('.cmp-vi [data-stacked="true"]').length });
     // H8a: Overlay là vùng chung, bật bằng nút; mắt trên tiêu đề cột chọn font; mốc đặc
     const ovBtn = btn('Overlay');
-    ovBtn?.click(); await wait(() => document.querySelector('.cmp-ovl text'), 8000); await sleep(500);
+    ovBtn?.click(); await wait(() => document.querySelector('.cmp-ovl text'), 8000); await settle(300); // overlay vẽ xong trước khi lấy mẫu/chụp
     const styles1 = [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style'));
     await snap('compare-v2-overlay');
-    const eye1 = ariaBtn('Overlay ·', heads()[1]); eye1?.click(); await sleep(300);
+    const eye1 = ariaBtn('Overlay ·', heads()[1]); eye1?.click(); await wait(() => [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style')).join('|') !== styles1.join('|'), 5000);
     const styles2 = [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style'));
-    eye1?.click(); await sleep(300);
+    eye1?.click(); await wait(() => [...document.querySelectorAll('.cmp-ovl text')].map(x => x.getAttribute('data-style')).join('|') === styles1.join('|'), 5000);
     const pngOv = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
     await log('compare-overlay-toggle', ovBtn?.getAttribute('aria-pressed') === 'true' && styles1.join() === 'solid,line' && styles2.join() === 'solid' && !document.querySelector('[data-row="specimen.overlay"]') && !!pngOv && pngOv.overlayLayers === 2 && pngOv.rows.includes('overlay'), { styles1, styles2, pngLayers: pngOv?.overlayLayers });
     // H8b: thanh đo theo min–max của các font đang xem: hai marker không dính nhau khi giá trị khác nhau
     const bars = [...document.querySelectorAll('.cmp-tbl .row')].filter(r => r.querySelectorAll('.cmp-pbar').length === 2).map(r => [...r.querySelectorAll('.cmp-pbar i')].map(i => parseFloat(i.style.width)));
     await log('compare-pbar-scale', bars.length > 0 && bars.some(b => Math.abs(b[0] - b[1]) > 5) && !document.querySelector('.cmp-pbar em'), { rows: bars.length, spreads: bars.slice(0, 6) });
     // Ảnh dark cho bảng v2 (overlay + pin + thanh tô từ 0)
-    const themeV2 = document.documentElement.dataset.theme; document.documentElement.dataset.theme = "dark"; await sleep(400);
+    const themeV2 = document.documentElement.dataset.theme; document.documentElement.dataset.theme = "dark"; await settle(400); // đổi theme: chờ vẽ lại trước khi đo/chụp
     const fillGaps = [...document.querySelectorAll('.cmp-tbl .cmp-page')].map(pg => Math.round(pg.parentElement.getBoundingClientRect().bottom - pg.getBoundingClientRect().bottom));
     const noteBg = (document.querySelector('.cmp-tbl .fa-note') ? getComputedStyle(document.querySelector('.cmp-tbl .fa-note')).backgroundColor : '').match(/\d+/g)?.map(Number) ?? [];
     await log('compare-dark-fill-and-note-red', fillGaps.length > 0 && fillGaps.every(g => g <= 1) && noteBg.length >= 3 && noteBg[0] > 200 && noteBg[0] > noteBg[1] * 1.5 && noteBg[0] > noteBg[2] * 1.5, { fillGaps, noteBg });
     await snap('compare-v2-dark');
-    if (themeV2) document.documentElement.dataset.theme = themeV2; else document.documentElement.removeAttribute("data-theme"); await sleep(200);
+    if (themeV2) document.documentElement.dataset.theme = themeV2; else document.documentElement.removeAttribute("data-theme");
     const termC = await termCheck('.cmp-tbl .rh [data-term]');
     await log('compare-term-tooltips', termC.n >= 10 && termC.bad.length === 0 && termC.art >= 8, termC);
     // PNG: vẽ như nút Xuất nhưng không qua hộp thoại (móc QA); phải có overlay, đơn vị, nhãn không bị cắt.
@@ -619,7 +619,7 @@
     await log('compare-png-content', !!pngL && pngL.rows.includes('overlay') && pngL.rows.includes('vi') && pngL.texts.some(x => /\d,\d+ (em|°|tỷ lệ|×)/.test(x)) && !pngL.texts.some(x => x.includes('…')) && pngL.dark === false, { rows: pngL?.rows, units: pngL?.texts.filter(x => /\d,\d+ /.test(x)).slice(0, 4), ellipsis: pngL?.texts.filter(x => x.includes('…')), warn: pngL?.texts.filter(x => /Thiếu|Dấu/.test(x)) });
     // DARK: vùng specimen nền tối, đổi theme lúc đang mở là đổi ngay; PNG theo theme.
     const prevTheme = document.documentElement.dataset.theme;
-    document.documentElement.dataset.theme = 'dark'; await sleep(200);
+    document.documentElement.dataset.theme = 'dark'; await settle(200); // đổi theme: chờ vẽ lại rồi đo nền specimen
     const darkSpec = rgbSum(document.querySelector('.cmp-page'));
     const darkInk = getComputedStyle(document.querySelector('.cmp-page')).color;
     const pngD = await (window.__faQaComparePng ? window.__faQaComparePng() : null);
@@ -648,7 +648,7 @@
     pairBtn?.click();
     const prRoot = await wait(() => document.querySelector('.pr'), 20000);
     await wait(() => document.querySelector('[data-testid=pair-combo], [data-testid=zero-state], .pr-state[role=alert]'), 30000);
-    await sleep(500); await snap('pair-these-open');
+    await settle(500); await snap('pair-these-open');
     const comboN = document.querySelectorAll('[data-testid=pair-combo]').length;
     const prAlert = document.querySelector('.pr-state[role=alert]')?.textContent ?? null;
     const prLabels = document.querySelectorAll('[data-testid=pair-label]').length;
@@ -662,16 +662,16 @@
     const r0 = cs[0].getBoundingClientRect();
     cs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r0.left + 60, clientY: r0.top + 60, button: 2 }));
     const menu = await wait(() => document.querySelector('[role=menu]'), 3000);
-    await sleep(100); await snap('context-menu');
+    await settle(100); await snap('context-menu');
     const labels = [...document.querySelectorAll('[role=menuitem]')].map(i => i.textContent);
     await log('context-menu-open', !!menu && labels.some(l => /^Thêm vào dự án/.test(l)) && !!bar && document.querySelector('[data-testid=selection-count]')?.textContent === '2 đã chọn', { labels, header: menu?.textContent.slice(0, 30) });
     const addProj = [...document.querySelectorAll('[role=menuitem]')].find(i => /^Thêm vào dự án/.test(i.textContent));
     addProj?.click();
     const newProj = await wait(() => [...document.querySelectorAll('[role=menuitem]')].find(i => i.textContent === 'Dự án mới…'), 3000);
-    await sleep(100); await snap('context-submenu');
+    await settle(100); await snap('context-submenu');
     newProj?.click();
     const nameInput = await wait(() => document.querySelector('input[aria-label="Tên dự án"]'), 3000);
-    await sleep(100); await snap('new-project-prompt');
+    await settle(100); await snap('new-project-prompt');
     if (nameInput) {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(nameInput, 'QA hai font');
       nameInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -679,7 +679,7 @@
     }
     let proj = null;
     for (let i = 0; i < 30 && !proj?.itemCount; i++) { await sleep(300); proj = (await inv('list_collections', {})).find(c => c.name === 'QA hai font'); }
-    await sleep(100); await snap('project-created');
+    await settle(100); await snap('project-created');
     await log('new-project-has-two-fonts', !!proj && proj.itemCount === 2, { proj, toast: document.querySelector('.fa-toast')?.textContent, sidebar: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].some(b => /QA hai font/.test(b.textContent)) });
     // Esc bỏ chọn: chờ menu/hộp nhập/tooltip đã đóng (điều kiện thật, không đoán thời gian), rồi gửi Esc tới phần tử đang focus như bàn phím thật.
     const overlays = () => document.querySelector('[role=menu], [role=dialog], [role=alertdialog], [role=tooltip]');
@@ -691,7 +691,7 @@
     const c3 = cells()[3]; const r3 = c3.getBoundingClientRect();
     c3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 50, clientY: r3.top + 50, button: 2 }));
     await wait(() => document.querySelector('[role=menu]'), 3000);
-    await sleep(400);
+    await wait(() => document.querySelectorAll('[role=menuitem]').length > 0 && document.querySelector('[aria-label="Chi tiết font"] h2'), 5000);
     const single = [...document.querySelectorAll('[role=menuitem]')].map(i => i.textContent);
     const h2 = document.querySelector('[aria-label="Chi tiết font"] h2');
     await wait(() => h2 && h2.dataset.ownFont, 8000);
@@ -700,26 +700,28 @@
     (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('[role=menu]'), 5000);
     document.documentElement.dataset.theme = 'dark';
-    await sleep(150);
+    await settle(150); // đổi theme: chờ vẽ lại trước khi mở menu để chụp
     c3.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r3.left + 50, clientY: r3.top + 50, button: 2 }));
     await wait(() => document.querySelector('[role=menu]'), 3000);
-    await sleep(100); await snap('context-menu-dark');
+    await settle(100); await snap('context-menu-dark');
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    const gear2 = document.querySelector('button[aria-label="Cài đặt"]'); hover(gear2); await wait(tip, 3000); await sleep(100); await snap('tooltip-dark'); unhover(gear2);
+    const gear2 = document.querySelector('button[aria-label="Cài đặt"]'); hover(gear2); await wait(tip, 3000); await settle(100); await snap('tooltip-dark'); unhover(gear2);
     document.documentElement.dataset.theme = 'light';
     await log('dark-snapshots', true, '');
     // Nút sáng/tối ở sidebar phải đổi cả appearance cửa sổ native (lớp kính vibrancy của sidebar)
     const themeBtn = document.querySelector('button[aria-label="Giao diện sáng/tối"]');
     const nativeTheme = () => inv('plugin:window|theme', { label: 'main' }).catch(e => 'err:' + e);
     const themeBefore = await nativeTheme();
-    themeBtn?.click(); await sleep(400);
-    const css1 = document.documentElement.dataset.theme, native1 = await nativeTheme();
-    themeBtn?.click(); await wait(() => document.documentElement.dataset.theme !== css1, 8000); await sleep(300);
-    const css2 = document.documentElement.dataset.theme, native2 = await nativeTheme();
+    const cssBefore = document.documentElement.dataset.theme;
+    const nativeFollows = async () => { let nt = await nativeTheme(); for (let k = 0; k < 20 && nt !== document.documentElement.dataset.theme; k++) { await sleep(250); nt = await nativeTheme(); } return nt; }; // theme native đổi bất đồng bộ: chờ tới khi khớp CSS
+    themeBtn?.click(); await wait(() => document.documentElement.dataset.theme !== cssBefore, 8000);
+    const css1 = document.documentElement.dataset.theme, native1 = await nativeFollows();
+    themeBtn?.click(); await wait(() => document.documentElement.dataset.theme !== css1, 8000);
+    const css2 = document.documentElement.dataset.theme, native2 = await nativeFollows();
     await log('native-theme-follows', css1 === native1 && css2 === native2, { themeBefore, css1, native1, css2, native2 });
     // Phân loại: chip ở đầu panel + lọc theo class bằng facet thật
     const cchip = await wait(() => document.querySelector('[data-testid=class-chip]'), 10000);
-    await sleep(150); await snap('class-chip');
+    await settle(150); await snap('class-chip');
     const chipText = (cchip?.textContent ?? '').trim();
     const countNow = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, ''));
     // Tổng ban đầu: đợi tới khi > 0 và đứng yên qua hai lần đọc (thư viện còn đang tải thì số chưa ổn định).
@@ -733,10 +735,10 @@
     const chips = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
     const facetCount = Number((boxes[0]?.closest('label')?.querySelector('.fa-count')?.textContent ?? '').replace(/\D/g, ''));
     await wait(() => countNow() === facetCount, 10000);
-    await sleep(300); await snap('class-filter');
+    await settle(300); await snap('class-filter');
     const total1 = countNow();
     await log('class-chip-and-filter', !!cchip && chipText.length > 0 && boxes.length > 0 && !!chips && total1 > 0 && total1 === facetCount && (boxes.length < 2 || total1 < total0), { facetCount, chipText, facets: boxes.length, label0, total0, total1, chips: chips?.textContent });
-    await closeAdv(); await sleep(200);
+    await closeAdv();
     const sIn = document.querySelector('.fa-search input'); sIn?.focus();
     sIn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true, bubbles: true, cancelable: true }));
     await wait(() => !document.querySelector('[data-testid=filter-summary]'), 5000);
@@ -752,7 +754,7 @@
     if (dsum.total > 0) {
       dupBtn().click();
       await wait(() => document.querySelector('.dup [data-testid=dup-group]'), 20000);
-      await sleep(400); await snap('duplicates-view');
+      await settle(400); await snap('duplicates-view');
       const dplan = await inv('resolve_preview', { scope: { type: 'all' }, q: dq });
       const cards = [...document.querySelectorAll('[data-testid=dup-group]')];
       const dbtn = [...document.querySelectorAll('.dup button')].map(x => x.textContent.trim());
@@ -773,7 +775,7 @@
       const firstCard = () => document.querySelector('.dup [data-testid=dup-group]');
       [...firstCard().querySelectorAll('button')].find(x => x.textContent.trim() === 'Giải quyết')?.click();
       const dlg = await wait(() => document.querySelector('[role=dialog] [data-testid=pv-summary]'), 10000);
-      await sleep(300); await snap('duplicates-preview');
+      await settle(300); await snap('duplicates-preview');
       const hideDefault = document.querySelector('[role=dialog] input[name=dup-act]')?.checked === true;
       document.querySelector('[data-testid=pv-confirm]')?.click();
       const gone = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total - 1, 15000);
@@ -782,7 +784,7 @@
       await log('duplicates-resolve-hide', !!dlg && hideDefault && !!gone && rev1.length === rev0.length + 1 && rev1[0].action === 'hide', { hideDefault, before: rev0.length, after: rev1.length, action: rev1[0]?.action });
       [...document.querySelectorAll('.dup [role=tab]')].find(x => /Đã giải quyết/.test(x.textContent))?.click();
       const row = await wait(() => document.querySelector('[data-testid=dup-res-row]'), 10000);
-      await sleep(300); await snap('duplicates-resolved');
+      await settle(300); await snap('duplicates-resolved');
       [...(row?.querySelectorAll('button') ?? [])].find(x => x.textContent.trim() === 'Hoàn tác')?.click();
       const back = await waitA(async () => (await inv('duplicate_summary', { q: dq })).total === dsum.total, 15000);
       await log('duplicates-undo', !!row && !!back && (await inv('resolve_list', { includeUndone: false })).length === rev0.length, { restored: !!back });
@@ -802,7 +804,7 @@
         const rowsN = () => [...document.querySelectorAll('[data-testid=prio-row] strong')].map(x => x.textContent);
         const nameOf = id => srcsNow.find(s => s.id === id)?.name;
         const match0 = JSON.stringify(rowsN()) === JSON.stringify(order0.map(nameOf));
-        await sleep(200); await snap('source-priority');
+        await settle(200); await snap('source-priority');
         document.querySelector('[data-testid=prio-row] .mv button:nth-child(2)')?.click();
         const moved = await waitA(async () => { const o = await inv('source_priority', {}); return o[0] === order0[1] && o[1] === order0[0]; }, 8000);
         document.querySelector('[data-testid=prio-row]:nth-child(2) .mv button:nth-child(1)')?.click();
@@ -826,7 +828,7 @@
       const altG = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', code: 'KeyG', altKey: true, bubbles: true, cancelable: true }));
       altG();
       const head0 = await waitA(() => document.querySelector('[data-testid=group-head]'), 15000);
-      await sleep(500); await snap('family-groups');
+      await settle(500); await snap('family-groups');
       const grid = document.querySelector('[role=grid]');
       const colsN = Number(grid?.getAttribute('aria-colcount')) || 1;
       const expectRows = fg.length + fg.reduce((a, g) => a + Math.ceil(g.count / colsN), 0);
@@ -839,7 +841,7 @@
       const gap0 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
       headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
       await waitA(() => headsNow()[0]?.getAttribute('aria-expanded') === 'false', 5000);
-      await sleep(300);
+      await waitA(() => { const h = headsNow(); return h.length < 2 || Math.abs(topOf(h[1]) - topOf(h[0]) - 32) <= 1; }, 5000); // layout thu gọn xong khi khoảng cách hàng = 32
       const gap1 = headsNow().length >= 2 ? topOf(headsNow()[1]) - topOf(headsNow()[0]) : null;
       const collapsedOk = headsNow()[0]?.getAttribute('aria-expanded') === 'false' && (gap0 === null || gap1 === null || (gap1 < gap0 && Math.abs(gap1 - 32) <= 1));
       headsNow()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
@@ -862,7 +864,7 @@
         const mi = await waitA(() => [...document.querySelectorAll('[role=menuitem]')].find(x => /Gỡ nguồn/.test(x.textContent)), 5000);
         mi?.click();
         const facts = await waitA(() => document.querySelector('[data-testid=rmsrc-facts]'), 8000);
-        await sleep(300); await snap('remove-source-preview');
+        await settle(300); await snap('remove-source-preview');
         const locText = facts?.querySelector('[data-fact=locations]')?.textContent ?? '';
         const locOk = locText.includes(`${prev.removedLocations} vị trí`);
         const noDelete = /không xoá file font nào/.test(document.querySelector('[data-testid=rmsrc]')?.textContent ?? '');
@@ -881,11 +883,11 @@
       const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
       const countNow2 = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
-      await sleep(600);
+      { let prevC = -1; await wait(() => { const c = countNow2(); const ok = c > 0 && c === prevC; prevC = c; return ok; }, 15000); } // số font ổn định qua hai lần đọc
       const base = countNow2();
       await inv('add_source', { path: '__QA_DIR__/E' });
       await wait(() => countNow2() >= base + 12, 120000);
-      await sleep(800);
+      { let prevC = -1; await wait(() => { const c = countNow2(); const ok = c >= base + 12 && c === prevC; prevC = c; return ok; }, 15000); } // lắng xuống: hai lần đọc bằng nhau
       const total = countNow2();
       // Hộp thoại Gỡ nguồn (bước trước) trả focus về nút nguồn ở thanh bên: ⌘A chỉ chạy khi focus ở thư viện hoặc ngoài mọi vùng, nên bỏ focus như người dùng bấm ra vùng trống.
       (document.activeElement instanceof HTMLElement) && document.activeElement.blur();
@@ -896,7 +898,7 @@
       const top3 = gridTop(); const noTag3 = !document.querySelector('[data-testid=narrow-tag]');
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true, cancelable: true }));
       await wait(() => Number((document.querySelector('[data-testid=selection-count]')?.textContent ?? '').replace(/\D/g, '')) >= total, 15000);
-      await sleep(300);
+      await wait(() => document.querySelector('[data-testid=narrow-tag]'), 5000);
       const topAll = gridTop(); const tag = document.querySelector('[data-testid=narrow-tag]');
       const tagBox = tag?.getBoundingClientRect(); const wrapBox = tag?.closest('.fa-act-wrap')?.getBoundingClientRect(); const gb = document.querySelector('[role=grid]')?.getBoundingClientRect();
       await snap('narrow-tag');
@@ -909,7 +911,7 @@
       await wait(() => !document.querySelector('[data-testid=narrow-pop]'), 3000);
       const selBtn = document.querySelector('[data-testid=selbar-activate]'); selBtn?.focus(); selBtn?.click();
       const dlg = await wait(() => document.querySelector('[role=dialog].fa-conf'), 30000);
-      await sleep(300);
+      await wait(() => document.querySelectorAll('[role=dialog].fa-conf [data-testid=conflict-list] > li').length > 0, 8000);
       const rowsN = dlg ? dlg.querySelectorAll('[data-testid=conflict-list] > li').length : 0;
       const h = dlg?.getBoundingClientRect().height ?? 0;
       // Hộp thoại phải NẰM TRÊN CÙNG thật (không kẹt dưới stacking context của Top Bar/lưới): điểm giữa và 4 góc trong hộp trỏ vào chính nó.
@@ -917,9 +919,9 @@
       const probes = dr ? [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]].map(([fx, fy]) => dlg.contains(document.elementFromPoint(dr.left + dr.width * fx, dr.top + dr.height * fy))) : [];
       const scrimTop = !!dlg && document.elementFromPoint(20, window.innerHeight - 20)?.classList.contains('fa-modal-scrim');
       await log('conflict-dialog-on-top', probes.length === 5 && probes.every(Boolean) && scrimTop && dlg.parentElement?.parentElement === document.body, { probes, scrimTop, parent: dlg?.parentElement?.parentElement?.tagName });
-      await sleep(400); await snap('conflict-dialog');
-      const themeC = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await sleep(400); await snap('conflict-dialog-dark');
-      if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme'); await sleep(200);
+      await settle(400); await snap('conflict-dialog');
+      const themeC = document.documentElement.dataset.theme; document.documentElement.dataset.theme = 'dark'; await settle(400); await snap('conflict-dialog-dark');
+      if (themeC) document.documentElement.dataset.theme = themeC; else document.documentElement.removeAttribute('data-theme');
       const title = dlg?.querySelector('h2')?.textContent ?? '';
       await log('conflict-dialog-compact', !!dlg && rowsN >= 6 && h <= window.innerHeight * 0.7 + 1 && /^\d+ font đã có trên máy$/.test(title) && !/\/Users\/|\/var\//.test(dlg.textContent ?? '') && !!dlg.querySelector('[role=img][aria-label*="· /"]'), { rowsN, h: Math.round(h), win: window.innerHeight, title, text: (dlg?.textContent ?? '').slice(0, 200) });
       const radios = [...(dlg?.querySelectorAll('input[type=radio]') ?? [])];
@@ -931,7 +933,7 @@
       // Mặc định mới có thể là "Thay bằng bản này" (khi chỉ có app đã nhận diện): bước này kiểm "Bỏ qua" nên chọn nó rõ ràng.
       const skipRadio = radios.find(r => r.closest('label')?.textContent?.includes('Bỏ qua'));
       const activeBeforeGo = (await actOn()).length;
-      skipRadio?.click(); await sleep(100);
+      skipRadio?.click(); await wait(() => skipRadio?.checked, 3000);
       const goBtn = btn('Tiếp tục', dlg); goBtn?.click();
       await wait(() => !document.querySelector('[role=dialog].fa-conf'), 30000);
       await log('conflict-dialog-returns-focus', document.activeElement === selBtn || document.activeElement?.closest('[data-testid=selbar-activate]') === selBtn, { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
@@ -965,12 +967,12 @@
         await log('available-recomputed', again.length === 1 && again[0].hashHex === key.hashHex, { n: again.length });
         window.dispatchEvent(new Event('focus'));
         [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^G\d*$/.test(b.textContent.trim()))?.click();
-        await sleep(800);
+        await wait(() => cells().length > 0 && cells().length < 5, 10000); // đã sang nguồn G (ít font), không còn là lưới thư viện
         const cell = await wait(() => cells()[0], 10000); cell?.click();
         const rowA = await wait(() => document.querySelector('aside.fa-panel [data-testid=active-row][data-available=true]'), 10000);
         const swA = rowA?.querySelector('[data-testid=active-switch]');
         const dotA = cells()[0]?.querySelector('[data-testid=active-dot][data-scope=available]');
-        await sleep(300); await snap('available-peek');
+        await settle(300); await snap('available-peek');
         await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA, ncells: cells().length, cell0: cells()[0]?.textContent?.slice(0, 40), anyRow: !!document.querySelector('aside.fa-panel [data-testid=active-row]'), rowStatus: document.querySelector('aside.fa-panel [data-testid=active-status]')?.textContent, rowAvailAttr: document.querySelector('aside.fa-panel [data-testid=active-row]')?.getAttribute('data-available'), dotAny: cells()[0]?.querySelector('[data-testid=active-dot]')?.getAttribute('data-scope'), side: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].map(b => b.textContent.trim()).slice(-8) });
       }
     }
@@ -979,21 +981,21 @@
       const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
       const pressOn = (el, key, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
-      await sleep(800);
+      await wait(() => cells().length >= 10, 15000);
       const cell0 = await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 10000);
-      cell0?.click(); await sleep(400);
+      cell0?.click();
       const pairTab = await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000);
       pairTab?.click();
       const openBtn = await wait(() => document.querySelector('[data-testid=open-desk]'), 15000);
       openBtn?.click();
       const desk = await wait(() => deskEl(), 15000);
       await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 15000);
-      await sleep(500);
+      await wait(() => document.querySelectorAll('[data-testid=desk-role]').length >= 2, 8000);
       await log('desk-opens', !!desk && document.querySelectorAll('[data-testid=desk-role]').length >= 2 && !!document.querySelector('[data-testid=desk-heading]'), { roles: document.querySelectorAll('[data-testid=desk-role]').length, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
       const tb = document.querySelector('header.fa-topbar');
       await log('desk-is-the-only-page', !!desk && (!tb || tb.offsetParent === null) && !document.querySelector('.cmp-tbl, .pr') && !document.querySelector('[data-testid=duplicates-page]')?.offsetParent, { topbarHidden: !tb || tb.offsetParent === null });
       if (desk) {
-        document.documentElement.dataset.theme = 'light'; await sleep(250); await snap('font-desk-light');
+        document.documentElement.dataset.theme = 'light'; await settle(250); await snap('font-desk-light');
         pressOn(desk, 'Enter');
         const nFilled = () => [...document.querySelectorAll('[data-testid=desk-role]')].filter(r => !/Chưa có font/.test(r.textContent)).length;
         await wait(() => nFilled() >= 2, 20000); // ứng viên nạp bất đồng bộ: máy tải thì chậm hơn 6 s
@@ -1001,7 +1003,7 @@
         await log('desk-enter-places', filled >= 2, { filled });
         const nCand = document.querySelectorAll('[data-testid=desk-cand]').length;
         pressOn(desk, 'ArrowDown');
-        await wait(() => document.querySelectorAll('[data-testid=strip-delta]').length === 8, 15000); await sleep(200);
+        await wait(() => document.querySelectorAll('[data-testid=strip-delta]').length === 8, 15000);
         const deltas = [...document.querySelectorAll('[data-testid=strip-delta]')].map(d => d.textContent);
         await log('desk-strip-delta', deltas.length === 8 && (nCand < 2 || deltas.some(x => /^[+−]|±0/.test(x))), { nCand, deltas });
         pressOn(desk, 'i');
@@ -1009,8 +1011,8 @@
         const collapsed = document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed === 'true'; pressOn(desk, 'i');
         await wait(() => document.querySelector('[data-testid=detail-strip]')?.dataset.collapsed !== 'true', 8000);
         await log('desk-strip-collapses', collapsed && !!document.querySelector('[data-testid=strip-metrics]'), { collapsed });
-        document.querySelector('[data-testid=combo-label]')?.click(); await sleep(200);
-        [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent))?.click();
+        document.querySelector('[data-testid=combo-label]')?.click();
+        (await wait(() => [...document.querySelectorAll('[role=menuitem]')].find(i => /Combo mới/.test(i.textContent)), 5000))?.click();
         await wait(() => /Combo 2\/2/.test(document.querySelector('[data-testid=combo-label]')?.textContent ?? ''), 8000);
         const l2 = document.querySelector('[data-testid=combo-label]')?.textContent ?? '';
         pressOn(deskEl(), '[');
@@ -1019,16 +1021,15 @@
         await log('desk-combo-stepper', /Combo 2\/2/.test(l2) && /Combo 1\/2/.test(l1), { l2, l1 });
         document.querySelector('[data-testid=mode-combos]')?.click();
         await wait(() => document.querySelectorAll('[data-testid=cc-col]').length >= 2, 10000);
-        await sleep(400);
         const ccCols = document.querySelectorAll('[data-testid=cc-col]').length;
         await log('desk-compare-combos', ccCols === 2 && document.querySelector('[data-testid=cc-col]')?.dataset.base === 'true' && document.querySelectorAll('[data-testid=cc-rel]').length === 2, { ccCols });
-        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-combos-' + th); }
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('font-desk-compare-combos-' + th); }
         document.querySelector('[data-testid=mode-fonts]')?.click();
         await wait(() => document.querySelectorAll('[data-testid=fc-col]').length > 0, 20000); // cột nạp sau khi khung hiện
-        await sleep(500);
+        await wait(() => document.querySelectorAll('tr[data-metric]').length >= 4, 10000);
         await log('desk-compare-fonts', !!document.querySelector('[data-testid=font-compare]') && document.querySelectorAll('tr[data-metric]').length >= 4 && !!document.querySelector('[data-testid=fc-sort]'), { cols: document.querySelectorAll('[data-testid=fc-col]').length });
-        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-compare-fonts-' + th); }
-        document.querySelector('[data-testid=fc-view-pages]')?.click(); await sleep(400);
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('font-desk-compare-fonts-' + th); }
+        document.querySelector('[data-testid=fc-view-pages]')?.click(); await wait(() => !document.querySelector('tr[data-metric]'), 8000);
         await log('desk-compare-fonts-pages', !document.querySelector('tr[data-metric]'), {});
         // Đặt vào vai từ Compare Font: ứng viên đầu thành MỐC (cột đầu), không còn lặp ở cột khác.
         {
@@ -1049,8 +1050,8 @@
           await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && titles[0] === pname && new Set(titles).size === titles.length, { pname, titles: titles.length, first: titles[0] });
           }
         }
-        document.querySelector('[data-testid=mode-pairing]')?.click(); await sleep(400);
-        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('font-desk-' + th); }
+        document.querySelector('[data-testid=mode-pairing]')?.click(); await wait(() => deskEl() && !document.querySelector('[data-testid=font-compare], [data-testid=cc-col]'), 8000);
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('font-desk-' + th); }
         const dbg = () => ({ tip: [...document.querySelectorAll('[role=tooltip]')].map(e => e.textContent), overlays: [...document.querySelectorAll('[role=dialog],[role=alertdialog],[aria-modal=true],[role=menu]')].map(e => e.getAttribute('aria-label') ?? e.className), active: document.activeElement?.outerHTML?.slice(0, 140), fixed: [...document.body.children].map(e => e.tagName + '.' + e.className).slice(0, 12) });
         const dbg0 = dbg();
         pressOn(deskEl(), 'Escape');
@@ -1245,9 +1246,9 @@
         document.querySelector('[data-field=license] input')?.click();
         await wait(() => document.querySelectorAll('[data-testid=face-license]').length > 0, 8000);
         const after = document.querySelectorAll('[data-testid=face-meta2]').length;
-        await sleep(300);
+        await settle(300); // layout lưới sau khi bật Giấy phép (hàng cao hơn) xong trước khi đo chiều cao hàng
         const h1 = cellH();
-        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('view-options-' + th); }
+        for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('view-options-' + th); }
         document.querySelector('[data-testid=view-reset]')?.click();
         await wait(() => document.querySelectorAll('[data-testid=face-license]').length === 0, 8000);
         (document.activeElement && document.querySelector('[data-testid=view-pop]')?.contains(document.activeElement) ? document.activeElement : document.querySelector('[data-testid=view-pop]') ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
