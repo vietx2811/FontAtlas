@@ -1254,25 +1254,6 @@
               uS?.click();
               await log('desk-drag-swap-roles-undo', !!(await wait(() => fontOf(target) === fa && fontOf(second) === fb, 15000)), { now: [fontOf(target), fontOf(second)] });
             }
-            // đổi thứ tự bằng tay nắm: thả vào khe sau vai cuối (cần ≥ 3 vai đã lưu; thiếu thì thêm một vai tên tự do bằng API)
-            {
-              const lis = () => [...document.querySelectorAll('[data-reorder-index]')];
-              const before = roleNames(); const first = lis()[0]; const lastLi = lis().at(-1);
-              const grip = first?.querySelector('[data-testid=role-grip]');
-              if (!grip || !lastLi || lis().length < 2) await log('desk-drag-reorder-roles', true, { skipped: 'Combo chưa lưu ≥ 2 vai (vai mặc định chỉ có ở giao diện, không có tay nắm); phần kéo đổi thứ tự có test đơn vị', n: lis().length });
-              else {
-                const gr = grip.getBoundingClientRect(), lr = lastLi.getBoundingClientRect();
-                const gx = gr.left + gr.width / 2, gy = gr.top + gr.height / 2, ty = lr.bottom - 2;
-                grip.dispatchEvent(ptr('pointerdown', gx, gy)); window.dispatchEvent(ptr('pointermove', gx + 6, gy + 10)); window.dispatchEvent(ptr('pointermove', gx, ty));
-                const line = await wait(() => document.querySelector('[data-insert]'), 5000);
-                window.dispatchEvent(ptr('pointerup', gx, ty));
-                const moved = await wait(() => { const now = roleNames(); return now[now.length - 1] === before[0] && now[0] !== before[0]; }, 15000);
-                const uR = await wait(() => [...document.querySelectorAll('.fa-toast')].filter(x => /Đã đổi thứ tự|Reordered/.test(x.textContent)).pop()?.querySelector('button'), 8000);
-                await log('desk-drag-reorder-roles', !!line && !!moved && !!uR, { before, now: roleNames(), line: !!line, undo: !!uR });
-                uR?.click();
-                await log('desk-drag-reorder-roles-undo', !!(await wait(() => roleNames().join('|') === before.join('|'), 15000)), { before, now: roleNames() });
-              }
-            }
           } catch (e) { await log('desk-drag-g8-error', false, String(e && e.message || e)); }
         }
         // G3: + Role (gợi ý tên + tên tự do), đổi tên, bỏ vai, Hoàn tác.
@@ -1298,6 +1279,26 @@
           u?.click();
           const back = await wait(() => roleNames().includes('Nhãn QA 2'), 15000);
           await log('desk-role-remove-undo', !!back && roleNames().indexOf('Nhãn QA 2') === posBefore, { posBefore, pos: roleNames().indexOf('Nhãn QA 2') });
+          // G8: đổi thứ tự vai bằng tay nắm. Chạy SAU desk-role-add (lúc này Combo đã lưu ≥ 3 vai) nên luôn có tay nắm; thiếu tay nắm là FAIL.
+          const ptr = (type, x, y, extra = {}) => new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, ...extra });
+          {
+            const lis = () => [...document.querySelectorAll('[data-reorder-index]')];
+            const before = roleNames(); const first = lis()[0]; const lastLi = lis().at(-1);
+            const grip = first?.querySelector('[data-testid=role-grip]');
+            if (!grip || !lastLi || lis().length < 2) await log('desk-drag-reorder-roles', false, { why: 'không có tay nắm hoặc < 2 vai đã lưu (sau bước desk-role-add phải có)', n: lis().length });
+            else {
+              const gr = grip.getBoundingClientRect(), lr = lastLi.getBoundingClientRect();
+              const gx = gr.left + gr.width / 2, gy = gr.top + gr.height / 2, ty = lr.bottom - 2;
+              grip.dispatchEvent(ptr('pointerdown', gx, gy)); window.dispatchEvent(ptr('pointermove', gx + 6, gy + 10)); window.dispatchEvent(ptr('pointermove', gx, ty));
+              const line = await wait(() => document.querySelector('[data-insert]'), 5000);
+              window.dispatchEvent(ptr('pointerup', gx, ty));
+              const moved = await wait(() => { const now = roleNames(); return now[now.length - 1] === before[0] && now[0] !== before[0]; }, 15000);
+              const uR = await wait(() => [...document.querySelectorAll('.fa-toast')].filter(x => /Đã đổi thứ tự|Reordered/.test(x.textContent)).pop()?.querySelector('button'), 8000);
+              await log('desk-drag-reorder-roles', !!line && !!moved && !!uR, { before, now: roleNames(), line: !!line, undo: !!uR });
+              uR?.click();
+              await log('desk-drag-reorder-roles-undo', !!(await wait(() => roleNames().join('|') === before.join('|'), 15000)), { before, now: roleNames() });
+            }
+          }
         }
         // G4/G5: Picker 5 nguồn, đổi bằng phím 1–5; chọn phong cách pair; KHÔNG có số điểm nào hiện ra.
         {
