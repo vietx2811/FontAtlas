@@ -49,6 +49,41 @@ impl Encode for SlowEncoder {
     }
 }
 
+/// Encoder luôn lỗi theo `make`: để kiểm mã lỗi worker báo ra.
+struct ErrEncoder(fn() -> EmbedError);
+
+impl Encode for ErrEncoder {
+    fn raw_dim(&self) -> usize {
+        768
+    }
+    fn encode(&mut self, _: &[Vec<f32>], _: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
+        Err((self.0)())
+    }
+}
+
+fn error_reported_for(make: fn() -> EmbedError) -> (&'static str, String) {
+    let d = store_dir_with(&[("roboto.ttf", 0)]);
+    let (tx, rx) = std::sync::mpsc::channel::<Progress>();
+    let w = EmbedWorker::start(cfg(&d), Box::new(ErrEncoder(make)), Box::new(move |p| drop(tx.send(p)))).unwrap();
+    assert!(w.join().is_err());
+    rx.try_iter()
+        .find_map(|p| match p {
+            Progress::Error { code, message } => Some((code, message)),
+            _ => None,
+        })
+        .expect("worker phải báo Progress::Error")
+}
+
+#[test]
+fn worker_error_keeps_the_typed_error_code() {
+    // trước đây chỉ còn chuỗi và app gắn cứng "inference" cho mọi lỗi của worker
+    let (code, message) = error_reported_for(|| EmbedError::Render("hỏng".into()));
+    assert_eq!(code, "render_failed");
+    assert!(message.contains("hỏng"), "{message}");
+    assert_eq!(error_reported_for(|| EmbedError::Io(std::io::Error::other("đĩa đầy"))).0, "io");
+    assert_eq!(error_reported_for(|| EmbedError::Model("sai kích thước".into())).0, "inference");
+}
+
 #[test]
 fn processes_all_fonts_and_finishes() {
     let d = store_dir_with(&[("roboto.ttf", 0), ("playfair_display.ttf", 0), ("source_code_pro.ttf", 0), ("open_sans.ttf", 0)]);

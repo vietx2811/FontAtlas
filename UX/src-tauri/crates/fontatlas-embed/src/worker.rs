@@ -30,7 +30,8 @@ pub enum Progress {
     Resumed,
     Cancelled,
     Finished { total_done: usize },
-    Error(String),
+    /// Lỗi hệ thống làm dừng worker; `code` = `EmbedError::code()` (không còn gộp hết thành "inference").
+    Error { code: &'static str, message: String },
 }
 
 pub struct EmbedWorker {
@@ -80,7 +81,7 @@ impl EmbedWorker {
             .spawn(move || {
                 let r = run.run();
                 if let Err(e) = &r {
-                    (run.emit)(Progress::Error(e.to_string()));
+                    (run.emit)(Progress::Error { code: e.code(), message: e.to_string() });
                 }
                 r
             })?;
