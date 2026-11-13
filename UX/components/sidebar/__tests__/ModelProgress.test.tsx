@@ -65,7 +65,7 @@ describe('ModelProgress', () => {
     await mount({ initial: { model: { state: 'checksum_mismatch' } } });
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('Model tải về bị hỏng');
-    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tải lại model' })).toBeTruthy();
   });
 
   it('checking is indeterminate and errors keep technical text collapsed; cancellation is not red', async () => {
@@ -85,7 +85,7 @@ describe('ModelProgress', () => {
 
   it('E6 offers both [Tải lại] and [Xoá model]', async () => {
     await mount({ initial: { model: { state: 'corrupt' } } });
-    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tải lại model' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Xoá model' })).toBeTruthy();
   });
 
