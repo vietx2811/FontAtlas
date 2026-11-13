@@ -21,7 +21,7 @@
   const btn = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.trim() === text && !b.disabled);
   // Cửa sổ QA có thể không ở trước nên WKWebView không chạy animation/transition: chốt về trạng thái cuối trước khi chụp.
   const settleAnims = () => { try { document.getAnimations().forEach(x => { try { x.finish(); } catch (e) {} }); } catch (e) {} };
-  const snap = async name => { settleAnims(); await sleep(80); try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); };
+  const snap = async name => { settleAnims(); await sleep(80); /* nhịp vẽ cuối trước khi native chụp */ try { await inv('plugin:event|emit', { event: 'qa-snap', payload: name }); } catch (e) {} await sleep(350); /* chờ native chụp xong (không có tín hiệu hoàn tất) */ };
   const btnHas = (text, root = document) => [...root.querySelectorAll('button')].find(b => b.textContent.includes(text) && !b.disabled);
   // Ảnh PNG xuất ra tệp qua bảng settings (giới hạn 64 KB/khoá → cắt từng đoạn ui.qapng.<theme>.NN); run.sh ghép lại.
   const savePng = async (th, url) => { const errs = []; if (!url) return ['không có dataUrl']; const b = url.split(',')[1]; for (let i = 0, n = 0; i < b.length; i += 60000, n++) { try { await inv('set_setting', { key: 'ui.qapng.' + th + '.' + String(n).padStart(3, '0'), value: b.slice(i, i + 60000) }); } catch (e) { errs.push('đoạn ' + n + ': ' + String(e && e.message || e).slice(0, 120)); } } return errs; };
@@ -142,10 +142,10 @@
     }
     await wait(() => !document.querySelector('.fa-onb'), 15000);
     await log('onb-finished', !document.querySelector('.fa-onb'), '');
-    { // Rời onboarding: kính phải biến mất và vibrancy sidebar trở lại (không sót NSGlassEffectView dưới webview).
+    try { // Rời onboarding: kính phải biến mất và vibrancy sidebar trở lại (không sót NSGlassEffectView dưới webview).
       let pe; for (let k = 0; k < 20; k++) { try { pe = await inv('glass_probe', { resize: null }); } catch (e) { pe = { error: String(e && e.message || e) }; } if (!pe.error && pe.glassCount === 0 && pe.visualEffectCount === 1) break; await sleep(250); }
       await log('onb-glass-gone-after', !pe.error && pe.glassCount === 0 && pe.visualEffectCount === 1, pe);
-    }
+    } catch (e) { await log('khối-lỗi: Rời onboarding: kính phải biến mất v', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // THƯ VIỆN
     const cells = () => [...document.querySelectorAll('[role=gridcell][data-face-id]')];
     await wait(() => cells().length >= 10, 120000);
@@ -174,12 +174,12 @@
       await log(step, !!hxgSvg && capY !== null && inkCap !== null && Math.abs((112 - inkCap) - capY) <= 1, { capY, expected: inkCap === null ? null : 112 - inkCap, status: hxgSvg?.dataset.guides, family: hxgText?.style.fontFamily, name: document.querySelector('.fa-p-name')?.textContent });
     };
     await hxgCheck('anatomy-hxg-guides-match', 'anatomy-hxg');
-    {
+    try {
       const orig = document.querySelector('[role=gridcell][aria-selected=true]');
       const serifCell = [...document.querySelectorAll('[role=gridcell][data-face-id]')].find(c => /Playfair|Baskerville/.test(c.textContent ?? ''));
       if (serifCell && orig) { const prevFam = document.querySelector('[data-testid=hxg-text]')?.style.fontFamily; serifCell.click(); await hxgCheck('anatomy-hxg-guides-match-serif', 'anatomy-hxg-serif', prevFam); orig.click(); await wait(() => document.querySelector('[data-testid=hxg-text]')?.style.fontFamily === prevFam, 8000); }
       else await log('anatomy-hxg-guides-match-serif', false, { error: 'không tìm thấy ô serif hoặc ô đang chọn (SKIPPED, không tính là pass)', hasSerif: !!serifCell, hasOrig: !!orig });
-    }
+    } catch (e) { await log('khối-lỗi: khoi', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     const termA = await termCheck('[data-testid=axis-row] [data-term]');
     await log('anatomy-term-tooltips', termA.n >= 5 && termA.bad.length === 0 && termA.art > 0, termA);
     const axisNames = [...document.querySelectorAll('[data-testid=axis-row] .fa-axis-name')].map(e => ({ text: e.textContent.trim(), term: e.dataset.term }));
@@ -225,7 +225,7 @@
     await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && rangesAll.some(r => r !== '0–1') && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
     await closeAdv();
     // ADVANCED + TÓM TẮT + "ĐANG LỌC" (2a)
-    {
+    try {
       const key = (el, init) => el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
       const total = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
       document.querySelector('.fa-family-chip')?.click(); await wait(() => !document.querySelector('.fa-family-chip'), 8000); await wait(() => total() > 0, 8000);
@@ -308,22 +308,22 @@
       // dọn: bỏ lọc để các bước sau chạy trên thư viện đầy đủ
       key(sinput ?? document, { key: 'Backspace', metaKey: true }); await wait(() => !document.querySelector('[data-testid=filter-summary]'), 10000);
       await log('summary-clear-all', !document.querySelector('[data-testid=filter-summary]'), null);
-    }
+    } catch (e) { await log('khối-lỗi: ADVANCED  TÓM TẮT  ĐANG LỌC 2a', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // CÀI ĐẶT → SIDEBAR
     document.querySelector('button[aria-label="Cài đặt"]')?.click();
     const st = await wait(() => document.querySelector('[data-testid=settings]'));
     await snap('settings');
     // Theme tối qua radio trong Cài đặt (đường thật: applyTheme + theme cửa sổ native cho lớp kính sidebar), không đặt data-theme bằng JS.
-    {
+    try {
       const radioOf = re => [...document.querySelectorAll('[data-testid=settings] input[type=radio][name=theme]')].find(r => re.test(r.closest('label')?.textContent ?? ''));
       radioOf(/^(Tối|Dark)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'dark', 8000); await settle(300);
       await snap('settings-dark-real');
       const darkApplied = document.documentElement.dataset.theme === 'dark';
       radioOf(/^(Sáng|Light)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'light', 8000);
       await log('settings-theme-radio-dark', darkApplied && document.documentElement.dataset.theme === 'light', { darkApplied, after: document.documentElement.dataset.theme });
-    }
+    } catch (e) { await log('khối-lỗi: Theme tối qua radio trong Cài đặt đư', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // 0.4.0 — Cài đặt: "Xoá danh sách font vừa xem" (Dữ liệu) và công tắc "Tự phát hiện thay đổi trên ổ cloud" (Thư viện và nguồn).
-    {
+    try {
       const goto = async name => { const b = [...document.querySelectorAll('.fa-set-nav button')].find(x => x.textContent.trim() === name); b?.click(); return !!b; };
       const recentN = async () => (await inv('recent_views', { limit: 50 })).length;
       const had = await recentN();
@@ -343,15 +343,15 @@
       sw?.click();
       let w2 = w1; for (let i = 0; i < 40 && w2 === w1; i++) { await sleep(250); w2 = await watch(); }
       await log('settings-cloud-watch', nav2 && !!sw && w1 === !w0 && w2 === w0 && aria1 === String(w1), { w0, w1, w2, aria1 });
-    }
+    } catch (e) { await log('khối-lỗi: 040  Cài đặt Xoá danh sách font vừa', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // Bật font tự động (0.3.0): nhóm có đủ 6 app theo thứ tự cố định, công tắc chung, nhật ký; trạng thái thật do backend quyết nên chỉ kiểm cấu trúc.
-    {
+    try {
       [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Bật font tự động|Auto-activation)/.test(b.textContent))?.click();
       await wait(() => document.querySelectorAll('[data-testid=auto-app]').length === 6, 15000);
       const ids = [...document.querySelectorAll('[data-testid=auto-app]')].map(x => x.dataset.app).join(',');
       for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('auto-activation-' + th); }
       await log('auto-activation-page', ids === 'photoshop,aftereffects,illustrator,indesign,incopy,affinity' && !!document.querySelector('[data-testid=auto-switch]') && !!document.querySelector('[data-testid=auto-log], [data-testid=auto-log-empty]') && !document.querySelector('[data-testid=auto-error]'), { ids, error: document.querySelector('[data-testid=auto-error]')?.textContent ?? null });
-    }
+    } catch (e) { await log('khối-lỗi: Bật font tự động 030 nhóm có đủ 6 ap', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     const nav = [...document.querySelectorAll('[aria-label="Thanh bên"] button, nav button, aside button')].find(b => b.textContent.includes('Tất cả'));
     nav?.click();
     const left = await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);
@@ -427,7 +427,7 @@
 
     // ACTIVE (2c): công tắc có nhãn, trạng thái + phạm vi, nút trên thẻ, Top Bar, ⌘⇧A, cả family. Engine CoreText THẬT nhưng chỉ font fixture trong thư mục QA;
     // mọi bước trả về trạng thái "tắt" và cuối cùng kiểm tra không còn font nào bật (phạm vi Persistent chỉ bật thoáng qua rồi đổi lại).
-    {
+    try {
       const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
       const waitActive = async (pred, ms = 15000) => { const t0 = Date.now(); let last = null; while (Date.now() - t0 < ms) { last = await actOn(); if (pred(last)) return last; await sleep(200); } return last; };
       const row = () => document.querySelector('aside.fa-panel [data-testid=active-row]');
@@ -505,7 +505,7 @@
       if (themeAct) document.documentElement.dataset.theme = themeAct; else document.documentElement.removeAttribute('data-theme');
       sw().click(); const fin = await waitActive(x => x.length === 0);
       await log('active-clean', fin.length === 0, { left: fin.map(x => [x.hashHex.slice(0, 8), x.scope]) });
-    }
+    } catch (e) { await log('khối-lỗi: mọi bước trả về trạng thái tắt và cu', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // Compare (⇧C / nút) với 2 font: màn Compare thật, số đo thật, Esc quay lại giữ vùng chọn
     const compareBtn = [...(pcGroup?.querySelectorAll('button') ?? [])].find(x => x.getAttribute('aria-label') === 'Compare');
@@ -793,7 +793,7 @@
       await log('duplicates-view', true, 'không có nhóm trùng trong fixture QA: mục sidebar ẩn đúng');
     }
     // Thứ tự ưu tiên nguồn (Cài đặt → Thư viện): hàng khớp source_priority; nút ↓ đổi thứ tự thật rồi ↑ trả lại
-    {
+    try {
       const srcsNow = await inv('list_sources', {});
       if (srcsNow.length >= 2) {
         document.querySelector('button[aria-label="Cài đặt"]')?.click();
@@ -815,9 +815,9 @@
       } else {
         await log('source-priority', true, 'ít hơn 2 nguồn trong fixture QA: khối thứ tự ưu tiên ẩn đúng');
       }
-    }
+    } catch (e) { await log('khối-lỗi: Thứ tự ưu tiên nguồn Cài đặt  Thư vi', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // Nhóm theo Family (R3): ⌥G bật → tiêu đề nhóm khớp family_groups, số hàng khớp, ←/→ thu gọn/mở, ⌥G tắt lại
-    {
+    try {
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
       await wait(() => cells().length > 0, 10000);
       document.activeElement?.blur?.();
@@ -849,9 +849,9 @@
       altG();
       const off = await waitA(() => !document.querySelector('[data-testid=group-head]') && !document.querySelector('[role=grid]')?.dataset.grouped, 8000);
       await log('family-groups', !!head0 && sumCount === totalQ && fg.length > 0 && rowsNow === expectRows && label0 === wantLabel && collapsedOk && !!reopened && !!off, { groups: fg.length, sumCount, totalQ, colsN, expectRows, rowsNow, label0, wantLabel, gap0, gap1, collapsedOk, reopened: !!reopened, off: !!off });
-    }
+    } catch (e) { await log('khối-lỗi: Nhóm theo Family R3 G bật  tiêu đề n', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // Gỡ nguồn: menu chuột phải → hộp xem trước có số liệu khớp remove_source_preview; Huỷ không gỡ gì
-    {
+    try {
       const srcs2 = await inv('list_sources', {});
       const target = srcs2.find(x => x.available) ?? srcs2[0];
       // đúng mục nguồn: theo title (đường dẫn) hoặc tên đứng đầu rồi tới số đếm — KHÔNG dùng includes (tên nguồn có thể chỉ một chữ cái)
@@ -876,10 +876,10 @@
       } else {
         await log('remove-source-preview', true, 'không có nguồn trong fixture QA');
       }
-    }
+    } catch (e) { await log('khối-lỗi: Gỡ nguồn menu chuột phải  hộp xem tr', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // XUNG ĐỘT KÍCH HOẠT (2c-A) + TAG NỔI (2c-B). Thêm nguồn E: 12 bản sửa 2 byte của font đã có (cùng tên PostScript, khác nội dung).
     // Chọn tất cả → Activate: một nửa mỗi cặp xung đột thật (engine CoreText thật, chỉ font fixture trong thư mục QA).
-    {
+    try {
       const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
       const countNow2 = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => b.textContent.includes('Tất cả'))?.click();
@@ -946,11 +946,11 @@
       st2 = await actOn();
       for (let i = 0; i < 40 && st2.length > 0; i++) { await sleep(500); st2 = await actOn(); } // tắt hết xong chậm hơn 800 ms khi máy tải: chờ về 0 thay vì đo cố định (các bước 'available-*' sau đó đòi 0 font bật)
       await log('conflict-clean', st2.length === 0, { left: st2.length });
-    }
+    } catch (e) { await log('khối-lỗi: Chọn tất cả  Activate một nửa mỗi cặ', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // "CÓ SẴN TRÊN MÁY": một bản font hệ thống chép vào nguồn G (giống hệt từng byte) → Font Atlas không bật gì, chỉ báo ai cung cấp.
     // (Chỉ là phép thử trong thư mục QA tạm; không ảnh nào của bước này được đưa vào tài liệu.)
-    {
+    try {
       const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
       const dqa = { text: 'Academy', vi: null, license: [], variable: null, italic: null, sourceIds: [], favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 10, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] };
       await inv('add_source', { path: '__QA_DIR__/G' });
@@ -975,9 +975,9 @@
         await settle(300); await snap('available-peek');
         await log('available-peek-and-card', !!rowA && swA.getAttribute('aria-disabled') === 'true' && /^Có sẵn · /.test(rowA.querySelector('[data-testid=active-status]').textContent) && !!dotA && !cells()[0].querySelector('[data-testid=cell-active]') && (await actOn()).length === 0, { status: rowA?.querySelector('[data-testid=active-status]')?.textContent, dot: !!dotA, ncells: cells().length, cell0: cells()[0]?.textContent?.slice(0, 40), anyRow: !!document.querySelector('aside.fa-panel [data-testid=active-row]'), rowStatus: document.querySelector('aside.fa-panel [data-testid=active-status]')?.textContent, rowAvailAttr: document.querySelector('aside.fa-panel [data-testid=active-row]')?.getAttribute('data-available'), dotAny: cells()[0]?.querySelector('[data-testid=active-dot]')?.getAttribute('data-scope'), side: [...document.querySelectorAll('[aria-label="Thanh bên"] button')].map(b => b.textContent.trim()).slice(-8) });
       }
-    }
+    } catch (e) { await log('khối-lỗi: Chỉ là phép thử trong thư mục QA tạm', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
     // PAIRING DESK (2b lát 1–3): Pair từ peek → Desk; ↓ thử, Enter đặt; dải chi tiết có Δ; Combo stepper; Esc về Thư viện
-    {
+    try {
       const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
       const pressOn = (el, key, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra }));
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
@@ -1058,10 +1058,10 @@
         await wait(() => !deskEl(), 8000);
         await log('desk-esc-leaves', !deskEl() && !!cells().length > 0, { dbg0, dbg1: dbg(), desk: !!deskEl(), cells: cells().length });
       }
-    }
+    } catch (e) { await log('khối-lỗi: PAIRING DESK 2b lát 13 Pair từ peek', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // 0.4.0 — G1: kéo font từ lưới vào Dự án và Case ở Sidebar, rồi Hoàn tác. Chỉ chờ theo điều kiện (có hạn).
-    {
+    try {
       const setVal = (el, v) => { try { if (!el) return false; const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); return true; } catch (e) { return false; } };
       const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
       [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
@@ -1109,11 +1109,11 @@
         await log('drag-to-case-undo', n2 === 0, { n2 });
       }
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    }
+    } catch (e) { await log('khối-lỗi: 040  G1 kéo font từ lưới vào Dự án v', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // 0.4.0 — Desk: "+" ở ứng viên (G2), + Role / đổi tên / bỏ vai / Hoàn tác (G3), Picker 5 nguồn bằng phím 1–5 và phong cách pair (G4/G5),
     // gợi ý combo "Nhận cả combo" rồi Hoàn tác (G6). Mọi chờ đều theo điều kiện.
-    {
+    try {
       const deskEl = () => document.querySelector('[data-testid=pairing-desk]');
       const pressOn = (el, k, extra = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
       const setVal = (el, v) => { try { if (!el) return false; const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); return true; } catch (e) { return false; } };
@@ -1232,10 +1232,10 @@
         pressOn(deskEl() ?? desk, 'Escape');
         await wait(() => !deskEl(), 8000);
       }
-    }
+    } catch (e) { await log('khối-lỗi: gợi ý combo Nhận cả combo rồi Hoàn t', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // Hiển thị (A3): mở bằng nút, bật Giấy phép → thẻ có hàng 2, Đặt lại, Esc trả focus về nút.
-    {
+    try {
       const vb = () => document.querySelector('[data-testid=view-open]');
       if (vb()) {
         vb().click();
@@ -1258,10 +1258,10 @@
         await log('view-options-focus-returns', document.activeElement === vb(), { active: document.activeElement?.tagName + '.' + (document.activeElement?.getAttribute('data-testid') ?? '') });
         await log('view-options-row-height', h0 > 0 && Math.abs((h1 - h0) - 18) <= 2, { h0, h1 });
       } else await log('view-options', false, 'no view-open button');
-    }
+    } catch (e) { await log('khối-lỗi: Hiển thị A3 mở bằng nút bật Giấy phé', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     // Menu chuột phải Sidebar (C6): mở trên "Gần đây" không đổi view; Esc đóng và trả focus.
-    {
+    try {
       const nav = [...document.querySelectorAll('[data-testid=sidebar] .fa-nav')].find(b => /Gần đây/.test(b.textContent));
       if (nav) {
         const viewBefore = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
@@ -1280,7 +1280,7 @@
         const viewAfter = document.querySelector('[data-testid=sidebar] .fa-nav[aria-current=true]')?.textContent;
         await log('sidebar-context-menu', opened && closed && sameView && focused, { opened, closed, focused, sameView, menuLabel, viewBefore, viewAfter, context: nav.dataset.context ?? null, active: document.activeElement?.tagName + '.' + (document.activeElement?.className ?? '') });
       } else await log('sidebar-context-menu', false, 'no Gần đây item');
-    }
+    } catch (e) { await log('khối-lỗi: Menu chuột phải Sidebar C6 mở trên G', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
