@@ -26,9 +26,9 @@ describe('Settings', () => {
 
   it('has the groups of spec 5 in a left column and shows one group at a time', async () => {
     await mount();
-    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp']);
+    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp', 'Giới thiệu và ghi công']);
     const nav = screen.getByRole('navigation', { name: 'Nhóm cài đặt' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(9);
+    expect(within(nav).getAllByRole('button')).toHaveLength(10);
     expect(within(nav).getByRole('button', { name: 'Chung' }).getAttribute('aria-current')).toBe('true');
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Chung');
     await go('Giấy phép');
