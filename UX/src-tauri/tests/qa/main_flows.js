@@ -1112,6 +1112,78 @@
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
 
+    // 0.5.0 — G8: kéo font từ lưới vào "Đang bật" và vào thẻ; Dự án → Dự án (thêm; giữ ⌘ = chuyển); mỗi bước có Hoàn tác. Chỉ chờ theo điều kiện (có hạn).
+    {
+      const toastUndo = name => [...document.querySelectorAll('.fa-toast button')].filter(b => /^(Hoàn tác|Undo)$/.test(b.textContent.trim()) && (b.closest('.fa-toast')?.textContent ?? '').includes(name)).pop();
+      const ptr = (type, x, y, extra = {}) => new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, ...extra });
+      const side = () => [...document.querySelectorAll('[aria-label="Thanh bên"] button')];
+      const drag = async (cell, target, meta = false) => {
+        const cr = cell.getBoundingClientRect(), tr = target.getBoundingClientRect();
+        const sx = cr.left + cr.width / 2, sy = cr.top + cr.height / 2, tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+        cell.dispatchEvent(ptr('pointerdown', sx, sy));
+        window.dispatchEvent(ptr('pointermove', sx + 12, sy + 12));
+        window.dispatchEvent(ptr('pointermove', tx, ty, { metaKey: meta }));
+        const layer = await wait(() => document.querySelector('[data-testid=drag-layer]'), 5000);
+        const info = { layer: !!layer, over: layer?.dataset.over ?? null, label: layer?.querySelector('small')?.textContent ?? null };
+        window.dispatchEvent(ptr('pointerup', tx, ty, { metaKey: meta }));
+        await wait(() => !document.querySelector('[data-testid=drag-layer]'), 5000);
+        return info;
+      };
+      const until = async (fn, want, ms = 15000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await fn(); if (v === want) return v; await sleep(250); } return v; };
+      try {
+        side().find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+        await wait(() => cells().length >= 4, 15000);
+        // Đang bật
+        const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active').length;
+        const a0 = await actOn();
+        const navAct = await wait(() => document.querySelector('[data-drop-active]'), 15000);
+        const cAct = cells().find(c => /Miltonian/.test(c.textContent)) ?? cells()[0];
+        const infoA = navAct ? await drag(cAct, navAct) : null;
+        let a1 = a0; for (let i = 0; i < 60 && a1 <= a0; i++) { a1 = await actOn(); if (a1 <= a0) await sleep(250); }
+        const uA = await wait(() => toastUndo('Đã bật') ?? toastUndo('Activated'), 8000);
+        await log('drag-to-active', !!navAct && a1 > a0 && infoA?.over === 'ok' && !!uA, { a0, a1, infoA, undo: !!uA });
+        uA?.click();
+        await log('drag-to-active-undo', (await until(actOn, a0, 20000)) === a0, { a0, now: await actOn() });
+        // Thẻ
+        const tag = await inv('create_tag', { name: 'QA kéo thẻ' });
+        window.dispatchEvent(new Event('focus'));
+        let navTag = await wait(() => document.querySelector(`[data-drop-tag="${tag.id}"]`), 6000);
+        if (!navTag) { side().find(b => /^(Thẻ|Tags)$/.test(b.textContent.trim()))?.click(); navTag = await wait(() => document.querySelector(`[data-drop-tag="${tag.id}"]`), 8000); }
+        const tagN = async () => (await inv('list_tags', {})).find(x => x.id === tag.id)?.faceCount ?? -1;
+        const infoT = navTag ? await drag(cells()[0], navTag) : null;
+        const t1 = await until(tagN, 1, 15000);
+        const uT = await wait(() => toastUndo('QA kéo thẻ'), 8000);
+        await log('drag-to-tag', !!navTag && t1 === 1 && infoT?.over === 'ok' && !!uT, { t1, infoT, undo: !!uT });
+        uT?.click();
+        await log('drag-to-tag-undo', (await until(tagN, 0, 15000)) === 0, { now: await tagN() });
+        // Dự án A → B: mặc định thêm (A giữ nguyên); giữ ⌘ thì chuyển; Hoàn tác đưa về.
+        const pa = await inv('create_collection', { name: 'QA nguồn', color: null });
+        const pb = await inv('create_collection', { name: 'QA đích', color: null });
+        const faces = (await inv('query_faces', { q: { ...dq, limit: 2 } })).items.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex }));
+        await inv('add_to_collection', { id: pa.id, faces });
+        window.dispatchEvent(new Event('focus'));
+        const navA = await wait(() => document.querySelector(`[data-drop-col="${pa.id}"] button`), 15000);
+        const navB = await wait(() => document.querySelector(`[data-drop-col="${pb.id}"]`), 15000);
+        const count = async id => (await inv('list_collections', {})).find(c => c.id === id)?.itemCount ?? -1;
+        navA?.click();
+        await wait(() => cells().length === 2, 15000);
+        if (!navA || !navB || cells().length !== 2) await log('drag-project-add', false, { navA: !!navA, navB: !!navB, cells: cells().length });
+        else {
+          const info1 = await drag(cells()[0], navB);
+          const b1 = await until(() => count(pb.id), 1, 15000);
+          await log('drag-project-add', b1 === 1 && (await count(pa.id)) === 2 && info1.over === 'ok' && !/chuyển|move/i.test(info1.label ?? ''), { b1, a: await count(pa.id), info1 });
+          const info2 = await drag(cells()[1], navB, true);
+          const a2 = await until(() => count(pa.id), 1, 15000);
+          const uM = await wait(() => toastUndo('QA đích'), 8000);
+          await log('drag-project-move', a2 === 1 && (await count(pb.id)) === 2 && /chuyển|move/i.test(info2.label ?? '') && !!uM, { a2, b: await count(pb.id), info2, undo: !!uM });
+          uM?.click();
+          await log('drag-project-move-undo', (await until(() => count(pa.id), 2, 15000)) === 2 && (await count(pb.id)) === 1, { a: await count(pa.id), b: await count(pb.id) });
+        }
+      } catch (e) { await log('drag-g8-error', false, String(e && e.message || e)); }
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      side().find(b => /^Tất cả/.test(b.textContent.trim()))?.click();
+    }
+
     // 0.4.0 — Desk: "+" ở ứng viên (G2), + Role / đổi tên / bỏ vai / Hoàn tác (G3), Picker 5 nguồn bằng phím 1–5 và phong cách pair (G4/G5),
     // gợi ý combo "Nhận cả combo" rồi Hoàn tác (G6). Mọi chờ đều theo điều kiện.
     {
@@ -1146,6 +1218,43 @@
             const inUse = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => li.querySelector('.fa-desk-cand-name')?.textContent === name && li.querySelector('[data-testid=cand-inuse]')), 15000);
             await log('desk-cand-plus', !!row && !!add && labelled && focusable && !!inUse, { name, labelled, focusable, inUse: !!inUse, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
           } catch (e) { await log('desk-cand-plus', false, { error: String(e && e.message || e) }); }
+        }
+        // G8: kéo ứng viên thả lên một vai (đặt font, Hoàn tác trả lại) rồi kéo vai này sang vai kia (đổi chỗ, Hoàn tác).
+        {
+          try {
+            const ptr = (type, x, y, extra = {}) => new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse', isPrimary: true, ...extra });
+            const drag = async (src, target) => {
+              const sr = src.getBoundingClientRect(), tr = target.getBoundingClientRect();
+              const sx = sr.left + 20, sy = sr.top + sr.height / 2, tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+              src.dispatchEvent(ptr('pointerdown', sx, sy)); window.dispatchEvent(ptr('pointermove', sx + 12, sy + 12)); window.dispatchEvent(ptr('pointermove', tx, ty));
+              const layer = await wait(() => document.querySelector('[data-testid=drag-layer]'), 5000); const over = layer?.dataset.over ?? null;
+              window.dispatchEvent(ptr('pointerup', tx, ty)); await wait(() => !document.querySelector('[data-testid=drag-layer]'), 5000); return over;
+            };
+            const roleBtn = r => [...document.querySelectorAll('[data-testid=desk-role]')].find(b => b.dataset.role === r);
+            const fontOf = r => roleBtn(r)?.querySelector('.fa-desk-role-font')?.textContent ?? '';
+            const roles = roleNames(); const target = roles[0];
+            const was = fontOf(target);
+            const cand = await wait(() => [...document.querySelectorAll('[data-testid=desk-cand]')].find(li => !li.querySelector('[data-testid=cand-inuse]') && li.querySelector('.fa-desk-cand-name')?.textContent), 15000);
+            const name = cand?.querySelector('.fa-desk-cand-name')?.textContent ?? '';
+            const over1 = cand && roleBtn(target) ? await drag(cand, roleBtn(target).closest('li')) : null;
+            const placed = await wait(() => fontOf(target) === name && name !== was, 15000);
+            const uP = await wait(() => toastUndo(name), 8000);
+            await log('desk-drag-cand-to-role', !!placed && over1 === 'ok' && !!uP, { target, was, name, now: fontOf(target), over1, undo: !!uP });
+            uP?.click();
+            await log('desk-drag-cand-to-role-undo', !!(await wait(() => fontOf(target) === was, 15000)), { was, now: fontOf(target) });
+            // đổi chỗ: cần hai vai đều có font
+            const second = roles.find(r => r !== target && fontOf(r));
+            if (!second) await log('desk-drag-swap-roles', false, { why: 'không có hai vai cùng có font', roles, fonts: roles.map(fontOf) });
+            else {
+              const fa = fontOf(target), fb = fontOf(second);
+              const over2 = await drag(roleBtn(target), roleBtn(second).closest('li'));
+              const swapped = await wait(() => fontOf(target) === fb && fontOf(second) === fa, 15000);
+              const uS = await wait(() => [...document.querySelectorAll('.fa-toast')].filter(x => /Đã đổi chỗ|Swapped/.test(x.textContent)).pop()?.querySelector('button'), 8000);
+              await log('desk-drag-swap-roles', !!swapped && over2 === 'ok' && !!uS, { fa, fb, now: [fontOf(target), fontOf(second)], over2, undo: !!uS });
+              uS?.click();
+              await log('desk-drag-swap-roles-undo', !!(await wait(() => fontOf(target) === fa && fontOf(second) === fb, 15000)), { now: [fontOf(target), fontOf(second)] });
+            }
+          } catch (e) { await log('desk-drag-g8-error', false, String(e && e.message || e)); }
         }
         // G3: + Role (gợi ý tên + tên tự do), đổi tên, bỏ vai, Hoàn tác.
         {
