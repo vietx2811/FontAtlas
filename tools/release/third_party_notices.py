@@ -62,7 +62,7 @@ DATA_ITEMS = [
      "texts": ["UX/src-tauri/resources/NOTICE-hyperglot.md"]},
     {"name": "Whitening matrix (whitening-v2.bin) and reference quantiles (reference-v1.json)",
      "files": ["UX/src-tauri/crates/fontatlas-embed/data/whitening-v2.bin", "UX/src-tauri/crates/fontatlas-index/data/reference-v1.json"],
-     "license": "Font Atlas's own data (derived statistics)", "origin": "Computed by Font Atlas from the open font collection google/fonts (revision 47d54ca1ebb14fd864695f1d39dc734f39017c33, OFL and Apache-2.0 fonts)",
+     "license": "Font Atlas's own data (derived statistics)", "origin": "Computed by Font Atlas from the open font collection google/fonts (revision 47d54ca1ebb14fd864695f1d39dc734f39017c33, OFL and Apache-2.0 fonts): the whitening matrix is fitted on the 1,729 faces of the \"tune\" half; the reference quantiles cover 3,813 faces",
      "note": "Numeric matrices and percentile tables only; they contain no font outlines or font files.",
      "texts": []},
     {"name": "Hand-made tables and text written for Font Atlas",
