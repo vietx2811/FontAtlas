@@ -528,8 +528,15 @@ impl Store {
             stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
         }
         tx.commit()?;
-        // quét trọn vẹn → tự dọn: vị trí missing quá hạn, file/face mồ côi, dữ liệu dẫn xuất không còn file
-        stats.purged = self.gc_missing(MISSING_RETENTION_MS)?;
+        // quét trọn vẹn → tự dọn, nhưng CHỈ vị trí missing của chính nguồn này và CHỈ khi lần quét thấy ít nhất một font
+        // (thư mục gốc còn đó mà trống — điểm gắn kết rỗng của ổ mạng/ổ rút — không chứng minh được font đã mất).
+        // Nguồn khác (kể cả ổ đang rút) không bao giờ bị dọn bởi lần quét này.
+        stats.purged = if stats.seen + stats.not_downloaded > 0 {
+            self.gc_missing(Some(source_id), MISSING_RETENTION_MS)?
+        } else {
+            self.gc()?;
+            0
+        };
         Ok(stats)
     }
 
@@ -593,11 +600,16 @@ impl Store {
         Ok(n)
     }
 
-    /// Dọn vị trí `missing` mà lần cuối thấy file đã quá `retention_ms`, rồi `gc`. Trả số vị trí đã dọn.
-    pub fn gc_missing(&mut self, retention_ms: i64) -> Result<usize, StoreError> {
+    /// Dọn vị trí `missing` mà lần cuối thấy file đã quá `retention_ms`, rồi `gc`. `source_id`: chỉ nguồn đó (`None` = mọi
+    /// nguồn). `missing` chỉ được đặt khi gốc nguồn đang truy cập được lúc quét, nên file ở ổ chưa gắn không bao giờ vào đây.
+    /// Trả số vị trí đã dọn.
+    pub fn gc_missing(&mut self, source_id: Option<i64>, retention_ms: i64) -> Result<usize, StoreError> {
         let cutoff = now_ms() - retention_ms;
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        let n = tx.execute("DELETE FROM file_locations WHERE missing=1 AND last_seen_at < ?1", [cutoff])?;
+        let n = tx.execute(
+            "DELETE FROM file_locations WHERE missing=1 AND last_seen_at < ?1 AND (?2 IS NULL OR source_id = ?2)",
+            params![cutoff, source_id],
+        )?;
         tx.commit()?;
         self.gc()?;
         Ok(n)

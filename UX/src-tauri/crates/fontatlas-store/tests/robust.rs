@@ -146,3 +146,85 @@ fn rebuild_clears_library_keeps_user_data_and_rescan_restores_it_on_a_temp_dir()
     assert!(fts_hits(&s, "roboto") > 0);
     assert_eq!(count(&s, "SELECT count(*) FROM u.favorites"), 1);
 }
+
+fn age_missing(s: &Store) {
+    s.conn().execute("UPDATE file_locations SET last_seen_at = 0 WHERE missing = 1", []).unwrap();
+}
+
+#[test]
+fn an_unmounted_volume_never_loses_anything_even_after_months_and_comes_back_whole() {
+    let (d, fonts, mut s, src) = setup(&["roboto.ttf", "open_sans.ttf"]);
+    // một nguồn thứ hai (ổ khác) vẫn đang gắn và được quét
+    let other = d.path().join("Other");
+    std::fs::create_dir_all(&other).unwrap();
+    std::fs::copy(core_fixture("oswald_vf.ttf"), other.join("oswald_vf.ttf")).unwrap();
+    let src2 = s.add_source(SourceKind::Directory, "Other", Some(&other)).unwrap();
+    s.rescan_source_with(src2, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    let total_before = count(&s, "SELECT count(*) FROM file_locations");
+
+    // một font của nguồn 1 đã bị đánh missing từ lâu (vd lần quét trước khi rút ổ), rồi ổ bị rút
+    s.conn().execute("UPDATE file_locations SET missing = 1 WHERE path LIKE '%roboto.ttf'", []).unwrap();
+    age_missing(&s);
+    let unplugged = fonts.with_file_name("Fonts_unplugged");
+    std::fs::rename(&fonts, &unplugged).unwrap();
+
+    // ổ rút: quét chính nó không đánh/dọn gì; quét nguồn khác không đụng tới vị trí của ổ đang rút
+    let st = s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!((format!("{:?}", st.status), st.missing, st.purged), ("SourceUnavailable".to_string(), 0, 0));
+    let st2 = s.rescan_source_with(src2, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!(st2.purged, 0, "quét nguồn khác không dọn vị trí của ổ đang rút");
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), total_before);
+    assert_eq!(count(&s, "SELECT count(*) FROM files"), total_before);
+
+    // 2 tháng sau ổ cắm lại, file vẫn còn: không mất gì, vị trí trở lại bình thường
+    std::fs::rename(&unplugged, &fonts).unwrap();
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations WHERE missing = 1"), 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), total_before);
+}
+
+#[test]
+fn an_empty_mount_point_does_not_prove_the_fonts_are_gone() {
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf", "open_sans.ttf"]);
+    // thư mục gốc còn nhưng rỗng (điểm gắn kết ổ mạng chưa mount): các vị trí bị đánh missing, nhưng KHÔNG bị dọn dù đã rất cũ
+    for e in std::fs::read_dir(&fonts).unwrap() {
+        let p = e.unwrap().path();
+        std::fs::rename(&p, p.with_extension("held")).unwrap(); // đổi đuôi: gốc "rỗng" font
+    }
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations WHERE missing = 1"), 2);
+    age_missing(&s);
+    let st = s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!(st.purged, 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), 2, "không mất gì");
+    assert!(count(&s, "SELECT count(*) FROM faces") > 0);
+
+    // font trở lại ⇒ khớp lại như cũ
+    for e in std::fs::read_dir(&fonts).unwrap() {
+        let p = e.unwrap().path();
+        std::fs::rename(&p, p.with_extension("ttf")).unwrap();
+    }
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations WHERE missing = 0"), 2);
+}
+
+#[test]
+fn dataless_cloud_files_are_never_missing_and_never_purged() {
+    let (_d, fonts, mut s, src) = setup(&["roboto.ttf", "open_sans.ttf"]);
+    let is_roboto: &(dyn Fn(&std::path::Path, &std::fs::Metadata) -> bool + Sync) = &|p, _| p.ends_with("roboto.ttf");
+    // roboto trở thành placeholder (chưa tải về); vị trí cũ rất xưa
+    s.conn().execute("UPDATE file_locations SET last_seen_at = 0", []).unwrap();
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), is_roboto).unwrap();
+    assert_eq!((st.not_downloaded, st.missing, st.purged), (1, 0, 0));
+    let row: (i64, i64) = s
+        .conn()
+        .query_row("SELECT missing, cloud_only FROM file_locations WHERE path LIKE '%roboto.ttf'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap();
+    assert_eq!(row, (0, 1), "placeholder: còn đó (cloud_only), không missing");
+    // lần quét sau, dù cách rất lâu, vẫn không dọn
+    s.conn().execute("UPDATE file_locations SET last_seen_at = 0", []).unwrap();
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), is_roboto).unwrap();
+    assert_eq!(st.purged, 0);
+    assert_eq!(count(&s, "SELECT count(*) FROM file_locations"), 2);
+    assert_eq!(count(&s, "SELECT count(*) FROM files"), 2);
+}

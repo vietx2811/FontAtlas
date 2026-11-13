@@ -44,6 +44,9 @@ export interface Api extends LibraryApi {
    * phân tích, embedding, ngôn ngữ) rồi quét lại mọi nguồn. KHÔNG đụng dữ liệu người dùng (Dự án, Collection, Tag, Yêu thích,
    * nguồn, ghi đè phân loại; gán theo hash nên khớp lại khi font quay về). Font hiện dần khi quét; phân tích và embedding
    * tính lại ở nền nên có thể mất lâu với thư viện lớn. Ném CmdError('busy') nếu có nguồn chưa dừng quét kịp.
+   * BẮT BUỘC cho hộp xác nhận (05 viết chữ, vi + en): nói rõ (1) font hiện dần khi quét lại, (2) phân tích và embedding sẽ được TÍNH LẠI
+   * ở nền và có thể mất RẤT LÂU với thư viện lớn, (3) Dự án/Collection/Tag/Yêu thích và các nguồn KHÔNG bị đụng. Nút xác nhận không
+   * là nút mặc định; nêu số `filesRemoved` nếu có.
    */
   rebuildLibrary(): Promise<RebuildLibraryReportDto>;
   /** Mở Finder tại thư mục của nguồn (đường dẫn lấy từ Store). Ném CmdError('source_unavailable') khi thư mục không còn (ổ chưa mount). */
