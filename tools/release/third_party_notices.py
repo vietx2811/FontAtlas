@@ -39,6 +39,76 @@ OWN_PREFIX = ("fontatlas-",)
 OWN_NAMES = {"app"}
 
 
+# ---------- Dữ liệu và mô hình đi kèm app ----------
+# Mỗi mục: tên, tệp (đường dẫn từ gốc repo; có thể dùng *), nguồn/giấy phép, ghi chú, và các tệp văn bản giấy phép/thông báo
+# được chép nguyên văn vào THIRD-PARTY-NOTICES. Cổng chặn: mọi tệp dữ liệu được commit trong UX/public/, crates/*/data/ và
+# resources/ phải thuộc một mục ở đây; thêm tệp dữ liệu mới mà chưa kiểm giấy phép là bước phát hành thất bại.
+DATA_ITEMS = [
+    {"name": "Inter, JetBrains Mono, Newsreader (UI fonts, woff2 in the web bundle)",
+     "files": ["UX/public/fonts/*.woff2", "UX/public/fonts/OFL-*.txt"],
+     "license": "SIL Open Font License 1.1", "origin": "The Inter, JetBrains Mono and Newsreader project authors (see the copyright lines below)",
+     "note": "Variable-font woff2 subsets (latin, latin-ext, vietnamese) embedded in the app's frontend; licence texts follow.",
+     "texts": ["UX/public/fonts/OFL-Inter.txt", "UX/public/fonts/OFL-JetBrainsMono.txt", "UX/public/fonts/OFL-Newsreader.txt"]},
+    {"name": "SigLIP 2 image encoder (vision tower), downloaded at first use",
+     "files": ["UX/src-tauri/crates/fontatlas-embed/data/model-manifest.json", "UX/src-tauri/crates/fontatlas-embed/data/model-NOTICE.txt",
+               "UX/src-tauri/crates/fontatlas-embed/data/model-LICENSE-Apache-2.0.txt"],
+     "license": "Apache License 2.0", "origin": "google/siglip2-base-patch16-224 (Google), Hugging Face, revision 75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2",
+     "note": "Not shipped inside the app: Font Atlas downloads the weights directly from Hugging Face on the user's machine and keeps only the vision tensors, unchanged (details in the notice below). The manifest in the app pins the revision and checksums.",
+     "texts": ["UX/src-tauri/crates/fontatlas-embed/data/model-NOTICE.txt", "UX/src-tauri/crates/fontatlas-embed/data/model-LICENSE-Apache-2.0.txt"]},
+    {"name": "Language data (Hyperglot)",
+     "files": ["UX/src-tauri/crates/fontatlas-core/data/langdata.json", "UX/src-tauri/resources/NOTICE-hyperglot.md", "UX/src-tauri/resources/LICENSE-hyperglot.txt"],
+     "license": "Apache License 2.0", "origin": "Hyperglot 0.8.2 by Rosetta Type/Research and contributors",
+     "note": "langdata.json is converted from the Hyperglot data files; the full licence is bundled as LICENSE-hyperglot.txt next to this file.",
+     "texts": ["UX/src-tauri/resources/NOTICE-hyperglot.md"]},
+    {"name": "Whitening matrix (whitening-v2.bin) and reference quantiles (reference-v1.json)",
+     "files": ["UX/src-tauri/crates/fontatlas-embed/data/whitening-v2.bin", "UX/src-tauri/crates/fontatlas-index/data/reference-v1.json"],
+     "license": "Font Atlas's own data (derived statistics)", "origin": "Computed by Font Atlas from the open font collection google/fonts (revision 47d54ca1ebb14fd864695f1d39dc734f39017c33, OFL and Apache-2.0 fonts)",
+     "note": "Numeric matrices and percentile tables only; they contain no font outlines or font files.",
+     "texts": []},
+    {"name": "Hand-made tables and text written for Font Atlas",
+     "files": ["UX/src-tauri/crates/fontatlas-describe/data/descriptor-dictionary.json", "UX/src-tauri/crates/fontatlas-index/data/superfamilies-v1.csv",
+               "UX/src-tauri/resources/en.lproj/*", "UX/src-tauri/resources/vi.lproj/*"],
+     "license": "Font Atlas's own work", "origin": "Font Atlas project",
+     "note": "Descriptor dictionary, superfamily table (family names), and localisation strings.",
+     "texts": []},
+]
+DATA_GLOBS = ["UX/public/*", "UX/src-tauri/crates/*/data/*", "UX/src-tauri/resources/*"]
+DATA_IGNORE = {"UX/src-tauri/resources/THIRD-PARTY-NOTICES.txt"}
+
+
+def data_files_unlisted():
+    import fnmatch
+    out = subprocess.run(["git", "ls-files", "--"] + DATA_GLOBS, capture_output=True, text=True, cwd=ROOT)
+    tracked = [f for f in out.stdout.splitlines() if f not in DATA_IGNORE and "/tests/" not in f]  # fixtures của test không đi vào app
+    pats = [x for it in DATA_ITEMS for x in it["files"]]
+    return [f for f in tracked if not any(fnmatch.fnmatch(f, pt) for pt in pats)]
+
+
+def data_missing():
+    miss = []
+    for it in DATA_ITEMS:
+        for f in it["texts"] + [x for x in it["files"] if "*" not in x]:
+            if not os.path.isfile(os.path.join(ROOT, f)):
+                miss.append(f)
+    return miss
+
+
+def render_data():
+    L = ["2. DATA AND MODELS", "-" * 72]
+    for it in DATA_ITEMS:
+        L.append("")
+        L.append("* " + it["name"])
+        L.append("  Licence: " + it["license"])
+        L.append("  Origin:  " + it["origin"])
+        L.append("  " + it["note"])
+        for t in it["texts"]:
+            L.append("")
+            L.append("  --- " + os.path.basename(t) + " ---")
+            L.extend("  " + ln if ln.strip() else "" for ln in read(os.path.join(ROOT, t)).split("\n"))
+    L.append("")
+    return L
+
+
 def die(msg):
     print("THIRD-PARTY-NOTICES: " + msg, file=sys.stderr)
     sys.exit(1)
@@ -226,8 +296,8 @@ def render(pkgs):
     L.append("FONT ATLAS — THIRD-PARTY NOTICES")
     L.append("=" * 72)
     L.append("Font Atlas includes the open-source components listed below. Each is the property of its authors and")
-    L.append("is used under the licence shown. Language data from Hyperglot (Apache-2.0) has its own notice:")
-    L.append("NOTICE-hyperglot.md and LICENSE-hyperglot.txt in the same folder.")
+    L.append("is used under the licence shown. Section 2 covers the data, fonts and models that are not code; the")
+    L.append("Hyperglot notice and licence are also bundled as NOTICE-hyperglot.md and LICENSE-hyperglot.txt in the same folder.")
     L.append("")
     L.append("Generated by tools/release/third_party_notices.py from Cargo.lock and UX/node_modules; do not edit by hand.")
     L.append("")
@@ -237,7 +307,8 @@ def render(pkgs):
         L.append("%s %s %s — %s%s" % ("[rust]" if p["eco"] == "rust" else "[npm] ", p["name"], p["version"], p["spdx"],
                                         (" — " + p["repo"]) if p["repo"] else ""))
     L.append("")
-    L.append("2. LICENCE TEXTS")
+    L.extend(render_data())
+    L.append("3. LICENCE TEXTS OF CODE COMPONENTS")
     L.append("-" * 72)
     for h, (text, ps) in sorted(groups.items(), key=lambda kv: (-len(kv[1][1]), kv[0])):
         L.append("")
@@ -262,6 +333,13 @@ def main():
         for p, why in bad:
             print("  %s %s %s: %s" % (p["eco"], p["name"], p["version"], why), file=sys.stderr)
         print("Sửa: bỏ phụ thuộc đó, hoặc (quyết định pháp lý) thêm vào ALLOWED/OVERRIDES kèm lý do.", file=sys.stderr)
+        sys.exit(1)
+    miss, unl = data_missing(), data_files_unlisted()
+    if miss or unl:
+        for f in miss:
+            print("THIRD-PARTY-NOTICES: thiếu tệp được liệt kê trong DATA_ITEMS: " + f, file=sys.stderr)
+        for f in unl:
+            print("THIRD-PARTY-NOTICES: tệp dữ liệu chưa được kiểm giấy phép (thêm vào DATA_ITEMS): " + f, file=sys.stderr)
         sys.exit(1)
     text = render(pkgs)
     n_rust = sum(1 for p in pkgs if p["eco"] == "rust")
