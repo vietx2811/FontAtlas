@@ -12,7 +12,7 @@ Tra cứu ngắn (không phải khảo sát từng app; không tìm được tư
 | Thành phần | Giấy phép | Ghi chú |
 |---|---|---|
 | Hyperglot (dữ liệu) | Apache-2.0 | Bắt buộc giữ thông báo + nêu thay đổi: `Resources/NOTICE-hyperglot.md`, `LICENSE-hyperglot.txt` đã đóng gói; màn này hiện `credit.hyperglot` + dòng thay đổi |
-| SigLIP 2 base-patch16-224 (trọng số, tải khi bật phân tích hình ảnh) | Apache-2.0 | Theo các trang tổng hợp (Voxel51, Superlinked) — **chưa đọc được model card gốc**; nên đối chiếu `README` front matter của `google/siglip2-base-patch16-224` trước khi phát hành |
+| SigLIP 2 base-patch16-224 (trọng số, tải khi bật phân tích hình ảnh) | Apache-2.0 | Đã đối chiếu front matter model card gốc `google/siglip2-base-patch16-224` (`license: apache-2.0`, Lead kiểm) |
 | candle 0.11 | MIT OR Apache-2.0 | |
 | Tauri 2.9 · @tauri-apps/api | Apache-2.0 OR MIT | |
 | read-fonts, skrifa, kurbo | MIT OR Apache-2.0 | |
