@@ -32,9 +32,19 @@ Test: `tests/embed_claim.rs` (9 test; RED trước khi sửa là test đếm qu�
 **Đã đo và không phải nguyên nhân.** `similar_families` trên Index (không có store), `suggest_bench` (thêm N = 20k):
 p50 0,8 / 2,3 / 6,6 / 21,7 ms tại 2k / 5k / 10k / 20k: gần tuyến tính. `pair_candidates_gated` 0,5 / 1,2 / 1,8 / 8,0 ms.
 
-**Chưa đo.** Trong app, `similar_families` gọi `similar_with(k = toàn thư viện)` nên bước xếp lại f32 đọc embedding của *mọi*
-ứng viên từ SQLite (N tra cứu theo khoá mỗi truy vấn): vẫn tuyến tính, nhưng nên đo với store thật nếu truy vấn Similar chậm ở
-20k+. Gợi ý nếu cần: chỉ xếp lại f32 cho các trang họ đang hiển thị.
+**Rerank f32 đọc N embedding từ SQLite (đã đo sau yêu cầu của Lead).** Trong app, `similar_families` gọi
+`similar_with(k = toàn thư viện)` nên bước xếp lại f32 đọc vector của *mọi* ứng viên. Đo `EmbedReader::embeddings_f32` trên store
+thật, vector 128 chiều f32, 15 lượt, cache trang nóng (`rerank_fetch_of_every_candidate`, nhánh `feat/d14-followup`):
+
+| N | p50 | p95 |
+|---|---|---|
+| 5.000 | 6,1 ms | 6,7 ms |
+| 20.000 | 25,3 ms | 26,9 ms |
+
+Cộng phần tính trên Index ở 20k (p50 21,7 / p95 29,1 ms, `suggest_bench`) → khoảng p50 47 ms, p95 56 ms mỗi lần gọi, **dưới
+ngưỡng 100 ms của Lead nên không thêm bộ nhớ đệm**. Giới hạn: phép cộng là ước lượng (chưa chạy đầu-cuối trong app); cache trang
+nóng; chưa tính tranh chấp với writer của worker embedding (WAL, `busy_timeout` 5 s) và chi phí `matching_keys`/`rows_of` ở
+lớp app. Nếu đo thật trong app vượt 100 ms, hướng đã thống nhất là bộ đệm bộ nhớ vô hiệu theo model_version.
 
 ## 2. Luồng tải model kẹt
 
