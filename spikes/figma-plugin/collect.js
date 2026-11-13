@@ -16,9 +16,9 @@ function collectFonts(textNodes, availableKeys /* Set "family|style" */) {
   return [...seen.values()].sort((a, b) => a.family.localeCompare(b.family) || a.style.localeCompare(b.style));
 }
 // base64url(JSON) cho fontatlas://fonts?v=1&d=...
-function toLink(fonts, fileName) {
+function toLink(fonts, fileName, scheme = 'fontatlas') {
   const json = JSON.stringify({ v: 1, src: 'figma', file: fileName, fonts: fonts.map(f => [f.family, f.style, f.missing ? 1 : 0]) });
   const b64 = Buffer.from(json, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return 'fontatlas://fonts?v=1&d=' + b64;
+  return scheme + '://fonts?v=1&d=' + b64;
 }
 module.exports = { collectFonts, toLink };

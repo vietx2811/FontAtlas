@@ -12,8 +12,8 @@ export function parseImportText(text: string): FigmaImportDto {
   if (text.length > 64 * 1024) throw bad('import_too_large');
   let raw = text.trim();
   if (!raw) throw bad('import_empty');
-  if (raw.toLowerCase().startsWith('fontatlas://')) {
-    const m = /^fontatlas:\/\/fonts\?(.*)$/i.exec(raw);
+  if (/^fontatlas(-dev)?:\/\//i.test(raw)) {
+    const m = /^fontatlas(?:-dev)?:\/\/fonts\?(.*)$/i.exec(raw);
     const d = m && new URLSearchParams(m[1]).get('d');
     if (!d) throw bad('import_format');
     try { raw = decodeURIComponent(escape(atob(d.replace(/-/g, '+').replace(/_/g, '/')))); } catch { throw bad('import_format'); }

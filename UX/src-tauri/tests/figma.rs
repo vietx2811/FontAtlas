@@ -39,7 +39,7 @@ fn name(f: &str, s: &str) -> FontNameDto {
 }
 
 fn link(json: &str) -> String {
-    format!("fontatlas://fonts?v=1&d={}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json))
+    format!("{}://fonts?v=1&d={}", figma::LINK_SCHEME, base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json))
 }
 
 const JSON: &str = r#"{"v":1,"src":"figma","file":"Menu v3","fonts":[["Playfair Display","Bold",0],["Inter","Regular",1]]}"#;
@@ -59,8 +59,8 @@ fn parse_errors_carry_codes_not_prose() {
     let code = |s: &str| figma::parse_figma_import(s).unwrap_err().code;
     assert_eq!(code("   "), "import_empty");
     assert_eq!(code("không phải json"), "import_format");
-    assert_eq!(code("fontatlas://fonts?v=1&d=@@@"), "import_format");
-    assert_eq!(code("fontatlas://other?d=e30"), "import_format");
+    assert_eq!(code(&format!("{}://fonts?v=1&d=@@@", figma::LINK_SCHEME)), "import_format");
+    assert_eq!(code(&format!("{}://other?d=e30", figma::LINK_SCHEME)), "import_format");
     assert_eq!(code(r#"{"v":9,"fonts":[]}"#), "import_version");
     let many: Vec<String> = (0..201).map(|i| format!(r#"["F{i}","Regular",0]"#)).collect();
     assert_eq!(code(&format!(r#"{{"v":1,"fonts":[{}]}}"#, many.join(","))), "import_too_many_fonts");
@@ -128,9 +128,13 @@ fn opened_links_queue_until_the_frontend_takes_them_and_bad_ones_queue_a_coded_e
     assert!(figma::take_pending_imports(&st).is_empty());
     // Mở lạnh: link tới trước khi giao diện sẵn sàng → phải còn nguyên chờ lấy.
     assert!(figma::enqueue_link(&st, &link(JSON)));
-    assert!(figma::enqueue_link(&st, "fontatlas://fonts?v=9&d=e30"));
+    assert!(figma::enqueue_link(&st, &format!("{}://fonts?v=9&d=e30", figma::LINK_SCHEME)));
     assert!(!figma::enqueue_link(&st, "https://example.com/x"), "không phải scheme của ta: bỏ qua, không xếp");
     assert!(!figma::enqueue_link(&st, "file:///etc/passwd"));
+    // Mỗi build chỉ nhận scheme của mình: link release không vào bản debug và ngược lại.
+    let other = if figma::LINK_SCHEME == "fontatlas" { "fontatlas-dev" } else { "fontatlas" };
+    assert!(!figma::enqueue_link(&st, &format!("{other}://fonts?v=1&d=e30")));
+    assert_eq!(figma::parse_figma_import(&format!("{other}://fonts?v=1&d=e30")).unwrap_err().code, "import_format");
     let got = figma::take_pending_imports(&st);
     assert_eq!(got.len(), 2);
     assert_eq!(got[0].import.as_ref().unwrap().items.len(), 2);

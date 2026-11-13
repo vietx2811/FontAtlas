@@ -69,7 +69,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["fontatlas"]
+        "schemes": ["fontatlas-dev"]
       }
     }
   }

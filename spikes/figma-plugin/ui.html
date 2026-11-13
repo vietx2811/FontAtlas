@@ -4,6 +4,7 @@
 <div id="n">Đang quét…</div>
 <div id="miss"></div>
 <label><input type="checkbox" id="nofile"> Không gửi tên file</label><br>
+<label><input type="checkbox" id="dev"> Bản dev (fontatlas-dev://)</label><br>
 <button id="copy">Sao chép cho Font Atlas</button>
 <a id="open" target="_blank">Mở trong Font Atlas</a>
 <script>
@@ -20,7 +21,7 @@ onmessage = e => {
   document.getElementById('n').textContent = m.fonts.length + ' font (' + m.scope + ')';
   const miss = m.fonts.filter(f => f.missing).length;
   document.getElementById('miss').textContent = miss ? miss + ' font Figma báo thiếu' : '';
-  document.getElementById('open').href = 'fontatlas://fonts?v=1&d=' + b64url(payload());
+  document.getElementById('open').href = (document.getElementById('dev').checked ? 'fontatlas-dev' : 'fontatlas') + '://fonts?v=1&d=' + b64url(payload());
 };
 document.getElementById('copy').onclick = () => {
   const t = document.createElement('textarea'); t.value = payload(); document.body.appendChild(t); t.select();

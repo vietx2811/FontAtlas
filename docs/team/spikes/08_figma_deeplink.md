@@ -73,6 +73,22 @@ Nguồn: tài liệu Tauri 2 (plugin deep-link) và mã nguồn `tauri-bundler`,
 - **App chưa chạy**: macOS mở app rồi gửi cùng sự kiện `Opened`. Plugin lưu URL vào `current`, đọc bằng `get_current()`/`getCurrent()`. Mã nguồn không chứng minh sự kiện luôn đến sau khi frontend sẵn sàng, nên **frontend phải đọc `getCurrent()` lúc khởi động rồi mới đăng ký `onOpenUrl`**, và backend nên giữ hàng đợi link tới khi giao diện báo sẵn sàng. Cần thử thật (§4 mục 3).
 - Tài liệu cảnh báo: người dùng có thể giả link bằng tham số dòng lệnh; plugin chỉ khớp scheme đã cấu hình nhưng **phải tự kiểm định dạng URL** (§3.4).
 
+### 2.3 Hai scheme: `fontatlas://` (phát hành) và `fontatlas-dev://` (debug, CI, QA)
+Vấn đề: macOS đăng ký scheme của mọi `.app` nó thấy (kể cả khi chỉ mở bản debug ở một thư mục tạm). Nếu bản debug cũng khai `fontatlas://`, link từ Figma có thể mở một bản debug cũ trong thư mục CI thay vì app đã cài.
+
+Quy ước (đã làm):
+- `UX/src-tauri/tauri.conf.json` (mặc định, dùng cho `tauri dev`, `cargo tauri build --debug`, CI, QA, smoke) khai **`fontatlas-dev`**.
+- `UX/src-tauri/tauri.release.conf.json` là overlay chỉ đổi `plugins.deep-link.desktop.schemes` thành **`fontatlas`**. Bản phát hành build bằng `cargo tauri build --config src-tauri/tauri.release.conf.json` (`npm run tauri:build` đã có cờ này). Quên cờ thì bản phát hành mất scheme (hỏng an toàn, dễ thấy), không bao giờ bản debug giành `fontatlas://`.
+- Backend (`services/figma::LINK_SCHEME`) chọn theo `debug_assertions`: debug = `fontatlas-dev`, release = `fontatlas`; mỗi build chỉ nhận scheme của mình và bỏ link của build kia.
+- `tools/release/make_dmg.sh` từ chối đóng DMG nếu `Info.plist` của app không khai đúng `fontatlas`.
+- Plugin Figma thử có ô "Bản dev" để sinh link `fontatlas-dev://`.
+
+Dọn đăng ký cũ (tay, không tự động xoá gì): chỉ ĐỌC bằng
+```bash
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | grep -B2 -A12 "fontatlas"
+```
+để xem những bundle nào đang giữ `fontatlas` hoặc `fontatlas-dev`, và `Font Atlas.app` nào nằm ở thư mục tạm của CI. Muốn gỡ một bản cụ thể thì chủ máy tự chạy `lsregister -u "<đường dẫn .app>"` cho đúng bản đó (hoặc xoá thư mục bản debug cũ rồi `lsregister -gc`); không có script nào của dự án làm việc này.
+
 ## 3. Luồng tối thiểu đề xuất
 
 ### 3.1 Hai link

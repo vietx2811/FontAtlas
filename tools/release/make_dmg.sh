@@ -13,6 +13,14 @@ CMD="$HERE/Cài Font Atlas.command"
 [ -d "$APP" ] || { echo "không thấy app: $APP"; exit 1; }
 VER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 
+# Bản phát hành PHẢI khai scheme fontatlas:// (build bằng `cargo tauri build --config src-tauri/tauri.release.conf.json`, xem `npm run tauri:build`).
+# Bản debug/CI chỉ khai fontatlas-dev:// để không giành link của app đã cài.
+SCHEMES="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes' "$APP/Contents/Info.plist" 2>/dev/null | tr -d ' {}()\n' || true)"
+case "$SCHEMES" in
+  fontatlas) ;;
+  *) echo "Info.plist khai scheme '$SCHEMES', cần đúng 'fontatlas': build lại bằng tauri.release.conf.json"; exit 1 ;;
+esac
+
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 ditto "$APP" "$STAGE/Font Atlas.app"
 ln -s /Applications "$STAGE/Applications"

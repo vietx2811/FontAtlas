@@ -13,6 +13,10 @@ use crate::error::CmdError;
 use crate::services::analysis::{bundle, dto_key};
 use crate::state::AppState;
 
+/// Scheme của build này. Bản phát hành: `fontatlas`. Bản debug (kể cả CI/QA): `fontatlas-dev`, để mỗi bản debug đặt ở một đường dẫn khác
+/// không giành link của app đã cài trong LaunchServices. Khớp với `tauri.conf.json` (dev) và `tauri.release.conf.json` (release).
+pub const LINK_SCHEME: &str = if cfg!(debug_assertions) { "fontatlas-dev" } else { "fontatlas" };
+
 pub const IMPORT_MAX_BYTES: usize = 64 * 1024;
 pub const IMPORT_MAX_FONTS: usize = 200;
 const STR_MAX_CHARS: usize = 128;
@@ -34,7 +38,14 @@ fn short_str(v: &Value) -> Option<String> {
 
 /// Link `fontatlas://fonts?v=1&d=<base64url>` → JSON; văn bản khác → coi là JSON thuần.
 fn payload_json(text: &str) -> Result<String, CmdError> {
-    let Some(rest) = text.strip_prefix("fontatlas://") else { return Ok(text.to_string()) };
+    let own = format!("{LINK_SCHEME}://");
+    let Some(rest) = text.strip_prefix(&own) else {
+        // Link của build kia (vd dán link release vào bản debug): báo định dạng sai thay vì coi là JSON.
+        if text.starts_with("fontatlas://") || text.starts_with("fontatlas-dev://") {
+            return Err(coded("import_format", "scheme"));
+        }
+        return Ok(text.to_string());
+    };
     let (host, query) = rest.split_once('?').unwrap_or((rest, ""));
     if host.trim_end_matches('/') != "fonts" {
         return Err(coded("import_format", host));
@@ -142,7 +153,7 @@ pub const PENDING_MAX: usize = 10;
 /// Nhận một URL do hệ điều hành chuyển tới. Trả `false` (không xếp) nếu không phải scheme `fontatlas://`:
 /// scheme khác không bao giờ được xử lý ở đây. Link sai định dạng vẫn xếp, kèm mã lỗi, để giao diện báo.
 pub fn enqueue_link(state: &AppState, url: &str) -> bool {
-    if !url.trim_start().to_ascii_lowercase().starts_with("fontatlas://") {
+    if !url.trim_start().to_ascii_lowercase().starts_with(&format!("{LINK_SCHEME}://")) {
         return false;
     }
     let item = match parse_figma_import(url.trim_start()) {
