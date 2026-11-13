@@ -665,3 +665,65 @@ pub struct CloudDownloadReportDto {
     pub rescan_queued: bool,
     pub first_failure_code: Option<String>,
 }
+
+/// G8: đích của lần nhập — Collection hoặc Dự án (Case) đã có.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum ImportTargetKindDto {
+    Collection,
+    Case,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ImportTargetDto {
+    pub kind: ImportTargetKindDto,
+    #[ts(type = "number")]
+    pub id: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum ImportPhaseDto {
+    AddingSources,
+    Scanning,
+    Adding,
+}
+
+/// Tiến độ nhập: `done`/`total` theo `phase` (mục đường dẫn | nguồn đang quét | face đang thêm).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ImportProgressDto {
+    pub phase: ImportPhaseDto,
+    pub done: u32,
+    pub total: u32,
+    /// Face mới đã thêm vào đích (chỉ > 0 ở pha `adding`).
+    pub added: u32,
+    pub skipped: u32,
+}
+
+/// `reason`: `not_font` | `cloud_not_downloaded` | `unreadable` | `missing`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ImportSkipDto {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ImportResultDto {
+    /// Đúng các face MỚI được thêm vào đích (Hoàn tác gỡ đúng danh sách này).
+    pub added: Vec<FaceKeyDto>,
+    /// Face đã có sẵn trong đích (không thêm lại).
+    pub already_there: u32,
+    pub skipped: Vec<ImportSkipDto>,
+    /// Bị huỷ: dừng chờ quét và dừng thêm; quét đã xếp vẫn chạy nốt, không thêm gì thêm vào đích.
+    pub cancelled: bool,
+}

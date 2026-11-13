@@ -153,6 +153,18 @@ impl Store {
         Ok(id)
     }
 
+    /// Với mỗi face của `keys`: đã có trong Dự án `case_id` chưa? (G8: chỉ thêm và chỉ báo "đã thêm" cho face chưa có.)
+    pub fn case_has_faces(&self, case_id: i64, keys: &[FaceKey]) -> Result<Vec<bool>, StoreError> {
+        let mut st = self.conn.prepare("SELECT 1 FROM u.case_faces WHERE case_id=?1 AND hash=?2 AND face_index=?3")?;
+        keys.iter().map(|k| Ok(st.exists(params![case_id, &k.hash[..], k.face_index])?)).collect()
+    }
+
+    /// Như [`Store::case_has_faces`] cho Collection.
+    pub fn collection_has_faces(&self, collection_id: i64, keys: &[FaceKey]) -> Result<Vec<bool>, StoreError> {
+        let mut st = self.conn.prepare("SELECT 1 FROM u.collection_items WHERE collection_id=?1 AND hash=?2 AND face_index=?3")?;
+        keys.iter().map(|k| Ok(st.exists(params![collection_id, &k.hash[..], k.face_index])?)).collect()
+    }
+
     pub fn sources(&self) -> Result<Vec<Source>, StoreError> {
         let mut st = self.conn.prepare(&format!("SELECT {SOURCE_COLS} FROM u.sources ORDER BY source_id"))?;
         let v = st.query_map([], row_source)?.collect::<rusqlite::Result<Vec<_>>>()?;

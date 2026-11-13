@@ -67,6 +67,8 @@ macro_rules! command_list {
             async rebuild_library() -> Result<RebuildLibraryReportDto, CmdError>;
             async source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadProgressDto>) -> Result<CloudDownloadReportDto, CmdError>;
             async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
+            async import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> Result<ImportResultDto, CmdError>;
+            async import_paths_cancel() -> Result<bool, CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
             async scan_cancel() -> Result<(), CmdError>;
@@ -398,6 +400,12 @@ cmd!(source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadPro
         let _ = on_progress.send(p);
     })
 });
+cmd!(import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> ImportResultDto => |s| {
+    crate::services::import::import_paths_into(s, paths, &target, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(import_paths_cancel() -> bool => |s| Ok(crate::services::import::cancel_import(s)));
 cmd!(source_download_cancel(source_id: i64) -> bool => |s| Ok(cloud_download::cancel_download(s, source_id)));
 cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));
 cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));

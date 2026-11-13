@@ -669,3 +669,78 @@ fn boot_sweeps_locations_left_behind_by_an_interrupted_source_removal() {
     assert_eq!(n, 0, "khởi động lại dọn vị trí mồ côi");
     assert_eq!(all(&st).total, 0);
 }
+
+fn target_case(st: &Arc<AppState>) -> app_lib::dto::library::ImportTargetDto {
+    let c = cases::create_case(st, Some("Nhập"), None, None).unwrap();
+    app_lib::dto::library::ImportTargetDto { kind: app_lib::dto::library::ImportTargetKindDto::Case, id: c.id }
+}
+
+fn import(st: &Arc<AppState>, paths: &[&Path], t: &app_lib::dto::library::ImportTargetDto) -> Result<ImportResultDto, app_lib::error::CmdError> {
+    app_lib::services::import::import_paths_into(st, paths.iter().map(|p| p.to_string_lossy().into_owned()).collect(), t, &mut |_| {})
+}
+
+#[test]
+fn dropping_a_folder_adds_it_as_a_source_and_only_its_faces_to_the_case_then_reports_already_there() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let fonts = d.path().join("Dropped");
+    std::fs::create_dir_all(&fonts).unwrap();
+    for n in ["roboto.ttf", "open_sans.ttf"] {
+        std::fs::copy(core_fixture(n), fonts.join(n)).unwrap();
+    }
+    let t = target_case(&st);
+    let r = import(&st, &[&fonts], &t).unwrap();
+    assert_eq!((r.added.len(), r.already_there, r.skipped.len(), r.cancelled), (2, 0, 0, false));
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1, "thư mục thả vào trở thành nguồn");
+    assert_eq!(cases::get_case(&st, t.id).unwrap().faces.len(), 2);
+    let again = import(&st, &[&fonts], &t).unwrap();
+    assert_eq!((again.added.len(), again.already_there), (0, 2), "không thêm trùng, báo đã có");
+}
+
+#[test]
+fn dropping_one_loose_file_does_not_turn_its_folder_into_a_source() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let dl = d.path().join("Downloads");
+    std::fs::create_dir_all(&dl).unwrap();
+    std::fs::copy(core_fixture("roboto.ttf"), dl.join("roboto.ttf")).unwrap();
+    std::fs::copy(core_fixture("open_sans.ttf"), dl.join("open_sans.ttf")).unwrap();
+    std::fs::write(dl.join("readme.txt"), b"x").unwrap();
+    let t = target_case(&st);
+    assert!(sources::list_sources(&st).unwrap().is_empty());
+    let r = import(&st, &[&dl.join("roboto.ttf"), &dl.join("readme.txt"), &dl.join("ghost.ttf")], &t).unwrap();
+    assert_eq!(r.added.len(), 1, "chỉ đúng một font được thả");
+    let reasons: Vec<_> = r.skipped.iter().map(|s| (s.path.rsplit('/').next().unwrap().to_string(), s.reason.clone())).collect();
+    assert_eq!(reasons, vec![("readme.txt".to_string(), "not_font".to_string()), ("ghost.ttf".to_string(), "missing".to_string())]);
+    let list = sources::list_sources(&st).unwrap();
+    assert_eq!((list.len(), list[0].kind.as_str(), list[0].path.is_none(), list[0].face_count), (1, "loose", true, r.added.len() as u32));
+    assert_eq!(all(&st).total, 1, "open_sans.ttf cạnh đó KHÔNG vào thư viện");
+}
+
+#[test]
+fn dropping_one_file_inside_an_existing_source_adds_only_that_face() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let t = target_case(&st);
+    let r = import(&st, &[&dir.join("open_sans.ttf")], &t).unwrap();
+    assert_eq!((r.added.len(), r.skipped.len()), (1, 0));
+    assert_eq!(cases::get_case(&st, t.id).unwrap().faces.len(), 1);
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1, "không thêm nguồn mới");
+}
+
+#[test]
+fn import_into_a_collection_rejects_unknown_targets_and_cancel_is_false_when_idle() {
+    use app_lib::dto::library::{ImportTargetDto, ImportTargetKindDto};
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let f = d.path().join("roboto.ttf");
+    std::fs::copy(core_fixture("roboto.ttf"), &f).unwrap();
+    let bad = ImportTargetDto { kind: ImportTargetKindDto::Collection, id: 999 };
+    assert_eq!(import(&st, &[&f], &bad).unwrap_err().code, "not_found");
+    let col = library::create_collection(&st, "Bộ", None).unwrap();
+    let t = ImportTargetDto { kind: ImportTargetKindDto::Collection, id: col.id };
+    let r = import(&st, &[&f], &t).unwrap();
+    assert_eq!(r.added.len(), 1);
+    assert_eq!(library::list_collections(&st).unwrap()[0].item_count, 1);
+    assert!(!app_lib::services::import::cancel_import(&st), "không có lượt nào để huỷ");
+}

@@ -52,6 +52,9 @@ import type { FamilyStyleDto } from './FamilyStyleDto';
 import type { FontManagerDto } from './FontManagerDto';
 import type { GlassProbeDto } from './GlassProbeDto';
 import type { IgnoredGroupDto } from './IgnoredGroupDto';
+import type { ImportProgressDto } from './ImportProgressDto';
+import type { ImportResultDto } from './ImportResultDto';
+import type { ImportTargetDto } from './ImportTargetDto';
 import type { LangCoverageDto } from './LangCoverageDto';
 import type { LangDto } from './LangDto';
 import type { LangListDto } from './LangListDto';
@@ -121,6 +124,8 @@ export interface TauriCommandMap {
   rebuild_library: { args: Record<string, never>; result: RebuildLibraryReportDto };
   source_download_cloud: { args: { sourceId: number; onProgress: Channel<CloudDownloadProgressDto> }; result: CloudDownloadReportDto };
   source_download_cancel: { args: { sourceId: number }; result: boolean };
+  import_paths_into: { args: { paths: string[]; target: ImportTargetDto; onProgress: Channel<ImportProgressDto> }; result: ImportResultDto };
+  import_paths_cancel: { args: Record<string, never>; result: boolean };
   scan_pause: { args: Record<string, never>; result: null };
   scan_resume: { args: Record<string, never>; result: null };
   scan_cancel: { args: Record<string, never>; result: null };

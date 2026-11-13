@@ -16,6 +16,7 @@ pub mod brief;
 pub mod cloud;
 pub mod cloud_download;
 pub mod cloud_watch;
+pub mod import;
 pub mod cases;
 pub mod compare;
 pub mod embed;

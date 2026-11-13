@@ -43,7 +43,25 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
 
 pub fn list_sources(state: &AppState) -> Result<Vec<SourceDto>, CmdError> {
     let sources = state.with_user(|u| Ok(u.sources()?))?;
-    sources.into_iter().map(|s| dto(state, s)).collect()
+    // nguồn hệ thống ẩn: `derived` (bản sao đổi tên) không hiện; `loose` (font lẻ) chỉ hiện khi đang có font
+    let loose_in_use: bool = state.with_store(|s| {
+        Ok(s.conn()
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM file_locations l WHERE l.source_id IN (SELECT source_id FROM u.sources WHERE kind='loose'))",
+                [],
+                |r| r.get::<_, bool>(0),
+            )
+            .map_err(StoreError::from)?)
+    })?;
+    sources
+        .into_iter()
+        .filter(|s| match s.kind {
+            SourceKind::Derived => false,
+            SourceKind::Loose => loose_in_use,
+            _ => true,
+        })
+        .map(|s| dto(state, s))
+        .collect()
 }
 
 pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdError> {
