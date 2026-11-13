@@ -1282,7 +1282,7 @@ fn server_that_accepts_but_never_answers_times_out_and_fails_cleanly() {
         matches!(r, Err(EmbedError::Network { kind: fontatlas_embed::NetworkErrorKind::Timeout, .. })),
         "{r:?}"
     );
-    assert!(t.elapsed() < Duration::from_secs(20), "{:?}", t.elapsed());
+    assert!(t.elapsed() < Duration::from_secs(120), "{:?}", t.elapsed()); // chỉ chặn vòng lặp vô hạn
     assert!(matches!(st.status(), ModelStatus::Missing), "không để lại .part khi chưa có byte nào");
 }
 
@@ -1291,19 +1291,21 @@ fn cancel_while_waiting_for_headers_returns_cancelled_promptly() {
     let s = silent_server();
     let m = manifest_for(&fake_model(), &s.url);
     let d = tempfile::tempdir().unwrap();
-    // timeout đọc mặc định (30 s): chỉ cờ huỷ mới giải phóng được luồng trong thời gian ngắn
-    let st = store(&d, m);
+    // timeout đọc 10 phút: chỉ cờ huỷ mới giải phóng được luồng. Luồng riêng + chờ có hạn thay cho đồng hồ ngắn:
+    // CI chạy cùng build song song (tải máy > 20) từng làm một lần huỷ mất 15 s, không phải do treo.
+    let st = Arc::new(store(&d, m).with_read_timeout_for_test(Duration::from_secs(600)));
     let cancel = Arc::new(AtomicBool::new(false));
-    let c = cancel.clone();
-    let watcher = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(300));
-        c.store(true, Ordering::SeqCst);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (st2, c2) = (st.clone(), cancel.clone());
+    std::thread::spawn(move || {
+        let _ = tx.send(st2.ensure_resumable(&|_| {}, &c2));
     });
-    let t = std::time::Instant::now();
-    let r = st.ensure_resumable(&|_| {}, &cancel);
-    watcher.join().unwrap();
-    assert!(matches!(r, Err(EmbedError::Cancelled)), "{r:?}");
-    assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+    std::thread::sleep(Duration::from_millis(300));
+    cancel.store(true, Ordering::SeqCst);
+    match rx.recv_timeout(Duration::from_secs(90)) {
+        Ok(r) => assert!(matches!(r, Err(EmbedError::Cancelled)), "{r:?}"),
+        Err(_) => panic!("luồng tải không dừng sau khi huỷ dù timeout đọc còn 10 phút"),
+    }
 }
 
 #[test]
@@ -1328,7 +1330,8 @@ fn cancel_while_another_process_holds_the_model_lock_returns_promptly() {
     });
     std::thread::sleep(Duration::from_millis(300));
     cancel.store(true, Ordering::SeqCst);
-    match rx.recv_timeout(Duration::from_secs(5)) {
+    // chờ có hạn rộng: chỉ để phân biệt "kẹt vô hạn" với "máy đang tải nặng"
+    match rx.recv_timeout(Duration::from_secs(90)) {
         Ok(r) => assert!(matches!(r, Err(EmbedError::Cancelled)), "{r:?}"),
         Err(_) => panic!("luồng tải bị chặn ở khoá file dù đã huỷ"),
     }
