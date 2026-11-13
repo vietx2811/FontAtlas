@@ -516,6 +516,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                 keep_active_on_exit: false,
                 rescan_on_launch: true,
                 cloud_preview_download: true,
+                cloud_watch: true,
             }),
         ),
         ("ui_state", v(&UiStateDto::default())),
@@ -731,6 +732,8 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         owner: fa::Owner::RightFont,
         same_file: false,
         replace_tier: fa::ReplaceTier::Replace,
+        variable: false,
+        existing_variable: Some(true),
     };
     use fa::FileOutcome as F;
     let outcomes = vec![

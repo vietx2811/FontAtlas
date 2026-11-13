@@ -179,6 +179,21 @@ fn ui_state_roundtrip_and_size_cap() {
 }
 
 #[test]
+fn ui_state_old_json_without_closed_sections_keeps_new_groups_open() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    // Dữ liệu lưu trước khi có nhóm Case: không có `closedSections`.
+    system::set_setting(&st, "ui.state", r#"{"sidebarCollapsed":true,"openSections":["col","tag"],"layout":"list","sampleSize":40,"infoExpanded":true}"#).unwrap();
+    let ui = system::get_ui_state(&st).unwrap();
+    assert!(ui.closed_sections.is_empty());
+    assert_eq!(ui.open_sections, vec!["col", "tag"]);
+    assert!(ui.sidebar_collapsed && ui.info_expanded && ui.layout == "list");
+    let closed = UiStateDto { closed_sections: vec!["case".into()], ..Default::default() };
+    system::set_ui_state(&st, &closed).unwrap();
+    assert_eq!(system::get_ui_state(&st).unwrap(), closed);
+}
+
+#[test]
 fn get_set_setting_only_ui_keys_and_64k_cap() {
     let d = tempfile::tempdir().unwrap();
     let st = booted(d.path());
@@ -483,4 +498,107 @@ fn removing_a_source_keeps_faces_that_live_in_another_source() {
     let r = sources::remove_source(&st, first.id).unwrap();
     assert_eq!((r.removed_locations, r.faces_left_without_location, r.active_fonts), (1, 0, 0), "face còn ở nguồn kia");
     assert_eq!(all(&st).total, 1);
+}
+
+// ---- A2: theo dõi thư mục cloud (FSEvents) — chỉ thư mục tạm, `is_cloud` giả ----
+
+fn wait_until(what: &str, secs: u64, mut f: impl FnMut() -> bool) {
+    let t0 = std::time::Instant::now();
+    while t0.elapsed() < Duration::from_secs(secs) {
+        if f() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    panic!("hết {secs}s chờ: {what}");
+}
+
+#[test]
+fn cloud_watch_rescans_the_source_after_a_font_appears_and_disappears() {
+    use app_lib::services::cloud_watch::CloudWatch;
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
+    assert_eq!(all(&st).total, 1);
+    // test dùng thời gian rút ngắn; trong app mặc định là QUIET 2 s / MAX 30 s
+    let w = CloudWatch::with_timing(Duration::from_millis(300), Duration::from_secs(3));
+    w.sync_with(&st, &|_| true);
+    assert_eq!(w.watching().len(), 1);
+    std::thread::sleep(Duration::from_millis(600)); // cho luồng FSEvents sẵn sàng
+
+    std::fs::copy(core_fixture("roboto.ttf"), dir.join("roboto.ttf")).unwrap();
+    wait_until("font mới tự hiện", 30, || all(&st).total == 2);
+
+    std::fs::remove_file(dir.join("roboto.ttf")).unwrap();
+    wait_until("font xoá tự biến mất", 30, || all(&st).total == 1);
+    w.shutdown();
+}
+
+#[test]
+fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources() {
+    use app_lib::services::cloud_watch::CloudWatch;
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
+    let w = CloudWatch::with_timing(Duration::from_millis(200), Duration::from_secs(2));
+    w.sync_with(&st, &|_| false);
+    assert!(w.watching().is_empty(), "không phải ổ cloud thì không theo dõi");
+    w.sync_with(&st, &|_| true);
+    assert_eq!(w.watching().len(), 1);
+    std::thread::sleep(Duration::from_millis(600));
+    let queued = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let q2 = queued.clone();
+    st.hubs.scan.subscribe(Box::new(move |e| {
+        if matches!(e, app_lib::dto::events::ScanEvent::Queued { .. }) {
+            q2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }));
+    std::fs::write(dir.join("notes.txt"), b"x").unwrap();
+    std::fs::write(dir.join(".DS_Store"), b"x").unwrap();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 0, "file không phải font không gây quét");
+    // một cụm 30 thay đổi font chỉ ra đúng MỘT lượt quét
+    for i in 0..30 {
+        std::fs::copy(core_fixture("roboto.ttf"), dir.join(format!("r{i}.ttf"))).unwrap();
+    }
+    wait_until("có lượt quét", 30, || queued.load(std::sync::atomic::Ordering::SeqCst) >= 1);
+    std::thread::sleep(Duration::from_millis(1200));
+    assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 1, "cụm sự kiện được gom thành một lượt");
+    sources::remove_source(&st, 1).unwrap();
+    w.sync_with(&st, &|_| true);
+    assert!(w.watching().is_empty(), "nguồn đã xoá thì dừng theo dõi");
+    w.shutdown();
+}
+
+#[test]
+fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
+    use app_lib::dto::model::SettingsPatchDto;
+    use app_lib::services::settings;
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["open_sans.ttf"]);
+    assert!(settings::get_settings(&st).unwrap().cloud_watch, "mặc định BẬT");
+    st.cloud_watch.treat_all_as_cloud_for_test(true);
+    st.cloud_watch.sync(&st);
+    assert_eq!(st.cloud_watch.watching().len(), 1);
+
+    let off = settings::set_settings(&st, SettingsPatchDto { cloud_watch: Some(false), ..Default::default() }).unwrap();
+    assert!(!off.cloud_watch);
+    assert!(st.cloud_watch.watching().is_empty(), "tắt = dừng mọi watcher ngay, không chờ khởi động lại");
+    st.cloud_watch.sync(&st); // các lần đồng bộ sau (thêm nguồn, mở app) cũng không bật lại khi đang tắt
+    assert!(st.cloud_watch.watching().is_empty());
+
+    let on = settings::set_settings(&st, SettingsPatchDto { cloud_watch: Some(true), ..Default::default() }).unwrap();
+    assert!(on.cloud_watch);
+    assert_eq!(st.cloud_watch.watching().len(), 1, "bật lại = đồng bộ lại ngay");
+    // đổi công tắc khác không đụng tới watcher
+    settings::set_settings(&st, SettingsPatchDto { rescan_on_launch: Some(false), ..Default::default() }).unwrap();
+    assert_eq!(st.cloud_watch.watching().len(), 1);
+    st.cloud_watch.shutdown();
+}
+
+#[test]
+fn name_clashes_command_is_empty_when_names_differ_and_reads_only() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["oswald_vf.ttf", "roboto.ttf", "open_sans.ttf"]);
+    assert!(library::name_clashes(&st).unwrap().is_empty());
+    // chỉ đọc: file trên đĩa không đổi
+    assert_eq!(std::fs::read(dir.join("oswald_vf.ttf")).unwrap(), std::fs::read(core_fixture("oswald_vf.ttf")).unwrap());
 }

@@ -10,6 +10,7 @@ export const SHORTCUTS: readonly ShortcutItem[] = [
   { id: 'view', keys: ['⌘', 'J'], title: 'tips.view', desc: 'tips.view.d', where: 'main/ViewOptions.tsx' },
   { id: 'selectAll', keys: ['⌘', 'A'], title: 'tips.selectAll', desc: 'tips.selectAll.d', where: 'main/useLibrarySelection.ts' },
   { id: 'activate', keys: ['⇧', '⌘', 'A'], title: 'tips.activate', desc: 'tips.activate.d', where: 'main/TopBarActions.tsx (ActivationShortcut)' },
+  { id: 'addto', keys: ['⌥', '⌘', 'P'], title: 'dnd.addTo', desc: 'dnd.addTo.tip', where: 'main/Library.tsx' },
   { id: 'pair', keys: ['⇧', 'P'], title: 'tips.pair', desc: 'tips.pair.d', where: 'main/TopBarActions.tsx' },
   { id: 'compare', keys: ['⇧', 'C'], title: 'tips.compare', desc: 'tips.compare.d', where: 'main/TopBarActions.tsx' },
   { id: 'desk', keys: ['[', ']'], title: 'tips.desk', desc: 'tips.desk.d', where: 'desk/PairingDesk.tsx' },

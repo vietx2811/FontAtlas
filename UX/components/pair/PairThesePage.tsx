@@ -13,10 +13,12 @@ import { Tooltip } from '../ui/Tooltip';
 import { TermOrTip, termKey } from '../ui/terms';
 import { ZeroState } from '../zero/ZeroState';
 import './pair.css';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
 const css = (family: string | null, row: FaceRowDto) => ({ fontFamily: family ? `"${family}", var(--font-ui)` : 'var(--font-ui)', fontWeight: row.weightClass ?? undefined, fontStyle: row.isItalic ? 'italic' as const : undefined });
-const name = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
+const name = (r: FaceRowDto) => faceLabel(r);
 
 function Specimen({ api, row, testId, text, size, tag: Tag }: { api: Api; row: FaceRowDto; testId: string; text: string; size: number; tag: 'div' | 'p' }): React.JSX.Element {
   const family = useFontFamily(api, { hashHex: row.hashHex, faceIndex: row.faceIndex, fileSize: row.fileSize });
@@ -24,6 +26,7 @@ function Specimen({ api, row, testId, text, size, tag: Tag }: { api: Api; row: F
 }
 
 function Combo({ api, c, sample }: { api: Api; c: PairComboDto; sample: string }): React.JSX.Element {
+  useNameClashes();
   const a = c.assessment;
   const warns = [...(a.bodyWarnings ?? [])];
   return (
@@ -37,8 +40,8 @@ function Combo({ api, c, sample }: { api: Api; c: PairComboDto; sample: string }
         <Specimen api={api} row={c.body} testId="pair-body" text={PARAGRAPH} size={14} tag="p" />
       </div>
       <dl className="pr-names">
-        <div><dt>{t('pair.heading')}</dt><dd>{name(c.heading)}</dd></div>
-        <div><dt>{t('pair.body')}</dt><dd>{name(c.body)}</dd></div>
+        <div><dt>{t('pair.heading')}</dt><dd>{name(c.heading)}<ClashNote faceId={c.heading.faceId} inline /></dd></div>
+        <div><dt>{t('pair.body')}</dt><dd>{name(c.body)}<ClashNote faceId={c.body.faceId} inline /></dd></div>
       </dl>
       <ul className="pr-labels">
         {a.labels.map(l => {

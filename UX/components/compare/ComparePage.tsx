@@ -15,6 +15,8 @@ import { META_ROWS, LicenseCell } from './MetaCells';
 import { barScale, fitScale } from './compareMath';
 import { detectMissingAll, ensureFonts, renderCompare, renderCompareBlob } from './exportPng';
 import './compare.css';
+import { clashRoleOf, faceLabel, useNameClashes, vfDisplayName } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 type RowDef = { id: string; group: GroupKey; name: string; head: React.ReactNode; cell(f: CompareFace): React.ReactNode };
 const SPEC_SIZE = 30;
@@ -46,11 +48,12 @@ const GroupHead = ({ k, cols, collapsed, onToggle }: { k: GroupKey; cols: number
 );
 
 function ColHead({ face, base, pinned, canRemove, overlay }: { face: CompareFace; base: boolean; pinned: boolean; canRemove: boolean; overlay: { on: boolean; full: boolean } | null }): React.JSX.Element {
+  useNameClashes();
   const id = keyOf(face.face);
-  const name = `${face.row.family} ${face.row.subfamily ?? ''}`.trim();
+  const name = faceLabel(face.row);
   return (
     <div role="columnheader" className={`ch${base ? ' base' : ''}${pinned ? ' pinned' : ''}`} title={name} data-pinned={pinned}>
-      <div className="t">{base && <Icon name="anchor" size={13} />}<span>{face.row.family}</span>
+      <div className="t">{base && <Icon name="anchor" size={13} />}<span>{vfDisplayName(face.row.family, clashRoleOf(face.row.faceId))}<ClashNote faceId={face.row.faceId} inline /></span>
         <span className="act">
           {overlay && (
             <Tooltip label={overlay.on ? t('compare.ov.col.off') : overlay.full ? t('compare.ov.max', { n: OVERLAY_MAX }) : t('compare.ov.col')}>

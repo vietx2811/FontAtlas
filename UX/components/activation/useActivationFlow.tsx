@@ -5,7 +5,8 @@ import { refreshActivation } from '../../store/activationSync';
 import { useActivationQueue } from '../../store/activationFlow';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
-import { isSameFile, toItems } from './conflictModel';
+import { isSameFile, replaceAdvice, toItems, vfActionOf, vfPairOf, type ConflictItem } from './conflictModel';
+import { runReplace } from './applyReplace';
 import { describeOutcome } from './messages';
 
 /** Báo các kết quả đáng báo (lỗi, bận…); thành công thì im lặng. */
@@ -33,9 +34,36 @@ export function useActivationFlow(api: Api): ActivationFlow {
       const keys = real.map(r => ({ hashHex: r.hashHex, faceIndex: r.requestedFaces[0] ?? 0 }));
       let rows: Awaited<ReturnType<Api['queryFaces']>>['items'] = [];
       try { rows = (await api.queryFaces({ faceKeys: keys, limit: keys.length })).items; } catch { /* không có tên: dùng tên PostScript */ }
-      useActivationQueue.getState().enqueue({ type: 'conflict', total: totalFonts - fresh.length, conflictFaces: keys, items: toItems(rows, keys, real.map(conflictsOf)) });
+      const items = toItems(rows, keys, real.map(conflictsOf));
+      // G7: cặp VF↔static mà người dùng đã chọn "nhớ" → làm theo, chỉ khi cách đó được phép; không thì hỏi như thường
+      if (totalFonts - fresh.length === keys.length && await applyRemembered(keys, items)) { sayOutcomes(rep.results.map(r => r.outcome)); return; }
+      useActivationQueue.getState().enqueue({ type: 'conflict', total: totalFonts - fresh.length, conflictFaces: keys, items });
     }
     sayOutcomes(rep.results.map(r => r.outcome));
+  };
+
+  /** Lựa chọn đã nhớ cho cặp VF↔static (G7). Trả true nếu đã xử lý (không hiện hộp thoại). Không làm khi: chưa nhớ gì; không phải cặp
+   *  thuần VF↔static; "dùng bản này" mà bản kia không thay được / do app lạ; "giữ cả hai" mà có font hệ thống (luôn được ưu tiên). */
+  const applyRemembered = async (keys: FaceKeyDto[], items: ConflictItem[]): Promise<boolean> => {
+    const pair = vfPairOf(items);
+    if (!pair) return false;
+    let policy: Awaited<ReturnType<Api['activationVfPolicy']>> = 'ask';
+    try { policy = await api.activationVfPolicy(); } catch { return false; }
+    if (policy === 'ask') return false;
+    const action = vfActionOf(policy, pair.newIsVf);
+    const kinds = { vf: t('act.vf.kind.vf'), static: t('act.vf.kind.static') };
+    const [mine, other] = pair.newIsVf ? [kinds.vf, kinds.static] : [kinds.static, kinds.vf];
+    if (action === 'keep') { push({ kind: 'info', text: t('act.vf.auto.keep', { kept: other, skipped: mine }) }); return true; }
+    if (action === 'both') {
+      if (items.some(i => i.conflicts.some(c => c.owner === 'system'))) return false;
+      sayOutcomes((await api.activationActivate(keys, { proceed: true })).results.map(r => r.outcome));
+      push({ kind: 'info', text: t('act.vf.auto.both') });
+      return true;
+    }
+    const advice = replaceAdvice(items);
+    if (advice.tier !== 'replace' || advice.unknownApp) return false;
+    await runReplace(api, keys, items, faces => toggle(faces, true), t('act.vf.auto.use', { used: mine, old: other }));
+    return true;
   };
 
   const toggle = useCallback(async (faces: FaceKeyDto[], on: boolean) => {

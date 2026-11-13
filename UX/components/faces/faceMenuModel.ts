@@ -13,6 +13,8 @@ export type FaceMenuActions = {
   setFavorite(rows: readonly FaceRow[], on: boolean): void;
   addToProject(rows: readonly FaceRow[], id: number, name: string): void;
   newProject(rows: readonly FaceRow[]): void;
+  /** Thêm vào một Case (menu "Thêm vào…"). */
+  addToCase?(rows: readonly FaceRow[], id: number, name: string): void;
   tag(rows: readonly FaceRow[], id: number, name: string): void;
   newTag(rows: readonly FaceRow[]): void;
   setActive(rows: readonly FaceRow[], on: boolean): void;
@@ -27,20 +29,26 @@ export type FaceMenuCtx = {
   isActive(row: FaceRow): boolean;
   /** null = đang tải. */
   collections: readonly CollectionDto[] | null;
+  /** Case đang có (menu "Thêm vào…" liệt kê cả Case); thiếu → không có nhóm Case. */
+  cases?: readonly { id: number; name: string; faceCount: number }[] | null;
   tags: readonly TagDto[] | null;
   actions: FaceMenuActions;
 };
 
 export const faceName = (r: Pick<FaceRow, 'family' | 'subfamily'>): string => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
 
-export function projectEntries(rows: readonly FaceRow[], ctx: Pick<FaceMenuCtx, 'collections' | 'actions' | 'view'>): MenuEntry[] {
+export function projectEntries(rows: readonly FaceRow[], ctx: Pick<FaceMenuCtx, 'collections' | 'actions' | 'view'> & Partial<Pick<FaceMenuCtx, 'cases'>>): MenuEntry[] {
   const { collections, actions } = ctx;
   // Đang xem chính dự án đó thì thêm vào là vô nghĩa.
   const here = ctx.view.startsWith('col:') ? Number(ctx.view.slice(4)) : null;
   const list: MenuEntry[] = collections === null
     ? [{ id: 'loading', label: t('faces.loading'), disabled: true }]
     : collections.map(c => ({ id: `col-${c.id}`, label: c.name, hint: String(c.itemCount), disabled: c.id === here, reason: t('faces.hereReason'), onSelect: () => actions.addToProject(rows, c.id, c.name) }));
-  return [...list, ...(list.length ? [{ type: 'sep' as const, id: 'sep-new' }] : []), { id: 'new-project', label: t('faces.newProject'), onSelect: () => actions.newProject(rows) }];
+  const addCase = actions.addToCase;
+  const caseList: MenuEntry[] = addCase && ctx.cases && ctx.cases.length
+    ? [{ type: 'sep' as const, id: 'sep-case' }, { type: 'label' as const, id: 'lbl-case', text: 'Case' }, ...ctx.cases.map(c => ({ id: `case-${c.id}`, label: c.name, hint: String(c.faceCount), onSelect: () => addCase(rows, c.id, c.name) }))]
+    : [];
+  return [...list, ...(list.length ? [{ type: 'sep' as const, id: 'sep-new' }] : []), { id: 'new-project', label: t('faces.newProject'), onSelect: () => actions.newProject(rows) }, ...caseList];
 }
 
 export function buildFaceMenu(rows: readonly FaceRow[], ctx: FaceMenuCtx): MenuEntry[] {

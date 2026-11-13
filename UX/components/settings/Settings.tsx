@@ -1,7 +1,7 @@
 import { defaultSample, isDefaultSample } from '../../i18n/sample';
 import { readSplashEnabled, writeSplashEnabled } from '../splash/splashState';
 import { useCallback, useEffect, useState } from 'react';
-import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, ReplacedEntryDto, SettingsDto, SourceDto } from '../../api';
+import type { Api, OnboardingDto, ProblemDto, PreviewCacheInfoDto, ReplacedEntryDto, SettingsDto, SourceDto, VfPolicyDto } from '../../api';
 import { restoreReplaced } from '../activation/restoreReplaced';
 import { openPrivacySettings } from '../../privacy';
 import { useScanStore } from '../../store/scan';
@@ -152,6 +152,8 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
       <Switch label={t('set.rescanLaunch')} on={s.rescanOnLaunch} onChange={v => void patch({ rescanOnLaunch: v })} />
       <Switch label={t('cloud.switch')} on={s.cloudPreviewDownload} onChange={v => void patch({ cloudPreviewDownload: v })} />
       <p className="fa-set-note">{t('cloud.switch.note')}</p>
+      <Switch label={t('cloud.watch')} on={s.cloudWatch} onChange={v => void patch({ cloudWatch: v })} />
+      <p className="fa-set-note">{t('cloud.watch.note')}</p>
       <p className="fa-set-note">
         <TermTip term="dataless"><span data-term="dataless" tabIndex={0} className="fa-termword">dataless</span></TermTip>
         {' · '}
@@ -189,13 +191,20 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
   const active = useUiStore(x => x.active);
   const [replaced, setReplaced] = useState<ReplacedEntryDto[]>([]);
   const reloadReplaced = useCallback(() => api.activationListReplaced().then(setReplaced, () => setReplaced([])), [api]);
-  useEffect(() => { void api.onboardingState().then(setOb); void reloadReplaced(); }, [api, reloadReplaced]);
+  const [vfPolicy, setVfPolicy] = useState<VfPolicyDto>('ask');
+  useEffect(() => { void api.onboardingState().then(setOb); void reloadReplaced(); void api.activationVfPolicy().then(setVfPolicy, () => undefined); }, [api, reloadReplaced]);
   if (ob && !ob.activationSupported) return <p className="fa-set-note">{t('set.act.unsupported')}</p>;
   return (
     <>
       <fieldset className="fa-set-group"><legend>{t('set.act.exit')}</legend>
         <label><input type="radio" name="keep" checked={!s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: false })} />{t('set.act.deactAll')}</label>
         <label><input type="radio" name="keep" checked={s.keepActiveOnExit} onChange={() => void patch({ keepActiveOnExit: true })} />{t('set.act.keep')}</label>
+      </fieldset>
+      <fieldset className="fa-set-group" data-testid="vf-policy"><legend>{t('set.vf.title')}</legend>
+        <p className="fa-set-note">{t('set.vf.note')}</p>
+        {(['ask', 'vf', 'static', 'both'] as const).map(p => (
+          <label key={p}><input type="radio" name="vfpolicy" checked={vfPolicy === p} onChange={() => { setVfPolicy(p); void api.activationSetVfPolicy(p); }} />{t(`set.vf.${p}` as const)}</label>
+        ))}
       </fieldset>
       {ob?.fontManagers.filter(m => m.installed).map(m => <p key={m.name} className="fa-set-note">{t('set.act.detected', { name: m.name, detail: m.activeCount ? t('set.act.detail.n', { n: m.activeCount }) : t('set.act.detail.installed') })}</p>)}
       <fieldset className="fa-set-group" data-testid="replaced-list"><legend>{t('set.replaced.title')}</legend>
@@ -241,6 +250,10 @@ function Data({ api }: { api: Api }) {
       <div className="fa-set-group"><span>{t('set.data.cache')}</span>
         <p className="fa-set-note" data-testid="cache-info">{cache ? tn('set.data.cacheInfo', { mb: Math.round(cache.bytes / MB), n: cache.entries }) : '…'}</p>
         <button type="button" onClick={async () => { await api.clearPreviewCache(); await load(); }}>{t('set.data.clearCache')}</button>
+      </div>
+      <div className="fa-set-group" data-testid="recent-views"><span>{t('set.data.recent')}</span>
+        <p className="fa-set-note">{t('set.data.recentNote')}</p>
+        <button type="button" data-testid="clear-recent" onClick={async () => { await api.clearRecentViews(); useNoticeStore.getState().push({ kind: 'info', text: t('pick.recent.cleared') }); }}>{t('pick.recent.clear')}</button>
       </div>
       <div className="fa-set-group" data-testid="problems"><span>{problems.length === 0 ? t('set.data.noProblems') : tn('set.data.problems', { n: problems.length })}</span>
         {problems.length > 0 && <>

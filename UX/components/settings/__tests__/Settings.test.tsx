@@ -6,6 +6,7 @@ import { useScanStore } from '../../../store/scan';
 import { useUiStore } from '../../../store/ui';
 import { Settings, SETTINGS_GROUPS } from '../Settings';
 import { tipOf } from '../../../test/tip';
+import { setLocale, t } from '../../../i18n';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const initial = useUiStore.getState();
@@ -136,6 +137,23 @@ describe('Settings', () => {
       expect(within(rows[0]).queryByTestId('cloud-hint')).toBeNull();
     });
 
+    it('"Tự phát hiện thay đổi trên ổ cloud" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
+      const { api } = await mount();
+      await go('Thư viện và nguồn');
+      const sw = screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' });
+      expect(sw.getAttribute('aria-checked')).toBe('true');
+      expect(document.body.textContent).toMatch(/tự quét lại thư mục đó sau vài giây/);
+      const set = vi.spyOn(api, 'setSettings');
+      fireEvent.click(sw);
+      await settle();
+      expect(set).toHaveBeenLastCalledWith({ cloudWatch: false });
+      expect(screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' }).getAttribute('aria-checked')).toBe('false');
+      setLocale('en');
+      expect(t('cloud.watch')).toBe('Detect changes on cloud drives automatically');
+      expect(t('cloud.watch.note')).toMatch(/rescans that folder/);
+      setLocale('vi');
+    });
+
     it('"Tự tải font trên cloud để xem trước" is on by default, is saved when switched, and explains dataless / Always keep', async () => {
       const { api } = await mount();
       await go('Thư viện và nguồn');
@@ -234,6 +252,21 @@ describe('Settings', () => {
       await settle();
       expect(within(screen.getByTestId('replaced-list')).queryByRole('button', { name: 'Khôi phục' })).toBeNull();
       expect(within(screen.getByTestId('replaced-list')).getByText('Chưa có bản cũ nào bị thay.')).toBeTruthy();
+    });
+
+    it('VF/static pairs: asks every time by default; a picked default is saved and shown again on reopening', async () => {
+      const api = createMockApi();
+      await mount({}, api);
+      await go('Kích hoạt font');
+      const box = screen.getByTestId('vf-policy');
+      expect(within(box).getByText('Cặp variable ↔ static trùng tên')).toBeTruthy();
+      expect((within(box).getByRole('radio', { name: 'Hỏi mỗi lần' }) as HTMLInputElement).checked).toBe(true);
+      await act(async () => { fireEvent.click(within(box).getByRole('radio', { name: 'Luôn dùng bản static' })); });
+      await settle();
+      expect(await api.activationVfPolicy()).toBe('static');
+      await act(async () => { fireEvent.click(within(box).getByRole('radio', { name: 'Hỏi mỗi lần' })); });
+      await settle();
+      expect(await api.activationVfPolicy()).toBe('ask');
     });
 
     it('"when FontAtlas quits" is saved; other font managers are information only', async () => {

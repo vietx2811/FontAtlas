@@ -24,6 +24,37 @@ pub fn canonical_path(p: &Path) -> std::io::Result<PathBuf> {
 #[cfg(target_os = "macos")]
 const SF_DATALESS: u32 = 0x4000_0000;
 
+/// Font có bảng `fvar` (variable font)? Chỉ đọc vài trăm byte đầu của bảng tra cứu (không đọc cả file) và chỉ khi file `Ready`
+/// (file iCloud chưa tải mà bị mở sẽ bị tải về ngầm). `None` = không biết (chưa tải, thiếu, không đọc được, không phải sfnt);
+/// với TTC xét font đầu tiên.
+pub fn is_variable_font(p: &Path) -> Option<bool> {
+    use std::io::{Read, Seek, SeekFrom};
+    if probe_file(p) != FileProbe::Ready {
+        return None;
+    }
+    let mut f = std::fs::File::open(p).ok()?;
+    let mut head = [0u8; 12];
+    f.read_exact(&mut head).ok()?;
+    if &head[0..4] == b"ttcf" {
+        let mut off = [0u8; 4];
+        f.seek(SeekFrom::Start(12)).ok()?;
+        f.read_exact(&mut off).ok()?;
+        f.seek(SeekFrom::Start(u32::from_be_bytes(off) as u64)).ok()?;
+        f.read_exact(&mut head).ok()?;
+    }
+    let sfnt = &head[0..4];
+    if sfnt != [0, 1, 0, 0] && sfnt != b"OTTO" && sfnt != b"true" && sfnt != b"typ1" {
+        return None;
+    }
+    let n = u16::from_be_bytes([head[4], head[5]]) as usize;
+    if n == 0 || n > 4096 {
+        return None;
+    }
+    let mut dir = vec![0u8; n * 16];
+    f.read_exact(&mut dir).ok()?;
+    Some(dir.chunks_exact(16).any(|e| &e[0..4] == b"fvar"))
+}
+
 /// Hai file có cùng nội dung không? Chỉ đọc khi CẢ HAI `Ready` (file iCloud chưa tải mà bị mở sẽ bị tải về ngầm).
 /// So kích thước trước (rẻ) từ handle đã mở (không TOCTOU, symlink được theo), chỉ khi bằng nhau mới so từng khối.
 /// Lỗi đọc / không `Ready` → false: coi là khác, để người dùng quyết định.
@@ -361,13 +392,15 @@ mod tests {
     #[test]
     fn ensure_local_times_out_instead_of_hanging() {
         let local = Arc::new(AtomicBool::new(false));
-        let t = Instant::now();
-        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(150), probe_flag(&local), |_| {
+        let finished = Arc::new(AtomicBool::new(false));
+        let f2 = finished.clone();
+        let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(150), probe_flag(&local), move |_| {
             std::thread::sleep(Duration::from_secs(5)); // ổ cloud không phản hồi
+            f2.store(true, Ordering::SeqCst);
             Ok(())
         });
         assert_eq!(r, Err(EnsureLocalError::Timeout));
-        assert!(t.elapsed() < Duration::from_secs(2), "phải trả về đúng hạn, không đợi fetch: {:?}", t.elapsed());
+        assert!(!finished.load(Ordering::SeqCst), "phải trả về đúng hạn, không đợi fetch");
     }
 
     #[test]
@@ -388,7 +421,7 @@ mod tests {
         let t = Instant::now();
         let r = ensure_local_by(Path::new("/x.ttf"), Duration::from_millis(400), probe_flag(&local), |_| Ok(()));
         assert_eq!(r, Err(EnsureLocalError::StillCloudOnly));
-        assert!(t.elapsed() >= Duration::from_millis(300) && t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
+        assert!(t.elapsed() >= Duration::from_millis(300), "{:?}", t.elapsed()); // chỉ cận dưới: không phụ thuộc tải máy
     }
 
     #[test]

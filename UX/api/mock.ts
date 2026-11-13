@@ -68,10 +68,11 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 }
 
 import { createMockCases } from './mockCases';
+import { createMockSuggest } from './mockSuggest';
 import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
-import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto } from './types';
+import type { DuplicateGroupDto, DuplicateMemberDto, BootStatusDto, EmbedStatusDto, LegacyStateDto, ModelStatusDto, OnboardingDto, ScanEvent, AxisHistogramDto, NameClashDto } from './types';
 export type MockOptions = { auto?: MockAutoOptions; latencyMs?: number; tickMs?: number; /** Lần chạy đầu: chưa nguồn, chưa xác nhận giấy phép, chưa onboarding. */ firstRun?: boolean; legacy?: boolean; initial?: { model?: Partial<ModelStatusDto>; embed?: Partial<EmbedStatusDto> } };
 
 export function createMockApi(o: MockOptions = {}): Api {
@@ -124,11 +125,12 @@ export function createMockApi(o: MockOptions = {}): Api {
   const scanListeners = new Set<(e: ScanEvent) => void>();
   let scanning = false;
   let cacheBytes = 12 * 1024 * 1024;
+  const mockNameClashes: NameClashDto[] = [];
   let onboarded = !o.firstRun;
   let legacy: LegacyStateDto = { found: !!o.legacy, preview: o.legacy ? { fonts: 1240, sources: 2, collections: 3, favorites: 17, tags: 9 } : null, imported: null, resolved: null, error: null };
   const legacyState = () => legacy;
   const boot = (): BootStatusDto => ({ phase: 'ready', storeError: null, libraryRecreated: false, userBackup: null, legacy });
-  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: null, sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true };
+  const settings: SettingsDto = { embedEnabled: false, licenseNoticeAck: !o.firstRun, uiLang: null, sampleText: 'Phở bò Hà Nội', projectViDefault: false, keepActiveOnExit: false, rescanOnLaunch: true, cloudPreviewDownload: true, cloudWatch: true };
 
   const simulateScan = (id: number) => {
     const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));
@@ -153,9 +155,11 @@ export function createMockApi(o: MockOptions = {}): Api {
   const findRow = (k: FaceKeyDto) => { const r = byKey.get(keyOf(k)); if (!r) throw new CmdError('not_found', 'face not found'); return r; };
 
   const caseApi = createMockCases(k => byKey.get(keyOf(k)));
+  const suggestApi = createMockSuggest({ rows: () => rows, caseFaces: async id => (await caseApi.getCase(id)).faces.map(f => f.key) });
   return {
     ...lib,
     ...caseApi,
+    ...suggestApi,
     async briefStarter(brief) {
       // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
       const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };
@@ -469,6 +473,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async previewCacheInfo() { return ok({ bytes: cacheBytes, entries: cacheBytes ? 340 : 0 }); },
     async clearPreviewCache() { cacheBytes = 0; },
     async listProblems() { return []; },
+    async nameClashes() { return mockNameClashes; },
     async retryProblems() { return 0; },
     // Khởi động, onboarding, quét
     async startupStatus() { return ok(boot()); },
@@ -485,6 +490,7 @@ export function createMockApi(o: MockOptions = {}): Api {
       });
     },
     async setOnboardingStep(step) { uiSettings.set('onboarding_step', step ?? ''); },
+    async setWindowGlass() { return false; }, // trình duyệt/mock: không có kính native
     async legacyImport() { legacy = { ...legacyState(), imported: { fonts: 1240, sources: 2, collections: 3, recoveredCollections: 0, badTags: 0, skippedSources: 0 } }; return ok(legacy); },
     async legacyRetry() { return ok(legacyState()); },
     async scanStatus() { return ok({ running: scanning, paused: false, currentSourceId: null, queued: [] }); },

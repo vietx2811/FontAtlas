@@ -18,11 +18,14 @@ import { Tooltip } from '../ui/Tooltip';
 import { NoteMark } from '../ui/noteMark';
 import { t, tn, formatNumber } from '../../i18n';
 import './detail.css';
+import { ClashNote } from '../ui/ClashNote';
+import { clashRoleOf, useNameClashes, vfDisplayName } from '../../store/nameClash';
 
 const tabs = (): Array<[PanelTab, string, string]> => [['spec', t('det.specimen'), 'Aa'], ['vi', t('det.vietnamese'), 'Ặ'], ['anat', t('det.anatomy'), '⌖'], ['sim', t('det.similar'), '◎'], ['pair', t('det.pairing'), '∞']];
 const FORMAT: Record<string, string> = { glyf: 'TTF', cff: 'OTF', cff2: 'OTF', none: '' };
 
 export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
+  useNameClashes();
   const panel = useRef<HTMLElement>(null);
   const selectedId = useUiStore(s => s.selectedId);
   const style = useUiStore(s => s.style);
@@ -56,8 +59,9 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
           <div className="fa-p-row">
             <Tooltip label={t('det.close')}><button type="button" className="fa-panel-close" aria-label={t('det.close')} onClick={() => useUiStore.getState().select(null)}>×</button></Tooltip>
             <Tooltip label={detail?.row.family} onlyIfTruncated>
-              <FaceTitle as="h2" api={api} face={detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null} className="fa-p-name">{detail?.row.family ?? ''}</FaceTitle>
+              <FaceTitle as="h2" api={api} face={detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null} className="fa-p-name">{detail ? vfDisplayName(detail.row.family, clashRoleOf(detail.row.faceId)) : ''}</FaceTitle>
             </Tooltip>
+            {detail && <ClashNote faceId={detail.row.faceId} inline />}
           </div>
           <ActiveRow face={detail ? face : null} flow={flow} />
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}{detail?.row.onCloudOnly && <NoteMark kind="info" inline testId="cloud-only-note" text={t('cloud.note')} />}</div>

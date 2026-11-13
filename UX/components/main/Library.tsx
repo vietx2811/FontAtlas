@@ -15,6 +15,9 @@ import { libraryEmpty, type Empty } from '../zero/zeroStates';
 import { COMPOSER_INSET } from './SampleComposer';
 import { useGroupShortcut } from './useGroupShortcut';
 import { faceKey, singleTagId, toGridQuery, useUiStore } from '../../store/ui';
+import { cancelFaceDrag, registerFaceDropHandler } from '../../store/faceDrag';
+import { DragLayer } from '../dnd/DragLayer';
+import { dropFacesInto } from '../dnd/dropFaces';
 
 type Props = { api: Api; width?: number; height?: number };
 
@@ -92,6 +95,30 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   }), [actions]);
   const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null);
 
+  // Lối bàn phím cho "Thêm vào…" (G1): ⌥⌘P mở danh sách dự án cho các font đang chọn (cùng menu với nút ở thanh chọn).
+  useEffect(() => {
+    if (!actions) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyP' || !e.altKey || !(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"]')) return;
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')) return;
+      const rows = [...useSelectionStore.getState().rows.values()];
+      if (!rows.length) return;
+      e.preventDefault();
+      const anchorEl = wrap.current?.querySelector<HTMLElement>('[role="gridcell"][aria-selected="true"]') ?? wrap.current;
+      const rect = anchorEl?.getBoundingClientRect() ?? { left: 0, right: 0, top: 0, bottom: 0 };
+      actions.openProjectMenu(rows, { rect }, { keyboard: true, returnFocus: anchorEl });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [actions]);
+
+  // G1: thả font vào một dự án ở thanh bên (xem dropFaces.ts).
+  useEffect(() => {
+    const off = registerFaceDropHandler((rows, target) => void dropFacesInto(api, rows, target));
+    return () => { off(); cancelFaceDrag(); };
+  }, [api]);
+
   const filtered = !!(filters.variable != null || filters.italic != null || filters.rawAxisRanges?.length || familyScope);
   const empty: Empty = libraryEmpty({ view, tag, query, viOnly, sources, scanning, access, cloud, filtered, familyName: familyScope?.name });
   const onEmptyAction = (id: string) => {
@@ -102,12 +129,19 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'grant') void openPrivacySettings();
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };
+  // Mở Detail (chọn thẻ) ghi một lần xem cho nguồn "Vừa xem" của Desk; lướt lưới không ghi. Lỗi ghi không ảnh hưởng thao tác.
   const onSelect = useCallback((row: FaceRow) => { setSelectedFaceId(row.faceId); select(faceKey(row)); }, [select]);
+  useEffect(() => {
+    if (!selectedKey) return;
+    const [hashHex, idx] = selectedKey.split(':');
+    if (hashHex && idx !== undefined && Number.isFinite(Number(idx))) void api.recordView({ hashHex, faceIndex: Number(idx) }).catch(() => undefined);
+  }, [selectedKey, api]);
   const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
       <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onHiddenRanges={onHiddenRanges} collapsed={collapsedGroups} onToggleGroup={onToggleGroup} onContextMenu={onContextMenu ?? undefined} />
+      <DragLayer />
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { t, tn } from '../../i18n';
 import { Modal } from '../Modal';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
-import { groupByFamily, groupNote, replaceAdvice, type ConflictItem } from './conflictModel';
+import { groupByFamily, groupNote, replaceAdvice, vfChoiceOf, vfPairOf, type ConflictItem, type VfAction, type VfChoice } from './conflictModel';
 import './conflictDialog.css';
 
 type ConflictProps = {
@@ -14,6 +14,8 @@ type ConflictProps = {
   onRetry?(): void;
   /** "Hiện trong Finder" cho file bản cũ (font hệ thống / thư mục font: không bao giờ đụng). */
   onReveal?(path: string): void;
+  /** G7: cặp variable↔static, người dùng tích "Nhớ lựa chọn này": lưu lựa chọn (theo loại) trước khi thực hiện. */
+  onRemember?(choice: VfChoice): void;
 };
 type Choice = 'skip' | 'both' | 'replace';
 
@@ -29,11 +31,14 @@ function fillSlots(text: string, slots: Record<string, React.ReactNode>): React.
  * D3 (UX 03 §4.3): trùng tên PostScript với font đang có. Gộp theo family (một dòng mỗi family, mở ra xem kiểu); ai cài và đường dẫn
  * chỉ nằm trong tooltip của dấu "!". Mặc định bỏ qua các font trùng. Hộp cao tối đa 70% cửa sổ, danh sách cuộn bên trong.
  */
-export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, onRetry, onReveal }: ConflictProps): React.JSX.Element {
+export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, onRetry, onReveal, onRemember }: ConflictProps): React.JSX.Element {
   const advice = useMemo(() => replaceAdvice(items), [items]);
   const canReplace = advice.tier === 'replace' && !!onReplace;
   // chọn sẵn "Thay bằng bản này" khi được phép và chỉ có app đã nhận diện; có app lạ → giữ "bỏ qua" + xác nhận mạnh
-  const [choice, setChoice] = useState<Choice>(() => (canReplace && !advice.unknownApp ? 'replace' : 'skip'));
+  const pair = useMemo(() => vfPairOf(items), [items]);
+  // cặp VF↔static (G7): KHÔNG chọn sẵn "thay" — người dùng phải tự chọn; không bao giờ tự thay
+  const [choice, setChoice] = useState<Choice>(() => (canReplace && !advice.unknownApp && !pair ? 'replace' : 'skip'));
+  const [remember, setRemember] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const appName = advice.apps.join(' / ');
   const other = t('act.replace.app.other');
@@ -48,10 +53,14 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
   const groups = useMemo(() => groupByFamily(items), [items]);
   const n = items.length;
   const blocked = items.some(i => i.conflicts.some(c => c.owner === 'system'));
+  const go = () => {
+    if (pair && remember && onRemember) onRemember(vfChoiceOf((choice === 'replace' ? 'use' : choice === 'both' ? 'both' : 'keep') as VfAction, pair.newIsVf));
+    if (choice === 'replace' && onReplace) onReplace(); else onConfirm(choice === 'both');
+  };
   const flip = (f: string) => setOpen(s => { const x = new Set(s); if (x.has(f)) x.delete(f); else x.add(f); return x; });
   return (
     <Modal title={t('act.conflict.title', { n })} onClose={onCancel} className="fa-conf">
-      <p>{t('act.conflict.why')}</p>
+      <p>{pair ? fillSlots(t('act.vf.why', { existing: '{existing}', new: '{new}' }), { existing: kindTip(!pair.newIsVf), new: kindTip(pair.newIsVf) }) : t('act.conflict.why')}</p>
       <ul className="fa-conf-list" data-testid="conflict-list">
         {groups.map(g => {
           const isOpen = open.has(g.family);
@@ -67,6 +76,7 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
           );
         })}
       </ul>
+      {pair ? <VfPairOptions newIsVf={pair.newIsVf} choice={choice} setChoice={setChoice} canReplace={canReplace} blocked={blocked} remember={remember} setRemember={setRemember} warnId={warnId} /> : <>
       <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'skip'} onChange={() => setChoice('skip')} />
         {total === n ? t('act.conflict.skip') : t('act.conflict.skip.rest', { n: total - n })}</label>
       {canReplace && (
@@ -75,6 +85,7 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
       )}
       <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'both'} disabled={blocked} onChange={() => setChoice('both')} />
         {total === n ? t('act.conflict.force') : t('act.conflict.force.all', { total })}{blocked && <em> ({t('act.conflict.blocked')})</em>}</label>
+      </>}
       {canReplace && (
         <div className="fa-conf-replace">
           {strong && choice === 'replace' && (
@@ -114,7 +125,7 @@ export function ConflictDialog({ items, total, onCancel, onConfirm, onReplace, o
       )}
       <div className="fa-modal-actions">
         <button type="button" onClick={onCancel}>{t('act.conflict.cancel')}</button>
-        <button type="button" className="primary" disabled={goDisabled} onClick={() => (choice === 'replace' && onReplace ? onReplace() : onConfirm(choice === 'both'))}>{t('act.conflict.go')}</button>
+        <button type="button" className="primary" disabled={goDisabled} onClick={go}>{t('act.conflict.go')}</button>
       </div>
     </Modal>
   );
@@ -130,5 +141,31 @@ export function HeldDialog({ collectionCount, onCancel, onConfirm }: HeldProps):
         <button type="button" className="primary" onClick={onConfirm}>{t('act.held.go')}</button>
       </div>
     </Modal>
+  );
+}
+
+/** Tên loại font (variable/static) kèm tooltip thuật ngữ. */
+function kindTip(isVf: boolean): React.ReactNode {
+  const term = isVf ? 'variable_font' : 'static_font';
+  return <TermTip term={term}><span data-term={term} tabIndex={0} className="fa-termword">{t(isVf ? 'act.vf.kind.vf' : 'act.vf.kind.static')}</span></TermTip>;
+}
+
+type VfOptionsProps = { newIsVf: boolean; choice: Choice; setChoice(c: Choice): void; canReplace: boolean; blocked: boolean; remember: boolean; setRemember(v: boolean): void; warnId: string };
+/** G7: ba lựa chọn cho cặp variable↔static + ô "Nhớ lựa chọn này". Đặt tên theo LOẠI font (không "bản cũ/mới"). */
+function VfPairOptions({ newIsVf, choice, setChoice, canReplace, blocked, remember, setRemember, warnId }: VfOptionsProps): React.JSX.Element {
+  const slots = (key: 'act.vf.keep' | 'act.vf.use') => fillSlots(t(key, { existing: '{existing}', new: '{new}' }), { existing: kindTip(!newIsVf), new: kindTip(newIsVf) });
+  return (
+    <div data-testid="vf-pair-options">
+      <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'skip'} onChange={() => setChoice('skip')} />
+        {slots('act.vf.keep')} <span className="fa-conf-gloss">· {t('act.vf.keep.gloss')}</span></label>
+      {canReplace && (
+        <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'replace'} onChange={() => setChoice('replace')} aria-describedby={warnId} />
+          {slots('act.vf.use')} <span className="fa-conf-gloss">· {t('act.vf.use.gloss')}</span></label>
+      )}
+      <label className="fa-radio"><input type="radio" name="d3" checked={choice === 'both'} disabled={blocked} onChange={() => setChoice('both')} />
+        {t('act.vf.both')} <span className="fa-conf-gloss">· {t('act.vf.both.gloss')}</span>{blocked && <em> ({t('act.conflict.blocked')})</em>}</label>
+      {choice === 'both' && <p className="fa-conf-warn" data-testid="vf-both-warning">{t('act.vf.both.warn')}</p>}
+      <label className="fa-radio"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />{t('act.vf.remember')}</label>
+    </div>
   );
 }

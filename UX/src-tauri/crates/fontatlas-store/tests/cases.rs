@@ -113,7 +113,7 @@ fn combos_main_order_duplicate_and_slots() {
     let all = s.combos(c).unwrap();
     assert_eq!(all.iter().map(|x| (x.name.as_str(), x.idx, x.is_main)).collect::<Vec<_>>(), vec![("Combo 1", 1, true), ("Lạnh", 2, false), ("Combo 3", 3, false)]);
 
-    assert!(s.set_combo_slot(c1, "nope", Some(&key(1)), None, None).is_err());
+    assert_eq!(s.set_combo_slot(c1, "  ", Some(&key(1)), None, None).unwrap_err().code(), "role_name_invalid");
     assert!(s.set_combo_slot(c1, "body", Some(&key(1)), None, Some("{")).is_err());
     s.set_combo_slot(c1, "heading", Some(&key(1)), Some("neo"), Some(r#"{"weight":700}"#)).unwrap();
     let r = s.set_combo_slot(c1, "body", Some(&key(2)), None, None).unwrap();
@@ -162,7 +162,7 @@ fn create_combos_is_atomic_and_limits_apply() {
     let (_d, mut s) = open();
     let c = s.create_case("C", None, None).unwrap();
     let good = NewCombo { name: Some("OK".into()), slots: vec![("heading".into(), key(1)), ("body".into(), key(2))] };
-    let bad = NewCombo { name: None, slots: vec![("lạ".into(), key(3))] };
+    let bad = NewCombo { name: None, slots: vec![("  ".into(), key(3))] }; // tên vai rỗng (vai lạ nay hợp lệ: G3)
     assert!(s.create_combos(c, &[good.clone(), bad]).is_err());
     assert!(s.combos(c).unwrap().is_empty(), "Combo thứ hai lỗi thì Combo thứ nhất cũng không được tạo");
     assert!(s.case_faces(c).unwrap().is_empty());

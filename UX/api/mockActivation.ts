@@ -5,7 +5,7 @@ import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, FaceKeyDto, FileOutcomeDto, FileResultDto, ReasonDto,
 } from './types';
 import type { ActivateOptions, DeactivateOptions } from './index';
-import type { AvailabilityDto, ConfirmedConflictDto, ConflictDto } from './types';
+import type { AvailabilityDto, ConfirmedConflictDto, ConflictDto, VfPolicyDto } from './types';
 
 /** Họ "Roboto" giả lập trùng tên với font hệ thống (cần xác nhận); "Lobster" giả lập file đã đổi trên đĩa. */
 export const CONFLICT_FAMILY = 'Roboto';
@@ -14,6 +14,8 @@ export const OTHER_MANAGER_FAMILY = 'Oswald';
 export const CHANGED_FAMILY = 'Lobster';
 /** Đã cài sẵn ở ~/Library/Fonts/FontBase/ bằng ĐÚNG file này (sameFile): không phải hỏi. */
 export const SAME_FILE_FAMILY = 'Pacifico';
+/** Họ "Bebas Neue" giả lập cặp VF↔static (G7): bản của thư viện là static, bản RightFont đang cài là variable. */
+export const VF_PAIR_FAMILY = 'Bebas Neue';
 
 type Entry = { reasons: ReasonDto[]; scope: 'session' | 'persistent' };
 type Deps = { rowOf(k: FaceKeyDto): FaceRow | undefined; collectionFaces(id: number): FaceKeyDto[] };
@@ -40,10 +42,10 @@ export function createActivationSim(d: Deps) {
   /** Font đã dùng được nhờ file giống hệt của bên khác: Font Atlas không ghi dòng kích hoạt cho chúng. */
   const available = new Map<string, AvailabilityDto>();
   const conflictOf = (row: FaceRow | undefined) => {
-    const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY ? 'right_font' as const : row?.family === SAME_FILE_FAMILY ? 'user_installed' as const : null;
+    const owner = row?.family === CONFLICT_FAMILY ? 'system' as const : row?.family === OTHER_MANAGER_FAMILY || row?.family === VF_PAIR_FAMILY ? 'right_font' as const : row?.family === SAME_FILE_FAMILY ? 'user_installed' as const : null;
     const dir = (o: 'system' | 'right_font' | 'user_installed') => (o === 'system' ? '/Library/Fonts' : o === 'right_font' ? '~/Library/RightFont' : '/Users/u/Library/Fonts/FontBase');
     const tier = (o: typeof owner) => (o === 'system' || o === 'user_installed' ? 'protected' as const : 'replace' as const);
-    return row && owner ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: `${dir(owner)}/${row.family}.ttf`, owner, sameFile: row.family === SAME_FILE_FAMILY, replaceTier: tier(owner) }] : [];
+    return row && owner ? [{ postscriptName: `${row.family}-${row.subfamily ?? 'Regular'}`, existingPath: `${dir(owner)}/${row.family}.ttf`, owner, sameFile: row.family === SAME_FILE_FAMILY, replaceTier: tier(owner), variable: false, existingVariable: row.family === VF_PAIR_FAMILY ? true : false }] : [];
   };
 
   const activateOne = (f: FaceKeyDto, reason: ReasonDto, o: ActivateOptions): FileOutcomeDto => {
@@ -89,6 +91,7 @@ export function createActivationSim(d: Deps) {
   /** Sổ "bản cũ đã gỡ" của mock (khớp activation_replaced phía Rust). */
   const replacedLog = new Map<number, { hashHex: string; path: string; owner: ConflictDto['owner']; restored: boolean }>();
   let nextReplaced = 1;
+  let vfPolicy: VfPolicyDto = 'ask';
   const fail = (f: FaceKeyDto, code: string, message: string) => result(f, { kind: 'failed', code, message });
 
   return {
@@ -165,6 +168,8 @@ export function createActivationSim(d: Deps) {
       return finish(all.map(f => result(f, { kind: 'deactivated' })), o.onProgress);
     },
     async activationSetKeep() {},
+    async activationVfPolicy(): Promise<VfPolicyDto> { return vfPolicy; },
+    async activationSetVfPolicy(p: VfPolicyDto) { vfPolicy = p; },
     async activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent') {
       const changed = hashes(faces).filter(f => { const e = state.get(f.hashHex); if (!e || e.scope === scope) return false; e.scope = scope; return true; });
       return finish(changed.map(f => result(f, { kind: 'activated' })));

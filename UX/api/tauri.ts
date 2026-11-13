@@ -75,7 +75,7 @@ const similarOpts = (o: SimilarQuery = {}) => ({
 const settingsPatch = (p: Partial<Record<keyof SettingsPatchDto, unknown>>): SettingsPatchDto => ({
   embedEnabled: (p.embedEnabled as boolean) ?? null, licenseNoticeAck: (p.licenseNoticeAck as boolean) ?? null, uiLang: (p.uiLang as string) ?? null,
   sampleText: (p.sampleText as string) ?? null, projectViDefault: (p.projectViDefault as boolean) ?? null, keepActiveOnExit: (p.keepActiveOnExit as boolean) ?? null,
-  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null, cloudPreviewDownload: (p.cloudPreviewDownload as boolean) ?? null,
+  rescanOnLaunch: (p.rescanOnLaunch as boolean) ?? null, cloudPreviewDownload: (p.cloudPreviewDownload as boolean) ?? null, cloudWatch: (p.cloudWatch as boolean) ?? null,
 });
 
 export function createTauriApi(): Api {
@@ -94,6 +94,7 @@ export function createTauriApi(): Api {
     bootSubscribe: onEvent => subscribe('boot_subscribe', onEvent),
     onboardingState: () => call('onboarding_state'),
     setOnboardingStep: step => none(call('set_onboarding_step', { step })),
+    setWindowGlass: on => call('set_window_glass', { on }),
     legacyImport: () => call('legacy_import'),
     legacyRetry: () => call('legacy_retry'),
     // Nguồn, quét
@@ -149,7 +150,18 @@ export function createTauriApi(): Api {
     deleteCombo: id => none(call('delete_combo', { id })),
     reorderCombos: (caseId, ids) => none(call('reorder_combos', { caseId, ids })),
     setComboSlot: (comboId, role, face, note, style) => call('set_combo_slot', { comboId, role, face, note: note ?? null, style: style ?? null }),
+    addComboRole: (comboId, name) => call('add_combo_role', { comboId, name }),
+    removeComboRole: (comboId, role) => call('remove_combo_role', { comboId, role }),
+    renameComboRole: (comboId, role, newName) => call('rename_combo_role', { comboId, role, newName }),
+    reorderComboRoles: (comboId, roles) => call('reorder_combo_roles', { comboId, roles }),
     createCombos: (caseId, combos) => call('create_combos', { caseId, combos }),
+    deskSuggest: req => call('desk_suggest', { req }),
+    suggestPartners: (anchor, req) => call('suggest_partners', { anchor, req }),
+    suggestCombos: req => call('suggest_combos', { req }),
+    roleFit: (face, role) => call('role_fit', { face, role }),
+    recentViews: limit => call('recent_views', { limit }),
+    recordView: face => none(call('record_view', { face })),
+    clearRecentViews: () => call('clear_recent_views'),
     caseCompare: (caseId, comboIds, lang = getLocale()) => call('case_compare', { caseId, comboIds, lang }),
     briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),
@@ -190,6 +202,7 @@ export function createTauriApi(): Api {
     previewCacheInfo: () => call('preview_cache_info'),
     clearPreviewCache: () => none(call('clear_preview_cache')),
     listProblems: () => call('list_problems'),
+    nameClashes: () => call('name_clashes'),
     retryProblems: () => call('retry_problems'),
     // Cài đặt
     getSetting: key => call('get_setting', { key }),
@@ -226,6 +239,8 @@ export function createTauriApi(): Api {
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),
+    activationVfPolicy: () => call('activation_vf_policy'),
+    activationSetVfPolicy: policy => none(call('activation_set_vf_policy', { policy })),
     activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
     activationAvailability: (faces = []) => call('activation_availability', { faces }),
     activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),

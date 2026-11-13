@@ -1,7 +1,7 @@
 import type { FaceExtrasDto } from '../bindings/FaceExtrasDto';
 import type { FamilyStructureDto } from '../bindings/FamilyStructureDto';
 import type { LicenseNoteDto } from '../bindings/LicenseNoteDto';
-import type { AxisReadingDto, ClassificationDto, FaceDetailDto, FaceKeyDto, FaceRowDto } from '../bindings';
+import type { AxisReadingDto, ClassificationDto, FaceDetailDto, FaceKeyDto, FaceRowDto, VariableAxisDto } from '../bindings';
 import { t, getLocale } from '../i18n';
 
 /** Các số đo hiện trong Compare, theo thứ tự hàng. Khoá = `AxisReadingDto.key` canonical. */
@@ -24,6 +24,8 @@ export type CompareFace = {
   };
   /** Tên giấy phép hiển thị (kind từ backend hoặc chuỗi license của font). */
   license: string | null; designer: string | null;
+  /** A4: nhà phát hành, bản (version), số glyph và các trục Variable (tag + min–max); thiếu → null / rỗng. */
+  foundry?: string | null; version?: string | null; glyphs?: number | null; variableAxes?: VariableAxisDto[];
   /** D2: vendor, năm, nhóm OpenType, kerning, cấu trúc style, fsType. `null` khi nguồn dữ liệu không có (phân tích cũ). */
   extras?: FaceExtrasDto | null; family?: FamilyStructureDto | null; licenseNote?: LicenseNoteDto | null;
 };
@@ -53,6 +55,8 @@ export function buildCompare(details: FaceDetailDto[], failed: CompareDto['faile
         metrics: Object.fromEntries(COMPARE_METRICS.map(k => [k, metricOf(k, axes.find(a => a.key === k))])),
         vi: { supports: vi?.supports ?? false, missing: vi?.missing?.length ?? 0, total: vi?.total ?? 0, stackedMarksOverflow: vi?.stackedMarksOverflow ?? false, stackedMarksTopEm: vi?.stackedMarksTopEm ?? null },
         license: d.metadata?.license ?? null, designer: d.metadata?.designer ?? null,
+        foundry: d.metadata?.manufacturer ?? null, version: d.metadata?.version ?? null,
+        glyphs: typeof d.file?.numGlyphs === 'number' && d.file.numGlyphs > 0 ? d.file.numGlyphs : null, variableAxes: d.metadata?.variableAxes ?? [],
       };
     }),
   };

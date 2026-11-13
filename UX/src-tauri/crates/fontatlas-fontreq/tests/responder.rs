@@ -192,27 +192,27 @@ fn slow_backend_returns_at_the_deadline_then_serves_the_late_result_next_time() 
     let fp = f.to_string_lossy().into_owned();
     let calls = Arc::new(AtomicUsize::new(0));
     let c2 = calls.clone();
+    // Việc nền bị chốt bởi latch tới khi test thả: "trả về đúng hạn" kiểm bằng thứ tự, không đo giờ.
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let release_rx = std::sync::Mutex::new(release_rx);
     let slow = Responder::new(
         move |_q: &EnsureRequest| {
             c2.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(500));
+            let _ = release_rx.lock().unwrap().recv();
             Ok(resp(FontStatus::Activated, Some(&fp)))
         },
         || true,
         |_: i32| None,
     )
     .with_deadline(Duration::from_millis(80));
-    let t = std::time::Instant::now();
+    assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing); // việc nền còn bị chốt mà vẫn trả về → đã dừng chờ đúng hạn
+    // trong lúc việc nền còn chạy: trả rỗng, KHÔNG gọi lại thư viện và không chờ thêm (nếu chờ thì treo vì latch chưa thả)
     assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing);
-    assert!(t.elapsed() < Duration::from_millis(400), "{:?}", t.elapsed());
-    // trong lúc việc nền còn chạy: trả rỗng NGAY (không xếp hàng thêm một lần chờ nữa)
-    let t = std::time::Instant::now();
-    assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Nothing);
-    assert!(t.elapsed() < Duration::from_millis(50), "{:?}", t.elapsed());
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+    release_tx.send(()).unwrap();
     // việc nền xong → kết quả tốt đến muộn được dùng lại, không gọi lại thư viện
     let t0 = std::time::Instant::now();
-    while slow.inflight() > 0 && t0.elapsed() < Duration::from_secs(5) {
+    while slow.inflight() > 0 && t0.elapsed() < Duration::from_secs(30) {
         std::thread::sleep(Duration::from_millis(10));
     }
     assert_eq!(slow.answer(1, &ps("Slow-Regular")), Answer::Files(vec![f]));

@@ -27,7 +27,7 @@ export function SelectionBar({ rows }: { rows: readonly FaceRow[] }): React.JSX.
       <Tooltip label={t(allFav ? 'sel.unfav.tip' : 'sel.fav.tip')}>
         <button type="button" onClick={() => void actions.setFavorite(rows, !allFav)}><Icon name="star" size={15} />{t(allFav ? 'sel.unfav' : 'sel.fav')}</button>
       </Tooltip>
-      <Tooltip label={t('sel.project.tip')}>
+      <Tooltip label={t('sel.project.tip')} shortcut="⌥⌘P">
         <button ref={projectBtn} type="button" aria-haspopup="menu" onClick={e => actions.openProjectMenu(rows, { rect: e.currentTarget.getBoundingClientRect() }, { returnFocus: e.currentTarget })}><Icon name="folder" size={15} />{t('sel.project')}</button>
       </Tooltip>
       <Tooltip label={t(usable.length === 0 ? 'sel.missing.tip' : allActive ? 'sel.deactivate.tip' : 'sel.activate.tip')}>

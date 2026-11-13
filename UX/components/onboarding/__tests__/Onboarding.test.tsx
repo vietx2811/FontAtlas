@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { CmdError } from '../../../api';
@@ -7,7 +7,8 @@ import { setSplashOpen } from '../../splash/splashState';
 import { setLocale } from '../../../i18n';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
-const click = async (name: string | RegExp) => { await act(async () => { fireEvent.click(screen.getByRole('button', { name })); }); await settle(); };
+// Chờ nút xuất hiện (máy bận: bước chưa kịp vẽ) rồi mới bấm.
+const click = async (name: string | RegExp) => { const btn = await screen.findByRole('button', { name }); await act(async () => { fireEvent.click(btn); }); await settle(); };
 
 async function mount(opts: Parameters<typeof createMockApi>[0] = { firstRun: true }, extra: Partial<React.ComponentProps<typeof Onboarding>> = {}) {
   const api = createMockApi(opts);
@@ -148,7 +149,7 @@ describe('Onboarding', () => {
     const api = createMockApi({ firstRun: true, initial: { model: { state: 'downloading', doneBytes: 100, totalBytes: 100 } } });
     await api.setOnboardingStep('o6');
     render(<Onboarding api={api} onDone={() => {}} animated={false} />); await settle();
-    expect(screen.getByText('Đang kiểm tra tệp…')).toBeTruthy();
+    expect(await screen.findByText('Đang kiểm tra tệp…')).toBeTruthy(); // chờ theo điều kiện: model sync xong sau vài lượt khi máy bận
     expect(screen.getByTestId('model-spinner')).toBeTruthy();
     const { useModelStore } = await import('../../../store/model');
     act(() => useModelStore.setState(s => ({ model: { ...s.model!, state: 'paused', lastError: { code: 'tls', message: 'ONBOARD_TLS_DETAIL' } } })));
@@ -345,14 +346,14 @@ describe('Onboarding', () => {
       await api.setOnboardingStep('end');
       const onDone = vi.fn();
       const save = vi.spyOn(api, 'setOnboardingStep');
-      render(<Onboarding api={api} onDone={onDone} outroMs={50} />);
+      // Biên rộng: outro 1500 ms, kiểm "chưa gọi" ngay sau thao tác (máy bận cũng chỉ mất vài trăm ms), rồi chờ có hạn dài tới khi gọi.
+      render(<Onboarding api={api} onDone={onDone} outroMs={1500} />);
       await settle();
       await click('Vào thư viện'); await click('Bắt đầu');
       expect(save).toHaveBeenLastCalledWith('done');
       expect(screen.getByTestId('onb-outro')).toBeTruthy();
       expect(onDone).not.toHaveBeenCalled();
-      await act(async () => { await new Promise(r => setTimeout(r, 120)); });
-      expect(onDone).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1), { timeout: 8000 });
     });
 
     it('"Bỏ qua hướng dẫn" skips the outro', async () => {
@@ -369,8 +370,27 @@ describe('Onboarding', () => {
       expect(document.querySelector('.fa-onb-top')!.textContent).not.toMatch(/Bước|Esc|←|→/);
       expect(document.querySelectorAll('.fa-onb-dots i').length).toBeGreaterThanOrEqual(6);
       expect(screen.getByRole('group', { name: /^Bước 1\/\d$/ })).toBeTruthy();
-      expect(document.querySelector('.fa-onb-body > .fa-stage')).toBeTruthy();
-      expect(document.querySelector('.fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+      // Hai mảng: TRÁI = nội dung (trên kính), PHẢI = minh hoạ phủ kín; hình không nằm trong mảng chữ.
+      expect(document.querySelector('.fa-onb > .fa-onb-art > .fa-stage')).toBeTruthy();
+      expect(document.querySelector('.fa-onb-left .fa-stage')).toBeNull();
+      expect(document.querySelector('.fa-onb > .fa-onb-left .fa-onb-body > .fa-onb-pane h1')).toBeTruthy();
+    });
+
+    it('asks the window for real glass behind the left pane while onboarding, and gives it back on leave', async () => {
+      const api = createMockApi({ firstRun: true });
+      const calls: boolean[] = [];
+      api.setWindowGlass = async on => { calls.push(on); return on; };
+      const { unmount } = render(<Onboarding api={api} onDone={() => undefined} animated={false} />);
+      await waitFor(() => expect(document.querySelector('.fa-onb')!.getAttribute('data-glass')).toBe('true'));
+      expect(calls).toEqual([true]);
+      unmount();
+      expect(calls).toEqual([true, false]);
+    });
+
+    it('without native glass (browser, older macOS) the left pane keeps a solid theme background', async () => {
+      await mount();
+      expect(document.querySelector('.fa-onb')!.getAttribute('data-glass')).toBe('false');
+      expect(document.querySelector('.fa-onb')!.getAttribute('data-native')).toBe('false');
     });
 
     it('the last step shows the shortcuts overlay BEFORE the outro; Esc skips it and finishes', async () => {

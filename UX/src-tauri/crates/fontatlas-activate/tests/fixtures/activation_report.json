@@ -84,7 +84,9 @@
             "existingPath": "/Users/u/Library/Mobile Documents/com~apple~CloudDocs/Fonts/Grid.rightfontlibrary/fonts/L/x.ttf",
             "owner": "right_font",
             "sameFile": false,
-            "replaceTier": "replace"
+            "replaceTier": "replace",
+            "variable": false,
+            "existingVariable": true
           }
         ]
       }

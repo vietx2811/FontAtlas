@@ -103,7 +103,14 @@ struct RunGuard {
     shared: Arc<Shared>,
 }
 impl RunGuard {
+    /// Gỡ key khỏi `running` TRƯỚC khi báo kết quả: người hỏi nhận kết quả rồi hỏi lại ngay không được gặp lại việc đã xong
+    /// (nếu không, "không nhớ" cho Failed/Unavailable/Conflict bị gộp nhầm vào việc cũ).
     fn finish(&self, a: Answer) {
+        if let Ok(mut m) = self.running.lock() {
+            if m.get(&self.key).is_some_and(|x| Arc::ptr_eq(x, &self.shared)) {
+                m.remove(&self.key);
+            }
+        }
         if let Ok(mut r) = self.shared.result.lock() {
             if r.is_none() {
                 *r = Some(a);
@@ -114,12 +121,7 @@ impl RunGuard {
 }
 impl Drop for RunGuard {
     fn drop(&mut self) {
-        self.finish(Answer::Nothing); // panic: người chờ nhận rỗng
-        if let Ok(mut m) = self.running.lock() {
-            if m.get(&self.key).is_some_and(|x| Arc::ptr_eq(x, &self.shared)) {
-                m.remove(&self.key);
-            }
-        }
+        self.finish(Answer::Nothing); // panic hoặc không spawn được: người chờ nhận rỗng (không đè kết quả đã có)
     }
 }
 

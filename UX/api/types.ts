@@ -1,13 +1,13 @@
 export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisStatsDto, AxisHistogramDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, SimilarFamilyDto, SimilarFamilyPageDto, RawAxisRangeDto, LangListDto, LangItemDto, LangCoverageDto, LangBadgeDto, LangFilterDto } from '../bindings';
 // Kiểu IPC: lấy từ UX/bindings (ts-rs, sinh từ Rust). File này chỉ đặt lại tên cho gọn và thêm kiểu phía giao diện.
 import type {
-  PreviewCacheInfoDto, ProblemDto,
+  PreviewCacheInfoDto, ProblemDto, NameClashDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
   ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
-  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 } from '../bindings';
 import type { FacePage, FaceQuery, FaceRow } from '../features/library-grid/types';
 
@@ -17,9 +17,9 @@ export type {
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
   PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
-  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto,
+  AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 };
-export type { PreviewCacheInfoDto, ProblemDto };
+export type { PreviewCacheInfoDto, ProblemDto, NameClashDto };
 export type ModelState = ModelStatusDto['state'];
 export type PairRole = PairRoleDto;
 export type PairMode = PairModeDto;
@@ -40,7 +40,7 @@ export class CmdError extends Error {
 export type SimilarQuery = { k?: number; useImage?: boolean; viOnly?: boolean; weights?: GroupWeightsDto; sourceIds?: number[]; weightRange?: [number, number] | null };
 
 export const DEFAULT_UI_STATE: UiStateDto = {
-  sidebarCollapsed: false, openSections: ['col', 'src', 'tag'], layout: 'grid', sampleSize: 34, infoExpanded: false,
+  sidebarCollapsed: false, openSections: ['col', 'src', 'tag'], closedSections: [], layout: 'grid', sampleSize: 34, infoExpanded: false,
 };
 
 /** Lệnh model/embed có Channel dùng chung kiểu callback phía giao diện. */

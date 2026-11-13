@@ -6,6 +6,17 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
 test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
+# QA phải chạy qua CI cục bộ (khoá + hàng đợi) và đúng bundle của SHA đang checkout: bundle nằm ở target/ DÙNG CHUNG nên run khác có thể đã ghi đè nó.
+# Chạy lại riêng: bash tools/ci/local_ci.sh <ref> --qa-only. Bỏ qua kiểm (chỉ khi tự biết mình đang làm gì): FONTATLAS_QA_NO_GUARD=1.
+if [ "${FONTATLAS_QA_NO_GUARD:-}" != 1 ]; then
+  [ "${FONTATLAS_CI_RUN:-}" = 1 ] || { echo "run.sh phải chạy qua khoá CI: bash tools/ci/local_ci.sh <ref> --qa-only (hoặc FONTATLAS_QA_NO_GUARD=1)"; exit 1; }
+  STAMP="$UX/src-tauri/target/debug/bundle/.built-sha"   # ghi bởi local_ci sau khi build xong
+  WANT="$(git -C "$UX" rev-parse HEAD 2>/dev/null || true)"
+  HAVE="$(cat "$STAMP" 2>/dev/null || true)"
+  echo "bundle SHA: ${HAVE:-không có}; mã nguồn SHA: ${WANT:-?}"
+  [ -n "$WANT" ] && [ "$HAVE" = "$WANT" ] || { echo "bundle không khớp SHA đang checkout → từ chối chạy QA (build lại: bash tools/ci/local_ci.sh <ref>)"; exit 1; }
+fi
+echo "tải máy: $(uptime | sed 's/.*load averages*: //')"
 # Chỉ MỘT lượt QA native tại một thời điểm trên máy: font đăng ký phiên (CoreText) của app đang chạy là toàn người dùng, nên lượt QA khác
 # (CI cục bộ, worktree khác) làm font của mình thành "đã có sẵn · ứng dụng khác" và dọn không sạch (conflict-clean left:5, available-*).
 LOCK="${FONTATLAS_QA_LOCK:-/tmp/fontatlas-native-qa.lock}"
@@ -22,7 +33,18 @@ trap release_lock EXIT
 # Dọn đăng ký font còn sót từ lượt QA trước bị ngắt giữa chừng (persistent scope sống qua tiến trình). Chỉ file dưới thư mục QA có qa.js.
 sweep_qa_fonts() { command -v swift >/dev/null && swift "$HERE/unregister_qa_fonts.swift" 2>/dev/null || true; }
 sweep_qa_fonts
-QA="$(mktemp -d)"; F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
+# Thư mục tạm của QA (ảnh chụp + dữ liệu, ~40 MB/lượt) đặt ở ổ dữ liệu khi có, không ở ổ hệ thống (đang thiếu chỗ).
+QA_BASE="${FONTATLAS_QA_TMP:-}"
+[ -z "$QA_BASE" ] && [ -d /Volumes/VXData/Users/VietX ] && QA_BASE="/Volumes/VXData/Users/VietX/fontatlas-tmp/qa"
+if [ -n "$QA_BASE" ]; then
+  mkdir -p "$QA_BASE"
+  # Dọn lượt QA cũ hơn 7 ngày, chỉ thư mục có qa.js do chính script này tạo.
+  find "$QA_BASE" -maxdepth 1 -name 'qa.*' -type d -mtime +7 -exec test -f '{}/qa.js' \; -exec rm -rf '{}' + 2>/dev/null || true
+  QA="$(mktemp -d "$QA_BASE/qa.XXXXXX")"
+else
+  QA="$(mktemp -d)"
+fi
+F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
 mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/data"
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
 cp "$F"/{playfair_display,libre_baskerville,libre_baskerville_italic_vf,fira_sans_regular}.ttf "$QA/B/"

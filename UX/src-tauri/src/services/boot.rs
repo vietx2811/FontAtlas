@@ -90,6 +90,7 @@ fn after_ready(state: &Arc<AppState>) {
         let _ = state.scans.enqueue_all_directories(state);
     }
     mark_analyzer_seen_if_current(state);
+    state.cloud_watch.sync(state);
     let _ = crate::services::embed::ensure_started(state);
     crate::services::langs::ensure_started(state);
     crate::services::cases::purge_trash(state);

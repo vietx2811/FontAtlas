@@ -166,6 +166,30 @@ impl Store {
         Ok(out)
     }
 
+    /// Tính chất một face để chọn khi nhiều bản CÙNG TÊN (G7): `(là variable font, khớp family + style app đã gửi)`.
+    /// Khớp = family sau `vi_fold` và style sau khi gọn (rỗng = "Regular") bằng nhau; không gửi family thì không bản nào "khớp".
+    pub fn face_pick_traits(&self, k: &FaceKey, family: &str, style: &str) -> Result<(bool, bool), StoreError> {
+        let row: Option<(bool, String, Option<String>)> = self
+            .conn
+            .query_row(
+                "SELECT fa.is_variable, fa.family_key, fa.subfamily FROM main.faces fa JOIN main.files f ON f.file_id = fa.file_id
+                 WHERE f.hash = ?1 AND fa.face_index = ?2",
+                params![&k.hash[..], k.face_index],
+                |r| Ok((r.get::<_, i64>(0)? != 0, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?;
+        let Some((variable, family_key, sub)) = row else { return Ok((false, false)) };
+        if family.trim().is_empty() {
+            return Ok((variable, false));
+        }
+        let want = {
+            let w = squash(style);
+            if w.is_empty() { "regular".to_string() } else { w }
+        };
+        let have = sub.as_deref().map(squash).filter(|x| !x.is_empty()).unwrap_or_else(|| "regular".into());
+        Ok((variable, family_key == vi_fold(family) && have == want))
+    }
+
     /// Ghi một dòng nhật ký và giữ `AUTO_LOG_KEEP` dòng mới nhất. App hỏi lặp lại (vd Photoshop hỏi lại mỗi lần vẽ
     /// lại chữ) thì không ghi thêm nếu đã có dòng y hệt (app, tên, kết quả) trong `AUTO_LOG_DEDUPE_MS`.
     /// Trả `true` nếu có ghi.

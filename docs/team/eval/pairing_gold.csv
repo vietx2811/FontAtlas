@@ -1,0 +1,33 @@
+# Cặp/vai vàng để hiệu chuẩn mô hình G4 (UX/src-tauri/crates/fontatlas-core/src/pairing.rs). Soạn bởi 04, 2026-11-12.
+# kind: pair = cặp font theo phong cách `style`; role = một font ở vai `role_a`.
+# expect: ok = mức >= ok; weak = mức phải là weak. gf_dir = thư mục trong google/fonts@47d54ca1 (ofl/<gf_dir>); chỉ họ OFL.
+# source: superfamily = cùng họ do nhà làm phát hành (kiểm bằng tên họ); memory = cặp hay được gợi ý trong các bài pairing (Google Fonts, Typewolf...), nhớ lại, CHƯA kiểm nguồn trực tiếp, không phải trích nguyên văn;
+#         neg = ví dụ phản (hai sans, hai script...), do 04 dựng để kiểm đường âm; measure = kỳ vọng từ phân loại hiển nhiên (blackletter/script không làm chữ thân).
+kind,gf_dir_a,role_a,gf_dir_b,role_b,style,expect,source,note
+pair,sourcesans3,body,sourceserif4,body,superfamily,ok,superfamily,Source Sans 3 + Source Serif 4
+pair,ibmplexsans,body,ibmplexserif,heading,superfamily,ok,superfamily,IBM Plex Sans + IBM Plex Serif
+pair,merriweather,body,merriweathersans,heading,superfamily,ok,superfamily,Merriweather + Merriweather Sans
+pair,notosans,body,notoserif,heading,superfamily,ok,superfamily,Noto Sans + Noto Serif
+pair,playfairdisplay,heading,sourcesans3,body,contrast,ok,memory,serif tương phản cao + sans trung tính
+pair,lora,heading,montserrat,body,contrast,ok,memory,
+pair,librebaskerville,heading,sourcesans3,body,contrast,ok,memory,
+pair,cormorantgaramond,heading,prozalibre,body,contrast,ok,memory,
+pair,abrilfatface,display,sourcesans3,body,display_vs_neutral,ok,memory,display đậm + sans trung tính (bản hay gặp dùng Poppins nhưng Poppins thiếu tiếng Việt nên đổi; xem README)
+pair,bebasneue,display,opensans,body,display_vs_neutral,ok,memory,
+pair,oswald,heading,lora,body,contrast,ok,memory,
+pair,roboto,body,opensans,body,contrast,weak,neg,hai sans không phải tương phản serif+sans
+pair,lora,body,merriweather,body,contrast,weak,neg,hai serif
+pair,playfairdisplay,display,abrilfatface,display,display_vs_neutral,weak,neg,hai font cá tính đối đầu nhau
+pair,dancingscript,display,pacifico,display,display_vs_neutral,weak,neg,hai script
+pair,roboto,body,lora,body,superfamily,weak,neg,khác họ
+role,roboto,body,,,,ok,measure,
+role,opensans,body,,,,ok,measure,
+role,sourceserif4,body,,,,ok,measure,
+role,lora,body,,,,ok,measure,
+role,pacifico,body,,,,weak,measure,script không làm chữ thân
+role,dancingscript,body,,,,weak,measure,
+role,bebasneue,body,,,,weak,measure,display chữ hoa
+role,abrilfatface,display,,,,ok,measure,
+role,bebasneue,display,,,,ok,measure,
+role,playfairdisplay,display,,,,ok,measure,
+role,pacifico,display,,,,ok,measure,

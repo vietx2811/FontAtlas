@@ -10,4 +10,12 @@ sameFile: boolean,
 /**
  * Ma trận "Thay thế" do backend tính (đã canonical hoá đường dẫn): UI dùng nguyên, không tự đoán.
  */
-replaceTier: ReplaceTierDto, };
+replaceTier: ReplaceTierDto, 
+/**
+ * File trong thư viện là font variable (VF).
+ */
+variable: boolean, 
+/**
+ * Bản đang cài là VF? `null` = không đọc được. Cặp VF↔static: `existingVariable === !variable` (G7).
+ */
+existingVariable: boolean | null, };

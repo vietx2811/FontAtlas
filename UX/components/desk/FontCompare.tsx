@@ -10,13 +10,15 @@ import { Icon } from '../sidebar/icons';
 import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { TermTip, termKey, termName } from '../ui/terms';
-import { isHeadingLike } from './deskRoles';
+import { isHeadingLike, roleLabel } from './deskRoles';
+import { faceLabel, useNameClashes } from '../../store/nameClash';
+import { ClashNote } from '../ui/ClashNote';
 
 export type FcFace = { face: FaceKeyDto; row: FaceRowDto };
 type SortKey = 'order' | 'name' | 'vi' | (typeof COMPARE_METRICS)[number];
 const keyOf = (f: FaceKeyDto) => `${f.hashHex}:${f.faceIndex}`;
-const nameOf = (r: FaceRowDto) => `${r.family}${r.subfamily ? ` ${r.subfamily}` : ''}`;
-const roleName = (r: ComboRoleDto) => t(`role.${r}` as 'role.display');
+const nameOf = (r: FaceRowDto) => faceLabel(r);
+const roleName = roleLabel;
 
 /** Đọc số đo cho nhiều font; nhớ theo khoá, lỗi thì không nhớ (lần sau đọc lại). */
 function useFacesData(api: Api, faces: FaceKeyDto[]): { cache: Map<string, CompareFace | null>; failed: ReadonlySet<string> } {
@@ -75,6 +77,7 @@ function MetricCell({ m, base }: { m: CompareMetric | undefined; base: CompareMe
 export function FontCompare({ api, role, base, partner, suggestions, onPlace, onTry }: {
   api: Api; role: ComboRoleDto; base: FcFace | null; partner: FaceRowDto | null; suggestions: FcFace[]; /** true = đã đặt (cột sẽ bị bỏ vì font thành mốc); false = lỗi, giữ cột. */ onPlace(f: FcFace): Promise<boolean>; onTry(f: FcFace): void;
 }): React.JSX.Element {
+  useNameClashes();
   const [cols, setCols] = useState<FcFace[]>(() => suggestions.slice(0, 4));
   const touched = useRef(false); // người dùng đã thêm/bỏ cột: không seed lại từ gợi ý
   const sugSig = suggestions.map(s => keyOf(s.face)).join('|');
@@ -171,7 +174,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
           const isBase = !!base && keyOf(c.face) === keyOf(base.face); const pin = pinned.includes(keyOf(c.face));
           return (
             <th scope="col" key={keyOf(c.face)} data-testid="fc-col" data-base={isBase || undefined} data-pinned={pin || undefined}>
-              <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}</div>
+              <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}<ClashNote faceId={c.row.faceId} inline />{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}</div>
               {!isBase && (
                 <div className="fa-cc-actions">
                   <button type="button" data-testid="fc-pin" aria-pressed={pin} onClick={() => togglePin(c)}>{pin ? t('fc.unpin') : t('fc.pin')}</button>

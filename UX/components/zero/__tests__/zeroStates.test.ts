@@ -1,3 +1,4 @@
+import { setLocale } from '../../../i18n';
 import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
 import { cloudHint, libraryEmpty, type EmptyCtx } from '../zeroStates';
@@ -95,12 +96,28 @@ describe('libraryEmpty', () => {
   });
 });
 
+describe('cloudHint — tên nút theo từng dịch vụ', () => {
+  it.each([
+    ['one_drive', /Always Keep on This Device/], ['google_drive', /Available offline/], ['dropbox', /Make available offline/],
+    ['box', /Make Available Offline/], ['icloud', /Keep Downloaded/], ['other', /Always keep on this device/],
+  ])('%s', (provider, re) => {
+    expect(cloudHint(src({ cloudProvider: provider, faceCount: 10, cloudOnlyCount: 5 }))).toMatch(re);
+  });
+  it('nói rõ Font Atlas không tự đặt tuỳ chọn, cả vi và en', () => {
+    const s = src({ cloudProvider: 'icloud', faceCount: 10, cloudOnlyCount: 5 });
+    expect(cloudHint(s)).toMatch(/không tự đặt/);
+    setLocale('en');
+    expect(cloudHint(s)).toMatch(/never sets this option/);
+    setLocale('vi');
+  });
+});
+
 describe('cloudHint', () => {
   it('names the real share of fonts that are not on this machine, only for cloud sources that have some', () => {
     const cloud = src({ cloudProvider: 'one_drive', faceCount: 300, cloudOnlyCount: 280 });
     const h = cloudHint(cloud)!;
     expect(h).toMatch(/^93% font của nguồn này chưa tải về máy/);
-    expect(h).toMatch(/Always keep on this device/);
+    expect(h).toMatch(/Always Keep on This Device/);
     expect(h).toMatch(/Finder/);
     expect(cloudHint(src({ cloudProvider: null, faceCount: 300, cloudOnlyCount: 280 }))).toBeNull();
     expect(cloudHint(src({ cloudProvider: 'icloud', faceCount: 300, cloudOnlyCount: 0 }))).toBeNull();

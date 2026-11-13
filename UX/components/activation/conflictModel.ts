@@ -1,4 +1,4 @@
-import type { ConflictDto, FaceKeyDto, FaceRow } from '../../api';
+import type { ConflictDto, FaceKeyDto, FaceRow, VfPolicyDto } from '../../api';
 import { t } from '../../i18n';
 
 /** Một font cần xác nhận: tên family/kiểu đọc từ thư viện, và các bản trùng đang cài ở máy. */
@@ -90,3 +90,19 @@ export function toItems(rows: readonly FaceRow[], keys: readonly FaceKeyDto[], c
     return { hashHex: k.hashHex, family: r?.family ?? (fam || k.hashHex.slice(0, 8)), style: r?.subfamily ?? (rest.join('-') || 'Regular'), conflicts: conflicts[i] ?? [] };
   });
 }
+
+/** G7: lựa chọn cho cặp variable (VF) ↔ static trùng tên PostScript. `keep` = dùng bản đang có (bỏ qua bản mới),
+ *  `use` = dùng bản mới (tắt bản kia), `both` = giữ cả hai. Lựa chọn đã nhớ lưu theo LOẠI ("vf" | "static" | "both"), không theo bản. */
+export type VfChoice = Exclude<VfPolicyDto, 'ask'>;
+export type VfAction = 'keep' | 'use' | 'both';
+
+/** Cả hộp thoại là các cặp VF↔static (mọi bản trùng khác loại với font sắp bật, mọi font sắp bật cùng loại)?
+ *  Có bản trùng không đọc được loại (`existingVariable` null) hoặc cùng loại → hộp thoại xung đột thường. */
+export function vfPairOf(items: readonly ConflictItem[]): { newIsVf: boolean } | null {
+  const cs = items.flatMap(i => i.conflicts).filter(c => !c.sameFile);
+  if (!cs.length) return null;
+  const newIsVf = cs[0].variable;
+  return cs.every(c => c.variable === newIsVf && c.existingVariable === !newIsVf) ? { newIsVf } : null;
+}
+export const vfActionOf = (choice: VfChoice, newIsVf: boolean): VfAction => (choice === 'both' ? 'both' : (choice === 'vf') === newIsVf ? 'use' : 'keep');
+export const vfChoiceOf = (action: VfAction, newIsVf: boolean): VfChoice => (action === 'both' ? 'both' : (action === 'use') === newIsVf ? 'vf' : 'static');

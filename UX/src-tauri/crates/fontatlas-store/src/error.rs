@@ -28,6 +28,10 @@ pub enum StoreError {
     Conflict(String),
     #[error("đường dẫn lồng với nguồn #{existing_id}")]
     NestedSource { existing_id: i64 },
+    /// Lỗi vai trong Combo, mã riêng cho giao diện: `role_name_invalid`, `role_duplicate`, `role_not_found`,
+    /// `role_limit`, `role_set_mismatch`.
+    #[error("{msg}")]
+    Role { code: &'static str, msg: String },
 }
 
 impl StoreError {
@@ -43,6 +47,7 @@ impl StoreError {
             StoreError::Invalid(_) => "invalid_arg",
             StoreError::Conflict(_) => "conflict",
             StoreError::NestedSource { .. } => "nested_source",
+            StoreError::Role { code, .. } => code,
         }
     }
 }

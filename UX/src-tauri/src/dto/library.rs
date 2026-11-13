@@ -525,6 +525,27 @@ impl From<Tag> for TagDto {
     }
 }
 
+/// G7: một font Variable (VF) trùng tên PostScript với một hay nhiều font static (app thiết kế thấy hai mục giống nhau).
+/// Không sửa file: giao diện thêm hậu tố "VF" vào tên hiển thị của bản VF và đặt dấu "!" giải thích ở cả hai bên.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct NameClashDto {
+    #[ts(type = "number")]
+    pub vf_face_id: i64,
+    #[ts(type = "Array<number>")]
+    pub static_face_ids: Vec<i64>,
+    pub ps_names: Vec<String>,
+    /// `true`: trùng tên PostScript của chính face VF; `false`: chỉ trùng tên suy ra từ named instance (khả năng cao, chưa chắc).
+    pub exact: bool,
+}
+
+impl From<fontatlas_store::NameClash> for NameClashDto {
+    fn from(c: fontatlas_store::NameClash) -> Self {
+        NameClashDto { vf_face_id: c.vf_face_id, static_face_ids: c.static_face_ids, ps_names: c.ps_names, exact: c.exact }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
@@ -585,6 +606,8 @@ pub struct FamilyStyleDto {
 pub struct UiStateDto {
     pub sidebar_collapsed: bool,
     pub open_sections: Vec<String>,
+    /// Nhóm thanh bên đã đóng, cho nhóm MỚI mặc định mở (Case): dữ liệu cũ không có trường này nên nhóm đó vẫn mở.
+    pub closed_sections: Vec<String>,
     pub layout: String,
     pub sample_size: u32,
     pub info_expanded: bool,
@@ -595,6 +618,7 @@ impl Default for UiStateDto {
         UiStateDto {
             sidebar_collapsed: false,
             open_sections: vec!["col".into(), "src".into(), "tag".into()],
+            closed_sections: vec![],
             layout: "grid".into(),
             sample_size: 34,
             info_expanded: false,

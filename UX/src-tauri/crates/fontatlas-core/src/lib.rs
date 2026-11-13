@@ -6,6 +6,7 @@ pub mod classify;
 pub mod extras;
 pub mod geom;
 pub mod langdata;
+pub mod pairing;
 mod load;
 mod metadata;
 mod metric;
