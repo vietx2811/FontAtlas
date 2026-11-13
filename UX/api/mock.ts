@@ -90,6 +90,7 @@ export function createMockApi(o: MockOptions = {}): Api {
 
   const cloudFetched = new Set<number>();
   const cloudRuns = new Map<number, boolean>();
+  let importBusy = false;
   let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
@@ -264,6 +265,18 @@ export function createMockApi(o: MockOptions = {}): Api {
       if (!s) throw new CmdError('not_found', 'source');
       if (!s.available || !s.path) throw new CmdError('source_unavailable', 'source unavailable', { sourceId: id, name: s.name });
     },
+    async importPathsInto(paths, target, onProgress) {
+      if (importBusy) throw new CmdError('busy', 'import busy');
+      if (target.kind === 'collection' ? !collections.has(target.id) : false) throw new CmdError('not_found', 'target');
+      importBusy = true;
+      try {
+        onProgress?.({ phase: 'scanning', done: 0, total: paths.length, added: 0, skipped: 0 });
+        await Promise.resolve();
+        onProgress?.({ phase: 'adding', done: paths.length, total: paths.length, added: 0, skipped: paths.length });
+        return { added: [], alreadyThere: 0, skipped: paths.map(path => ({ path, reason: 'not_font' })), cancelled: false };
+      } finally { importBusy = false; }
+    },
+    async importPathsCancel() { return importBusy; },
     async sourceDownloadCloud(id, onProgress) {
       const s = sources.find(x => x.id === id);
       if (!s) throw new CmdError('not_found', 'source');

@@ -9,7 +9,7 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
-import { useFaceDragStore } from '../../store/faceDrag';
+import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
@@ -17,7 +17,9 @@ import { NavItem } from './NavItem';
 import { t, tn } from '../../i18n';
 import { NavSection } from './NavSection';
 import { Icon } from './icons';
-import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
+import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths, type DropAt } from './useDropPaths';
+import { hoverFinderDrop } from '../../store/finderDrop';
+import { importPathsIntoTarget } from '../dnd/importDrop';
 import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
 import { Menu, type MenuAnchor } from '../ui/Menu';
@@ -142,14 +144,17 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const onAddFont = async () => { const p = await pickFolder(); if (p) await addPath(p); };
   const lastAddRequest = useRef(addRequest);
   useEffect(() => { if (addRequest !== lastAddRequest.current) { lastAddRequest.current = addRequest; void onAddFont(); } }); // eslint-disable-line react-hooks/exhaustive-deps
-  const onDrop = useCallback((paths: string[]) => {
+  const onDrop = useCallback((paths: string[], at?: DropAt) => {
     const [first] = paths;
     if (!first) return;
+    // G8: thả lên một Dự án/Case ở thanh bên → nhập thẳng vào đó (có Hoàn tác); thả chỗ khác → thêm Source như trước.
+    const tg = at ? targetAt(at.x, at.y) : null;
+    if (tg && (tg.kind === 'col' || tg.kind === 'case')) { void importPathsIntoTarget(api, paths, { kind: tg.kind, id: tg.id, name: tg.name }, () => void refresh()); return; }
     if (!isFontFile(first)) { void addPath(first); return; }
     const dir = parentDir(first);
     setNotice({ text: t('side.addFolder', { dir: String(dir.split(/[\\/]/).pop()) }), action: { label: t('side.add'), run: () => { setNotice(null); void addPath(dir); } } });
-  }, [addPath]);
-  useDropPaths(onDrop);
+  }, [addPath, api, refresh]);
+  useDropPaths(onDrop, hoverFinderDrop);
 
   /** Bấm Case: mở trong Pairing Desk ở Combo chính (không có Combo chính thì Combo đầu). */
   const openCaseInDesk = async (id: number) => {
@@ -246,7 +251,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     const goView = (v: string) => () => setView(v as never);
     return buildSidebarMenu(c.kind, {
       open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
-      sourceAvailable: src?.available, hasPath: !!src?.path, scanning: scanningNow,
+      sourceAvailable: src?.available && src.kind !== 'loose', hasPath: !!src?.path, scanning: scanningNow,
       reveal: () => { if (src) api.revealSource(src.id).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
       cloudSource: !!src && (!!src.cloudProvider || notDownloadedOf(src, cloud) > 0), cloudLeft: src ? notDownloadedOf(src, cloud) : 0, downloading: !!src && src.id in dlRuns,
@@ -324,7 +329,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
 
         <NavSection title={t('side.sources')} open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
-            <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
+            <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.kind === 'loose' ? t('side.loose') : s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
               sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns
                 ? <>

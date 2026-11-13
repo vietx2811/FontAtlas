@@ -88,5 +88,10 @@ export const EN_FACES: Record<keyof typeof FACES_I18N, string> = {
   'dnd.compareAdded': 'Added {what} to Compare', 'dnd.compareSome': 'Added {what} to Compare ({k} already there or no room)', 'dnd.compareAllThere': 'These fonts are already in Compare', 'dnd.compareFull': 'Compare is full ({n} fonts): nothing added', 'dnd.compareUndone': 'Undone: removed {what} from Compare', 'dnd.dropCompare': 'Drop to add to Compare',
   'dnd.dropRole': 'Drop to put in the “{role}” role', 'dnd.dropSwap': 'Drop to swap with the “{role}” role', 'dnd.hereRole': 'This font is already in this role',
   'dnd.rolePlaced': 'Put {font} in the {role} role', 'dnd.roleSame': '{font} is already the {role}', 'dnd.roleSwapped': 'Swapped the {a} and {b} roles', 'dnd.roleUndone': 'Undone: the {role} role is back as it was', 'dnd.roleFail': 'Couldn’t put it in the {role} role: {msg}',
+  'dnd.imp.sources': 'Adding sources for “{name}”…', 'dnd.imp.scan': 'Scanning to import into “{name}”: {done}/{total}', 'dnd.imp.adding': 'Adding to “{name}”: {n} new fonts', 'dnd.imp.cancel': 'Cancel',
+  'dnd.imp.cancelled': 'Cancelled importing into “{name}”', 'dnd.imp.added': 'Imported {what} into “{name}”', 'dnd.imp.there': '({k} fonts were already there.)', 'dnd.imp.allThere': 'These fonts are already in “{name}”: nothing added.',
+  'dnd.imp.none': 'No fonts to import into “{name}”.', 'dnd.imp.skipped': 'Skipped: {list}.', 'dnd.imp.skip': '{n} {why}', 'dnd.imp.undone': 'Undone: removed {what} from “{name}”',
+  'dnd.imp.why.not_font': 'not fonts', 'dnd.imp.why.cloud_not_downloaded': 'not downloaded yet (cloud drive)', 'dnd.imp.why.unreadable': 'unreadable', 'dnd.imp.why.missing': 'no longer on this Mac',
+  'dnd.imp.busy': 'Another import is running: try again when it finishes.', 'dnd.imp.gone': '“{name}” no longer exists.', 'dnd.imp.fail': 'Couldn’t import into “{name}”: {msg}', 'side.loose': 'Loose fonts',
   'dnd.addTo': 'Add to…', 'dnd.addTo.tip': 'Add the selected fonts to a project (same as dragging onto the sidebar)',
 };

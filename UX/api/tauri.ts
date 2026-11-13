@@ -105,6 +105,8 @@ export function createTauriApi(): Api {
     rebuildLibrary: () => call('rebuild_library'),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     revealSource: sourceId => none(call('reveal_source', { sourceId })),
+    importPathsInto: (paths, target, onProgress) => call('import_paths_into', { paths, target, onProgress: channel(onProgress).ch }),
+    importPathsCancel: () => call('import_paths_cancel'),
     sourceDownloadCloud: (sourceId, onProgress) => call('source_download_cloud', { sourceId, onProgress: channel(onProgress).ch }),
     sourceDownloadCancel: sourceId => call('source_download_cancel', { sourceId }),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),

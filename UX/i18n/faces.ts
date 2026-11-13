@@ -87,5 +87,10 @@ export const FACES_I18N = {
   'dnd.compareAdded': 'Đã thêm {what} vào So sánh', 'dnd.compareSome': 'Đã thêm {what} vào So sánh ({k} font đã có hoặc không còn chỗ)', 'dnd.compareAllThere': 'Các font này đã có trong So sánh', 'dnd.compareFull': 'So sánh đã đủ {n} font: không thêm được', 'dnd.compareUndone': 'Đã hoàn tác: gỡ {what} khỏi So sánh', 'dnd.dropCompare': 'Thả để thêm vào So sánh',
   'dnd.dropRole': 'Thả để đặt vào vai «{role}»', 'dnd.dropSwap': 'Thả để đổi chỗ với vai «{role}»', 'dnd.hereRole': 'Font này đang ở vai này',
   'dnd.rolePlaced': 'Đã đặt {font} vào vai {role}', 'dnd.roleSame': '{font} đã ở vai {role}', 'dnd.roleSwapped': 'Đã đổi chỗ vai {a} và {b}', 'dnd.roleUndone': 'Đã hoàn tác: vai {role} trở lại như cũ', 'dnd.roleFail': 'Không đặt được vào vai {role}: {msg}',
+  'dnd.imp.sources': 'Đang thêm nguồn cho «{name}»…', 'dnd.imp.scan': 'Đang quét để nhập vào «{name}»: {done}/{total}', 'dnd.imp.adding': 'Đang thêm vào «{name}»: {n} font mới', 'dnd.imp.cancel': 'Huỷ',
+  'dnd.imp.cancelled': 'Đã huỷ nhập vào «{name}»', 'dnd.imp.added': 'Đã nhập {what} vào «{name}»', 'dnd.imp.there': '({k} font đã có sẵn.)', 'dnd.imp.allThere': 'Các font này đã có trong «{name}»: không thêm gì.',
+  'dnd.imp.none': 'Không có font nào để nhập vào «{name}».', 'dnd.imp.skipped': 'Bỏ qua: {list}.', 'dnd.imp.skip': '{n} {why}', 'dnd.imp.undone': 'Đã hoàn tác: gỡ {what} khỏi «{name}»',
+  'dnd.imp.why.not_font': 'không phải font', 'dnd.imp.why.cloud_not_downloaded': 'chưa tải về máy (ổ cloud)', 'dnd.imp.why.unreadable': 'không đọc được', 'dnd.imp.why.missing': 'không còn trên máy',
+  'dnd.imp.busy': 'Đang nhập một lượt khác: thử lại khi nó xong.', 'dnd.imp.gone': '«{name}» không còn nữa.', 'dnd.imp.fail': 'Không nhập được vào «{name}»: {msg}', 'side.loose': 'Font lẻ',
   'dnd.addTo': 'Thêm vào…', 'dnd.addTo.tip': 'Thêm font đang chọn vào dự án (như kéo thả vào thanh bên)',
 } as const;

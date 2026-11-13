@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Icon, type IconName } from './icons';
 import { useUiStore } from '../../store/ui';
 import { useFaceDragStore } from '../../store/faceDrag';
+import { useFinderDropStore } from '../../store/finderDrop';
 import { Tooltip } from '../ui/Tooltip';
 
 type Props = {
@@ -15,9 +16,11 @@ type Props = {
 export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub, onContextMenu, onRename, context, navId, drop }: Props): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const over = useFaceDragStore(s => (drop && s.drag?.over?.kind === (drop.kind ?? 'col') && s.drag.over.id === drop.id ? (s.drag.over.valid ? 'ok' : 'no') : undefined));
+  const finderOver = useFinderDropStore(s => (drop && s.over?.kind === (drop.kind ?? 'col') && s.over.id === drop.id ? 'ok' : undefined));
+  const finderArmed = useFinderDropStore(s => !!drop && s.armed && (drop.kind ?? 'col') !== 'active' && drop.kind !== 'compare');
   const dragging = useFaceDragStore(s => !!drop && s.drag !== null);
   return (
-    <div className="fa-nav-wrap" data-drop-col={drop && (drop.kind ?? 'col') === 'col' ? drop.id : undefined} data-drop-case={drop?.kind === 'case' ? drop.id : undefined} data-drop-active={drop?.kind === 'active' ? drop.id : undefined} data-drop-compare={drop?.kind === 'compare' ? drop.id : undefined} data-drop-name={drop?.name} data-drop-here={drop?.here ? 'true' : undefined} data-drop-over={over} data-drop-armed={dragging && !drop?.here ? 'true' : undefined}>
+    <div className="fa-nav-wrap" data-drop-col={drop && (drop.kind ?? 'col') === 'col' ? drop.id : undefined} data-drop-case={drop?.kind === 'case' ? drop.id : undefined} data-drop-active={drop?.kind === 'active' ? drop.id : undefined} data-drop-compare={drop?.kind === 'compare' ? drop.id : undefined} data-drop-name={drop?.name} data-drop-here={drop?.here ? 'true' : undefined} data-drop-over={over ?? finderOver} data-drop-armed={(dragging && !drop?.here) || finderArmed ? 'true' : undefined}>
       {/* Thanh bên thu gọn chỉ còn icon → luôn có tooltip; khi mở rộng chỉ hiện nếu có chú thích riêng (đường dẫn, trạng thái). */}
       <Tooltip label={title ?? label} disabled={!collapsed && title === undefined}>
       <button type="button" className={`fa-nav${unavailable ? ' fa-ejected' : ''}`} aria-current={current ? 'true' : undefined}
