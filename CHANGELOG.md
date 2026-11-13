@@ -4,6 +4,52 @@ Mọi thay đổi đáng chú ý của Font Atlas được ghi ở đây.
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/). Số phiên bản theo [Semantic Versioning](https://semver.org/lang/vi/).
 Thuật ngữ typo giữ nguyên tiếng Anh, giống trong app.
 
+## [0.4.0] — 2026-11-13
+
+Pairing Desk mới, kéo thả font vào Sidebar, onboarding mới trên nền kính macOS, xử lý font VF trùng tên với bản static, theo dõi thư mục font trên ổ cloud.
+
+### Thêm mới
+- **Kéo thả font vào Sidebar:**
+  - Kéo một hay nhiều font từ lưới thả vào Dự án hoặc Case. Con trỏ hiện số font đang kéo, vùng thả sáng lên, có Hoàn tác.
+  - Case nay nằm ở Sidebar.
+- **Pairing Desk:**
+  - Nút **+** hiện khi rê chuột qua tên font, để thêm font vào combo.
+  - **+ Role**: thêm vai tuỳ ý (gợi ý Display, Heading, Body, Caption…), đổi tên hoặc bỏ vai, có Hoàn tác.
+  - Cột 2 là nơi gợi ý và chọn font, với 5 nguồn (phím 1–5): font đã pin trong Case hoặc Dự án, font tương tự, font hợp vai, font vừa xem…
+  - Tên combo đặt lên đầu.
+  - Chọn kiểu combo (UI, Editorial, Brand, Packaging/Menu, Poster/Campaign) để nhận combo gợi ý. Có thể nhận cả combo hoặc từng vai.
+  - Tag trục biến thiên (variable axes), vòng tiếng Việt, hàng Glyphs/Δ.
+- **Pair theo vai và phong cách:**
+  - Mỗi font được đánh giá độ hợp vai: Hợp, Tạm hoặc Yếu, kèm lý do, không có điểm số.
+  - Chọn phong cách pair: tương phản serif + sans, cùng họ/superfamily, cùng cấu trúc, cùng thời kỳ, display + chữ trung tính.
+- **Font VF trùng tên với bản static:**
+  - Tên hiển thị trong app thêm hậu tố "VF". File font không bị sửa.
+  - Khi bật font trùng tên, app hỏi một lần: dùng VF, dùng static hay giữ cả hai (có cảnh báo khi giữ cả hai). Có "nhớ lựa chọn".
+- **Ổ cloud:** app theo dõi thay đổi trong thư mục font trên ổ cloud và tự quét lại (bật/tắt trong Cài đặt), kèm gợi ý "Luôn giữ trên máy".
+- **Onboarding mới:**
+  - Bố cục hai mảng. Bên trái là nội dung trên nền kính thật của macOS; máy chưa hỗ trợ thì dùng nền mờ.
+  - Bên phải là minh hoạ phủ kín, đổi theo từng bước.
+  - Chữ đạt độ tương phản 4.5:1 ở cả chế độ sáng và tối.
+
+### Cải thiện
+- **Phân loại:**
+  - Font sans có chữ l đuôi cong (Bellota, Mooli, Ruluko, Aboreto, Genos…) trước đây bị để "Chưa chắc chắn", nay được nhận là Sans.
+  - Serif chân nhỏ (Alegreya, Cormorant Upright, DM Serif Display…) được nhận đúng là Serif.
+  - Không cần quét lại thư viện: phân loại được tính lại từ số đo đã lưu.
+  - Một số font viết tay vẫn có thể ra "Chưa chắc chắn": thà không gán còn hơn gán sai.
+- **Gợi ý pair** dùng lớp phân loại dự đoán khi font còn "Chưa chắc chắn".
+- **Sidebar** tự cập nhật Dự án và Case khi cửa sổ được chọn lại.
+
+### Kiểm thử
+- Bỏ phụ thuộc thời gian trong test.
+- Native QA phủ các tính năng mới, gồm kiểm nền kính của onboarding: đúng một lớp kính, kính theo kích thước cửa sổ và theo chế độ sáng/tối, rời onboarding thì nền cũ trở lại.
+- CI cục bộ bỏ qua các bước có nội dung không đổi, nên lượt chạy lại chỉ còn vài phút thay vì vài giờ.
+
+### Lưu ý
+- Auto-activation trên Illustrator, InDesign và Affinity thật chưa kiểm xong; Photoshop đã kiểm.
+- Theo dõi ổ cloud đã kiểm bằng thư mục tạm, chưa kiểm trên OneDrive thật.
+- Các ngưỡng phân loại mới được chọn sau khi xem kết quả trên chính bộ kiểm, nên số đo cải thiện là trên tập đã chỉnh.
+
 ## [0.3.1] — 2026-11-12
 
 Bản sửa lỗi cho nguồn font trên ổ cloud, hộp thoại xung đột và kiểm thử.
