@@ -17,7 +17,8 @@ Nghĩa là phần còn lại chủ yếu là UI + chuỗi + bằng chứng, khô
 ## 2. Cổng chất lượng: định trước ngưỡng, trước khi thấy kết quả
 
 Bộ mù: 20 gợi ý của mô hình + 10 đối chứng, một người chấm (chủ app) theo Hợp / Tạm / Không. Chỉ 30 mục và một người chấm: đây là
-kiểm khói, không phải thống kê. Đề xuất ngưỡng (Lead và chủ app chốt, chốt **trước** khi chạy `pairing_blind --score`):
+kiểm khói, không phải thống kê. **Ngưỡng dưới đây đã được Lead đồng ý (2026-11-14) và được ghi vào repo TRƯỚC khi có JSON của chủ app**
+(commit này; dấu thời gian git là bằng chứng), áp dụng khi chạy `pairing_blind --score`:
 
 - Gợi ý của mô hình được chấm Hợp hoặc Tạm: **≥ 70 %** (≥ 14/20), và Không: **≤ 15 %** (≤ 3/20).
 - Đối chứng (cặp/vai do mô hình xếp thấp hoặc ngẫu nhiên) chấm Không: **≥ 60 %** (≥ 6/10), để chứng minh chủ app phân biệt được.
