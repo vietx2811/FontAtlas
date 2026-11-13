@@ -123,6 +123,7 @@
       }
       if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
         // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
+        await wait(() => document.querySelector('.fa-stage svg.fa-bp'), 8000); // màn Xong vẽ xong ô minh hoạ
         const vb = document.querySelector('.fa-stage svg.fa-bp')?.getAttribute('viewBox');
         const bw = document.querySelector('.fa-stage svg.fa-bp') ? getComputedStyle(document.querySelector('.fa-stage svg.fa-bp')).borderTopWidth : null;
         btn('Vào thư viện')?.click();
@@ -245,7 +246,7 @@
       await log('advanced-term-tooltips', tt.n >= 17 && tt.bad.length === 0 && tt.art > 0, tt);
       // Weight 600+ bằng bàn phím: lưới đổi số lượng, tóm tắt hiện Weight, nháy đúp thanh = bỏ lọc
       const lo = document.querySelector('[data-axis=weight_class] [data-testid=rs-lo]');
-      lo?.focus(); for (let i = 0; i < 5; i++) key(lo, { key: 'ArrowRight' });
+      lo?.focus(); for (let i = 0; i < 5; i++) { const v0 = lo?.getAttribute('aria-valuenow'); key(lo, { key: 'ArrowRight' }); await wait(() => lo?.getAttribute('aria-valuenow') !== v0, 3000); } // mỗi phím phải được React nhận (giá trị đổi) trước phím kế, không bắn dồn
       await wait(() => /Weight/.test(document.querySelector('[data-testid=filter-summary]')?.textContent ?? '') && total() > 0 && total() < base, 10000);
       const sum = document.querySelector('[data-testid=filter-summary]');
       const after = total();
