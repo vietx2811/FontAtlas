@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { beginFaceDrag, useFaceDragStore } from '../../store/faceDrag';
 import type { FaceRow } from '../../features/library-grid/types';
 import type { Api } from '../../api';
@@ -40,6 +40,10 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
   const [renaming, setRenaming] = useState<ComboRoleDto | null>(null);
   const [draft, setDraft] = useState('');
   const busy = useRef(false);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [ins, setIns] = useState<number | null>(null); // vị trí chèn (0..n) trong các vai đã lưu khi đang kéo tay nắm
+  const gripCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => gripCleanup.current?.(), []);
   const stored = combo.roles; // thứ tự đã lưu ở backend
   const have = new Set(roles.map(r => r.toLowerCase()));
   const suggestions = SUGGESTED_ROLES.filter(r => !have.has(r));
@@ -86,6 +90,38 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
     const next = [...stored]; [next[i], next[j]] = [next[j], next[i]];
     void run(r, async () => { onCombo(await api.reorderComboRoles(combo.id, next)); });
   };
+  /** Kéo vai bằng tay nắm ở đầu hàng: thả vào khe giữa các vai (vạch chèn mảnh hiện vị trí) để đổi thứ tự; Esc huỷ; Hoàn tác trả thứ tự cũ. */
+  const beginGrip = (e: React.PointerEvent, r: ComboRoleDto) => {
+    if (e.button !== 0 || !inStore(r) || gripCleanup.current) return;
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY; let moving = false; let at: number | null = null;
+    const slots = () => [...(listRef.current?.querySelectorAll<HTMLElement>('[data-reorder-index]') ?? [])];
+    const posOf = (y: number): number => { const els = slots(); let n = 0; for (const el of els) { const b = el.getBoundingClientRect(); if (y > b.top + b.height / 2) n++; } return n; };
+    const end = () => {
+      window.removeEventListener('pointermove', onMove, true); window.removeEventListener('pointerup', onUp, true); window.removeEventListener('pointercancel', abort, true);
+      window.removeEventListener('keydown', onKey, true); window.removeEventListener('blur', abort);
+      document.body.style.removeProperty('cursor'); setIns(null); gripCleanup.current = null;
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (!moving) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return; moving = true; document.body.style.cursor = 'grabbing'; }
+      at = posOf(ev.clientY); const i = stored.indexOf(r);
+      setIns(at === i || at === i + 1 ? null : at); // thả ngay chỗ cũ: không có gì đổi
+    };
+    const onUp = () => {
+      const to = at; const i = stored.indexOf(r); const was = moving; end();
+      if (!was || to === null || to === i || to === i + 1) return;
+      const before = [...stored]; const rest = before.filter(x => x !== r); const next = [...rest.slice(0, to > i ? to - 1 : to), r, ...rest.slice(to > i ? to - 1 : to)];
+      void run(r, async () => {
+        onCombo(await api.reorderComboRoles(combo.id, next));
+        say('info', t('role.reordered', { role: roleLabel(r) }), { label: t('role.undo'), run: () => void run(r, async () => { onCombo(await api.reorderComboRoles(combo.id, before)); }) });
+      });
+    };
+    const abort = () => end();
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); end(); } };
+    gripCleanup.current = end;
+    window.addEventListener('pointermove', onMove, true); window.addEventListener('pointerup', onUp, true); window.addEventListener('pointercancel', abort, true);
+    window.addEventListener('keydown', onKey, true); window.addEventListener('blur', abort);
+  };
   const rename = async (r: ComboRoleDto, raw: string) => {
     const name = storedRoleName(raw);
     if (!name || name === r) { setRenaming(null); return; }
@@ -97,12 +133,13 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
   };
 
   return (
-    <ul>
+    <ul ref={listRef}>
       {roles.map(r => {
         const s = slotOf(r); const i = stored.indexOf(r); const gloss = roleGloss(r);
         return (
-          <li key={r} className="fa-desk-roleitem" data-drop-role={r} data-drop-name={roleLabel(r)} data-drop-here={drag?.fromRole === r ? 'true' : undefined}
+          <li key={r} className="fa-desk-roleitem" data-reorder-index={i >= 0 ? i : undefined} data-insert={ins !== null && i >= 0 ? (ins === i ? 'before' : ins === stored.length && i === stored.length - 1 ? 'after' : undefined) : undefined} data-drop-role={r} data-drop-name={roleLabel(r)} data-drop-here={drag?.fromRole === r ? 'true' : undefined}
             data-drop-armed={drag ? 'true' : undefined} data-drop-over={drag?.over?.kind === 'role' && drag.over.role === r ? (drag.over.valid ? 'ok' : 'no') : undefined}>
+            {renaming !== r && inStore(r) && <Tooltip label={t('role.grip')}><span className="fa-desk-rolegrip" data-testid="role-grip" aria-hidden onPointerDown={e => beginGrip(e, r)}>⠿</span></Tooltip>}
             {renaming === r
               ? <input className="fa-desk-roleinput" data-testid="role-rename" aria-label={t('role.rename', { role: roleLabel(r) })} autoFocus defaultValue={roleLabel(r)} maxLength={40}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void rename(r, e.currentTarget.value); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setRenaming(null); } }}

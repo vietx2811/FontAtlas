@@ -121,7 +121,7 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'role.remove': 'Remove role {role}',
   'role.removeTip': 'Remove the role from the Combo (the font stays in the Case)',
   'role.removed': 'Removed role {role}',
-  'role.undo': 'Undo',
+  'role.undo': 'Undo', 'role.grip': 'Drag to reorder roles', 'role.reordered': 'Reordered the {role} role',
   'role.err.invalid': 'A role name needs 1–40 characters, no control characters',
   'role.err.duplicate': 'This Combo already has a role named “{name}” (case-insensitive)',
   'role.err.limit': 'A Combo can have at most 30 roles',

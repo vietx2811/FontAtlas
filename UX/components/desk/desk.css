@@ -105,6 +105,13 @@
 .fa-cloud-skeleton { display: block; height: 18px; width: 70%; margin-bottom: 6px; border-radius: 4px; background: var(--border); opacity: .6; }
 
 .fa-desk-roleitem { position: relative; }
+.fa-desk-rolegrip { position: absolute; left: -2px; top: 50%; transform: translateY(-50%); width: 14px; text-align: center; cursor: grab; color: var(--muted); opacity: 0; user-select: none; touch-action: none; font-size: 12px; line-height: 1; }
+.fa-desk-roleitem:hover .fa-desk-rolegrip, .fa-desk-roleitem:focus-within .fa-desk-rolegrip { opacity: .7; }
+.fa-desk-rolegrip:hover { opacity: 1 !important; color: var(--fg); }
+/* Vạch chèn mảnh khi kéo tay nắm: trước hàng đích, hoặc sau hàng cuối. */
+.fa-desk-roleitem[data-insert="before"]::before, .fa-desk-roleitem[data-insert="after"]::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; z-index: 2; }
+.fa-desk-roleitem[data-insert="before"]::before { top: -1px; }
+.fa-desk-roleitem[data-insert="after"]::after { bottom: -1px; }
 .fa-desk-roleact { position: absolute; top: 4px; right: 4px; display: none; gap: 2px; }
 .fa-desk-roleitem:hover .fa-desk-roleact, .fa-desk-roleitem:focus-within .fa-desk-roleact { display: flex; }
 .fa-desk-roleact button { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--muted); background: var(--card); line-height: 1; }

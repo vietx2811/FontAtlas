@@ -164,6 +164,34 @@ describe('PairingDesk', () => {
     act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60 })); });
   };
 
+  it('G8: kéo tay nắm của một vai vào khe giữa các vai đổi thứ tự (vạch chèn hiện), Hoàn tác trả lại; thả chỗ cũ thì không đổi', async () => {
+    const { api, res } = await seeded();
+    await api.addComboRole(res.comboId, 'caption'); await api.addComboRole(res.comboId, 'Tagline');
+    await mount(api, res);
+    const rolesNow = async () => (await api.getCase(res.case.id)).combos[0].roles;
+    const order = await rolesNow(); expect(order.length).toBeGreaterThanOrEqual(3);
+    const items = [...document.querySelectorAll<HTMLElement>('[data-reorder-index]')];
+    items.forEach((el, i) => { el.getBoundingClientRect = () => ({ top: i * 40, bottom: i * 40 + 40, height: 40, left: 0, right: 100, width: 100, x: 0, y: i * 40, toJSON: () => ({}) }) as DOMRect; });
+    const grip = (i: number) => items[i].querySelector('[data-testid=role-grip]') as HTMLElement;
+    const run = (from: number, y: number) => {
+      act(() => { grip(from).dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: from * 40 + 20 })); });
+      act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 5, clientY: y })); });
+    };
+    run(0, items.length * 40 - 2); // gần đáy hàng cuối → chèn sau hàng cuối
+    expect(document.querySelectorAll('[data-insert]').length).toBe(1);
+    expect(items[items.length - 1].dataset.insert).toBe('after');
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 5, clientY: items.length * 40 - 2 })); }); await settle();
+    expect(await rolesNow()).toEqual([...order.slice(1), order[0]]);
+    expect(document.querySelectorAll('[data-insert]').length).toBe(0);
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/Đã đổi thứ tự/);
+    n.action!.run(); await settle();
+    expect(await rolesNow()).toEqual(order);
+    run(1, 45); // thả ngay trên hàng cũ (giữa hàng 1): không có gì đổi, không có vạch chèn
+    expect(document.querySelectorAll('[data-insert]').length).toBe(0);
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 5, clientY: 45 })); }); await settle();
+    expect(await rolesNow()).toEqual(order);
+  });
+
   it('G8: kéo ứng viên thả lên một vai đặt font vào vai đó, Hoàn tác trả vai về như cũ', async () => {
     const { api, res } = await seeded(); await mount(api, res);
     const display = screen.getAllByTestId('desk-role').find(b => b.dataset.role === 'display')!.closest('li')!;

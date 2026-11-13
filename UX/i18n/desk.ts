@@ -28,7 +28,7 @@ export const DESK_I18N = {
   'role.caption.gloss': 'chú thích nhỏ', 'role.accent.gloss': 'chữ nhấn, nhãn', 'role.quote.gloss': 'trích dẫn', 'role.label.gloss': 'nhãn nhỏ, tên mục, nút', 'role.numerals.gloss': 'chữ số: giá, bảng, ngày tháng',
   'role.add': '+ Role', 'role.add.tip': 'Thêm vai cho Combo này, đặt tên tuỳ ý', 'role.name': 'Tên vai', 'role.name.ph': 'Tên vai, ví dụ Tagline', 'role.suggest': 'Gợi ý tên vai',
   'role.up': 'Chuyển vai {role} lên', 'role.down': 'Chuyển vai {role} xuống', 'role.rename': 'Đổi tên vai {role}', 'role.remove': 'Bỏ vai {role}', 'role.removeTip': 'Bỏ vai khỏi Combo (font vẫn ở trong Case)',
-  'role.removed': 'Đã bỏ vai {role}', 'role.undo': 'Hoàn tác', 'role.err.invalid': 'Tên vai cần 1–40 ký tự, không có ký tự điều khiển', 'role.err.duplicate': 'Combo này đã có vai tên «{name}» (không phân biệt hoa thường)',
+  'role.removed': 'Đã bỏ vai {role}', 'role.undo': 'Hoàn tác', 'role.grip': 'Kéo để đổi thứ tự vai', 'role.reordered': 'Đã đổi thứ tự vai {role}', 'role.err.invalid': 'Tên vai cần 1–40 ký tự, không có ký tự điều khiển', 'role.err.duplicate': 'Combo này đã có vai tên «{name}» (không phân biệt hoa thường)',
   'role.err.limit': 'Một Combo tối đa 30 vai', 'role.err.gone': 'Vai này không còn trong Combo', 'role.err.mismatch': 'Danh sách vai đã đổi: thử lại', 'role.err.other': 'Không đổi được vai: {msg}',
   'peek.openDesk': 'Mở trong Pairing Desk', 'peek.openDeskTip': 'Tạo (hoặc dùng) Case và đặt font này làm {role}; ứng viên đang xem thành lựa chọn thử',
   'peek.occupied.title': 'Thay font ở vai {role}?', 'peek.occupied.body': 'Vai {role} của Combo hiện tại đang dùng {old}. Thay bằng {new}?', 'peek.occupied.replace': 'Thay', 'peek.occupied.keep': 'Giữ {old}',
