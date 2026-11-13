@@ -114,7 +114,7 @@ Cần một tài khoản Figma thử riêng (không phải của chủ app) và 
 | 4 | Font bật bằng kích hoạt của app có xuất hiện trong Figma desktop/web không, cần làm mới gì | Làm cho "Kích hoạt" từ hộp thoại có ý nghĩa với Figma |
 
 Rủi ro:
-- **Phát hành plugin trên Figma Community** cần duyệt và dịch vụ của Figma; có thể phải cấp nhật khi API đổi. Với MVP có thể chỉ dùng plugin phát triển cục bộ (nhập manifest), không cần Community.
+- **Phát hành plugin trên Figma Community** cần duyệt và dịch vụ của Figma; có thể phải cập nhật khi API đổi. Với MVP có thể chỉ dùng plugin phát triển cục bộ (nhập manifest), không cần Community.
 - Tên font Figma ≠ tên thư viện (Google Fonts đặt tên khác, font Adobe, font người dùng đổi tên): sẽ có tỉ lệ không khớp; phải hiển thị thật thà ("không khớp chắc") thay vì đoán.
 - Windows: scheme gắn qua registry (NSIS/MSI cấu hình sẵn) và link tới lần chạy mới qua tham số dòng lệnh; cần single-instance. Chưa thử.
 - Mở rộng sau MVP: nhận link từ Sketch, Adobe (cần plugin riêng mỗi app), lúc đó giao thức `fonts?v=1` giữ nguyên, thêm `src`.
