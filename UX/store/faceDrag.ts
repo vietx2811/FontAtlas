@@ -7,14 +7,17 @@ import { useSelectionStore, rowKey } from './selection';
 
 export type DropKind = 'col' | 'case' | 'active' | 'tag';
 export type DropTarget = { kind: DropKind; id: number; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
-export type FaceDragState = { rows: readonly FaceRow[]; x: number; y: number; over: DropTarget | null };
+/** `moveFrom` = id Dự án đang xem làm nguồn kéo (null: kéo từ nơi không phải Dự án, không có gì để chuyển khỏi); `move` = đang giữ ⌘ (chuyển thay vì thêm). */
+export type FaceDragState = { rows: readonly FaceRow[]; x: number; y: number; over: DropTarget | null; moveFrom: number | null; move: boolean };
 type Store = { drag: FaceDragState | null };
 export const useFaceDragStore = create<Store>()(() => ({ drag: null }));
 
-export type DropHandler = (rows: readonly FaceRow[], target: DropTarget) => void;
+/** `moveFrom`: Dự án nguồn cần gỡ font khỏi khi người dùng giữ ⌘ lúc thả (chuyển); null = chỉ thêm. */
+export type DropHandler = (rows: readonly FaceRow[], target: DropTarget, opts: { moveFrom: number | null }) => void;
 let handler: DropHandler | null = null;
-/** Nơi nhận thao tác thả (Library đăng ký, có `api`). Trả hàm gỡ đăng ký. */
-export function registerFaceDropHandler(h: DropHandler): () => void { handler = h; return () => { if (handler === h) handler = null; }; }
+let sourceOf: () => number | null = () => null;
+/** Nơi nhận thao tác thả (Library đăng ký, có `api`) và cách biết Dự án đang xem (nguồn kéo). Trả hàm gỡ đăng ký. */
+export function registerFaceDropHandler(h: DropHandler, source: () => number | null = () => null): () => void { handler = h; sourceOf = source; return () => { if (handler === h) { handler = null; sourceOf = () => null; } }; }
 
 /** Quá ngưỡng này (px) mới coi là kéo; dưới ngưỡng vẫn là bấm chọn bình thường. */
 export const DRAG_THRESHOLD = 5;
@@ -40,7 +43,9 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
   const sx = e.clientX, sy = e.clientY;
   let dragging = false;
   let rows: readonly FaceRow[] = [];
-  const set = (x: number, y: number) => useFaceDragStore.setState({ drag: { rows, x, y, over: targetAt(x, y) } });
+  let lastX = sx, lastY = sy, meta = false;
+  const moveFrom = sourceOf();
+  const set = (x: number, y: number) => useFaceDragStore.setState({ drag: { rows, x, y, over: targetAt(x, y), moveFrom, move: meta && moveFrom !== null } });
   const onMove = (ev: PointerEvent) => {
     if (!dragging) {
       if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < DRAG_THRESHOLD) return;
@@ -50,13 +55,17 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
       dragging = true;
       document.body.dataset.faceDragging = 'true';
     }
+    meta = ev.metaKey === true; lastX = ev.clientX; lastY = ev.clientY;
     set(ev.clientX, ev.clientY);
   };
+  const onMeta = (ev: KeyboardEvent) => { if (dragging && ev.key === 'Meta') { meta = ev.type === 'keydown'; set(lastX, lastY); } };
   const end = () => {
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerup', onUp, true);
     window.removeEventListener('pointercancel', abort, true);
     window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('keydown', onMeta);
+    window.removeEventListener('keyup', onMeta);
     window.removeEventListener('blur', abort);
     delete document.body.dataset.faceDragging;
     useFaceDragStore.setState({ drag: null });
@@ -70,10 +79,11 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
   };
   const onUp = (ev: PointerEvent) => {
     const was = dragging; const target = was ? targetAt(ev.clientX, ev.clientY) : null; const picked = rows;
+    const mv = (ev.metaKey === true || meta) && moveFrom !== null ? moveFrom : null;
     end();
     if (!was) return;
     swallowClick();
-    if (target?.valid && handler) handler(picked, target);
+    if (target?.valid && handler) handler(picked, target, { moveFrom: mv });
   };
   const abort = () => { const was = dragging; end(); if (was) swallowClick(); };
   const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && dragging) { ev.stopPropagation(); ev.preventDefault(); abort(); } };
@@ -82,5 +92,7 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
   window.addEventListener('pointerup', onUp, true);
   window.addEventListener('pointercancel', abort, true);
   window.addEventListener('keydown', onKey, true);
+  window.addEventListener('keydown', onMeta);
+  window.addEventListener('keyup', onMeta);
   window.addEventListener('blur', abort);
 }

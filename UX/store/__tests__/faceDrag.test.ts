@@ -36,7 +36,7 @@ describe('G1 faceDrag', () => {
     expect(useFaceDragStore.getState().drag?.over).toMatchObject({ id: 7, valid: true });
     expect(document.body.dataset.faceDragging).toBe('true');
     ptr('pointerup', 40, 40);
-    expect(h).toHaveBeenCalledWith([a], expect.objectContaining({ id: 7, name: 'Menu' }));
+    expect(h).toHaveBeenCalledWith([a], expect.objectContaining({ id: 7, name: 'Menu' }), { moveFrom: null });
     expect(useFaceDragStore.getState().drag).toBeNull(); expect(document.body.dataset.faceDragging).toBeUndefined(); off();
   });
 

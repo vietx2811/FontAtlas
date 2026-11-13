@@ -2,7 +2,7 @@ import type { Api } from '../../api';
 import type { FaceRow } from '../../features/library-grid/types';
 import { formatNumber, t, tn } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
-import { rowKey } from '../../store/selection';
+import { dropFromSelection, rowKey } from '../../store/selection';
 import { useUiStore } from '../../store/ui';
 import { faceName } from '../faces/faceMenuModel';
 import type { DropTarget } from '../../store/faceDrag';
@@ -15,28 +15,39 @@ const say = (kind: 'info' | 'error', text: string, action?: { label: string; run
  * Thả font vào một dự án hoặc một Case (G1): chỉ thêm font chưa có, báo kết quả; thông báo có "Hoàn tác" chỉ gỡ đúng phần
  * vừa thêm (font đã có sẵn từ trước không bị gỡ).
  */
-export async function dropFacesInto(api: Api, rows: readonly FaceRow[], target: Pick<DropTarget, 'id' | 'name'> & { kind: 'col' | 'case' }): Promise<void> {
+export async function dropFacesInto(api: Api, rows: readonly FaceRow[], target: Pick<DropTarget, 'id' | 'name'> & { kind: 'col' | 'case' }, opts: { moveFrom?: number | null } = {}): Promise<void> {
   const isCase = target.kind === 'case';
   const name = isCase ? `Case ${target.name}` : target.name; // "Case" là thuật ngữ giữ nguyên ở mọi ngôn ngữ
+  const moveFrom = opts.moveFrom != null && !(target.kind === 'col' && target.id === opts.moveFrom) ? opts.moveFrom : null; // ⌘: chuyển khỏi Dự án đang xem
+  const bumpAfterRemove = (fromView: boolean) => useUiStore.getState().bumpLibrary(fromView);
   try {
     const have = new Set<string>();
     if (isCase) (await api.getCase(target.id)).faces.forEach(f => have.add(`${f.key.hashHex}:${f.key.faceIndex}`));
     else (await api.queryFaces({ collectionId: target.id, faceKeys: rows.map(keyOf), limit: rows.length })).items.forEach(r => have.add(rowKey(r)));
     const fresh = rows.filter(r => !have.has(rowKey(r)));
-    if (!fresh.length) { say('info', t('dnd.allThere', { name })); return; }
-    if (isCase) await api.addToCase(target.id, fresh.map(keyOf)); else await api.addToCollection(target.id, fresh.map(keyOf));
-    useUiStore.getState().bumpLibrary(false);
+    if (!fresh.length && moveFrom === null) { say('info', t('dnd.allThere', { name })); return; }
+    if (fresh.length) { if (isCase) await api.addToCase(target.id, fresh.map(keyOf)); else await api.addToCollection(target.id, fresh.map(keyOf)); }
+    if (moveFrom !== null) {
+      await api.removeFromCollection(moveFrom, rows.map(keyOf));
+      dropFromSelection(rows); // các thẻ này không còn trong truy vấn của Dự án nguồn
+      bumpAfterRemove(true);
+    } else useUiStore.getState().bumpLibrary(false);
     const undo = {
       label: t('dnd.undo'),
       run: () => {
-        (isCase ? api.removeFromCase(target.id, fresh.map(keyOf)).then(() => undefined) : api.removeFromCollection(target.id, fresh.map(keyOf))).then(
-          () => { say('info', t('dnd.undone', { what: what(fresh), name })); useUiStore.getState().bumpLibrary(!isCase && useUiStore.getState().view === `col:${target.id}`); },
+        const back = async () => {
+          if (fresh.length) { if (isCase) await api.removeFromCase(target.id, fresh.map(keyOf)); else await api.removeFromCollection(target.id, fresh.map(keyOf)); }
+          if (moveFrom !== null) await api.addToCollection(moveFrom, rows.map(keyOf));
+        };
+        back().then(
+          () => { say('info', moveFrom !== null ? t('dnd.moveUndone', { what: what(rows) }) : t('dnd.undone', { what: what(fresh), name })); bumpAfterRemove(moveFrom !== null || (!isCase && useUiStore.getState().view === `col:${target.id}`)); },
           e => say('error', t('dnd.undoFail', { msg: (e as Error)?.message ?? String(e) })),
         );
       },
     };
-    say('info', fresh.length === rows.length ? t('faces.addedTo', { what: what(rows), name }) : t('dnd.addedSome', { what: what(fresh), name, k: rows.length - fresh.length }), undo);
-  } catch (e) { say('error', t('dnd.addFail', { name, msg: (e as Error)?.message ?? String(e) })); }
+    if (moveFrom !== null) say('info', t('dnd.moved', { what: what(rows), name }), undo);
+    else say('info', fresh.length === rows.length ? t('faces.addedTo', { what: what(rows), name }) : t('dnd.addedSome', { what: what(fresh), name, k: rows.length - fresh.length }), undo);
+  } catch (e) { say('error', t(moveFrom !== null ? 'dnd.moveFail' : 'dnd.addFail', { name, msg: (e as Error)?.message ?? String(e) })); }
 }
 /** Tên cũ (chỉ dự án), giữ để nơi gọi và test hiện có không đổi. */
 export const dropFacesIntoCollection = (api: Api, rows: readonly FaceRow[], target: { id: number; name: string }): Promise<void> => dropFacesInto(api, rows, { kind: 'col', ...target });
@@ -81,8 +92,8 @@ async function dropFacesOnActive(rows: readonly FaceRow[], extras: DropExtras): 
 }
 
 /** Cửa vào chung của lượt thả font từ lưới: chọn bộ xử lý theo loại đích. */
-export function dropFacesOn(api: Api, rows: readonly FaceRow[], target: DropTarget, extras: DropExtras = {}): Promise<void> {
+export function dropFacesOn(api: Api, rows: readonly FaceRow[], target: DropTarget, extras: DropExtras = {}, opts: { moveFrom?: number | null } = {}): Promise<void> {
   if (target.kind === 'active') return dropFacesOnActive(rows, extras);
   if (target.kind === 'tag') return dropFacesOnTag(api, rows, target);
-  return dropFacesInto(api, rows, { kind: target.kind, id: target.id, name: target.name });
+  return dropFacesInto(api, rows, { kind: target.kind, id: target.id, name: target.name }, opts);
 }

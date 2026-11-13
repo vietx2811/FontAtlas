@@ -115,7 +115,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
 
   // G1: thả font vào một dự án ở thanh bên (xem dropFaces.ts).
   useEffect(() => {
-    const off = registerFaceDropHandler((rows, target) => void dropFacesOn(api, rows, target, { setActive: actions?.setActive }));
+    const off = registerFaceDropHandler((rows, target, opts) => void dropFacesOn(api, rows, target, { setActive: actions?.setActive }, opts), () => { const v = useUiStore.getState().view; return v.startsWith('col:') ? Number(v.slice(4)) : null; });
     return () => { off(); cancelFaceDrag(); };
   }, [api, actions]);
 

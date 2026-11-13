@@ -591,9 +591,9 @@ describe('Sidebar: đích thả font (G1)', () => {
     expect(wrapA.dataset.dropName).toBe('Menu'); expect(wrapA.dataset.dropHere).toBeUndefined(); expect(wrapB.dataset.dropHere).toBe('true');
     expect(wrapA.dataset.dropOver).toBeUndefined();
     const rows = (await api.queryFaces({ limit: 2 })).items as never[];
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: a.id, name: 'Menu', valid: true } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'col', id: a.id, name: 'Menu', valid: true } } }));
     expect(wrapA.dataset.dropOver).toBe('ok'); expect(wrapA.dataset.dropArmed).toBe('true'); expect(wrapB.dataset.dropArmed).toBeUndefined();
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: b.id, name: 'Poster', valid: false } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'col', id: b.id, name: 'Poster', valid: false } } }));
     expect(wrapB.dataset.dropOver).toBe('no'); expect(wrapA.dataset.dropOver).toBeUndefined();
   });
 });
@@ -610,7 +610,7 @@ describe('Sidebar: nhóm Case (G1)', () => {
     const item = container.querySelector(`[data-drop-case="${res.case.id}"]`) as HTMLElement;
     expect(item).toBeTruthy(); expect(item.dataset.dropName).toBe(res.case.name);
     const rows = (await api.queryFaces({ limit: 2 })).items as never[];
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'case', id: res.case.id, name: res.case.name, valid: true } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'case', id: res.case.id, name: res.case.name, valid: true } } }));
     expect(item.dataset.dropOver).toBe('ok');
     act(() => useFaceDragStore.setState({ drag: null }));
     fireEvent.click(item.querySelector('button')!); await settle();

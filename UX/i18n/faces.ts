@@ -83,5 +83,6 @@ export const FACES_I18N = {
   'dnd.tagAllThere': 'Đã có thẻ «{name}»: không gắn thêm', 'dnd.tagSome': 'Đã gắn thẻ «{name}» cho {what} ({k} font đã có thẻ)', 'dnd.tagUndone': 'Đã hoàn tác: gỡ thẻ «{name}» khỏi {what}',
   'dnd.activeDone': 'Đã bật {what}', 'dnd.activeAllThere': 'Các font này đã bật: không làm gì', 'dnd.activeMissing': 'Không bật được: file font đang không có trên máy',
   'dnd.dropTag': 'Thả để gắn thẻ «{name}»', 'dnd.dropActive': 'Thả để bật',
+  'dnd.moveTo': 'Thả để chuyển sang «{name}»', 'dnd.moved': 'Đã chuyển {what} sang «{name}»', 'dnd.moveUndone': 'Đã hoàn tác: đưa {what} về dự án cũ', 'dnd.moveFail': 'Không chuyển được sang «{name}»: {msg}',
   'dnd.addTo': 'Thêm vào…', 'dnd.addTo.tip': 'Thêm font đang chọn vào dự án (như kéo thả vào thanh bên)',
 } as const;

@@ -492,6 +492,35 @@ describe('Library: thêm vào dự án (G1)', () => {
     drop.remove();
   });
 
+  it('kéo từ Dự án A sang B: mặc định thêm (A giữ nguyên); giữ ⌘ thì chuyển (A mất font), Hoàn tác đưa về A', async () => {
+    const api = createMockApi(); const a = await api.createCollection('A', null); const b = await api.createCollection('B', null);
+    const first = (await api.queryFaces({ limit: 1 })).items[0]; await api.addToCollection(a.id, [{ hashHex: first.hashHex, faceIndex: first.faceIndex }]);
+    useUiStore.setState({ view: `col:${a.id}` });
+    await mount(api);
+    const drop = document.createElement('div'); drop.dataset.dropCol = String(b.id); drop.dataset.dropName = 'B'; document.body.appendChild(drop);
+    const drag = (meta: boolean) => {
+      (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => drop;
+      act(() => { cells()[0].dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); });
+      act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 60, clientY: 60, metaKey: meta })); });
+      if (meta) expect(screen.getByText(/chuyển sang/)).toBeTruthy();
+      act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60, metaKey: meta })); });
+    };
+    drag(false); await settle();
+    expect((await api.queryFaces({ collectionId: a.id, limit: 10 })).items).toHaveLength(1);
+    expect((await api.queryFaces({ collectionId: b.id, limit: 10 })).items).toHaveLength(1);
+    await api.removeFromCollection(b.id, [{ hashHex: first.hashHex, faceIndex: first.faceIndex }]);
+    await act(async () => { useUiStore.getState().bumpLibrary(false); }); await settle();
+    drag(true); await settle();
+    expect((await api.queryFaces({ collectionId: a.id, limit: 10 })).items).toHaveLength(0);
+    expect((await api.queryFaces({ collectionId: b.id, limit: 10 })).items).toHaveLength(1);
+    const n = useNoticeStore.getState().notices.at(-1);
+    expect(n?.text).toMatch(/Đã chuyển/);
+    act(() => n?.action?.run()); await settle();
+    expect((await api.queryFaces({ collectionId: a.id, limit: 10 })).items).toHaveLength(1);
+    expect((await api.queryFaces({ collectionId: b.id, limit: 10 })).items).toHaveLength(0);
+    drop.remove();
+  });
+
   it('thả thẻ lên "Đang bật" (data-drop-active) bật font; Hoàn tác tắt lại', async () => {
     const api = createMockApi();
     await mount(api);
