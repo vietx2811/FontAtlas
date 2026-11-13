@@ -102,6 +102,7 @@ export function createTauriApi(): Api {
     addSource: path => call('add_source', { path }),
     removeSource: sourceId => call('remove_source', { sourceId }),
     removeSourcePreview: sourceId => call('remove_source_preview', { sourceId }),
+    rebuildLibrary: () => call('rebuild_library'),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     revealSource: sourceId => none(call('reveal_source', { sourceId })),
     sourceDownloadCloud: (sourceId, onProgress) => call('source_download_cloud', { sourceId, onProgress: channel(onProgress).ch }),

@@ -137,19 +137,19 @@ describe('Settings', () => {
       expect(within(rows[0]).queryByTestId('cloud-hint')).toBeNull();
     });
 
-    it('"Tự phát hiện thay đổi trên ổ cloud" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
+    it('"Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
       const { api } = await mount();
       await go('Thư viện và nguồn');
-      const sw = screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' });
+      const sw = screen.getByRole('switch', { name: 'Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn' });
       expect(sw.getAttribute('aria-checked')).toBe('true');
       expect(document.body.textContent).toMatch(/tự quét lại thư mục đó sau vài giây/);
       const set = vi.spyOn(api, 'setSettings');
       fireEvent.click(sw);
       await settle();
       expect(set).toHaveBeenLastCalledWith({ cloudWatch: false });
-      expect(screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' }).getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole('switch', { name: 'Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn' }).getAttribute('aria-checked')).toBe('false');
       setLocale('en');
-      expect(t('cloud.watch')).toBe('Detect changes on cloud drives automatically');
+      expect(t('cloud.watch')).toBe('Detect fonts added, deleted or changed in source folders automatically');
       expect(t('cloud.watch.note')).toMatch(/rescans that folder/);
       setLocale('vi');
     });

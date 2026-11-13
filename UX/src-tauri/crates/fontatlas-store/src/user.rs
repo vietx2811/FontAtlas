@@ -18,6 +18,10 @@ pub enum SourceKind {
     GoogleFonts,
     AdobeFonts,
     Community,
+    /// G8: font lẻ nhập từng file (thả file font ngoài mọi nguồn); không có thư mục, không quét, không theo dõi.
+    Loose,
+    /// G7b: bản sao đổi tên do Font Atlas tạo; nguồn hệ thống ẩn.
+    Derived,
 }
 
 impl SourceKind {
@@ -28,6 +32,8 @@ impl SourceKind {
             SourceKind::GoogleFonts => "google_fonts",
             SourceKind::AdobeFonts => "adobe_fonts",
             SourceKind::Community => "community",
+            SourceKind::Loose => "loose",
+            SourceKind::Derived => "derived",
         }
     }
     pub fn parse(s: &str) -> Option<SourceKind> {
@@ -37,6 +43,8 @@ impl SourceKind {
             "google_fonts" => SourceKind::GoogleFonts,
             "adobe_fonts" => SourceKind::AdobeFonts,
             "community" => SourceKind::Community,
+            "loose" => SourceKind::Loose,
+            "derived" => SourceKind::Derived,
             _ => return None,
         })
     }
@@ -143,6 +151,18 @@ impl Store {
         let id = tx.last_insert_rowid();
         tx.commit()?;
         Ok(id)
+    }
+
+    /// Với mỗi face của `keys`: đã có trong Dự án `case_id` chưa? (G8: chỉ thêm và chỉ báo "đã thêm" cho face chưa có.)
+    pub fn case_has_faces(&self, case_id: i64, keys: &[FaceKey]) -> Result<Vec<bool>, StoreError> {
+        let mut st = self.conn.prepare("SELECT 1 FROM u.case_faces WHERE case_id=?1 AND hash=?2 AND face_index=?3")?;
+        keys.iter().map(|k| Ok(st.exists(params![case_id, &k.hash[..], k.face_index])?)).collect()
+    }
+
+    /// Như [`Store::case_has_faces`] cho Collection.
+    pub fn collection_has_faces(&self, collection_id: i64, keys: &[FaceKey]) -> Result<Vec<bool>, StoreError> {
+        let mut st = self.conn.prepare("SELECT 1 FROM u.collection_items WHERE collection_id=?1 AND hash=?2 AND face_index=?3")?;
+        keys.iter().map(|k| Ok(st.exists(params![collection_id, &k.hash[..], k.face_index])?)).collect()
     }
 
     pub fn sources(&self) -> Result<Vec<Source>, StoreError> {

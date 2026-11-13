@@ -1,4 +1,5 @@
-//! A2: theo dõi thư mục nguồn nằm trên ổ cloud (File Provider/iCloud) bằng FSEvents (crate `notify`, chỉ backend macOS).
+//! A2 + B8: theo dõi MỌI thư mục nguồn (ổ cloud File Provider/iCloud, ổ ngoài, thư mục cục bộ) bằng FSEvents
+//! (crate `notify`, chỉ backend macOS). Công tắc "Tự phát hiện thay đổi" (khoá `cloud_watch`, tên cũ giữ cho tương thích) mặc định bật.
 //!
 //! Sự kiện chỉ để ĐÁNH THỨC: không mang dữ liệu, không quyết định gì. Sau khi yên lặng một lúc (hoặc tối đa `max_wait`)
 //! xếp MỘT lượt quét lại cho đúng nguồn đó bằng `ScanManager::enqueue_follow_up`; quét (so size/mtime/cờ dataless) vẫn là
@@ -11,7 +12,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use fontatlas_store::{FONT_EXTENSIONS, SourceKind, cloud_provider_of};
+use fontatlas_store::{FONT_EXTENSIONS, SourceKind};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::state::AppState;
@@ -22,7 +23,8 @@ pub const QUIET: Duration = Duration::from_secs(2);
 pub const MAX_WAIT: Duration = Duration::from_secs(30);
 
 /// Sự kiện này có đáng đánh thức không? Chỉ nhìn tên (không chạm đĩa): font, stub iCloud, hoặc thư mục (không đuôi).
-/// Bỏ file/thư mục ẩn (trừ stub `.Tên.ttf.icloud`), file tạm của hệ thống (`*.sb-*`, `~$*`, `.tmp`, `.part`).
+/// Bỏ file/thư mục ẩn (trừ stub `.Tên.ttf.icloud`), file tạm/đang tải dở (`*.sb-*`, `~$*`, `~`, `.tmp`, `.temp`, `.part`, `.partial`,
+/// `.crdownload`, `.download`, `.opdownload`, `.aria2`, `.swp`).
 ///
 /// `roots`: đường dẫn nguồn như người dùng thêm VÀ dạng đã `canonicalize` (FSEvents báo đường dẫn thật, vd `/private/var`).
 /// Chỉ xét phần BÊN DƯỚI gốc: thư mục ẩn nằm phía trên nguồn (vd `~/.cache/…`) không làm nguồn bị bỏ qua.
@@ -38,7 +40,8 @@ pub fn is_relevant(path: &Path, roots: &[PathBuf]) -> bool {
         return false;
     }
     let l = last.to_ascii_lowercase();
-    if l.contains(".sb-") || l.starts_with("~$") || l.ends_with(".tmp") || l.ends_with(".part") || l.ends_with(".crdownload") {
+    const PARTIAL: [&str; 10] = [".tmp", ".temp", ".part", ".partial", ".crdownload", ".download", ".opdownload", ".aria2", ".swp", "~"];
+    if l.contains(".sb-") || l.starts_with("~$") || PARTIAL.iter().any(|x| l.ends_with(x)) {
         return false;
     }
     if is_stub {
@@ -107,8 +110,6 @@ struct Watch {
 
 /// Các luồng theo dõi: mỗi nguồn cloud đang bật một watcher; một luồng gom và xếp quét.
 pub struct CloudWatch {
-    /// Chỉ cho test: coi mọi thư mục là ổ cloud (thư mục tạm không nằm dưới CloudStorage).
-    all_cloud: std::sync::atomic::AtomicBool,
     quiet: Duration,
     max_wait: Duration,
     inner: Mutex<Inner>,
@@ -133,12 +134,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 impl CloudWatch {
     pub fn with_timing(quiet: Duration, max_wait: Duration) -> Self {
-        CloudWatch { all_cloud: Default::default(), quiet, max_wait, inner: Mutex::new(Inner::default()) }
-    }
-
-    #[doc(hidden)]
-    pub fn treat_all_as_cloud_for_test(&self, on: bool) {
-        self.all_cloud.store(on, std::sync::atomic::Ordering::SeqCst);
+        CloudWatch { quiet, max_wait, inner: Mutex::new(Inner::default()) }
     }
 
     /// Các nguồn đang được theo dõi (cho test/chẩn đoán).
@@ -148,15 +144,10 @@ impl CloudWatch {
         v
     }
 
-    /// Đồng bộ danh sách watcher với nguồn hiện tại: nguồn thư mục đang bật nằm trên ổ cloud (và đang truy cập được) có
-    /// watcher; nguồn bị tắt/xoá/ngắt kết nối thì dừng. Gọi lại bao nhiêu lần cũng được.
+    /// Đồng bộ danh sách watcher với nguồn hiện tại: MỌI nguồn thư mục đang bật và đang truy cập được có watcher; nguồn bị
+    /// tắt/xoá/ngắt kết nối (ổ rút) thì dừng. Gọi lại bao nhiêu lần cũng được; ổ cắm lại thì lần `sync` sau (thêm/gỡ nguồn,
+    /// mở app, đổi công tắc) theo dõi lại.
     pub fn sync(&self, state: &Arc<AppState>) {
-        let all = self.all_cloud.load(std::sync::atomic::Ordering::SeqCst);
-        self.sync_with(state, &|p| all || cloud_provider_of(p).is_some());
-    }
-
-    /// Như `sync` nhưng `is_cloud` do bên gọi quyết (test dùng thư mục tạm, không có ổ cloud thật).
-    pub fn sync_with(&self, state: &Arc<AppState>, is_cloud: &dyn Fn(&Path) -> bool) {
         // công tắc "Tự phát hiện thay đổi trên ổ cloud" (mặc định bật); tắt = không nguồn nào được theo dõi
         let enabled = state.with_user(|u| Ok(u.setting(crate::services::keys::CLOUD_WATCH)?)).ok().flatten().is_none_or(|v| v != "0" && v != "false");
         let want: HashMap<i64, PathBuf> = state
@@ -165,7 +156,7 @@ impl CloudWatch {
             .into_iter()
             .filter(|s| enabled && s.kind == SourceKind::Directory && s.enabled)
             .filter_map(|s| s.path.map(|p| (s.id, PathBuf::from(p))))
-            .filter(|(_, p)| is_cloud(p) && crate::services::sources::root_available(&p.to_string_lossy()))
+            .filter(|(_, p)| crate::services::sources::root_available(&p.to_string_lossy()))
             .collect();
         let mut g = lock(&self.inner);
         let stale: Vec<i64> = g.watches.iter().filter(|(id, w)| want.get(id) != Some(&w.root)).map(|(id, _)| *id).collect();
@@ -299,7 +290,10 @@ mod tests {
         for ok in ["/r/a.ttf", "/r/sub/B.OTF", "/r/sub", "/r/.Name.ttf.icloud", "/r/x/.Name.otf.icloud", "/r"] {
             assert!(is_relevant(Path::new(ok), &root), "{ok}");
         }
-        for no in ["/r/a.txt", "/r/.DS_Store", "/r/.hidden/a.ttf", "/r/a.ttf.sb-82369e39-LTUTFh", "/r/~$a.ttf", "/r/a.ttf.part", "/r/readme.md"] {
+        for no in [
+            "/r/a.txt", "/r/.DS_Store", "/r/.hidden/a.ttf", "/r/a.ttf.sb-82369e39-LTUTFh", "/r/~$a.ttf", "/r/a.ttf.part", "/r/readme.md",
+            "/r/a.ttf.download", "/r/a.otf.crdownload", "/r/a.ttf.partial", "/r/a.ttf~", "/r/a.ttf.swp", "/r/a.ttf.aria2", "/r/a.ttf.temp",
+        ] {
             assert!(!is_relevant(Path::new(no), &root), "{no}");
         }
         // gốc nằm dưới thư mục ẩn / qua symlink (/var → /private/var): chỉ xét phần dưới gốc

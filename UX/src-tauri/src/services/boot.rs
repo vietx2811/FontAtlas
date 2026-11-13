@@ -53,6 +53,16 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
             return snapshot(state);
         }
     };
+    let mut store = store;
+    // lần gỡ nguồn bị ngắt giữa hai DB (crash/mất điện) để lại vị trí mồ côi: dọn. Bỏ qua khi user.db vừa bị thay
+    // (hỏng → bản mới) hoặc library vừa dựng lại, vì lúc đó danh sách nguồn không còn đáng tin để so.
+    if report.user_backup.is_none() && !report.library_recreated {
+        match store.sweep_orphan_locations() {
+            Ok(n) if n > 0 => log::warn!("dọn {n} vị trí file mồ côi của nguồn đã gỡ dở"),
+            Ok(_) => {}
+            Err(e) => log::warn!("dọn vị trí mồ côi lỗi: {e}"),
+        }
+    }
     let _ = state.store.set(Mutex::new(store));
     let _ = state.user.set(Mutex::new(user));
     if let Ok(mut b) = state.boot.write() {
@@ -90,10 +100,23 @@ fn after_ready(state: &Arc<AppState>) {
         let _ = state.scans.enqueue_all_directories(state);
     }
     mark_analyzer_seen_if_current(state);
+    refresh_loose_fonts(state);
     state.cloud_watch.sync(state);
     let _ = crate::services::embed::ensure_started(state);
     crate::services::langs::ensure_started(state);
     crate::services::cases::purge_trash(state);
+}
+
+/// Font lẻ (G8) không có thư mục để quét: đối chiếu từng file (còn/mất, đã tải/chưa) mỗi lần mở app.
+fn refresh_loose_fonts(state: &Arc<AppState>) {
+    let ids: Vec<i64> = state
+        .with_user(|u| Ok(u.sources()?.into_iter().filter(|s| s.kind == fontatlas_store::SourceKind::Loose).map(|s| s.id).collect()))
+        .unwrap_or_default();
+    for id in ids {
+        if let Err(e) = state.with_store(|s| Ok(s.refresh_file_source(id)?)) {
+            log::warn!("làm mới font lẻ lỗi: {}", e.message);
+        }
+    }
 }
 
 /// Ghi `analyzer_version_seen` khi mọi face đã có bản phân tích theo phiên bản hiện tại.

@@ -521,7 +521,7 @@ fn cloud_watch_rescans_the_source_after_a_font_appears_and_disappears() {
     assert_eq!(all(&st).total, 1);
     // test dùng thời gian rút ngắn; trong app mặc định là QUIET 2 s / MAX 30 s
     let w = CloudWatch::with_timing(Duration::from_millis(300), Duration::from_secs(3));
-    w.sync_with(&st, &|_| true);
+    w.sync(&st);
     assert_eq!(w.watching().len(), 1);
     std::thread::sleep(Duration::from_millis(600)); // cho luồng FSEvents sẵn sàng
 
@@ -534,15 +534,13 @@ fn cloud_watch_rescans_the_source_after_a_font_appears_and_disappears() {
 }
 
 #[test]
-fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources() {
+fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_sources() {
     use app_lib::services::cloud_watch::CloudWatch;
     let d = tempfile::tempdir().unwrap();
     let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
     let w = CloudWatch::with_timing(Duration::from_millis(200), Duration::from_secs(2));
-    w.sync_with(&st, &|_| false);
-    assert!(w.watching().is_empty(), "không phải ổ cloud thì không theo dõi");
-    w.sync_with(&st, &|_| true);
-    assert_eq!(w.watching().len(), 1);
+    w.sync(&st);
+    assert_eq!(w.watching().len(), 1, "B8: thư mục cục bộ (không phải ổ cloud) cũng được theo dõi");
     std::thread::sleep(Duration::from_millis(600));
     let queued = Arc::new(std::sync::atomic::AtomicU32::new(0));
     let q2 = queued.clone();
@@ -553,6 +551,10 @@ fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources
     }));
     std::fs::write(dir.join("notes.txt"), b"x").unwrap();
     std::fs::write(dir.join(".DS_Store"), b"x").unwrap();
+    // file tạm / đang tải dở mang đuôi font: không gây quét
+    for n in ["x.ttf.download", "y.otf.crdownload", "z.ttf.part", "w.ttf~"] {
+        std::fs::write(dir.join(n), b"half").unwrap();
+    }
     std::thread::sleep(Duration::from_millis(1500));
     assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 0, "file không phải font không gây quét");
     // một cụm 30 thay đổi font chỉ ra đúng MỘT lượt quét
@@ -563,8 +565,26 @@ fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_or_non_cloud_sources
     std::thread::sleep(Duration::from_millis(1200));
     assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 1, "cụm sự kiện được gom thành một lượt");
     sources::remove_source(&st, 1).unwrap();
-    w.sync_with(&st, &|_| true);
+    w.sync(&st);
     assert!(w.watching().is_empty(), "nguồn đã xoá thì dừng theo dõi");
+    w.shutdown();
+}
+
+#[test]
+fn watcher_follows_the_volume_unplugged_stops_and_replugged_watches_again() {
+    use app_lib::services::cloud_watch::CloudWatch;
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
+    let w = CloudWatch::with_timing(Duration::from_millis(200), Duration::from_secs(2));
+    w.sync(&st);
+    assert_eq!(w.watching().len(), 1);
+    let away = dir.with_file_name("Fonts_unplugged");
+    std::fs::rename(&dir, &away).unwrap();
+    w.sync(&st);
+    assert!(w.watching().is_empty(), "ổ rút: dừng theo dõi, không báo gì");
+    std::fs::rename(&away, &dir).unwrap();
+    w.sync(&st);
+    assert_eq!(w.watching().len(), 1, "ổ cắm lại: theo dõi lại");
     w.shutdown();
 }
 
@@ -575,7 +595,6 @@ fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
     let d = tempfile::tempdir().unwrap();
     let (st, _dir) = scanned(d.path(), &["open_sans.ttf"]);
     assert!(settings::get_settings(&st).unwrap().cloud_watch, "mặc định BẬT");
-    st.cloud_watch.treat_all_as_cloud_for_test(true);
     st.cloud_watch.sync(&st);
     assert_eq!(st.cloud_watch.watching().len(), 1);
 
@@ -601,4 +620,127 @@ fn name_clashes_command_is_empty_when_names_differ_and_reads_only() {
     assert!(library::name_clashes(&st).unwrap().is_empty());
     // chỉ đọc: file trên đĩa không đổi
     assert_eq!(std::fs::read(dir.join("oswald_vf.ttf")).unwrap(), std::fs::read(core_fixture("oswald_vf.ttf")).unwrap());
+}
+
+#[test]
+fn rebuild_library_clears_the_library_keeps_user_data_and_the_rescan_brings_fonts_back() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let rows = all(&st).items;
+    let a = key_of(&rows[0]);
+    library::set_favorite(&st, &a, true).unwrap();
+    let tag = library::create_tag(&st, "retro").unwrap();
+    library::tag_faces(&st, tag.id, std::slice::from_ref(&a)).unwrap();
+    let case = cases::create_case(&st, Some("Dự án"), None, None).unwrap();
+    cases::add_to_case(&st, Some(case.id), std::slice::from_ref(&a), None).unwrap();
+
+    let r = sources::rebuild_library(&st).unwrap();
+    assert_eq!((r.files_removed, r.locations_removed, r.sources_queued), (2, 2, 1));
+    assert!(r.faces_removed >= 2);
+    // nguồn và dữ liệu người dùng còn nguyên ngay sau khi xoá
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1);
+    assert_eq!(library::list_tags(&st).unwrap()[0].face_count, 1);
+
+    // quét lại chạy ngầm: font trở về, yêu thích/Dự án khớp lại theo hash
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert_eq!(all(&st).total, 2);
+    let fav = library::query_faces(&st, &FaceQueryDto { favorites_only: true, ..Default::default() }).unwrap();
+    assert_eq!((fav.total, fav.items[0].hash_hex.clone()), (1, a.hash_hex.clone()));
+    assert!(!cases::get_case(&st, case.id).unwrap().faces[0].missing);
+}
+
+#[test]
+fn boot_sweeps_locations_left_behind_by_an_interrupted_source_removal() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _dir) = scanned(d.path(), &["roboto.ttf"]);
+    let src = sources::list_sources(&st).unwrap()[0].id;
+    // mô phỏng crash sau khi u.sources đã commit và trước khi xoá vị trí
+    st.with_store(|s| {
+        let _ = s.remove_source_with(src, &mut || Err(fontatlas_store::StoreError::Invalid("crash".into())));
+        Ok(())
+    })
+    .unwrap();
+    let n = st.with_store(|s| Ok(s.conn().query_row("SELECT count(*) FROM file_locations", [], |r| r.get::<_, i64>(0)).unwrap())).unwrap();
+    assert_eq!(n, 1, "vị trí mồ côi còn lại sau crash");
+    drop(st);
+
+    let st = booted(d.path());
+    let n = st.with_store(|s| Ok(s.conn().query_row("SELECT count(*) FROM file_locations", [], |r| r.get::<_, i64>(0)).unwrap())).unwrap();
+    assert_eq!(n, 0, "khởi động lại dọn vị trí mồ côi");
+    assert_eq!(all(&st).total, 0);
+}
+
+fn target_case(st: &Arc<AppState>) -> app_lib::dto::library::ImportTargetDto {
+    let c = cases::create_case(st, Some("Nhập"), None, None).unwrap();
+    app_lib::dto::library::ImportTargetDto { kind: app_lib::dto::library::ImportTargetKindDto::Case, id: c.id }
+}
+
+fn import(st: &Arc<AppState>, paths: &[&Path], t: &app_lib::dto::library::ImportTargetDto) -> Result<ImportResultDto, app_lib::error::CmdError> {
+    app_lib::services::import::import_paths_into(st, paths.iter().map(|p| p.to_string_lossy().into_owned()).collect(), t, &mut |_| {})
+}
+
+#[test]
+fn dropping_a_folder_adds_it_as_a_source_and_only_its_faces_to_the_case_then_reports_already_there() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let fonts = d.path().join("Dropped");
+    std::fs::create_dir_all(&fonts).unwrap();
+    for n in ["roboto.ttf", "open_sans.ttf"] {
+        std::fs::copy(core_fixture(n), fonts.join(n)).unwrap();
+    }
+    let t = target_case(&st);
+    let r = import(&st, &[&fonts], &t).unwrap();
+    assert_eq!((r.added.len(), r.already_there, r.skipped.len(), r.cancelled), (2, 0, 0, false));
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1, "thư mục thả vào trở thành nguồn");
+    assert_eq!(cases::get_case(&st, t.id).unwrap().faces.len(), 2);
+    let again = import(&st, &[&fonts], &t).unwrap();
+    assert_eq!((again.added.len(), again.already_there), (0, 2), "không thêm trùng, báo đã có");
+}
+
+#[test]
+fn dropping_one_loose_file_does_not_turn_its_folder_into_a_source() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let dl = d.path().join("Downloads");
+    std::fs::create_dir_all(&dl).unwrap();
+    std::fs::copy(core_fixture("roboto.ttf"), dl.join("roboto.ttf")).unwrap();
+    std::fs::copy(core_fixture("open_sans.ttf"), dl.join("open_sans.ttf")).unwrap();
+    std::fs::write(dl.join("readme.txt"), b"x").unwrap();
+    let t = target_case(&st);
+    assert!(sources::list_sources(&st).unwrap().is_empty());
+    let r = import(&st, &[&dl.join("roboto.ttf"), &dl.join("readme.txt"), &dl.join("ghost.ttf")], &t).unwrap();
+    assert_eq!(r.added.len(), 1, "chỉ đúng một font được thả");
+    let reasons: Vec<_> = r.skipped.iter().map(|s| (s.path.rsplit('/').next().unwrap().to_string(), s.reason.clone())).collect();
+    assert_eq!(reasons, vec![("readme.txt".to_string(), "not_font".to_string()), ("ghost.ttf".to_string(), "missing".to_string())]);
+    let list = sources::list_sources(&st).unwrap();
+    assert_eq!((list.len(), list[0].kind.as_str(), list[0].path.is_none(), list[0].face_count), (1, "loose", true, r.added.len() as u32));
+    assert_eq!(all(&st).total, 1, "open_sans.ttf cạnh đó KHÔNG vào thư viện");
+}
+
+#[test]
+fn dropping_one_file_inside_an_existing_source_adds_only_that_face() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf"]);
+    let t = target_case(&st);
+    let r = import(&st, &[&dir.join("open_sans.ttf")], &t).unwrap();
+    assert_eq!((r.added.len(), r.skipped.len()), (1, 0));
+    assert_eq!(cases::get_case(&st, t.id).unwrap().faces.len(), 1);
+    assert_eq!(sources::list_sources(&st).unwrap().len(), 1, "không thêm nguồn mới");
+}
+
+#[test]
+fn import_into_a_collection_rejects_unknown_targets_and_cancel_is_false_when_idle() {
+    use app_lib::dto::library::{ImportTargetDto, ImportTargetKindDto};
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let f = d.path().join("roboto.ttf");
+    std::fs::copy(core_fixture("roboto.ttf"), &f).unwrap();
+    let bad = ImportTargetDto { kind: ImportTargetKindDto::Collection, id: 999 };
+    assert_eq!(import(&st, &[&f], &bad).unwrap_err().code, "not_found");
+    let col = library::create_collection(&st, "Bộ", None).unwrap();
+    let t = ImportTargetDto { kind: ImportTargetKindDto::Collection, id: col.id };
+    let r = import(&st, &[&f], &t).unwrap();
+    assert_eq!(r.added.len(), 1);
+    assert_eq!(library::list_collections(&st).unwrap()[0].item_count, 1);
+    assert!(!app_lib::services::import::cancel_import(&st), "không có lượt nào để huỷ");
 }

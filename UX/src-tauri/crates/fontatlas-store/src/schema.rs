@@ -629,7 +629,28 @@ INSERT INTO combo_slots (combo_id, role, ord, hash, face_index, note, style)
 DROP TABLE combo_slots_v6;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES];
+/// Nới CHECK của `sources.kind` thêm `loose` (G8: font lẻ) và `derived` (G7b: bản sao đổi tên); SQLite không sửa được CHECK nên dựng lại bảng
+/// (không bảng nào có FK trỏ vào `sources`). Số phiên bản do vị trí trong `USER_MIGRATIONS` quyết định: khi merge cạnh migration của nhánh
+/// khác (B5 `USER_CASE_APPS`…) chỉ cần đổi thứ tự mục trong danh sách.
+pub(crate) const USER_SOURCE_KINDS: &str = r#"
+CREATE TABLE sources_new (
+  source_id  INTEGER PRIMARY KEY,
+  legacy_id  TEXT UNIQUE,
+  kind       TEXT NOT NULL CHECK (kind IN ('directory','system','google_fonts','adobe_fonts','community','loose','derived')),
+  name       TEXT NOT NULL,
+  path       TEXT,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  priority   INTEGER
+);
+INSERT INTO sources_new(source_id,legacy_id,kind,name,path,enabled,created_at,priority)
+  SELECT source_id,legacy_id,kind,name,path,enabled,created_at,priority FROM sources;
+DROP TABLE sources;
+ALTER TABLE sources_new RENAME TO sources;
+CREATE UNIQUE INDEX sources_kind_path ON sources(kind, COALESCE(path, ''));
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
