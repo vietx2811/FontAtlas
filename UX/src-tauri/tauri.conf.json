@@ -66,5 +66,12 @@
       "Resources/THIRD-PARTY-NOTICES.txt": "resources/THIRD-PARTY-NOTICES.txt"
       }
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["fontatlas-dev"]
+      }
+    }
   }
 }

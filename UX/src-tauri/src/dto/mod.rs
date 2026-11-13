@@ -10,4 +10,5 @@ pub mod library;
 pub mod model;
 pub mod preview;
 pub mod settings;
+pub mod figma;
 pub mod suggest;

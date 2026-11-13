@@ -31,6 +31,7 @@ pub mod pairs;
 pub mod scan;
 pub mod settings;
 pub mod sources;
+pub mod figma;
 pub mod suggest;
 pub mod suggest_pair;
 pub mod system;

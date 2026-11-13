@@ -1,3 +1,4 @@
+import { FigmaImportHost } from './components/figma/FigmaImportHost';
 import React, { useEffect, useState } from 'react';
 import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
@@ -102,6 +103,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
             </div>
         </WindowShell>
         <ActivationDialogHost api={api} />
+        <FigmaImportHost api={api} />
         </FaceActionsProvider>
     );
 };
