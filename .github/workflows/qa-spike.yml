@@ -1,0 +1,42 @@
+name: qa-spike
+# Spike (chạy tay): native QA (UX/src-tauri/tests/qa/run.sh) có chạy được trên runner macOS không?
+# Cần phiên GUI, WKWebView chụp ảnh, đăng ký font CoreText theo phiên. Chỉ báo cáo, không chặn gì.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-spike-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  native-qa:
+    runs-on: macos-14
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'UX/src-tauri -> target', prefix-key: ci-macos }
+      - name: Phiên máy (GUI? màn hình?)
+        run: |
+          sw_vers; uname -m
+          echo "console user: $(stat -f%Su /dev/console)"; echo "whoami: $(whoami)"
+          launchctl managername || true
+          system_profiler SPDisplaysDataType | head -20 || true
+          screencapture -x /tmp/probe.png && ls -la /tmp/probe.png || echo "screencapture THẤT BẠI"
+      - name: Build debug bundle
+        working-directory: UX
+        run: |
+          npm ci
+          npx --yes @tauri-apps/cli@2.9.6 build --debug --bundles app
+      - name: Native QA
+        env: { FONTATLAS_QA_NO_GUARD: '1' }
+        run: bash UX/src-tauri/tests/qa/run.sh 2>&1 | tee qa.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: qa-spike-logs, path: qa.log, if-no-files-found: ignore }
