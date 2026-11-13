@@ -35,8 +35,11 @@ FaceMatchDto { face: FaceKeyDto, family, style, via: "style" | "ps_name" | "fami
 - Chỉ đọc Index; không đụng file font; bỏ face `missing` khỏi `exact` nhưng vẫn trả kèm `missing=true` để báo "mất file".
 - Hiệu năng: 200 mục < 50 ms (tra theo bảng băm family chuẩn hoá dựng sẵn trong `IndexBundle`, không quét tuyến tính).
 
+### `take_pending_imports() -> Vec<PendingImportDto>` (đã làm, SHA ở báo cáo)
+Hàng đợi link `fontatlas://` (trần 10). Backend nhận URL qua `RunEvent::Opened` của macOS (không cần crate deep-link: Info.plist do bundler tạo từ `plugins.deep-link.desktop.schemes` trong `tauri.conf.json`), phân tích, xếp hàng, phát sự kiện `figma-import-pending` và focus cửa sổ. Giao diện gọi lệnh này **lúc khởi động** (mở lạnh) và mỗi khi nhận sự kiện. Link sai định dạng vẫn xếp, với `error` = mã lỗi. Scheme khác `fontatlas://` bị bỏ.
+
 ### Tạo Case: dùng lệnh sẵn có
-`create_case(name = "Figma: <file>")` rồi `add_to_case(case_id, faces, origin)`. Thêm giá trị `figma` vào `CaseOriginDto` (chỉ chuỗi, không đổi lược đồ DB nếu cột là TEXT; kiểm lại khi làm). Font `exact` tự vào; `ambiguous` chỉ vào sau khi người dùng chọn; `none`/`family_only` không vào, nằm trong danh sách "thiếu" của hộp thoại.
+`create_case(name = "Figma: <file>")` rồi `add_to_case(case_id, faces, origin)`. **Dùng origin `added`**: cột `case_faces.origin` có CHECK ('added','pinned','brief','peek'), thêm `figma` cần migration dựng lại bảng. Nguồn Figma ghi trong tên Case. Font `exact` tự vào; `ambiguous` chỉ vào sau khi người dùng chọn; `none`/`family_only` không vào, nằm trong danh sách "thiếu" của hộp thoại.
 
 ### Font thiếu → hành động sẵn có
 "Tìm font tương tự" = `similar` (anchor là font gần nhất cùng họ nếu có, nếu không thì không có anchor và UI nói rõ). "Kích hoạt" = lệnh kích hoạt hiện có cho `active=false`.

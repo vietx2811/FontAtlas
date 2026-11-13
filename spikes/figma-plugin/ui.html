@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>body{font:12px system-ui;margin:12px}button{margin:4px 4px 0 0}#n{font-weight:600}</style>
+<div id="n">Đang quét…</div>
+<div id="miss"></div>
+<label><input type="checkbox" id="nofile"> Không gửi tên file</label><br>
+<button id="copy">Sao chép cho Font Atlas</button>
+<a id="open" target="_blank">Mở trong Font Atlas</a>
+<script>
+// Bản thử: dựng link ở UI (btoa) để không phụ thuộc Node. Cùng định dạng với collect.js#toLink.
+let state = null;
+function b64url(s){ return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function payload(){
+  return JSON.stringify({ v:1, src:'figma', file: document.getElementById('nofile').checked ? undefined : state.file,
+    fonts: state.fonts.map(f => [f.family, f.style, f.missing ? 1 : 0]) });
+}
+onmessage = e => {
+  const m = e.data.pluginMessage; if (!m || m.type !== 'fonts') return;
+  state = m;
+  document.getElementById('n').textContent = m.fonts.length + ' font (' + m.scope + ')';
+  const miss = m.fonts.filter(f => f.missing).length;
+  document.getElementById('miss').textContent = miss ? miss + ' font Figma báo thiếu' : '';
+  document.getElementById('open').href = 'fontatlas://fonts?v=1&d=' + b64url(payload());
+};
+document.getElementById('copy').onclick = () => {
+  const t = document.createElement('textarea'); t.value = payload(); document.body.appendChild(t); t.select();
+  document.execCommand('copy'); t.remove(); // navigator.clipboard có thể bị chặn quyền trong iframe plugin
+};
+</script>
