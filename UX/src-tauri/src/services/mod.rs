@@ -7,6 +7,7 @@ pub mod dup_pick;
 pub mod dup_resolve;
 pub mod duplicates;
 pub mod boot;
+pub mod app_sets;
 pub mod auto;
 pub mod broker;
 pub mod cep;

@@ -55,6 +55,17 @@ pub trait ActivationApi: Send + Sync {
     fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// B5: đồng bộ font của Case theo tập app đang chạy (bundle id). Xem `fontatlas_activate::app_sets`.
+    fn sync_app_sets(
+        &self,
+        s: &Mutex<Store>,
+        running: &std::collections::HashSet<String>,
+        now: std::time::Instant,
+        grace: std::time::Duration,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError>;
+    /// B5: gỡ mọi lý do `caseapp:*` (lúc thoát, trước `shutdown`).
+    fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
     /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
     /// "Thay bằng bản này" chỉ trên các xung đột đã xác nhận.
@@ -130,6 +141,19 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
     }
+    fn sync_app_sets(
+        &self,
+        s: &Mutex<Store>,
+        running: &std::collections::HashSet<String>,
+        now: std::time::Instant,
+        grace: std::time::Duration,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError> {
+        ActivationService::sync_app_sets(self, s, running, now, grace, tracker)
+    }
+    fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
+        ActivationService::release_all_case_apps(self, s)
+    }
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         ActivationService::restore_replaced(self, s, id)
     }
@@ -189,6 +213,19 @@ impl ActivationApi for NoActivation {
         Ok(ReconcileReport::default())
     }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
+        Ok(0)
+    }
+    fn sync_app_sets(
+        &self,
+        _: &Mutex<Store>,
+        _: &std::collections::HashSet<String>,
+        _: std::time::Instant,
+        _: std::time::Duration,
+        _: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError> {
+        Ok(vec![])
+    }
+    fn release_all_case_apps(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
     }
     fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
@@ -509,6 +546,11 @@ pub fn before_delete_collection(state: &AppState, id: i64) -> Result<(), CmdErro
 pub fn on_exit(state: &AppState) {
     if !state.activation.supported() {
         return;
+    }
+    if let Ok(store) = state.store()
+        && let Err(e) = state.activation.release_all_case_apps(store)
+    {
+        log::warn!("gỡ lý do app của Case lúc thoát lỗi: {e}");
     }
     if let Ok(store) = state.store()
         && let Err(e) = state.activation.shutdown(store)

@@ -69,6 +69,7 @@ pub struct AppState {
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
     /// Theo dõi thay đổi thư mục nguồn cloud (FSEvents) để xếp quét lại.
     pub cloud_watch: crate::services::cloud_watch::CloudWatch,
+    pub app_sets: crate::services::app_sets::AppSets,
     pub index: IndexSlot,
     pub rebuild: RebuildState,
     pub deps: Deps,
@@ -109,6 +110,7 @@ impl AppState {
             scans: ScanManager::default(),
             cloud_jobs: Default::default(),
             cloud_watch: Default::default(),
+            app_sets: Default::default(),
             index: RwLock::new(None),
             rebuild: RebuildState::default(),
             deps,
