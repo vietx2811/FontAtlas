@@ -63,7 +63,7 @@ fn sha_hex(h: Sha256) -> String {
 }
 
 fn bad(m: &str) -> EmbedError {
-    EmbedError::Model(format!("safetensors: {m}"))
+    EmbedError::ModelFile(format!("safetensors: {m}"))
 }
 
 /// Thứ tự trường cố định (khớp file đã ghim: data_offsets, dtype, shape).
@@ -474,6 +474,23 @@ pub struct ModelStore {
     dns_resolver: Option<std::sync::Arc<dyn reqwest::dns::Resolve>>,
 }
 
+/// Lấy khoá độc quyền của file `.lock`, thăm dò theo `cancel`: tiến trình khác (app thứ hai, công cụ dòng lệnh)
+/// đang giữ khoá thì luồng tải vẫn dừng được khi huỷ thay vì kẹt vô hạn ở `flock`.
+fn lock_unless_cancelled(file: &File, cancel: &AtomicBool) -> Result<(), EmbedError> {
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(()),
+            Err(std::fs::TryLockError::WouldBlock) => {
+                if cancel.load(Ordering::SeqCst) {
+                    return Err(EmbedError::Cancelled);
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(std::fs::TryLockError::Error(e)) => return Err(e.into()),
+        }
+    }
+}
+
 pub fn sha256_file(p: &Path) -> std::io::Result<String> {
     let mut f = File::open(p)?;
     let mut h = Sha256::new();
@@ -664,7 +681,7 @@ impl ModelStore {
             .truncate(false)
             .write(true)
             .open(self.path(".lock"))?;
-        lock.lock()?; // nhả khi drop
+        lock_unless_cancelled(&lock, cancel)?; // nhả khi drop
         match self.status() {
             ModelStatus::Ready(p) => return Ok(p),
             ModelStatus::Corrupt => {

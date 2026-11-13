@@ -100,8 +100,15 @@ pub enum EmbedError {
     NoGlyphs,
     #[error("render: {0}")]
     Render(String),
+    /// Lỗi nội bộ khi chạy model (không có hành động riêng cho người dùng): mã `inference`.
     #[error("model: {0}")]
     Model(String),
+    /// File model hỏng/thiếu/sai định dạng (nạp trọng số, header safetensors): người dùng tải lại model.
+    #[error("model file: {0}")]
+    ModelFile(String),
+    /// Hết bộ nhớ hoặc tài nguyên (RAM/GPU) khi nạp hay chạy model: đóng bớt ứng dụng rồi thử lại.
+    #[error("resources: {0}")]
+    Resources(String),
     #[error("checksum lệch: cần {expected}, nhận {got}")]
     ChecksumMismatch { expected: String, got: String },
     #[error("đã huỷ")]
@@ -127,6 +134,8 @@ impl EmbedError {
             EmbedError::NoGlyphs => "no_glyphs",
             EmbedError::Render(_) => "render_failed",
             EmbedError::Model(_) => "inference",
+            EmbedError::ModelFile(_) => "model_file",
+            EmbedError::Resources(_) => "resources",
             EmbedError::ChecksumMismatch { .. } => "checksum",
             EmbedError::Cancelled => "cancelled",
             EmbedError::Disabled => "disabled",
@@ -196,5 +205,8 @@ mod tests {
         assert_eq!(EmbedError::NoGlyphs.code(), "no_glyphs");
         assert_eq!(EmbedError::Cancelled.code(), "cancelled");
         assert_eq!(EmbedError::Disabled.code(), "disabled");
+        assert_eq!(EmbedError::Model("x".into()).code(), "inference");
+        assert_eq!(EmbedError::ModelFile("x".into()).code(), "model_file");
+        assert_eq!(EmbedError::Resources("x".into()).code(), "resources");
     }
 }
