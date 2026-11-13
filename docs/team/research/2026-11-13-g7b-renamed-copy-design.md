@@ -21,8 +21,15 @@ Lựa chọn **"Giữ cả hai"** trong hộp xác nhận xung đột VF/static 
 - Từ chối: `fsType` hạn chế (bit "Restricted License"), TTC/WOFF/WOFF2 (v1; VF phổ biến là TTF/OTF), font không trùng thật.
 - Giấy phép: OFL Reserved Font Name cấm dùng tên gốc cho bản sửa — đổi tên chính là cách tuân thủ; vẫn ghi chú ở UI theo "tool not gatekeeper", không chặn.
 
-## Cần xác nhận trước khi code
-1. Điểm vào "Giữ cả hai" + nút ở ClashNote (06 + 05).
-2. Migration `sources.kind = 'derived'` (user.db, 02).
-3. Hậu tố cố định " VF" (và PS "-VF")? Hay cho người dùng đặt?
-4. Thứ tự: nên làm SAU spec Organized Library v1 để chỗ đặt bản sao khỏi làm lại.
+## Đã chốt (Lead 2026-11-13) + hợp đồng với 06
+1. Điểm vào: lựa chọn "Giữ cả hai" (mã `both`) của hộp xung đột G7 + nút ở ClashNote; không bao giờ tạo ngầm. Chỉ làm sau khi chủ app trả lời các câu hỏi B7.
+2. Migration `sources.kind = 'derived'` thêm vào CUỐI `USER_MIGRATIONS` (B5 cũng thêm migration; Lead xếp thứ tự khi merge).
+3. Hậu tố cố định, người dùng không đặt. Quy tắc tên (02 chốt): họ `X` → `X VF`; full name `X VF <Kiểu>`; **PostScript name chèn `VF` vào phần họ**: `Oswald-Regular` → `OswaldVF-Regular` (một dấu gạch, đúng quy ước PS; không có dấu cách; không trùng PS của bản gốc lẫn của static); PS không có gạch thì thêm `VF` ở cuối; áp dụng giống cho PS name của named instance trong `fvar`; unique ID = gốc + `;FontAtlas-VF`.
+4. **fsType "Restricted License" KHÔNG chặn** (tool, not gatekeeper): vẫn tạo bản sao, trả cờ `license_restricted` để UI hiện NoteMark "giấy phép của font hạn chế, bạn chịu trách nhiệm". Chỉ từ chối vì lý do kỹ thuật: TTC/WOFF/WOFF2 (v1), font không phải VF, font không trùng tên thật, font ngoài thư viện (không có hash/không đọc được — 06: "Giữ cả hai" lùi về hành vi G7 hiện tại).
+
+### Hàm cho 06 (store/app, đồng bộ)
+`derive_renamed_copy(hash) -> Result<DerivedCopy { hash, path, created, license_restricted }, DeriveError>`
+- Idempotent: cùng hash gốc + cùng hậu tố trả lại bản đã có (`created = false`), không tạo trùng.
+- Ghi file xong mới trả: viết vào file tạm cùng thư mục, `sync_all`, đổi tên nguyên tử; rồi nạp vào thư viện (nguồn `derived` hoặc Organized Library) và ghi `derived_fonts`.
+- `DeriveError`: `NotInLibrary`, `NotVariable`, `NoClash`, `UnsupportedContainer(ttc|woff|woff2)`, `NotDownloaded` (06 gọi `ensure_local` trước; nếu vẫn dataless thì trả lỗi này), `DiskFull`, `Io(kind)`.
+- `is_derived(hash) -> bool` (và `derived_from(hash) -> Option<hash>`) để 06 lọc ứng viên ở `ensure`/`pick` (loại trừ khi tên yêu cầu đúng tên mới).
