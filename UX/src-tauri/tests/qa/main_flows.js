@@ -8,9 +8,12 @@
   window.addEventListener('error', e => consoleErrors.push(String(e.error && e.error.stack || e.message).slice(0, 800)));
   const log = async (step, ok, detail) => { n++; if (!ok && consoleErrors.length) detail = { detail, consoleErrors: consoleErrors.splice(0, 3) }; try { await inv('set_setting', { key: 'ui.qa.' + String(n).padStart(2, '0'), value: JSON.stringify({ step, ok, detail, t: Math.round((Date.now() - T0) / 1000) }) }); } catch (e) {} };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // settle: CHỜ VẼ LẠI trước khi chụp ảnh (đổi theme/layout/animation). WKWebView không có tín hiệu "đã vẽ xong" để chờ theo điều kiện, nên đây là số ms nhỏ có chủ ý — chỉ dùng ngay trước snap() hoặc sau khi ép theme.
+  const settle = ms => sleep(ms);
+  const fontsReady = () => wait(() => document.fonts.status === 'loaded', 8000); // font đã nạp xong trước khi chụp (điều kiện thật)
   const wait = async (fn, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; };
   // Ngôn ngữ giao diện cố định cho cả lượt QA (mặc định vi; QA_LANG=en cho lượt chụp ảnh tiếng Anh). Không phụ thuộc ngôn ngữ của máy.
-  await wait(() => window.__faLocale, 20000); window.__faLocale?.('__QA_LANG__'); await sleep(500);
+  await wait(() => window.__faLocale, 20000); window.__faLocale?.('__QA_LANG__'); await wait(() => document.documentElement.lang === '__QA_LANG__' || document.querySelector('[data-testid=splash], .fa-onb, .fa-lib'), 8000);
   // Bộ lọc nay là sheet Advanced (nút data-testid=advanced-open); đóng bằng nút × của sheet.
   const openAdv = async () => { if (!document.querySelector('[data-testid=advanced-sheet]')) document.querySelector('[data-testid=advanced-open]')?.click(); return await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000); };
   const closeAdv = async () => { document.querySelector('.fa-adv-close')?.click(); await wait(() => !document.querySelector('[data-testid=advanced-sheet]'), 5000); };
@@ -65,7 +68,6 @@
       // Esc phải bị nuốt (defaultPrevented) — listener ở window capture + layout effect nên không có khoảng hở khi máy tải; Esc không rơi xuống onboarding còn kiểm ở splash-esc-stays-o1.
       await log('splash-skip', !document.querySelector('[data-testid=splash]') && inertBelow && esc.defaultPrevented, { inertBelow, prevented: esc.defaultPrevented });
       await wait(() => document.querySelector('.fa-onb h1, .fa-lib'), 90000);
-      await sleep(400);
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? null;
       // Lần đầu: vẫn đứng ở bước 1 (không bị Esc bỏ cả hướng dẫn). Không phải lần đầu: không có onboarding thì không có gì để kiểm.
       await log('splash-esc-stays-o1', h1 === null ? !!document.querySelector('.fa-lib') : /Chào mừng/.test(h1), { h1 });
@@ -75,24 +77,25 @@
     let foldersDone = false;
     for (let i = 0; i < 60 && document.querySelector('.fa-onb'); i++) {
       const h1 = document.querySelector('.fa-onb h1')?.textContent ?? '';
-      await sleep(600);
+      await settle(600); // animation chuyển bước onboarding kết thúc trước khi chụp
       // Mỗi bước chụp cả tối lẫn sáng (ép theme như các bước *-light khác), rồi trả theme về như cũ.
       { const root = document.documentElement; const was = root.dataset.theme;
-        root.dataset.theme = 'dark'; await sleep(250); await snap('onb-' + String(i).padStart(2, '0'));
-        root.dataset.theme = 'light'; await sleep(250); await snap('onb-' + String(i).padStart(2, '0') + '-light');
-        if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was; await sleep(150); }
+        root.dataset.theme = 'dark'; await settle(250); await snap('onb-' + String(i).padStart(2, '0'));
+        root.dataset.theme = 'light'; await settle(250); await snap('onb-' + String(i).padStart(2, '0') + '-light');
+        if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was; }
       if (i === 0) {
         // Kính thật (NSGlassEffectView): trong onboarding đúng 1 lớp, vibrancy sidebar đã gỡ, khung kính == bounds contentView, và vẫn khớp sau khi đổi cỡ cửa sổ / đổi theme.
         const probe = async resize => { try { return await inv('glass_probe', { resize: resize ?? null }); } catch (e) { return { error: String(e && e.message || e) }; } };
         const same = p => p.glassFrame && p.glassFrame.length === 4 && Math.abs(p.glassFrame[2] - p.contentBounds[0]) < 1.5 && Math.abs(p.glassFrame[3] - p.contentBounds[1]) < 1.5 && Math.abs(p.glassFrame[0]) < 1.5 && Math.abs(p.glassFrame[1]) < 1.5;
         let p0 = await probe(); for (let k = 0; k < 20 && !p0.error && !(p0.glassCount === 1 && p0.visualEffectCount === 0); k++) { await sleep(250); p0 = await probe(); }
         await log('onb-glass-present', !p0.error && p0.glassCount === 1 && p0.visualEffectCount === 0 && same(p0), p0);
-        const p1 = await probe([1180, 800]); await sleep(700); const p1b = await probe();
+        const p1 = await probe([1180, 800]); let p1b = p1; for (let k = 0; k < 24 && !(!p1b.error && p1b.contentBounds && Math.abs(p1b.contentBounds[0] - 1180) < 2 && p1b.glassCount === 1 && same(p1b)); k++) { await sleep(250); p1b = await probe(); } // đổi cỡ cửa sổ xong khi khung kính khớp
         await log('onb-glass-follows-resize', !p1.error && !p1b.error && p1b.glassCount === 1 && same(p1b) && Math.abs(p1b.contentBounds[0] - 1180) < 2, p1b);
         const root = document.documentElement; const was = root.dataset.theme;
-        for (const th of ['light', 'dark']) { root.dataset.theme = th; await sleep(300); }
-        const p2 = await probe(); if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was;
-        if (!p0.error) { await probe([p0.contentBounds[0], p0.contentBounds[1]]); await sleep(500); } // trả cỡ cửa sổ về như cũ cho các bước sau
+        for (const th of ['light', 'dark']) { root.dataset.theme = th; await wait(() => document.documentElement.dataset.theme === th, 3000); }
+        let p2 = await probe(); for (let k = 0; k < 20 && !(!p2.error && p2.glassCount === 1 && same(p2)); k++) { await sleep(250); p2 = await probe(); }
+         if (was === undefined) delete root.dataset.theme; else root.dataset.theme = was;
+        if (!p0.error) { await probe([p0.contentBounds[0], p0.contentBounds[1]]); for (let k = 0; k < 24; k++) { const pr = await probe(); if (!pr.error && pr.contentBounds && Math.abs(pr.contentBounds[0] - p0.contentBounds[0]) < 2) break; await sleep(250); } } // trả cỡ cửa sổ về như cũ cho các bước sau (chờ tới khi đúng cỡ)
         await log('onb-glass-survives-theme', !p2.error && p2.glassCount === 1 && same(p2), p2);
       }
       const add = btn('+ Thêm thư mục');
@@ -108,7 +111,7 @@
         await log('onb-add-another-later', rows() >= r0 + 3, { after: rows() });
         await wait(() => btn('+ Thêm thư mục'));
         picks.push(['__QA_DIR__/A/']); btn('+ Thêm thư mục').click();
-        await wait(() => rows() === r0 + 3, 15000); await sleep(200); // chờ theo điều kiện, không theo số giây
+        await wait(() => rows() === r0 + 3, 15000); await wait(() => document.querySelector('.fa-onb-feedback, [role=alert]')?.textContent, 3000); // chờ thông báo trùng hiện (không có cũng đi tiếp)
         const fb = document.querySelector('.fa-onb-feedback, [role=alert]')?.textContent ?? '';
         await log('onb-duplicate-kept', rows() === r0 + 3, { after: rows(), feedback: fb.slice(0, 140) });
         const names = [...document.querySelectorAll('.fa-onb-sources > li:not(.empty)')].map(li => li.textContent.replace(/\s+/g, ' ').slice(0, 80));
@@ -116,7 +119,7 @@
         await snap('onb-folders-3');
         foldersDone = true;
         const go = await wait(() => btn('Tiếp tục'));
-        go?.click(); await sleep(800); continue;
+        go?.click(); await wait(() => (document.querySelector('.fa-onb h1')?.textContent ?? '') !== h1 || !document.querySelector('.fa-onb'), 8000); continue;
       }
       if (h1 === 'Xong' && !document.querySelector('[role=dialog]')) {
         // Cuối hướng dẫn: bảng phím tắt hiện TRƯỚC outro (lưới thẻ, bỏ qua được); ô minh hoạ vuông không viền.
@@ -124,7 +127,7 @@
         const bw = document.querySelector('.fa-stage svg.fa-bp') ? getComputedStyle(document.querySelector('.fa-stage svg.fa-bp')).borderTopWidth : null;
         btn('Vào thư viện')?.click();
         const dlg = await wait(() => document.querySelector('[role=dialog] .fa-tips-grid'), 8000);
-        await sleep(300); await snap('onb-tips');
+        await settle(300); await snap('onb-tips');
         const cards = dlg ? dlg.querySelectorAll('[data-testid=tip-card]').length : 0;
         const dots = document.querySelectorAll('.fa-onb-dots i').length;
         await log('onb-tips-overlay', !!dlg && cards >= 8 && vb === '0 0 480 480' && bw === '0px' && dots >= 6 && !document.querySelector('.fa-onb-keys, .fa-onb-stepno, .fa-legend'), { cards, vb, bw, dots, legend: !!document.querySelector('.fa-legend') });
@@ -135,7 +138,7 @@
       const b = await wait(() => (document.querySelector('.fa-onb') ? order.map(t => btn(t)).find(Boolean) : true), 120000);
       if (!b) { await log('onb-stuck', false, h1); break; }
       if (b === true) break;
-      b.click(); await sleep(700);
+      b.click(); await wait(() => (document.querySelector('.fa-onb h1')?.textContent ?? '') !== h1 || !document.querySelector('.fa-onb') || document.querySelector('[role=dialog]'), 4000); // sang bước kế (h1 đổi) hoặc onboarding đóng
     }
     await wait(() => !document.querySelector('.fa-onb'), 15000);
     await log('onb-finished', !document.querySelector('.fa-onb'), '');
@@ -146,7 +149,7 @@
     // THƯ VIỆN
     const cells = () => [...document.querySelectorAll('[role=gridcell][data-face-id]')];
     await wait(() => cells().length >= 10, 120000);
-    await sleep(1500); await snap('library');
+    await wait(() => document.fonts.status === 'loaded', 8000); await settle(300); await snap('library');
     await log('library-cells', cells().length >= 10, { cells: cells().length, header: document.querySelector('header')?.textContent.replace(/\s+/g, ' ').slice(0, 80) });
     const roboto = cells().find(c => /Roboto/.test(c.textContent) && !/Italic/.test(c.textContent));
     roboto?.click();
@@ -186,13 +189,13 @@
     const acts = await wait(() => { const a = [...document.querySelectorAll('.fa-sim-actions')]; return a.length ? a : null; }, 60000);
     const items = (acts ?? []).map(a => a.closest('li, article, div')?.parentElement?.textContent.replace(/\s+/g, ' ').slice(0, 70));
     const fams = (acts ?? []).map(a => (a.closest('li, article') ?? a.parentElement)?.querySelector('h3, h4, strong, b')?.textContent ?? '');
-    await sleep(800); await snap('similar');
+    await fontsReady(); await settle(300); await snap('similar');
     await log('similar-families', !!acts && !fams.some(f => /^Roboto$/.test(f.trim())), { count: acts?.length ?? 0, fams, hasOpen: !!btn('Mở font'), hasFamily: !!btnHas('Xem family') });
     // XEM FAMILY
     const xf = btnHas('Xem family'); const target = fams[0];
     xf?.click();
     const chip = await wait(() => document.querySelector('.fa-family-chip'), 20000);
-    await sleep(1200);
+    await wait(() => cells().length > 0, 15000); await fontsReady(); await settle(300);
     await snap('family-chip');
     await log('view-family', !!chip, { chip: chip?.textContent, title: chip?.getAttribute('aria-label'), target, cells: cells().length, cellNames: cells().slice(0, 6).map(c => c.textContent.replace(/\s+/g, ' ').slice(-40)) });
     // LỌC
@@ -206,35 +209,33 @@
     const before = cells().length;
     const it = fp && [...fp.querySelectorAll('label')].find(l => (l.textContent.includes('Italic') || l.textContent.includes('In nghiêng')))?.querySelector('input');
     it?.click();
-    await sleep(1500);
+    await wait(() => cells().length !== before || document.querySelector('[data-testid=filter-summary]'), 15000); await fontsReady(); await settle(300);
     const chip2 = document.querySelector('.fa-family-chip');
     await snap('filter-italic');
     await log('filter-italic', !!fp && !!it, { inputs, ranges, before, after: cells().length, chip: chip2?.getAttribute('aria-label'), trigger: fbtn?.textContent });
-    it?.click(); await sleep(1000);
+    it?.click(); await wait(() => cells().length === before || !document.querySelector('[data-testid=filter-summary]'), 15000);
     await closeAdv();
     await log('filter-cleared', true, { cells: cells().length, chip: document.querySelector('.fa-family-chip')?.getAttribute('aria-label') });
     // BỘ LỌC trên toàn thư viện: khoảng slider lấy p1–p99 của chính thư viện, không phải 0–1
-    document.querySelector('.fa-family-chip')?.click(); await sleep(1000);
+    document.querySelector('.fa-family-chip')?.click(); await wait(() => !document.querySelector('.fa-family-chip'), 8000);
     const fpAll = await openAdv();
     await wait(() => axisPairs().length >= 6, 20000);
-    await sleep(800); await snap('filter-full-library');
+    await fontsReady(); await settle(300); await snap('filter-full-library');
     const rangesAll = axisPairs().slice(0, 6);
     await log('filter-full-library', !!fpAll && rangesAll.length >= 3 && rangesAll.some(r => r !== '0–1') && !document.querySelector('.fa-family-chip'), { cells: cells().length, rangesAll });
-    await closeAdv(); await sleep(300);
+    await closeAdv();
     // ADVANCED + TÓM TẮT + "ĐANG LỌC" (2a)
     {
       const key = (el, init) => el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
       const total = () => Number((document.querySelector('[data-testid=view-count]')?.textContent ?? '').replace(/\D/g, '')) || 0;
-      document.querySelector('.fa-family-chip')?.click(); await sleep(600);
+      document.querySelector('.fa-family-chip')?.click(); await wait(() => !document.querySelector('.fa-family-chip'), 8000); await wait(() => total() > 0, 8000);
       const base = total();
       key(document, { key: 'f', code: 'KeyF', metaKey: true, altKey: true });
       const sheet = await wait(() => document.querySelector('[data-testid=advanced-sheet]'), 8000);
       const rows = await wait(() => { const r = document.querySelectorAll('[data-testid=advanced-sheet] [data-testid=axis-filter-row]'); return r.length === 18 ? r : null; }, 20000);
-      await sleep(600);
       const th0 = document.documentElement.dataset.theme;
-      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('advanced-sheet-' + th); }
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await settle(250); await snap('advanced-sheet-' + th); }
       if (th0) document.documentElement.dataset.theme = th0; else delete document.documentElement.dataset.theme;
-      await sleep(150);
       const cols = sheet && getComputedStyle(sheet.querySelector('[data-testid=advanced-cols]'));
       const cards = sheet ? [...sheet.querySelectorAll('.fa-adv-card')] : [];
       const lefts = new Set(cards.map(c => Math.round(c.getBoundingClientRect().left)));
@@ -244,8 +245,8 @@
       await log('advanced-term-tooltips', tt.n >= 17 && tt.bad.length === 0 && tt.art > 0, tt);
       // Weight 600+ bằng bàn phím: lưới đổi số lượng, tóm tắt hiện Weight, nháy đúp thanh = bỏ lọc
       const lo = document.querySelector('[data-axis=weight_class] [data-testid=rs-lo]');
-      lo?.focus(); for (let i = 0; i < 5; i++) { key(lo, { key: 'ArrowRight' }); await sleep(120); }
-      await sleep(900);
+      lo?.focus(); for (let i = 0; i < 5; i++) key(lo, { key: 'ArrowRight' });
+      await wait(() => /Weight/.test(document.querySelector('[data-testid=filter-summary]')?.textContent ?? '') && total() > 0 && total() < base, 10000);
       const sum = document.querySelector('[data-testid=filter-summary]');
       const after = total();
       await log('advanced-weight-filters-grid', !!sum && /Weight/.test(sum.textContent) && after > 0 && after < base, { base, after, summary: sum?.textContent });
@@ -261,21 +262,20 @@
         const totalBefore = total();
         row?.click();
         await wait(() => document.querySelector('[data-testid=filter-summary]')?.textContent.includes('Tiếng Việt') || document.querySelector('[data-testid=filter-summary] [data-group=lang]'), 8000);
-        await sleep(1200);
         const labelFull = row?.getAttribute('aria-label') ?? '';
         const th2 = document.documentElement.dataset.theme;
-        document.documentElement.dataset.theme = 'dark'; await sleep(250);
+        document.documentElement.dataset.theme = 'dark'; await settle(250);
         await snap('lang-picker-dark');
         if (th2) document.documentElement.dataset.theme = th2; else delete document.documentElement.dataset.theme;
-        await closeAdv(); await sleep(500);
+        await closeAdv(); await wait(() => total() > 0 && document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]').length > 0, 10000);
         const marks = [...document.querySelectorAll('[role=gridcell] [data-testid=vi-mark]')];
         const after = total();
         const bad = marks.filter(m => !(m.dataset.lang === 'vie' && m.dataset.state === 'full')).map(m => m.dataset.state);
         await log('lang-filter-narrows-and-badges', !!row && /(đủ|full)$/.test(labelFull) && after > 0 && after <= totalBefore && marks.length > 0 && bad.length === 0, { totalBefore, after, label: labelFull, marks: marks.length, bad });
         await openAdv();
         // Bấm tới khi dòng về "chưa chọn" (full → near → off); tra lại phần tử mỗi lần vì danh sách vẽ lại khi dữ liệu về.
-        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/(chưa chọn|not selected)$/.test(r2?.getAttribute('aria-label') ?? '')) break; r2?.click(); await sleep(700); }
-        await closeAdv(); await sleep(400);
+        for (let i = 0; i < 4; i++) { const r2 = await wait(() => document.querySelector('[data-code=vie]'), 10000); if (/(chưa chọn|not selected)$/.test(r2?.getAttribute('aria-label') ?? '')) break; const lbl0 = r2?.getAttribute('aria-label'); r2?.click(); await wait(() => document.querySelector('[data-code=vie]')?.getAttribute('aria-label') !== lbl0, 5000); }
+        await closeAdv();
         // Số đếm cập nhật bất đồng bộ sau khi bỏ nhóm lọc: đợi tới khi về đúng giá trị (tối đa 8 giây) thay vì đọc ngay sau một lần sleep cố định.
         const langCleared = await wait(() => !document.querySelector('[data-testid=filter-summary] [data-group=lang]') && total() === totalBefore, 8000);
         await log('lang-filter-cleared', !!langCleared, { total: total(), totalBefore });
@@ -283,20 +283,19 @@
       // Tóm tắt trong ô tìm + Backspace hai lần + Hoàn tác
       const fp2 = await openAdv();
       [...(fp2?.querySelectorAll('label') ?? [])].find(l => l.textContent.includes('Italic') || l.textContent.includes('In nghiêng'))?.querySelector('input')?.click();
-      await sleep(900);
-      await closeAdv(); await sleep(300);
+      await wait(() => document.querySelector('[data-testid=filter-summary]'), 10000);
+      await closeAdv();
       const sbox = document.querySelector('.fa-search'); const sinput = sbox?.querySelector('input');
       const sum2 = await wait(() => document.querySelector('[data-testid=filter-summary]'), 8000);
       const ratio = sinput && sbox ? sinput.getBoundingClientRect().width / sbox.getBoundingClientRect().width : 0;
       await log('summary-keeps-input-wide', !!sum2 && ratio >= 0.4, { ratio, summary: sum2?.textContent });
       sum2?.click();
       const pop = await wait(() => document.querySelector('[data-testid=active-filters]'), 5000);
-      await sleep(300);
       const th1 = document.documentElement.dataset.theme;
-      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('active-filters-popover-' + th); }
+      for (const th of ['light', 'dark']) { document.documentElement.dataset.theme = th; await settle(250); await snap('active-filters-popover-' + th); }
       if (th1) document.documentElement.dataset.theme = th1; else delete document.documentElement.dataset.theme;
       await log('active-filters-popover', !!pop && pop.querySelectorAll('.fa-fpop-row').length >= 1 && /(Xoá tất cả|Clear all)/.test(pop.textContent), { rows: pop?.querySelectorAll('.fa-fpop-row').length, text: pop?.textContent.slice(0, 80) });
-      key(document, { key: 'Escape' }); await sleep(300);
+      key(document, { key: 'Escape' }); await wait(() => !document.querySelector('[data-testid=active-filters]'), 5000);
       const withFilter = total();
       sinput?.focus(); key(sinput, { key: 'Backspace' });
       const selected = !!(await wait(() => document.querySelector('.fa-fsum-seg[data-selected=true]'), 5000)); // chọn nhóm cuối: đợi trạng thái thay vì sleep cố định
@@ -317,7 +316,7 @@
     // Theme tối qua radio trong Cài đặt (đường thật: applyTheme + theme cửa sổ native cho lớp kính sidebar), không đặt data-theme bằng JS.
     {
       const radioOf = re => [...document.querySelectorAll('[data-testid=settings] input[type=radio][name=theme]')].find(r => re.test(r.closest('label')?.textContent ?? ''));
-      radioOf(/^(Tối|Dark)$/)?.click(); await sleep(900);
+      radioOf(/^(Tối|Dark)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'dark', 8000); await settle(300);
       await snap('settings-dark-real');
       const darkApplied = document.documentElement.dataset.theme === 'dark';
       radioOf(/^(Sáng|Light)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'light', 8000);
@@ -350,14 +349,13 @@
       [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Bật font tự động|Auto-activation)/.test(b.textContent))?.click();
       await wait(() => document.querySelectorAll('[data-testid=auto-app]').length === 6, 15000);
       const ids = [...document.querySelectorAll('[data-testid=auto-app]')].map(x => x.dataset.app).join(',');
-      await sleep(300);
-      for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await sleep(250); await snap('auto-activation-' + th); }
+      for (const th of ['dark', 'light']) { document.documentElement.dataset.theme = th; await settle(250); await snap('auto-activation-' + th); }
       await log('auto-activation-page', ids === 'photoshop,aftereffects,illustrator,indesign,incopy,affinity' && !!document.querySelector('[data-testid=auto-switch]') && !!document.querySelector('[data-testid=auto-log], [data-testid=auto-log-empty]') && !document.querySelector('[data-testid=auto-error]'), { ids, error: document.querySelector('[data-testid=auto-error]')?.textContent ?? null });
     }
     const nav = [...document.querySelectorAll('[aria-label="Thanh bên"] button, nav button, aside button')].find(b => b.textContent.includes('Tất cả'));
     nav?.click();
     const left = await wait(() => !document.querySelector('[data-testid=settings]') && cells().length > 0, 10000);
-    await sleep(800); await snap('after-settings');
+    await fontsReady(); await settle(300); await snap('after-settings');
     await log('settings-sidebar-leaves', !!st && !!left, { settingsOpened: !!st, navFound: !!nav, cells: cells().length });
 
     // ===== TIÊU ĐỀ BẰNG FONT CỦA THẺ · TOOLTIP · ĐA CHỌN · MENU NGỮ CẢNH (sáng) =====
