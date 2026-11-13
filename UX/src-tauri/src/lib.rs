@@ -6,6 +6,7 @@ pub mod error;
 pub mod hub;
 pub mod index_bundle;
 pub mod services;
+pub mod signals;
 pub mod state;
 pub mod glass;
 pub mod trash;
@@ -134,6 +135,8 @@ pub fn run() {
             let dirs = resolve_dirs(app.handle())?;
             let state = AppState::new(dirs, platform_api());
             app.manage(state.clone());
+            crate::signals::install();
+            crate::signals::watch(app.handle().clone());
             crate::glass::init(app.handle());
             state.system_hooks.store(true, std::sync::atomic::Ordering::SeqCst);
             crate::services::boot::start(state);
