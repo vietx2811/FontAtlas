@@ -1,7 +1,7 @@
 // Thông báo gọn, không modal (UX 03 §7.2): tối đa 4, trùng nội dung thì không thêm.
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
-export type Notice = { id: number; kind: 'info' | 'error'; text: string; action?: { label: string; run(): void } };
+export type Notice = { id: number; kind: 'info' | 'error'; text: string; action?: { label: string; run(): void }; /** Nút thứ hai (vd "Cài đặt…" cạnh "Tắt lần này"); không tự đóng thông báo. */ action2?: { label: string; run(): void } };
 type State = { notices: Notice[]; push(n: Omit<Notice, 'id'>): number; dismiss(id: number): void };
 export type NoticeStore = UseBoundStore<StoreApi<State>>;
 const MAX = 4;

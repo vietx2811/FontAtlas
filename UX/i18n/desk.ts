@@ -107,6 +107,7 @@ export const DESK_I18N = {
   'app.saved': 'Case «{name}» sẽ tự bật font khi mở {n} app đã chọn', 'app.cleared': 'Case «{name}» không còn gắn với app nào', 'app.undone': 'Đã hoàn tác: danh sách app của Case «{name}» trở lại như cũ', 'app.fail': 'Không lưu được danh sách app: {msg}',
   'app.on': 'Đã bật {n} font cho Case «{name}» (app gắn với Case vừa mở)', 'app.off': 'Đã tắt {n} font của Case «{name}» (app gắn với Case đã thoát)',
   'app.conflicts': '{n} font trùng tên nhưng khác nội dung nên không bật', 'app.failed': '{n} font không bật được', 'appset.restart': 'App đã mở trước đó có thể cần khởi động lại để thấy font.',
+  'app.settings': 'Cài đặt…', 'app.turnOn': 'Bật lại',
   'why.distinctive': 'nét đặc trưng rõ',
   'why.serif_vs_sans': 'serif đi với sans',
   'why.same_superfamily': 'cùng superfamily',

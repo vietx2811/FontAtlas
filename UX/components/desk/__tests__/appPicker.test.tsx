@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { appSetNotice } from '../../../store/activationSync';
 import { useAppPickerStore } from '../../../store/appPicker';
@@ -47,5 +47,16 @@ describe('B5 — Mở cùng app', () => {
     expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'info' }); expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/Đã bật 12 font.*khởi động lại/);
     await appSetNotice(api, { collectionId: 77, kind: 'off', changed: 3, conflicts: 2, failed: 1 });
     const n = useNoticeStore.getState().notices.at(-1)!; expect(n.kind).toBe('error'); expect(n.text).toMatch(/Đã tắt 3 font/); expect(n.text).toMatch(/2 font trùng tên/); expect(n.text).toMatch(/1 font không bật được/);
+  });
+
+  it('toast bật: có nút Cài đặt… mở hộp thoại của đúng Case; toast tắt: nút Bật lại bật cả Case', async () => {
+    const api = createMockApi(); const id = (await api.createCase('Khách Y')).id;
+    await appSetNotice(api, { collectionId: id, kind: 'on', changed: 5, conflicts: 0, failed: 0 });
+    const on = useNoticeStore.getState().notices.at(-1)!; expect(on.action2?.label).toBe('Cài đặt…');
+    act(() => on.action2!.run()); expect(useAppPickerStore.getState().target).toEqual({ caseId: id, name: 'Khách Y' });
+    const spy = vi.spyOn(api, 'activationActivateCase');
+    await appSetNotice(api, { collectionId: id, kind: 'off', changed: 5, conflicts: 0, failed: 0 });
+    const off = useNoticeStore.getState().notices.at(-1)!; expect(off.action?.label).toBe('Bật lại'); expect(off.action2).toBeUndefined();
+    act(() => off.action!.run()); await settle(); expect(spy).toHaveBeenCalledWith(id);
   });
 });

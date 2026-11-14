@@ -63,7 +63,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
             </Tooltip>
             {detail && <ClashNote faceId={detail.row.faceId} inline />}
           </div>
-          <ActiveRow face={detail ? face : null} flow={flow} />
+          <ActiveRow face={detail ? face : null} flow={flow} api={api} />
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}{detail?.row.onCloudOnly && <NoteMark kind="info" inline testId="cloud-only-note" text={t('cloud.note')} />}</div>
           {detail && face && detail.row.hashHex === face.hashHex && detail.row.faceIndex === face.faceIndex && <ClassChip key={`${face.hashHex}:${face.faceIndex}`} api={api} face={face} info={detail.classificationInfo} onChanged={retry} />}
           {styles.length > 0 && <StyleDropdown styles={styles} value={label} onChange={setStyle} loader={loaderFor(api)} family={{ on: familyOn, onToggle: () => void flow.toggle(styles.map(s => s.face), !familyOn) }} />}

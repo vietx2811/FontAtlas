@@ -1,6 +1,7 @@
 import type { Api } from '../api';
 import { reconcileNotices } from '../components/activation/messages';
 import { t } from '../i18n';
+import { useAppPickerStore } from './appPicker';
 import { useNoticeStore } from './notices';
 import { useUiStore } from './ui';
 
@@ -41,5 +42,11 @@ export async function appSetNotice(api: Api, ev: { collectionId: number; kind: '
   if (ev.conflicts > 0) parts.push(t('app.conflicts', { n: ev.conflicts }));
   if (ev.failed > 0) parts.push(t('app.failed', { n: ev.failed }));
   if (ev.kind === 'on' && ev.changed > 0) parts.push(t('appset.restart'));
-  useNoticeStore.getState().push({ kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. ') });
+  const settings = { label: t('app.settings'), run: () => useAppPickerStore.getState().open(ev.collectionId, name) };
+  // Bật tự động: [Tắt lần này] (chờ lệnh suppress của 06) + [Cài đặt…]. Tắt tự động: không hoàn tác; [Bật lại] bật cả Case thủ công.
+  const turnBackOn = { label: t('app.turnOn'), run: () => { api.activationActivateCase(ev.collectionId).then(() => void refreshActivation(api), e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
+  useNoticeStore.getState().push({
+    kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. '),
+    ...(ev.kind === 'on' ? { action2: settings } : ev.changed > 0 ? { action: turnBackOn } : {}),
+  });
 }

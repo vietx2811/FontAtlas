@@ -1,6 +1,7 @@
 import { useUiStore } from '../../store/ui';
 import { t } from '../../i18n';
-import type { FaceKeyDto } from '../../api';
+import type { Api, FaceKeyDto } from '../../api';
+import { ReasonLine } from './ReasonLine';
 import { Tooltip } from '../ui/Tooltip';
 import { TermTip } from '../ui/terms';
 import { ownerNote } from './conflictModel';
@@ -12,14 +13,16 @@ import './activeRow.css';
  * ("Đang bật · phiên này" / "Luôn bật") và nút đổi phạm vi. Không có face (đang tải) thì công tắc vô hiệu.
  * Font "Có sẵn trên máy" (bản giống hệt do bên khác cung cấp): công tắc khoá, dòng giải thích ai cung cấp; Font Atlas không bật gì.
  */
-export function ActiveRow({ face, flow }: { face: FaceKeyDto | null; flow: ActivationFlow }): React.JSX.Element {
+export function ActiveRow({ face, flow, api }: { face: FaceKeyDto | null; flow: ActivationFlow; api?: Api }): React.JSX.Element {
   const on = useUiStore(s => (face ? s.active.has(face.hashHex) : false));
   const scope = useUiStore(s => (face ? s.activeScope.get(face.hashHex) ?? 'session' : 'session'));
+  const reasons = useUiStore(s => (face && on ? s.activeReasons.get(face.hashHex) : undefined));
   const avail = useUiStore(s => (face && !s.active.has(face.hashHex) ? s.available.get(face.hashHex) : undefined));
   const who = avail ? ownerNote({ owner: avail.owner, existingPath: avail.path }) : '';
   const switchLabel = t(on ? 'act.switch.on' : 'act.switch.off');
   const other = scope === 'session' ? 'persistent' : 'session';
   return (
+    <>
     <div className="fa-act-row" data-testid="active-row" data-available={avail ? 'true' : undefined}>
       <TermTip term="activate"><span className="fa-act-lbl" data-term="activate">{t('act.label')}</span></TermTip>
       <Tooltip label={avail ? t('act.available.why', { who }) : switchLabel}>
@@ -37,5 +40,7 @@ export function ActiveRow({ face, flow }: { face: FaceKeyDto | null; flow: Activ
         </Tooltip>
       )}
     </div>
+    {api && reasons && <ReasonLine api={api} reasons={reasons} />}
+    </>
   );
 }

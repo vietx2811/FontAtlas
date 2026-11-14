@@ -210,6 +210,7 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'app.saved': 'Case “{name}” will turn its fonts on when any of the {n} chosen apps open', 'app.cleared': 'Case “{name}” is no longer tied to any app', 'app.undone': 'Undone: the app list of Case “{name}” is back as it was', 'app.fail': 'Couldn’t save the app list: {msg}',
   'app.on': 'Turned on {n} fonts for Case “{name}” (an app tied to it just opened)', 'app.off': 'Turned off {n} fonts of Case “{name}” (its apps have quit)',
   'app.conflicts': '{n} fonts have the same name but different content, so they weren’t turned on', 'app.failed': '{n} fonts couldn’t be turned on', 'appset.restart': 'Apps that were already open may need a restart to see the fonts.',
+  'app.settings': 'Settings…', 'app.turnOn': 'Turn on again',
   'why.distinctive': 'distinctive character',
   'why.serif_vs_sans': 'serif with sans',
   'why.same_superfamily': 'same superfamily',
