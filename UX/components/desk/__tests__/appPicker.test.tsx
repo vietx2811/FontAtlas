@@ -4,7 +4,9 @@ import { createMockApi } from '../../../api/mock';
 import { appSetNotice } from '../../../store/activationSync';
 import { useAppPickerStore } from '../../../store/appPicker';
 import { useNoticeStore } from '../../../store/notices';
-import { AppPickerHost, pickerRows } from '../AppPicker';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { AppPickerHost, BROWSERS, pickerRows } from '../AppPicker';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 
@@ -59,5 +61,13 @@ describe('B5 — Mở cùng app', () => {
     await appSetNotice(api, { collectionId: id, kind: 'off', changed: 5, conflicts: 0, failed: 0 });
     const off = useNoticeStore.getState().notices.at(-1)!; expect(off.action?.label).toBe('Bật lại'); expect(off.action2).toBeUndefined();
     act(() => off.action!.run()); await settle(); expect(spy).toHaveBeenCalledWith(id);
+  });
+
+  it('QA native dùng đúng luật trình duyệt (PREFIX) của app: hai bản regex phải khớp; "Eagle for Safari" không phải trình duyệt', () => {
+    const qa = readFileSync(resolve(process.cwd(), 'src-tauri/tests/qa/main_flows.js'), 'utf8');
+    expect(qa).toContain(BROWSERS.source);
+    expect(BROWSERS.test('com.apple.Safari')).toBe(true);
+    expect(BROWSERS.test('com.example.eagle.safari-extension')).toBe(false);
+    expect(BROWSERS.test('com.example.EagleForSafari')).toBe(false);
   });
 });
