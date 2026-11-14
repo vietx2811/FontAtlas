@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   native-qa:
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 90
     continue-on-error: true
     steps:
