@@ -276,33 +276,26 @@ fn whitening_with_wrong_dims_rejected_at_start() {
     assert!(matches!(EmbedWorker::start(c, tiny(), Box::new(|_| {})), Err(EmbedError::Model(_))));
 }
 
-/// Encoder giữ khoá ghi của library.db lâu hơn busy_timeout (5 s) → `finish` lỗi.
-/// Đếm 6,5 s từ lúc encode xong (ngay trước `finish`), không từ lúc lấy khoá: máy bận làm encode
-/// chậm thì khoá không được nhả sớm trước `finish` (từng gây test chập chờn).
-struct LockingEncoder {
+/// Encoder làm hỏng kho NGAY SAU khi encode xong, trước lúc worker ghi (`finish_embeddings`): đổi tên bảng
+/// `embeddings` thì lần ghi vector lỗi store tức thì ("no such table"), không phụ thuộc thời gian hay khoá.
+/// Bản cũ giữ khoá ghi 6,5 s và trông chờ busy_timeout 5 s của worker hết hạn trước khi khoá nhả: trên máy chậm
+/// (runner GitHub) `finish` chạy muộn hơn 1,5 s, khoá đã nhả, ghi thành công và `r.is_err()` sai.
+/// Nhánh được kiểm không đổi: lỗi store SAU khi claim → worker trả lô về `pending` rồi dừng với lỗi.
+struct BreakStoreEncoder {
     inner: Box<dyn Encode>,
     db: std::path::PathBuf,
 }
-impl Encode for LockingEncoder {
+impl Encode for BreakStoreEncoder {
     fn raw_dim(&self) -> usize {
         768
     }
     fn encode(&mut self, t: &[Vec<f32>], c: &AtomicBool) -> Result<Vec<Vec<f32>>, EmbedError> {
-        let db = self.db.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
-        std::thread::spawn(move || {
-            let conn = rusqlite::Connection::open(db).unwrap();
-            conn.execute_batch("BEGIN EXCLUSIVE").unwrap();
-            tx.send(()).unwrap();
-            let _ = go_rx.recv();
-            std::thread::sleep(Duration::from_millis(6500));
-            conn.execute_batch("COMMIT").unwrap();
-        });
-        rx.recv().unwrap();
-        let out = self.inner.encode(t, c);
-        let _ = go_tx.send(());
-        out
+        let out = self.inner.encode(t, c)?;
+        let conn = rusqlite::Connection::open(&self.db).unwrap();
+        // chỉ chặn chờ khi gặp khoá ghi thoáng qua của worker (claim đã commit); không phải điều kiện của test
+        conn.busy_timeout(Duration::from_secs(30)).unwrap();
+        conn.execute_batch("ALTER TABLE embeddings RENAME TO embeddings_broken").unwrap();
+        Ok(out)
     }
 }
 
@@ -310,8 +303,14 @@ impl Encode for LockingEncoder {
 fn store_error_after_claim_releases_batch() {
     let d = store_dir_with(&[("roboto.ttf", 0)]);
     let db = d.path().join("data").join(fontatlas_store::LIBRARY_FILE);
-    let r = EmbedWorker::start(cfg(&d), Box::new(LockingEncoder { inner: tiny(), db }), Box::new(|_| {})).unwrap().join();
-    assert!(r.is_err());
+    let enc = Box::new(BreakStoreEncoder { inner: tiny(), db: db.clone() });
+    let r = EmbedWorker::start(cfg(&d), enc, Box::new(|_| {})).unwrap().join();
+    assert!(r.is_err(), "lỗi store khi ghi phải làm worker dừng với lỗi");
+    // trả bảng về tên cũ để kiểm trạng thái hàng đợi qua Store thường
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute_batch("ALTER TABLE embeddings_broken RENAME TO embeddings").unwrap();
+    drop(conn);
     let s = open_data(&d);
     assert_eq!((count_status(&s, "running"), count_status(&s, "pending")), (0, 1));
+    assert_eq!(s.count_embeddings(RAW).unwrap(), 0, "không ghi vector nào");
 }
