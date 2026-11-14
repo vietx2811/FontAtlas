@@ -117,3 +117,30 @@ fn a_newer_pack_is_refused_and_existing_data_is_never_overwritten() {
     std::fs::write(&mp, serde_json::to_vec(&v).unwrap()).unwrap();
     assert!(matches!(verify_pack(&pack), Err(StoreError::NewerSchema { db: "user", .. })));
 }
+
+#[test]
+fn restore_moves_existing_databases_aside_instead_of_deleting_them() {
+    let (d, fonts, s) = populated();
+    let pack = d.path().join("pack");
+    s.export_pack(&pack).unwrap();
+    drop(s);
+    // lần mở đầu sau khi cài lại đã tạo DB rỗng
+    let fresh = d.path().join("newdb");
+    drop(Store::open(&fresh).unwrap());
+    assert!(fresh.join("user.db").exists());
+    let (rep, backup) = fontatlas_store::restore_pack(&pack, &fresh, &[]).unwrap();
+    assert_eq!(rep.counts.files, 2);
+    let b = backup.expect("DB cũ phải được dời, không xoá");
+    assert!(b.join("user.db").exists() && b.join("library.db").exists());
+    let (s2, _) = Store::open(&fresh).unwrap();
+    assert_eq!(count(&s2, "SELECT count(*) FROM u.face_tags"), 1);
+    assert_eq!(s2.sources().unwrap()[0].path.as_deref(), Some(fonts.to_string_lossy().as_ref()));
+
+    // gói hỏng: không dời gì
+    let before = std::fs::read(fresh.join("user.db")).unwrap();
+    std::fs::write(pack.join("user.db"), b"hong").unwrap();
+    assert!(fontatlas_store::restore_pack(&pack, &fresh, &[]).is_err());
+    drop(s2);
+    assert_eq!(std::fs::read(fresh.join("user.db")).unwrap().len() > 0, before.len() > 0);
+    assert!(fresh.join("library.db").exists());
+}

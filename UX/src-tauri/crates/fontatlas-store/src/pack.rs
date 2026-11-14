@@ -189,3 +189,28 @@ pub fn import_pack(pack: &Path, data_dir: &Path, remap: &[(String, String)]) -> 
     let _ = std::fs::remove_dir(&stage);
     Ok(rep)
 }
+
+/// Khôi phục (cài lại máy / thư viện hỏng): như [`import_pack`] nhưng nếu `data_dir` đã có DB (vd lần mở đầu sau cài đã tạo DB rỗng) thì
+/// DỜI chúng sang `pre-restore-<thời điểm>/` trong cùng thư mục (không xoá) rồi mới nhập. Gói được kiểm TRƯỚC khi dời bất cứ thứ gì.
+/// Chỉ gọi khi KHÔNG có kết nối nào đang mở các DB đó (app gọi lúc khởi động, trước `Store::open`).
+/// Trả (báo cáo, thư mục sao lưu nếu có).
+pub fn restore_pack(pack: &Path, data_dir: &Path, remap: &[(String, String)]) -> Result<(ImportReport, Option<PathBuf>), StoreError> {
+    verify_pack(pack)?;
+    let mut backup = None;
+    let has = |f: &str| data_dir.join(f).exists();
+    if has(LIBRARY_FILE) || has(USER_FILE) {
+        let b = data_dir.join(format!("pre-restore-{}", now_ms()));
+        std::fs::create_dir_all(&b)?;
+        for base in [LIBRARY_FILE, USER_FILE] {
+            for ext in ["", "-wal", "-shm"] {
+                let name = format!("{base}{ext}");
+                if data_dir.join(&name).exists() {
+                    std::fs::rename(data_dir.join(&name), b.join(&name))?;
+                }
+            }
+        }
+        backup = Some(b);
+    }
+    let rep = import_pack(pack, data_dir, remap)?;
+    Ok((rep, backup))
+}

@@ -678,7 +678,30 @@ CREATE TABLE case_apps (
 CREATE INDEX case_apps_bundle ON case_apps(bundle_id);
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS];
+/// B7 Organized Library: sổ các bản CHÉP vào thư viện có tổ chức (một bản cho mỗi hash) và nhật ký di chuyển của "Sắp xếp lại"
+/// (có Hoàn tác). Số phiên bản do vị trí trong `USER_MIGRATIONS` quyết định; khi merge cạnh migration khác chỉ cần đổi thứ tự.
+pub(crate) const USER_ORGANIZED: &str = r#"
+CREATE TABLE organized_files (
+  hash       BLOB PRIMARY KEY CHECK (length(hash) = 32),
+  dest_path  TEXT NOT NULL UNIQUE,
+  src_path   TEXT NOT NULL,           -- bản gốc lúc chép (không đụng tới)
+  class_key  TEXT NOT NULL,           -- class lúc xếp, để biết khi nào "Sắp xếp lại" có việc
+  family     TEXT NOT NULL,           -- tên thư mục họ lúc xếp
+  copied_at  INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE organized_moves (
+  id        INTEGER PRIMARY KEY,
+  batch_id  INTEGER NOT NULL,
+  hash      BLOB NOT NULL,
+  from_path TEXT NOT NULL,
+  to_path   TEXT NOT NULL,
+  moved_at  INTEGER NOT NULL,
+  undone_at INTEGER
+);
+CREATE INDEX organized_moves_batch ON organized_moves(batch_id);
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
