@@ -234,14 +234,15 @@ fn panicking_backend_answers_nothing_and_releases_its_slot() {
 
 #[test]
 fn flood_of_slow_unknown_names_is_capped_and_does_not_pile_up_threads() {
-    let gate = Arc::new(std::sync::Barrier::new(1));
-    let _ = gate;
+    // Việc nền bị giữ tới khi kiểm xong (không dựa vào sleep): máy chậm không làm việc nào xong sớm và nhả chỗ.
+    let gate = Gate::new();
+    let g2 = gate.clone();
     let started = Arc::new(AtomicUsize::new(0));
     let s2 = started.clone();
     let r = Responder::new(
         move |_q: &EnsureRequest| {
             s2.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(400));
+            g2.wait();
             Ok(resp(FontStatus::Missing, None))
         },
         || true,
@@ -252,6 +253,7 @@ fn flood_of_slow_unknown_names_is_capped_and_does_not_pile_up_threads() {
         assert_eq!(r.answer(1, &ps(&format!("Name{i}-Regular"))), Answer::Nothing);
     }
     assert!(started.load(Ordering::SeqCst) <= fontatlas_fontreq::MAX_INFLIGHT, "{} việc nền", started.load(Ordering::SeqCst));
+    gate.open();
 }
 
 #[test]
@@ -331,10 +333,12 @@ fn same_name_asked_while_work_is_running_shares_that_work() {
 fn slow_name_asked_again_after_slow_ttl_does_not_spawn_another_thread() {
     let calls = Arc::new(AtomicUsize::new(0));
     let c2 = calls.clone();
+    let gate = Gate::new();
+    let g2 = gate.clone();
     let r = Responder::new(
         move |_q: &EnsureRequest| {
             c2.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(600));
+            g2.wait(); // việc nền "chậm" cho tới khi kiểm xong, không phụ thuộc tốc độ máy
             Ok(resp(FontStatus::Missing, None))
         },
         || true,
@@ -348,4 +352,22 @@ fn slow_name_asked_again_after_slow_ttl_does_not_spawn_another_thread() {
     }
     assert_eq!(calls.load(Ordering::SeqCst), 1, "việc cũ chưa xong thì không sinh luồng mới cho cùng tên");
     assert_eq!(r.inflight(), 1);
+    gate.open();
+}
+
+/// Cổng cho việc nền trong test: chờ tới khi `open()` (có hạn 30 s chỉ để bắt treo).
+#[derive(Clone)]
+struct Gate(Arc<(Mutex<bool>, std::sync::Condvar)>);
+impl Gate {
+    fn new() -> Self { Gate(Arc::new((Mutex::new(false), std::sync::Condvar::new()))) }
+    fn wait(&self) {
+        let (m, cv) = &*self.0;
+        let g = m.lock().unwrap();
+        let _ = cv.wait_timeout_while(g, Duration::from_secs(30), |open| !*open).unwrap();
+    }
+    fn open(&self) {
+        let (m, cv) = &*self.0;
+        *m.lock().unwrap() = true;
+        cv.notify_all();
+    }
 }
