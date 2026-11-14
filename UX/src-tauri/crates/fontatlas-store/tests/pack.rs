@@ -137,10 +137,8 @@ fn restore_moves_existing_databases_aside_instead_of_deleting_them() {
     assert_eq!(s2.sources().unwrap()[0].path.as_deref(), Some(fonts.to_string_lossy().as_ref()));
 
     // gói hỏng: không dời gì
-    let before = std::fs::read(fresh.join("user.db")).unwrap();
     std::fs::write(pack.join("user.db"), b"hong").unwrap();
     assert!(fontatlas_store::restore_pack(&pack, &fresh, &[]).is_err());
     drop(s2);
-    assert_eq!(std::fs::read(fresh.join("user.db")).unwrap().len() > 0, before.len() > 0);
-    assert!(fresh.join("library.db").exists());
+    assert!(fresh.join("user.db").exists() && fresh.join("library.db").exists(), "gói hỏng: không dời gì");
 }

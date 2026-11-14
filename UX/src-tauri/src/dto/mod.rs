@@ -8,6 +8,7 @@ pub mod events;
 pub mod langs;
 pub mod library;
 pub mod model;
+pub mod organized;
 pub mod preview;
 pub mod settings;
 pub mod figma;

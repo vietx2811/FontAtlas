@@ -39,6 +39,12 @@ pub fn start(state: Arc<AppState>) {
 /// Đồng bộ (để test). Không panic: lỗi mở Store → phase `failed`, không ghi thêm gì.
 pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
     set_phase(state, BootPhase::Starting);
+    // khôi phục từ gói (B7) đã xếp ở lần chạy trước: PHẢI chạy trước khi mở DB; DB cũ được dời, không xoá
+    match crate::services::organized::apply_pending_restore(&state.dirs.data) {
+        Some(Ok(b)) => log::warn!("đã khôi phục thư viện từ gói; DB cũ ở {b:?}"),
+        Some(Err(e)) => log::error!("khôi phục từ gói thất bại, giữ DB hiện tại: {e}"),
+        None => {}
+    }
     let (store, report) = match Store::open(&state.dirs.data) {
         Ok(x) => x,
         Err(e) => {

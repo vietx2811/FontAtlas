@@ -19,6 +19,7 @@ use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, Sca
 use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
+use crate::dto::organized::*;
 use crate::dto::preview::*;
 use crate::dto::settings::{FontManagerDto, GlassProbeDto};
 use crate::dto::suggest::*;
@@ -71,6 +72,20 @@ macro_rules! command_list {
             async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
             async import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> Result<ImportResultDto, CmdError>;
             async import_paths_cancel() -> Result<bool, CmdError>;
+            async organized_check_location(path: String) -> Result<OrganizedLocationCheckDto, CmdError>;
+            async organized_status() -> Result<OrganizedStatusDto, CmdError>;
+            async organized_create(path: String) -> Result<OrganizedStatusDto, CmdError>;
+            async organized_plan(scope: OrganizeScopeDto) -> Result<OrganizePlanDto, CmdError>;
+            async organized_import(scope: OrganizeScopeDto, on_progress: Channel<OrganizeProgressDto>) -> Result<OrganizeResultDto, CmdError>;
+            async organized_cancel() -> Result<bool, CmdError>;
+            async organized_resort_preview() -> Result<ResortPlanDto, CmdError>;
+            async organized_resort_apply() -> Result<ResortResultDto, CmdError>;
+            async organized_resort_undo(batch_id: i64) -> Result<ResortResultDto, CmdError>;
+            async organized_snapshot_now() -> Result<String, CmdError>;
+            async pack_inspect(path: String) -> Result<PackInfoDto, CmdError>;
+            async pack_restore_stage(path: String, remap: Vec<PathRemapDto>) -> Result<PackInfoDto, CmdError>;
+            async pack_restore_pending() -> Result<Option<PackInfoDto>, CmdError>;
+            async pack_restore_cancel() -> Result<bool, CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
             async scan_cancel() -> Result<(), CmdError>;
@@ -416,6 +431,24 @@ cmd!(import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress:
         let _ = on_progress.send(p);
     })
 });
+cmd!(organized_check_location(path: String) -> OrganizedLocationCheckDto => |s| crate::services::organized::check_location(s, &path));
+cmd!(organized_status() -> OrganizedStatusDto => |s| crate::services::organized::status(s));
+cmd!(organized_create(path: String) -> OrganizedStatusDto => |s| crate::services::organized::create(s, &path));
+cmd!(organized_plan(scope: OrganizeScopeDto) -> OrganizePlanDto => |s| crate::services::organized::import_plan(s, &scope));
+cmd!(organized_import(scope: OrganizeScopeDto, on_progress: Channel<OrganizeProgressDto>) -> OrganizeResultDto => |s| {
+    crate::services::organized::import(s, &scope, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(organized_cancel() -> bool => |s| Ok(crate::services::organized::cancel(s)));
+cmd!(organized_resort_preview() -> ResortPlanDto => |s| crate::services::organized::resort_preview(s));
+cmd!(organized_resort_apply() -> ResortResultDto => |s| crate::services::organized::resort_apply(s));
+cmd!(organized_resort_undo(batch_id: i64) -> ResortResultDto => |s| crate::services::organized::resort_undo(s, batch_id));
+cmd!(organized_snapshot_now() -> String => |s| crate::services::organized::snapshot_now(s));
+cmd!(pack_inspect(path: String) -> PackInfoDto => |_s| crate::services::organized::pack_inspect(&path));
+cmd!(pack_restore_stage(path: String, remap: Vec<PathRemapDto>) -> PackInfoDto => |s| crate::services::organized::pack_restore_stage(s, &path, &remap));
+cmd!(pack_restore_pending() -> Option<PackInfoDto> => |s| Ok(crate::services::organized::pack_restore_pending(s)));
+cmd!(pack_restore_cancel() -> bool => |s| Ok(crate::services::organized::pack_restore_cancel(s)));
 cmd!(import_paths_cancel() -> bool => |s| Ok(crate::services::import::cancel_import(s)));
 cmd!(source_download_cancel(source_id: i64) -> bool => |s| Ok(cloud_download::cancel_download(s, source_id)));
 cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));

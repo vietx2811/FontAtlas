@@ -67,6 +67,8 @@ pub struct AppState {
     pub scans: ScanManager,
     /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
+    /// Lượt chép / sắp xếp lại Organized Library đang chạy (B7): một lúc một lượt, cờ huỷ.
+    pub organize: crate::services::organized::OrganizeJob,
     /// Lượt nhập đường dẫn thả từ Finder đang chạy (G8): một lúc một lượt, cờ huỷ.
     pub imports: crate::services::import::ImportJob,
     /// Theo dõi thay đổi thư mục nguồn (FSEvents) để xếp quét lại.
@@ -114,6 +116,7 @@ impl AppState {
             scans: ScanManager::default(),
             cloud_jobs: Default::default(),
             imports: Default::default(),
+            organize: Default::default(),
             cloud_watch: Default::default(),
             app_sets: Default::default(),
             index: RwLock::new(None),
