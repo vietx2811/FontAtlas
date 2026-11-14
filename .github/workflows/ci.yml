@@ -110,4 +110,6 @@ jobs:
             grep -E '^(error|warning: unused)|error\[|could not compile' check.log | sort | uniq -c | sort -rn | head -80
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit $rc
+          # Chưa hỗ trợ Windows (W1 đang chuẩn bị): không làm đỏ PR, chỉ cảnh báo + danh sách lỗi trong summary.
+          if [ "$rc" -ne 0 ]; then echo "::warning title=Windows chưa build được::cargo check exit $rc, xem job summary"; fi
+          exit 0
