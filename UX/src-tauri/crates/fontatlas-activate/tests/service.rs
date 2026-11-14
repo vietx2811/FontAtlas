@@ -1079,3 +1079,26 @@ fn auto_request_uses_its_own_short_download_path() {
     assert_eq!((normal.load(Ordering::SeqCst), auto.load(Ordering::SeqCst)), (0, 1));
     assert!(svc.engine().registrations().is_empty());
 }
+
+#[test]
+fn deactivate_waits_for_a_busy_hash_instead_of_skipping_it() {
+    let env = Arc::new(env_with(&[LIBRE]));
+    let svc = Arc::new(service(&env));
+    let k = key_of(&env, LIBRE);
+    let barrier = Arc::new(Barrier::new(2));
+    svc.engine().block_register_until(barrier.clone());
+    let (e2, s2) = (env.clone(), svc.clone());
+    let t = std::thread::spawn(move || s2.activate_faces(&e2.store, &[k], None, ConflictPolicy::Ask, &mut no_progress()).unwrap());
+    while !svc.engine().is_blocked() {
+        std::thread::yield_now();
+    }
+    // "Tắt hết" chạy khi hash đang được kích hoạt dở; thả kích hoạt sau 300 ms
+    let (e3, s3) = (env.clone(), svc.clone());
+    let d = std::thread::spawn(move || s3.deactivate_faces(&e3.store, &[k], DeactivatePolicy::Force, &mut no_progress()).unwrap());
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    barrier.wait();
+    assert_eq!(t.join().unwrap().results[0].outcome, FileOutcome::Activated);
+    let rep = d.join().unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated, "chờ rồi tắt, không bỏ sót");
+    assert!(svc.engine().registrations().is_empty());
+}

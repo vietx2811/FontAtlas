@@ -12,6 +12,10 @@ use crate::engine::{ActivationEngine, Scope};
 use crate::service::{ActivationService, engine_failure, hex, now_ms, relock};
 use crate::types::{ActivationError, ActivationReport, DeactivatePolicy, EngineError, FileOutcome, FileResult, Progress};
 
+/// Số lần thử lại và thời gian chờ giữa hai lần khi hash đang bận (tổng ≤ 3 s mỗi font).
+const BUSY_RETRIES: usize = 30;
+const BUSY_RETRY_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// Lý do cần gỡ khỏi một file.
 #[derive(Clone, Copy)]
 enum Lift {
@@ -136,7 +140,16 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut rep = ActivationReport::default();
         let total = groups.len();
         for (i, (hash, req)) in groups.into_iter().enumerate() {
-            let r = self.deactivate_one(store, hash, req, what)?;
+            // Một thao tác khác (kích hoạt/đối soát/chuyển đường dẫn) đang giữ hash này: chờ ngắn rồi thử lại, kẻo "Tắt hết" bỏ sót
+            // font (trả Busy rồi người dùng thấy font vẫn bật). Hết hạn mới báo Busy.
+            let mut r = self.deactivate_one(store, hash, req.clone(), what)?;
+            for _ in 0..BUSY_RETRIES {
+                if r.outcome != FileOutcome::Busy {
+                    break;
+                }
+                std::thread::sleep(BUSY_RETRY_WAIT);
+                r = self.deactivate_one(store, hash, req.clone(), what)?;
+            }
             rep.push(r);
             progress(Progress { done: i + 1, total, hash_hex: hex(&hash) });
         }
