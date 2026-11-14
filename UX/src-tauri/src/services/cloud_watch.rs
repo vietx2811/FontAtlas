@@ -117,6 +117,9 @@ pub struct CloudWatch {
     bg_running: std::sync::atomic::AtomicBool,
     bg_again: std::sync::atomic::AtomicBool,
     closing: std::sync::atomic::AtomicBool,
+    /// Có dựng watcher FSEvents thật không. `CloudWatch::default()` (trạng thái trong `AppState::new`, dùng bởi mọi test) = TẮT để thư viện
+    /// tạm của test không dựng luồng FSEvents (chậm khi máy bận); app thật bật ở `lib.rs` bằng `enable_real_watchers`. `with_timing` = BẬT.
+    real: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Default)]
@@ -128,7 +131,9 @@ struct Inner {
 
 impl Default for CloudWatch {
     fn default() -> Self {
-        Self::with_timing(QUIET, MAX_WAIT)
+        let w = Self::with_timing(QUIET, MAX_WAIT);
+        w.real.store(false, std::sync::atomic::Ordering::SeqCst);
+        w
     }
 }
 
@@ -145,7 +150,13 @@ impl CloudWatch {
             bg_running: Default::default(),
             bg_again: Default::default(),
             closing: Default::default(),
+            real: std::sync::atomic::AtomicBool::new(true),
         }
+    }
+
+    /// Bật watcher thật (app thật gọi một lần lúc khởi tạo; test của watcher dùng `with_timing` hoặc gọi hàm này).
+    pub fn enable_real_watchers(&self) {
+        self.real.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Các nguồn đang được theo dõi (cho test/chẩn đoán).
@@ -159,7 +170,7 @@ impl CloudWatch {
     /// không được làm treo "Thêm nguồn"/mở app. Nhiều yêu cầu dồn lại thành tối đa một lượt chạy nối tiếp.
     pub fn sync_in_background(&self, state: &Arc<AppState>) {
         use std::sync::atomic::Ordering::SeqCst;
-        if self.closing.load(SeqCst) {
+        if self.closing.load(SeqCst) || !self.real.load(SeqCst) {
             return;
         }
         self.bg_again.store(true, SeqCst);
@@ -188,6 +199,9 @@ impl CloudWatch {
     /// mở app, đổi công tắc) theo dõi lại.
     pub fn sync(&self, state: &Arc<AppState>) {
         // công tắc "Tự phát hiện thay đổi trên ổ cloud" (mặc định bật); tắt = không nguồn nào được theo dõi
+        if !self.real.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         let enabled = state.with_user(|u| Ok(u.setting(crate::services::keys::CLOUD_WATCH)?)).ok().flatten().is_none_or(|v| v != "0" && v != "false");
         let want: HashMap<i64, PathBuf> = state
             .with_user(|u| Ok(u.sources()?))
