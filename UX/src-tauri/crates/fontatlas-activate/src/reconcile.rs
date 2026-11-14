@@ -64,6 +64,7 @@ impl<E: ActivationEngine> ActivationService<E> {
             (pruned, existing, s.activation_rows()?)
         };
         let mut rep = ReconcileReport::default();
+        self.finish_pending_relocations(store);
         let total = rows.len();
         for (i, row) in rows.into_iter().enumerate() {
             let hash = row.hash;
@@ -151,7 +152,16 @@ impl<E: ActivationEngine> ActivationService<E> {
         row.verified_at = Some(now_ms());
         let was_unknown = matches!(row.status, ActivationStatus::Unknown | ActivationStatus::Error);
         let target = relock(store).file_target(&row.hash)?;
-        let located = target.as_ref().map(locate).unwrap_or(Located::Missing(None));
+        // B7: đường đang đăng ký còn là vị trí hợp lệ (đúng hash) thì GIỮ, không nhảy sang vị trí khác chỉ vì nó đứng đầu danh sách
+        // (thêm bản chép vào Organized Library không được âm thầm đổi đường của font đang bật; đổi đường là việc của `relocate`).
+        let sticky = match (&row.active_path, &target) {
+            (Some(cur), Some(t)) => match crate::service::locate_where(t, |l| path_str(&l.path) == *cur || crate::paths::canonical_path(&l.path).is_ok_and(|c| path_str(&c) == *cur)) {
+                Located::Ready(p) => Some(Located::Ready(p)),
+                _ => None,
+            },
+            _ => None,
+        };
+        let located = sticky.unwrap_or_else(|| target.as_ref().map(locate).unwrap_or(Located::Missing(None)));
         let path = match located {
             Located::Ready(p) => p,
             gone => {

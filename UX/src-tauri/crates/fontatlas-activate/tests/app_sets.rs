@@ -220,3 +220,62 @@ fn a_conflicting_font_is_not_turned_on_and_is_counted() {
     assert_eq!(state(&env, &fontatlas_store::FaceKey { hash: other, face_index: 0 }), None, "không bật font xung đột");
     let _ = FileOutcome::Activated;
 }
+
+#[test]
+fn suppress_removes_only_the_app_reason_and_keeps_other_reasons() {
+    let (env, svc, k, c) = setup(&[AI]);
+    // bật tay (persistent) trước, app chạy sau → hai lý do
+    svc.activate_faces(&env.store, &[k], Some(fontatlas_activate::Scope::Persistent), fontatlas_activate::ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    let mut tr = AppSetTracker::new();
+    let t0 = Instant::now();
+    svc.sync_app_sets(&env.store, &running(&[AI]), t0, GRACE, &mut tr).unwrap();
+    assert_eq!(reasons(&env, &k), vec![ActivationReason::Manual, ActivationReason::CaseApp(c)]);
+    svc.suppress_case_app(&env.store, c, &mut tr).unwrap();
+    assert_eq!(reasons(&env, &k), vec![ActivationReason::Manual], "lý do bật tay còn nguyên");
+    assert_eq!(state(&env, &k), Some(DesiredState::Active));
+    assert!(tr.is_suppressed(c));
+}
+
+#[test]
+fn suppress_turns_the_fonts_off_and_the_observer_does_not_turn_them_back_on_until_relaunch() {
+    let (env, svc, k, c) = setup(&[AI]);
+    let mut tr = AppSetTracker::new();
+    let t0 = Instant::now();
+    svc.sync_app_sets(&env.store, &running(&[AI]), t0, GRACE, &mut tr).unwrap();
+    assert_eq!(state(&env, &k), Some(DesiredState::Active));
+    svc.suppress_case_app(&env.store, c, &mut tr).unwrap();
+    assert_eq!(state(&env, &k), Some(DesiredState::Inactive), "chỉ có lý do app → tắt");
+
+    // app vẫn chạy qua nhiều nhịp: không bật lại, không sự kiện
+    for i in 1..=5 {
+        let ev = svc.sync_app_sets(&env.store, &running(&[AI]), t0 + Duration::from_secs(i), GRACE, &mut tr).unwrap();
+        assert!(ev.is_empty(), "nhịp {i}");
+    }
+    assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
+
+    // app thoát hết → hết hiệu lực
+    svc.sync_app_sets(&env.store, &running(&[]), t0 + Duration::from_secs(10), GRACE, &mut tr).unwrap();
+    assert!(!tr.is_suppressed(c));
+    assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
+
+    // chạy lại → bật như thường
+    let ev = svc.sync_app_sets(&env.store, &running(&[AI]), t0 + Duration::from_secs(20), GRACE, &mut tr).unwrap();
+    assert_eq!(ev.len(), 1);
+    assert_eq!((ev[0].kind, ev[0].changed), (AppSetEventKind::On, 1));
+    assert_eq!(state(&env, &k), Some(DesiredState::Active));
+    assert_eq!(reasons(&env, &k), vec![ActivationReason::CaseApp(c)]);
+}
+
+#[test]
+fn suppress_with_two_apps_lasts_until_both_have_quit() {
+    let (env, svc, k, c) = setup(&[AI, ID]);
+    let mut tr = AppSetTracker::new();
+    let t0 = Instant::now();
+    svc.sync_app_sets(&env.store, &running(&[AI, ID]), t0, GRACE, &mut tr).unwrap();
+    svc.suppress_case_app(&env.store, c, &mut tr).unwrap();
+    // một app thoát, app kia còn chạy: vẫn bị chặn
+    svc.sync_app_sets(&env.store, &running(&[ID]), t0 + Duration::from_secs(2), GRACE, &mut tr).unwrap();
+    svc.sync_app_sets(&env.store, &running(&[ID, AI]), t0 + Duration::from_secs(4), GRACE, &mut tr).unwrap();
+    assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
+    assert!(tr.is_suppressed(c));
+}

@@ -210,12 +210,14 @@ macro_rules! command_list {
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_relocate(faces: Vec<FaceKeyDto>, prefer_under: Option<String>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
             async activation_vf_policy() -> Result<VfPolicyDto, CmdError>;
             async activation_set_vf_policy(policy: VfPolicyDto) -> Result<(), CmdError>;
             async case_apps(collection_id: i64) -> Result<Vec<CaseAppDto>, CmdError>;
             async case_set_apps(collection_id: i64, apps: Vec<CaseAppDto>) -> Result<(), CmdError>;
             async installed_apps() -> Result<Vec<InstalledAppDto>, CmdError>;
+            async case_app_suppress(collection_id: i64) -> Result<(), CmdError>;
             async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
             async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
             async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
@@ -600,11 +602,17 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
         let _ = on_progress.send(p);
     })
 });
+cmd!(activation_relocate(faces: Vec<FaceKeyDto>, prefer_under: Option<String>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::relocate(s, &faces, prefer_under.as_deref(), &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
 cmd!(activation_vf_policy() -> VfPolicyDto => |s| activation::vf_policy(s));
 cmd!(activation_set_vf_policy(policy: VfPolicyDto) -> () => |s| activation::set_vf_policy(s, policy));
 cmd!(case_apps(collection_id: i64) -> Vec<CaseAppDto> => |s| app_sets::case_apps(s, collection_id));
 cmd!(case_set_apps(collection_id: i64, apps: Vec<CaseAppDto>) -> () => |s| app_sets::set_case_apps(s, collection_id, &apps));
+cmd!(case_app_suppress(collection_id: i64) -> () => |s| app_sets::case_app_suppress(s, collection_id));
 cmd!(installed_apps() -> Vec<InstalledAppDto> => |_s| Ok(app_sets::installed_apps()));
 cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => |s| activation::availability(s, &faces));
 cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
