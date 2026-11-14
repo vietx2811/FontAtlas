@@ -11,7 +11,7 @@ use fontatlas_core::rename::{RenameError, rename_vf_copy};
 use fontatlas_store::{DerivedFont, FaceKey, FileImportOutcome, SourceKind, is_dataless};
 
 use crate::dto::library::FaceKeyDto;
-use crate::dto::organized::DerivedCopyDto;
+use crate::dto::organized::{DerivedCopyDto, DerivedCopyInfoDto, RemoveDerivedResultDto, RestoreDerivedResultDto, RestoreViaDto};
 use crate::error::CmdError;
 use crate::services::organized::{free_dest, safe_component};
 use crate::state::AppState;
@@ -138,30 +138,121 @@ pub fn derive_renamed_copy(state: &Arc<AppState>, hash: &[u8; 32]) -> Result<(Fa
     let new_hash: [u8; 32] = *blake3::hash(&out.bytes).as_bytes();
     let dest = free_dest(&dir, &format!("{stem}-VF.{ext}"), &new_hash, &|p: &Path| p.exists());
     write_atomic(&dest, &out.bytes)?;
-    // 5. nạp vào thư viện như font thường: nguồn thư mục chứa đích (Organized Library) hoặc nguồn ẩn `derived`
+    // 5. nạp vào thư viện như font thường và ghi sổ
+    let rec = DerivedFont { hash: new_hash, derived_from: *hash, path: dest.to_string_lossy().into_owned(), license_restricted: out.license_restricted };
+    if let Err(e) = register_copy(state, &dest, &rec) {
+        let _ = std::fs::remove_file(&dest);
+        return Err(e);
+    }
+    let k = make_key(new_hash);
+    Ok((k, DerivedCopyDto { face: FaceKeyDto::from(&k), path: rec.path, created: true, license_restricted: out.license_restricted }))
+}
+
+/// Nạp file bản sao `dest` vào thư viện (nguồn thư mục chứa nó — Organized Library — hoặc nguồn ẩn `derived`) và ghi sổ `derived_fonts`.
+fn register_copy(state: &Arc<AppState>, dest: &Path, rec: &DerivedFont) -> Result<(), DeriveError> {
+    let internal = |e: CmdError| DeriveError::Io(e.message);
     let sources = state.with_user(|u| Ok(u.sources()?)).map_err(internal)?;
     let sid = match sources.iter().find(|s| s.kind == SourceKind::Directory && s.path.as_deref().is_some_and(|p| dest.starts_with(p))) {
         Some(s) => s.id,
-        None => state
-            .with_user(|u| Ok(u.add_source(SourceKind::Derived, DERIVED_SOURCE_NAME, None)?))
-            .map_err(internal)?,
+        None => state.with_user(|u| Ok(u.add_source(SourceKind::Derived, DERIVED_SOURCE_NAME, None)?)).map_err(internal)?,
     };
-    let outcomes = state.with_store(|s| Ok(s.import_files(sid, std::slice::from_ref(&dest))?)).map_err(internal)?;
+    let outcomes = state.with_store(|s| Ok(s.import_files(sid, std::slice::from_ref(&dest.to_path_buf()))?)).map_err(internal)?;
     if !matches!(outcomes.first().map(|o| o.1), Some(FileImportOutcome::Imported | FileImportOutcome::AlreadyKnown)) {
-        let _ = std::fs::remove_file(&dest);
         return Err(DeriveError::Io("không nạp được bản sao vào thư viện".into()));
     }
-    let rec = DerivedFont { hash: new_hash, derived_from: *hash, path: dest.to_string_lossy().into_owned(), license_restricted: out.license_restricted };
-    state.with_store(|s| Ok(s.derived_record(&rec)?)).map_err(internal)?;
+    state.with_store(|s| Ok(s.derived_record(rec)?)).map_err(internal)?;
     crate::services::duplicates::invalidate_cache();
     let _ = crate::services::preview::bump_generation(state);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
-    let k = make_key(new_hash);
-    Ok((k, DerivedCopyDto { face: FaceKeyDto::from(&k), path: rec.path, created: true, license_restricted: out.license_restricted }))
+    Ok(())
 }
 
 /// Lệnh: nhận face của VF, trả bản sao.
 pub fn derive_command(state: &Arc<AppState>, face: &FaceKeyDto) -> Result<DerivedCopyDto, CmdError> {
     let k = FaceKey::try_from(face)?;
     Ok(derive_renamed_copy(state, &k.hash)?.1)
+}
+
+// ---------- gỡ bản sao + hoàn tác ----------
+
+/// Gỡ MỘT bản sao đổi tên: tắt nếu đang bật, chuyển file vào Thùng rác (KHÔNG BAO GIỜ xoá vĩnh viễn; chỉ file do chính app tạo trong
+/// thư mục bản sao), rồi dọn sổ + vị trí trong thư viện. `trasher` tiêm được để test.
+pub fn remove_derived_copy_with(
+    state: &Arc<AppState>,
+    face: &FaceKeyDto,
+    trasher: &dyn Fn(&Path) -> Result<PathBuf, String>,
+) -> Result<RemoveDerivedResultDto, CmdError> {
+    let key = FaceKey::try_from(face)?;
+    let d = state
+        .with_store(|s| Ok(s.derived_for_copy(&key.hash)?))?
+        .ok_or_else(|| CmdError::new("not_derived", "font này không phải bản sao đổi tên"))?;
+    let path = PathBuf::from(&d.path);
+    // chỉ file nằm trong thư mục bản sao của app (Library/Derived hoặc <data>/derived) mới được chuyển vào Thùng rác
+    let derived_roots = [derived_dir(state), state.dirs.data.join("derived")];
+    let in_derived = |p: &Path| derived_roots.iter().any(|r| p.starts_with(r));
+    if path.exists() && !in_derived(&path) {
+        return Err(CmdError::new("not_allowed", "bản sao nằm ngoài thư mục bản sao của app; không tự chuyển vào Thùng rác"));
+    }
+    // 1. tắt trước (font đang bật trỏ vào file sắp rời đi)
+    let mut was_active = false;
+    if state.activation.supported() {
+        let rep = crate::services::activation::deactivate(state, std::slice::from_ref(face), true, &mut |_| {})
+            .map_err(|e| CmdError::new("deactivate_failed", e.message))?;
+        was_active = rep.changed > 0;
+    }
+    // 2. Thùng rác
+    let trash_path = if path.exists() {
+        Some(trasher(&path).map_err(|e| CmdError::new("trash_failed", e))?.to_string_lossy().into_owned())
+    } else {
+        None
+    };
+    // 3. sổ + vị trí thư viện
+    let id = state.with_store(|s| Ok(s.derived_remove(&d, trash_path.as_deref())?))?;
+    crate::services::duplicates::invalidate_cache();
+    let _ = crate::services::preview::bump_generation(state);
+    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    Ok(RemoveDerivedResultDto { removal_id: id, trashed: trash_path.is_some(), was_active })
+}
+
+pub fn remove_derived_copy(state: &Arc<AppState>, face: &FaceKeyDto) -> Result<RemoveDerivedResultDto, CmdError> {
+    remove_derived_copy_with(state, face, &crate::trash::trash_item)
+}
+
+/// Hoàn tác một lần gỡ: đưa file từ Thùng rác về chỗ cũ (nếu còn và chỗ cũ trống), không thì TẠO LẠI từ font gốc.
+pub fn restore_derived_copy(state: &Arc<AppState>, removal_id: i64) -> Result<RestoreDerivedResultDto, CmdError> {
+    let r = state
+        .with_store(|s| Ok(s.derived_removal(removal_id)?))?
+        .ok_or_else(|| CmdError::not_found(format!("lần gỡ #{removal_id}")))?;
+    if r.undone {
+        return Err(CmdError::new("already_undone", "lần gỡ này đã được hoàn tác"));
+    }
+    let orig = PathBuf::from(&r.original_path);
+    let from_trash = r.trash_path.as_deref().map(PathBuf::from).filter(|t| t.is_file());
+    if let Some(t) = from_trash
+        && !orig.exists()
+        && orig.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok())
+        && std::fs::rename(&t, &orig).is_ok()
+    {
+        let rec = DerivedFont { hash: r.hash, derived_from: r.derived_from, path: r.original_path.clone(), license_restricted: r.license_restricted };
+        register_copy(state, &orig, &rec).map_err(CmdError::from)?;
+        state.with_store(|s| Ok(s.derived_removal_mark_undone(removal_id)?))?;
+        let k = FaceKey { hash: r.hash, face_index: 0 };
+        return Ok(RestoreDerivedResultDto { via: RestoreViaDto::Trash, face: FaceKeyDto::from(&k), path: r.original_path });
+    }
+    // Thùng rác đã dọn / chỗ cũ bị chiếm: tạo lại từ font gốc (cần gốc còn trong thư viện và vẫn trùng tên)
+    let (k, c) = derive_renamed_copy(state, &r.derived_from).map_err(CmdError::from)?;
+    state.with_store(|s| Ok(s.derived_removal_mark_undone(removal_id)?))?;
+    Ok(RestoreDerivedResultDto { via: RestoreViaDto::ReDerived, face: FaceKeyDto::from(&k), path: c.path })
+}
+
+/// Các bản sao của font gốc `face` (để hỏi "gỡ luôn các bản sao?" trước khi xoá font gốc).
+pub fn derived_copies_of(state: &AppState, face: &FaceKeyDto) -> Result<Vec<DerivedCopyInfoDto>, CmdError> {
+    let key = FaceKey::try_from(face)?;
+    let list = state.with_store(|s| Ok(s.derived_copies_of(&key.hash)?))?;
+    let mut out = Vec::new();
+    for d in list {
+        let name = state.with_store(|s| Ok(s.face_label(&d.hash, 0)?))?.unwrap_or_default();
+        out.push(DerivedCopyInfoDto { face: FaceKeyDto::from(&FaceKey { hash: d.hash, face_index: 0 }), path: d.path, name, license_restricted: d.license_restricted });
+    }
+    Ok(out)
 }

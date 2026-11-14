@@ -712,7 +712,21 @@ CREATE TABLE derived_fonts (
 ) WITHOUT ROWID;
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED, USER_DERIVED_FONTS];
+/// G7b: nhật ký gỡ bản sao đổi tên (đủ để Hoàn tác: khôi phục từ Thùng rác, hoặc tạo lại từ font gốc).
+pub(crate) const USER_DERIVED_REMOVALS: &str = r#"
+CREATE TABLE derived_removals (
+  id                 INTEGER PRIMARY KEY,
+  hash               BLOB NOT NULL CHECK (length(hash) = 32),
+  derived_from_hash  BLOB NOT NULL CHECK (length(derived_from_hash) = 32),
+  original_path      TEXT NOT NULL,
+  trash_path         TEXT,                 -- NULL: file đã không còn lúc gỡ (không có gì trong Thùng rác)
+  license_restricted INTEGER NOT NULL DEFAULT 0,
+  removed_at         INTEGER NOT NULL,
+  undone_at          INTEGER
+);
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED, USER_DERIVED_FONTS, USER_DERIVED_REMOVALS];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]

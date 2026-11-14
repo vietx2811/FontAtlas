@@ -43,7 +43,7 @@ pub use fold::vi_fold;
 pub use legacy::{LEGACY_DB_FILE, LegacyImport, LegacyPreview, LegacyResolve, legacy_preview};
 pub use ingest::{Analysis, FaceKey, IngestItem, IngestSummary, ProblemFile, ScannedFile};
 pub use rescan::{FONT_EXTENSIONS, INGEST_BATCH, PlaceholderProbe, RescanStats, RescanStatus, ScanPhase, ScanProgress, cloud_placeholders, is_dataless, os_placeholder, walk_fonts};
-pub use derived::DerivedFont;
+pub use derived::{DerivedFont, DerivedRemoval};
 pub use organized::{OrganizeCandidate, OrganizedFile, OrganizedMove};
 pub use pack::{ImportReport, MANIFEST_FILE, PACK_FORMAT, PackCounts, PackFile, PackManifest, import_pack, restore_pack, verify_pack};
 pub use rescan::{FileImportOutcome, MISSING_RETENTION_MS, RebuildReport, SourceRemovalReport};
