@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hook pre-push: chỉ cho push dev/mvp và main khi commit đã xanh trên CI máy (tools/ci/local_ci.sh).
+# Hook pre-push: (1) mọi nhánh: chặn ảnh mới ngoài danh sách cho phép (tools/ci/check_images.sh); (2) chỉ cho push dev/mvp và main khi commit đã xanh trên CI máy (tools/ci/local_ci.sh).
 # Commit merge vào main được chấp nhận nếu cây (tree) của nó trùng cây của một commit đã xanh.
 # Bỏ qua có chủ đích: FONTATLAS_CI_SKIP=1 git push ...   (sẽ in cảnh báo)
 set -uo pipefail
@@ -20,7 +20,12 @@ green() {
 }
 
 bad=0
+ROOT="$(git rev-parse --show-toplevel)"
 while read -r lref lsha rref rsha; do
+  # Repo công khai: ảnh mới ngoài danh sách cho phép chặn MỌI nhánh, không chỉ dev/mvp/main (không có cách bỏ qua).
+  if [ "$lsha" != "$ZERO" ] && [ -f "$ROOT/tools/ci/check_images.sh" ]; then
+    bash "$ROOT/tools/ci/check_images.sh" "$rsha" "$lsha" || bad=1
+  fi
   case "$rref" in refs/heads/dev/mvp|refs/heads/main) ;; *) continue ;; esac
   [ "$lsha" = "$ZERO" ] && continue  # xoá nhánh: không phải việc của CI
   if green "$lsha"; then

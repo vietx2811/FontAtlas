@@ -75,3 +75,39 @@ jobs:
       - name: tauri debug build
         working-directory: UX
         run: npx --yes @tauri-apps/cli@2.9.6 build --debug --bundles app
+
+  # Chuẩn bị cho Windows (W1): chỉ xem crate nào chưa biên dịch được. Không chặn PR (continue-on-error); danh sách lỗi nằm ở tóm tắt của job.
+  windows:
+    name: windows check (non-blocking)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'UX/src-tauri -> target', prefix-key: ci-windows }
+      - name: Frontend (tauri cần UX/dist)
+        working-directory: UX
+        shell: bash
+        run: |
+          npm ci
+          npx vite build
+      - name: cargo check --workspace --keep-going
+        working-directory: UX/src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo check --workspace --locked --keep-going --message-format short 2>&1 | tee check.log
+          rc=${PIPESTATUS[0]}
+          {
+            echo "### Windows: cargo check (exit $rc)"
+            echo
+            echo "Crate/lỗi (dùng cho 02/06):"
+            echo '```'
+            grep -E '^(error|warning: unused)|error\[|could not compile' check.log | sort | uniq -c | sort -rn | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $rc

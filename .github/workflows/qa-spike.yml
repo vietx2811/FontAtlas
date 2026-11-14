@@ -1,6 +1,6 @@
 name: qa-spike
 # Spike (chạy tay): native QA (UX/src-tauri/tests/qa/run.sh) có chạy được trên runner macOS không?
-# Cần phiên GUI, WKWebView chụp ảnh, đăng ký font CoreText theo phiên. Chỉ báo cáo, không chặn gì.
+# Cần phiên GUI, WKWebView chụp ảnh, đăng ký font CoreText theo phiên. Chỉ báo cáo, không chặn gì. Chỉ đăng LOG (qa.log), không đăng ảnh chụp: repo công khai.
 on: workflow_dispatch
 
 permissions:
