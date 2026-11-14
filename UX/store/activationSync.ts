@@ -1,5 +1,6 @@
 import type { Api } from '../api';
 import { reconcileNotices } from '../components/activation/messages';
+import { t } from '../i18n';
 import { useNoticeStore } from './notices';
 import { useUiStore } from './ui';
 
@@ -17,6 +18,7 @@ export async function startActivationSync(api: Api): Promise<() => void> {
   const refresh = () => refreshActivation(api);
   const off = await api.activationSubscribe(e => {
     if (e.type === 'changed') void refresh();
+    else if (e.type === 'appSet') { void appSetNotice(api, e.event); void refresh(); }
     else if (e.type === 'reconciled') {
       reconcileNotices(e.report).forEach(m => useNoticeStore.getState().push(m));
       void refresh();
@@ -27,4 +29,17 @@ export async function startActivationSync(api: Api): Promise<() => void> {
   const onFocus = () => { void refresh(); };
   window.addEventListener('focus', onFocus);
   return () => { window.removeEventListener('focus', onFocus); off(); };
+}
+
+/** B5: toast khi font của Case tự bật/tắt theo app. Không có gì đổi và không xung đột thì không báo (đỡ ồn). Xung đột/lỗi thì nói thật. */
+export async function appSetNotice(api: Api, ev: { collectionId: number; kind: 'on' | 'off' | string; changed: number; conflicts: number; failed: number }): Promise<void> {
+  if (ev.changed === 0 && ev.conflicts === 0 && ev.failed === 0) return;
+  let name = `#${ev.collectionId}`;
+  try { name = (await api.getCase(ev.collectionId)).name; } catch { /* Case vừa bị xoá: vẫn báo bằng số */ }
+  const parts: string[] = [];
+  if (ev.changed > 0) parts.push(t(ev.kind === 'on' ? 'app.on' : 'app.off', { n: ev.changed, name }));
+  if (ev.conflicts > 0) parts.push(t('app.conflicts', { n: ev.conflicts }));
+  if (ev.failed > 0) parts.push(t('app.failed', { n: ev.failed }));
+  if (ev.kind === 'on' && ev.changed > 0) parts.push(t('appset.restart'));
+  useNoticeStore.getState().push({ kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. ') });
 }

@@ -20,6 +20,7 @@ import { readSplashEnabled } from './components/splash/splashState';
 import { NoticeStack } from './components/NoticeStack';
 import { FaceActionsProvider } from './components/faces/FaceActions';
 import { ActivationDialogHost } from './components/activation/ActivationDialogHost';
+import { AppPickerHost } from './components/desk/AppPicker';
 import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -103,6 +104,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
             </div>
         </WindowShell>
         <ActivationDialogHost api={api} />
+        <AppPickerHost api={api} />
         <FigmaImportHost api={api} />
         </FaceActionsProvider>
     );

@@ -2,7 +2,7 @@ import type { MenuEntry } from '../ui/Menu';
 import { t } from '../../i18n';
 
 /** Mục Sidebar có menu chuột phải (spec library-view-options C6). Tất cả / Yêu thích / Trùng lặp không có menu. */
-export type SidebarMenuKind = 'source' | 'collection' | 'tag' | 'recent' | 'active' | 'compare';
+export type SidebarMenuKind = 'source' | 'collection' | 'tag' | 'recent' | 'active' | 'compare' | 'case';
 
 export type SidebarMenuCtx = {
   open(): void;
@@ -20,6 +20,8 @@ export type SidebarMenuCtx = {
   activeCount?: number;
   /** Đang so sánh */
   closeSession?(): void;
+  /** Case: B5 "Mở cùng app…". */
+  openWithApp?(): void;
 };
 
 const open = (c: SidebarMenuCtx): MenuEntry => ({ id: 'open', label: t('smenu.open'), onSelect: c.open });
@@ -57,6 +59,7 @@ export function buildSidebarMenu(kind: SidebarMenuKind, c: SidebarMenuCtx): Menu
     ];
     case 'recent': return [open(c), sep, { id: 'clear', label: t('smenu.clearRecent'), danger: true, disabled: !c.recentCount, reason: t('smenu.empty'), onSelect: c.clearRecent }];
     case 'active': return [open(c), sep, { id: 'off', label: t('smenu.deactivateAllN', { n: c.activeCount ?? 0 }), disabled: !c.activeCount, reason: t('smenu.empty'), onSelect: c.deactivateAll }];
+    case 'case': return [open(c), sep, { id: 'openWith', label: t('case.openWith'), onSelect: c.openWithApp }];
     case 'compare': return [{ id: 'resume', label: t('smenu.resume'), onSelect: c.open }, sep, { id: 'close', label: t('smenu.closeSession'), danger: true, onSelect: c.closeSession }];
   }
 }

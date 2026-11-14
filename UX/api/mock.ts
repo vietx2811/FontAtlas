@@ -92,6 +92,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const cloudFetched = new Set<number>();
   const cloudRuns = new Map<number, boolean>();
   let importBusy = false;
+  const caseAppStore = new Map<number, Array<{ bundleId: string; name: string }>>();
   let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
@@ -279,6 +280,21 @@ export function createMockApi(o: MockOptions = {}): Api {
       } finally { importBusy = false; }
     },
     async importPathsCancel() { return importBusy; },
+    async caseApps(id) { return [...(caseAppStore.get(id) ?? [])]; },
+    async caseSetApps(id, apps) {
+      if (apps.some(a => !/^[A-Za-z0-9._-]{3,255}$/.test(a.bundleId))) throw new CmdError('invalid_arg', 'bundle id');
+      caseAppStore.set(id, apps.map(a => ({ ...a })));
+    },
+    async installedApps() {
+      return [
+        { bundleId: 'com.apple.TextEdit', name: 'TextEdit', path: '/System/Applications/TextEdit.app', running: false },
+        { bundleId: 'com.adobe.Illustrator', name: 'Adobe Illustrator 2026', path: '/Applications/Adobe Illustrator 2026/Adobe Illustrator.app', running: true },
+        { bundleId: 'com.adobe.InDesign', name: 'Adobe InDesign 2026', path: '/Applications/Adobe InDesign 2026/Adobe InDesign 2026.app', running: false },
+        { bundleId: 'com.figma.Desktop', name: 'Figma', path: '/Applications/Figma.app', running: false },
+        { bundleId: 'com.apple.Safari', name: 'Safari', path: '/Applications/Safari.app', running: false },
+        { bundleId: 'com.apple.Pages', name: 'Pages', path: '/Applications/Pages.app', running: false },
+      ];
+    },
     async sourceDownloadCloud(id, onProgress) {
       const s = sources.find(x => x.id === id);
       if (!s) throw new CmdError('not_found', 'source');
