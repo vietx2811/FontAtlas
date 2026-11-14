@@ -92,6 +92,7 @@ export function createMockApi(o: MockOptions = {}): Api {
   const cloudFetched = new Set<number>();
   const cloudRuns = new Map<number, boolean>();
   let importBusy = false;
+  let derivedRemovalSeq = 0;
   const organized = { configured: false, root: null as string | null, libraryDir: null as string | null, sourceId: null as number | null, files: 0, bytes: 0, freeBytes: 0, isCloud: false, available: true, snapshots: 0, lastSnapshot: null as string | null };
   let orgBusy = false, orgCancel = false, orgBatch = 0, packPending: Awaited<ReturnType<Api['packInspect']>> | null = null;
   const caseAppStore = new Map<number, Array<{ bundleId: string; name: string }>>();
@@ -323,6 +324,9 @@ export function createMockApi(o: MockOptions = {}): Api {
     async activationRelocate(faces) { return { results: faces.map(f => ({ hashHex: f.hashHex, requestedFaces: [f.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0 }; },
     async activationRelocateTo(targets) { return { results: targets.map(x => ({ hashHex: x.face.hashHex, requestedFaces: [x.face.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0 }; },
     async deriveRenamedCopy(face) { return { face: { hashHex: `${face.hashHex}-vf`, faceIndex: 0 }, path: '/app/derived/x-VF.ttf', created: true, licenseRestricted: /restricted/i.test(face.hashHex) }; },
+    async removeDerivedCopy() { return { removalId: ++derivedRemovalSeq, trashed: true, wasActive: false }; },
+    async restoreDerivedCopy(removalId) { if (removalId <= 0) throw new CmdError('not_found', 'x'); return { via: 'trash', face: { hashHex: 'copy', faceIndex: 0 }, path: '/app/derived/x-VF.ttf' }; },
+    async derivedCopiesOf() { return []; },
     async caseApps(id) { return [...(caseAppStore.get(id) ?? [])]; },
     async caseSetApps(id, apps) {
       if (apps.some(a => !/^[A-Za-z0-9._-]{3,255}$/.test(a.bundleId))) throw new CmdError('invalid_arg', 'bundle id');

@@ -3,6 +3,8 @@ import type { Api, FaceQuery, PlanItemDto, ResolvePlanDto, ResolveResultDto, Res
 import { t } from '../../i18n';
 import { Modal } from '../Modal';
 import { applyPlan } from './applyPlan';
+import { removeCopy } from '../detail/RemoveCopy';
+import { useNoticeStore } from '../../store/notices';
 import { itemId, memberName, splitForTrash, trashState, viewOf } from './dupPlan';
 import { blockedText, formatBytes, reasonText } from './dupText';
 import { splitPath, tailDepth } from './duplicatesFormat';
@@ -44,7 +46,13 @@ export function ResolveDialog({ api, scope, q, choices, onClose, onDone }: {
     if (!canGo || running.current) return;
     running.current = true; setBusy(true); setStale(false);
     try {
+      // G7b: font GỐC vào Thùng rác mà còn bản sao đổi tên → hỏi "Gỡ luôn bản sao?" (backend không tự gỡ). Tra TRƯỚC khi gốc rời thư viện.
+      const copies = action === 'trash' ? (await Promise.all(split.trash.map(m => api.derivedCopiesOf(m.face).catch(() => [])))).flat() : [];
       const r = await applyPlan({ api, items, choices, action, ticked, allSafe: allSafe && !changed });
+      if (copies.length > 0 && r.done.length > 0) {
+        const names = copies.slice(0, 3).map(c => `«${c.name}»`).join(', ') + (copies.length > 3 ? ` +${copies.length - 3}` : '');
+        useNoticeStore.getState().push({ kind: 'info', text: t('rcopy.orig', { names }), action: { label: t('rcopy.origGo'), run: () => { void (async () => { for (const c of copies) await removeCopy(api, c.face, c.name); })(); } } });
+      }
       if (r.done.length === 0 && r.failed.some(f => f.code === 'plan_stale')) {
         // Kế hoạch cũ: lập lại, và đưa các lựa chọn về mặc định an toàn (Ẩn, chưa tick tệp nào) để không gửi nhầm cho tệp mới.
         setStale(true); setTicked(new Set()); setAction('hide'); setAttempt(n => n + 1); running.current = false; setBusy(false); return;

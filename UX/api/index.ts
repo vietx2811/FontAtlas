@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, RelocateTargetDto, DerivedCopyDto, CaseActivationDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, RelocateTargetDto, DerivedCopyDto, DerivedCopyInfoDto, RemoveDerivedResultDto, RestoreDerivedResultDto, CaseActivationDto,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto, VfPolicyDto,
 } from './types';
 
@@ -85,6 +85,12 @@ export interface Api extends LibraryApi {
   deriveRenamedCopy(face: FaceKeyDto): Promise<DerivedCopyDto>;
   /** G7b "Giữ cả hai": nếu font bật là VF trùng PS với static → tạo bản sao đổi tên và bật BẢN SAO cùng static (warning renamed_copy[_restricted] | rename_failed:<mã>); còn lại như bật trùng tên. */
   activationKeepBoth(faces: FaceKeyDto[], scope?: ScopeDto | null, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  /** G7b: gỡ BẢN SAO đổi tên (face của bản sao): tắt trước nếu đang bật, file vào Thùng rác, font gốc không đổi. Lỗi: not_derived | not_allowed | deactivate_failed | trash_failed. */
+  removeDerivedCopy(face: FaceKeyDto): Promise<RemoveDerivedResultDto>;
+  /** Hoàn tác gỡ bản sao: lấy từ Thùng rác hoặc tạo lại từ gốc; không tự bật lại font. */
+  restoreDerivedCopy(removalId: number): Promise<RestoreDerivedResultDto>;
+  /** Các bản sao của một font GỐC (hỏi "gỡ luôn bản sao?" trước khi xoá gốc). */
+  derivedCopiesOf(face: FaceKeyDto): Promise<DerivedCopyInfoDto[]>;
   caseApps(collectionId: number): Promise<CaseAppDto[]>;
   caseSetApps(collectionId: number, apps: CaseAppDto[]): Promise<void>;
   /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */

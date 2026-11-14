@@ -229,3 +229,46 @@ pub struct DerivedCopyDto {
     /// `OS/2.fsType` hạn chế: vẫn tạo; UI hiện ghi chú "giấy phép của font hạn chế, bạn chịu trách nhiệm".
     pub license_restricted: bool,
 }
+
+/// G7b: kết quả gỡ một bản sao đổi tên. Giữ `removalId` cho nút Hoàn tác.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RemoveDerivedResultDto {
+    #[ts(type = "number")]
+    pub removal_id: i64,
+    /// File đã vào Thùng rác (false khi file đã không còn trên đĩa lúc gỡ).
+    pub trashed: bool,
+    /// Bản sao đang bật và đã được tắt trước khi gỡ.
+    pub was_active: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum RestoreViaDto {
+    /// Lấy lại từ Thùng rác.
+    Trash,
+    /// Thùng rác đã dọn: tạo lại từ font gốc.
+    ReDerived,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RestoreDerivedResultDto {
+    pub via: RestoreViaDto,
+    pub face: FaceKeyDto,
+    pub path: String,
+}
+
+/// Một bản sao của font gốc (để hỏi có gỡ luôn các bản sao khi xoá font gốc).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DerivedCopyInfoDto {
+    pub face: FaceKeyDto,
+    pub path: String,
+    pub name: String,
+    pub license_restricted: bool,
+}

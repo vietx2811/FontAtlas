@@ -19,7 +19,60 @@ fn h32(v: Vec<u8>) -> Result<[u8; 32], StoreError> {
     v.try_into().map_err(|_| StoreError::BadHash("hash không đủ 32 byte".into()))
 }
 
+/// Một lần gỡ bản sao (để Hoàn tác).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DerivedRemoval {
+    pub id: i64,
+    pub hash: [u8; 32],
+    pub derived_from: [u8; 32],
+    pub original_path: String,
+    pub trash_path: Option<String>,
+    pub license_restricted: bool,
+    pub undone: bool,
+}
+
 impl Store {
+    /// Gỡ bản sao khỏi sổ + vị trí file của nó trong thư viện (+ `gc`), và ghi nhật ký gỡ. Không đụng file trên đĩa.
+    pub fn derived_remove(&mut self, d: &DerivedFont, trash_path: Option<&str>) -> Result<i64, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.execute("DELETE FROM u.derived_fonts WHERE hash=?1", [&d.hash[..]])?;
+        tx.execute(
+            "INSERT INTO u.derived_removals(hash, derived_from_hash, original_path, trash_path, license_restricted, removed_at) VALUES (?1,?2,?3,?4,?5,?6)",
+            params![&d.hash[..], &d.derived_from[..], d.path, trash_path, d.license_restricted, now_ms()],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        self.conn.execute("DELETE FROM file_locations WHERE path=?1", [&d.path])?;
+        self.gc()?;
+        Ok(id)
+    }
+
+    pub fn derived_removal(&self, id: i64) -> Result<Option<DerivedRemoval>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT id, hash, derived_from_hash, original_path, trash_path, license_restricted, undone_at IS NOT NULL FROM u.derived_removals WHERE id=?1",
+                [id],
+                |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, Vec<u8>>(2)?, r.get::<_, String>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, bool>(5)?, r.get::<_, bool>(6)?))
+                },
+            )
+            .optional()?
+            .map(|(id, h, f, original_path, trash_path, license_restricted, undone)| {
+                Ok(DerivedRemoval { id, hash: h32(h)?, derived_from: h32(f)?, original_path, trash_path, license_restricted, undone })
+            })
+            .transpose()
+    }
+
+    pub fn derived_removal_mark_undone(&mut self, id: i64) -> Result<(), StoreError> {
+        self.conn.execute("UPDATE u.derived_removals SET undone_at=?2 WHERE id=?1", params![id, now_ms()])?;
+        Ok(())
+    }
+
+    /// Các bản sao hiện có của font gốc `from` (hiện tối đa một, nhưng trả danh sách để giao diện không phụ thuộc).
+    pub fn derived_copies_of(&self, from: &[u8; 32]) -> Result<Vec<DerivedFont>, StoreError> {
+        Ok(self.derived_for(from)?.into_iter().collect())
+    }
+
     pub fn derived_record(&mut self, d: &DerivedFont) -> Result<(), StoreError> {
         self.conn.execute(
             "INSERT INTO u.derived_fonts(hash, derived_from_hash, path, license_restricted, created_at) VALUES (?1,?2,?3,?4,?5)
@@ -35,6 +88,19 @@ impl Store {
             .query_row(
                 "SELECT hash, derived_from_hash, path, license_restricted FROM u.derived_fonts WHERE derived_from_hash=?1",
                 [&from[..]],
+                |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, String>(2)?, r.get::<_, bool>(3)?)),
+            )
+            .optional()?
+            .map(|(h, f, path, license_restricted)| Ok(DerivedFont { hash: h32(h)?, derived_from: h32(f)?, path, license_restricted }))
+            .transpose()
+    }
+
+    /// Dòng sổ của chính bản sao `hash` (không phải của font gốc).
+    pub fn derived_for_copy(&self, hash: &[u8; 32]) -> Result<Option<DerivedFont>, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT hash, derived_from_hash, path, license_restricted FROM u.derived_fonts WHERE hash=?1",
+                [&hash[..]],
                 |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, String>(2)?, r.get::<_, bool>(3)?)),
             )
             .optional()?

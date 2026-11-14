@@ -18,3 +18,5 @@
 .fa-org-download { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
 .fa-org-download small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .fa-p-derived { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font-size: 11px; color: var(--muted); }
+.fa-p-derived-rm { margin-left: auto; height: 22px; padding: 0 8px; border-radius: 11px; border: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.fa-p-derived-rm:hover { color: var(--fg); background: var(--surface-2); }
