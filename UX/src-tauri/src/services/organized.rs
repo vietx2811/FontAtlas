@@ -99,7 +99,7 @@ fn hex_of(h: &[u8; 32]) -> String {
 }
 
 /// `dir/name`; nếu đã bị chiếm (trên đĩa hoặc trong sổ) thì `dir/stem-<hash8>.ext`, rồi thêm số thứ tự.
-fn free_dest(dir: &Path, file_name: &str, hash: &[u8; 32], taken: &dyn Fn(&Path) -> bool) -> PathBuf {
+pub(crate) fn free_dest(dir: &Path, file_name: &str, hash: &[u8; 32], taken: &dyn Fn(&Path) -> bool) -> PathBuf {
     let first = dir.join(file_name);
     if !taken(&first) {
         return first;

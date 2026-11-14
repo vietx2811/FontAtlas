@@ -257,6 +257,12 @@ fn base_groups(state: &AppState, b: &Arc<IndexBundle>) -> Result<Arc<Vec<RawGrou
     if let Some(prefix) = crate::services::organized::library_prefix(state) {
         rows.retain(|r| !r.path.strip_prefix(&prefix).is_some_and(|rest| rest.starts_with('/')));
     }
+    // bản sao đổi tên của VF (G7b) cùng họ với bản gốc nhưng cố ý tách riêng: không phải "phiên bản trùng"
+    if let Ok(derived) = state.with_store(|s| Ok(s.derived_hashes()?))
+        && !derived.is_empty()
+    {
+        rows.retain(|r| !derived.contains(&r.key.hash));
+    }
     let meta: &HashMap<IxKey, FaceMeta> = &b.meta;
     let groups = Arc::new(group_rows(&rows, &|r| meta.get(&ix_key(&r.key)).and_then(|m| m.version.clone())));
     if let Ok(mut g) = cache.lock() {

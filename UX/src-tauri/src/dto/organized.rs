@@ -175,3 +175,17 @@ pub struct PackInfoDto {
     /// Gốc các nguồn lúc xuất: gợi ý để người dùng đổi tiền tố khi đường dẫn đã khác.
     pub source_roots: Vec<String>,
 }
+
+/// G7b: kết quả tạo bản sao đổi tên của một VF.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DerivedCopyDto {
+    /// Face (index 0) của BẢN SAO; 06 bật cái này cùng bản static.
+    pub face: FaceKeyDto,
+    pub path: String,
+    /// `false` khi bản sao đã có từ trước (idempotent).
+    pub created: bool,
+    /// `OS/2.fsType` hạn chế: vẫn tạo; UI hiện ghi chú "giấy phép của font hạn chế, bạn chịu trách nhiệm".
+    pub license_restricted: bool,
+}

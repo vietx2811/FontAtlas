@@ -33,3 +33,10 @@ Lựa chọn **"Giữ cả hai"** trong hộp xác nhận xung đột VF/static 
 - Ghi file xong mới trả: viết vào file tạm cùng thư mục, `sync_all`, đổi tên nguyên tử; rồi nạp vào thư viện (nguồn `derived` hoặc Organized Library) và ghi `derived_fonts`.
 - `DeriveError`: `NotInLibrary`, `NotVariable`, `NoClash`, `UnsupportedContainer(ttc|woff|woff2)`, `NotDownloaded` (06 gọi `ensure_local` trước; nếu vẫn dataless thì trả lỗi này), `DiskFull`, `Io(kind)`.
 - `is_derived(hash) -> bool` (và `derived_from(hash) -> Option<hash>`) để 06 lọc ứng viên ở `ensure`/`pick` (loại trừ khi tên yêu cầu đúng tên mới).
+
+## Đã làm (2026-11-14) — API thật
+- `fontatlas_core::rename::{rename_vf_copy, ps_name}`: chỉ viết lại bảng `name` (họ `X VF`, PS `OswaldVF-Regular`, PS của named instance trong `fvar`, unique ID `;FontAtlas-VF`, nameID 10 mô tả), bảng khác nguyên byte, checksum + `head.checkSumAdjustment` tính lại; TTC/WOFF/WOFF2 → `Unsupported`.
+- Store: `derive` sổ `derived_fonts` (user.db, migration `USER_DERIVED_FONTS` ở CUỐI), `Store::{is_derived, derived_from, derived_for, derived_hashes, best_location, face_is_variable}`, nguồn ẩn `kind='derived'`.
+- App: `services::derived::derive_renamed_copy(&Arc<AppState>, &[u8;32]) -> Result<(FaceKey, DerivedCopyDto), DeriveError>` (idempotent, ghi tạm → sync → đổi tên nguyên tử, nạp như font thường); `is_derived(state, hash)`, `derived_from(state, hash)`; lệnh `derive_renamed_copy(face) -> DerivedCopyDto {face, path, created, licenseRestricted}`. Mã lỗi: `not_in_library | not_variable | no_clash | unsupported_container (detail.container) | not_downloaded | disk_full | io`.
+- Vị trí: `<Organized>/Library/Derived/<gốc>-VF.<ext>` nếu có Organized Library, không thì `<data>/derived/`. Bản sao không lọt vào nhóm Duplicates.
+- Việc của 06: gọi `derive_renamed_copy` ở lựa chọn "Giữ cả hai", rồi bật face của bản sao (key trong kết quả) cùng bản static; lọc ứng viên ở `ensure`/`pick` bằng `is_derived` (trừ khi tên yêu cầu đúng tên mới).

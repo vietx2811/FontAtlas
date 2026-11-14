@@ -72,6 +72,7 @@ macro_rules! command_list {
             async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
             async import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> Result<ImportResultDto, CmdError>;
             async import_paths_cancel() -> Result<bool, CmdError>;
+            async derive_renamed_copy(face: FaceKeyDto) -> Result<DerivedCopyDto, CmdError>;
             async organized_check_location(path: String) -> Result<OrganizedLocationCheckDto, CmdError>;
             async organized_status() -> Result<OrganizedStatusDto, CmdError>;
             async organized_create(path: String) -> Result<OrganizedStatusDto, CmdError>;
@@ -432,6 +433,7 @@ cmd!(import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress:
         let _ = on_progress.send(p);
     })
 });
+cmd!(derive_renamed_copy(face: FaceKeyDto) -> DerivedCopyDto => |s| crate::services::derived::derive_command(s, &face));
 cmd!(organized_check_location(path: String) -> OrganizedLocationCheckDto => |s| crate::services::organized::check_location(s, &path));
 cmd!(organized_status() -> OrganizedStatusDto => |s| crate::services::organized::status(s));
 cmd!(organized_create(path: String) -> OrganizedStatusDto => |s| crate::services::organized::create(s, &path));
