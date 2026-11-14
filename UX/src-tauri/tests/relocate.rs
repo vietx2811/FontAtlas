@@ -57,4 +57,12 @@ fn relocate_command_switches_to_the_copy_and_reports() {
     // người dùng chưa bấm thì không tự đổi: một lần đối soát không kéo đăng ký đi đâu cả
     activation::reconcile_now(&st, false);
     assert_eq!(eng.registrations(), regs);
+
+    // Hoàn tác: đưa về đường cũ đã ghi, kết quả theo file
+    let back = activation::relocate_to(&st, &[RelocateTargetDto { face: key.clone(), path: old.to_str().unwrap().to_string() }], &mut |_| {}).unwrap();
+    assert_eq!(serde_json::to_value(&back.results[0].outcome).unwrap()["kind"], "activated");
+    assert_eq!(eng.registrations(), vec![(old.clone(), Scope::Persistent)]);
+    let missing = activation::relocate_to(&st, &[RelocateTargetDto { face: key.clone(), path: d.path().join("khong-co.ttf").to_str().unwrap().to_string() }], &mut |_| {}).unwrap();
+    assert_eq!(serde_json::to_value(&missing.results[0].outcome).unwrap()["kind"], "missing_file");
+    assert_eq!(serde_json::to_value(&RelocateTargetDto { face: key, path: "/x".into() }).unwrap()["face"]["hashHex"].as_str().map(|s| s.len()), Some(64));
 }

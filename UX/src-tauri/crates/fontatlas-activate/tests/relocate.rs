@@ -166,3 +166,46 @@ fn reconcile_keeps_a_still_valid_registered_path_instead_of_hopping_to_a_new_cop
     assert_eq!(regs(&svc), vec![(old.clone(), Scope::Persistent)]);
     assert_eq!(env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap().active_path.as_deref(), Some(old.to_str().unwrap()));
 }
+
+#[test]
+fn relocate_to_undoes_a_relocation_back_to_the_recorded_path() {
+    let (env, svc, k, old, new) = setup(Scope::Persistent);
+    let org = env.dir.path().join("org");
+    svc.relocate(&env.store, &[k.hash], Some(&org), &mut no_progress()).unwrap();
+    assert_eq!(regs(&svc), vec![(new.clone(), Scope::Persistent)]);
+    let calls: Arc<Mutex<Vec<(String, PathBuf)>>> = Arc::default();
+    {
+        let c = calls.clone();
+        svc.engine().on_call(move |op, p| c.lock().unwrap().push((op.to_string(), p.to_path_buf())));
+    }
+    let rep = svc.relocate_to(&env.store, &[(k.hash, old.clone())], &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Activated);
+    assert_eq!(regs(&svc), vec![(old.clone(), Scope::Persistent)], "đã về đường cũ, giữ scope");
+    let c = calls.lock().unwrap();
+    assert!(c.iter().position(|(o, p)| o == "register" && *p == old) < c.iter().position(|(o, p)| o == "unregister" && *p == new), "đăng ký đường đích trước");
+    // lần hai: đã ở đúng đường
+    drop(c);
+    let rep = svc.relocate_to(&env.store, &[(k.hash, old)], &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::AlreadyActive);
+}
+
+#[test]
+fn relocate_to_refuses_missing_wrong_hash_and_inactive_without_changing_anything() {
+    let (env, svc, k, old, _new) = setup(Scope::Session);
+    let gone = env.dir.path().join("gone.ttf");
+    let rep = svc.relocate_to(&env.store, &[(k.hash, gone)], &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::MissingFile);
+
+    let bad = env.dir.path().join("bad.ttf");
+    let mut b = std::fs::read(&old).unwrap();
+    b.push(1);
+    std::fs::write(&bad, b).unwrap();
+    let rep = svc.relocate_to(&env.store, &[(k.hash, bad)], &mut no_progress()).unwrap();
+    assert!(matches!(&rep.results[0].outcome, FileOutcome::Failed { code, .. } if code == "content_changed"));
+    assert_eq!(regs(&svc), vec![(old.clone(), Scope::Session)]);
+
+    svc.deactivate_faces(&env.store, &[k], fontatlas_activate::DeactivatePolicy::Ask, &mut no_progress()).unwrap();
+    let rep = svc.relocate_to(&env.store, &[(k.hash, old)], &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::AlreadyInactive);
+    assert!(regs(&svc).is_empty());
+}

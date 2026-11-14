@@ -569,3 +569,12 @@ impl From<&fontatlas_activate::AppSetEvent> for AppSetEventDto {
         }
     }
 }
+
+/// B7 Hoàn tác: font và đường đích cụ thể (đường cũ đã ghi trước khi chuyển sang bản trong thư viện).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RelocateTargetDto {
+    pub face: crate::dto::library::FaceKeyDto,
+    pub path: String,
+}
