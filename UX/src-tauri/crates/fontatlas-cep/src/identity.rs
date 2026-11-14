@@ -27,7 +27,12 @@ impl Identity {
     }
 
     /// Đọc khoá đã lưu trong `dir`, hoặc sinh mới và lưu. Khoá/chứng chỉ hỏng → sinh lại (gói cũ sẽ báo cần cài lại).
+    ///
+    /// An toàn khi nhiều luồng gọi cùng lúc trên cùng thư mục (khoá trong tiến trình): luồng đến sau thấy cặp khoá/chứng chỉ vừa
+    /// lưu thay vì sinh một cặp khác ghi đè. Tệp tạm có tên riêng mỗi lần ghi và cả hai tệp được ghi nguyên tử (rename).
     pub fn load_or_create(dir: &Path) -> Result<Self, IdentityError> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let (kp, cp) = (dir.join("signing.pem"), dir.join("signing.cert.der"));
         if let (Ok(pem), Ok(cert)) = (std::fs::read_to_string(&kp), std::fs::read(&cp))
             && let Ok(key) = RsaPrivateKey::from_pkcs8_pem(&pem)
@@ -37,8 +42,9 @@ impl Identity {
         }
         let id = Self::generate()?;
         std::fs::create_dir_all(dir)?;
-        write_private(&kp, id.key.to_pkcs8_pem(LineEnding::LF).map_err(|e| IdentityError::Rsa(e.to_string()))?.as_bytes())?;
-        std::fs::write(&cp, &id.cert_der)?;
+        // chứng chỉ trước, khoá sau: người đọc chỉ coi là có danh tính khi CẢ HAI có; không thấy cặp nửa vời
+        write_atomic(&cp, &id.cert_der, 0o644)?;
+        write_atomic(&kp, id.key.to_pkcs8_pem(LineEnding::LF).map_err(|e| IdentityError::Rsa(e.to_string()))?.as_bytes(), 0o600)?;
         Ok(id)
     }
 
@@ -47,14 +53,24 @@ impl Identity {
     }
 }
 
-fn write_private(path: &Path, data: &[u8]) -> std::io::Result<()> {
+/// Ghi qua tệp tạm CÓ TÊN RIÊNG (pid + bộ đếm) rồi `rename`: không bao giờ để người khác thấy tệp ghi dở, và hai lần ghi
+/// song song (luồng hay tiến trình) không giẫm lên tệp tạm của nhau.
+fn write_atomic(path: &Path, data: &[u8], mode: u32) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
-    let tmp = path.with_extension("tmp");
-    let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
-    f.write_all(data)?;
-    f.sync_all()?;
-    std::fs::rename(tmp, path)
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let tmp = path.with_extension(format!("tmp-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    let res = (|| {
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(mode).open(&tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    res
 }
 
 fn self_signed_cert(key: &RsaPrivateKey) -> Result<Vec<u8>, IdentityError> {
