@@ -18,12 +18,16 @@
 #   trùng hash với một lượt đã PASS thì bước đó in "SKIP (cache <sha>)", ghi vào git note. Native QA và vite-build luôn chạy. --no-cache ép
 #   chạy đủ (dùng khi phát hành). --print-keys in các khoá hash rồi thoát.
 #   --priority (chỉ Lead, cần FONTATLAS_CI_PRIORITY=1) xếp vé đứng trước mọi vé thường.
+#   --cancel <pid|tên-vé>: dừng một vé đang chờ hoặc lượt đang chạy (chỉ nhận pid của vé/khoá local_ci; gửi SIGTERM, tiến trình tự dọn vé và
+#   dừng các tiến trình con của nó). SIGTERM/SIGINT gửi thẳng vào local_ci cũng dừng ngay cả khi đang chờ hàng hoặc đang chạy một bước.
 # - Không đụng thư viện thật: QA dùng FONTATLAS_DATA_DIR tạm, chỉ chạy bản debug.
 set -uo pipefail
 
-REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0; QAONLY=0; CACHE=1; PRINTKEYS=0
+REF="dev/mvp"; QA=1; WAIT=1; PRIO=0; STATUS=0; QAONLY=0; CACHE=1; PRINTKEYS=0; CANCEL=""; EXPECT=""
 for a in "$@"; do
+  if [ "$EXPECT" = cancel ]; then CANCEL="$a"; EXPECT=""; continue; fi
   case "$a" in
+    --cancel) EXPECT=cancel ;;
     --no-qa) QA=0 ;;
     --qa-only) QAONLY=1 ;;
     --no-cache) CACHE=0 ;;
@@ -32,7 +36,7 @@ for a in "$@"; do
     --no-wait) WAIT=0 ;;
     --priority) PRIO=1 ;;
     --status) STATUS=1 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
     *) REF="$a" ;;
   esac
 done
@@ -53,6 +57,22 @@ reap() {
   fi
 }
 queue_list() { ls -1 "$QUEUE" 2>/dev/null | LC_ALL=C sort; }
+
+if [ -n "$CANCEL" ]; then
+  reap
+  pid=""
+  if [[ "$CANCEL" =~ ^[0-9]+$ ]]; then pid="$CANCEL"
+  else for t in "$QUEUE"/*; do [ -e "$t" ] || continue; case "${t##*/}" in *"$CANCEL"*) pid="$(ticket_pid "$t")"; break ;; esac; done
+  fi
+  [ -n "$pid" ] || { echo "không thấy vé nào khớp '$CANCEL' (xem: bash tools/ci/local_ci.sh --status)"; exit 2; }
+  ok=0; for t in "$QUEUE"/*; do [ -e "$t" ] && [ "$(ticket_pid "$t")" = "$pid" ] && ok=1; done
+  [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$pid" ] && ok=1
+  [ $ok = 1 ] || { echo "pid $pid không phải vé hay khoá của local_ci: không gửi tín hiệu"; exit 2; }
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do alive "$pid" || break; sleep 1; done
+  if alive "$pid"; then echo "pid $pid vẫn còn sống sau 20 s"; exit 1; fi
+  reap; echo "đã dừng pid $pid"; exit 0
+fi
 
 if [ $STATUS = 1 ]; then
   reap
@@ -120,7 +140,11 @@ if [ $PRIO = 1 ] && [ "${FONTATLAS_CI_PRIORITY:-}" != 1 ]; then echo "--priority
 TICKET=""
 cleanup() { [ -n "${SAMPLER_PID:-}" ] && kill "$SAMPLER_PID" 2>/dev/null; [ -n "$TICKET" ] && rm -f "$TICKET"; if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$LOCK"; fi; }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+# Dừng cây tiến trình con của chính script này (theo cha-con, không theo tên), rồi thoát. Bash chỉ chạy trap sau khi lệnh foreground xong,
+# nên mọi chỗ chờ (hàng đợi, bước CI) chạy lệnh nền rồi `wait` để tín hiệu có hiệu lực ngay.
+kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; return 0; }
+on_signal() { trap '' INT TERM; echo "nhận tín hiệu dừng: dọn vé/khoá và dừng các tiến trình con"; local c; for c in $(pgrep -P $$ 2>/dev/null); do kill_tree "$c"; done; exit 130; }
+trap on_signal INT TERM
 if [ $WAIT = 1 ]; then
   KIND=Q; [ $PRIO = 1 ] && KIND=P
   NOW="$(python3 -c 'import time; print("%020d" % time.time_ns())')"
@@ -133,7 +157,7 @@ if [ $WAIT = 1 ]; then
     if [ "$QUEUE/$head" = "$TICKET" ] && mkdir "$LOCK" 2>/dev/null; then break; fi
     pos="$(queue_list | grep -n -F -x "${TICKET##*/}" | cut -d: -f1)"
     [ "$pos" != "$shown" ] && { echo "chờ CI: vị trí ${pos:-?} trong hàng đợi (xem: bash tools/ci/local_ci.sh --status)"; shown="$pos"; }
-    sleep 3
+    sleep 3 & wait $!
   done
   rm -f "$TICKET"; TICKET=""
 else
@@ -145,7 +169,7 @@ else
 fi
 echo $$ > "$LOCK/pid"
 echo "$(date +%s) $REF $SHA" > "$LOCK/info"
-[ -n "${FONTATLAS_CI_TEST_HOLD:-}" ] && { echo "đã có khoá"; sleep "$FONTATLAS_CI_TEST_HOLD"; exit 0; }   # chỉ cho tools/ci/test_queue.sh
+[ -n "${FONTATLAS_CI_TEST_HOLD:-}" ] && { echo "đã có khoá"; sleep "$FONTATLAS_CI_TEST_HOLD" & wait $!; exit 0; }   # chỉ cho tools/ci/test_queue.sh
 
 # Worktree riêng, giữ lại giữa các lần chạy để target/ còn nóng.
 if [ ! -e "$WT/.git" ]; then
@@ -219,7 +243,7 @@ echo "local CI · $SHORT ($REF) · log: $OUT"
 step() {
   local name="$1" dir="$2"; shift 2
   local t0=$(date +%s) rc
-  ( cd "$WT/$dir" && "$@" ) > "$OUT/$name.log" 2>&1; rc=$?
+  ( cd "$WT/$dir" && "$@" ) > "$OUT/$name.log" 2>&1 & wait $!; rc=$?
   local dt=$(( $(date +%s) - t0 ))
   if [ $rc -eq 0 ]; then printf 'OK   %5ss  %s\n' "$dt" "$name"; STEPS+=("$name:ok:$dt")
   else printf 'FAIL %5ss  %s  (tail %s)\n' "$dt" "$name" "$OUT/$name.log"; tail -n 15 "$OUT/$name.log" | sed 's/^/     │ /'; STEPS+=("$name:fail:$dt"); FAILED+=("$name"); fi
