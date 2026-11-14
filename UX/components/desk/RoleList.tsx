@@ -151,7 +151,7 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
                     ? <Tooltip label={gloss}><span className="fa-desk-role-name" data-term={`role.${presetKey(r)}`}>{roleLabel(r)}</span></Tooltip>
                     : <span className="fa-desk-role-name fa-desk-role-custom">{r}</span>}
                   {s
-                    ? <><FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle><ClashNote faceId={s.row.faceId} inline /></>
+                    ? <><FaceTitle api={api} face={s.row} className="fa-desk-role-font">{nameOf(s.row)}</FaceTitle><ClashNote faceId={s.row.faceId} inline face={{ hashHex: s.row.hashHex, faceIndex: s.row.faceIndex }} /></>
                     : <span className="fa-desk-role-empty">{t('desk.roleEmpty')}</span>}
                   {s?.missing && <NoteMark inline text={t('desk.missing')} />}
                 </button>}

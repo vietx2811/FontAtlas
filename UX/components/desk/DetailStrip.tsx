@@ -66,7 +66,7 @@ function Card({ title, row, face, tone, baseGlyphs }: { title: string; row: Face
     <div className="fa-dstrip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
       <h3>{title}</h3>
       {row ? <>
-        <div className="fa-dstrip-name">{nameOf(row)}<ClashNote faceId={row.faceId} inline />{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
+        <div className="fa-dstrip-name">{nameOf(row)}<ClashNote faceId={row.faceId} inline face={{ hashHex: row.hashHex, faceIndex: row.faceIndex }} />{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
         <div className="fa-dstrip-meta">
           {face?.designer && <Tooltip label="Designer"><span>{face.designer}</span></Tooltip>}
           {face?.foundry && face.foundry !== face.designer && <Tooltip label="Foundry"><span>{face.foundry}</span></Tooltip>}

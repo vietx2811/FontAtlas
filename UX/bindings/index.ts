@@ -65,6 +65,7 @@ export type { ConfirmedConflictDto } from './ConfirmedConflictDto';
 export type { ConflictDto } from './ConflictDto';
 export type { DescribeConflictDto } from './DescribeConflictDto';
 export type { DescribeDto } from './DescribeDto';
+export type { DerivedCopyDto } from './DerivedCopyDto';
 export type { DesiredStateDto } from './DesiredStateDto';
 export type { DeskItemDto } from './DeskItemDto';
 export type { DeskPageDto } from './DeskPageDto';

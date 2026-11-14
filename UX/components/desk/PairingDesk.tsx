@@ -296,7 +296,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
               return (
               <li key={`${c.face.hashHex}:${c.face.faceIndex}`} role="option" aria-selected={i === idx} data-testid="desk-cand" data-trial={c.fromPeek ? 'peek' : undefined}
                 onPointerEnter={() => setIdx(i)} onPointerDown={e => beginFaceDrag(e, c.row as unknown as FaceRow, { solo: true })} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
-                <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline />
+                <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline face={{ hashHex: c.row.hashHex, faceIndex: c.row.faceIndex }} />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
                 {c.row.supportsVi === false && c.row.viMissing > 0 && <NoteMark inline kind="warn" text={tn('strip.viMissing', { n: c.row.viMissing })} />}
@@ -328,8 +328,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
             <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
           </div>
           <div className="fa-desk-strip">
-            {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b><ClashNote faceId={trial.row.faceId} inline /></span>}
-            {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}<ClashNote faceId={current.row.faceId} inline /></span>}
+            {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b><ClashNote faceId={trial.row.faceId} inline face={{ hashHex: trial.row.hashHex, faceIndex: trial.row.faceIndex }} /></span>}
+            {current && <span className="fa-desk-using">{t('desk.inUse')}: {nameOf(current.row)}<ClashNote faceId={current.row.faceId} inline face={{ hashHex: current.row.hashHex, faceIndex: current.row.faceIndex }} /></span>}
             <button type="button" className="fa-desk-place" data-testid="desk-place" aria-disabled={!trial || inUseSame} onClick={() => { if (trial && !inUseSame) void place(); }}>↵ {t('desk.place')}</button>
           </div>
           <DetailStrip api={api} inUse={current && !current.missing ? current.row : null} trial={trial?.row ?? null} collapsed={stripCollapsed} onToggle={() => setStripCollapsed(c => !c)} onCompare={toCompare} compareReason={compareReason} />

@@ -21,6 +21,7 @@ import { NoticeStack } from './components/NoticeStack';
 import { FaceActionsProvider } from './components/faces/FaceActions';
 import { ActivationDialogHost } from './components/activation/ActivationDialogHost';
 import { AppPickerHost } from './components/desk/AppPicker';
+import { DeriveCopyDialog } from './components/activation/DeriveCopyDialog';
 import { startScanSync } from './store/scan';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
@@ -105,6 +106,7 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
         </WindowShell>
         <ActivationDialogHost api={api} />
         <AppPickerHost api={api} />
+        <DeriveCopyDialog api={api} />
         <FigmaImportHost api={api} />
         </FaceActionsProvider>
     );

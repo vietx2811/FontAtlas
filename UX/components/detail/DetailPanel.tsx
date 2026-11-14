@@ -61,7 +61,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
             <Tooltip label={detail?.row.family} onlyIfTruncated>
               <FaceTitle as="h2" api={api} face={detail ? { hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex, fileSize: detail.row.fileSize } : null} className="fa-p-name">{detail ? vfDisplayName(detail.row.family, clashRoleOf(detail.row.faceId)) : ''}</FaceTitle>
             </Tooltip>
-            {detail && <ClashNote faceId={detail.row.faceId} inline />}
+            {detail && <ClashNote faceId={detail.row.faceId} inline face={{ hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex }} />}
           </div>
           <ActiveRow face={detail ? face : null} flow={flow} api={api} />
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}{detail?.row.onCloudOnly && <NoteMark kind="info" inline testId="cloud-only-note" text={t('cloud.note')} />}</div>

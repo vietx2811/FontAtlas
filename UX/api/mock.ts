@@ -321,6 +321,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async caseAppSuppress() { /* mock: không có app thật để chặn */ },
     async activationRelocate(faces) { return { results: faces.map(f => ({ hashHex: f.hashHex, requestedFaces: [f.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0 }; },
     async activationRelocateTo(targets) { return { results: targets.map(x => ({ hashHex: x.face.hashHex, requestedFaces: [x.face.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0 }; },
+    async deriveRenamedCopy(face) { return { face: { hashHex: `${face.hashHex}-vf`, faceIndex: 0 }, path: '/app/derived/x-VF.ttf', created: true, licenseRestricted: /restricted/i.test(face.hashHex) }; },
     async caseApps(id) { return [...(caseAppStore.get(id) ?? [])]; },
     async caseSetApps(id, apps) {
       if (apps.some(a => !/^[A-Za-z0-9._-]{3,255}$/.test(a.bundleId))) throw new CmdError('invalid_arg', 'bundle id');
