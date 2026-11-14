@@ -25,6 +25,10 @@ r="$(mk UX/src-tauri/Cargo.lock)"
 check "đổi Cargo.lock: khoá Rust đổi" "$([ "$(key $r rust)" != "$(key $base rust)" ] && echo diff)" diff
 check "đổi Cargo.lock: khoá frontend giữ nguyên" "$(key $r front)" "$(key $base front)"
 
+n="$(mk UX/src-tauri/resources/THIRD-PARTY-NOTICES.txt)"
+check "đổi THIRD-PARTY-NOTICES: khoá Rust giữ nguyên (cache cargo-test không mất)" "$(key $n rust)" "$(key $base rust)"
+check "đổi THIRD-PARTY-NOTICES: khoá bundle đổi (file nằm trong .app)" "$([ "$(key $n bundle)" != "$(key $base bundle)" ] && echo diff)" diff
+
 # doc_crates: crate nào có khối ``` trong doc comment thì được chạy cargo test --doc.
 eval "$(sed -n '/^doc_crates() {/,/^}/p' tools/ci/local_ci.sh)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
