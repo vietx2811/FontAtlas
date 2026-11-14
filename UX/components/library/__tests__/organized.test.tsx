@@ -1,10 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { OrganizedPanel } from '../OrganizedPanel';
 import { issueSummary } from '../OrganizedImportDialog';
-import { relocateCounts } from '../RelocateDialog';
+import { relocateCounts, undoRelocate } from '../RelocateDialog';
 
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const picker = (p: string | null) => async () => p;
@@ -81,5 +81,13 @@ describe('B7 — Organized Library (Cài đặt ▸ Thư viện)', () => {
     fireEvent.click(screen.getByTestId('org-open-relocate')); await settle();
     expect(screen.getByTestId('org-reloc-body').textContent).toMatch(/không có font nào đang bật/);
     expect((screen.getByTestId('org-reloc-run') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('Hoàn tác chuyển font: gọi activation_relocate_to với đường cũ đã ghi; báo số font không chuyển ngược được', async () => {
+    const api = createMockApi();
+    const spy = vi.spyOn(api, 'activationRelocateTo').mockResolvedValue({ results: [{ hashHex: 'aa', requestedFaces: [0], outcome: { kind: 'activated' } }, { hashHex: 'bb', requestedFaces: [0], outcome: { kind: 'missing_file' } }] as never, changed: 1, needsConfirmation: 0, failed: 1 });
+    await undoRelocate(api, [{ face: { hashHex: 'aa', faceIndex: 0 }, path: '/Users/example/Fonts/a.ttf' }, { face: { hashHex: 'bb', faceIndex: 0 }, path: '/Users/example/Fonts/b.ttf' }]);
+    expect(spy).toHaveBeenCalledWith([{ face: { hashHex: 'aa', faceIndex: 0 }, path: '/Users/example/Fonts/a.ttf' }, { face: { hashHex: 'bb', faceIndex: 0 }, path: '/Users/example/Fonts/b.ttf' }]);
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.kind).toBe('error'); expect(n.text).toMatch(/1 font về đường cũ/); expect(n.text).toMatch(/1 font không chuyển ngược được/);
   });
 });
