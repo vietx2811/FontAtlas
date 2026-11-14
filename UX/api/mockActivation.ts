@@ -167,6 +167,8 @@ export function createActivationSim(d: Deps) {
       state.clear();
       return finish(all.map(f => result(f, { kind: 'deactivated' })), o.onProgress);
     },
+    /** G7b: mock = như bật với proceed (không có bản sao thật). */
+    async activationKeepBoth(faces: FaceKeyDto[], _scope?: unknown, o: Pick<DeactivateOptions, 'onProgress'> = {}) { return this.activationActivate(faces, { proceed: true, onProgress: o.onProgress }); },
     async activationSetKeep() {},
     async activationVfPolicy(): Promise<VfPolicyDto> { return vfPolicy; },
     async activationSetVfPolicy(p: VfPolicyDto) { vfPolicy = p; },

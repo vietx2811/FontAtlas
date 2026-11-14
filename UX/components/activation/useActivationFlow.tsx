@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import type { Api, ActivationReportDto, ConflictDto, FaceKeyDto, FileOutcomeDto, FileResultDto } from '../../api';
 import { t } from '../../i18n';
 import { refreshActivation } from '../../store/activationSync';
+import { keepBoth } from './renamedCopy';
 import { useActivationQueue } from '../../store/activationFlow';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
@@ -56,7 +57,7 @@ export function useActivationFlow(api: Api): ActivationFlow {
     if (action === 'keep') { push({ kind: 'info', text: t('act.vf.auto.keep', { kept: other, skipped: mine }) }); return true; }
     if (action === 'both') {
       if (items.some(i => i.conflicts.some(c => c.owner === 'system'))) return false;
-      sayOutcomes((await api.activationActivate(keys, { proceed: true })).results.map(r => r.outcome));
+      await keepBoth(api, keys);
       push({ kind: 'info', text: t('act.vf.auto.both') });
       return true;
     }

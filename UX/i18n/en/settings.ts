@@ -184,6 +184,7 @@ export const EN_SETTINGS: Record<keyof typeof SETTINGS_I18N, string> = {
   'copy.err.notVariable':'This isn’t a Variable font, so it doesn’t need a renamed copy.', 'copy.err.noClash':'No static font shares this font’s name, so no copy is needed.', 'copy.err.container':'Copies aren’t supported for TTC/WOFF/WOFF2 yet; use a TTF/OTF file.',
   'copy.err.notDownloaded':'The file is still a cloud placeholder. Download it to this Mac and try again.', 'copy.err.disk':'Not enough free space to make the copy.', 'copy.err.notInLibrary':'The font is no longer in your library.', 'copy.err.other':'Couldn’t make the renamed copy: {msg}',
   'term.postscript_name.gloss':'The unique technical name of one font style (e.g. Oswald-Regular). Apps look fonts up by this name, so two fonts that share it can get mixed up.',
+  'copy.both':'Turned on a renamed copy so you can use both.', 'copy.both.named':'Turned on the renamed copy {names} so you can use both (the original VF is untouched).', 'copy.both.fallback':'The font was still turned on the old way (same name).',
   'set.g.credits': 'About and credits',
   'credits.intro': 'Font Atlas uses the open-source data, model and libraries below. Thanks to their authors; each licence is listed alongside.',
   'credits.group.data': 'Language data',

@@ -182,6 +182,7 @@ export const SETTINGS_I18N = {
   'copy.err.notVariable':'Đây không phải font Variable nên không cần bản sao đổi tên.', 'copy.err.noClash':'Font này không trùng tên với bản static nào nên không cần bản sao.', 'copy.err.container':'Chưa tạo được bản sao cho định dạng TTC/WOFF/WOFF2; hãy dùng file TTF/OTF.',
   'copy.err.notDownloaded':'File còn là bản giữ chỗ trên ổ cloud. Hãy tải về máy rồi thử lại.', 'copy.err.disk':'Hết chỗ trống để tạo bản sao.', 'copy.err.notInLibrary':'Font không còn trong thư viện.', 'copy.err.other':'Không tạo được bản sao đổi tên: {msg}',
   'term.postscript_name.gloss':'Tên kỹ thuật duy nhất của một kiểu font (vd Oswald-Regular). Các app tra font theo tên này, nên hai font trùng tên dễ bị nhầm với nhau.',
+  'copy.both':'Đã bật bản sao đổi tên để dùng cả hai.', 'copy.both.named':'Đã bật bản sao đổi tên {names} để dùng cả hai (bản VF gốc không bị đụng tới).', 'copy.both.fallback':'Font vẫn được bật như cũ (trùng tên).',
   'set.g.credits': 'Giới thiệu và ghi công',
   'credits.intro': 'Font Atlas dùng dữ liệu, model và thư viện mã nguồn mở dưới đây. Cảm ơn các tác giả; giấy phép của từng phần được nêu kèm.',
   'credits.group.data': 'Dữ liệu ngôn ngữ',

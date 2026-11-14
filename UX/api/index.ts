@@ -83,6 +83,8 @@ export interface Api extends LibraryApi {
   activationRelocateTo(targets: RelocateTargetDto[], opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   /** G7b: bản sao đổi tên (họ `X VF`, PostScript chèn VF) của một font Variable trùng tên với static; idempotent, file gốc không đụng. Lỗi: not_variable | no_clash | unsupported_container | not_downloaded | disk_full | not_in_library. */
   deriveRenamedCopy(face: FaceKeyDto): Promise<DerivedCopyDto>;
+  /** G7b "Giữ cả hai": nếu font bật là VF trùng PS với static → tạo bản sao đổi tên và bật BẢN SAO cùng static (warning renamed_copy[_restricted] | rename_failed:<mã>); còn lại như bật trùng tên. */
+  activationKeepBoth(faces: FaceKeyDto[], scope?: ScopeDto | null, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   caseApps(collectionId: number): Promise<CaseAppDto[]>;
   caseSetApps(collectionId: number, apps: CaseAppDto[]): Promise<void>;
   /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */

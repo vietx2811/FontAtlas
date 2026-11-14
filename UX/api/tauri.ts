@@ -126,6 +126,7 @@ export function createTauriApi(): Api {
     activationRelocate: (faces, preferUnder, o = {}) => call('activation_relocate', { faces, preferUnder, onProgress: channel(o.onProgress).ch }),
     activationRelocateTo: (targets, o = {}) => call('activation_relocate_to', { targets, onProgress: channel(o.onProgress).ch }),
     deriveRenamedCopy: face => call('derive_renamed_copy', { face }),
+    activationKeepBoth: (faces, scope, o = {}) => call('activation_keep_both', { faces, scope: scope ?? null, onProgress: channel(o.onProgress).ch }),
     caseApps: collectionId => call('case_apps', { collectionId }),
     caseSetApps: (collectionId, apps) => none(call('case_set_apps', { collectionId, apps })),
     installedApps: () => call('installed_apps'),

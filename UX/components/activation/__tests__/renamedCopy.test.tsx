@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CmdError } from '../../../api';
 import { createMockApi } from '../../../api/mock';
 import { useDeriveStore } from '../../../store/deriveCopy';
@@ -7,7 +7,7 @@ import { useNameClashStore } from '../../../store/nameClash';
 import { useNoticeStore } from '../../../store/notices';
 import { ClashNote } from '../../ui/ClashNote';
 import { DeriveCopyDialog } from '../DeriveCopyDialog';
-import { copyDoneText, deriveErrorText } from '../renamedCopy';
+import { copyDoneText, deriveErrorText, keepBoth } from '../renamedCopy';
 
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 
@@ -38,5 +38,19 @@ describe('G7b — bản sao đổi tên', () => {
     fireEvent.click(screen.getByTestId('copy-make')); await settle();
     expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/Đã tạo bản sao đổi tên/);
     expect(screen.queryByTestId('copy-make')).toBeNull();
+  });
+
+  it('Giữ cả hai qua activation_keep_both: toast nêu tên bản sao + ghi chú giấy phép; lỗi tạo bản sao nói lý do và đã bật như cũ', async () => {
+    const api = createMockApi(); const first = (await api.queryFaces({ limit: 1 })).items[0];
+    const key = { hashHex: first.hashHex, faceIndex: first.faceIndex };
+    const spy = vi.spyOn(api, 'activationKeepBoth').mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [key.faceIndex], outcome: { kind: 'activated' }, warning: 'renamed_copy_restricted' }] as never, changed: 1, needsConfirmation: 0, failed: 0 });
+    await keepBoth(api, [key]);
+    expect(spy).toHaveBeenCalledWith([key], null);
+    const texts = useNoticeStore.getState().notices.map(n => n.text).join('|');
+    expect(texts).toMatch(/Đã bật bản sao đổi tên «.* VF.*» để dùng cả hai/); expect(texts).toMatch(/hạn chế việc sửa đổi/);
+    useNoticeStore.setState({ notices: [] });
+    spy.mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [0], outcome: { kind: 'activated' }, warning: 'rename_failed:disk_full' }] as never, changed: 1, needsConfirmation: 0, failed: 0 });
+    await keepBoth(api, [key]);
+    const err = useNoticeStore.getState().notices.find(n => n.kind === 'error')!; expect(err.text).toMatch(/Hết chỗ trống.*bật như cũ/);
   });
 });
