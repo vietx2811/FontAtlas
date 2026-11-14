@@ -230,10 +230,17 @@ describe('DuplicatesPage: the Trash is a deliberate, per-file choice', () => {
     const { d, hooks } = await toTrash();
     click(within(d).getByRole('checkbox'));
     confirm();
-    await waitFor(() => expect(hooks.__log.applied.length).toBeGreaterThanOrEqual(1));
-    const req = hooks.__log.applied[0];
-    expect(req.action).toBe('trash');
-    expect(req.explicitTrashPaths).toEqual(['/Users/me/Library/Fonts/Inter-Regular.ttf']);
+    // Thiết kế: Thùng rác = HAI yêu cầu liên tiếp (tệp đủ điều kiện vào Thùng rác; tệp không được phép, như font hệ thống, chỉ bị ẩn).
+    // Chờ cả hai xong rồi kiểm; trước đây test chỉ bắt được trạng thái trung gian (đã có 1) nên dễ vỡ theo thứ tự vi-mô.
+    await waitFor(() => expect(hooks.__log.applied.length).toBe(2));
+    const [trash, hide] = hooks.__log.applied;
+    expect(trash.action).toBe('trash');
+    expect(trash.explicitTrashPaths).toEqual(['/Users/me/Library/Fonts/Inter-Regular.ttf']);
+    expect(hide.action).toBe('hide'); expect(hide.joinBatch).toBeTruthy(); // cùng một mẻ để Hoàn tác hoàn tác cả hai
+    // Không tệp nào bị xử lý hai lần: hai yêu cầu không có đường dẫn chung (không có "Thùng rác hai lần").
+    const trashed = trash.items.flatMap(i => i.loserPaths), hidden = hide.items.flatMap(i => i.loserPaths);
+    expect(trashed.filter(p => hidden.includes(p))).toEqual([]);
+    await new Promise(r => setTimeout(r, 200)); expect(hooks.__log.applied.length).toBe(2); // và không có yêu cầu thứ ba sau khi đã lắng xuống
   });
 
   it('a system font cannot go to the Trash and says why in plain words', async () => {
