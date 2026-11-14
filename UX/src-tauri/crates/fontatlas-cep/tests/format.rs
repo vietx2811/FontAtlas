@@ -124,3 +124,22 @@ fn panel_validates_broker_json_and_scans_without_truncating_runs() {
     assert!(!host.contains("r < 300"), "không cắt 300 text run");
     assert!(host.contains("st.ri"), "vị trí quét có chỉ số run để quét tiếp theo lát");
 }
+
+/// Hồi quy cho test chập chờn: nhiều luồng cùng `load_or_create` trên một thư mục MỚI (đúng như `id()` gọi từ hai test song song).
+/// Trước khi sửa: các luồng dùng chung tệp tạm `signing.tmp`, luồng đến sau `rename` mất tệp → `Err` (và khoá/chứng chỉ có thể
+/// của hai lần sinh khác nhau). Mọi luồng phải thành công và nhận CÙNG một chứng chỉ, trùng với thứ đã lưu trên đĩa.
+#[test]
+fn concurrent_load_or_create_on_a_fresh_dir_is_safe_and_consistent() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("identity");
+    let certs: Vec<Vec<u8>> = std::thread::scope(|s| {
+        let hs: Vec<_> = (0..8).map(|_| s.spawn(|| Identity::load_or_create(&path).expect("không được lỗi khi chạy song song").cert_der().to_vec())).collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    assert!(certs.iter().all(|c| c == &certs[0]), "mọi luồng phải thấy cùng một danh tính");
+    assert_eq!(std::fs::read(path.join("signing.cert.der")).unwrap(), certs[0], "chứng chỉ trên đĩa trùng danh tính đã trả");
+    let again = Identity::load_or_create(&path).unwrap();
+    assert_eq!(again.cert_der(), &certs[0][..], "lần nạp sau đọc đúng cặp đã lưu");
+    let leftovers: Vec<_> = std::fs::read_dir(&path).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.contains("tmp")).collect();
+    assert!(leftovers.is_empty(), "không để lại tệp tạm: {leftovers:?}");
+}
