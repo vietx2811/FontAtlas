@@ -5,6 +5,7 @@ use crate::state::AppState;
 pub fn on_exit(state: &AppState) {
     // đặt cờ huỷ cho cả ba hàng đợi trước, rồi mới chờ: tổng thời gian ≈ một lượt chờ, không cộng dồn
     crate::services::fontreq::stop(state);
+    crate::services::app_sets::stop(state); // trước on_exit: không đồng bộ lại lúc đang gỡ font
     crate::services::broker::stop(state);
     state.cloud_watch.shutdown(); // trước hàng đợi quét: không xếp quét mới khi đang tắt
     state.scans.request_shutdown();

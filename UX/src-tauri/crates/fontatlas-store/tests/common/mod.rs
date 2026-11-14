@@ -63,6 +63,31 @@ pub fn open_store(dir: &Path) -> Store {
     Store::open(dir).expect("open").0
 }
 
+/// Thư viện gồm roboto thật + `n` face tổng hợp (mỗi face một file riêng, đường dẫn `/bench/<i>.ttf` chỉ có trong DB).
+/// Dùng cho test/bench hàng đợi: không cần file thật vì claim chỉ đọc đường dẫn.
+pub fn synthetic_library(n: usize) -> (tempfile::TempDir, Store) {
+    use std::sync::atomic::AtomicBool;
+    let d = tmp();
+    let fonts = d.path().join("Fonts");
+    std::fs::create_dir_all(&fonts).unwrap();
+    std::fs::copy(core_fixture("roboto.ttf"), fonts.join("roboto.ttf")).unwrap();
+    let mut s = open_store(&d.path().join("db"));
+    let src = s.add_source(fontatlas_store::SourceKind::Directory, "Fonts", Some(&fonts)).unwrap();
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    s.conn()
+        .execute_batch(&format!(
+            "CREATE TEMP TABLE seq AS WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i < {n}) SELECT i, randomblob(32) h FROM n;
+             INSERT INTO files(hash,size,container,num_faces,first_seen_at) SELECT h, 1000, 'sfnt', 1, i FROM seq;
+             INSERT INTO file_locations(file_id,source_id,path,size,mtime_ns,last_seen_at,created_ns,created_src)
+               SELECT fi.file_id, 1, '/bench/'||seq.i||'.ttf', 1000, 1, 1, 1000000000000000000 + seq.i*1000000000, 'disk' FROM files fi JOIN seq ON seq.h = fi.hash;
+             INSERT INTO faces(file_id,face_index,family_name,weight_class,is_italic,outline_format,license_class,vi_status,family_key,search_text)
+               SELECT fi.file_id, 0, 'Fam'||(seq.i/5), 100+(seq.i%9)*100, seq.i%2, 'glyf','ofl','full','fam'||(seq.i/5),'fam'||(seq.i/5) FROM files fi JOIN seq ON seq.h = fi.hash;
+             DROP TABLE seq;"
+        ))
+        .unwrap();
+    (d, s)
+}
+
 pub fn count(s: &Store, sql: &str) -> i64 {
     s.conn().query_row(sql, [], |r| r.get(0)).expect(sql)
 }

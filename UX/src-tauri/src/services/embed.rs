@@ -206,8 +206,8 @@ fn on_progress(state: &Arc<AppState>, p: Progress) {
             request_rebuild(state, RebuildWhy::QueueEmpty);
             state.hubs.embed.emit(EmbedEvent::Finished { total_done: total_done as u64 });
         }
-        Progress::Error(_) => {
-            lock(&sup.stats).load_error = Some("inference".into());
+        Progress::Error { code, .. } => {
+            lock(&sup.stats).load_error = Some(code.into());
             sup.running.store(false, Ordering::SeqCst);
         }
     }

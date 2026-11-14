@@ -104,6 +104,8 @@ pub enum ActivationReason {
     Collection(i64),
     /// Font tự bật khi một app thiết kế hỏi (broker / helper). Luôn scope session.
     Auto(crate::auto::AutoApp),
+    /// B5: font của Case do một app gắn với Case đang chạy bật (scope session). Gỡ khi mọi app của Case đã thoát (sau ân hạn).
+    CaseApp(i64),
 }
 
 impl ActivationReason {
@@ -112,6 +114,7 @@ impl ActivationReason {
             ActivationReason::Manual => "manual".into(),
             ActivationReason::Collection(id) => format!("collection:{id}"),
             ActivationReason::Auto(app) => format!("auto:{}", app.slug()),
+            ActivationReason::CaseApp(id) => format!("caseapp:{id}"),
         }
     }
     pub fn parse_db(s: &str) -> Option<ActivationReason> {
@@ -120,6 +123,12 @@ impl ActivationReason {
         }
         if let Some(app) = s.strip_prefix("auto:") {
             return crate::auto::AutoApp::from_slug(app).map(ActivationReason::Auto);
+        }
+        if let Some(id) = s.strip_prefix("caseapp:") {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            return id.parse().ok().map(ActivationReason::CaseApp);
         }
         let id = s.strip_prefix("collection:")?;
         if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
@@ -149,6 +158,12 @@ impl Serialize for ActivationReason {
                 let mut st = s.serialize_struct("ActivationReason", 2)?;
                 st.serialize_field("kind", "auto")?;
                 st.serialize_field("app", app.slug())?;
+                st.end()
+            }
+            ActivationReason::CaseApp(id) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "case_app")?;
+                st.serialize_field("collectionId", id)?;
                 st.end()
             }
         }

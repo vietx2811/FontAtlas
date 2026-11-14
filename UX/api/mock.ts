@@ -69,6 +69,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 
 import { createMockCases } from './mockCases';
 import { createMockSuggest } from './mockSuggest';
+import { createMockFigma } from './mockFigma';
 import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
@@ -161,6 +162,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     ...lib,
     ...caseApi,
     ...suggestApi,
+    ...createMockFigma(() => rows),
     async briefStarter(brief) {
       // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
       const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };

@@ -71,6 +71,7 @@ pub struct AppState {
     pub imports: crate::services::import::ImportJob,
     /// Theo dõi thay đổi thư mục nguồn (FSEvents) để xếp quét lại.
     pub cloud_watch: crate::services::cloud_watch::CloudWatch,
+    pub app_sets: crate::services::app_sets::AppSets,
     pub index: IndexSlot,
     pub rebuild: RebuildState,
     pub deps: Deps,
@@ -87,6 +88,8 @@ pub struct AppState {
     pub fontreq_error: Mutex<Option<String>>,
     /// Tên probe tự kiểm sức khoẻ mà nguồn font request đã nhận (xem services/fontreq::probe). Tối đa vài mục gần nhất.
     pub fontreq_seen: Mutex<Vec<String>>,
+    /// Link `fontatlas://` đã nhận, chờ giao diện lấy (`services::figma::take_pending_imports`).
+    pub pending_imports: Mutex<Vec<crate::dto::figma::PendingImportDto>>,
     /// Báo luồng thử lại dừng (thoát app).
     pub fontreq_stop: std::sync::atomic::AtomicBool,
     /// Chỉ app thật (lib.rs `run`) bật: cho phép đăng ký thứ có phạm vi CẢ phiên đăng nhập (nguồn font request). Test và
@@ -112,6 +115,7 @@ impl AppState {
             cloud_jobs: Default::default(),
             imports: Default::default(),
             cloud_watch: Default::default(),
+            app_sets: Default::default(),
             index: RwLock::new(None),
             rebuild: RebuildState::default(),
             deps,
@@ -123,6 +127,7 @@ impl AppState {
             fontreq: Mutex::new(None),
             fontreq_error: Mutex::new(None),
             fontreq_seen: Mutex::new(Vec::new()),
+            pending_imports: Mutex::new(Vec::new()),
             fontreq_stop: std::sync::atomic::AtomicBool::new(false),
             system_hooks: std::sync::atomic::AtomicBool::new(false),
         })

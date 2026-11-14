@@ -99,4 +99,6 @@ pub enum ActivationEvent {
     Reconciled { report: ReconcileReportDto },
     /// Các file vừa đổi trạng thái (UI nạp lại `activation_state`).
     Changed { hashes: Vec<String> },
+    /// B5: font của một Case vừa bật/tắt vì app gắn với Case mở/thoát.
+    AppSet { event: crate::dto::activation::AppSetEventDto },
 }

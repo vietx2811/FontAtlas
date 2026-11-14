@@ -27,5 +27,10 @@ export const ERR_I18N = {
   'err.locked_role_unknown': 'Font khoá thuộc một vai không có trong combo.',
   'err.locked_duplicate': 'Một font không thể giữ hai vai trong cùng combo.',
   'err.scope_unknown': 'Phạm vi gợi ý không hợp lệ.',
+  'err.import_empty': 'Chưa có gì để nhập. Hãy dán nội dung sao chép từ plugin Figma.',
+  'err.import_format': 'Nội dung dán không đúng định dạng của plugin Font Atlas cho Figma.',
+  'err.import_version': 'Nội dung này tạo bởi phiên bản plugin mới hơn; hãy cập nhật Font Atlas.',
+  'err.import_too_large': 'Nội dung dán quá lớn để nhập.',
+  'err.import_too_many_fonts': 'File có quá nhiều font (tối đa 200 mỗi lần nhập). Hãy chọn một vùng nhỏ hơn trong Figma.',
   'err.generic': 'Đã xảy ra lỗi ({code}).',
 } as const;

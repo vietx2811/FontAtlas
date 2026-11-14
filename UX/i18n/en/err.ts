@@ -28,5 +28,10 @@ export const EN_ERR: Record<keyof typeof ERR_I18N, string> = {
   'err.locked_role_unknown': 'A locked font belongs to a role that isn’t in the combo.',
   'err.locked_duplicate': 'One font can’t hold two roles in the same combo.',
   'err.scope_unknown': 'That suggestion scope isn’t valid.',
+  'err.import_empty': 'Nothing to import yet. Paste what you copied from the Figma plugin.',
+  'err.import_format': 'That doesn’t look like the Font Atlas Figma plugin’s format.',
+  'err.import_version': 'This was made by a newer plugin version; update Font Atlas.',
+  'err.import_too_large': 'That’s too large to import.',
+  'err.import_too_many_fonts': 'The file uses too many fonts (200 per import). Select a smaller area in Figma.',
   'err.generic': 'Something went wrong ({code}).',
 };

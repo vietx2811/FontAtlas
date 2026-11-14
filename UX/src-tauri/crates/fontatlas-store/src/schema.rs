@@ -650,7 +650,35 @@ ALTER TABLE sources_new RENAME TO sources;
 CREATE UNIQUE INDEX sources_kind_path ON sources(kind, COALESCE(path, ''));
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS];
+/// B5 App Font Sets (0.5.0): Case gắn với app (`case_apps`) và lý do kích hoạt `caseapp:<collection_id>` (CHECK của `activation_reasons`
+/// nới ra, dựng lại bảng như USER_AUTO_ACTIVATION). Số phiên bản do vị trí trong `USER_MIGRATIONS` quyết định; khi gom nhánh
+/// chỉ cần đổi thứ tự mục. `bundle_id` là khoá app (vd com.adobe.Illustrator), `app_name` chỉ để hiển thị.
+pub(crate) const USER_CASE_APPS: &str = r#"
+ALTER TABLE activation_reasons RENAME TO activation_reasons_v12;
+CREATE TABLE activation_reasons (
+  hash     BLOB NOT NULL REFERENCES activation_state(hash) ON DELETE CASCADE,
+  reason   TEXT NOT NULL CHECK (reason = 'manual'
+           OR (reason GLOB 'collection:[0-9]*' AND reason NOT GLOB 'collection:*[^0-9]*')
+           OR (reason GLOB 'caseapp:[0-9]*' AND reason NOT GLOB 'caseapp:*[^0-9]*')
+           OR (reason GLOB 'auto:[a-z]*' AND reason NOT GLOB 'auto:*[^a-z]*')),
+  added_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, reason)
+) WITHOUT ROWID;
+INSERT INTO activation_reasons (hash, reason, added_at) SELECT hash, reason, added_at FROM activation_reasons_v12;
+DROP TABLE activation_reasons_v12;
+DROP INDEX IF EXISTS activation_reasons_reason;
+CREATE INDEX activation_reasons_reason ON activation_reasons(reason);
+CREATE TABLE case_apps (
+  collection_id INTEGER NOT NULL REFERENCES collections ON DELETE CASCADE,
+  bundle_id     TEXT NOT NULL CHECK (length(bundle_id) BETWEEN 3 AND 255),
+  app_name      TEXT NOT NULL DEFAULT '',
+  added_at      INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, bundle_id)
+) WITHOUT ROWID;
+CREATE INDEX case_apps_bundle ON case_apps(bundle_id);
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
@@ -723,6 +751,16 @@ pub fn create_user_v5_for_test(path: &Path) {
 pub fn create_user_pre_auto_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user v7");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_AUTO_ACTIVATION).expect("auto-activation migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+/// Chỉ cho test: user.db ngay TRƯỚC migration B5 `case_apps` (mọi migration đứng trước nó trong danh sách).
+#[doc(hidden)]
+pub fn create_user_pre_case_apps_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-case-apps");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_CASE_APPS).expect("case-apps migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }

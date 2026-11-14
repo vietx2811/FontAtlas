@@ -14,6 +14,7 @@ import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { SourcePriority } from './SourcePriority';
+import { Credits } from './Credits';
 import { Modal } from '../Modal';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
 import { useNoticeStore } from '../../store/notices';
@@ -25,7 +26,7 @@ import { takeSettingsGroup } from './groupRequest';
 export const SETTINGS_GROUPS = [
   { id: 'general', get label() { return t('set.g.general'); } }, { id: 'library', get label() { return t('set.g.library'); } }, { id: 'vision', get label() { return t('set.g.vision'); } },
   { id: 'activation', get label() { return t('set.g.activation'); } }, { id: 'auto', get label() { return t('auto.group'); } }, { id: 'license', get label() { return t('set.g.license'); } }, { id: 'data', get label() { return t('set.g.data'); } },
-  { id: 'shortcuts', get label() { return t('set.g.shortcuts'); } }, { id: 'help', get label() { return t('set.g.help'); } },
+  { id: 'shortcuts', get label() { return t('set.g.shortcuts'); } }, { id: 'help', get label() { return t('set.g.help'); } }, { id: 'credits', get label() { return t('set.g.credits'); } },
 ] as const;
 type GroupId = typeof SETTINGS_GROUPS[number]['id'];
 
@@ -91,6 +92,7 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
           <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
         )}
         {group === 'help' && <Help api={api} onRerun={onRerunOnboarding} />}
+        {group === 'credits' && <Credits />}
       </section>
     </div>
   );

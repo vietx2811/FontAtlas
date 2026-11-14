@@ -9,6 +9,7 @@ import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, isHeadingLike, presetKey, roleLabel } from './deskRoles';
 import { guessProfile, whyText } from './pickerSources';
+import { BetaBadge } from '../ui/BetaBadge';
 import { INTENTS, intentName, matchIntent, type Intent } from './intents';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { ClashNote } from '../ui/ClashNote';
@@ -144,7 +145,7 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef }: { api: Api;
       {open && (
         <div ref={pop} className="fa-cs" role="dialog" aria-label={t('cs.dialog')} data-testid="combo-suggest" onKeyDown={onPopKey}>
           <header>
-            <b>{shownName ? t('cs.title', { name: shownName }) : t('cs.title.none')}</b>
+            <b>{shownName ? t('cs.title', { name: shownName }) : t('cs.title.none')}<BetaBadge /></b>
             <label>{t('cs.style')} <select data-testid="cs-style" value={style} onChange={e => setStyle(e.target.value)}>
               <option value="">{t('cs.style.all')}</option>{STYLE_IDS.map(s => <option key={s} value={s}>{t(`style.${s}` as 'style.contrast')}</option>)}</select></label>
             <label><input type="checkbox" data-testid="cs-keep" checked={keep} onChange={e => setKeep(e.target.checked)} /> {t('cs.keep')}</label>

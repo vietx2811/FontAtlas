@@ -14,6 +14,7 @@ use crate::dto::auto::*;
 use crate::dto::analysis::*;
 use crate::dto::cases::*;
 use crate::dto::dup_resolve::*;
+use crate::dto::figma::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
 use crate::dto::langs::*;
 use crate::dto::library::*;
@@ -24,7 +25,8 @@ use crate::dto::suggest::*;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
+    app_sets,
+    activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, figma, langs, library, model, onboarding, pairs,
     preview,
     settings, sources, suggest, suggest_pair, system,
 };
@@ -119,6 +121,9 @@ macro_rules! command_list {
             async record_view(face: FaceKeyDto) -> Result<(), CmdError>;
             async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
             async clear_recent_views() -> Result<u32, CmdError>;
+            async parse_figma_import(text: String) -> Result<FigmaImportDto, CmdError>;
+            async take_pending_imports() -> Result<Vec<PendingImportDto>, CmdError>;
+            async resolve_fonts(items: Vec<FontNameDto>) -> Result<Vec<FontMatchDto>, CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
@@ -193,6 +198,9 @@ macro_rules! command_list {
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
             async activation_vf_policy() -> Result<VfPolicyDto, CmdError>;
             async activation_set_vf_policy(policy: VfPolicyDto) -> Result<(), CmdError>;
+            async case_apps(collection_id: i64) -> Result<Vec<CaseAppDto>, CmdError>;
+            async case_set_apps(collection_id: i64, apps: Vec<CaseAppDto>) -> Result<(), CmdError>;
+            async installed_apps() -> Result<Vec<InstalledAppDto>, CmdError>;
             async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
             async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
             async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
@@ -388,6 +396,9 @@ cmd!(suggest_combos(req: SuggestCombosReqDto) -> Vec<ComboSuggestionDto> => |s| 
 cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
 cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
 cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));
+cmd!(parse_figma_import(text: String) -> FigmaImportDto => |_s| figma::parse_figma_import(&text));
+cmd!(take_pending_imports() -> Vec<PendingImportDto> => |s| Ok(figma::take_pending_imports(s)));
+cmd!(resolve_fonts(items: Vec<FontNameDto>) -> Vec<FontMatchDto> => |s| figma::resolve_fonts(s, &items));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
@@ -559,6 +570,9 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
 cmd!(activation_vf_policy() -> VfPolicyDto => |s| activation::vf_policy(s));
 cmd!(activation_set_vf_policy(policy: VfPolicyDto) -> () => |s| activation::set_vf_policy(s, policy));
+cmd!(case_apps(collection_id: i64) -> Vec<CaseAppDto> => |s| app_sets::case_apps(s, collection_id));
+cmd!(case_set_apps(collection_id: i64, apps: Vec<CaseAppDto>) -> () => |s| app_sets::set_case_apps(s, collection_id, &apps));
+cmd!(installed_apps() -> Vec<InstalledAppDto> => |_s| Ok(app_sets::installed_apps()));
 cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => |s| activation::availability(s, &faces));
 cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
 

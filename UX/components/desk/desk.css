@@ -127,6 +127,7 @@
 
 /* Picker (G5) */
 .fa-pickbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.fa-pick-beta { display: inline-flex; align-items: center; }
 .fa-pick-src { display: flex; flex-wrap: wrap; gap: 4px; }
 .fa-pick-src button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 12px; font-size: var(--text-xs); color: var(--muted); }
 .fa-pick-src button i { font-style: normal; font-variant-numeric: tabular-nums; opacity: .75; }

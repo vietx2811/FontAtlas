@@ -1,3 +1,4 @@
+import { useFigmaImport } from '../../store/figmaImport';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import type { CaseSummaryDto } from '../../bindings';
@@ -291,6 +292,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     <nav className="fa-side" data-testid="sidebar" data-collapsed={collapsed} aria-label={t('side.nav')}>
       <div className="fa-side-scroll">
         <NavItem icon="plus" label={t('side.addFont')} onClick={onAddFont} />
+        <NavItem icon="plus" label={t('figma.paste')} title={t('figma.paste.tip')} onClick={() => useFigmaImport.getState().openPaste()} />
         <NavItem icon="all" label={t('side.all')} count={counts.all} current={cur('all')} onClick={() => setView('all')} />
         <NavItem icon="star" label={t('side.favorites')} count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />

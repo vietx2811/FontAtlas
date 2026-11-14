@@ -2,6 +2,7 @@
 import { COMPARE_MAX, COMPARE_MIN } from './compare';
 import { fromWire } from './compareWire';
 import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } from '../bindings';
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
@@ -165,6 +166,10 @@ export function createTauriApi(): Api {
     recentViews: limit => call('recent_views', { limit }),
     recordView: face => none(call('record_view', { face })),
     clearRecentViews: () => call('clear_recent_views'),
+    parseFigmaImport: text => call('parse_figma_import', { text }),
+    resolveFonts: items => call('resolve_fonts', { items }),
+    takePendingImports: () => call('take_pending_imports'),
+    figmaImportSubscribe: async onPending => { const off = await listen('figma-import-pending', () => onPending()); return off; },
     caseCompare: (caseId, comboIds, lang = getLocale()) => call('case_compare', { caseId, comboIds, lang }),
     briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),

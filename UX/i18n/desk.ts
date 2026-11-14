@@ -97,6 +97,8 @@ export const DESK_I18N = {
   'why.spacing': 'spacing khác nhau',
   'why.stem': 'stem khác nhau',
   'why.width': 'width khác nhau',
+  'why.distinctiveness_low': 'điểm yếu nhất của vai: nét đặc trưng chưa nổi bật',
+  'term.beta.label': 'Beta', 'term.beta.gloss': 'Tính năng đang thử nghiệm: gợi ý có thể chưa chính xác và cách làm còn thay đổi. Hãy xem như một ý tham khảo, bạn luôn quyết định cuối cùng.',
   'why.distinctive': 'nét đặc trưng rõ',
   'why.serif_vs_sans': 'serif đi với sans',
   'why.same_superfamily': 'cùng superfamily',

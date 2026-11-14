@@ -6,6 +6,7 @@ pub mod error;
 pub mod hub;
 pub mod index_bundle;
 pub mod services;
+pub mod signals;
 pub mod state;
 pub mod glass;
 pub mod trash;
@@ -134,6 +135,8 @@ pub fn run() {
             let dirs = resolve_dirs(app.handle())?;
             let state = AppState::new(dirs, platform_api());
             app.manage(state.clone());
+            crate::signals::install();
+            crate::signals::watch(app.handle().clone());
             crate::glass::init(app.handle());
             state.system_hooks.store(true, std::sync::atomic::Ordering::SeqCst);
             state.cloud_watch.enable_real_watchers(); // AppState::new mặc định KHÔNG dựng watcher (test); app thật bật tại đây
@@ -171,6 +174,21 @@ pub fn run() {
                 && let Some(state) = app.try_state::<std::sync::Arc<AppState>>()
             {
                 crate::services::lifecycle::on_exit(&state);
+            }
+            // Link `fontatlas://` (macOS gửi khi app đang chạy hoặc vừa được mở bởi link): chỉ xếp hàng
+            // rồi báo giao diện; không bao giờ tự làm gì với nội dung link.
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = &event
+                && let Some(state) = app.try_state::<std::sync::Arc<AppState>>()
+            {
+                let any = urls.iter().fold(false, |acc, u| crate::services::figma::enqueue_link(&state, u.as_str()) | acc);
+                if any {
+                    use tauri::Emitter;
+                    let _ = app.emit("figma-import-pending", ());
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.set_focus();
+                    }
+                }
             }
         });
 }

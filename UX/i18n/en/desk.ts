@@ -200,6 +200,8 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'why.spacing': 'different spacing',
   'why.stem': 'different stem',
   'why.width': 'different width',
+  'why.distinctiveness_low': 'weakest point for this role: distinctive character is less pronounced',
+  'term.beta.label': 'Beta', 'term.beta.gloss': 'An experimental feature: suggestions may be off and the method may still change. Treat them as a starting point; you always have the final say.',
   'why.distinctive': 'distinctive character',
   'why.serif_vs_sans': 'serif with sans',
   'why.same_superfamily': 'same superfamily',

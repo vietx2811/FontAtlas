@@ -18,6 +18,8 @@ enum Lift {
     /// `deactivate_faces`: gỡ `Manual`; collection còn giữ → hỏi (Ask) hoặc gỡ hết (Force).
     Manual(DeactivatePolicy),
     Collection(i64),
+    /// B5: gỡ lý do `caseapp:<id>` (app của Case đã thoát / hết gắn).
+    CaseApp(i64),
     All,
 }
 
@@ -28,7 +30,7 @@ fn split(reasons: &[ActivationReason]) -> (bool, Vec<i64>) {
         .filter_map(|r| match r {
             ActivationReason::Collection(id) => Some(*id),
             // Auto không giữ font trước người dùng: không tính vào "collection còn giữ".
-            ActivationReason::Manual | ActivationReason::Auto(_) => None,
+            ActivationReason::Manual | ActivationReason::Auto(_) | ActivationReason::CaseApp(_) => None,
         })
         .collect();
     (manual, colls)
@@ -65,6 +67,18 @@ impl<E: ActivationEngine> ActivationService<E> {
         self.deactivate_hashes(store, groups, Lift::Collection(collection_id), progress)
     }
 
+    /// B5: gỡ lý do `caseapp:<id>` khỏi mọi file mang nó. Font còn lý do khác (bật tay, Case khác, app khác) vẫn bật.
+    pub fn release_case_app(
+        &self,
+        store: &Mutex<Store>,
+        collection_id: i64,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        let hashes = relock(store).hashes_with_reason(ActivationReason::CaseApp(collection_id))?;
+        let groups = hashes.into_iter().map(|h| (h, vec![])).collect();
+        self.deactivate_hashes(store, groups, Lift::CaseApp(collection_id), progress)
+    }
+
     /// Gọi khi một collection bị xoá (6a gọi TRƯỚC `Store::delete_collection`; gọi sau cũng đúng).
     /// Gỡ lý do `Collection(id)` khỏi mọi file còn mang nó, rồi gỡ đăng ký của mọi file đang `Active`
     /// mà không còn lý do nào (trường hợp store đã xoá lý do trong cùng transaction với collection).
@@ -75,6 +89,9 @@ impl<E: ActivationEngine> ActivationService<E> {
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
         let mut rep = self.deactivate_collection(store, collection_id, progress)?;
+        for r in self.release_case_app(store, collection_id, progress)?.results {
+            rep.push(r);
+        }
         let orphans: Vec<_> = relock(store)
             .activation_rows()?
             .into_iter()
@@ -165,12 +182,15 @@ impl<E: ActivationEngine> ActivationService<E> {
         let left = relock(store).with_tx(|tx| {
             let left: Vec<ActivationReason> = match what {
                 Lift::Manual(DeactivatePolicy::Ask) => {
-                    // Người dùng tắt tay thì thắng lý do `auto:*` (app sẽ hỏi lại nếu còn cần).
-                    tx.execute("DELETE FROM u.activation_reasons WHERE hash=?1 AND reason GLOB 'auto:*'", [&hash[..]])?;
+                    // Người dùng tắt tay thì thắng lý do `auto:*` và `caseapp:*` (app sẽ hỏi lại / lần mở app sau bật lại).
+                    tx.execute("DELETE FROM u.activation_reasons WHERE hash=?1 AND (reason GLOB 'auto:*' OR reason GLOB 'caseapp:*')", [&hash[..]])?;
                     fontatlas_store::remove_activation_reason_tx(tx, &hash, ActivationReason::Manual)?
                 }
                 Lift::Collection(id) => {
                     fontatlas_store::remove_activation_reason_tx(tx, &hash, ActivationReason::Collection(id))?
+                }
+                Lift::CaseApp(id) => {
+                    fontatlas_store::remove_activation_reason_tx(tx, &hash, ActivationReason::CaseApp(id))?
                 }
                 Lift::Manual(DeactivatePolicy::Force) | Lift::All => {
                     tx.execute("DELETE FROM u.activation_reasons WHERE hash=?1", [&hash[..]])?;

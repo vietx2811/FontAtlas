@@ -5,7 +5,6 @@ import App from './App';
 import { setApi } from './api';
 import { createApi } from './api/select';
 import { applyDevBoot, applyDevPreset, devInitial } from './store/devPreset';
-import { StatusProvider } from './context/StatusContext';
 import { LocaleBoundary } from './i18n/LocaleBoundary';
 import { chooseLocale, initLocale, hasChosenThisSession } from './i18n';
 
@@ -26,9 +25,7 @@ const render = () => root.render(
   <React.StrictMode>
     <LocaleBoundary>
       {() => (
-        <StatusProvider>
-          <App />
-        </StatusProvider>
+        <App />
       )}
     </LocaleBoundary>
   </React.StrictMode>

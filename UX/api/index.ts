@@ -9,7 +9,7 @@ import type {
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto, VfPolicyDto,
 } from './types';
 
-import type { DeskSuggestReqDto, DeskPageDto, SuggestPartnersReqDto, PartnerPageDto, SuggestCombosReqDto, ComboSuggestionDto, RoleRefDto, RoleFitDto, RecentViewDto } from '../bindings';
+import type { DeskSuggestReqDto, DeskPageDto, SuggestPartnersReqDto, PartnerPageDto, SuggestCombosReqDto, ComboSuggestionDto, RoleRefDto, RoleFitDto, RecentViewDto, FigmaImportDto, FontNameDto, FontMatchDto, PendingImportDto } from '../bindings';
 
 export * from './types';
 
@@ -145,6 +145,14 @@ export interface Api extends LibraryApi {
   recordView(face: FaceKeyDto): Promise<void>;
   /** Xoá danh sách font vừa xem; trả số dòng đã xoá. */
   clearRecentViews(): Promise<number>;
+  /** Nhập từ Figma (B6). Phân tích văn bản dán (JSON hoặc link fontatlas://); chỉ đọc. Lỗi: `import_empty|format|version|too_large|too_many_fonts`. */
+  parseFigmaImport(text: string): Promise<FigmaImportDto>;
+  /** Khớp tên font Figma với thư viện (≤200). Kết quả cùng thứ tự đầu vào; không điểm số. */
+  resolveFonts(items: FontNameDto[]): Promise<FontMatchDto[]>;
+  /** Link fontatlas:// đã nhận (kể cả mở lạnh) chờ giao diện lấy; lấy xong là rỗng. */
+  takePendingImports(): Promise<PendingImportDto[]>;
+  /** Báo khi có link mới tới lúc app đang chạy. */
+  figmaImportSubscribe(onPending: () => void): Promise<Unsubscribe>;
   /** Compare Combo: cột = Combo, kèm quan hệ giữa giọng ① và các vai khác. `comboIds` rỗng = mọi Combo (≤ 8). */
   caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
   /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */

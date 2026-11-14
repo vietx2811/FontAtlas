@@ -15,6 +15,50 @@ const STAGE: &str = "embedding";
 /// (hash, face_index, đã có vector, status, version) của một face khi xếp hàng.
 type QueueRow = (Vec<u8>, i64, bool, Option<String>, Option<String>);
 
+/// Số ứng viên nạp mỗi lần quét hàng đợi `pending`.
+const CLAIM_SCAN: usize = 1024;
+
+/// Vị trí trong thứ tự claim: (updated_at, hash, face_index).
+type ClaimCursor = (i64, Vec<u8>, i64);
+
+/// Trạng thái nội bộ của `claim_embedding_batch`: ứng viên đã sắp xếp nạp theo trang (con trỏ keyset), để
+/// mỗi lô BATCH nhỏ không phải đọc và sắp xếp lại cả hàng đợi (trước đây O(N²/BATCH) cho N face).
+/// Dòng trong bộ đệm có thể cũ: mỗi dòng được kiểm lại còn `pending` đúng version lúc claim.
+#[derive(Default)]
+pub(crate) struct ClaimQueue {
+    version: String,
+    queue: std::collections::VecDeque<(Vec<u8>, i64)>,
+    /// Trang tiếp theo bắt đầu sau vị trí này; `None` = từ đầu hàng đợi.
+    cursor: Option<ClaimCursor>,
+    /// Số lần đã quét hàng đợi `pending` để nạp ứng viên.
+    scans: u64,
+}
+
+impl ClaimQueue {
+    /// Nạp trang kế tiếp; trang ngắn nghĩa là đã tới cuối → lần quét sau bắt đầu lại từ đầu.
+    fn refill(&mut self, c: &Connection, raw_version: &str) -> Result<usize, StoreError> {
+        self.scans += 1;
+        let base = "SELECT hash, face_index, updated_at FROM pipeline_state
+                    WHERE stage='embedding' AND status='pending' AND version=?1";
+        let order = "ORDER BY updated_at, hash, face_index LIMIT ?2";
+        let map = |r: &rusqlite::Row| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?));
+        let rows: Vec<(Vec<u8>, i64, i64)> = match &self.cursor {
+            None => c
+                .prepare_cached(&format!("{base} {order}"))?
+                .query_map(params![raw_version, CLAIM_SCAN as i64], map)?
+                .collect::<Result<_, _>>()?,
+            Some((u, h, f)) => c
+                .prepare_cached(&format!("{base} AND (updated_at, hash, face_index) > (?3, ?4, ?5) {order}"))?
+                .query_map(params![raw_version, CLAIM_SCAN as i64, u, h, f], map)?
+                .collect::<Result<_, _>>()?,
+        };
+        let n = rows.len();
+        self.cursor = if n < CLAIM_SCAN { None } else { rows.last().map(|(h, f, u)| (*u, h.clone(), *f)) };
+        self.queue.extend(rows.into_iter().map(|(h, f, _)| (h, f)));
+        Ok(n)
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EnqueueStats {
     pub pending: usize,
@@ -161,21 +205,43 @@ impl Store {
         )?)
     }
 
+    /// Số lần `claim_embedding_batch` đã quét lại hàng đợi (chẩn đoán cho bench/test: phải ~ N/lô nạp, không phải N/BATCH).
+    pub fn embed_claim_scans(&self) -> u64 {
+        self.claim.scans
+    }
+
     /// Lấy tối đa `n` face `pending` kèm đường dẫn còn tồn tại, đánh `running` (cùng transaction IMMEDIATE).
     pub fn claim_embedding_batch(&mut self, raw_version: &str, n: usize) -> Result<Vec<EmbedJob>, StoreError> {
         let now = now_ms();
+        if self.claim.version != raw_version {
+            self.claim = ClaimQueue { version: raw_version.to_string(), scans: self.claim.scans, ..Default::default() };
+        }
         let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let cands: Vec<(Vec<u8>, i64)> = {
-            let mut st = tx.prepare(
-                "SELECT hash, face_index FROM pipeline_state
-                 WHERE stage='embedding' AND status='pending' AND version=?1 ORDER BY updated_at, hash, face_index",
-            )?;
-            st.query_map([raw_version], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?
-        };
         let mut out = Vec::new();
-        for (h, fi) in cands {
-            if out.len() >= n {
-                break;
+        // Đã quét tới cuối hàng đợi trong lần gọi này: không quét lại (dòng chỉ-cloud còn `pending` sẽ bị gặp lại mãi).
+        let mut end_seen = false;
+        while out.len() < n {
+            let Some((h, fi)) = self.claim.queue.pop_front() else {
+                if end_seen {
+                    break;
+                }
+                // Hết bộ đệm: nạp trang kế. Trang rỗng khi đang đi giữa chừng → quét lại từ đầu một lần (dòng
+                // mới/được trả về); trang ngắn = tới cuối.
+                let had_cursor = self.claim.cursor.is_some();
+                let got = self.claim.refill(&tx, raw_version)?;
+                if self.claim.cursor.is_none() && !(got == 0 && had_cursor) {
+                    end_seen = true;
+                }
+                continue;
+            };
+            let still_pending: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM pipeline_state WHERE hash=?1 AND face_index=?2 AND stage='embedding'
+                                AND status='pending' AND version=?3)",
+                params![&h, fi, raw_version],
+                |r| r.get(0),
+            )?;
+            if !still_pending {
+                continue;
             }
             let hash = hash_from_blob(h)?;
             let path: Option<String> = tx
