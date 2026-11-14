@@ -146,6 +146,7 @@ fn reading(k: &str, v: Option<Value>, q: &str, p: Option<f32>) -> AxisReadingDto
 
 fn detail() -> FaceDetailDto {
     FaceDetailDto {
+        derived_from: None,
         row: row(3, 3, "Playfair Display", "Regular", 400, false),
         summary: "Serif, tương phản cao, x-height thấp. Đủ 134 ký tự Việt.".into(),
         classification: Some("Serif".into()),

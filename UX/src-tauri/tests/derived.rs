@@ -84,6 +84,18 @@ fn derives_a_renamed_copy_only_for_a_real_clash_without_touching_the_original() 
     let groups = duplicates::duplicate_groups(&st, &q).unwrap();
     assert!(groups.iter().all(|g| g.faces.iter().all(|m| m.row.family != "Oswald VF")), "bản sao lọt vào nhóm trùng lặp");
 
+    // chi tiết font: bản sao biết nó là bản sao của ai; font thường thì không
+    {
+        use app_lib::dto::analysis::LangDto;
+        use app_lib::services::analysis;
+        assert!(wait_rebuilt(&st, Duration::from_secs(60)));
+        let det = analysis::get_face(&st, &FaceKeyDto::from(&key), LangDto::Vi).unwrap();
+        let from = det.derived_from.expect("bản sao có derivedFrom");
+        assert_eq!(from.face_key.hash_hex, FaceKeyDto::from(&fontatlas_store::FaceKey { hash: vf, face_index: 0 }).hash_hex);
+        assert!(from.name.starts_with("Oswald"), "{}", from.name);
+        let orig = analysis::get_face(&st, &from.face_key, LangDto::Vi).unwrap();
+        assert!(orig.derived_from.is_none());
+    }
     // idempotent: lần hai trả lại đúng bản đã có
     let (key2, c2) = derive_renamed_copy(&st, &vf).unwrap();
     assert!(!c2.created);

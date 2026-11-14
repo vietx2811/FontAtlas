@@ -368,11 +368,23 @@ pub struct VietnameseDto {
     pub mark_weight_ratio: AxisReadingDto,
 }
 
+/// Font gốc của một bản sao đổi tên (G7b).
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct DerivedFromDto {
+    pub face_key: FaceKeyDto,
+    /// "Họ Kiểu" của font gốc để hiển thị.
+    pub name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct FaceDetailDto {
     pub row: FaceRowDto,
+    /// G7b: font này là BẢN SAO đổi tên của font khác ("Copy of «X»"); `null` với font thường.
+    pub derived_from: Option<DerivedFromDto>,
     pub summary: String,
     /// Sans · Serif · Mono: dòng dưới tên.
     pub classification: Option<String>,

@@ -10,9 +10,17 @@ export type OrganizePlanDto = { toCopy: number, bytes: number,
  */
 alreadyThere: number, 
 /**
- * Còn là placeholder trên ổ cloud: không chép (tải về máy trước).
+ * Còn là placeholder trên ổ cloud (chưa tải về). Không chọn `downloadFirst` thì các font này bị BỎ QUA.
  */
-cloudNotDownloaded: number, freeBytes: number, 
+cloudNotDownloaded: number, 
+/**
+ * Số font phải TẢI VỀ trước khi chép khi chọn `downloadFirst` (= `cloudNotDownloaded` trong phạm vi) và tổng dung lượng.
+ */
+needsDownload: number, downloadBytes: number, 
+/**
+ * Ổ chứa thư mục cloud còn đủ chỗ cho `downloadBytes` + 5% (file tải về nằm lại trên máy; OneDrive tự giải phóng theo cài đặt của nó).
+ */
+enoughSpaceForDownload: boolean, freeBytes: number, 
 /**
  * `freeBytes` đủ cho `bytes` + 5% dự phòng.
  */

@@ -74,6 +74,22 @@ impl Store {
             .optional()?)
     }
 
+    /// "Họ Kiểu" của một face để hiển thị (vd "Oswald Regular"); None nếu không có trong thư viện.
+    pub fn face_label(&self, hash: &[u8; 32], face_index: u32) -> Result<Option<String>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT f.family_name, f.subfamily FROM faces f JOIN files fi ON fi.file_id = f.file_id WHERE fi.hash=?1 AND f.face_index=?2",
+                params![&hash[..], face_index],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+            )
+            .optional()?
+            .map(|(fam, sub)| match sub.filter(|s| !s.is_empty()) {
+                Some(s) => format!("{fam} {s}"),
+                None => fam,
+            }))
+    }
+
     /// `faces.is_variable` của một face (theo hash + index); None nếu không có trong thư viện.
     pub fn face_is_variable(&self, hash: &[u8; 32], face_index: u32) -> Result<Option<(i64, bool)>, StoreError> {
         Ok(self
