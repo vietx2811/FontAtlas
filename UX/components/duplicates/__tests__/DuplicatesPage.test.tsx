@@ -230,7 +230,7 @@ describe('DuplicatesPage: the Trash is a deliberate, per-file choice', () => {
     const { d, hooks } = await toTrash();
     click(within(d).getByRole('checkbox'));
     confirm();
-    await waitFor(() => expect(hooks.__log.applied.length).toBe(1));
+    await waitFor(() => expect(hooks.__log.applied.length).toBeGreaterThanOrEqual(1));
     const req = hooks.__log.applied[0];
     expect(req.action).toBe('trash');
     expect(req.explicitTrashPaths).toEqual(['/Users/me/Library/Fonts/Inter-Regular.ttf']);

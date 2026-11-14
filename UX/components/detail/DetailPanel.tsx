@@ -1,4 +1,6 @@
 import '../library/organized.css';
+import { faceLabel } from '../../store/nameClash';
+import { RemoveCopyButton } from './RemoveCopy';
 import { useEffect, useRef } from 'react';
 import type { Api } from '../../api';
 import { useUiStore, type PanelTab } from '../../store/ui';
@@ -64,7 +66,7 @@ export function DetailPanel({ api }: { api: Api }): React.JSX.Element | null {
             </Tooltip>
             {detail && <ClashNote faceId={detail.row.faceId} inline face={{ hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex }} />}
           </div>
-          {detail?.derivedFrom && <div className="fa-p-derived" data-testid="derived-badge"><span>{t('dnd.derived.badge', { name: detail.derivedFrom.name })}</span><NoteMark kind="info" inline text={t('dnd.derived.tip')} /></div>}
+          {detail?.derivedFrom && <div className="fa-p-derived" data-testid="derived-badge"><span>{t('dnd.derived.badge', { name: detail.derivedFrom.name })}</span><NoteMark kind="info" inline text={t('dnd.derived.tip')} /><RemoveCopyButton api={api} face={{ hashHex: detail.row.hashHex, faceIndex: detail.row.faceIndex }} name={faceLabel(detail.row)} /></div>}
           <ActiveRow face={detail ? face : null} flow={flow} api={api} />
           <div className="fa-p-sub" data-testid="panel-sub">{fmt}{detail?.row.onCloudOnly && <NoteMark kind="info" inline testId="cloud-only-note" text={t('cloud.note')} />}</div>
           {detail && face && detail.row.hashHex === face.hashHex && detail.row.faceIndex === face.faceIndex && <ClassChip key={`${face.hashHex}:${face.faceIndex}`} api={api} face={face} info={detail.classificationInfo} onChanged={retry} />}
