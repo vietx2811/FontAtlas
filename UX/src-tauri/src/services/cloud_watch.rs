@@ -113,6 +113,10 @@ pub struct CloudWatch {
     quiet: Duration,
     max_wait: Duration,
     inner: Mutex<Inner>,
+    /// `sync_in_background`: có luồng đồng bộ đang chạy / có yêu cầu mới đến khi nó đang chạy.
+    bg_running: std::sync::atomic::AtomicBool,
+    bg_again: std::sync::atomic::AtomicBool,
+    closing: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Default)]
@@ -134,7 +138,14 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 impl CloudWatch {
     pub fn with_timing(quiet: Duration, max_wait: Duration) -> Self {
-        CloudWatch { quiet, max_wait, inner: Mutex::new(Inner::default()) }
+        CloudWatch {
+            quiet,
+            max_wait,
+            inner: Mutex::new(Inner::default()),
+            bg_running: Default::default(),
+            bg_again: Default::default(),
+            closing: Default::default(),
+        }
     }
 
     /// Các nguồn đang được theo dõi (cho test/chẩn đoán).
@@ -142,6 +153,34 @@ impl CloudWatch {
         let mut v: Vec<i64> = lock(&self.inner).watches.keys().copied().collect();
         v.sort_unstable();
         v
+    }
+
+    /// Như `sync` nhưng chạy ở luồng nền, không chặn người gọi: dựng một luồng FSEvents có thể mất nhiều giây khi máy bận (đã đo 13 s),
+    /// không được làm treo "Thêm nguồn"/mở app. Nhiều yêu cầu dồn lại thành tối đa một lượt chạy nối tiếp.
+    pub fn sync_in_background(&self, state: &Arc<AppState>) {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self.closing.load(SeqCst) {
+            return;
+        }
+        self.bg_again.store(true, SeqCst);
+        if self.bg_running.swap(true, SeqCst) {
+            return; // luồng đang chạy sẽ thấy cờ `again`
+        }
+        let st = Arc::clone(state);
+        let spawned = std::thread::Builder::new().name("fontatlas-watch-sync".into()).spawn(move || {
+            let w = &st.cloud_watch;
+            while w.bg_again.swap(false, SeqCst) && !w.closing.load(SeqCst) {
+                w.sync(&st);
+            }
+            w.bg_running.store(false, SeqCst);
+            // yêu cầu lọt vào giữa lúc kết thúc
+            if w.bg_again.load(SeqCst) && !w.closing.load(SeqCst) {
+                w.sync_in_background(&st);
+            }
+        });
+        if spawned.is_err() {
+            self.bg_running.store(false, SeqCst);
+        }
     }
 
     /// Đồng bộ danh sách watcher với nguồn hiện tại: MỌI nguồn thư mục đang bật và đang truy cập được có watcher; nguồn bị
@@ -225,6 +264,7 @@ impl CloudWatch {
 
     /// Dừng mọi watcher và luồng gom (khi tắt app).
     pub fn shutdown(&self) {
+        self.closing.store(true, std::sync::atomic::Ordering::SeqCst);
         let (worker, watches) = {
             let mut g = lock(&self.inner);
             g.tx = None;

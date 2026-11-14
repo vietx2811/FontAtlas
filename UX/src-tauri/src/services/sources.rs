@@ -85,7 +85,7 @@ pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdErr
         Err(e) => return Err(e),
     };
     state.scans.enqueue(state, &[id]);
-    state.cloud_watch.sync(state);
+    state.cloud_watch.sync_in_background(state);
     let src = state.with_user(|u| Ok(u.source(id)?))?;
     dto(state, src)
 }
@@ -102,7 +102,7 @@ pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceRepor
         return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
     }
     let report: RemoveSourceReportDto = state.with_store(|s| Ok(s.remove_source(id)?.into()))?;
-    state.cloud_watch.sync(state);
+    state.cloud_watch.sync_in_background(state);
     // ảnh preview theo thế hệ: font vừa bị gỡ không được phục vụ từ URL cũ
     let _ = crate::services::preview::bump_generation(state);
     crate::services::activation::reconcile_now(state, false);

@@ -29,6 +29,8 @@ struct Inner {
     shutdown: AtomicBool,
     worker: Mutex<Option<JoinHandle<()>>>,
     last: Mutex<HashMap<i64, RescanStatsDto>>,
+    /// Có lượt quét nào từ lần hết việc trước làm đổi thư viện (font mới/đổi/mất, lỗi, huỷ giữa chừng)? Chỉ khi đó mới dựng lại Index.
+    dirty: AtomicBool,
 }
 
 #[derive(Default)]
@@ -229,7 +231,7 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             // Đang tắt app thì bỏ móc (không mở worker embed hay đăng ký lại font sau `on_exit`).
             state.hubs.scan.emit(ScanEvent::Idle);
             if !inner.shutdown.load(Ordering::SeqCst) {
-                after_idle(&state);
+                after_idle(&state, inner.dirty.swap(false, Ordering::SeqCst));
             }
             let mut q = lock(&inner.q);
             if q.queue.is_empty() || inner.shutdown.load(Ordering::SeqCst) {
@@ -293,21 +295,37 @@ fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, 
     );
     match r {
         Ok(stats) => {
+            if changed_library(&stats) {
+                inner.dirty.store(true, Ordering::SeqCst);
+            }
             let dto = RescanStatsDto::from(&stats);
             lock(&inner.last).insert(id, dto.clone());
             state.hubs.scan.emit(ScanEvent::Finished { source_id: id, stats: dto });
         }
-        Err(e) => state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() }),
+        Err(e) => {
+            inner.dirty.store(true, Ordering::SeqCst);
+            state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() });
+        }
     }
 }
 
+/// Lượt quét có làm đổi thư viện không? Lượt "không có gì mới" (vd quét lại do watcher báo, mọi file không đổi) KHÔNG được
+/// kéo theo dựng lại Index (đắt với thư viện lớn).
+fn changed_library(s: &fontatlas_store::RescanStats) -> bool {
+    s.status != fontatlas_store::RescanStatus::Ok
+        || s.analyzed + s.relinked + s.failed + s.missing + s.purged > 0
+        || s.seen > s.unchanged
+}
+
 /// Việc nối tiếp khi hàng đợi quét về rỗng (mỗi task sau thêm móc của mình).
-fn after_idle(state: &Arc<AppState>) {
+fn after_idle(state: &Arc<AppState>, library_changed: bool) {
     boot::resolve_legacy_if_needed(state);
     boot::mark_analyzer_seen_if_current(state);
     crate::services::activation::reconcile_now(state, false);
     let _ = crate::services::embed::ensure_started(state);
     state.langs.bump();
     crate::services::langs::ensure_started(state);
-    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    if library_changed {
+        crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    }
 }

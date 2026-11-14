@@ -101,7 +101,7 @@ fn after_ready(state: &Arc<AppState>) {
     }
     mark_analyzer_seen_if_current(state);
     refresh_loose_fonts(state);
-    state.cloud_watch.sync(state);
+    state.cloud_watch.sync_in_background(state);
     let _ = crate::services::embed::ensure_started(state);
     crate::services::langs::ensure_started(state);
     crate::services::cases::purge_trash(state);
