@@ -250,3 +250,114 @@ fn a_cloud_location_is_warned_about_but_not_refused() {
     let s = organized::create(&st, p.to_str().unwrap()).unwrap();
     assert!(s.configured && s.is_cloud, "người dùng vẫn chọn được; UI chịu trách nhiệm cảnh báo");
 }
+
+// ---------- "Tải về rồi chép" (font còn là placeholder trên OneDrive/iCloud) ----------
+
+use fontatlas_activate::EnsureLocalError;
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+
+/// Thư viện có ba font; open_sans và oswald_vf được đánh dấu "chỉ có trên cloud" (như sau một lần quét thấy placeholder).
+fn cloud_setup() -> (tempfile::TempDir, Arc<AppState>, PathBuf, PathBuf) {
+    let d = tempfile::tempdir().unwrap();
+    let (st, fonts) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf", "oswald_vf.ttf"]);
+    st.with_store(|s| {
+        s.conn().execute("UPDATE file_locations SET cloud_only=1 WHERE path LIKE '%open_sans.ttf' OR path LIKE '%oswald_vf.ttf'", []).unwrap();
+        Ok(())
+    })
+    .unwrap();
+    let root = make_library(&st, d.path());
+    (d, st, fonts, root)
+}
+
+fn copied_names(root: &Path) -> Vec<String> {
+    walk(&root.join("Library"))
+        .iter()
+        .filter(|p| p.file_name().unwrap() != ".fontatlas-library" && !p.to_string_lossy().contains("/Snapshots/"))
+        .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn the_preview_counts_files_to_download_and_their_size_and_default_import_only_skips_them() {
+    let (_d, st, fonts, root) = cloud_setup();
+    let sz = |n: &str| std::fs::metadata(fonts.join(n)).unwrap().len();
+    let plan = organized::import_plan(&st, &OrganizeScopeDto::default()).unwrap();
+    assert_eq!((plan.to_copy, plan.cloud_not_downloaded, plan.needs_download), (1, 2, 2));
+    assert_eq!(plan.download_bytes, sz("open_sans.ttf") + sz("oswald_vf.ttf"));
+    assert!(plan.enough_space && plan.enough_space_for_download);
+    let plan_dl = organized::import_plan(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }).unwrap();
+    assert_eq!((plan_dl.to_copy, plan_dl.needs_download), (3, 2));
+    assert_eq!(plan_dl.bytes, sz("roboto.ttf") + sz("open_sans.ttf") + sz("oswald_vf.ttf"));
+
+    let fetched = AtomicU32::new(0);
+    let fetch = |_: &Path, _: app_lib::services::cloud::Permit, _: &AtomicBool| {
+        fetched.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    };
+    let r = organized::import_with(&st, &OrganizeScopeDto::default(), &fetch, &mut |_| {}).unwrap();
+    assert_eq!((r.copied, r.skipped_cloud, r.downloaded, r.issue_count), (1, 2, 0, 0));
+    assert_eq!(fetched.load(Ordering::SeqCst), 0, "mặc định KHÔNG tải gì");
+    assert_eq!(copied_names(&root), vec!["roboto.ttf".to_string()]);
+}
+
+use std::sync::atomic::AtomicBool;
+
+#[test]
+fn download_first_downloads_through_the_shared_lane_then_copies_with_progress() {
+    let (_d, st, fonts, root) = cloud_setup();
+    let before = std::fs::read(fonts.join("open_sans.ttf")).unwrap();
+    let (inflight, peak, calls) = (AtomicUsize::new(0), AtomicUsize::new(0), AtomicU32::new(0));
+    let fetch = |_: &Path, _permit: app_lib::services::cloud::Permit, _: &AtomicBool| {
+        calls.fetch_add(1, Ordering::SeqCst);
+        let n = inflight.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(n, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(40));
+        inflight.fetch_sub(1, Ordering::SeqCst);
+        Ok(())
+    };
+    let mut phases = Vec::new();
+    let r = organized::import_with(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }, &fetch, &mut |p| phases.push(p)).unwrap();
+    assert_eq!((r.copied, r.downloaded, r.skipped_cloud, r.issue_count, r.cancelled), (3, 2, 0, 0, false));
+    assert!(r.issue_groups.is_empty());
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "chỉ tải font còn là placeholder");
+    assert!(peak.load(Ordering::SeqCst) <= 4, "không vượt cổng tải chung");
+    assert_eq!(copied_names(&root).len(), 3);
+    assert_eq!(std::fs::read(fonts.join("open_sans.ttf")).unwrap(), before, "file gốc nguyên vẹn");
+    // tiến độ: có pha tải với tổng 2, và kết thúc ở done = total = 3
+    assert!(phases.iter().any(|p| p.phase == OrganizePhaseDto::Downloading && p.download_total == 2));
+    assert!(phases.iter().any(|p| p.downloaded == 2));
+    let last = phases.last().unwrap();
+    assert_eq!((last.done, last.total, last.failed), (3, 3, 0));
+}
+
+#[test]
+fn download_failures_are_grouped_by_code_and_the_rest_still_copies() {
+    let (_d, st, _fonts, root) = cloud_setup();
+    let fetch = |p: &Path, _: app_lib::services::cloud::Permit, _: &AtomicBool| {
+        if p.ends_with("open_sans.ttf") { Err(EnsureLocalError::Timeout) } else { Err(EnsureLocalError::Missing) }
+    };
+    let r = organized::import_with(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }, &fetch, &mut |_| {}).unwrap();
+    assert_eq!((r.copied, r.downloaded, r.issue_count), (1, 0, 2), "font có sẵn trên máy vẫn được chép");
+    let codes: Vec<(String, u32)> = r.issue_groups.iter().map(|g| (g.code.clone(), g.count)).collect();
+    assert_eq!(codes, vec![("cloud_timeout".to_string(), 1), ("missing_file".to_string(), 1)]);
+    assert!(r.issue_groups[0].first_path.ends_with("open_sans.ttf"));
+    assert_eq!(copied_names(&root), vec!["roboto.ttf".to_string()], "font tải lỗi không để lại gì (không có file chép dở)");
+    // lần sau thử lại: chỉ còn hai font đó
+    let again = organized::import_plan(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }).unwrap();
+    assert_eq!((again.to_copy, again.already_there), (2, 1));
+}
+
+#[test]
+fn cancelling_during_the_download_stops_further_batches() {
+    let (_d, st, _fonts, _root) = cloud_setup();
+    let st2 = st.clone();
+    let fetch = move |_: &Path, _: app_lib::services::cloud::Permit, c: &AtomicBool| {
+        assert!(organized::cancel(&st2), "đang có lượt chép để huỷ");
+        assert!(c.load(Ordering::SeqCst));
+        Err(EnsureLocalError::Cancelled)
+    };
+    let r = organized::import_with(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }, &fetch, &mut |_| {}).unwrap();
+    assert!(r.cancelled);
+    assert_eq!(r.issue_count, 0, "huỷ không phải lỗi");
+    assert_eq!(r.copied, 1, "font có sẵn trên máy đã chép trước khi tới lô cloud");
+}

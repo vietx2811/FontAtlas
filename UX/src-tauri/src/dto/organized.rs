@@ -54,6 +54,9 @@ pub struct OrganizedStatusDto {
 pub struct OrganizeScopeDto {
     #[ts(type = "number[] | null")]
     pub source_ids: Option<Vec<i64>>,
+    /// "Tải về rồi chép": font còn là placeholder trên ổ cloud được TẢI VỀ MÁY (qua làn tải của "Tải về máy": tối đa 4 cùng lúc,
+    /// huỷ được) rồi chép. `false` (mặc định) = bỏ qua chúng và chỉ báo số lượng.
+    pub download_first: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -75,8 +78,14 @@ pub struct OrganizePlanDto {
     pub bytes: u64,
     /// Đã có bản trong thư viện (bỏ qua).
     pub already_there: u32,
-    /// Còn là placeholder trên ổ cloud: không chép (tải về máy trước).
+    /// Còn là placeholder trên ổ cloud (chưa tải về). Không chọn `downloadFirst` thì các font này bị BỎ QUA.
     pub cloud_not_downloaded: u32,
+    /// Số font phải TẢI VỀ trước khi chép khi chọn `downloadFirst` (= `cloudNotDownloaded` trong phạm vi) và tổng dung lượng.
+    pub needs_download: u32,
+    #[ts(type = "number")]
+    pub download_bytes: u64,
+    /// Ổ chứa thư mục cloud còn đủ chỗ cho `downloadBytes` + 5% (file tải về nằm lại trên máy; OneDrive tự giải phóng theo cài đặt của nó).
+    pub enough_space_for_download: bool,
     #[ts(type = "number")]
     pub free_bytes: u64,
     /// `freeBytes` đủ cho `bytes` + 5% dự phòng.
@@ -88,11 +97,36 @@ pub struct OrganizePlanDto {
 #[serde(rename_all = "camelCase")]
 #[ts(export, rename_all = "camelCase")]
 pub struct OrganizeProgressDto {
+    /// `downloading` (đang tải một lô font cloud) | `copying`.
+    pub phase: OrganizePhaseDto,
+    /// Số font đã xử lý xong (chép xong hoặc lỗi) / tổng cần chép.
     pub done: u32,
     pub total: u32,
     #[ts(type = "number")]
     pub bytes_done: u64,
     pub failed: u32,
+    /// Tải về: số font cloud đã tải xong (kể cả lỗi) / tổng cần tải.
+    pub downloaded: u32,
+    pub download_total: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum OrganizePhaseDto {
+    Downloading,
+    Copying,
+}
+
+/// Lỗi gộp theo mã (tổng thật, không bị cắt như `issues`): `code` ∈ `cloud_timeout` | `cloud_download_failed` | `cloud_stub` |
+/// `missing_file` | `cloud_busy` (tải) và `cloud_not_downloaded` | `source_missing` | `verify_failed` | `disk_full` | `io` (chép).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct OrganizeIssueGroupDto {
+    pub code: String,
+    pub count: u32,
+    pub first_path: String,
 }
 
 /// `code`: `cloud_not_downloaded` | `source_missing` | `verify_failed` | `disk_full` | `io`.
@@ -115,6 +149,12 @@ pub struct OrganizeResultDto {
     /// Tối đa 200 mục; `issueCount` là tổng thật.
     pub issues: Vec<OrganizeIssueDto>,
     pub issue_count: u32,
+    /// Lỗi gộp theo mã, nhiều nhất trước.
+    pub issue_groups: Vec<OrganizeIssueGroupDto>,
+    /// Số font cloud đã TẢI VỀ trong lần này (chỉ khi `downloadFirst`).
+    pub downloaded: u32,
+    /// Số font cloud chưa tải bị bỏ qua (không chọn `downloadFirst`).
+    pub skipped_cloud: u32,
     pub cancelled: bool,
     /// Gói khôi phục chụp ngay sau lần chép (nếu có chép được gì).
     pub snapshot: Option<String>,

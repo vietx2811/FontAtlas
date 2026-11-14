@@ -3,4 +3,9 @@
 /**
  * Phạm vi chép: `sourceIds` rỗng/`null` = mọi font ngoài thư viện có tổ chức.
  */
-export type OrganizeScopeDto = { sourceIds: number[] | null, };
+export type OrganizeScopeDto = { sourceIds: number[] | null, 
+/**
+ * "Tải về rồi chép": font còn là placeholder trên ổ cloud được TẢI VỀ MÁY (qua làn tải của "Tải về máy": tối đa 4 cùng lúc,
+ * huỷ được) rồi chép. `false` (mặc định) = bỏ qua chúng và chỉ báo số lượng.
+ */
+downloadFirst: boolean, };

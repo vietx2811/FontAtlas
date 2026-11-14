@@ -13,7 +13,7 @@ use fontatlas_store::{OrganizeCandidate, OrganizedFile, SourceKind, cloud_provid
 use crate::dto::library::FaceKeyDto;
 use crate::dto::organized::*;
 use crate::error::CmdError;
-use crate::services::{keys, library, sources};
+use crate::services::{cloud_download, keys, library, sources};
 use crate::state::AppState;
 
 pub const LIBRARY_DIR: &str = "Library";
@@ -263,12 +263,16 @@ struct Item {
     cand: OrganizeCandidate,
     class_key: String,
     dest: PathBuf,
+    /// Còn là placeholder trên ổ cloud: phải tải về trước khi chép (chỉ có khi `downloadFirst`).
+    cloud: bool,
 }
 
 struct Plan {
     items: Vec<Item>,
     already: u32,
+    /// Font cloud chưa tải trong phạm vi (đã vào `items` nếu `downloadFirst`, bị bỏ qua nếu không).
     cloud: u32,
+    cloud_bytes: u64,
     bytes: u64,
 }
 
@@ -289,10 +293,11 @@ fn plan(state: &AppState, scope: &OrganizeScopeDto) -> Result<(Plan, PathBuf), C
     };
     let cands = state.with_store(|s| Ok(s.organize_candidates(&lib.to_string_lossy())?))?;
     let ledger: HashSet<String> = state.with_store(|s| Ok(s.organized_files()?.into_iter().map(|f| f.dest_path).collect()))?;
+    let copied: HashSet<[u8; 32]> = state.with_store(|s| Ok(s.organized_files()?.into_iter().map(|f| f.hash).collect()))?;
     let mut planned: HashSet<PathBuf> = HashSet::new();
-    let mut p = Plan { items: Vec::new(), already: 0, cloud: 0, bytes: 0 };
+    let mut p = Plan { items: Vec::new(), already: 0, cloud: 0, cloud_bytes: 0, bytes: 0 };
     for c in cands {
-        if c.in_library || state.with_store(|s| Ok(s.organized_file(&c.hash)?.is_some()))? {
+        if c.in_library || copied.contains(&c.hash) {
             p.already += 1;
             continue;
         }
@@ -304,9 +309,13 @@ fn plan(state: &AppState, scope: &OrganizeScopeDto) -> Result<(Plan, PathBuf), C
         {
             continue;
         }
-        if c.cloud_only || is_dataless(Path::new(&c.src_path)) {
+        let cloud = c.cloud_only || is_dataless(Path::new(&c.src_path));
+        if cloud {
             p.cloud += 1;
-            continue;
+            p.cloud_bytes += c.size.max(0) as u64;
+            if !scope.download_first {
+                continue;
+            }
         }
         let class_key = class_key_of(&eff, &c);
         let dir = lib.join(class_folder(&class_key)).join(safe_component(&c.family, "Unnamed"));
@@ -314,7 +323,7 @@ fn plan(state: &AppState, scope: &OrganizeScopeDto) -> Result<(Plan, PathBuf), C
         let dest = free_dest(&dir, &name, &c.hash, &|d: &Path| d.exists() || ledger.contains(&*d.to_string_lossy()) || planned.contains(d));
         planned.insert(dest.clone());
         p.bytes += c.size.max(0) as u64;
-        p.items.push(Item { cand: c, class_key, dest });
+        p.items.push(Item { cand: c, class_key, dest, cloud });
     }
     Ok((p, lib))
 }
@@ -322,11 +331,17 @@ fn plan(state: &AppState, scope: &OrganizeScopeDto) -> Result<(Plan, PathBuf), C
 pub fn import_plan(state: &AppState, scope: &OrganizeScopeDto) -> Result<OrganizePlanDto, CmdError> {
     let (p, lib) = plan(state, scope)?;
     let free = free_bytes(&lib);
+    // ổ chứa file cloud (thường là ổ hệ thống): lấy từ font cloud đầu tiên
+    let cloud_free = p.items.iter().find(|i| i.cloud).map(|i| free_bytes(Path::new(&i.cand.src_path))).unwrap_or(u64::MAX);
+    let dl_bytes: u64 = p.items.iter().filter(|i| i.cloud).map(|i| i.cand.size.max(0) as u64).sum();
     Ok(OrganizePlanDto {
         to_copy: p.items.len() as u32,
         bytes: p.bytes,
         already_there: p.already,
         cloud_not_downloaded: p.cloud,
+        needs_download: p.cloud,
+        download_bytes: p.cloud_bytes,
+        enough_space_for_download: cloud_free >= dl_bytes + dl_bytes / 20,
         free_bytes: free,
         enough_space: free >= p.bytes + p.bytes / 20,
         sample: p
@@ -374,9 +389,30 @@ pub fn copy_verified(src: &Path, dest: &Path, expect: &[u8; 32]) -> Result<(), (
     r
 }
 
+/// Số font cloud tải về mỗi lô trước khi chép (chép ngay khi một lô xong, không đợi tải hết cả thư viện).
+pub const DOWNLOAD_BATCH: usize = 16;
+
+/// Chép vào Organized Library. Font cloud chưa tải: bỏ qua (mặc định) hoặc, với `downloadFirst`, tải về qua làn tải của
+/// "Tải về máy" (cổng chung, tối đa 4 cùng lúc, huỷ được) rồi chép; file tải về giữ nguyên trạng thái OneDrive/iCloud của nó
+/// (không đổi "Always keep on this device"). Lỗi gộp theo mã.
 pub fn import(
     state: &Arc<AppState>,
     scope: &OrganizeScopeDto,
+    progress: &mut dyn FnMut(OrganizeProgressDto),
+) -> Result<OrganizeResultDto, CmdError> {
+    import_with(
+        state,
+        scope,
+        &|p, permit, cancel| cloud_download::materialize(p, cloud_download::BULK_FILE_TIMEOUT, permit, cancel),
+        progress,
+    )
+}
+
+/// Như `import` nhưng thay được cách tải (test giả lập file dataless, không cần ổ cloud thật).
+pub fn import_with(
+    state: &Arc<AppState>,
+    scope: &OrganizeScopeDto,
+    fetch: &cloud_download::Fetch<'_>,
     progress: &mut dyn FnMut(OrganizeProgressDto),
 ) -> Result<OrganizeResultDto, CmdError> {
     let Some((cancel, _g)) = state.organize.begin() else {
@@ -392,59 +428,122 @@ pub fn import(
         return Err(CmdError::new("disk_full", "không đủ chỗ trống để chép").with_detail(serde_json::json!({ "needed": p.bytes, "free": free })));
     }
     let total = p.items.len() as u32;
-    let (mut done, mut failed, mut bytes) = (0u32, 0u32, 0u64);
-    let mut issues: Vec<OrganizeIssueDto> = Vec::new();
+    let download_total = p.items.iter().filter(|i| i.cloud).count() as u32;
+    let st = std::cell::RefCell::new(Counters::default());
+    let emit = |phase: OrganizePhaseDto, progress: &mut dyn FnMut(OrganizeProgressDto)| {
+        let c = st.borrow();
+        progress(OrganizeProgressDto { phase, done: c.done, total, bytes_done: c.bytes, failed: c.failed, downloaded: c.downloaded, download_total });
+    };
+    emit(OrganizePhaseDto::Copying, progress);
     let mut cancelled = false;
-    let mut copied = 0u32;
-    progress(OrganizeProgressDto { done, total, bytes_done: 0, failed });
-    for it in &p.items {
+
+    // font đã có trên máy trước, font cloud theo lô sau (tải rồi chép từng lô)
+    let (local, cloud): (Vec<&Item>, Vec<&Item>) = p.items.iter().partition(|i| !i.cloud);
+    let mut work: Vec<Vec<&Item>> = vec![local];
+    work.extend(cloud.chunks(DOWNLOAD_BATCH).map(|c| c.to_vec()));
+    'outer: for (bi, batch) in work.iter().enumerate() {
         if cancel.load(Ordering::SeqCst) {
             cancelled = true;
             break;
         }
-        let src = Path::new(&it.cand.src_path);
-        let issue = |code: &str, issues: &mut Vec<OrganizeIssueDto>, failed: &mut u32| {
-            *failed += 1;
-            if issues.len() < 200 {
-                issues.push(OrganizeIssueDto { path: it.cand.src_path.clone(), code: code.into() });
-            }
-        };
-        if !src.exists() {
-            issue("source_missing", &mut issues, &mut failed);
-        } else if is_dataless(src) {
-            issue("cloud_not_downloaded", &mut issues, &mut failed);
-        } else {
-            match copy_verified(src, &it.dest, &it.cand.hash) {
-                Ok(()) => {
-                    let rec = OrganizedFile {
-                        hash: it.cand.hash,
-                        dest_path: it.dest.to_string_lossy().into_owned(),
-                        src_path: it.cand.src_path.clone(),
-                        class_key: it.class_key.clone(),
-                        family: safe_component(&it.cand.family, "Unnamed"),
-                        copied_at: crate::services::dup_resolve::now_ms(),
-                    };
-                    state.with_store(|s| Ok(s.organized_record(&rec)?))?;
-                    copied += 1;
-                    bytes += it.cand.size.max(0) as u64;
+        // lô cloud: tải về trước (bi > 0 là các lô cloud)
+        let mut failed_dl: std::collections::HashMap<PathBuf, String> = std::collections::HashMap::new();
+        let mut ok_dl: HashSet<PathBuf> = HashSet::new();
+        if bi > 0 {
+            let paths: Vec<PathBuf> = batch.iter().map(|i| PathBuf::from(&i.cand.src_path)).collect();
+            let errs = std::sync::Mutex::new(std::collections::HashMap::<PathBuf, String>::new());
+            let oks = std::sync::Mutex::new(HashSet::<PathBuf>::new());
+            let wrapped = |path: &Path, permit: crate::services::cloud::Permit, c: &AtomicBool| {
+                let r = fetch(path, permit, c);
+                if r.is_ok() {
+                    oks.lock().unwrap_or_else(|x| x.into_inner()).insert(path.to_path_buf());
                 }
-                Err((code, e)) => {
-                    log::warn!("organized: chép {} lỗi ({code}): {e}", it.cand.src_path);
-                    issue(&code, &mut issues, &mut failed);
-                    if code == "disk_full" {
-                        // hết chỗ: dừng, các file sau cũng sẽ hỏng
-                        done += 1;
-                        progress(OrganizeProgressDto { done, total, bytes_done: bytes, failed });
-                        break;
-                    }
+                if let Err(e) = &r
+                    && !matches!(e, fontatlas_activate::EnsureLocalError::Cancelled)
+                {
+                    errs.lock().unwrap_or_else(|x| x.into_inner()).insert(path.to_path_buf(), e.code().to_string());
                 }
+                r
+            };
+            let base = st.borrow().downloaded;
+            emit(OrganizePhaseDto::Downloading, progress);
+            let _ = cloud_download::run(
+                &paths,
+                crate::services::cloud::global_gate(),
+                cloud_download::BULK_WORKERS,
+                &cancel,
+                &wrapped,
+                &mut |dp| {
+                    st.borrow_mut().downloaded = base + dp.done;
+                    emit(OrganizePhaseDto::Downloading, progress);
+                },
+            );
+            failed_dl = errs.into_inner().unwrap_or_else(|x| x.into_inner());
+            ok_dl = oks.into_inner().unwrap_or_else(|x| x.into_inner());
+            if cancel.load(Ordering::SeqCst) {
+                // font đã tải xong trong lô này vẫn được chép bên dưới; font chưa kịp tải thì bỏ
+                cancelled = true;
             }
         }
-        done += 1;
-        progress(OrganizeProgressDto { done, total, bytes_done: bytes, failed });
+        for it in batch {
+            let src = Path::new(&it.cand.src_path);
+            let mut c = st.borrow_mut();
+            if bi > 0
+                && let Some(code) = failed_dl.get(src)
+            {
+                c.issue(code, &it.cand.src_path);
+            } else if bi > 0 && cancelled && !ok_dl.contains(src) {
+                // huỷ trước khi tải xong font này: không phải lỗi, chỉ chưa làm
+                continue;
+            } else if !src.exists() {
+                c.issue("source_missing", &it.cand.src_path);
+            } else if is_dataless(src) {
+                c.issue("cloud_not_downloaded", &it.cand.src_path);
+            } else {
+                drop(c);
+                match copy_verified(src, &it.dest, &it.cand.hash) {
+                    Ok(()) => {
+                        let rec = OrganizedFile {
+                            hash: it.cand.hash,
+                            dest_path: it.dest.to_string_lossy().into_owned(),
+                            src_path: it.cand.src_path.clone(),
+                            class_key: it.class_key.clone(),
+                            family: safe_component(&it.cand.family, "Unnamed"),
+                            copied_at: crate::services::dup_resolve::now_ms(),
+                        };
+                        state.with_store(|s| Ok(s.organized_record(&rec)?))?;
+                        let mut c = st.borrow_mut();
+                        c.copied += 1;
+                        c.bytes += it.cand.size.max(0) as u64;
+                    }
+                    Err((code, e)) => {
+                        log::warn!("organized: chép {} lỗi ({code}): {e}", it.cand.src_path);
+                        st.borrow_mut().issue(&code, &it.cand.src_path);
+                        if code == "disk_full" {
+                            st.borrow_mut().done += 1;
+                            emit(OrganizePhaseDto::Copying, progress);
+                            break 'outer; // hết chỗ: các file sau cũng sẽ hỏng
+                        }
+                    }
+                }
+                st.borrow_mut().done += 1;
+                emit(OrganizePhaseDto::Copying, progress);
+                if cancel.load(Ordering::SeqCst) {
+                    cancelled = true;
+                }
+                continue;
+            }
+            c.done += 1;
+            drop(c);
+            emit(OrganizePhaseDto::Copying, progress);
+        }
+        if cancelled {
+            break;
+        }
     }
+    let c = st.into_inner();
     let mut snapshot = None;
-    if copied > 0 {
+    if c.copied > 0 {
         crate::services::duplicates::invalidate_cache();
         if let Some(src_id) = status(state)?.source_id {
             state.scans.enqueue_follow_up(state, &[src_id]);
@@ -452,15 +551,52 @@ pub fn import(
         snapshot = snapshot_now(state).ok();
     }
     let _ = root;
+    let skipped_cloud = if scope.download_first { 0 } else { p.cloud };
+    let (groups, downloaded) = (c.groups(), c.downloaded.saturating_sub(c.download_failed()));
     Ok(OrganizeResultDto {
-        copied,
-        bytes,
+        copied: c.copied,
+        bytes: c.bytes,
         already_there: p.already,
-        issue_count: failed,
-        issues,
+        issue_count: c.failed,
+        issue_groups: groups,
+        issues: c.issues,
+        downloaded,
+        skipped_cloud,
         cancelled,
         snapshot,
     })
+}
+
+#[derive(Default)]
+struct Counters {
+    done: u32,
+    copied: u32,
+    failed: u32,
+    bytes: u64,
+    downloaded: u32,
+    issues: Vec<OrganizeIssueDto>,
+    by_code: std::collections::BTreeMap<String, (u32, String)>,
+}
+
+impl Counters {
+    fn issue(&mut self, code: &str, path: &str) {
+        self.failed += 1;
+        if self.issues.len() < 200 {
+            self.issues.push(OrganizeIssueDto { path: path.into(), code: code.into() });
+        }
+        let e = self.by_code.entry(code.to_string()).or_insert((0, path.to_string()));
+        e.0 += 1;
+    }
+    /// Số font tải lỗi (mã của lượt tải, không phải của lượt chép).
+    fn download_failed(&self) -> u32 {
+        self.by_code.iter().filter(|(c, _)| matches!(c.as_str(), "cloud_timeout" | "cloud_download_failed" | "cloud_stub" | "missing_file" | "cloud_busy")).map(|(_, v)| v.0).sum()
+    }
+    fn groups(&self) -> Vec<OrganizeIssueGroupDto> {
+        let mut v: Vec<OrganizeIssueGroupDto> =
+            self.by_code.iter().map(|(code, (count, first))| OrganizeIssueGroupDto { code: code.clone(), count: *count, first_path: first.clone() }).collect();
+        v.sort_by(|a, b| b.count.cmp(&a.count).then(a.code.cmp(&b.code)));
+        v
+    }
 }
 
 // ---------- gói khôi phục ----------

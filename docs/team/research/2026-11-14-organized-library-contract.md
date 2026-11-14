@@ -39,3 +39,14 @@ Người viết: 02 · 2026-11-14 · Nhánh `feat/organized-library-050`. Mặc 
 - Migration user.db mới `USER_ORGANIZED` ở CUỐI `USER_MIGRATIONS` (bảng `organized_files`, `organized_moves`); Lead xếp thứ tự khi merge cạnh B5.
 - Khóa cài đặt `organized_root`. Khôi phục chạy trong `boot::run_boot` TRƯỚC `Store::open`.
 - Chưa làm: font cloud chưa tải (bị bỏ qua, báo `cloud_not_downloaded`), nút dọn bản gốc, "chuyển font đang bật" (đợi 06), Windows (ADR đường dẫn).
+
+## Bổ sung: "Tải về rồi chép" cho font còn là placeholder trên ổ cloud (OneDrive/iCloud…)
+Thư viện của chủ app nằm trên OneDrive, nên font chưa tải KHÔNG chỉ bị bỏ qua nữa.
+- `OrganizeScopeDto` thêm `downloadFirst: boolean` (mặc định `false`). `false` = như cũ: bỏ qua font cloud chưa tải và báo số lượng. `true` = tải về máy rồi chép.
+- `OrganizePlanDto` thêm: `needsDownload` (số font phải tải, = `cloudNotDownloaded`), `downloadBytes` (tổng dung lượng), `enoughSpaceForDownload` (ổ chứa thư mục cloud còn đủ chỗ + 5%). `toCopy`/`bytes`/`enoughSpace` đã tính cả font cloud khi `downloadFirst = true`. Xem trước phải nói rõ: "N font (X GB) chưa tải về máy; chọn Tải về rồi chép sẽ tải chúng, file tải về nằm lại trên máy theo cài đặt OneDrive của bạn" và cảnh báo khi `enoughSpaceForDownload = false`.
+- Cơ chế: dùng ĐÚNG làn tải của "Tải về máy" 0.3.1 (cổng chung, tối đa 4 lần tải thật đồng thời — mỗi lượt dùng 3 luồng chừa 1 chỗ cho xem trước, mỗi font hạn 120 s, huỷ được). Font đã có trên máy được chép TRƯỚC; font cloud xử lý theo lô 16 (tải lô → chép lô đó → lô kế), nên font đầu tiên vào thư viện sớm và Huỷ dừng ngay giữa các lô. File tải về KHÔNG bị đổi trạng thái OneDrive ("Always keep on this device" không đụng tới; chỉ đọc để hệ điều hành tải).
+- `OrganizeProgressDto` thêm `phase` (`downloading` | `copying`), `downloaded`, `downloadTotal`. `done/total` vẫn là số font đã xử lý/tổng cần chép; thanh tiến độ nên hiện "Đang tải n/m" khi `phase = downloading`.
+- `OrganizeResultDto` thêm `issueGroups[{code, count, firstPath}]` (lỗi GỘP THEO MÃ, tổng thật, nhiều nhất trước), `downloaded` (số font đã tải về trong lần này), `skippedCloud` (số font cloud bị bỏ qua khi không chọn `downloadFirst`). Mã lỗi tải: `cloud_timeout | cloud_download_failed | cloud_stub | missing_file | cloud_busy`; mã chép như cũ. Huỷ = `cancelled: true`, không tính là lỗi; font đã tải xong vẫn được chép. Font tải lỗi không để lại file chép dở và lần sau thử lại chỉ còn các font đó.
+
+## Bổ sung: bản sao đổi tên trong chi tiết font (G7b)
+`FaceDetailDto.derivedFrom: { faceKey, name } | null` — `null` với font thường; với bản sao đổi tên là font gốc ("Copy of «name»").
