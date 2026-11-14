@@ -355,6 +355,94 @@ pub fn activate(
     Ok(finish(state, r))
 }
 
+/// G7 + G7b "Giữ cả hai". Với font VARIABLE trong thư viện đang trùng PostScript name với bản STATIC đã cài: tạo bản sao đổi tên
+/// của VF (`derived::derive_renamed_copy`, file gốc không đụng) rồi bật BẢN SAO cùng bản static: hai tên khác nhau nên dùng đồng thời
+/// được. Kết quả của font gốc trả `activated` kèm `warning`: `renamed_copy` (hoặc `renamed_copy_restricted` khi `fsType` hạn chế: UI hiện
+/// ghi chú giấy phép, không chặn) và `path` = bản sao. Các trường hợp còn lại (static bật sau VF đã cài, VF của app khác, không tạo được
+/// bản sao) lùi về hành vi G7: đăng ký trùng tên (`proceed`), `warning` = `rename_failed:<mã>` khi thử tạo bản sao mà lỗi.
+pub fn keep_both(
+    state: &Arc<AppState>,
+    faces: &[FaceKeyDto],
+    scope: Option<ScopeDto>,
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let pre = state.activation.preflight(state.store()?, &keys)?;
+    let mut derived: Vec<(FaceKey, FaceKey, bool)> = vec![]; // (gốc, bản sao, license_restricted)
+    let mut fallback: Vec<FaceKey> = vec![];
+    let mut fail_codes: std::collections::HashMap<[u8; 32], String> = std::collections::HashMap::new();
+    for k in &keys {
+        let conflicts = pre.results.iter().find(|r| r.hash_hex == FaceKeyDto::from(k).hash_hex).and_then(|r| match &r.outcome {
+            fontatlas_activate::FileOutcome::NeedsConfirmation { conflicts } => Some(conflicts),
+            _ => None,
+        });
+        // chỉ cặp "VF của thư viện ↔ static đã cài" (mọi xung đột thật đều như vậy) mới có bản sao đổi tên
+        let derivable = conflicts.is_some_and(|c| {
+            let real: Vec<_> = c.iter().filter(|x| !x.same_file).collect();
+            !real.is_empty() && real.iter().all(|x| x.variable && x.existing_variable == Some(false))
+        });
+        if derivable {
+            match crate::services::derived::derive_renamed_copy(state, &k.hash) {
+                Ok((copy, dto)) => {
+                    derived.push((*k, copy, dto.license_restricted));
+                    continue;
+                }
+                Err(e) => {
+                    let code = CmdError::from(e).code;
+                    fail_codes.insert(k.hash, code.to_string());
+                }
+            }
+        }
+        fallback.push(*k);
+    }
+    let scope_core = scope.map(Into::into);
+    let mut out = ActivationReportDto::default();
+    if !fallback.is_empty() {
+        let r = state.activation.activate_faces(state.store()?, &fallback, scope_core, policy(true), &mut |p| progress((&p).into()))?;
+        let mut dto = ActivationReportDto::from(&r);
+        for res in &mut dto.results {
+            if res.warning.is_none()
+                && let Some(code) = hash_of_hex(&res.hash_hex).and_then(|h| fail_codes.get(&h))
+            {
+                res.warning = Some(format!("rename_failed:{code}"));
+            }
+        }
+        out = dto;
+    }
+    if !derived.is_empty() {
+        let copies: Vec<FaceKey> = derived.iter().map(|d| d.1).collect();
+        let r = state.activation.activate_faces(state.store()?, &copies, scope_core, ConflictPolicy::Ask, &mut |p| progress((&p).into()))?;
+        let mut dto = ActivationReportDto::from(&r);
+        for res in &mut dto.results {
+            // trả kết quả dưới hash của font GỐC (cái người dùng đã chọn); `path` = bản sao
+            if let Some((orig, copy, restricted)) = derived.iter().find(|d| FaceKeyDto::from(&d.1).hash_hex == res.hash_hex) {
+                res.hash_hex = FaceKeyDto::from(orig).hash_hex;
+                res.requested_faces = vec![orig.face_index];
+                let _ = copy;
+                if matches!(res.outcome, FileOutcomeDto::Activated | FileOutcomeDto::AlreadyActive) && res.warning.is_none() {
+                    res.warning = Some(if *restricted { "renamed_copy_restricted" } else { "renamed_copy" }.into());
+                }
+            }
+        }
+        out.changed += dto.changed;
+        out.needs_confirmation += dto.needs_confirmation;
+        out.failed += dto.failed;
+        out.results.extend(dto.results);
+    }
+    // `finish` phát `Changed` theo hash trong kết quả; bản sao là font mới của thư viện nên báo cả hash của nó
+    let mut hashes: Vec<String> = out.results.iter().filter(|r| matches!(r.outcome, FileOutcomeDto::Activated)).map(|r| r.hash_hex.clone()).collect();
+    hashes.extend(derived.iter().map(|d| FaceKeyDto::from(&d.1).hash_hex));
+    if !hashes.is_empty() {
+        state.hubs.activation.emit(ActivationEvent::Changed { hashes });
+    }
+    Ok(out)
+}
+
+fn hash_of_hex(h: &str) -> Option<[u8; 32]> {
+    FaceKey::from_hex(h, 0).ok().map(|k| k.hash)
+}
+
 /// "Tắt bản cũ và bật bản này": như `activate` nhưng gỡ các bản xung đột theo ma trận (xem fontatlas-activate).
 pub fn replace(
     state: &AppState,

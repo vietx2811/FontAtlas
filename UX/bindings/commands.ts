@@ -282,6 +282,7 @@ export interface TauriCommandMap {
   activation_deactivate: { args: { faces: FaceKeyDto[]; force: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_all: { args: { onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
+  activation_keep_both: { args: { faces: FaceKeyDto[]; scope: ScopeDto | null; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_relocate: { args: { faces: FaceKeyDto[]; preferUnder: string | null; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_set_keep: { args: { on: boolean }; result: null };
   activation_vf_policy: { args: Record<string, never>; result: VfPolicyDto };
