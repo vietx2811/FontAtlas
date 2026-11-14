@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Api, OrganizedStatusDto, PackInfoDto } from '../../api';
 import { formatNumber, t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
+import { useUiStore } from '../../store/ui';
+import { RelocateDialog } from './RelocateDialog';
 import { formatBytes } from '../duplicates/dupText';
 import { pickFolderWithDialog } from '../sidebar/useDropPaths';
 import { NoteMark } from '../ui/noteMark';
@@ -11,7 +13,7 @@ import { ResortDialog } from './ResortDialog';
 import { RestorePackDialog } from './RestorePackDialog';
 import './organized.css';
 
-type Dlg = 'import' | 'resort' | 'restore' | null;
+type Dlg = 'import' | 'resort' | 'restore' | 'relocate' | null;
 
 /** Cài đặt ▸ Thư viện: Organized Library (trạng thái, chép thêm, sắp xếp lại, chụp gói, khôi phục từ gói). */
 export function OrganizedPanel({ api, pick = pickFolderWithDialog }: { api: Api; pick?: () => Promise<string | null> }): React.JSX.Element {
@@ -41,6 +43,7 @@ export function OrganizedPanel({ api, pick = pickFolderWithDialog }: { api: Api;
           <div className="fa-org-actions">
             <button type="button" data-testid="org-open-import" disabled={!st.available} onClick={() => setDlg('import')}>{t('org.act.import')}</button>
             <button type="button" data-testid="org-open-resort" disabled={!st.available} onClick={() => setDlg('resort')}>{t('org.act.resort')}</button>
+            <button type="button" data-testid="org-open-relocate" disabled={!st.available} onClick={() => setDlg('relocate')}>{t('org.act.relocate')}</button>
             <button type="button" disabled={!st.available} onClick={() => void snapshot()}>{t('org.act.snapshot')}</button>
           </div>
         </>
@@ -48,6 +51,7 @@ export function OrganizedPanel({ api, pick = pickFolderWithDialog }: { api: Api;
       <div className="fa-org-actions"><button type="button" data-testid="org-open-restore" onClick={() => setDlg('restore')}>{t('org.act.restore')}</button></div>
       {dlg === 'import' && <OrganizedImportDialog api={api} onClose={close} />}
       {dlg === 'resort' && <ResortDialog api={api} onClose={close} />}
+      {dlg === 'relocate' && st && <RelocateDialog api={api} preferUnder={st.libraryDir ?? st.root} onClose={close} />}
       {dlg === 'restore' && <RestorePackDialog api={api} pick={pick} onClose={close} />}
     </div>
   );

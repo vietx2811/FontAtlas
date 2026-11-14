@@ -4,6 +4,7 @@ import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { OrganizedPanel } from '../OrganizedPanel';
 import { issueSummary } from '../OrganizedImportDialog';
+import { relocateCounts } from '../RelocateDialog';
 
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 const picker = (p: string | null) => async () => p;
@@ -71,5 +72,14 @@ describe('B7 — Organized Library (Cài đặt ▸ Thư viện)', () => {
 
   it('issueSummary gộp theo mã', () => {
     expect(issueSummary([{ code: 'cloud_not_downloaded' }, { code: 'cloud_not_downloaded' }, { code: 'verify_failed' }])).toBe('2 chưa tải về máy; 1 chép xong nhưng kiểm nội dung không khớp');
+  });
+
+  it('chuyển font đang bật: đếm kết quả theo file; không có font bật thì nói và khoá nút', async () => {
+    expect(relocateCounts([{ outcome: { kind: 'activated' } }, { outcome: { kind: 'already_active' } }, { outcome: { kind: 'failed' } }, { outcome: { kind: 'missing_file' } }, { outcome: { kind: 'already_inactive' } }])).toEqual({ moved: 1, same: 1, kept: 2 });
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-relocate')); await settle();
+    expect(screen.getByTestId('org-reloc-body').textContent).toMatch(/không có font nào đang bật/);
+    expect((screen.getByTestId('org-reloc-run') as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -211,6 +211,7 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'app.on': 'Turned on {n} fonts for Case “{name}” (an app tied to it just opened)', 'app.off': 'Turned off {n} fonts of Case “{name}” (its apps have quit)',
   'app.conflicts': '{n} fonts have the same name but different content, so they weren’t turned on', 'app.failed': '{n} fonts couldn’t be turned on', 'appset.restart': 'Apps that were already open may need a restart to see the fonts.',
   'app.settings': 'Settings…', 'app.turnOn': 'Turn on again',
+  'app.suppress': 'Turn off this time', 'app.suppressed': 'Turned off Case “{name}” fonts this time; they come back the next time its app opens (not while it stays open).',
   'why.distinctive': 'distinctive character',
   'why.serif_vs_sans': 'serif with sans',
   'why.same_superfamily': 'same superfamily',

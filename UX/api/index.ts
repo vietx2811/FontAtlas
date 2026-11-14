@@ -75,6 +75,10 @@ export interface Api extends LibraryApi {
   packRestoreStage(path: string, remap: PathRemapDto[]): Promise<PackInfoDto>;
   packRestorePending(): Promise<PackInfoDto | null>;
   packRestoreCancel(): Promise<boolean>;
+  /** B5: "Tắt lần này": gỡ CHỈ lý do caseapp của Case (font còn lý do khác vẫn bật), không gỡ app khỏi Case; bật lại khi mọi app đã thoát rồi mở lại. */
+  caseAppSuppress(collectionId: number): Promise<void>;
+  /** B7: chuyển font ĐANG BẬT sang bản chép trong Organized Library (`preferUnder` = gốc thư viện); chỉ khi người dùng bấm. */
+  activationRelocate(faces: FaceKeyDto[], preferUnder: string | null, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   caseApps(collectionId: number): Promise<CaseAppDto[]>;
   caseSetApps(collectionId: number, apps: CaseAppDto[]): Promise<void>;
   /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */

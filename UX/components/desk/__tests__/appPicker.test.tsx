@@ -52,7 +52,8 @@ describe('B5 — Mở cùng app', () => {
   it('toast bật: có nút Cài đặt… mở hộp thoại của đúng Case; toast tắt: nút Bật lại bật cả Case', async () => {
     const api = createMockApi(); const id = (await api.createCase('Khách Y')).id;
     await appSetNotice(api, { collectionId: id, kind: 'on', changed: 5, conflicts: 0, failed: 0 });
-    const on = useNoticeStore.getState().notices.at(-1)!; expect(on.action2?.label).toBe('Cài đặt…');
+    const on = useNoticeStore.getState().notices.at(-1)!; expect(on.action?.label).toBe('Tắt lần này'); expect(on.action2?.label).toBe('Cài đặt…');
+    const sup = vi.spyOn(api, 'caseAppSuppress'); act(() => on.action!.run()); await settle(); expect(sup).toHaveBeenCalledWith(id); expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/lần này.*tự bật lại/);
     act(() => on.action2!.run()); expect(useAppPickerStore.getState().target).toEqual({ caseId: id, name: 'Khách Y' });
     const spy = vi.spyOn(api, 'activationActivateCase');
     await appSetNotice(api, { collectionId: id, kind: 'off', changed: 5, conflicts: 0, failed: 0 });

@@ -122,6 +122,8 @@ export function createTauriApi(): Api {
     packRestoreStage: (path, remap) => call('pack_restore_stage', { path, remap }),
     packRestorePending: () => call('pack_restore_pending'),
     packRestoreCancel: () => call('pack_restore_cancel'),
+    caseAppSuppress: collectionId => none(call('case_app_suppress', { collectionId })),
+    activationRelocate: (faces, preferUnder, o = {}) => call('activation_relocate', { faces, preferUnder, onProgress: channel(o.onProgress).ch }),
     caseApps: collectionId => call('case_apps', { collectionId }),
     caseSetApps: (collectionId, apps) => none(call('case_set_apps', { collectionId, apps })),
     installedApps: () => call('installed_apps'),
