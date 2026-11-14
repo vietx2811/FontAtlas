@@ -235,7 +235,7 @@ fn panicking_backend_answers_nothing_and_releases_its_slot() {
 #[test]
 fn flood_of_slow_unknown_names_is_capped_and_does_not_pile_up_threads() {
     // Việc nền bị giữ tới khi kiểm xong (không dựa vào sleep): máy chậm không làm việc nào xong sớm và nhả chỗ.
-    let gate = Gate::new();
+    let gate = Gate::new(); // mở khi rời hàm (kể cả khi assert đỏ) để luồng nền không chờ tới hạn
     let g2 = gate.clone();
     let started = Arc::new(AtomicUsize::new(0));
     let s2 = started.clone();
@@ -252,8 +252,9 @@ fn flood_of_slow_unknown_names_is_capped_and_does_not_pile_up_threads() {
     for i in 0..20 {
         assert_eq!(r.answer(1, &ps(&format!("Name{i}-Regular"))), Answer::Nothing);
     }
+    // inflight tăng đồng bộ trong answer() trước khi sinh luồng, và Gate giữ mọi việc: đúng bằng trần.
+    assert_eq!(r.inflight(), fontatlas_fontreq::MAX_INFLIGHT);
     assert!(started.load(Ordering::SeqCst) <= fontatlas_fontreq::MAX_INFLIGHT, "{} việc nền", started.load(Ordering::SeqCst));
-    gate.open();
 }
 
 #[test]
@@ -333,7 +334,7 @@ fn same_name_asked_while_work_is_running_shares_that_work() {
 fn slow_name_asked_again_after_slow_ttl_does_not_spawn_another_thread() {
     let calls = Arc::new(AtomicUsize::new(0));
     let c2 = calls.clone();
-    let gate = Gate::new();
+    let gate = Gate::new(); // mở khi rời hàm (kể cả khi assert đỏ) để luồng nền không chờ tới hạn
     let g2 = gate.clone();
     let r = Responder::new(
         move |_q: &EnsureRequest| {
@@ -352,7 +353,6 @@ fn slow_name_asked_again_after_slow_ttl_does_not_spawn_another_thread() {
     }
     assert_eq!(calls.load(Ordering::SeqCst), 1, "việc cũ chưa xong thì không sinh luồng mới cho cùng tên");
     assert_eq!(r.inflight(), 1);
-    gate.open();
 }
 
 /// Cổng cho việc nền trong test: chờ tới khi `open()` (có hạn 30 s chỉ để bắt treo).
@@ -367,7 +367,11 @@ impl Gate {
     }
     fn open(&self) {
         let (m, cv) = &*self.0;
-        *m.lock().unwrap() = true;
+        if let Ok(mut g) = m.lock() { *g = true; }
         cv.notify_all();
     }
+}
+impl Drop for Gate {
+    // Mỗi bản sao rời phạm vi đều mở cổng: bản trong test rời khi hàm kết thúc (đã kiểm xong hoặc panic).
+    fn drop(&mut self) { self.open(); }
 }
