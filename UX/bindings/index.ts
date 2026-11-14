@@ -63,6 +63,7 @@ export type { CompareOptsDto } from './CompareOptsDto';
 export type { CompareVietnameseDto } from './CompareVietnameseDto';
 export type { ConfirmedConflictDto } from './ConfirmedConflictDto';
 export type { ConflictDto } from './ConflictDto';
+export type { DerivedCopyDto } from './DerivedCopyDto';
 export type { DescribeConflictDto } from './DescribeConflictDto';
 export type { DescribeDto } from './DescribeDto';
 export type { DerivedCopyDto } from './DerivedCopyDto';

@@ -377,3 +377,31 @@ fn pick_traits_tell_variable_and_family_style_apart() {
     assert_eq!(t(st, "", ""), (false, false), "không gửi family thì không bản nào 'khớp'");
     assert_eq!(t(&fontatlas_store::FaceKey { hash: [9; 32], face_index: 0 }, "x", "y"), (false, false), "face lạ");
 }
+
+/// G7b: bản sao đổi tên của VF ("Oswald VF", PS `OswaldVF-Regular`) chỉ được chọn khi tên yêu cầu ĐÚNG là tên mới; yêu cầu theo tên
+/// gốc (PostScript hay họ + kiểu) không bao giờ rơi vào bản sao, nên không cần lọc riêng ở `pick`.
+#[test]
+fn a_renamed_vf_copy_is_chosen_only_by_its_own_new_name() {
+    let (env, b) = backend(&["oswald_vf.ttf"]);
+    let out = fontatlas_core::rename::rename_vf_copy(&std::fs::read(fixture("oswald_vf.ttf")).unwrap()).unwrap();
+    std::fs::write(env.fonts.join("oswald_vf-VF.ttf"), &out.bytes).unwrap();
+    {
+        let mut s = b.store.lock().unwrap();
+        let src = s.sources().unwrap()[0].id;
+        s.rescan_source(src).unwrap();
+        teach(b.service.engine(), &s);
+    }
+    let orig = canon(&env.fonts.join("oswald_vf.ttf"));
+    let copy = canon(&env.fonts.join("oswald_vf-VF.ttf"));
+    let path_of = |r: &fontatlas_broker::EnsureResponse| r.results[0].path.clone().map(std::path::PathBuf::from);
+    for (r, want) in [
+        (ps("Oswald-Regular"), &orig),
+        (fs("Oswald", "Regular"), &orig),
+        (ps("OswaldVF-Regular"), &copy),
+        (fs("Oswald VF", "Regular"), &copy),
+    ] {
+        let resp = b.ensure(&req("illustrator", vec![r.clone()])).unwrap();
+        assert!(matches!(status(&resp, 0), FontStatus::Activated | FontStatus::AlreadyActive), "{r:?}: {:?}", status(&resp, 0));
+        assert_eq!(path_of(&resp).as_deref(), Some(want.as_path()), "{r:?}");
+    }
+}

@@ -212,6 +212,7 @@ macro_rules! command_list {
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_relocate_to(targets: Vec<RelocateTargetDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_keep_both(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_relocate(faces: Vec<FaceKeyDto>, prefer_under: Option<String>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
             async activation_vf_policy() -> Result<VfPolicyDto, CmdError>;
@@ -607,6 +608,11 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
 });
 cmd!(activation_relocate_to(targets: Vec<RelocateTargetDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::relocate_to(s, &targets, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_keep_both(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::keep_both(s, &faces, scope, &mut |p| {
         let _ = on_progress.send(p);
     })
 });
