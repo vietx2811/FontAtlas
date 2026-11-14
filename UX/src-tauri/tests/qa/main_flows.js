@@ -323,7 +323,7 @@
       radioOf(/^(Sáng|Light)$/)?.click(); await wait(() => document.documentElement.dataset.theme === 'light', 8000);
       await log('settings-theme-radio-dark', darkApplied && document.documentElement.dataset.theme === 'light', { darkApplied, after: document.documentElement.dataset.theme });
     }
-    // 0.4.0 — Cài đặt: "Xoá danh sách font vừa xem" (Dữ liệu) và công tắc "Tự phát hiện thay đổi trên ổ cloud" (Thư viện và nguồn).
+    // 0.4.0 — Cài đặt: "Xoá danh sách font vừa xem" (Dữ liệu) và công tắc "Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn" (Thư viện và nguồn).
     {
       const goto = async name => { const b = [...document.querySelectorAll('.fa-set-nav button')].find(x => x.textContent.trim() === name); b?.click(); return !!b; };
       const recentN = async () => (await inv('recent_views', { limit: 50 })).length;
@@ -335,7 +335,7 @@
       let left = -1; for (let i = 0; i < 40 && left !== 0; i++) { left = await recentN(); if (left !== 0) await sleep(250); }
       await log('settings-clear-recent', nav1 && !!clr && !!toast && left === 0, { had, left, toast: !!toast });
       const nav2 = await goto('Thư viện và nguồn');
-      const sw = await wait(() => [...document.querySelectorAll('[role=switch]')].find(x => x.getAttribute('aria-label') === 'Tự phát hiện thay đổi trên ổ cloud'), 10000);
+      const sw = await wait(() => [...document.querySelectorAll('[role=switch]')].find(x => x.getAttribute('aria-label') === 'Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn'), 10000);
       const watch = async () => (await inv('get_settings', {})).cloudWatch;
       const w0 = await watch();
       sw?.click();
