@@ -106,10 +106,11 @@ compute_keys() {
   local tc fe; tc="$(cd "${1:-$PWD}/UX/src-tauri" 2>/dev/null && { rustc -V; cargo -V; cargo clippy -V; } 2>&1 | shasum | cut -c1-8)"
   fe="$( { node -v; npm -v; } 2>&1 | shasum | cut -c1-8)"
   local tauri; tauri="$(cargo tauri -V 2>&1 | shasum | cut -c1-8)"
-  RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
+  RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/|\tUX/src-tauri/resources/THIRD-PARTY-NOTICES.txt' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
   # Frontend còn đọc 3 file trong src-tauri (fixture face_row.json, Cargo.toml, tauri.conf.json): đưa vào khoá frontend.
   FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json)-$fe"
-  BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri" | shasum | cut -c1-16)"
+  # THIRD-PARTY-NOTICES.txt chỉ là văn bản (cargo-test/clippy không đọc) nên không nằm trong RUST_KEY, nhưng nó được đóng vào .app → vào khoá bundle.
+  BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri$(tree_hash '' UX/src-tauri/resources/THIRD-PARTY-NOTICES.txt)" | shasum | cut -c1-16)"
 }
 compute_keys "$(git rev-parse --show-toplevel 2>/dev/null)"
 if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo "bundle=$BUNDLE_KEY"; exit 0; fi
@@ -251,6 +252,10 @@ else
   skip vite-build "npm ci đỏ"; skip tsc "npm ci đỏ"; skip vitest "npm ci đỏ"
 fi
 
+# THIRD-PARTY-NOTICES phải khớp Cargo.lock/node_modules (vài giây, không tải gì). Đỏ ⇒ dừng sớm các bước Rust/QA (hàng giờ) để lỗi hiện ngay lúc merge, không đợi ngày phát hành.
+NOTICES=0
+if [ $FRONT = 1 ]; then step notices . bash tools/release/third_party_notices.sh --check && NOTICES=1; else skip notices "npm ci đỏ"; fi
+
 # Doc-tests: cargo test --workspace chạy rustdoc cho TỪNG crate dù có 0 ví dụ (~9 phút/crate khi máy tải, ~2 giờ cho 13 crate).
 # Chỉ chạy lib/bin/tests; riêng crate nào CÓ khối ``` trong doc comment thì vẫn chạy `cargo test --doc` cho crate đó.
 doc_crates() {
@@ -270,7 +275,7 @@ rust_tests() {
   local c; for c in $(doc_crates); do echo "doc-tests (có ví dụ trong doc comment): $c"; cargo test --doc --locked -p "$c" || return 1; done
 }
 
-if [ $FRONT = 1 ]; then
+if [ $FRONT = 1 ] && [ $NOTICES = 1 ]; then
   cstep cargo-test "$RUST_KEY" UX/src-tauri rust_tests
   # drift chỉ được SKIP khi cargo-test cũng được lấy từ cache (cùng một đơn vị, xem rust_tests); nếu cargo-test chạy thật thì drift chạy thật.
   if [ "${#CACHED[@]}" -gt 0 ] && printf '%s\n' "${CACHED[@]}" | grep -q '^cargo-test='; then
@@ -280,13 +285,16 @@ if [ $FRONT = 1 ]; then
   fi
   cstep clippy "$RUST_KEY" UX/src-tauri cargo clippy --workspace --all-targets --locked -- -D warnings
 else
-  skip cargo-test "thiếu UX/dist"; skip bindings-drift "thiếu UX/dist"; skip clippy "thiếu UX/dist"
+  R="thiếu UX/dist"; [ $FRONT = 1 ] && R="notices đỏ (chạy: bash tools/release/third_party_notices.sh rồi commit)"
+  skip cargo-test "$R"; skip bindings-drift "$R"; skip clippy "$R"
 fi
 
 if [ $QA = 0 ]; then
   skip native-qa "--no-qa"
 elif [ $FRONT = 0 ]; then
   skip native-qa "frontend đỏ"
+elif [ $NOTICES = 0 ]; then
+  skip native-qa "notices đỏ"
 else
   BKEY="${STAMP%.built-sha}.built-key"   # khoá nội dung của bundle (Rust + frontend, không tính tests/qa)
   APPBIN="$WT/UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
