@@ -99,7 +99,7 @@ fn hex_of(h: &[u8; 32]) -> String {
 }
 
 /// `dir/name`; nếu đã bị chiếm (trên đĩa hoặc trong sổ) thì `dir/stem-<hash8>.ext`, rồi thêm số thứ tự.
-fn free_dest(dir: &Path, file_name: &str, hash: &[u8; 32], taken: &dyn Fn(&Path) -> bool) -> PathBuf {
+pub(crate) fn free_dest(dir: &Path, file_name: &str, hash: &[u8; 32], taken: &dyn Fn(&Path) -> bool) -> PathBuf {
     let first = dir.join(file_name);
     if !taken(&first) {
         return first;
@@ -603,6 +603,7 @@ pub fn resort_apply(state: &Arc<AppState>) -> Result<ResortResultDto, CmdError> 
     let moves = resort_moves(state)?;
     let batch = state.with_store(|s| Ok(s.organized_next_batch()?))?;
     let (mut moved, mut failed) = (0u32, 0u32);
+    let mut moved_hashes: Vec<[u8; 32]> = Vec::new();
     for m in &moves {
         let ok = m.to.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::rename(&m.from, &m.to).is_ok();
         if !ok {
@@ -612,8 +613,10 @@ pub fn resort_apply(state: &Arc<AppState>) -> Result<ResortResultDto, CmdError> 
         let (f, t) = (m.from.to_string_lossy().into_owned(), m.to.to_string_lossy().into_owned());
         state.with_store(|s| Ok(s.organized_apply_move(batch, &m.hash, &f, &t, &m.class_key, &m.family)?))?;
         prune_empty_dirs(m.from.parent(), &lib);
+        moved_hashes.push(m.hash);
         moved += 1;
     }
+    relocate_active(state, &moved_hashes, &lib);
     let _ = crate::services::preview::bump_generation(state);
     Ok(ResortResultDto { batch_id: batch, moved, failed })
 }
@@ -625,6 +628,7 @@ pub fn resort_undo(state: &Arc<AppState>, batch_id: i64) -> Result<ResortResultD
     let lib = need_root(state).map(|r| lib_dir(&r))?;
     let moves = state.with_store(|s| Ok(s.organized_moves(batch_id)?))?;
     let (mut moved, mut failed) = (0u32, 0u32);
+    let mut moved_hashes: Vec<[u8; 32]> = Vec::new();
     for m in moves.iter().rev().filter(|m| !m.undone) {
         let (to, from) = (PathBuf::from(&m.to_path), PathBuf::from(&m.from_path));
         let ok = to.exists() && !from.exists() && from.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::rename(&to, &from).is_ok();
@@ -639,10 +643,29 @@ pub fn resort_undo(state: &Arc<AppState>, batch_id: i64) -> Result<ResortResultD
         let (ck, fam) = old_class_family(&from, &lib).unwrap_or((class_key, family));
         state.with_store(|s| Ok(s.organized_mark_undone(m, &ck, &fam)?))?;
         prune_empty_dirs(to.parent(), &lib);
+        moved_hashes.push(m.hash);
         moved += 1;
     }
+    relocate_active(state, &moved_hashes, &lib);
     let _ = crate::services::preview::bump_generation(state);
     Ok(ResortResultDto { batch_id, moved, failed })
+}
+
+/// Sau khi file trong thư viện đổi chỗ: font đang bật trỏ đường cũ phải được đăng ký lại ở đường mới (06: `relocate`, đăng ký mới
+/// trước, gỡ cũ sau; hash không đang bật thì bỏ qua). Làm một lần theo lô; lỗi chỉ ghi log — `reconcile` lần sau sửa nốt.
+fn relocate_active(state: &Arc<AppState>, hashes: &[[u8; 32]], lib: &Path) {
+    if hashes.is_empty() {
+        return;
+    }
+    let mut faces: Vec<FaceKeyDto> = Vec::new();
+    for h in hashes {
+        if let Ok(ks) = state.with_store(|s| Ok(s.face_keys_of_hash(h)?)) {
+            faces.extend(ks.iter().take(1).map(FaceKeyDto::from));
+        }
+    }
+    if let Err(e) = crate::services::activation::relocate(state, &faces, Some(&lib.to_string_lossy()), &mut |_| {}) {
+        log::debug!("organized: relocate font đang bật bỏ qua: {} {}", e.code, e.message);
+    }
 }
 
 fn old_class_family(p: &Path, lib: &Path) -> Option<(String, String)> {

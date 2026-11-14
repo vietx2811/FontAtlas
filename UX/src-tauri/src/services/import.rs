@@ -157,6 +157,7 @@ pub fn import_paths_into(
             }
         }
         let _ = crate::services::preview::bump_generation(state);
+        crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
     }
 
     // ---- 3. chờ quét xong (huỷ được) ----

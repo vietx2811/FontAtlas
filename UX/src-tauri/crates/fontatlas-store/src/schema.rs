@@ -701,7 +701,18 @@ CREATE TABLE organized_moves (
 CREATE INDEX organized_moves_batch ON organized_moves(batch_id);
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED];
+/// G7b: sổ bản sao đổi tên của VF (một bản cho mỗi font gốc). Ở user.db để sống sót qua `rebuild_library` và đi cùng gói khôi phục.
+pub(crate) const USER_DERIVED_FONTS: &str = r#"
+CREATE TABLE derived_fonts (
+  hash               BLOB PRIMARY KEY CHECK (length(hash) = 32),   -- hash của bản sao
+  derived_from_hash  BLOB NOT NULL UNIQUE CHECK (length(derived_from_hash) = 32),
+  path               TEXT NOT NULL,
+  license_restricted INTEGER NOT NULL DEFAULT 0,
+  created_at         INTEGER NOT NULL
+) WITHOUT ROWID;
+"#;
+
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED, USER_DERIVED_FONTS];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]

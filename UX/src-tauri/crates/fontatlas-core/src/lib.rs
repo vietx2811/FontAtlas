@@ -7,6 +7,7 @@ pub mod extras;
 pub mod geom;
 pub mod langdata;
 pub mod pairing;
+pub mod rename;
 mod load;
 mod metadata;
 mod metric;

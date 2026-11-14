@@ -35,6 +35,7 @@ import type { ComboSuggestionDto } from './ComboSuggestionDto';
 import type { CompareDto } from './CompareDto';
 import type { CompareOptsDto } from './CompareOptsDto';
 import type { ConfirmedConflictDto } from './ConfirmedConflictDto';
+import type { DerivedCopyDto } from './DerivedCopyDto';
 import type { DescribeDto } from './DescribeDto';
 import type { DeskPageDto } from './DeskPageDto';
 import type { DeskSuggestReqDto } from './DeskSuggestReqDto';
@@ -143,6 +144,7 @@ export interface TauriCommandMap {
   source_download_cancel: { args: { sourceId: number }; result: boolean };
   import_paths_into: { args: { paths: string[]; target: ImportTargetDto; onProgress: Channel<ImportProgressDto> }; result: ImportResultDto };
   import_paths_cancel: { args: Record<string, never>; result: boolean };
+  derive_renamed_copy: { args: { face: FaceKeyDto }; result: DerivedCopyDto };
   organized_check_location: { args: { path: string }; result: OrganizedLocationCheckDto };
   organized_status: { args: Record<string, never>; result: OrganizedStatusDto };
   organized_create: { args: { path: string }; result: OrganizedStatusDto };
