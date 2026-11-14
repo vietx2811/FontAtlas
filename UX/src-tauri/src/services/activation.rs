@@ -81,6 +81,13 @@ pub trait ActivationApi: Send + Sync {
         prefer_under: Option<&std::path::Path>,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError>;
+    /// B7 Hoàn tác: như `relocate` nhưng mỗi font có đường đích cụ thể.
+    fn relocate_to(
+        &self,
+        s: &Mutex<Store>,
+        targets: &[([u8; 32], std::path::PathBuf)],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError>;
     /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
     /// "Thay bằng bản này" chỉ trên các xung đột đã xác nhận.
@@ -186,6 +193,14 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     ) -> Result<ActivationReport, ActivationError> {
         ActivationService::relocate(self, s, hashes, prefer_under, progress)
     }
+    fn relocate_to(
+        &self,
+        s: &Mutex<Store>,
+        targets: &[([u8; 32], std::path::PathBuf)],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::relocate_to(self, s, targets, progress)
+    }
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         ActivationService::restore_replaced(self, s, id)
     }
@@ -270,6 +285,9 @@ impl ActivationApi for NoActivation {
         _: Option<&std::path::Path>,
         _: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn relocate_to(&self, _: &Mutex<Store>, _: &[([u8; 32], std::path::PathBuf)], _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
     fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
@@ -488,6 +506,18 @@ pub fn relocate(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&st
     hashes.dedup();
     let root = prefer_under.map(std::path::Path::new);
     let r = state.activation.relocate(state.store()?, &hashes, root, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
+
+/// B7 Hoàn tác: đưa đăng ký của từng font về đường cụ thể (đường cũ đã ghi trước khi chuyển). Kết quả theo file như `relocate`.
+pub fn relocate_to(state: &AppState, targets: &[RelocateTargetDto], progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let mut list = Vec::with_capacity(targets.len());
+    for t in targets {
+        let key = keys_of(std::slice::from_ref(&t.face))?.remove(0);
+        list.push((key.hash, std::path::PathBuf::from(&t.path)));
+    }
+    let r = state.activation.relocate_to(state.store()?, &list, &mut |p| progress((&p).into()))?;
     Ok(finish(state, r))
 }
 

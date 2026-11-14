@@ -179,6 +179,7 @@ export type { ReasonNamesDto } from './ReasonNamesDto';
 export type { RebuildLibraryReportDto } from './RebuildLibraryReportDto';
 export type { RecentViewDto } from './RecentViewDto';
 export type { ReconcileReportDto } from './ReconcileReportDto';
+export type { RelocateTargetDto } from './RelocateTargetDto';
 export type { RemoveSourceReportDto } from './RemoveSourceReportDto';
 export type { ReplaceTierDto } from './ReplaceTierDto';
 export type { ReplacedEntryDto } from './ReplacedEntryDto';

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::engine::{ActivationEngine, Scope};
 use crate::service::{ActivationService, Located, engine_failure, hex, locate, locate_where, now_ms, path_str, relock};
-use crate::paths::canonical_path;
+use crate::paths::{FileProbe, canonical_path, probe_file};
 use crate::types::{ActivationError, ActivationReport, EngineError, FileOutcome, FileResult, Progress};
 
 /// Khoá settings giữ các đường cũ đang chờ gỡ.
@@ -39,6 +39,34 @@ fn under(p: &Path, root: &Path) -> bool {
     p.starts_with(root) || canonical_path(p).is_ok_and(|c| canonical_path(root).is_ok_and(|r| c.starts_with(r)))
 }
 
+/// Cách chọn đường đích của một file.
+#[derive(Clone, Copy)]
+enum Pick<'a> {
+    /// Vị trí dùng được đầu tiên (nếu có `under`: chỉ dưới thư mục đó).
+    Location(Option<&'a Path>),
+    /// Đường cụ thể do người gọi chỉ định (Hoàn tác): phải là file đọc được, UTF-8, đúng hash.
+    Exact(&'a Path),
+}
+
+/// Kiểm một đường cụ thể như `locate`: có file, đã tải, canonical UTF-8, nội dung khớp hash.
+fn locate_exact(hash: &[u8; 32], p: &Path) -> Located {
+    match probe_file(p) {
+        FileProbe::Missing => Located::Missing(Some(p.to_path_buf())),
+        FileProbe::NotDownloaded => Located::NotDownloaded(p.to_path_buf()),
+        FileProbe::Ready => {
+            let Ok(c) = canonical_path(p) else { return Located::Missing(Some(p.to_path_buf())) };
+            if c.to_str().is_none() {
+                return Located::BadPath(c);
+            }
+            match std::fs::read(&c) {
+                Ok(b) if blake3::hash(&b).as_bytes() == hash => Located::Ready(c),
+                Ok(_) => Located::Changed(c),
+                Err(_) => Located::Missing(Some(c)),
+            }
+        }
+    }
+}
+
 impl<E: ActivationEngine> ActivationService<E> {
     /// Chuyển đăng ký các file đang bật (`hashes`) sang đường dẫn mới.
     /// `prefer_under`: chỉ chấp nhận vị trí nằm dưới thư mục này (vd gốc Organized Library); `None` = vị trí dùng được đầu tiên.
@@ -54,13 +82,30 @@ impl<E: ActivationEngine> ActivationService<E> {
         let mut rep = ActivationReport::default();
         let total = hashes.len();
         for (i, h) in hashes.iter().enumerate() {
-            rep.push(self.relocate_one(store, *h, prefer_under)?);
+            rep.push(self.relocate_one(store, *h, Pick::Location(prefer_under))?);
             progress(Progress { done: i + 1, total, hash_hex: hex(h) });
         }
         Ok(rep)
     }
 
-    fn relocate_one(&self, store: &Mutex<Store>, hash: [u8; 32], prefer: Option<&Path>) -> Result<FileResult, ActivationError> {
+    /// Như `relocate` nhưng mỗi font có đường đích CỤ THỂ (Hoàn tác "chuyển sang bản trong thư viện": đưa về đường cũ đã ghi).
+    /// Cùng kiểm tra và cùng kết quả theo file; đường đích không có / sai hash → không đổi gì, đường hiện tại vẫn dùng.
+    pub fn relocate_to(
+        &self,
+        store: &Mutex<Store>,
+        targets: &[([u8; 32], std::path::PathBuf)],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        let mut rep = ActivationReport::default();
+        let total = targets.len();
+        for (i, (h, p)) in targets.iter().enumerate() {
+            rep.push(self.relocate_one(store, *h, Pick::Exact(p))?);
+            progress(Progress { done: i + 1, total, hash_hex: hex(h) });
+        }
+        Ok(rep)
+    }
+
+    fn relocate_one(&self, store: &Mutex<Store>, hash: [u8; 32], pick: Pick<'_>) -> Result<FileResult, ActivationError> {
         let mut res = FileResult { hash_hex: hex(&hash), path: None, requested_faces: vec![], extra_faces: vec![], outcome: FileOutcome::Busy, replaced: vec![], warning: None };
         let Some(_guard) = self.take(hash) else { return Ok(res) };
         let (row, target) = {
@@ -76,9 +121,10 @@ impl<E: ActivationEngine> ActivationService<E> {
             res.outcome = FileOutcome::Failed { code: "not_found".into(), message: "không có file trong thư viện".into() };
             return Ok(res);
         };
-        let located = match prefer {
-            Some(root) => locate_where(&target, |l| under(&l.path, root)),
-            None => locate(&target),
+        let located = match pick {
+            Pick::Location(Some(root)) => locate_where(&target, |l| under(&l.path, root)),
+            Pick::Location(None) => locate(&target),
+            Pick::Exact(p) => locate_exact(&hash, p),
         };
         let new = match located {
             Located::Ready(p) => p,
