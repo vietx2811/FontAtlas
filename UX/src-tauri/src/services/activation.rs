@@ -66,6 +66,14 @@ pub trait ActivationApi: Send + Sync {
     ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError>;
     /// B5: gỡ mọi lý do `caseapp:*` (lúc thoát, trước `shutdown`).
     fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// B7: chuyển đăng ký các file đang bật sang đường dẫn mới (đăng ký mới trước, gỡ cũ sau).
+    fn relocate(
+        &self,
+        s: &Mutex<Store>,
+        hashes: &[[u8; 32]],
+        prefer_under: Option<&std::path::Path>,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError>;
     /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
     /// "Thay bằng bản này" chỉ trên các xung đột đã xác nhận.
@@ -154,6 +162,15 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::release_all_case_apps(self, s)
     }
+    fn relocate(
+        &self,
+        s: &Mutex<Store>,
+        hashes: &[[u8; 32]],
+        prefer_under: Option<&std::path::Path>,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::relocate(self, s, hashes, prefer_under, progress)
+    }
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         ActivationService::restore_replaced(self, s, id)
     }
@@ -227,6 +244,15 @@ impl ActivationApi for NoActivation {
     }
     fn release_all_case_apps(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
+    }
+    fn relocate(
+        &self,
+        _: &Mutex<Store>,
+        _: &[[u8; 32]],
+        _: Option<&std::path::Path>,
+        _: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
     }
     fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
         Err(ActivationError::Unsupported)
@@ -416,6 +442,18 @@ pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress:
     let keys = keys_of(faces)?;
     let pol = if force { DeactivatePolicy::Force } else { DeactivatePolicy::Ask };
     let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
+
+/// B7: chuyển đăng ký của các font ĐANG BẬT sang bản chép (hoặc đường dẫn mới). Người dùng bấm "Switch active fonts to the
+/// organized copies"; không bao giờ tự chạy. `prefer_under` = gốc Organized Library (chỉ nhận vị trí dưới đó).
+pub fn relocate(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let mut hashes: Vec<[u8; 32]> = keys_of(faces)?.into_iter().map(|k| k.hash).collect();
+    hashes.sort();
+    hashes.dedup();
+    let root = prefer_under.map(std::path::Path::new);
+    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |p| progress((&p).into()))?;
     Ok(finish(state, r))
 }
 

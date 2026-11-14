@@ -86,8 +86,13 @@ pub(crate) enum Located {
 /// Vị trí đầu tiên dùng được (đã canonical, UTF-8, đúng hash); không có thì phân biệt
 /// nội dung đã đổi / đường dẫn lạ / iCloud chưa tải / thiếu hẳn.
 pub(crate) fn locate(t: &FileTarget) -> Located {
+    locate_where(t, |_| true)
+}
+
+/// Như `locate` nhưng chỉ xét các vị trí thoả `want` (B7: tìm bản chép trong Organized Library).
+pub(crate) fn locate_where(t: &FileTarget, want: impl Fn(&fontatlas_store::FileLocation) -> bool) -> Located {
     let (mut changed, mut bad, mut not_downloaded) = (None, None, None);
-    for loc in &t.locations {
+    for loc in t.locations.iter().filter(|l| want(l)) {
         match probe_file(&loc.path) {
             FileProbe::Ready => {
                 let Ok(c) = canonical_path(&loc.path) else { continue };
