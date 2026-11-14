@@ -1450,6 +1450,63 @@
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     } catch (e) { await log('organized-library', false, String(e && e.stack || e).slice(0, 400)); }
 
+    // G7/G7b — «Giữ cả hai» cho cặp variable↔static trùng PostScript (fixture OFL thật: roboto.ttf static ở A + roboto_vf.ttf ở H, cùng "Roboto-Regular").
+    // Bật static trước → bật VF qua giao diện → hộp thoại cặp VF↔static → "Giữ cả hai" → bản sao "Roboto VF" bật cùng static, VF gốc không bật và không bị sửa.
+    // Dọn: tắt hết, gỡ nguồn H. Bản sao đổi tên nằm trong thư mục dữ liệu QA tạm (nguồn ẩn 'derived'); chưa có lệnh xoá bản sao nên nó bị bỏ cùng thư mục tạm.
+    try {
+      const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const mkq = (text, variable, sourceIds) => ({ text, vi: null, license: [], variable, italic: null, sourceIds, favoritesOnly: false, collectionId: null, tagIds: [], includeMissing: false, sort: 'family', descending: false, offset: 0, limit: 50, axisFilters: [], rawAxisRanges: [], hard: [], faceKeys: null, classes: [], subclasses: [], traits: [] });
+      const keyOf = r => ({ hashHex: r.hashHex ?? r.hash_hex, faceIndex: r.faceIndex ?? r.face_index ?? 0 });
+      const prog = '__CHANNEL__:' + T.transformCallback(() => {});
+      const srcByDir = async d => (await inv('list_sources', {})).find(x => (x.path ?? '').replace(/\/+$/, '').endsWith('/' + d));
+      let srcA = null; for (let i = 0; i < 40 && !srcA; i++) { srcA = await srcByDir('A'); if (!srcA) await sleep(250); }
+      await inv('add_source', { path: '__QA_DIR__/H' });
+      let srcH = null; for (let i = 0; i < 60 && !srcH; i++) { srcH = await srcByDir('H'); if (!srcH) await sleep(250); }
+      const findRow = async (q, pred) => { for (let i = 0; i < 80; i++) { const r = ((await inv('query_faces', { q })).items || []).find(pred); if (r) return r; await sleep(250); } return null; };
+      const stRow = await findRow(mkq('Roboto', false, srcA ? [srcA.id] : []), r => !r.isVariable && r.family === 'Roboto' && /Regular/.test(r.subfamily ?? 'Regular'));
+      const vfRow = srcH ? await findRow(mkq('Roboto', true, [srcH.id]), r => r.isVariable) : null;
+      await log('keep-both-fixtures', !!stRow && !!vfRow && stRow.hashHex !== vfRow.hashHex, { static: !!stRow, vf: !!vfRow });
+      if (stRow && vfRow) {
+        const base = (await actOn()).length;
+        await inv('activation_activate', { faces: [keyOf(stRow)], scope: null, proceed: false, onProgress: prog });
+        for (let i = 0; i < 60 && !(await actOn()).some(x => x.hashHex === stRow.hashHex); i++) await sleep(250);
+        // Mở nguồn H, chọn VF, bật bằng công tắc ở panel Active (đường thật của người dùng).
+        [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^H\d*$/.test(b.textContent.trim()))?.click();
+        await wait(() => cells().length > 0 && cells().length < 5, 15000);
+        (await wait(() => cells()[0], 10000))?.click();
+        const sw = await wait(() => document.querySelector('aside.fa-panel [data-testid=active-row] [data-testid=active-switch]'), 10000);
+        sw?.click();
+        const dlg = await wait(() => document.querySelector('[role=dialog].fa-conf'), 20000);
+        const opts = await wait(() => dlg?.querySelector('[data-testid=vf-pair-options]'), 8000);
+        const radios = opts ? [...opts.querySelectorAll('input[type=radio]')] : [];
+        const bothR = radios.find(r => /Giữ cả hai|Keep both/.test(r.closest('label')?.textContent ?? ''));
+        await log('keep-both-dialog', !!dlg && !!opts && radios.length >= 2 && !!bothR && !bothR.disabled && /Giữ cả hai|Keep both/.test(opts.textContent), { radios: radios.length, both: !!bothR, disabled: bothR?.disabled ?? null });
+        bothR?.click();
+        await wait(() => document.querySelector('[data-testid=vf-both-warning]'), 5000);
+        btn('Tiếp tục', dlg)?.click();
+        await wait(() => !document.querySelector('[role=dialog].fa-conf'), 20000);
+        // Bản sao bật cùng static: đúng hai font bật hơn lúc đầu (static + bản sao), VF gốc không bật.
+        let two = await actOn(); for (let i = 0; i < 80 && two.length < base + 2; i++) { await sleep(250); two = await actOn(); }
+        const copyRow = await findRow(mkq('Roboto VF', null, []), r => r.family === 'Roboto VF');
+        const actNow = await actOn();
+        const copyOn = !!copyRow && actNow.some(x => x.hashHex === copyRow.hashHex);
+        const staticOn = actNow.some(x => x.hashHex === stRow.hashHex);
+        const vfOn = actNow.some(x => x.hashHex === vfRow.hashHex);
+        await log('keep-both-copy-on-with-static', copyOn && staticOn && !vfOn && actNow.length === base + 2, { copy: !!copyRow, copyOn, staticOn, vfOn, active: actNow.length, base, two: two.length });
+        // VF gốc không đổi: vẫn là font Variable thường (không phải bản sao), cùng hash, vẫn nằm ở nguồn H; bản sao truy được về gốc.
+        const dv = await inv('get_face', { face: keyOf(vfRow), lang: 'vi' });
+        const dc = copyRow ? await inv('get_face', { face: keyOf(copyRow), lang: 'vi' }) : null;
+        const inH = ((await inv('query_faces', { q: mkq('Roboto', true, srcH ? [srcH.id] : []) })).items || []).filter(r => r.hashHex === vfRow.hashHex).length;
+        await log('keep-both-original-untouched', dv.row.hashHex === vfRow.hashHex && dv.row.isVariable && dv.row.family === 'Roboto' && dv.derivedFrom === null && inH === 1 && !!dc && !!dc.derivedFrom && /Roboto/.test(dc.derivedFrom.name) && dc.derivedFrom.faceKey.hashHex === vfRow.hashHex, { origFamily: dv.row.family, derived: dv.derivedFrom, inH, copyFrom: dc?.derivedFrom?.name ?? null });
+      }
+      // Dọn: tắt hết (không để font bật cho các bước sau) và gỡ nguồn H.
+      await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) });
+      let left = -1; for (let i = 0; i < 60 && left !== 0; i++) { left = (await actOn()).length; if (left !== 0) await sleep(250); }
+      if (srcH) { try { await inv('remove_source', { sourceId: srcH.id }); } catch (e) { await log('keep-both-teardown-source', false, String(e && e.message || e)); } }
+      await log('keep-both-clean', left === 0, { left });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } catch (e) { await log('khối-lỗi: Giữ cả hai G7b', false, String(e && e.stack || e).slice(0, 400)); }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

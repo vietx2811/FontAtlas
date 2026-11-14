@@ -53,6 +53,7 @@ cp "$F"/{bebas_neue,oswald_vf,dancing_script_vf,miltonian,source_code_pro}.ttf "
 for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do cp "$F/$n.ttf" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
 # G (cuối QA): bản chép một font hệ thống (giống hệt từng byte) → trạng thái "Có sẵn trên máy". Không có thì QA bỏ qua bước.
 SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
+cp "$F/roboto_vf.ttf" "$QA/H/" # H (cuối QA): VF Roboto trùng PostScript "Roboto-Regular" với roboto.ttf static → bước «Giữ cả hai» G7b
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
 sed -e "s#__QA_DIR__#$QA#g" -e "s#__QA_LANG__#${QA_LANG:-vi}#g" "$HERE/main_flows.js" > "$QA/qa.js"
 # QA_LANG=en: các bộ chọn theo aria-label viết bằng tiếng Việt đổi sang đúng chuỗi tiếng Anh của app (khoá i18n tương ứng), để các bước vẫn tìm được phần tử và chụp ảnh bản tiếng Anh.

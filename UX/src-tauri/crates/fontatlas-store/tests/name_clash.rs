@@ -78,3 +78,18 @@ fn two_variable_fonts_never_clash_with_each_other() {
     s.ingest(vec![item(1, "/lib/vf-twin.ttf", &r)], 10).unwrap();
     assert!(s.name_clashes().unwrap().is_empty());
 }
+
+/// Cặp fixture thật dùng cho native QA «Giữ cả hai»: Roboto VF (OFL) có PostScript mặc định trùng `roboto.ttf` static.
+#[test]
+fn real_roboto_vf_clashes_with_the_roboto_static_fixture() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let st = report("roboto.ttf");
+    let vf = report("roboto_vf.ttf");
+    s.ingest(vec![item(1, "/lib/roboto.ttf", &st), item(1, "/lib/roboto_vf.ttf", &vf)], 10).unwrap();
+    let c = s.name_clashes().unwrap();
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert!(c[0].exact, "PostScript mặc định phải trùng đúng: {c:?}");
+    assert_eq!(c[0].ps_names, vec!["Roboto-Regular".to_string()]);
+    assert_eq!(c[0].static_face_ids.len(), 1);
+}

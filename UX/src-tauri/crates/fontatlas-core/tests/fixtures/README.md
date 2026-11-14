@@ -37,3 +37,11 @@ Unmodified OFL fonts from `google/fonts@47d54ca1ebb14fd864695f1d39dc734f39017c33
 |---|---|---:|---|
 | `dm_serif_display.ttf` | `dmserifdisplay/DMSerifDisplay-Regular.ttf` | 76580 | `8cc3643535edf039aa5d95440a8542735e9197e4f4b8d9303e980fefbf5ab616` |
 | `chonburi.ttf` | `chonburi/Chonburi-Regular.ttf` | 170492 | `aa0dac4df08af10785ba1dc10121492227f8e4288f0a23d11dd1d1f5a7f6ebfa` |
+
+## G7 keep-both regression pair (native QA)
+
+Unmodified OFL font from `google/fonts@47d54ca1ebb14fd864695f1d39dc734f39017c33`; license text is `accuracy-licenses/roboto-OFL.txt`. Its default instance has PostScript name `Roboto-Regular`, the same as the static `roboto.ttf`, so the pair is a real variable↔static name clash (`Store::name_clashes()` reports it; see `fontatlas-store/tests/name_clash.rs`). Native QA activates the static first, then the VF, and takes "Keep both".
+
+| Fixture | Source under ofl/ | Bytes | SHA-256 |
+|---|---|---:|---|
+| `roboto_vf.ttf` | `roboto/Roboto[wdth,wght].ttf` | 488584 | `d7598e12c5dbef095ff8272cfc55da0250bd07fbdecbac8a530b9b277872a134` |
