@@ -1268,7 +1268,8 @@
             document.querySelector('[data-testid=desk-open-with]')?.click();
             const list = await wait(() => document.querySelector('[data-testid=app-list]'), 10000);
             const rows = await wait(() => { const r = [...document.querySelectorAll('[data-testid=app-row]')]; return r.length ? r : null; }, 30000);
-            const browsers = (rows ?? []).filter(r => /safari|chrome|firefox|edgemac|brave/i.test(r.dataset.bundle ?? '')).length;
+            // Cùng luật PREFIX với AppPicker.isBrowserApp (components/desk/AppPicker.tsx; có test giữ hai bản khớp): "Eagle for Safari" không phải trình duyệt.
+            const browsers = (rows ?? []).filter(r => /^(com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|company\.thebrowser\.browser|com\.brave\.browser|com\.operasoftware\.opera|com\.vivaldi\.vivaldi)/i.test(r.dataset.bundle ?? '')).length;
             const web = !!document.querySelector('[data-testid=app-web-note]');
             const save = document.querySelector('[data-testid=app-save]');
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
