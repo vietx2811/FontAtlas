@@ -1,7 +1,7 @@
 //! G7b: bản sao đổi tên của VF — chỉ bảng `name` đổi, mọi thứ khác nguyên byte, file hợp lệ.
 use fontatlas_core::analyze_paths;
 use fontatlas_core::rename::{RenameError, rename_vf_copy};
-use read_fonts::{FontRef, TableProvider};
+use read_fonts::FontRef;
 use std::path::PathBuf;
 
 fn fixture(n: &str) -> PathBuf {
