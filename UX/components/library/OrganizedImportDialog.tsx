@@ -16,6 +16,11 @@ export function issueSummary(issues: ReadonlyArray<{ code: string }>): string {
   return [...by.entries()].map(([c, n]) => `${formatNumber(n)} ${t(reasonKey(c))}`).join('; ');
 }
 
+/** Tóm tắt theo mã với TỔNG THẬT từ backend (issues[] chỉ giữ ≤ 200 dòng đầu): "2 chưa tải về máy; 1 lỗi đọc/ghi". */
+export function groupSummary(groups: ReadonlyArray<{ code: string; count: number }>): string {
+  return groups.map(g => `${formatNumber(g.count)} ${t(reasonKey(g.code))}`).join('; ');
+}
+
 type Phase = 'plan' | 'running' | 'done';
 
 /**
@@ -28,11 +33,14 @@ export function OrganizedImportDialog({ api, onClose, onFinished }: { api: Api; 
   const [prog, setProg] = useState<OrganizeProgressDto | null>(null);
   const [result, setResult] = useState<OrganizeResultDto | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [download, setDownload] = useState(false); // "Tải về rồi chép": font cloud chưa tải được tải trước (lô 16), mặc định bỏ qua và báo
   const alive = useRef(true);
-  useEffect(() => { alive.current = true; api.organizedPlan({ sourceIds: null }).then(p => { if (alive.current) setPlan(p); }, e => { if (alive.current) setErr(msgOf(e)); }); return () => { alive.current = false; }; }, [api]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  // Tính lại xem trước khi bật/tắt "Tải về rồi chép" (toCopy/bytes/enoughSpace đổi theo).
+  useEffect(() => { setErr(null); api.organizedPlan({ sourceIds: null, downloadFirst: download }).then(p => { if (alive.current) setPlan(p); }, e => { if (alive.current) setErr(msgOf(e)); }); }, [api, download]);
   const start = async () => {
     setPhase('running'); setErr(null);
-    try { const r = await api.organizedImport({ sourceIds: null }, p => { if (alive.current) setProg(p); }); if (!alive.current) return; setResult(r); setPhase('done'); onFinished?.(r); }
+    try { const r = await api.organizedImport({ sourceIds: null, downloadFirst: download }, p => { if (alive.current) setProg(p); }); if (!alive.current) return; setResult(r); setPhase('done'); onFinished?.(r); }
     catch (e) { if (alive.current) { setErr(msgOf(e)); setPhase('plan'); } }
   };
   const close = () => { if (phase === 'running') return; onClose(); };
@@ -47,9 +55,17 @@ export function OrganizedImportDialog({ api, onClose, onFinished }: { api: Api; 
               <dl className="fa-org-plan" data-testid="org-plan">
                 <dt>{t('org.imp.willCopy')}</dt><dd>{formatNumber(plan.toCopy)} · {formatBytes(plan.bytes)}</dd>
                 <dt>{t('org.imp.alreadyThere')}</dt><dd>{formatNumber(plan.alreadyThere)}</dd>
-                {plan.cloudNotDownloaded > 0 && <><dt><NoteMark inline text={t('org.imp.cloud.tip')} /> {t('org.imp.cloud')}</dt><dd>{formatNumber(plan.cloudNotDownloaded)}</dd></>}
+                {plan.needsDownload > 0 && !download && <><dt><NoteMark inline text={t('org.imp.cloud.tip')} /> {t('org.imp.cloud')}</dt><dd>{formatNumber(plan.needsDownload)} · {formatBytes(plan.downloadBytes)}</dd></>}
                 <dt>{t('org.imp.freeSpace')}</dt><dd>{formatBytes(plan.freeBytes)} {plan.enoughSpace ? '✓' : ''}</dd>
               </dl>
+              {plan.needsDownload > 0 && (
+                <label className="fa-org-download" data-testid="org-download-opt">
+                  <input type="checkbox" checked={download} disabled={!plan.enoughSpaceForDownload && !download} onChange={e => setDownload(e.target.checked)} />
+                  <span><b>{t('org.imp.dl', { n: formatNumber(plan.needsDownload), size: formatBytes(plan.downloadBytes) })}</b>
+                    <small>{t('org.imp.dl.note')}</small>
+                    {!plan.enoughSpaceForDownload && <small className="fa-org-err" role="alert" data-testid="org-dl-nospace">{t('org.imp.dl.noSpace')}</small>}</span>
+                </label>
+              )}
               {!plan.enoughSpace && <p className="fa-org-err" role="alert">{t('org.imp.noSpace')}</p>}
               <p className="fa-org-note">{t('org.imp.license')}</p>
             </>
@@ -57,14 +73,14 @@ export function OrganizedImportDialog({ api, onClose, onFinished }: { api: Api; 
           {err && <p className="fa-org-err" role="alert">{err}</p>}
           <div className="fa-modal-actions">
             <button type="button" onClick={onClose}>{t('org.cancel')}</button>
-            <button type="button" className="primary" data-testid="org-start" disabled={!plan || !plan.enoughSpace || plan.toCopy === 0} onClick={() => void start()}>{t('org.imp.start')}</button>
+            <button type="button" className="primary" data-testid="org-start" disabled={!plan || !plan.enoughSpace || plan.toCopy === 0 || (download && !plan.enoughSpaceForDownload)} onClick={() => void start()}>{t('org.imp.start')}</button>
           </div>
         </>
       )}
       {phase === 'running' && (
         <>
           <progress data-testid="org-progress" max={prog?.total || 1} value={prog?.done ?? 0} aria-label={t('org.imp.running')} />
-          <p role="status">{t('org.imp.progress', { done: formatNumber(prog?.done ?? 0), total: formatNumber(prog?.total ?? 0), size: formatBytes(prog?.bytesDone ?? 0) })}{prog && prog.failed > 0 ? ` · ${t('org.imp.failedN', { n: formatNumber(prog.failed) })}` : ''}</p>
+          <p role="status" data-testid="org-phase">{prog?.phase === 'downloading' ? t('org.imp.downloading', { done: formatNumber(prog.downloaded), total: formatNumber(prog.downloadTotal) }) : t('org.imp.progress', { done: formatNumber(prog?.done ?? 0), total: formatNumber(prog?.total ?? 0), size: formatBytes(prog?.bytesDone ?? 0) })}{prog && prog.failed > 0 ? ` · ${t('org.imp.failedN', { n: formatNumber(prog.failed) })}` : ''}</p>
           <div className="fa-modal-actions"><button type="button" data-testid="org-cancel-run" onClick={() => void api.organizedCancel()}>{t('org.cancel')}</button></div>
         </>
       )}
@@ -72,7 +88,9 @@ export function OrganizedImportDialog({ api, onClose, onFinished }: { api: Api; 
         <>
           <p role="status" data-testid="org-done">{result.cancelled ? t('org.imp.cancelled', { n: formatNumber(result.copied) }) : t('org.imp.done', { n: formatNumber(result.copied), size: formatBytes(result.bytes) })}</p>
           {result.alreadyThere > 0 && <p className="fa-org-note">{t('org.imp.thereN', { n: formatNumber(result.alreadyThere) })}</p>}
-          {result.issueCount > 0 && <p className="fa-org-warn" data-testid="org-issues">{t('org.imp.issues', { list: issueSummary(result.issues) })}</p>}
+          {result.downloaded > 0 && <p className="fa-org-note">{t('org.imp.downloadedN', { n: formatNumber(result.downloaded) })}</p>}
+          {result.skippedCloud > 0 && <p className="fa-org-warn" data-testid="org-skipped-cloud">{t('org.imp.skippedCloud', { n: formatNumber(result.skippedCloud) })}</p>}
+          {result.issueGroups.length > 0 && <p className="fa-org-warn" data-testid="org-issues">{t('org.imp.issues', { list: groupSummary(result.issueGroups) })}</p>}
           {result.snapshot && <p className="fa-org-note">{t('org.imp.snapshot')}</p>}
           <div className="fa-modal-actions"><button type="button" className="primary" onClick={onClose}>{t('org.close')}</button></div>
         </>

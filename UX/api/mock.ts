@@ -294,19 +294,20 @@ export function createMockApi(o: MockOptions = {}): Api {
       return { ...organized };
     },
     async organizedStatus() { return { ...organized }; },
-    async organizedPlan() {
+    async organizedPlan(scope) {
       if (!organized.configured) throw new CmdError('not_configured', 'nc');
-      return { toCopy: 42, bytes: 1_800_000_000, alreadyThere: 3, cloudNotDownloaded: 2, freeBytes: 38e9, enoughSpace: true, sample: [{ src: '/Fonts/A/Roboto-Regular.ttf', dest: 'Library/Sans/Roboto/Roboto-Regular.ttf', classFolder: 'Sans' }] };
+      const dl = !!scope?.downloadFirst;
+      return { toCopy: dl ? 44 : 42, bytes: dl ? 2_000_000_000 : 1_800_000_000, alreadyThere: 3, cloudNotDownloaded: 2, needsDownload: 2, downloadBytes: 200_000_000, enoughSpaceForDownload: !/lowspace/i.test(organized.root ?? ''), freeBytes: 38e9, enoughSpace: true, sample: [{ src: '/Fonts/A/Roboto-Regular.ttf', dest: 'Library/Sans/Roboto/Roboto-Regular.ttf', classFolder: 'Sans' }] };
     },
     async organizedImport(_scope, onProgress) {
       if (!organized.configured) throw new CmdError('not_configured', 'nc');
       if (orgBusy) throw new CmdError('busy', 'busy');
       orgBusy = true; orgCancel = false;
       try {
-        for (let i = 1; i <= 3 && !orgCancel; i++) { await Promise.resolve(); onProgress?.({ done: i * 14, total: 42, bytesDone: i * 6e8, failed: 0 }); }
-        if (orgCancel) return { copied: 14, bytes: 6e8, alreadyThere: 3, issues: [], issueCount: 0, cancelled: true, snapshot: null };
+        for (let i = 1; i <= 3 && !orgCancel; i++) { await Promise.resolve(); onProgress?.({ phase: i === 1 && _scope.downloadFirst ? 'downloading' : 'copying', done: i * 14, total: 42, bytesDone: i * 6e8, failed: 0, downloaded: _scope.downloadFirst ? i : 0, downloadTotal: _scope.downloadFirst ? 3 : 0 }); }
+        if (orgCancel) return { copied: 14, bytes: 6e8, alreadyThere: 3, issues: [], issueCount: 0, issueGroups: [], downloaded: 0, skippedCloud: 0, cancelled: true, snapshot: null };
         organized.files += 42; organized.bytes += 1_800_000_000; organized.snapshots += 1; organized.lastSnapshot = `${organized.root}/Snapshots/2026-11-14`;
-        return { copied: 42, bytes: 1_800_000_000, alreadyThere: 3, issues: [{ path: '/Fonts/x.otf', code: 'cloud_not_downloaded' }], issueCount: 1, cancelled: false, snapshot: organized.lastSnapshot };
+        return { copied: 42, bytes: 1_800_000_000, alreadyThere: 3, issues: [{ path: '/Fonts/x.otf', code: 'cloud_not_downloaded' }], issueCount: 1, issueGroups: [{ code: 'cloud_not_downloaded', count: 1, firstPath: '/Fonts/x.otf' }], downloaded: _scope.downloadFirst ? 2 : 0, skippedCloud: _scope.downloadFirst ? 0 : 2, cancelled: false, snapshot: organized.lastSnapshot };
       } finally { orgBusy = false; }
     },
     async organizedCancel() { if (!orgBusy) return false; orgCancel = true; return true; },
@@ -511,7 +512,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
-        row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
+        row, derivedFrom: null, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
         classificationInfo: mockClassification(row.family, classOver.get(keyOf(row))),
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {

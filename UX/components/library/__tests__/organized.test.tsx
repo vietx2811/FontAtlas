@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { useNoticeStore } from '../../../store/notices';
 import { OrganizedPanel } from '../OrganizedPanel';
-import { issueSummary } from '../OrganizedImportDialog';
+import { groupSummary, issueSummary } from '../OrganizedImportDialog';
 import { relocateCounts, undoRelocate } from '../RelocateDialog';
 
 const settle = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
@@ -89,5 +89,28 @@ describe('B7 — Organized Library (Cài đặt ▸ Thư viện)', () => {
     await undoRelocate(api, [{ face: { hashHex: 'aa', faceIndex: 0 }, path: '/Users/example/Fonts/a.ttf' }, { face: { hashHex: 'bb', faceIndex: 0 }, path: '/Users/example/Fonts/b.ttf' }]);
     expect(spy).toHaveBeenCalledWith([{ face: { hashHex: 'aa', faceIndex: 0 }, path: '/Users/example/Fonts/a.ttf' }, { face: { hashHex: 'bb', faceIndex: 0 }, path: '/Users/example/Fonts/b.ttf' }]);
     const n = useNoticeStore.getState().notices.at(-1)!; expect(n.kind).toBe('error'); expect(n.text).toMatch(/1 font về đường cũ/); expect(n.text).toMatch(/1 font không chuyển ngược được/);
+  });
+
+  it('Tải về rồi chép: hiện khi có file chưa tải; bật thì tính lại; hết chỗ tải thì khoá; tiến độ tải; kết quả gộp theo mã với tổng thật', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-import')); await settle();
+    expect(screen.getByTestId('org-plan').textContent).toMatch(/Chưa tải về máy.*2 · /);
+    const opt = screen.getByTestId('org-download-opt'); expect(opt.textContent).toMatch(/Tải về rồi chép \(2 file/); expect(opt.textContent).toMatch(/ổ hệ thống cho tới khi OneDrive\/iCloud giải phóng/);
+    fireEvent.click(opt.querySelector('input')!); await settle();
+    expect(screen.getByTestId('org-plan').textContent).toMatch(/44/);
+    fireEvent.click(screen.getByTestId('org-start')); await settle();
+    expect(screen.getByTestId('org-done').textContent).toMatch(/Đã chép 42 file/);
+    expect(screen.queryByTestId('org-skipped-cloud')).toBeNull();
+    expect(screen.getByTestId('org-issues').textContent).toMatch(/1 chưa tải về máy/);
+    expect(groupSummary([{ code: 'cloud_not_downloaded', count: 250 }, { code: 'io', count: 3 }])).toBe('250 chưa tải về máy; 3 lỗi đọc/ghi');
+  });
+
+  it('không đủ chỗ để tải: khoá lựa chọn "Tải về rồi chép" và nói lý do', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Volumes/lowspace/Fonts');
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-import')); await settle();
+    expect((screen.getByTestId('org-download-opt').querySelector('input') as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByTestId('org-dl-nospace').textContent).toMatch(/Không đủ chỗ trống để tải/);
   });
 });

@@ -14,3 +14,7 @@
 .fa-org-mode { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .fa-org-mode label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
 .fa-org-mode small { display: block; color: var(--muted); font-size: 12px; }
+
+.fa-org-download { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.fa-org-download small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.fa-p-derived { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font-size: 11px; color: var(--muted); }
