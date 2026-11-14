@@ -262,6 +262,7 @@ export interface TauriCommandMap {
   case_apps: { args: { collectionId: number }; result: CaseAppDto[] };
   case_set_apps: { args: { collectionId: number; apps: CaseAppDto[] }; result: null };
   installed_apps: { args: Record<string, never>; result: InstalledAppDto[] };
+  case_app_suppress: { args: { collectionId: number }; result: null };
   activation_availability: { args: { faces: FaceKeyDto[] }; result: AvailabilityDto[] };
   activation_set_scope: { args: { faces: FaceKeyDto[]; scope: ScopeDto }; result: ActivationReportDto };
   activation_subscribe: { args: { onEvent: Channel<ActivationEvent> }; result: null };

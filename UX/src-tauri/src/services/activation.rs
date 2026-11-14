@@ -64,6 +64,13 @@ pub trait ActivationApi: Send + Sync {
         grace: std::time::Duration,
         tracker: &mut fontatlas_activate::AppSetTracker,
     ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError>;
+    /// B5: "Tắt lần này": gỡ lý do `caseapp:<id>` và đánh dấu để không bật lại cho tới khi app thoát/chạy lại.
+    fn suppress_case_app(
+        &self,
+        s: &Mutex<Store>,
+        collection_id: i64,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<ActivationReport, ActivationError>;
     /// B5: gỡ mọi lý do `caseapp:*` (lúc thoát, trước `shutdown`).
     fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
     /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
@@ -154,6 +161,14 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::release_all_case_apps(self, s)
     }
+    fn suppress_case_app(
+        &self,
+        s: &Mutex<Store>,
+        collection_id: i64,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::suppress_case_app(self, s, collection_id, tracker)
+    }
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         ActivationService::restore_replaced(self, s, id)
     }
@@ -228,6 +243,9 @@ impl ActivationApi for NoActivation {
     fn release_all_case_apps(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
     }
+    fn suppress_case_app(&self, _: &Mutex<Store>, _: i64, _: &mut fontatlas_activate::AppSetTracker) -> Result<ActivationReport, ActivationError> {
+        Ok(ActivationReport::default())
+    }
     fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
         Err(ActivationError::Unsupported)
     }
@@ -286,10 +304,24 @@ fn policy(proceed: bool) -> ConflictPolicy {
     if proceed { ConflictPolicy::Proceed } else { ConflictPolicy::Ask }
 }
 
+fn reason_names(r: &ReasonDto, names: &std::collections::HashMap<i64, String>, apps: &std::collections::HashMap<i64, Vec<String>>) -> ReasonNamesDto {
+    match r {
+        ReasonDto::Collection { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: vec![] },
+        ReasonDto::CaseApp { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: apps.get(collection_id).cloned().unwrap_or_default() },
+        ReasonDto::Manual | ReasonDto::Auto { .. } => ReasonNamesDto { collection_name: None, app_names: vec![] },
+    }
+}
+
 /// Mọi dòng trạng thái kèm danh sách face của file (file một face: `[0]`; TTC: nhiều face).
 pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError> {
     let rows = state.activation.state(state.store()?)?;
     state.with_store(|s| {
+        let names: std::collections::HashMap<i64, String> = s.collections()?.into_iter().map(|c| (c.id, c.name)).collect();
+        let mut apps: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
+        for b in s.case_bindings()? {
+            let list = s.case_apps(b.collection_id)?.into_iter().map(|a| if a.app_name.is_empty() { a.bundle_id } else { a.app_name }).collect();
+            apps.insert(b.collection_id, list);
+        }
         let mut st = s
             .conn()
             .prepare(
@@ -304,7 +336,9 @@ pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError>
                     .map_err(fontatlas_store::StoreError::from)?
                     .filter_map(|x| x.ok().map(|v| v as u32))
                     .collect();
-                Ok(ActivationStateDto::from_core(r, if faces.is_empty() { vec![0] } else { faces }))
+                let mut dto = ActivationStateDto::from_core(r, if faces.is_empty() { vec![0] } else { faces });
+                dto.reason_names = Some(dto.reasons.iter().map(|x| reason_names(x, &names, &apps)).collect());
+                Ok(dto)
             })
             .collect()
     })

@@ -27,6 +27,8 @@ pub const DEFAULT_GRACE: Duration = Duration::from_secs(30);
 enum CaseState {
     On,
     Leaving(Instant),
+    /// Người dùng bấm "Tắt lần này": không bật lại cho tới khi MỌI app của Case thoát (rồi chạy lại).
+    Suppressed,
 }
 
 /// Trạng thái ân hạn trong bộ nhớ (không lưu đĩa: mở lại Font Atlas thì đối soát từ đầu).
@@ -41,7 +43,16 @@ impl AppSetTracker {
     }
     /// Số Case đang giữ font (bật hoặc đang trong ân hạn).
     pub fn held(&self) -> usize {
-        self.cases.len()
+        self.cases.values().filter(|s| !matches!(s, CaseState::Suppressed)).count()
+    }
+
+    /// Đánh dấu Case bị tắt lần này (xem `ActivationService::suppress_case_app`).
+    pub fn suppress(&mut self, collection_id: i64) {
+        self.cases.insert(collection_id, CaseState::Suppressed);
+    }
+
+    pub fn is_suppressed(&self, collection_id: i64) -> bool {
+        matches!(self.cases.get(&collection_id), Some(CaseState::Suppressed))
     }
 }
 
@@ -88,7 +99,7 @@ impl<E: ActivationEngine> ActivationService<E> {
             let any = b.bundles.iter().any(|x| running.contains(x));
             let st = tracker.cases.get(&b.collection_id).copied();
             match (any, st) {
-                (true, Some(CaseState::On)) => {}
+                (true, Some(CaseState::On)) | (true, Some(CaseState::Suppressed)) => {}
                 (true, Some(CaseState::Leaving(_))) => {
                     // Mở lại trong ân hạn: font vẫn đang bật, chỉ huỷ việc gỡ.
                     tracker.cases.insert(b.collection_id, CaseState::On);
@@ -111,6 +122,10 @@ impl<E: ActivationEngine> ActivationService<E> {
                         events.push(AppSetEvent { collection_id: b.collection_id, kind: AppSetEventKind::Off, changed, conflicts: 0, failed });
                     }
                 }
+                // đã tắt lần này và app đã thoát hết: lần chạy sau bật lại bình thường
+                (false, Some(CaseState::Suppressed)) => {
+                    tracker.cases.remove(&b.collection_id);
+                }
                 (false, None) => {}
             }
         }
@@ -130,6 +145,19 @@ impl<E: ActivationEngine> ActivationService<E> {
         // Case bị bỏ gắn hoặc xoá: quên trạng thái.
         tracker.cases.retain(|id, _| bound.contains(id));
         Ok(events)
+    }
+
+    /// Nút "Tắt lần này" trên toast: gỡ lý do `caseapp:<id>` (KHÔNG đụng lý do khác: bật tay, Case khác, app khác) và đánh dấu
+    /// để bộ quan sát không bật lại ngay. Hết hiệu lực khi mọi app của Case đã thoát; app chạy lại thì bật như thường.
+    pub fn suppress_case_app(
+        &self,
+        store: &Mutex<Store>,
+        collection_id: i64,
+        tracker: &mut AppSetTracker,
+    ) -> Result<crate::types::ActivationReport, ActivationError> {
+        let rep = self.release_case_app(store, collection_id, &mut |_| {})?;
+        tracker.suppress(collection_id);
+        Ok(rep)
     }
 
     /// Lúc thoát Font Atlas: gỡ MỌI lý do `caseapp:*` (font session sắp bị gỡ; lần mở sau đồng bộ lại từ app đang chạy).

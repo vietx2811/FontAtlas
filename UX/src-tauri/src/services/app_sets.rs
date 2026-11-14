@@ -23,6 +23,8 @@ pub const POLL: Duration = Duration::from_secs(2);
 
 #[derive(Default)]
 pub struct AppSets {
+    /// Trạng thái ân hạn/tắt-lần-này, chung giữa luồng quan sát và lệnh `case_app_suppress`.
+    tracker: Mutex<AppSetTracker>,
     stop: AtomicBool,
     handle: Mutex<Option<JoinHandle<()>>>,
 }
@@ -58,6 +60,12 @@ pub fn tick(state: &AppState, running: &HashSet<String>, now: Instant, grace: Du
     }
 }
 
+/// Một nhịp với trạng thái CHUNG của app (cùng bộ nhớ với `case_app_suppress`). Luồng quan sát và test dùng hàm này.
+pub fn sync_once(state: &AppState, running: &HashSet<String>, now: Instant, grace: Duration) -> Vec<AppSetEvent> {
+    let mut tracker = state.app_sets.tracker.lock().unwrap_or_else(|p| p.into_inner());
+    tick(state, running, now, grace, &mut tracker)
+}
+
 /// Khởi động luồng quan sát (một lần). Gọi sau `reconcile` lúc mở app.
 pub fn start(state: &Arc<AppState>) {
     if !state.activation.supported() {
@@ -72,9 +80,8 @@ pub fn start(state: &Arc<AppState>) {
     *h = std::thread::Builder::new()
         .name("fa-app-sets".into())
         .spawn(move || {
-            let mut tracker = AppSetTracker::new();
             while !st.app_sets.stop.load(Ordering::SeqCst) {
-                let events = tick(&st, &running_bundle_ids(), Instant::now(), DEFAULT_GRACE, &mut tracker);
+                let events = sync_once(&st, &running_bundle_ids(), Instant::now(), DEFAULT_GRACE);
                 if events.iter().any(|e| e.changed > 0) {
                     st.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![] });
                 }
@@ -95,6 +102,20 @@ pub fn stop(state: &AppState) {
     if let Some(h) = h {
         let _ = h.join();
     }
+}
+
+/// Nút "Tắt lần này" trên toast tự bật: gỡ lý do `caseapp:<id>` của Case (không đụng lý do khác) và chặn bật lại cho tới khi
+/// mọi app của Case thoát rồi chạy lại.
+pub fn case_app_suppress(state: &AppState, collection_id: i64) -> Result<(), CmdError> {
+    if !state.activation.supported() {
+        return Ok(());
+    }
+    let mut tracker = state.app_sets.tracker.lock().unwrap_or_else(|p| p.into_inner());
+    let rep = state.activation.suppress_case_app(state.store()?, collection_id, &mut tracker)?;
+    if rep.results.iter().any(|r| r.outcome == fontatlas_activate::FileOutcome::Deactivated) {
+        state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![] });
+    }
+    Ok(())
 }
 
 pub fn case_apps(state: &AppState, collection_id: i64) -> Result<Vec<CaseAppDto>, CmdError> {

@@ -121,6 +121,20 @@ pub struct ActivationStateDto {
     pub active_path: Option<String>,
     pub conflict_ps: Option<String>,
     pub last_error: Option<String>,
+    /// Tên để hiển thị cho từng phần tử của `reasons` (CÙNG thứ tự, cùng độ dài). Chỉ có khi lấy từ `activation_state`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reason_names: Option<Vec<ReasonNamesDto>>,
+}
+
+/// Tên hiển thị của một lý do: `collection` / `case_app` → tên Case (`null` nếu Case đã xoá); `case_app` → thêm tên các app gắn
+/// với Case; `manual` / `auto` → rỗng (giao diện tự dịch: `auto.app` là slug của app).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ReasonNamesDto {
+    pub collection_name: Option<String>,
+    pub app_names: Vec<String>,
 }
 
 impl ActivationStateDto {
@@ -138,6 +152,7 @@ impl ActivationStateDto {
             active_path: s.active_path,
             conflict_ps: s.conflict_ps,
             last_error: s.last_error,
+            reason_names: None,
         }
     }
 }

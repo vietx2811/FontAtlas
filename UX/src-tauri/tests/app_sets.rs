@@ -162,3 +162,51 @@ fn exit_releases_the_app_reasons_before_unregistering_session_fonts() {
 fn live_workspace_lists_finder() {
     assert!(app_sets::running_bundle_ids().contains("com.apple.finder"), "NSWorkspace phải thấy Finder đang chạy");
 }
+
+#[test]
+fn suppress_command_uses_the_shared_tracker_and_emits_changed() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, eng, case, _k) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() }]).unwrap();
+    let grace = Duration::from_secs(30);
+    let t0 = Instant::now();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0, grace);
+    assert_eq!(eng.registrations().len(), 1);
+    let changed = Arc::new(Mutex::new(0usize));
+    {
+        let changed = changed.clone();
+        st.hubs.activation.subscribe(Box::new(move |e| {
+            if matches!(e, ActivationEvent::Changed { .. }) {
+                *changed.lock().unwrap() += 1;
+            }
+        }));
+    }
+    app_sets::case_app_suppress(&st, case).unwrap();
+    assert!(eng.registrations().is_empty(), "font bật chỉ vì app đã tắt");
+    assert_eq!(*changed.lock().unwrap(), 1);
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0 + Duration::from_secs(3), grace);
+    assert!(eng.registrations().is_empty(), "nhịp sau không bật lại");
+    app_sets::sync_once(&st, &running(&[]), t0 + Duration::from_secs(6), grace);
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0 + Duration::from_secs(9), grace);
+    assert_eq!(eng.registrations().len(), 1, "chạy lại thì bật lại");
+}
+
+#[test]
+fn activation_state_carries_display_names_for_each_reason() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() }, CaseAppDto { bundle_id: "com.x.noname".into(), name: String::new() }]).unwrap();
+    app_lib::services::activation::activate(&st, std::slice::from_ref(&key), Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), Instant::now(), Duration::from_secs(30));
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let r = &rows[0];
+    let names = r.reason_names.as_ref().expect("có tên hiển thị");
+    assert_eq!(names.len(), r.reasons.len(), "cùng độ dài, cùng thứ tự");
+    let i = r.reasons.iter().position(|x| matches!(x, ReasonDto::CaseApp { .. })).unwrap();
+    assert_eq!(names[i].collection_name.as_deref(), Some("Brand Kit A"));
+    assert_eq!(names[i].app_names, ["Adobe Illustrator", "com.x.noname"], "thiếu tên thì dùng bundle id");
+    let m = r.reasons.iter().position(|x| matches!(x, ReasonDto::Manual)).unwrap();
+    assert!(names[m].collection_name.is_none() && names[m].app_names.is_empty());
+    let j = serde_json::to_value(r).unwrap();
+    assert_eq!(j["reasonNames"][i]["collectionName"], "Brand Kit A");
+}
