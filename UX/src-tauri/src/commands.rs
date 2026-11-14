@@ -73,6 +73,9 @@ macro_rules! command_list {
             async import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> Result<ImportResultDto, CmdError>;
             async import_paths_cancel() -> Result<bool, CmdError>;
             async derive_renamed_copy(face: FaceKeyDto) -> Result<DerivedCopyDto, CmdError>;
+            async remove_derived_copy(face: FaceKeyDto) -> Result<RemoveDerivedResultDto, CmdError>;
+            async restore_derived_copy(removal_id: i64) -> Result<RestoreDerivedResultDto, CmdError>;
+            async derived_copies_of(face: FaceKeyDto) -> Result<Vec<DerivedCopyInfoDto>, CmdError>;
             async organized_check_location(path: String) -> Result<OrganizedLocationCheckDto, CmdError>;
             async organized_status() -> Result<OrganizedStatusDto, CmdError>;
             async organized_create(path: String) -> Result<OrganizedStatusDto, CmdError>;
@@ -433,6 +436,9 @@ cmd!(import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress:
         let _ = on_progress.send(p);
     })
 });
+cmd!(remove_derived_copy(face: FaceKeyDto) -> RemoveDerivedResultDto => |s| crate::services::derived::remove_derived_copy(s, &face));
+cmd!(restore_derived_copy(removal_id: i64) -> RestoreDerivedResultDto => |s| crate::services::derived::restore_derived_copy(s, removal_id));
+cmd!(derived_copies_of(face: FaceKeyDto) -> Vec<DerivedCopyInfoDto> => |s| crate::services::derived::derived_copies_of(s, &face));
 cmd!(derive_renamed_copy(face: FaceKeyDto) -> DerivedCopyDto => |s| crate::services::derived::derive_command(s, &face));
 cmd!(organized_check_location(path: String) -> OrganizedLocationCheckDto => |s| crate::services::organized::check_location(s, &path));
 cmd!(organized_status() -> OrganizedStatusDto => |s| crate::services::organized::status(s));
