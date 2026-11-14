@@ -19,6 +19,7 @@ export function NoticeStack({ store = useNoticeStore }: { store?: NoticeStore })
         <div key={n.id} className={`fa-toast ${n.kind}`} role={n.kind === 'error' ? 'alert' : 'status'}>
           <span>{n.text}</span>
           {n.action && <button type="button" onClick={() => { n.action!.run(); dismiss(n.id); }}>{n.action.label}</button>}
+          {n.action2 && <button type="button" onClick={() => { n.action2!.run(); dismiss(n.id); }}>{n.action2.label}</button>}
           <button type="button" aria-label={t('notice.dismiss')} onClick={() => dismiss(n.id)}>×</button>
         </div>
       ))}

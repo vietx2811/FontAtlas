@@ -1262,6 +1262,20 @@
             }
           } catch (e) { await log('desk-drag-g8-error', false, String(e && e.message || e)); }
         }
+        // B5: "Mở cùng app…" ở đầu Desk: hộp thoại liệt kê app đã cài (quét thật), không có trình duyệt, có ghi chú app web; Esc đóng. Chỉ chờ theo điều kiện.
+        {
+          try {
+            document.querySelector('[data-testid=desk-open-with]')?.click();
+            const list = await wait(() => document.querySelector('[data-testid=app-list]'), 10000);
+            const rows = await wait(() => { const r = [...document.querySelectorAll('[data-testid=app-row]')]; return r.length ? r : null; }, 30000);
+            const browsers = (rows ?? []).filter(r => /safari|chrome|firefox|edgemac|brave/i.test(r.dataset.bundle ?? '')).length;
+            const web = !!document.querySelector('[data-testid=app-web-note]');
+            const save = document.querySelector('[data-testid=app-save]');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            const closed = await wait(() => !document.querySelector('[data-testid=app-list]'), 8000);
+            await log('desk-open-with-apps', !!list && !!rows && browsers === 0 && web && !!save && save.disabled && !!closed, { rows: rows?.length ?? 0, browsers, web, saveDisabled: save?.disabled, closed: !!closed });
+          } catch (e) { await log('desk-open-with-apps', false, String(e && e.message || e)); }
+        }
         // G3: + Role (gợi ý tên + tên tự do), đổi tên, bỏ vai, Hoàn tác.
         {
           const before = roleNames();

@@ -10,6 +10,7 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
+import { useAppPickerStore } from '../../store/appPicker';
 import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
@@ -251,7 +252,8 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     const tg = c.kind === 'tag' ? tags.find(x => x.id === c.id) : undefined;
     const goView = (v: string) => () => setView(v as never);
     return buildSidebarMenu(c.kind, {
-      open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
+      open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : c.kind === 'case' ? () => void openCaseInDesk(c.id as number) : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
+      openWithApp: () => { if (c.kind === 'case' && c.id !== null) useAppPickerStore.getState().open(c.id, c.name); },
       sourceAvailable: src?.available && src.kind !== 'loose', hasPath: !!src?.path, scanning: scanningNow,
       reveal: () => { if (src) api.revealSource(src.id).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
@@ -323,7 +325,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         {cases.length > 0 && (
           <NavSection title={t('side.cases')} open={open.case} onToggle={() => toggleSection('case')}>
             {cases.map(c => (
-              <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`}
+              <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`} onContextMenu={openCtx('case', c.id, c.name)} context={ctx?.kind === 'case' && ctx.id === c.id}
                 drop={{ kind: 'case', id: c.id, name: c.name, here: useUiStore.getState().desk?.caseId === c.id }} onClick={() => void openCaseInDesk(c.id)} />
             ))}
           </NavSection>

@@ -12,6 +12,7 @@ import { NoteMark } from '../ui/noteMark';
 import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, anchorRoles, isHeadingLike, presetKey, roleLabel } from './deskRoles';
 import { RoleList } from './RoleList';
+import { useAppPickerStore } from '../../store/appPicker';
 import { useDeskDrop } from './useDeskDrop';
 import { beginFaceDrag } from '../../store/faceDrag';
 import type { FaceRow } from '../../features/library-grid/types';
@@ -247,6 +248,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <Tooltip label={t('desk.backTip')} shortcut="Esc"><button type="button" className="fa-desk-back" data-testid="desk-back" onClick={leave}>← {t('desk.back')}</button></Tooltip>
         <h1>{t('desk.title')}</h1>
         {data && <span className="fa-desk-case" data-testid="desk-case">{t('desk.case')}: {data.name}</span>}
+        {data && <Tooltip label={t('case.openWith.tip')}><button type="button" className="fa-desk-openwith" data-testid="desk-open-with" onClick={() => useAppPickerStore.getState().open(desk.caseId, data.name)}>{t('case.openWith')}</button></Tooltip>}
         {data && (
           <Tooltip label={t('desk.activateAll.tip')}>
             <button type="button" className="fa-desk-activate" data-testid="desk-activate-all" aria-disabled={activating || data.faces.length === 0 || undefined}

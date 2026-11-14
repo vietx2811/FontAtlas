@@ -8,3 +8,7 @@
 .fa-act-state[data-available="true"] { color: var(--muted); }
 .fa-act-state[data-available="true"]::before { content: ""; display: inline-block; width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--on); margin-right: 6px; vertical-align: 1px; }
 .fa-act-row[data-available="true"] .fa-switch { opacity: .45; cursor: not-allowed; }
+
+.fa-act-why { display: flex; align-items: center; gap: 6px; margin: -2px 0 6px; padding-left: 13px; font-size: 11px; color: var(--muted); }
+.fa-act-why-more { padding: 0 6px; border: 1px solid var(--border); border-radius: 8px; line-height: 15px; cursor: help; }
+.fa-act-why-all { display: flex; flex-direction: column; gap: 2px; }
