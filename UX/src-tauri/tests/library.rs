@@ -595,6 +595,7 @@ fn cloud_watch_setting_defaults_on_and_off_stops_every_watcher_at_once() {
     let d = tempfile::tempdir().unwrap();
     let (st, _dir) = scanned(d.path(), &["open_sans.ttf"]);
     assert!(settings::get_settings(&st).unwrap().cloud_watch, "mặc định BẬT");
+    st.cloud_watch.enable_real_watchers(); // AppState của test mặc định không dựng watcher thật
     st.cloud_watch.sync(&st);
     assert_eq!(st.cloud_watch.watching().len(), 1);
 

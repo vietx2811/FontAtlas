@@ -136,6 +136,7 @@ pub fn run() {
             app.manage(state.clone());
             crate::glass::init(app.handle());
             state.system_hooks.store(true, std::sync::atomic::Ordering::SeqCst);
+            state.cloud_watch.enable_real_watchers(); // AppState::new mặc định KHÔNG dựng watcher (test); app thật bật tại đây
             crate::services::boot::start(state);
             // QA nội bộ (chỉ bản debug): chạy một tệp JS trong webview thật để đi các luồng chính
             // trên IPC thật, cùng FONTATLAS_DATA_DIR tạm. Không có trong bản release.
