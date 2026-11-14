@@ -9,6 +9,7 @@ import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { CloudDownloadControl } from '../sidebar/CloudDownload';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
+import { OrganizedPanel } from '../library/OrganizedPanel';
 import { chooseLocale, t, useLocale, tn } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
@@ -137,6 +138,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   const state = (x: SourceDto) => (x.id in access ? t('set.src.access') : !x.available ? t('set.src.unavail') : x.scanning ? t('set.src.scanning') : t('set.src.ready'));
   return (
     <>
+      <OrganizedPanel api={api} />
       <div className="fa-set-bar"><button type="button" onClick={() => useUiStore.getState().requestAddFolder()}>{t('set.src.add')}</button></div>
       <ul className="fa-set-sources">
         {sources.map(x => (

@@ -5,7 +5,7 @@ import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, CaseActivationDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, CaseActivationDto,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto, VfPolicyDto,
 } from './types';
 
@@ -60,6 +60,21 @@ export interface Api extends LibraryApi {
   importPathsInto(paths: string[], target: ImportTargetDto, onProgress?: (p: ImportProgressDto) => void): Promise<ImportResultDto>;
   importPathsCancel(): Promise<boolean>;
   /** B5: app gắn với Case (bundleId là khoá). `caseSetApps` THAY TOÀN BỘ danh sách; lỗi invalid_arg/not_found thì danh sách cũ giữ nguyên. */
+  /** B7 Organized Library: chép (không di chuyển) font vào thư viện riêng `Class/Họ/`; mọi lệnh theo hợp đồng 02. */
+  organizedCheckLocation(path: string): Promise<OrganizedLocationCheckDto>;
+  organizedCreate(path: string): Promise<OrganizedStatusDto>;
+  organizedStatus(): Promise<OrganizedStatusDto>;
+  organizedPlan(scope: OrganizeScopeDto): Promise<OrganizePlanDto>;
+  organizedImport(scope: OrganizeScopeDto, onProgress?: (p: OrganizeProgressDto) => void): Promise<OrganizeResultDto>;
+  organizedCancel(): Promise<boolean>;
+  organizedResortPreview(): Promise<ResortPlanDto>;
+  organizedResortApply(): Promise<ResortResultDto>;
+  organizedResortUndo(batchId: number): Promise<ResortResultDto>;
+  organizedSnapshotNow(): Promise<string>;
+  packInspect(path: string): Promise<PackInfoDto>;
+  packRestoreStage(path: string, remap: PathRemapDto[]): Promise<PackInfoDto>;
+  packRestorePending(): Promise<PackInfoDto | null>;
+  packRestoreCancel(): Promise<boolean>;
   caseApps(collectionId: number): Promise<CaseAppDto[]>;
   caseSetApps(collectionId: number, apps: CaseAppDto[]): Promise<void>;
   /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */

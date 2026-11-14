@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
+import type { Api, OnboardingDto, OrganizedStatusDto, ScanEvent, SourceDto } from '../../api';
+import { OrganizedSetup } from '../library/OrganizedSetup';
+import { OrganizedImportDialog } from '../library/OrganizedImportDialog';
+import '../library/organized.css';
 import { CmdError } from '../../api';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -197,6 +200,11 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
   const lock = useRef(false);
   const alive = useRef(true);
   const [scanning, setScanning] = useState<number[]>([]);
+  // B7: kiểu quản lý font. Mặc định "tự quản theo thư mục" (cách cũ, không đổi gì); "Organized Library" chép vào thư viện riêng.
+  const [mode, setMode] = useState<'folders' | 'organized'>('folders');
+  const [org, setOrg] = useState<OrganizedStatusDto | null>(null);
+  const [importing, setImporting] = useState(false);
+  useEffect(() => { let on = true; api.organizedStatus().then(x => { if (on) { setOrg(x); if (x.configured) setMode('organized'); } }, () => undefined); return () => { on = false; }; }, [api]);
   const refresh = useCallback(async () => {
     const list = await api.listSources();
     if (alive.current) { setSources(list); setLoadError(null); }
@@ -248,6 +256,20 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
   return (
     <>
       <h1>{t('onb.o3.title')}</h1>
+      <fieldset className="fa-org-mode" data-testid="onb-mode">
+        <legend>{t('onb.mode.title')}</legend>
+        <label><input type="radio" name="fa-mode" checked={mode === 'organized'} disabled={busy} onChange={() => setMode('organized')} />
+          <span><b>{t('onb.mode.organized')}</b><small>{t('onb.mode.organized.d')}</small></span></label>
+        <label><input type="radio" name="fa-mode" checked={mode === 'folders'} disabled={busy || !!org?.configured} onChange={() => setMode('folders')} />
+          <span><b>{t('onb.mode.folders')}</b><small>{t('onb.mode.folders.d')}</small></span></label>
+      </fieldset>
+      {mode === 'organized' && (org?.configured
+        ? <div className="fa-onb-note" data-testid="onb-org-ready"><p>{t('onb.mode.ready', { root: org.root ?? '' })}</p>
+            {sources.some(x => x.faceCount > 0) && <button type="button" disabled={busy || scanning.length > 0} data-testid="onb-org-import" onClick={() => setImporting(true)}>{t('onb.mode.import')}</button>}
+            {scanning.length > 0 && <p>{t('onb.mode.waitScan')}</p>}</div>
+        : <OrganizedSetup api={api} pick={async () => (await pickFolders())[0] ?? null} disabled={busy} onCreated={x => setOrg(x)} />)}
+      <p className="fa-onb-note">{t('onb.mode.later')}</p>
+      {importing && <OrganizedImportDialog api={api} onClose={() => { setImporting(false); void api.organizedStatus().then(setOrg, () => undefined); }} />}
       <p>{t('onb.o3.intro')}</p>
       <ul className="fa-onb-sources" aria-label={t('onb.o3.list')} aria-busy={loading || busy}>
         {sources.map(s => {

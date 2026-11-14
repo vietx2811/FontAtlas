@@ -1432,6 +1432,24 @@
       } else await log('sidebar-context-menu', false, 'no Gần đây item');
     } catch (e) { await log('khối-lỗi: Menu chuột phải Sidebar C6 mở trên G', false, String(e && e.stack || e).slice(0, 400)); } // một khối lỗi không làm dừng cả lượt QA
 
+    // 0.5.0 — B7 Organized Library (trong thư mục QA tạm, KHÔNG chép font: chỉ kiểm tra vị trí, tạo, xem trước và bảng Cài đặt ▸ Thư viện).
+    try {
+      const root = '__QA_DIR__/OrgRoot';
+      const chk = await inv('organized_check_location', { path: root });
+      const st0 = await inv('organized_status', {});
+      let created = null;
+      if (!st0.configured && !chk.problem) created = await inv('organized_create', { path: root });
+      const plan = await inv('organized_plan', { scope: { sourceIds: null } });
+      const st1 = await inv('organized_status', {});
+      document.querySelector('button[aria-label="Cài đặt"]')?.click();
+      await wait(() => document.querySelector('.fa-set-nav button'), 8000);
+      [...document.querySelectorAll('.fa-set-nav button')].find(b => /(Thư viện|Library)/.test(b.textContent))?.click();
+      const panel = await wait(() => document.querySelector('[data-testid=organized-panel]'), 10000);
+      const shown = !!(await wait(() => document.querySelector('[data-testid=org-status]'), 10000));
+      await log('organized-library', !!chk && !chk.problem && chk.writable && (st0.configured || !!created) && st1.configured && plan.toCopy >= 1 && plan.enoughSpace && !!panel && shown, { problem: chk.problem, configured: st1.configured, toCopy: plan.toCopy, enoughSpace: plan.enoughSpace, panel: !!panel, status: shown });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } catch (e) { await log('organized-library', false, String(e && e.stack || e).slice(0, 400)); }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

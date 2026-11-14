@@ -92,6 +92,8 @@ export function createMockApi(o: MockOptions = {}): Api {
   const cloudFetched = new Set<number>();
   const cloudRuns = new Map<number, boolean>();
   let importBusy = false;
+  const organized = { configured: false, root: null as string | null, libraryDir: null as string | null, sourceId: null as number | null, files: 0, bytes: 0, freeBytes: 0, isCloud: false, available: true, snapshots: 0, lastSnapshot: null as string | null };
+  let orgBusy = false, orgCancel = false, orgBatch = 0, packPending: Awaited<ReturnType<Api['packInspect']>> | null = null;
   const caseAppStore = new Map<number, Array<{ bundleId: string; name: string }>>();
   let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
@@ -280,6 +282,42 @@ export function createMockApi(o: MockOptions = {}): Api {
       } finally { importBusy = false; }
     },
     async importPathsCancel() { return importBusy; },
+    async organizedCheckLocation(path) {
+      const cloud = /iCloud|OneDrive|Google ?Drive|Dropbox|CloudStorage/i.test(path);
+      return { path, writable: !/readonly/i.test(path), isCloud: cloud, cloudProvider: cloud ? 'iCloud' : null, freeBytes: 38e9, nestedSource: /nested/i.test(path), problem: /readonly/i.test(path) ? 'not_writable' : /nested/i.test(path) ? 'nested_source' : null };
+    },
+    async organizedCreate(path) {
+      if (organized.configured) throw new CmdError('already_configured', 'already');
+      const chk = await this.organizedCheckLocation(path);
+      if (chk.problem) throw new CmdError(chk.problem, chk.problem);
+      Object.assign(organized, { configured: true, root: path, libraryDir: `${path}/Library`, sourceId: 900, files: 0, bytes: 0, freeBytes: chk.freeBytes, isCloud: chk.isCloud, available: true });
+      return { ...organized };
+    },
+    async organizedStatus() { return { ...organized }; },
+    async organizedPlan() {
+      if (!organized.configured) throw new CmdError('not_configured', 'nc');
+      return { toCopy: 42, bytes: 1_800_000_000, alreadyThere: 3, cloudNotDownloaded: 2, freeBytes: 38e9, enoughSpace: true, sample: [{ src: '/Fonts/A/Roboto-Regular.ttf', dest: 'Library/Sans/Roboto/Roboto-Regular.ttf', classFolder: 'Sans' }] };
+    },
+    async organizedImport(_scope, onProgress) {
+      if (!organized.configured) throw new CmdError('not_configured', 'nc');
+      if (orgBusy) throw new CmdError('busy', 'busy');
+      orgBusy = true; orgCancel = false;
+      try {
+        for (let i = 1; i <= 3 && !orgCancel; i++) { await Promise.resolve(); onProgress?.({ done: i * 14, total: 42, bytesDone: i * 6e8, failed: 0 }); }
+        if (orgCancel) return { copied: 14, bytes: 6e8, alreadyThere: 3, issues: [], issueCount: 0, cancelled: true, snapshot: null };
+        organized.files += 42; organized.bytes += 1_800_000_000; organized.snapshots += 1; organized.lastSnapshot = `${organized.root}/Snapshots/2026-11-14`;
+        return { copied: 42, bytes: 1_800_000_000, alreadyThere: 3, issues: [{ path: '/Fonts/x.otf', code: 'cloud_not_downloaded' }], issueCount: 1, cancelled: false, snapshot: organized.lastSnapshot };
+      } finally { orgBusy = false; }
+    },
+    async organizedCancel() { if (!orgBusy) return false; orgCancel = true; return true; },
+    async organizedResortPreview() { return { total: 2, moves: [{ face: { hashHex: 'aa', faceIndex: 0 }, from: 'Sans/Foo Sans/Foo.ttf', to: 'Slab/Foo Sans/Foo.ttf', classFolder: 'Slab', family: 'Foo Sans' }, { face: { hashHex: 'bb', faceIndex: 0 }, from: 'Unclassified/Bar/Bar.ttf', to: 'Handwriting/Bar/Bar.ttf', classFolder: 'Handwriting', family: 'Bar' }] }; },
+    async organizedResortApply() { return { batchId: ++orgBatch, moved: 2, failed: 0 }; },
+    async organizedResortUndo(batchId) { return { batchId, moved: 2, failed: 0 }; },
+    async organizedSnapshotNow() { organized.snapshots += 1; organized.lastSnapshot = `${organized.root ?? ''}/Snapshots/now`; return organized.lastSnapshot; },
+    async packInspect(path) { if (/bad/i.test(path)) throw new CmdError('invalid_pack', 'bad'); return { path, createdAt: 1_700_000_000, appVersion: '0.5.0', files: 4812, faces: 5100, embeddings: 5000, sources: 3, sourceRoots: ['/Volumes/Old/Fonts', '/Users/example/Fonts'] }; },
+    async packRestoreStage(path) { packPending = await this.packInspect(path); return packPending; },
+    async packRestorePending() { return packPending; },
+    async packRestoreCancel() { const had = packPending !== null; packPending = null; return had; },
     async caseApps(id) { return [...(caseAppStore.get(id) ?? [])]; },
     async caseSetApps(id, apps) {
       if (apps.some(a => !/^[A-Za-z0-9._-]{3,255}$/.test(a.bundleId))) throw new CmdError('invalid_arg', 'bundle id');
