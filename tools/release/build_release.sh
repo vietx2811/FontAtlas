@@ -10,7 +10,9 @@ bash tools/release/bump_version.sh --check
 ( cd UX && npm ci && cargo tauri build --bundles app --config src-tauri/tauri.release.conf.json )
 APP="$ROOT/UX/src-tauri/target/release/bundle/macos/Font Atlas.app"
 [ -d "$APP" ] || { echo "không thấy $APP sau khi build"; exit 1; }
-SCHEMES="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes' "$APP/Contents/Info.plist" 2>/dev/null | tr -d ' {}()\n' || true)"
+# PlistBuddy in mảng dạng "Array { … }": đọc phần tử đầu và kiểm không có phần tử thứ hai (như make_dmg.sh).
+SCHEMES="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Contents/Info.plist" 2>/dev/null || true)"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:1' "$APP/Contents/Info.plist" >/dev/null 2>&1 && SCHEMES="$SCHEMES+more"
 [ "$SCHEMES" = "fontatlas" ] || { echo "Info.plist khai scheme '$SCHEMES', cần đúng 'fontatlas'"; exit 1; }
 [ -s "$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt" ] || { echo "app thiếu Contents/Resources/THIRD-PARTY-NOTICES.txt"; exit 1; }
 echo "OK: $APP (scheme fontatlas, có THIRD-PARTY-NOTICES.txt)"
