@@ -93,6 +93,7 @@ fn restore_when_the_old_file_is_gone_reports_it_and_keeps_the_record() {
     assert_eq!(env.store.lock().unwrap().unrestored_replaced().unwrap().len(), 1, "chưa khôi phục được thì giữ sổ");
 }
 
+#[cfg(unix)] // đường dẫn kiểu macOS (/System, /Users); Windows có mô hình đường dẫn riêng (W1)
 #[test]
 fn system_font_is_never_touched() {
     let engine = FakeEngine::new().with_system_font(PS, Path::new("/System/Library/Fonts/Supplemental/Dup.ttf"));
@@ -169,6 +170,7 @@ fn nothing_to_replace_activates_normally() {
     assert!(r.replaced.is_empty());
 }
 
+#[cfg(unix)] // đường dẫn kiểu macOS (/System, /Users); Windows có mô hình đường dẫn riêng (W1)
 #[test]
 fn replace_tiers_follow_the_matrix() {
     let home = Path::new("/Users/u");
@@ -496,6 +498,7 @@ fn e_restore_that_cannot_turn_ours_off_is_an_error_and_stays_unrestored() {
     assert_eq!(svc.engine().registrations(), vec![(ours, Scope::Session)], "phần bản cũ vừa đăng ký được gỡ lại");
 }
 
+#[cfg(unix)] // đường dẫn kiểu macOS (/System, /Users); Windows có mô hình đường dẫn riêng (W1)
 #[test]
 fn f_network_library_fonts_are_protected() {
     let home = Path::new("/Users/u");

@@ -21,7 +21,7 @@ fn candidates_prefer_local_originals_outside_the_library_and_flag_files_already_
     }
     let c = s.organize_candidates(&lib.to_string_lossy()).unwrap();
     assert_eq!(c.len(), 2, "hai font khác nhau (theo hash)");
-    let roboto = c.iter().find(|x| x.src_path.ends_with("A/roboto.ttf")).unwrap();
+    let roboto = c.iter().find(|x| nz(&x.src_path).ends_with("A/roboto.ttf")).unwrap();
     assert!(roboto.in_library && !roboto.cloud_only && !roboto.face_ids.is_empty());
     let open = c.iter().find(|x| x.src_path.ends_with("open_sans.ttf")).unwrap();
     assert!(!open.in_library);
@@ -58,4 +58,9 @@ fn record_move_and_undo_keep_the_ledger_and_file_locations_in_step() {
     assert_eq!(count(&s, &format!("SELECT count(*) FROM file_locations WHERE path = '{from}'")), 1);
     assert_eq!(s.organized_last_batch().unwrap(), None, "đã hoàn tác hết");
     assert_eq!(s.organized_next_batch().unwrap(), 2);
+}
+
+/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
+fn nz(s: impl AsRef<str>) -> String {
+    s.as_ref().replace('\\', "/")
 }

@@ -747,11 +747,11 @@ impl Store {
         let mut st = self.conn.prepare(
             "SELECT l.path, fi.hash, f.face_index FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
                JOIN faces f ON f.file_id = fi.file_id
-              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) = ?2 || '/'))
+              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) = ?2 || ?3))
               ORDER BY l.path, f.face_index",
         )?;
         let mut run = |exact: &str, prefix: &str| -> Result<(), StoreError> {
-            let rows = st.query_map(params![exact, prefix], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
+            let rows = st.query_map(params![exact, prefix, std::path::MAIN_SEPARATOR.to_string()], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
             for row in rows {
                 let (path, hash, face_index) = row?;
                 let hash: [u8; 32] = hash.try_into().map_err(|_| StoreError::BadHash("hash không đủ 32 byte".into()))?;

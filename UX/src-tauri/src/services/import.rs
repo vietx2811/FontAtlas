@@ -110,7 +110,7 @@ pub fn import_paths_into(
         if cancel.load(Ordering::SeqCst) {
             break;
         }
-        let p = PathBuf::from(raw.trim_end_matches('/'));
+        let p = PathBuf::from(raw.trim_end_matches(std::path::is_separator));
         if !seen.insert(p.clone()) {
             continue;
         }

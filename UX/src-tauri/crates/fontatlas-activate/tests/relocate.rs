@@ -115,7 +115,7 @@ fn a_failed_unregister_of_the_old_path_is_warned_journaled_and_finished_by_recon
     assert_eq!(rep.results[0].outcome, FileOutcome::Activated);
     assert!(rep.results[0].warning.is_some());
     assert_eq!(regs(&svc).len(), 2, "cả hai còn đăng ký tạm thời (cùng nội dung)");
-    assert!(env.store.lock().unwrap().setting(RELOCATE_PENDING_KEY).unwrap().unwrap().contains(old.to_str().unwrap()));
+    assert!(env.store.lock().unwrap().setting(RELOCATE_PENDING_KEY).unwrap().unwrap().contains(json_escaped(&old).as_str()));
     // lần mở sau
     svc.reconcile(&env.store, &mut |_| {}).unwrap();
     assert_eq!(regs(&svc), vec![(new, Scope::Persistent)], "reconcile gỡ nốt đường cũ");
@@ -284,4 +284,10 @@ fn set_scope_waits_for_a_busy_hash_and_then_really_changes_the_scope() {
     assert_eq!((rep.busy, rep.results[0].outcome.clone()), (0, FileOutcome::Activated), "{rep:?}");
     let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
     assert_eq!(row.scope, ActivationScope::Persistent, "phạm vi đổi thật sau khi chờ");
+}
+
+/// Sổ ghi bằng JSON: trên Windows dấu `\` trong đường dẫn được escape thành `\\`.
+fn json_escaped(p: &std::path::Path) -> String {
+    let q = serde_json::to_string(p.to_str().unwrap()).unwrap();
+    q[1..q.len() - 1].to_string()
 }

@@ -85,7 +85,7 @@ fn same_content_in_two_places_is_one_face_and_one_same_file_group() {
     assert_eq!(g[0].kind, DuplicateKindDto::SameFile);
     assert_eq!(g[0].faces.len(), 2);
     let paths: Vec<&str> = g[0].faces.iter().filter_map(|f| f.path.as_deref()).collect();
-    assert!(paths.iter().any(|p| p.ends_with("a/roboto.ttf")) && paths.iter().any(|p| p.ends_with("b/copy-of-roboto.ttf")), "{paths:?}");
+    assert!(paths.iter().any(|p| nz(p).ends_with("a/roboto.ttf")) && paths.iter().any(|p| nz(p).ends_with("b/copy-of-roboto.ttf")), "{paths:?}");
     assert!(g[0].faces.iter().all(|f| f.row.family == "Roboto" && !f.is_newest));
     let s = duplicates::duplicate_summary(&st, &FaceQueryDto::default()).unwrap();
     assert_eq!((s.same_file, s.versions, s.formats, s.total), (1, 0, 0, 1));
@@ -119,7 +119,7 @@ fn two_versions_are_grouped_and_newest_is_known_only_when_unique() {
     let newest: Vec<&DuplicateMemberDto> = g[0].faces.iter().filter(|f| f.is_newest).collect();
     assert_eq!(newest.len(), 1);
     assert_eq!(newest[0].version.as_deref(), Some("Version 1.204"));
-    assert!(newest[0].path.as_deref().unwrap().ends_with("new/playfair.ttf"));
+    assert!(nz(newest[0].path.as_deref().unwrap()).ends_with("new/playfair.ttf"));
     assert!(g[0].faces.iter().all(|f| f.revision.is_some_and(|r| (r - 1.2).abs() < 0.1) && f.modified.is_some()));
     // lọc: nhóm chỉ hiện khi có thành viên khớp bộ lọc
     let hit = duplicates::duplicate_groups(&st, &FaceQueryDto { text: Some("Playfair".into()), ..Default::default() }).unwrap();
@@ -297,4 +297,9 @@ fn reveal_location_only_accepts_paths_known_to_the_store() {
     // lỗi từ opener được trả về dạng typed
     let err = system::reveal_location(&st, &known[0], &|_| Err("finder lỗi".into())).unwrap_err();
     assert_eq!(err.code, "io");
+}
+
+/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
+fn nz(s: impl AsRef<str>) -> String {
+    s.as_ref().replace('\\', "/")
 }

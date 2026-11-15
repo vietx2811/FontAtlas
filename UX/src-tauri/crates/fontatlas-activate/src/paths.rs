@@ -545,6 +545,7 @@ mod tests {
         assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
     }
 
+    #[cfg(unix)] // đường dẫn kiểu macOS (/System, /Users); Windows có mô hình đường dẫn riêng (W1)
     #[test]
     fn classify_owner_table() {
         let home = Path::new("/Users/u");

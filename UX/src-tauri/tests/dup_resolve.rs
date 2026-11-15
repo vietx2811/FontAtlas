@@ -119,7 +119,7 @@ fn same_file_copies_hide_one_path_keep_the_other_and_never_touch_files() {
     assert_eq!(plan.items.len(), 1);
     let it = &plan.items[0];
     assert!(it.auto_safe);
-    assert!(it.keeper.path.ends_with("a/roboto.ttf"), "giữ tên sạch: {}", it.keeper.path);
+    assert!(nz(&it.keeper.path).ends_with("a/roboto.ttf"), "giữ tên sạch: {}", it.keeper.path);
     assert_eq!(it.reason.code, "same_content_tidiest_path");
     assert_eq!((plan.keep_count, plan.hide_count), (1, 1));
 
@@ -147,7 +147,7 @@ fn newer_version_is_kept_older_goes_to_trash_and_undo_puts_the_file_back() {
 
     let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
     let it = &plan.items[0];
-    assert!(it.keeper.path.ends_with("new/playfair.ttf"));
+    assert!(nz(&it.keeper.path).ends_with("new/playfair.ttf"));
     assert_eq!(it.reason.code, "newer_version");
     assert_eq!(it.reason.args["keep"], "Version 1.204");
     assert!(it.warnings.iter().any(|w| w.code == "may_reflow"));
@@ -330,7 +330,7 @@ fn source_priority_decides_which_copy_is_kept() {
 }
 
 fn item_of(it: &PlanItemDto, keeper: &str, losers: &[&str], members: Vec<String>) -> ResolveItemDto {
-    let p = |n: &str| it.member_paths.iter().find(|m| m.contains(&format!("/{n}/"))).unwrap().clone();
+    let p = |n: &str| it.member_paths.iter().find(|m| nz(m).contains(&format!("/{n}/"))).unwrap().clone();
     ResolveItemDto { kind: it.kind, key: it.key.clone(), keeper_path: p(keeper), loser_paths: losers.iter().map(|l| p(l)).collect(), member_paths: members }
 }
 
@@ -355,7 +355,7 @@ fn a_second_request_can_join_the_batch_of_the_first_and_one_undo_reverts_both() 
     .unwrap();
     assert!(r1.failed.is_empty(), "{:?}", r1.failed);
     // yêu cầu 2: chỉ ẩn v1, vào CÙNG mẻ (nhóm giờ chỉ còn v1, v3)
-    let members2: Vec<String> = all_members.iter().filter(|m| !m.contains("/v2/")).cloned().collect();
+    let members2: Vec<String> = all_members.iter().filter(|m| !nz(m).contains("/v2/")).cloned().collect();
     let r2 = dup_resolve::resolve_apply(
         &st,
         &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: Some(r1.batch_id.clone()) },
@@ -434,4 +434,9 @@ fn groups_that_need_a_human_are_not_in_all_safe_but_are_counted() {
     assert!(!item.auto_safe && item.review.is_some());
     let one = dup_resolve::resolve_preview(&st, &ResolveScopeDto::Group { kind: item.kind, key: item.key.clone() }, &all()).unwrap();
     assert_eq!(one.items.len(), 1, "xem trước từng nhóm vẫn có quyết định mặc định để người dùng đổi");
+}
+
+/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
+fn nz(s: impl AsRef<str>) -> String {
+    s.as_ref().replace('\\', "/")
 }

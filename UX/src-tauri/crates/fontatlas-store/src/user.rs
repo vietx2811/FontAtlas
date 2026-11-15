@@ -80,7 +80,9 @@ pub struct Tag {
 
 /// Chuẩn hoá để so lồng nhau: canonicalize (lỗi thì giữ nguyên) → NFC.
 pub(crate) fn norm_path(p: &Path) -> PathBuf {
-    let c = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    // APFS không phân biệt NFC/NFD nên canonicalize chạy được với dạng nào; NTFS thì có: lỗi → thử lại với dạng NFC rồi mới giữ nguyên.
+    let nfc_form = || PathBuf::from(p.to_string_lossy().nfc().collect::<String>());
+    let c = std::fs::canonicalize(p).or_else(|_| std::fs::canonicalize(nfc_form())).unwrap_or_else(|_| p.to_path_buf());
     PathBuf::from(c.to_string_lossy().nfc().collect::<String>())
 }
 
