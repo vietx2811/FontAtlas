@@ -11,12 +11,14 @@ import { EN_ONE, setLocale, t, tn, vi, type I18nKey } from '..';
 import { platformText } from '../platformText';
 import { detect, getOs, modKey, setOsForTest, shortcutKeys, shortcutText } from '../../platform';
 
-afterEach(() => { setOsForTest(null); setLocale('vi'); useAdvancedSheet.setState({ open: false }); });
+afterEach(() => { setOsForTest('mac'); setLocale('vi'); useAdvancedSheet.setState({ open: false }); });
 
 describe('platform detection', () => {
   it('jsdom (unknown) counts as macOS; forced values win', () => {
     expect(getOs()).toBe('mac');
     setOsForTest('windows'); expect(getOs()).toBe('windows');
+    // UA của jsdom trên runner Linux: nếu không ghim thì getOs() sẽ là linux — setup.ts ghim 'mac' cho mọi test.
+    expect(detect({ userAgent: 'Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.0.0' })).toBe('linux');
   });
   it('modKey is ⌘ on mac and Ctrl elsewhere', () => {
     expect(modKey({ metaKey: true })).toBe(true); expect(modKey({ ctrlKey: true })).toBe(false);
@@ -99,6 +101,7 @@ describe('platform text', () => {
     expect(platformText('This Mac is ready. Works on Mac.', 'en')).toBe('This PC is ready. Works on PC.');
     expect(platformText('Chạy trên Mac', 'vi')).toBe('Chạy trên PC');
     expect(platformText('MacBook and macOS', 'en')).toBe('MacBook and Windows');
+    expect(platformText('Set the MAC address', 'en')).toBe('Set the MAC address');
   });
   it('Windows: Finder → Explorer, Trash → Recycle Bin, macOS/Mac → Windows/PC (en); Finder → Explorer, macOS → Windows (vi)', () => {
     setOsForTest('windows');
