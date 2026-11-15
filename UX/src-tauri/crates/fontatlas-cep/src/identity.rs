@@ -57,12 +57,21 @@ impl Identity {
 /// song song (luồng hay tiến trình) không giẫm lên tệp tạm của nhau.
 fn write_atomic(path: &Path, data: &[u8], mode: u32) -> std::io::Result<()> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let tmp = path.with_extension(format!("tmp-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     let res = (|| {
-        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(mode).open(&tmp)?;
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        // quyền tệp kiểu Unix (0o600 cho khoá riêng); Windows không có khái niệm này: mở tệp bình thường (ACL mặc định của thư mục người dùng)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(mode);
+        }
+        #[cfg(not(unix))]
+        let _ = mode;
+        let mut f = opts.open(&tmp)?;
         f.write_all(data)?;
         f.sync_all()?;
         std::fs::rename(&tmp, path)
