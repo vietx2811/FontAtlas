@@ -55,11 +55,23 @@ where
     }
 }
 
+/// Tên hệ điều hành trong thông báo từ chối quyền (macOS giữ nguyên chữ cũ).
+#[cfg(target_os = "macos")]
+const OS_NAME: &str = "macOS";
+#[cfg(windows)]
+const OS_NAME: &str = "Windows";
+#[cfg(not(any(target_os = "macos", windows)))]
+const OS_NAME: &str = "hệ điều hành";
+
+fn denied_text(os: &str, detail: &str) -> String {
+    format!("{os} từ chối đọc thư mục: {detail}")
+}
+
 /// Lỗi gửi cho giao diện: mã `io` (hai nguồn `io` đã có trong 6a) kèm `detail {source:"app", op:"opendir", reason, path}`.
 pub fn to_error(root: &Path, a: &Access) -> Option<CmdError> {
     let (reason, text) = match a {
         Access::Ok => return None,
-        Access::Denied(m) => ("permission_denied", format!("macOS từ chối đọc thư mục: {m}")),
+        Access::Denied(m) => ("permission_denied", denied_text(OS_NAME, m)),
         Access::TimedOut => ("timeout", "không mở được thư mục sau vài giây (có thể đang chờ cấp quyền truy cập)".to_string()),
     };
     Some(CmdError::new("io", text).with_detail(json!({ "source": "app", "op": "opendir", "reason": reason, "path": root.to_string_lossy() })))
@@ -121,6 +133,14 @@ mod tests {
         if !root {
             assert!(matches!(a, Access::Denied(_)), "{a:?}");
         }
+    }
+
+    #[test]
+    fn denied_text_names_the_current_os_not_a_hardcoded_one() {
+        assert_eq!(denied_text("macOS", "x"), "macOS từ chối đọc thư mục: x");
+        assert_eq!(denied_text("Windows", "x"), "Windows từ chối đọc thư mục: x");
+        let e = to_error(Path::new("/p"), &Access::Denied("x".into())).unwrap();
+        assert!(e.message.starts_with(OS_NAME), "{}", e.message);
     }
 
     #[test]

@@ -140,9 +140,18 @@ impl EnsureLocalError {
             EnsureLocalError::Timeout => format!("hết {} giây chờ tải font từ ổ cloud", CLOUD_DOWNLOAD_TIMEOUT.as_secs()),
             EnsureLocalError::Io(m) => format!("không tải được font từ ổ cloud: {m}"),
             EnsureLocalError::StillCloudOnly => "font vẫn chưa về máy sau khi tải".into(),
-            EnsureLocalError::PlaceholderStub => "font mới có bản giữ chỗ iCloud, chưa có file để tải".into(),
+            EnsureLocalError::PlaceholderStub => stub_message().into(),
             EnsureLocalError::Cancelled => "đã huỷ".into(),
         }
+    }
+}
+
+/// Chữ cho bản giữ chỗ `.icloud` (chỉ macOS tạo ra); nền tảng khác nói chung về ổ cloud.
+fn stub_message() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "font mới có bản giữ chỗ iCloud, chưa có file để tải"
+    } else {
+        "font mới có bản giữ chỗ trên ổ cloud, chưa có file để tải"
     }
 }
 
@@ -543,6 +552,12 @@ mod tests {
         let r = ensure_local_hold_by(Path::new("/x.ttf"), Duration::from_secs(60), probe_flag(&local), |_| Ok(()), (), Some(&cancel));
         assert_eq!(r, Err(EnsureLocalError::Cancelled));
         assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn stub_message_names_icloud_only_on_macos() {
+        let m = EnsureLocalError::PlaceholderStub.message();
+        assert_eq!(m.contains("iCloud"), cfg!(target_os = "macos"), "{m}");
     }
 
     #[test]
