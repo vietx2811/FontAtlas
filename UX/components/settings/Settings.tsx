@@ -9,7 +9,7 @@ import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { CloudDownloadControl } from '../sidebar/CloudDownload';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
-import { noticeBusy } from '../activation/busyNotice';
+import { pushBusyOnly } from '../activation/busyNotice';
 import { OrganizedPanel } from '../library/OrganizedPanel';
 import { chooseLocale, t, useLocale, tn } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
@@ -193,6 +193,12 @@ function Vision({ api, s, patch, store }: { api: Api; store: ModelStore } & SubP
 function Activation({ api, s, patch }: { api: Api } & SubProps) {
   const [ob, setOb] = useState<OnboardingDto | null>(null);
   const [confirm, setConfirm] = useState(false);
+  /** Tắt hết: lỗi hiện thông báo; font bận → thông báo gộp + [Thử lại] = chạy lại ĐÚNG "Tắt hết" (không phải tắt tay: font còn lý do Dự án sẽ bị giữ). */
+  const offAll = async (retried: boolean): Promise<void> => {
+    try { pushBusyOnly(await api.activationDeactivateAll(), () => void offAll(true), retried); }
+    catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) }); }
+    await useUiStore.getState().refreshActive(api).catch(() => undefined);
+  };
   const active = useUiStore(x => x.active);
   const [replaced, setReplaced] = useState<ReplacedEntryDto[]>([]);
   const reloadReplaced = useCallback(() => api.activationListReplaced().then(setReplaced, () => setReplaced([])), [api]);
@@ -227,7 +233,7 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
           <p>{tn('set.act.offBody', { n: active.size })}</p>
           <div className="fa-modal-actions">
             <button type="button" onClick={() => setConfirm(false)}>{t('set.cancel')}</button>
-            <button type="button" className="primary" onClick={async () => { setConfirm(false); const rep = await api.activationDeactivateAll(); noticeBusy(rep, faces => { api.activationDeactivate(faces).then(() => useUiStore.getState().refreshActive(api), () => undefined); }); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
+            <button type="button" className="primary" onClick={async () => { setConfirm(false); await offAll(false); }}>{t('set.act.offOk')}</button>
           </div>
         </Modal>
       )}

@@ -3,28 +3,29 @@ import { t, tn } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 
 /**
- * Font "đang bận" (một lượt khác đang đụng cùng file): không đổi gì và sẽ thử lại được.
- * Ưu tiên số `busy` của báo cáo (backend 02); chưa có thì đếm kết quả `busy` theo file.
+ * Font "đang bận" (một lượt khác đang đụng cùng file): không đổi gì và thử lại được.
+ * Số liệu và danh sách font cùng MỘT nguồn (kết quả theo file) để số trong câu khớp nút Thử lại; chỉ khi báo cáo không có kết quả theo file
+ * (backend cắt bớt) mới dùng `report.busy`.
  */
 export function busyFaces(rep: Pick<ActivationReportDto, 'results'>): FaceKeyDto[] {
   return rep.results.filter(r => r.outcome.kind === 'busy').flatMap(r => (r.requestedFaces.length ? r.requestedFaces : [0]).map(faceIndex => ({ hashHex: r.hashHex, faceIndex })));
 }
-export function busyCount(rep: ActivationReportDto): number {
+export function busyN(rep: ActivationReportDto): number {
+  const fromResults = new Set(busyFaces(rep).map(f => f.hashHex)).size;
+  if (fromResults > 0) return fromResults;
   const field = (rep as { busy?: number }).busy;
-  return typeof field === 'number' ? field : new Set(busyFaces(rep).map(f => f.hashHex)).size;
+  return typeof field === 'number' && field > 0 ? field : 0;
 }
+/** Câu "N font đang bận, sẽ thử lại" để GHÉP vào câu kết quả chính (một thông báo, không đôi); null nếu không có font bận. */
+export const busyPart = (rep: ActivationReportDto): string | null => { const n = busyN(rep); return n > 0 ? tn('act.busy', { n }) : null; };
 
 /**
- * Sau Tắt hết / đổi scope / chuyển font: nếu có font bận thì báo "N font đang bận, sẽ thử lại" kèm nút [Thử lại] chạy lại ĐÚNG những font đó.
- * Trả true nếu đã báo. `retry` nhận danh sách font bận và tự xử lý kết quả của lần thử (thường gọi lại chính hàm này).
+ * Thao tác không có câu kết quả riêng (đổi scope, Tắt hết ở Cài đặt): chỉ báo khi có font bận, kèm [Thử lại] chạy lại ĐÚNG thao tác gốc.
+ * `retried`: đây là lần thử lại → hết bận thì nói một câu ngắn thay vì im lặng; không bao giờ đẩy tóm tắt rỗng.
  */
-export function noticeBusy(rep: ActivationReportDto, retry: (faces: FaceKeyDto[]) => void | Promise<unknown>): boolean {
-  const n = busyCount(rep);
-  if (n <= 0) return false;
-  const faces = busyFaces(rep);
-  useNoticeStore.getState().push({
-    kind: 'info', text: tn('act.busy', { n }),
-    action: faces.length ? { label: t('act.busy.retry'), run: () => void retry(faces) } : undefined,
-  });
-  return true;
+export function pushBusyOnly(rep: ActivationReportDto, retry: () => void, retried = false): void {
+  const part = busyPart(rep);
+  const push = useNoticeStore.getState().push;
+  if (part) push({ kind: 'info', text: part, action: { label: t('act.busy.retry'), run: retry } });
+  else if (retried) push({ kind: 'info', text: t('act.busy.cleared') });
 }

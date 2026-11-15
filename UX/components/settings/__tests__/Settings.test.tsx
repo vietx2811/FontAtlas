@@ -1,3 +1,4 @@
+import { useNoticeStore } from '../../../store/notices';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
@@ -297,6 +298,24 @@ describe('Settings', () => {
       await settle();
       expect(spy).toHaveBeenCalled();
       expect(await api.activationState()).toEqual([]);
+    });
+    it('Tắt tất cả ở Cài đặt gặp font bận: thông báo gộp + Thử lại chạy lại activation_deactivate_all; lỗi hiện thông báo', async () => {
+      const api = createMockApi();
+      const [a] = (await api.queryFaces({ limit: 1 })).items;
+      await api.activationActivate([{ hashHex: a.hashHex, faceIndex: 0 }]);
+      await mount({}, api);
+      await act(async () => { await useUiStore.getState().refreshActive(api); });
+      await go('Kích hoạt font');
+      const spy = vi.spyOn(api, 'activationDeactivateAll')
+        .mockResolvedValueOnce({ results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }] as never, changed: 0, needsConfirmation: 0, failed: 0 })
+        .mockRejectedValueOnce(new Error('boom'));
+      useNoticeStore.setState({ notices: [] });
+      fireEvent.click(screen.getByRole('button', { name: /Tắt mọi font đã kích hoạt/ }));
+      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Tắt tất cả' })); }); await settle();
+      const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toBe('1 font đang bận, sẽ thử lại'); expect(n.action?.label).toBe('Thử lại');
+      await act(async () => { n.action!.run(); await new Promise(r => setTimeout(r, 0)); }); await settle();
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error' }); // lỗi của lần thử lại không bị nuốt
     });
   });
 

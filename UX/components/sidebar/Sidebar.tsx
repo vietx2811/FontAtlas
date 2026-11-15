@@ -10,7 +10,7 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
-import { noticeBusy } from '../activation/busyNotice';
+import { busyPart } from '../activation/busyNotice';
 import { useAppPickerStore } from '../../store/appPicker';
 import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
@@ -236,16 +236,22 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   };
   const warn = (e: unknown) => setNotice({ text: t('side.opFail', { msg: (e as Error)?.message ?? String(e) }) });
   /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
-  const reportOff = (rep: ActivationReportDto) => {
+  const reportOff = (rep: ActivationReportDto, retry?: () => void, retried = false) => {
     const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
-    const parts = [failed ? tn('smenu.off.doneErr', { n: rep.changed, m: failed }) : tn('smenu.off.done', { n: rep.changed })];
+    const summary = rep.changed > 0 || failed > 0 || kept > 0 || rep.needsConfirmation > 0;
+    const busy = busyPart(rep);
+    const parts: string[] = [];
+    if (summary || !retried) { parts.push(failed ? tn('smenu.off.doneErr', { n: rep.changed, m: failed }) : tn('smenu.off.done', { n: rep.changed })); }
     if (kept) parts.push(t('smenu.off.kept', { k: kept }));
     if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
-    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
-    noticeBusy(rep, faces => { api.activationDeactivate(faces).then(r => { reportOff(r); void useUiStore.getState().refreshActive(api); }, warn); });
+    if (busy) parts.push(busy); // MỘT thông báo: kết quả + "N đang bận, sẽ thử lại"; không đẩy tóm tắt "0 đã tắt" khi thử lại
+    if (parts.length === 0) { useNoticeStore.getState().push({ kind: 'info', text: t('act.busy.cleared') }); return; }
+    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. '), action: busy && retry ? { label: t('act.busy.retry'), run: retry } : undefined });
   };
   const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
-    const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
+    // Thử lại = chạy lại ĐÚNG thao tác gốc (Tắt hết / Tắt cả Dự án): cùng cách gỡ lý do, không đổi sang tắt tay (sẽ bị "đang được dự án giữ").
+    const attempt = async (retried: boolean) => { try { reportOff(await run(), () => void attempt(true), retried); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
+    const go = () => attempt(false);
     if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: tn('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
   };
   const menuEntries = (c: Ctx) => {
