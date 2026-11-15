@@ -97,6 +97,24 @@ Tôi hiểu "lọc trình duyệt" là bộ chọn/duyệt app trong hộp tho�
 - Tùy chọn (chưa cần): bảng ánh xạ cho 6 app đã biết trong `services/auto.rs` (`photoshop`, `illustrator`, `indesign`, `aftereffects`, `incopy`, `affinity`):
   mỗi khoá logic có cả id macOS lẫn Windows, để một Case gắn "Illustrator" chạy được trên cả hai máy. Cần quyết định sản phẩm trước.
 
+### 6.1 Trình duyệt web cần ẩn (`AppPicker.BROWSERS`)
+
+Bộ chọn "Mở cùng app…" ẩn trình duyệt web. Với id Windows, khớp bằng danh sách này (so không phân biệt hoa thường; id đã viết thường):
+
+| Trình duyệt | Id |
+|---|---|
+| Chrome | `win:exe:chrome.exe` |
+| Edge | `win:exe:msedge.exe` |
+| Firefox | `win:exe:firefox.exe` |
+| Brave | `win:exe:brave.exe` |
+| Opera / Opera GX | `win:exe:opera.exe` |
+| Vivaldi | `win:exe:vivaldi.exe` |
+| Arc (bản Windows, đóng gói Store) | `win:pfn:TheBrowserCompany.Arc_*` (tiền tố tên gói; *chưa kiểm* tên gói chính xác) |
+| Tor Browser | `win:exe:firefox.exe` (dùng bản Firefox; không phân biệt được, chấp nhận) |
+
+Regex gợi ý cho 05: `^win:exe:(chrome|msedge|firefox|brave|opera|vivaldi|iexplore)\.exe$` và `^win:pfn:thebrowsercompany\.arc_`.
+Danh sách là heuristic *(chưa kiểm trên máy Windows)*; trình duyệt lạ vẫn hiện, người dùng không bị chặn.
+
 ## 7. Rủi ro và việc cần kiểm trên máy Windows thật
 
 1. Tên exe trùng giữa hai app khác nhau (`launcher.exe`, `update.exe`). Giảm bằng việc người dùng chỉ chọn từ danh sách đã cài (đã lọc); nếu thực tế trùng, mở rộng id
