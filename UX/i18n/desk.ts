@@ -18,7 +18,7 @@ export const DESK_I18N = {
   'fc.add.search':'Tìm font trong thư viện…','fc.add.group.pair':'Gợi ý ghép','fc.add.group.lib':'Thư viện',
   'fc.pin':'Ghim','fc.unpin':'Bỏ ghim','fc.try':'Thử trong Pairing','fc.remove':'Bỏ cột',
   'cc.license':'Giấy phép','cc.relations.tip':'Quan hệ giữa các giọng của Combo (cặp tiêu đề ↔ nội dung): nhãn so sánh x-height, contrast, độ đậm…','cc.vi.tip':'Số ký tự tiếng Việt thiếu nhiều nhất trong các font của Combo.',
-  'fc.pinned':'Đã ghim','fc.readFail':'Không đọc được số đo của font này','fc.cloudOnly':'Font chưa tải về: chưa hiện chữ mẫu.',
+  'fc.pinned':'Đã ghim','fc.dupe.file':'Tệp','fc.readFail':'Không đọc được số đo của font này','fc.cloudOnly':'Font chưa tải về: chưa hiện chữ mẫu.',
   'desk.opFail': 'Không thực hiện được: {msg}', 'desk.compareNeed': 'Cần hai font khác nhau để so sánh: hãy đặt hoặc thử một font khác vai đang dùng',
   'strip.deltaTip': 'Chênh lệch của font đang thử so với font đang dùng (mốc). + lớn hơn, − nhỏ hơn.',
   'combo.label': 'Combo', 'combo.cancel': 'Huỷ', 'combo.delete.title': 'Xoá Combo {n}?', 'combo.delete.body': 'Combo này có {n} vai. Xoá không hoàn tác được; các font vẫn còn trong Case.',

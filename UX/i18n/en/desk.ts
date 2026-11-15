@@ -81,6 +81,7 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'cc.relations.tip': 'Relations between the voices of a Combo (heading ↔ body pair): labels comparing x-height, contrast, weight…',
   'cc.vi.tip': 'The largest number of missing Vietnamese characters among the Combo’s fonts.',
   'fc.pinned': 'Pinned',
+  'fc.dupe.file': 'File',
   'fc.readFail': 'Couldn’t read this font’s measurements',
   'fc.cloudOnly': 'The font isn’t downloaded: no sample text yet.',
   'desk.opFail': 'Couldn’t do that: {msg}',

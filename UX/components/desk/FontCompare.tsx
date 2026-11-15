@@ -13,6 +13,7 @@ import { TermTip, termKey, termName } from '../ui/terms';
 import { isHeadingLike, roleLabel } from './deskRoles';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { ClashNote } from '../ui/ClashNote';
+import { DupeLine, dupeHintOf, dupeHints } from '../compare/dupeNames';
 
 export type FcFace = { face: FaceKeyDto; row: FaceRowDto };
 type SortKey = 'order' | 'name' | 'vi' | (typeof COMPARE_METRICS)[number];
@@ -116,6 +117,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
   }, [colsNoBase, pinned, sort, desc, data.size]);
 
   const shown = [...(base ? [base] : []), ...ordered];
+  const hints = dupeHints(shown.map(c => c.row)); // tên trùng giữa các cột đang hiện → dòng phụ
   const addable = suggestions.filter(s => !cols.some(c => keyOf(c.face) === keyOf(s.face)) && !(base && keyOf(base.face) === keyOf(s.face)));
   // Thêm cột từ THƯ VIỆN (ngoài gợi ý ghép): tìm theo tên, tối đa 30 kết quả, bỏ font đã có cột / mốc.
   const [search, setSearch] = useState('');
@@ -174,7 +176,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
           const isBase = !!base && keyOf(c.face) === keyOf(base.face); const pin = pinned.includes(keyOf(c.face));
           return (
             <th scope="col" key={keyOf(c.face)} data-testid="fc-col" data-face-key={keyOf(c.face)} data-base={isBase || undefined} data-pinned={pin || undefined}>
-              <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}<ClashNote faceId={c.row.faceId} inline />{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}</div>
+              <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}<ClashNote faceId={c.row.faceId} inline />{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}<DupeLine hint={dupeHintOf(hints, c.row)} /></div>
               {!isBase && (
                 <div className="fa-cc-actions">
                   <button type="button" data-testid="fc-pin" aria-pressed={pin} onClick={() => togglePin(c)}>{pin ? t('fc.unpin') : t('fc.pin')}</button>
