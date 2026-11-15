@@ -715,6 +715,22 @@ pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
 const RECONCILE_MAKEUP_PASSES: u32 = 2;
 const RECONCILE_MAKEUP_DELAY: std::time::Duration = std::time::Duration::from_millis(1500);
 
+/// Giữ một lượt bù trong `pending`; giảm khi drop — kể cả khi `reconcile_pass` panic trong luồng bù (test chờ `pending == 0` không treo).
+struct MakeupGuard(Arc<AppState>);
+
+impl MakeupGuard {
+    fn new(st: &Arc<AppState>) -> Self {
+        st.reconcile_makeup.pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        MakeupGuard(Arc::clone(st))
+    }
+}
+
+impl Drop for MakeupGuard {
+    fn drop(&mut self) {
+        self.0.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 /// Trạng thái các lượt đối soát bù: đếm lượt đang chờ/chạy (test chờ về 0 thay vì đoán theo đồng hồ) và cách chờ (tiêm được).
 #[derive(Default)]
 pub struct MakeupState {
@@ -755,22 +771,17 @@ fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32) {
                 state.hubs.activation.emit(ActivationEvent::Reconciled { report: dto });
             }
             if r.busy > 0 && attempt < RECONCILE_MAKEUP_PASSES && !state.scans.is_shutting_down() {
-                let st = Arc::clone(state);
-                st.reconcile_makeup.pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                let spawned = std::thread::Builder::new().name("fontatlas-reconcile-makeup".into()).spawn({
-                    let st = Arc::clone(&st);
-                    move || {
-                        st.reconcile_makeup.wait();
-                        // app có thể đã tắt trong lúc chờ: không chạy lượt bù sau khi tắt
-                        if !st.scans.is_shutting_down() {
-                            reconcile_pass(&st, false, attempt + 1);
-                        }
-                        st.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                let guard = MakeupGuard::new(state);
+                // nếu không dựng được luồng, closure (và `guard`) bị drop ⇒ `pending` tự giảm
+                let _ = std::thread::Builder::new().name("fontatlas-reconcile-makeup".into()).spawn(move || {
+                    let st = Arc::clone(&guard.0);
+                    st.reconcile_makeup.wait();
+                    // app có thể đã tắt trong lúc chờ: không chạy lượt bù sau khi tắt
+                    if !st.scans.is_shutting_down() {
+                        reconcile_pass(&st, false, attempt + 1);
                     }
+                    drop(guard);
                 });
-                if spawned.is_err() {
-                    st.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-                }
             }
         }
         Err(e) => log::warn!("đối soát kích hoạt lỗi: {e}"),
