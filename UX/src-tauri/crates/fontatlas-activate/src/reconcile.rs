@@ -36,6 +36,8 @@ pub struct ReconcileReport {
     pub not_downloaded: usize,
     pub cleaned: usize,
     pub failed: usize,
+    /// Hash bị thao tác khác giữ nên lượt này bỏ qua (lượt sau/bù sẽ làm); không phải lỗi nhưng cũng không phải đã xong.
+    pub busy: usize,
     pub results: Vec<FileResult>,
 }
 
@@ -90,6 +92,9 @@ impl<E: ActivationEngine> ActivationService<E> {
             }
             if matches!(res.outcome, FileOutcome::Failed { .. }) {
                 rep.failed += 1;
+            }
+            if res.outcome == FileOutcome::Busy {
+                rep.busy += 1;
             }
             rep.results.push(res);
             progress(Progress { done: i + 1, total, hash_hex: hex(&hash) });

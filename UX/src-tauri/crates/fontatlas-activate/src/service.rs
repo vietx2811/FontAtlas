@@ -34,6 +34,9 @@ pub struct ActivationService<E: ActivationEngine> {
     ensure_local: EnsureLocalFn,
     /// Như `ensure_local` nhưng cho app đang đợi trong callback (lý do `auto:*`): hạn chờ ngắn hơn nhiều.
     ensure_local_auto: EnsureLocalFn,
+    /// Thao tác tắt/đổi phạm vi/chuyển đường dẫn gặp hash đang bận: thử lại bấy nhiêu lần, mỗi lần chờ bấy nhiêu ms.
+    busy_retries: std::sync::atomic::AtomicUsize,
+    busy_wait_ms: std::sync::atomic::AtomicU64,
 }
 
 /// Một app thiết kế (Photoshop…) đang đợi trong callback: không chờ tải cloud quá lâu. Con số này là ước đoán
@@ -192,7 +195,32 @@ impl<E: ActivationEngine> ActivationService<E> {
             in_flight: Mutex::new(HashSet::new()),
             ensure_local: Box::new(|p| ensure_local(p, CLOUD_DOWNLOAD_TIMEOUT)),
             ensure_local_auto: Box::new(|p| ensure_local(p, AUTO_DOWNLOAD_TIMEOUT)),
+            busy_retries: std::sync::atomic::AtomicUsize::new(30),
+            busy_wait_ms: std::sync::atomic::AtomicU64::new(100),
         }
+    }
+
+    /// Đổi cách chờ-thử-lại khi hash bận (mặc định 30 × 100 ms ≈ 3 s mỗi font; test dùng giá trị nhỏ).
+    pub fn with_busy_retry(self, retries: usize, wait: std::time::Duration) -> Self {
+        self.busy_retries.store(retries, std::sync::atomic::Ordering::SeqCst);
+        self.busy_wait_ms.store(wait.as_millis() as u64, std::sync::atomic::Ordering::SeqCst);
+        self
+    }
+
+    /// Như `take` nhưng chờ-thử-lại khi hash đang bận (dùng cho thao tác TẮT/đổi phạm vi/chuyển đường dẫn — thao tác mà
+    /// bỏ sót im lặng sẽ để font vẫn bật). Hết hạn thì `None` (người gọi báo Busy, không im lặng).
+    pub(crate) fn take_retry(&self, hash: [u8; 32]) -> Option<InFlight<'_>> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let (n, wait) = (self.busy_retries.load(SeqCst), std::time::Duration::from_millis(self.busy_wait_ms.load(SeqCst)));
+        for i in 0..=n {
+            if let Some(g) = self.take(hash) {
+                return Some(g);
+            }
+            if i < n {
+                std::thread::sleep(wait);
+            }
+        }
+        None
     }
 
     /// Thay cách tải cho yêu cầu từ app (`auto:*`) — test hoặc đổi hạn chờ.

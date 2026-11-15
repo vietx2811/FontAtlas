@@ -33,6 +33,8 @@ export function createActivationSim(d: Deps) {
     changed: results.filter(r => r.outcome.kind === 'activated' || r.outcome.kind === 'deactivated').length,
     needsConfirmation: results.filter(r => r.outcome.kind === 'needs_confirmation').length,
     failed: results.filter(r => r.outcome.kind === 'failed').length,
+    busy: results.filter(r => r.outcome.kind === 'busy').length,
+    busyHashes: results.filter(r => r.outcome.kind === 'busy').map(r => r.hashHex),
   });
   const add = (h: string, r: ReasonDto, scope: Entry['scope'] = 'session') => {
     const e = state.get(h) ?? { reasons: [], scope };
@@ -85,7 +87,7 @@ export function createActivationSim(d: Deps) {
       const item = { hashHex: f.hashHex, faces: [f.faceIndex], removedReasons: [r], cause };
       if (failed.has(f.hashHex)) { state.set(f.hashHex, { reasons: [], scope: 'session' }); autoDeactivateFailed.push(item); } else autoDeactivated.push(item);
     }
-    emit({ type: 'reconciled', report: { autoDeactivated, autoDeactivateFailed, reregistered: 0, moved: 0, missing: 0, notDownloaded: 0, cleaned: 0, failed: autoDeactivateFailed.length, results: [] } });
+    emit({ type: 'reconciled', report: { autoDeactivated, autoDeactivateFailed, reregistered: 0, moved: 0, missing: 0, notDownloaded: 0, cleaned: 0, failed: autoDeactivateFailed.length, busy: 0, results: [] } });
   };
 
   /** Sổ "bản cũ đã gỡ" của mock (khớp activation_replaced phía Rust). */

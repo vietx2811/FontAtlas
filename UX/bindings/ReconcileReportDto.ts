@@ -6,4 +6,8 @@ export type ReconcileReportDto = { autoDeactivated: Array<AutoDeactivatedDto>,
 /**
  * Tự gỡ thất bại (hệ điều hành từ chối…): font vẫn đăng ký, giao diện nên báo.
  */
-autoDeactivateFailed: Array<AutoDeactivatedDto>, reregistered: number, moved: number, missing: number, notDownloaded: number, cleaned: number, failed: number, results: Array<FileResultDto>, };
+autoDeactivateFailed: Array<AutoDeactivatedDto>, reregistered: number, moved: number, missing: number, notDownloaded: number, cleaned: number, failed: number, 
+/**
+ * Hash bị bỏ qua vì đang bận (lượt bù sẽ làm).
+ */
+busy: number, results: Array<FileResultDto>, };

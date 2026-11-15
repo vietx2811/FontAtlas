@@ -529,7 +529,7 @@ describe('Sidebar', () => {
   });
 
   describe('review fixes', () => {
-    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, ...o });
+    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] as string[], ...o });
     it('Tắt tất cả reports failures and needs-confirmation instead of staying silent', async () => {
       const { api } = await mount();
       vi.spyOn(api, 'activationDeactivateAll').mockResolvedValue(report({ changed: 2, failed: 3, needsConfirmation: 1 }));

@@ -114,6 +114,11 @@ impl ScanManager {
         self.inner.paused.load(Ordering::SeqCst)
     }
 
+    /// App đang tắt (các lượt nền không nên xếp thêm việc).
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.shutdown.load(Ordering::SeqCst)
+    }
+
     /// Đặt cờ tắt + huỷ (không chờ).
     pub fn request_shutdown(&self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);

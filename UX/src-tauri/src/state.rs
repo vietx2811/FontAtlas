@@ -67,6 +67,8 @@ pub struct AppState {
     pub scans: ScanManager,
     /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
+    /// Đối soát kích hoạt BÙ (hash bận ở lượt trước): số lượt đang chờ/đang chạy và cách chờ (mặc định ngủ ~1,5 s; test tiêm cổng sự kiện).
+    pub reconcile_makeup: crate::services::activation::MakeupState,
     /// Lượt chép / sắp xếp lại Organized Library đang chạy (B7): một lúc một lượt, cờ huỷ.
     pub organize: crate::services::organized::OrganizeJob,
     /// Lượt nhập đường dẫn thả từ Finder đang chạy (G8): một lúc một lượt, cờ huỷ.
@@ -117,6 +119,7 @@ impl AppState {
             cloud_jobs: Default::default(),
             imports: Default::default(),
             organize: Default::default(),
+            reconcile_makeup: Default::default(),
             cloud_watch: Default::default(),
             app_sets: Default::default(),
             index: RwLock::new(None),
