@@ -307,7 +307,7 @@ describe('Settings', () => {
       await act(async () => { await useUiStore.getState().refreshActive(api); });
       await go('Kích hoạt font');
       const spy = vi.spyOn(api, 'activationDeactivateAll')
-        .mockResolvedValueOnce({ results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }] as never, changed: 0, needsConfirmation: 0, failed: 0 })
+        .mockResolvedValueOnce({ results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }] as never, changed: 0, needsConfirmation: 0, failed: 0, busy: 1, busyHashes: ['b1'] })
         .mockRejectedValueOnce(new Error('boom'));
       useNoticeStore.setState({ notices: [] });
       fireEvent.click(screen.getByRole('button', { name: /Tắt mọi font đã kích hoạt/ }));

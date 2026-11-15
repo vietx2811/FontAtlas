@@ -7,12 +7,17 @@ import { useNoticeStore } from '../../store/notices';
  * Số liệu và danh sách font cùng MỘT nguồn (kết quả theo file) để số trong câu khớp nút Thử lại; chỉ khi báo cáo không có kết quả theo file
  * (backend cắt bớt) mới dùng `report.busy`.
  */
-export function busyFaces(rep: Pick<ActivationReportDto, 'results'>): FaceKeyDto[] {
-  return rep.results.filter(r => r.outcome.kind === 'busy').flatMap(r => (r.requestedFaces.length ? r.requestedFaces : [0]).map(faceIndex => ({ hashHex: r.hashHex, faceIndex })));
+export function busyFaces(rep: Pick<ActivationReportDto, 'results'> & { busyHashes?: string[] }): FaceKeyDto[] {
+  const out = rep.results.filter(r => r.outcome.kind === 'busy').flatMap(r => (r.requestedFaces.length ? r.requestedFaces : [0]).map(faceIndex => ({ hashHex: r.hashHex, faceIndex })));
+  // `busyHashes` (backend) có thể liệt kê font bận mà `results` không còn (đã cắt): thêm vào (face 0) để nút Thử lại phủ đủ.
+  const have = new Set(out.map(f => f.hashHex));
+  for (const h of rep.busyHashes ?? []) if (!have.has(h)) { out.push({ hashHex: h, faceIndex: 0 }); have.add(h); }
+  return out;
 }
+/** Số font bận = số hash trong CÙNG danh sách với nút Thử lại; `busy` của backend chỉ dùng khi không có danh sách nào (chỉ có con số). */
 export function busyN(rep: ActivationReportDto): number {
-  const fromResults = new Set(busyFaces(rep).map(f => f.hashHex)).size;
-  if (fromResults > 0) return fromResults;
+  const n = new Set(busyFaces(rep).map(f => f.hashHex)).size;
+  if (n > 0) return n;
   const field = (rep as { busy?: number }).busy;
   return typeof field === 'number' && field > 0 ? field : 0;
 }

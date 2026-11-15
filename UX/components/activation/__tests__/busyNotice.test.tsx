@@ -9,7 +9,7 @@ import { RelocateDialog } from '../../library/RelocateDialog';
 import { busyFaces, busyN, busyPart, pushBusyOnly } from '../busyNotice';
 import { useActivationFlow } from '../useActivationFlow';
 
-const rep = (kinds: string[], extra: Record<string, unknown> = {}): ActivationReportDto => ({ results: kinds.map((k, i) => ({ hashHex: `h${i}`, requestedFaces: [0], outcome: { kind: k } })) as never, changed: 0, needsConfirmation: 0, failed: 0, ...extra } as ActivationReportDto);
+const rep = (kinds: string[], extra: Record<string, unknown> = {}): ActivationReportDto => ({ results: kinds.map((k, i) => ({ hashHex: `h${i}`, requestedFaces: [0], outcome: { kind: k } })) as never, changed: 0, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [], ...extra } as unknown as ActivationReportDto);
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); }); };
 
 describe('font đang bận (sau Tắt hết / đổi scope / chuyển font)', () => {
@@ -20,6 +20,8 @@ describe('font đang bận (sau Tắt hết / đổi scope / chuyển font)', ()
     expect(busyN(rep(['deactivated', 'busy', 'busy']))).toBe(2);
     expect(busyN(rep(['busy', 'busy'], { busy: 9 }))).toBe(2); // khớp nút Thử lại, không lấy 9
     expect(busyN(rep([], { busy: 5 }))).toBe(5);
+    expect(busyN(rep(['busy'], { busy: 3, busyHashes: ['h0', 'x1', 'x2'] }))).toBe(3); // busyHashes bổ sung font mà results không còn; số = số hash trong danh sách
+    expect(busyFaces(rep(['busy'], { busyHashes: ['h0', 'x1'] }))).toEqual([{ hashHex: 'h0', faceIndex: 0 }, { hashHex: 'x1', faceIndex: 0 }]);
     expect(busyFaces(rep(['busy', 'deactivated', 'busy']))).toEqual([{ hashHex: 'h0', faceIndex: 0 }, { hashHex: 'h2', faceIndex: 0 }]);
     expect(busyPart(rep(['deactivated']))).toBeNull();
   });
