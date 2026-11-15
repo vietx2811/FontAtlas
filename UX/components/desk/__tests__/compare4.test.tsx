@@ -207,3 +207,21 @@ describe('ComboCompare cloud', () => {
     expect(screen.getAllByTestId('cc-cloud').length).toBeGreaterThan(0);
   });
 });
+
+describe('Compare: same display name, different files', () => {
+  it('Compare Font shows a disambiguating line only for the clashing columns', async () => {
+    const api = createMockApi(); const fs = await faces(api, 3);
+    const twin: FcFace = { face: { hashHex: 'ee'.repeat(8), faceIndex: 0 }, row: { ...fs[0].row, faceId: 99999, hashHex: 'ee'.repeat(8), path: '/Other/Dup.ttf' } };
+    mountFc(api, { suggestions: [fs[0], twin, fs[1]] });
+    await settle();
+    const lines = screen.getAllByTestId('dupe-line');
+    expect(lines).toHaveLength(2);
+    expect(lines.map(l => l.getAttribute('aria-label'))).toContain('Tệp: /Other/Dup.ttf');
+  });
+  it('no extra line when names are distinct', async () => {
+    const api = createMockApi(); const fs = await faces(api, 3);
+    mountFc(api, { suggestions: fs });
+    await settle();
+    expect(screen.queryAllByTestId('dupe-line')).toHaveLength(0);
+  });
+});

@@ -92,6 +92,7 @@
 .fa-cc-ico { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--accent); }
 .fa-cc-actions button[aria-disabled="true"] { opacity: .4; cursor: default; }
 .fa-cc-title { font-weight: 700; }
+.fa-dupe-line { display: block; font-weight: 400; font-size: 11px; color: var(--muted); max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fa-cc-actions { display: flex; gap: 6px; margin-top: 4px; }
 .fa-cc-actions button { padding: 2px 8px; border-radius: var(--radius-md); color: var(--accent-ink); background: var(--accent-soft); font-size: var(--text-xs); }
 .fa-cc-page { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 12px; }

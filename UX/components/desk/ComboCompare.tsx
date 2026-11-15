@@ -9,6 +9,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { ROLE_ORDER, isHeadingLike, roleGloss, roleLabel } from './deskRoles';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { ClashNote } from '../ui/ClashNote';
+import { DupeLine, dupeHintOf, dupeHints } from '../compare/dupeNames';
 
 const comboTitle = (c: { idx: number; name: string | null }): string => `${t('combo.label')} ${c.idx}${c.name && c.name !== `Combo ${c.idx}` ? ` · ${c.name}` : ''}`;
 const nameOf = (r: FaceRowDto | null) => (r ? faceLabel(r) : '—');
@@ -51,6 +52,9 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
   if (!data) return <p className="fa-desk-hint">{t('compare.loading')}</p>;
   // Mốc đứng đầu, các Combo còn lại theo idx.
   const cols = [...data.columns].sort((a, b) => (a.combo.id === currentId ? -1 : b.combo.id === currentId ? 1 : a.combo.idx - b.combo.idx));
+  // Trùng tên xét theo từng hàng vai (so các cột với nhau trong cùng vai).
+  const hintsByRole = new Map<string, ReturnType<typeof dupeHints>>();
+  for (const r of new Set(cols.flatMap(c => c.combo.slots.map(s => s.role)))) hintsByRole.set(r, dupeHints(cols.map(c => c.combo.slots.find(x => x.role === r)?.row)));
   return (
     <div className="fa-cc" data-testid="combo-compare">
       <table>
@@ -67,7 +71,7 @@ export function ComboCompare({ api, caseId, currentId, onOpen, onMain }: { api: 
           {[...ROLE_ORDER.filter(r => cols.some(c => c.combo.slots.some(s => s.role === r))), ...[...new Set(cols.flatMap(c => c.combo.slots.map(s => s.role)))].filter(r => !ROLE_ORDER.includes(r))].map(r => (
             <tr key={r} data-role={r}><th scope="row">{roleGloss(r) ? <Tooltip label={roleGloss(r)}><span data-term={`role.${r}`}>{roleName(r)}</span></Tooltip> : <span>{roleName(r)}</span>}</th>{cols.map(c => {
               const s = c.combo.slots.find(x => x.role === r);
-              return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}<ClashNote faceId={s.row.faceId} inline />{s.missing && <NoteMark inline text={t('desk.missing')} />}</> : '—'}</td>;
+              return <td key={c.combo.id}>{s ? <>{nameOf(s.row)}<ClashNote faceId={s.row.faceId} inline />{s.missing && <NoteMark inline text={t('desk.missing')} />}<DupeLine hint={dupeHintOf(hintsByRole.get(r)!, s.row)} /></> : '—'}</td>;
             })}</tr>
           ))}
           <tr data-row="relations"><th scope="row" className="has-tip"><Tooltip label={t('cc.relations.tip')}><span>{t('cc.relations')}</span></Tooltip></th>{cols.map(c => (
