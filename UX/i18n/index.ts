@@ -126,9 +126,11 @@ const lookup = (key: string): string | undefined => {
   if (hit === undefined && import.meta.env?.DEV && !warned.has(key)) { warned.add(key); console.warn(`[i18n] missing key: ${key}`); } // khoá ghép động (class.${x}…) thiếu bản dịch
   return hit;
 };
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => platformText((lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')), getLocale());
+const fill = (tpl: string, vars: Record<string, string | number>): string => tpl.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+/** Chữ theo nền tảng áp lên MẪU thô, TRƯỚC khi nội suy {biến}: tên font/thư mục của người dùng không bao giờ bị đổi. */
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => fill(platformText(lookup(key) ?? key, getLocale()), vars);
 /** Như `t()` nhưng chọn dạng số ít tiếng Anh khi `vars.n` = 1 (tiếng Việt giữ một dạng). Khoá phải có trong EN_ONE, nếu không dùng dạng thường. */
 export const tn = (key: I18nKey, vars: Record<string, string | number> = {}): string => {
-  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return platformText(EN_ONE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')), 'en');
+  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return fill(platformText(EN_ONE[key], 'en'), vars);
   return t(key, vars);
 };

@@ -1,6 +1,7 @@
 import { cloneElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
+import { shortcutText } from '../../platform';
 import './tooltip.css';
 
 export const TOOLTIP_DELAY_MS = 450;
@@ -25,7 +26,6 @@ type Handlers = {
   'aria-describedby'?: string;
 };
 
-import { shortcutText } from '../../platform';
 let closeCurrent: (() => void) | null = null;
 
 export const isTruncated = (el: Element | null): boolean => !!el && el.scrollWidth > el.clientWidth + 1;

@@ -7,9 +7,9 @@ import { SHORTCUTS } from '../../components/help/shortcuts';
 import { WindowShell } from '../../components/shell/WindowShell';
 import { useAdvancedSheet } from '../../store/advancedSheet';
 import { en } from '../en';
-import { MAIN_I18N, setLocale, t, tn } from '..';
+import { EN_ONE, setLocale, t, tn, vi, type I18nKey } from '..';
 import { platformText } from '../platformText';
-import { getOs, modKey, setOsForTest, shortcutKeys, shortcutText } from '../../platform';
+import { detect, getOs, modKey, setOsForTest, shortcutKeys, shortcutText } from '../../platform';
 
 afterEach(() => { setOsForTest(null); setLocale('vi'); useAdvancedSheet.setState({ open: false }); });
 
@@ -53,11 +53,52 @@ describe('shortcut text', () => {
   });
 });
 
+describe('detect(navigator)', () => {
+  it('real WebView tables', () => {
+    const mac = { platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)', userAgentData: { platform: 'macOS' } };
+    const win = { platform: 'Win32', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 Edg/126.0', userAgentData: { platform: 'Windows' } };
+    const linux = { platform: 'Linux x86_64', userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15' };
+    const ipad = { platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15' };
+    expect(detect(mac)).toBe('mac'); expect(detect(win)).toBe('windows'); expect(detect(linux)).toBe('linux'); expect(detect(ipad)).toBe('mac');
+    expect(detect({})).toBe('mac'); expect(detect(undefined)).toBe('mac');
+    expect(detect({ userAgent: 'Mozilla/5.0 (darwin) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.0' })).toBe('mac'); // jsdom trên máy mac
+  });
+});
+
 describe('platform text', () => {
-  it('macOS: every vi and en string is returned exactly as written', () => {
-    for (const s of [...Object.values(MAIN_I18N), ...Object.values(en as Record<string, string>)]) expect(platformText(s, 'en')).toBe(s);
-    setLocale('en'); expect(t('faces.reveal')).toBe('Show in Finder'); expect(tn('act.rec.icloud', { n: 1 })).toContain('iCloud');
+  const ECHO = new Proxy({}, { get: (_, k) => `{${String(k)}}` }) as Record<string, string>; // {biến} → {biến}: t() phải trả đúng mẫu gốc
+  it('macOS: t() returns the stored template for EVERY key of the merged dictionaries, vi and en; tn() for every EN_ONE key', () => {
+    const keys = Object.keys(vi) as I18nKey[];
+    expect(keys.length).toBeGreaterThan(1500);
+    for (const loc of ['vi', 'en'] as const) {
+      setLocale(loc);
+      for (const k of keys) {
+        const raw = (loc === 'en' ? (en as Record<string, string>)[k] : undefined) ?? (vi as Record<string, string>)[k];
+        expect(t(k, ECHO), `${loc}:${k}`).toBe(raw);
+      }
+    }
+    setLocale('en');
+    for (const k of Object.keys(EN_ONE) as I18nKey[]) expect(tn(k, new Proxy({}, { get: (_, v) => (v === 'n' ? 1 : `{${String(v)}}`) }) as Record<string, string>), `one:${k}`).toBe(EN_ONE[k].replace(/\{n\}/g, '1'));
+    // và những chuỗi Finder/Trash/Mac thật sự còn nguyên
+    expect(t('faces.reveal')).toBe('Show in Finder'); expect(t('dup.d.active')).toBe('Active on this Mac');
     setLocale('vi'); expect(t('faces.reveal')).toBe('Hiện trong Finder'); expect(t('dup.pv.trash')).toBe('Chuyển vào Thùng rác');
+  });
+  it('the sanity check is not vacuous: the same walk on Windows DOES change strings', () => {
+    setOsForTest('windows'); setLocale('en');
+    const changed = (Object.keys(vi) as I18nKey[]).filter(k => t(k, ECHO) !== (((en as Record<string, string>)[k]) ?? (vi as Record<string, string>)[k]));
+    expect(changed.length).toBeGreaterThan(30);
+  });
+  it('user data inside {vars} is never rewritten, only the template (t and tn)', () => {
+    setOsForTest('windows'); setLocale('en');
+    expect(t('faces.finderFail', { msg: 'Trash of Finder on this Mac, macOS' })).toBe('Couldn’t open File Explorer: Trash of Finder on this Mac, macOS');
+    expect(tn('act.rec.icloud', { n: 1 })).toBe('1 font is still in iCloud and hasn’t been downloaded.');
+    setLocale('vi'); expect(t('faces.finderFail', { msg: 'Finder/macOS' })).toBe('Không mở được File Explorer: Finder/macOS');
+  });
+  it('“Mac” at the start of a sentence and bare “on Mac” also change on Windows', () => {
+    setOsForTest('windows');
+    expect(platformText('This Mac is ready. Works on Mac.', 'en')).toBe('This PC is ready. Works on PC.');
+    expect(platformText('Chạy trên Mac', 'vi')).toBe('Chạy trên PC');
+    expect(platformText('MacBook and macOS', 'en')).toBe('MacBook and Windows');
   });
   it('Windows: Finder → Explorer, Trash → Recycle Bin, macOS/Mac → Windows/PC (en); Finder → Explorer, macOS → Windows (vi)', () => {
     setOsForTest('windows');

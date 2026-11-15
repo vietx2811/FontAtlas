@@ -5,9 +5,10 @@ let forced: Os | null = null;
 /** Test: ép nền tảng (null = đọc lại từ trình duyệt). */
 export function setOsForTest(os: Os | null): void { forced = os; }
 
-function detect(): Os {
-  if (typeof navigator === 'undefined') return 'mac';
-  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+export type NavLike = { userAgentData?: { platform?: string }; platform?: string; userAgent?: string };
+/** Đọc nền tảng từ một đối tượng kiểu `navigator` (export để test bảng WebView thật). Không nhận ra = macOS. */
+export function detect(nav: NavLike | undefined = typeof navigator === 'undefined' ? undefined : navigator): Os {
+  if (!nav) return 'mac';
   const s = `${nav.userAgentData?.platform ?? ''} ${nav.platform ?? ''} ${nav.userAgent ?? ''}`;
   if (/mac|darwin|iphone|ipad/i.test(s)) return 'mac';
   if (/\bwin/i.test(s)) return 'windows';
