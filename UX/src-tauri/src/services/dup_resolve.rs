@@ -791,6 +791,7 @@ mod tests {
     }
 
     /// Review #5: symlink lọt qua so sánh chuỗi.
+    #[cfg(unix)]
     #[test]
     fn a_symlink_cannot_smuggle_a_system_or_outside_file_into_the_trash() {
         let d = tempfile::tempdir().unwrap();
