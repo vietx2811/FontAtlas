@@ -375,7 +375,11 @@ fn index_build_does_not_hold_main_store_lock() {
 fn rebuild_after_embed_is_debounced() {
     let d = tempfile::tempdir().unwrap();
     let st = lib6(d.path());
-    st.rebuild.policy.lock().unwrap().min_interval = Duration::from_millis(400);
+    // Tất định: dựng một lượt ngay trước loạt yêu cầu (mốc "vừa dựng" = bây giờ) và để cửa sổ chống dồn đủ rộng,
+    // để máy chậm (runner CI) không làm cửa sổ trôi qua giữa lúc dựng thư viện và loạt EmbedProgress.
+    request_rebuild(&st, RebuildWhy::QueueEmpty);
+    assert!(wait_rebuilt(&st, Duration::from_secs(30)));
+    st.rebuild.policy.lock().unwrap().min_interval = Duration::from_secs(60);
     let before = st.rebuild.builds.load(std::sync::atomic::Ordering::SeqCst);
     for _ in 0..10 {
         request_rebuild(&st, RebuildWhy::EmbedProgress);

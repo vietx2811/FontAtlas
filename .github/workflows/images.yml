@@ -1,0 +1,26 @@
+name: images
+# Repo công khai: ảnh chụp màn hình/ảnh cá nhân không được commit. Chạy cả với thay đổi chỉ-docs (không có paths-ignore ở đây).
+on:
+  push:
+    branches: [main, 'dev/**', 'int/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Ảnh mới phải nằm trong danh sách cho phép
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: bash tools/ci/check_images.sh "$BASE" "$HEAD"

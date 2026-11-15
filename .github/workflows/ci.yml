@@ -1,0 +1,115 @@
+name: ci
+# Hai tầng: "fast" (ubuntu, mỗi push/PR) và "full" (macOS: workspace đầy đủ + tauri debug build).
+# CI cục bộ (tools/ci/local_ci.sh + hook pre-push) vẫn chạy song song để so kết quả; native QA: xem qa-spike.yml.
+on:
+  push:
+    branches: [main, 'dev/**', 'int/**']
+    paths-ignore: ['**/*.md', 'docs/**', '.claude/**', 'LICENSE*']
+  pull_request:
+    paths-ignore: ['**/*.md', 'docs/**', '.claude/**', 'LICENSE*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  fast:
+    name: fast (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      - name: Frontend
+        working-directory: UX
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+          npx vite build
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'UX/src-tauri -> target', prefix-key: ci-linux }
+      # Crate `app` (tauri) cần webkit2gtk → để job macOS; ở đây toàn bộ crate còn lại.
+      - name: Rust crates (không gồm app)
+        working-directory: UX/src-tauri
+        run: |
+          cargo test --workspace --exclude app --locked --lib --bins --tests --no-fail-fast
+          cargo clippy --workspace --exclude app --all-targets --locked -- -D warnings
+
+  full:
+    name: full (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'UX/src-tauri -> target', prefix-key: ci-macos }
+      - name: Frontend (tauri cần UX/dist)
+        working-directory: UX
+        run: |
+          npm ci
+          npx vite build
+      - name: cargo test --workspace (sinh lại bindings)
+        working-directory: UX/src-tauri
+        env: { UPDATE_BINDINGS: '1' }
+        run: cargo test --workspace --locked --lib --bins --tests --no-fail-fast
+      - name: Bindings không được lệch
+        run: git diff --exit-code -- UX/bindings
+      - name: clippy
+        working-directory: UX/src-tauri
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: tauri debug build
+        working-directory: UX
+        run: npx --yes @tauri-apps/cli@2.9.6 build --debug --bundles app
+
+  # Chuẩn bị cho Windows (W1): chỉ xem crate nào chưa biên dịch được. Không chặn PR (continue-on-error); danh sách lỗi nằm ở tóm tắt của job.
+  windows:
+    name: windows check (non-blocking)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: UX/package-lock.json }
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: 'UX/src-tauri -> target', prefix-key: ci-windows }
+      - name: Frontend (tauri cần UX/dist)
+        working-directory: UX
+        shell: bash
+        run: |
+          npm ci
+          npx vite build
+      - name: cargo check --workspace --keep-going
+        working-directory: UX/src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo check --workspace --locked --keep-going --message-format short 2>&1 | tee check.log
+          rc=${PIPESTATUS[0]}
+          {
+            echo "### Windows: cargo check (exit $rc)"
+            echo
+            echo "Crate/lỗi (dùng cho 02/06):"
+            echo '```'
+            grep -E '^(error|warning: unused)|error\[|could not compile' check.log | sort | uniq -c | sort -rn | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Chưa hỗ trợ Windows (W1 đang chuẩn bị): không làm đỏ PR, chỉ cảnh báo + danh sách lỗi trong summary.
+          if [ "$rc" -ne 0 ]; then echo "::warning title=Windows chưa build được::cargo check exit $rc, xem job summary"; fi
+          exit 0
