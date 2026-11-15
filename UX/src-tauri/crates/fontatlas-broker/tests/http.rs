@@ -192,6 +192,7 @@ fn disabled_setting_returns_503() {
     assert!(b.service.engine().registrations().is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn broker_file_is_private_and_removed_on_shutdown() {
     let (env, srv, _b) = start(&[LIBRE], 100);

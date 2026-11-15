@@ -206,6 +206,7 @@ fn jrows(env: &Env) -> Vec<fontatlas_store::ReplacedRow> {
     env.store.lock().unwrap().unrestored_replaced().unwrap()
 }
 
+#[cfg(unix)]
 #[test]
 fn protected_dirs_are_recognised_through_symlinks_firmlinks_and_case() {
     let d = tempfile::tempdir().unwrap();
@@ -452,6 +453,7 @@ fn b_a_failure_after_removing_the_foreign_copy_gives_it_back() {
     assert!(jrows(&env).is_empty(), "trả lại được thì không còn sổ");
 }
 
+#[cfg(unix)]
 #[test]
 fn d_unregister_give_back_and_restore_use_the_registered_url_not_the_canonical_one() {
     let (env, svc, k, foreign) = setup("Cho khac/dup.ttf", FakeEngine::new());
@@ -468,6 +470,7 @@ fn d_unregister_give_back_and_restore_use_the_registered_url_not_the_canonical_o
     assert_eq!(svc.engine().registrations(), vec![(alias, Scope::Persistent)], "về đúng URL đã đăng ký");
 }
 
+#[cfg(unix)]
 #[test]
 fn d_a_failed_ours_gives_back_to_the_registered_url() {
     let (env, svc, k, foreign) = setup("Cho khac/dup.ttf", FakeEngine::new());

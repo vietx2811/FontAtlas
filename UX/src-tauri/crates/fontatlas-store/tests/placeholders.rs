@@ -26,6 +26,7 @@ fn scan(s: &mut Store, root: &Path, src: i64, progress: &mut Vec<ScanProgress>) 
     s.rescan_root_with_probe(src, root, &mut |p| progress.push(p.clone()), &AtomicBool::new(false), &probe).unwrap()
 }
 
+#[cfg(unix)]
 #[test]
 fn never_downloaded_placeholder_is_not_read_and_counted() {
     let (_d, fonts, mut s, src) = setup(&["roboto.ttf"]);
@@ -88,6 +89,7 @@ fn os_probe_is_false_for_ordinary_files() {
 /// Đổi `ANALYZER_VERSION` (core-0.8.0 → hiện tại) KHÔNG được kéo nội dung file dataless: phân tích lại chỉ chạy trên
 /// file đã có trên máy; file dataless giữ bản phân tích cũ (vẫn dùng được), đếm là "chờ phân tích lại", và được
 /// phân tích lại ở lần quét đầu tiên sau khi file đã tải về.
+#[cfg(unix)]
 #[test]
 fn analyzer_version_bump_skips_dataless_files_and_reanalyzes_after_download() {
     use std::os::unix::fs::PermissionsExt;
