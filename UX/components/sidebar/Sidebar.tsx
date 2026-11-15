@@ -10,6 +10,7 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
+import { noticeBusy } from '../activation/busyNotice';
 import { useAppPickerStore } from '../../store/appPicker';
 import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
@@ -241,6 +242,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     if (kept) parts.push(t('smenu.off.kept', { k: kept }));
     if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
     useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
+    noticeBusy(rep, faces => { api.activationDeactivate(faces).then(r => { reportOff(r); void useUiStore.getState().refreshActive(api); }, warn); });
   };
   const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
     const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };

@@ -3,6 +3,7 @@ import type { Api, ActivationReportDto, ConflictDto, FaceKeyDto, FileOutcomeDto,
 import { t } from '../../i18n';
 import { refreshActivation } from '../../store/activationSync';
 import { keepBoth } from './renamedCopy';
+import { noticeBusy } from './busyNotice';
 import { useActivationQueue } from '../../store/activationFlow';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
@@ -109,7 +110,11 @@ export function useActivationFlow(api: Api): ActivationFlow {
 
   /** Đổi phạm vi của font ĐANG bật (không tắt giữa chừng). */
   const setScope = useCallback(async (faces: FaceKeyDto[], scope: 'session' | 'persistent') => {
-    try { sayOutcomes((await api.activationSetScope(faces, scope)).results.map(r => r.outcome).filter(o => o.kind === 'failed' || o.kind === 'busy')); }
+    try {
+      const rep = await api.activationSetScope(faces, scope);
+      sayOutcomes(rep.results.map(r => r.outcome).filter(o => o.kind === 'failed')); // bận: một thông báo gộp có nút Thử lại (không báo từng file)
+      noticeBusy(rep, f => void setScope(f, scope));
+    }
     catch (e) { push({ kind: 'error', text: t('act.scope.fail', { msg: (e as Error).message }) }); }
     await refresh();
   }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps

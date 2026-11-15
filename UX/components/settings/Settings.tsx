@@ -9,6 +9,7 @@ import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { CloudDownloadControl } from '../sidebar/CloudDownload';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
+import { noticeBusy } from '../activation/busyNotice';
 import { OrganizedPanel } from '../library/OrganizedPanel';
 import { chooseLocale, t, useLocale, tn } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
@@ -226,7 +227,7 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
           <p>{tn('set.act.offBody', { n: active.size })}</p>
           <div className="fa-modal-actions">
             <button type="button" onClick={() => setConfirm(false)}>{t('set.cancel')}</button>
-            <button type="button" className="primary" onClick={async () => { setConfirm(false); await api.activationDeactivateAll(); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
+            <button type="button" className="primary" onClick={async () => { setConfirm(false); const rep = await api.activationDeactivateAll(); noticeBusy(rep, faces => { api.activationDeactivate(faces).then(() => useUiStore.getState().refreshActive(api), () => undefined); }); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
           </div>
         </Modal>
       )}

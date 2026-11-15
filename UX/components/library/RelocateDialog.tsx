@@ -4,6 +4,7 @@ import { formatNumber, t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
 import { Modal } from '../Modal';
+import { noticeBusy } from '../activation/busyNotice';
 import './organized.css';
 
 /** Kết quả theo file → số liệu cho thông báo: chuyển được / đã ở bản mới / không đổi được (đường cũ vẫn dùng). */
@@ -40,6 +41,7 @@ export function RelocateDialog({ api, preferUnder, onClose }: { api: Api; prefer
       await useUiStore.getState().refreshActive(api);
       const c = relocateCounts(rep.results);
       onClose();
+      noticeBusy(rep, f => { api.activationRelocate(f, preferUnder).then(() => useUiStore.getState().refreshActive(api), () => undefined); });
       const movedHashes = new Set(rep.results.filter(r => r.outcome.kind === 'activated').map(r => r.hashHex));
       const back: RelocateTargetDto[] = faces.filter(f => movedHashes.has(f.hashHex) && before.has(f.hashHex)).map(f => ({ face: f, path: before.get(f.hashHex)! }));
       useNoticeStore.getState().push({

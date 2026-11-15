@@ -1,6 +1,7 @@
 /** Dạng số ít (n = 1) của tiếng Anh cho các khoá đếm; tiếng Việt không chia số ít/nhiều. Dùng qua `tn(key, vars)`. */
 export const EN_ONE: Record<string, string> = {
   'app.count': '{n} app selected',
+  'act.busy': '{n} font busy, will retry. Another job is using it, so nothing changed yet.',
   'faces.nFonts': '{n} font',
   'faces.selectedN': '{n} font selected',
   'meta.faces': '{n} style',
