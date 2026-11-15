@@ -49,7 +49,7 @@ export function RelocateDialog({ api, preferUnder, onClose }: { api: Api; prefer
         if (parts.length === 0) parts.push(t('act.busy.cleared'));
         const movedHashes = new Set(rep.results.filter(r => r.outcome.kind === 'activated').map(r => r.hashHex));
         const back: RelocateTargetDto[] = ofFaces.filter(f => movedHashes.has(f.hashHex) && before.has(f.hashHex)).map(f => ({ face: f, path: before.get(f.hashHex)! }));
-        const retry = busy ? { label: t('act.busy.retry'), run: () => { const bf = busyFaces(rep); api.activationRelocate(bf, preferUnder).then(r => report(r, bf, true), e => useNoticeStore.getState().push({ kind: 'error', text: t('org.err.other', { msg: (e as Error)?.message ?? String(e) }) })); } } : undefined;
+        const retry = busy ? { label: t('act.busy.retry'), run: () => { const bf = busyFaces(rep); api.activationRelocate(bf, preferUnder).then(r => report(r, bf, true)).catch(e => useNoticeStore.getState().push({ kind: 'error', text: t('org.err.other', { msg: (e as Error)?.message ?? String(e) }) })); } } : undefined; // .catch (không phải đối số thứ hai của then): lỗi ném từ report (vd refreshActive) cũng được báo, không thành unhandled rejection
         const undo = back.length ? { label: t('dnd.undo'), run: () => void undoRelocate(api, back) } : undefined;
         useNoticeStore.getState().push({ kind: c.kept > 0 ? 'error' : 'info', text: parts.join(' '), action: undo ?? retry, action2: undo ? retry : undefined });
       };

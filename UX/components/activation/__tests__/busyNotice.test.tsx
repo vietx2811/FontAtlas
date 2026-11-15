@@ -69,4 +69,19 @@ describe('font đang bận (sau Tắt hết / đổi scope / chuyển font)', ()
     expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error' }); // lỗi của lần thử lại không bị nuốt
     void within;
   });
+
+  it('lỗi ném từ báo cáo của lần thử lại (refreshActive hỏng) vẫn thành thông báo lỗi, không phải unhandled rejection', async () => {
+    const api = createMockApi();
+    useUiStore.setState({ active: new Map([['h0', [0]]]) });
+    vi.spyOn(api, 'activationRelocate').mockResolvedValueOnce(rep(['busy'])).mockResolvedValueOnce(rep(['activated']));
+    vi.spyOn(api, 'activationState').mockResolvedValueOnce([] as never).mockResolvedValueOnce([] as never).mockRejectedValue(new Error('state down'));
+    const unhandled = vi.fn(); process.on('unhandledRejection', unhandled);
+    render(<RelocateDialog api={api} preferUnder="/lib" onClose={() => undefined} />);
+    fireEvent.click(screen.getByTestId('org-reloc-run')); await settle();
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    await act(async () => { n.action!.run(); await new Promise(r => setTimeout(r, 20)); });
+    expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error' });
+    expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/state down/);
+    process.off('unhandledRejection', unhandled); expect(unhandled).not.toHaveBeenCalled();
+  });
 });
