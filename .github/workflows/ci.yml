@@ -113,3 +113,26 @@ jobs:
           # Chưa hỗ trợ Windows (W1 đang chuẩn bị): không làm đỏ PR, chỉ cảnh báo + danh sách lỗi trong summary.
           if [ "$rc" -ne 0 ]; then echo "::warning title=Windows chưa build được::cargo check exit $rc, xem job summary"; fi
           exit 0
+      # Chạy test để biết test nào hỏng trên Windows. Vẫn chỉ cảnh báo (job continue-on-error, bước luôn exit 0).
+      - name: cargo test --workspace --no-fail-fast
+        working-directory: UX/src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo test --workspace --locked --no-fail-fast 2>&1 | tee test.log
+          rc=${PIPESTATUS[0]}
+          {
+            echo "### Windows: cargo test (exit $rc)"
+            echo
+            echo "Số pass/fail theo bộ test (crate/file test):"
+            echo '```'
+            awk '/^ +Running |^ +Doc-tests /{name=$0; sub(/^ +/,"",name)} /^test result:/{r=$0; sub(/; finished in.*/,"",r); print name " => " r}' test.log | head -150
+            echo '```'
+            echo
+            echo "Test hỏng / lỗi biên dịch:"
+            echo '```'
+            grep -E '^test .* FAILED$|^error(\[|:)|could not compile' test.log | sort -u | head -120
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -ne 0 ]; then echo "::warning title=Test Windows có lỗi::cargo test exit $rc, xem job summary"; fi
+          exit 0
