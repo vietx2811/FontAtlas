@@ -3,7 +3,7 @@
 Ngày: 2026-11-16 · Tác giả: 02 Core Engine · Trạng thái: **đánh giá, chưa có mã**. Mọi điều về Windows dưới đây là **suy luận từ tài liệu
 API đã biết, chưa chạy trên máy Windows nào**. Mỗi điều chưa kiểm được đánh dấu *(chưa kiểm)*.
 
-Bối cảnh: B5 (nhánh `feat/b5-app-font-sets`, chưa vào dev/mvp) gắn Case với app qua cột `case_apps.bundle_id` (+ `app_name`). Bộ quan sát
+Bối cảnh: B5 (đã vào dev/mvp) gắn Case với app qua cột `case_apps.bundle_id` (+ `app_name`). Bộ quan sát
 `running_bundle_ids()` thăm dò `NSWorkspace.runningApplications` mỗi 2 s; ngoài macOS trả tập rỗng. `installed_apps()` quét
 `/Applications`, `/System/Applications`, `~/Applications`. Hàm đồng bộ `sync_app_sets` chỉ so **tập chuỗi id đang chạy** với `case_apps`, nên
 phần lõi không đổi: chỉ cần (1) quy ước chuỗi id Windows, (2) hai hàm thu thập, (3) UI không giả định "bundle id".
