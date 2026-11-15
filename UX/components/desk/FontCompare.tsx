@@ -173,7 +173,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
         <thead><tr><td />{shown.map(c => {
           const isBase = !!base && keyOf(c.face) === keyOf(base.face); const pin = pinned.includes(keyOf(c.face));
           return (
-            <th scope="col" key={keyOf(c.face)} data-testid="fc-col" data-base={isBase || undefined} data-pinned={pin || undefined}>
+            <th scope="col" key={keyOf(c.face)} data-testid="fc-col" data-face-key={keyOf(c.face)} data-base={isBase || undefined} data-pinned={pin || undefined}>
               <div className="fa-cc-title">{pin && <span className="fa-cc-ico" role="img" aria-label={t('fc.pinned')}><Icon name="pin" size={12} /></span>}{nameOf(c.row)}<ClashNote faceId={c.row.faceId} inline />{failed.has(keyOf(c.face)) && <NoteMark inline kind="warn" testId="fc-readfail" text={t('fc.readFail')} />}{isBase && <small> · {t('compare.base')}</small>}</div>
               {!isBase && (
                 <div className="fa-cc-actions">
