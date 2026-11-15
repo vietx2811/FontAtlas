@@ -225,3 +225,37 @@ describe('Compare: same display name, different files', () => {
     expect(screen.queryAllByTestId('dupe-line')).toHaveLength(0);
   });
 });
+
+describe('ComboCompare: same font name, different files', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    const rs = (await api.queryFaces({ limit: 50 })).items;
+    const res = await api.openCaseFromPeek({ face: { hashHex: rs[0].hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    const real = api.caseCompare.bind(api);
+    return { api, res, real };
+  };
+  it('a role whose two Combos use same-named fonts from different files shows a line under each; other roles stay clean', async () => {
+    const { api, res, real } = await setup();
+    vi.spyOn(api, 'caseCompare').mockImplementation(async (id, ids, lang) => {
+      const r = await real(id, ids, lang); const a = r.columns[0];
+      const twin = { ...a, combo: { ...a.combo, id: a.combo.id + 1000, idx: a.combo.idx + 1, isMain: false, slots: a.combo.slots.map(s => ({ ...s, row: s.row ? { ...s.row, faceId: s.row.faceId + 50000, hashHex: 'dd'.repeat(8), path: '/Other/Twin.ttf' } : s.row })) } };
+      return { ...r, columns: [a, twin] };
+    });
+    render(<ComboCompare api={api} caseId={res.case.id} currentId={res.comboId} onOpen={() => {}} onMain={() => {}} />); await settle();
+    expect(screen.getAllByTestId('cc-col')).toHaveLength(2);
+    const lines = screen.getAllByTestId('dupe-line');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.length % 2).toBe(0); // luôn theo cặp: mỗi vai trùng hiện ở cả hai cột
+    expect(lines.some(l => l.getAttribute('aria-label') === 'Tệp: /Other/Twin.ttf')).toBe(true);
+  });
+  it('the same font in two Combos is not a clash', async () => {
+    const { api, res, real } = await setup();
+    vi.spyOn(api, 'caseCompare').mockImplementation(async (id, ids, lang) => {
+      const r = await real(id, ids, lang); const a = r.columns[0];
+      return { ...r, columns: [a, { ...a, combo: { ...a.combo, id: a.combo.id + 1000, idx: a.combo.idx + 1, isMain: false } }] };
+    });
+    render(<ComboCompare api={api} caseId={res.case.id} currentId={res.comboId} onOpen={() => {}} onMain={() => {}} />); await settle();
+    expect(screen.getAllByTestId('cc-col')).toHaveLength(2);
+    expect(screen.queryAllByTestId('dupe-line')).toHaveLength(0);
+  });
+});
