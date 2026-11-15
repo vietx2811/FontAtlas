@@ -1,5 +1,6 @@
 //! B7: sổ Organized Library — ứng viên chép, ghi bản chép, di chuyển có hoàn tác, vị trí file đi theo.
 mod common;
+use common::nz;
 use common::*;
 use fontatlas_store::{OrganizedFile, SourceKind};
 use std::sync::atomic::AtomicBool;
@@ -58,9 +59,4 @@ fn record_move_and_undo_keep_the_ledger_and_file_locations_in_step() {
     assert_eq!(count(&s, &format!("SELECT count(*) FROM file_locations WHERE path = '{from}'")), 1);
     assert_eq!(s.organized_last_batch().unwrap(), None, "đã hoàn tác hết");
     assert_eq!(s.organized_next_batch().unwrap(), 2);
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }

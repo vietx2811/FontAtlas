@@ -144,15 +144,19 @@ pub fn scan_apps(roots: &[PathBuf], running: &HashSet<String>) -> Vec<InstalledA
     let mut seen = HashSet::new();
     for root in roots {
         let Ok(rd) = std::fs::read_dir(root) else { continue };
-        for e in rd.flatten() {
-            let p = e.path();
+        // thứ tự xác định (read_dir tuỳ hệ tệp): hai gói cùng bundle id luôn chọn gói đứng trước theo đường dẫn
+        let mut entries: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+        entries.sort();
+        for p in entries {
             let mut cands = vec![];
             if p.extension().is_some_and(|x| x == "app") {
                 cands.push(p);
             } else if p.is_dir()
                 && let Ok(sub) = std::fs::read_dir(&p)
             {
-                cands.extend(sub.flatten().map(|s| s.path()).filter(|s| s.extension().is_some_and(|x| x == "app")));
+                let mut subs: Vec<PathBuf> = sub.flatten().map(|s| s.path()).filter(|s| s.extension().is_some_and(|x| x == "app")).collect();
+                subs.sort();
+                cands.extend(subs);
             }
             for app in cands {
                 if let Some(a) = read_app(&app, running)

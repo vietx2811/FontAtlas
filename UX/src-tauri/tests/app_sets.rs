@@ -55,9 +55,9 @@ fn scan_reads_bundle_id_name_one_level_down_dedupes_and_sorts() {
     std::fs::create_dir_all(r.join("Broken.app")).unwrap(); // không có Info.plist
     std::fs::write(r.join("note.txt"), "x").unwrap();
     let apps = app_sets::scan_apps(&[r.to_path_buf(), PathBuf::from("/nonexistent-root")], &running(&["com.adobe.illustrator"]));
-    // Hai gói cùng bundle id: gói nào được đọc trước thì thắng, mà thứ tự `read_dir` tuỳ hệ tệp (APFS ≠ NTFS) → chỉ đòi một trong hai.
-    let names: Vec<&str> = apps.iter().map(|a| a.name.as_str().trim_end_matches(" copy")).collect();
-    assert_eq!(names, ["Adobe Illustrator", "alpha", "Zeta"]);
+    // Hai gói cùng bundle id: scan_apps duyệt theo đường dẫn đã sắp xếp nên `Dup.app` (đứng trước `Zeta.app`) thắng, trên mọi hệ tệp.
+    let names: Vec<&str> = apps.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Adobe Illustrator", "alpha", "Zeta copy"]);
     assert!(apps[0].running && !apps[1].running);
     assert_eq!(apps[0].bundle_id, "com.adobe.illustrator");
 }

@@ -1,4 +1,7 @@
 //! Review của Lead (feat/duplicates-resolve @ce27e1d3), mục 3–9: activation, kế hoạch cũ, tệp đổi, undo an toàn, pending.
+mod common;
+use common::nz;
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -617,9 +620,4 @@ fn a_keeper_whose_losers_all_failed_is_not_marked_as_used() {
     let out = dup_resolve::resolve_apply(&st, &r, &no_trash, 1).unwrap();
     assert!(codes(&out).contains(&"loser_not_in_group"));
     assert_eq!(out.done.len(), 1, "mục 2 không bị chặn oan bởi mục 1 đã thất bại: {:?}", out.failed);
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }

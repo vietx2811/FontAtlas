@@ -1,4 +1,7 @@
 //! B7 Organized Library: vị trí, chép an toàn (file gốc không đụng tới), xem trước, sắp xếp lại + hoàn tác, gói khôi phục.
+mod common;
+use common::nz;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,7 +101,7 @@ fn import_copies_without_touching_originals_keeps_names_verifies_and_snapshots()
         .collect();
     assert_eq!(files.len(), 2);
     assert!(files.iter().any(|f| nz(f).ends_with("/roboto.ttf")) && files.iter().any(|f| nz(f).ends_with("/open_sans.ttf")), "giữ tên file gốc: {files:?}");
-    assert!(files.iter().all(|f| f.split('/').count() == 3), "Class/Họ/file: {files:?}");
+    assert!(files.iter().all(|f| nz(f).split('/').count() == 3), "Class/Họ/file: {files:?}");
     // file gốc nguyên vẹn
     for (i, n) in ["roboto.ttf", "open_sans.ttf"].iter().enumerate() {
         assert_eq!(std::fs::read(fonts.join(n)).unwrap(), before[i]);
@@ -360,9 +363,4 @@ fn cancelling_during_the_download_stops_further_batches() {
     assert!(r.cancelled);
     assert_eq!(r.issue_count, 0, "huỷ không phải lỗi");
     assert_eq!(r.copied, 1, "font có sẵn trên máy đã chép trước khi tới lô cloud");
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }

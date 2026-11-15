@@ -1,3 +1,6 @@
+mod common;
+use common::nz;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -297,9 +300,4 @@ fn reveal_location_only_accepts_paths_known_to_the_store() {
     // lỗi từ opener được trả về dạng typed
     let err = system::reveal_location(&st, &known[0], &|_| Err("finder lỗi".into())).unwrap_err();
     assert_eq!(err.code, "io");
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }

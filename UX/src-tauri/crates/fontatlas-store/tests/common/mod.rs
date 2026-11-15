@@ -144,3 +144,9 @@ pub fn make_legacy_db(path: &Path, with_collections: bool, src_dir: &Path, fonts
         ).unwrap();
     }
 }
+
+/// Dùng chung cho test: đường dẫn thật trên Windows dùng `\`; so sánh theo dạng có `/`.
+#[allow(dead_code)]
+pub fn nz(s: impl AsRef<str>) -> String {
+    s.as_ref().replace('\\', "/")
+}

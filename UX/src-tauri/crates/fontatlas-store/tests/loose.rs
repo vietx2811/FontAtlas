@@ -1,5 +1,6 @@
 //! G8: nguồn `loose` (font lẻ), `import_files`, `faces_at`, `refresh_file_source`; migration nới `sources.kind`.
 mod common;
+use common::nz;
 use common::*;
 use fontatlas_store::{FileImportOutcome, SourceKind};
 use std::sync::atomic::AtomicBool;
@@ -87,9 +88,4 @@ fn faces_at_matches_a_folder_by_whole_path_components_only() {
     let in_a = s.faces_at(&[], &[a.to_string_lossy().into()]).unwrap();
     assert!(!in_a.is_empty() && in_a.iter().all(|(p, _)| p.starts_with(&*a.to_string_lossy())));
     assert!(in_a.iter().all(|(p, _)| nz(p).contains("/Fonts/")), "Fonts2 không bị khớp nhầm");
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }

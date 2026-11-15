@@ -1,4 +1,7 @@
 //! Giải quyết trùng lặp end-to-end: quét thật → xem trước → áp dụng (ẩn / Thùng rác giả) → hoàn tác.
+mod common;
+use common::nz;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -434,9 +437,4 @@ fn groups_that_need_a_human_are_not_in_all_safe_but_are_counted() {
     assert!(!item.auto_safe && item.review.is_some());
     let one = dup_resolve::resolve_preview(&st, &ResolveScopeDto::Group { kind: item.kind, key: item.key.clone() }, &all()).unwrap();
     assert_eq!(one.items.len(), 1, "xem trước từng nhóm vẫn có quyết định mặc định để người dùng đổi");
-}
-
-/// Windows: so sánh đường dẫn theo dạng có `/` (đường dẫn thật dùng `\`).
-fn nz(s: impl AsRef<str>) -> String {
-    s.as_ref().replace('\\', "/")
 }
