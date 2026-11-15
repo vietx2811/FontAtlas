@@ -44,15 +44,32 @@ fn install_status_remove_cycle() {
 }
 
 #[test]
-fn signing_key_is_private_and_reused() {
+fn signing_key_is_reused_on_the_same_machine() {
+    let e = env();
+    inst(&e, "1").install().unwrap();
+    let cert1 = std::fs::read(e.state.join("signing.cert.der")).unwrap();
+    inst(&e, "2").install().unwrap();
+    assert_eq!(std::fs::read(e.state.join("signing.cert.der")).unwrap(), cert1, "cùng máy → cùng chứng chỉ");
+}
+
+#[cfg(unix)]
+#[test]
+fn signing_key_is_private() {
     use std::os::unix::fs::PermissionsExt;
     let e = env();
     inst(&e, "1").install().unwrap();
     let mode = std::fs::metadata(e.state.join("signing.pem")).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
-    let cert1 = std::fs::read(e.state.join("signing.cert.der")).unwrap();
-    inst(&e, "2").install().unwrap();
-    assert_eq!(std::fs::read(e.state.join("signing.cert.der")).unwrap(), cert1, "cùng máy → cùng chứng chỉ");
+}
+
+#[test]
+fn default_extensions_dir_per_platform() {
+    use fontatlas_cep::{mac_extensions_dir, windows_extensions_dir};
+    use std::path::Path;
+    assert_eq!(mac_extensions_dir(Path::new("/Users/u")), Path::new("/Users/u/Library/Application Support/Adobe/CEP/extensions"));
+    assert_eq!(windows_extensions_dir(Path::new("C:/Users/u/AppData/Roaming")), Path::new("C:/Users/u/AppData/Roaming/Adobe/CEP/extensions"));
+    #[cfg(target_os = "macos")]
+    assert!(fontatlas_cep::default_extensions_dir().is_some_and(|d| d.ends_with("Library/Application Support/Adobe/CEP/extensions")));
 }
 
 #[test]

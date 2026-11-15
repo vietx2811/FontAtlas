@@ -58,6 +58,7 @@ pub fn init(app: &tauri::AppHandle) {
 }
 
 /// Bật/tắt kính cho cửa sổ `main`; gỡ vibrancy `sidebar` khi kính hiện, trả lại khi tắt. `true` = kính đang hiện.
+#[cfg(target_os = "macos")]
 pub fn apply(on: bool) -> bool {
     use tauri::utils::config::WindowEffectsConfig;
     use tauri::utils::{WindowEffect, WindowEffectState};
@@ -68,6 +69,12 @@ pub fn apply(on: bool) -> bool {
     let sidebar = WindowEffectsConfig { effects: vec![WindowEffect::Sidebar], state: Some(WindowEffectState::FollowsWindowActiveState), radius: None, color: None };
     let _ = win.set_effects(if shown { None } else { Some(sidebar) });
     shown
+}
+
+/// Không phải macOS: không có kính (`ns_window` chỉ có trên macOS).
+#[cfg(not(target_os = "macos"))]
+pub fn apply(_on: bool) -> bool {
+    false
 }
 
 /// QA bản debug: đếm lớp kính và vibrancy trong contentView của cửa sổ chính.

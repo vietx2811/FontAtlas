@@ -13,5 +13,5 @@ mod install;
 mod sign;
 
 pub use identity::{Identity, IdentityError};
-pub use install::{BUNDLE_ID, InstallError, InstallReport, PanelInstaller, PanelStatus, default_extensions_dir};
+pub use install::{BUNDLE_ID, InstallError, InstallReport, PanelInstaller, PanelStatus, default_extensions_dir, mac_extensions_dir, windows_extensions_dir};
 pub use sign::{SignError, VerifyError, canonical_manifest, canonical_signed_info, sign_package, verify_package};

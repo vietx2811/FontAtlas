@@ -41,9 +41,31 @@ pub struct InstallReport {
     pub restart_illustrator: bool,
 }
 
-/// `~/Library/Application Support/Adobe/CEP/extensions` của người dùng hiện tại.
+/// Thư mục panel CEP mức người dùng. macOS: `~/Library/Application Support/Adobe/CEP/extensions`; Windows: `%APPDATA%\Adobe\CEP\extensions`.
+/// Nền tảng khác (không có Adobe CEP): `None`.
 pub fn default_extensions_dir() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support/Adobe/CEP/extensions"))
+    #[cfg(target_os = "macos")]
+    {
+        Some(mac_extensions_dir(Path::new(&std::env::var_os("HOME")?)))
+    }
+    #[cfg(windows)]
+    {
+        Some(windows_extensions_dir(Path::new(&std::env::var_os("APPDATA")?)))
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        None
+    }
+}
+
+/// Dưới `home` của người dùng (macOS).
+pub fn mac_extensions_dir(home: &Path) -> PathBuf {
+    home.join("Library/Application Support/Adobe/CEP/extensions")
+}
+
+/// Dưới `%APPDATA%` (Windows).
+pub fn windows_extensions_dir(appdata: &Path) -> PathBuf {
+    appdata.join("Adobe").join("CEP").join("extensions")
 }
 
 pub struct PanelInstaller {
