@@ -218,6 +218,7 @@ export interface TauriCommandMap {
   parse_figma_import: { args: { text: string }; result: FigmaImportDto };
   take_pending_imports: { args: Record<string, never>; result: PendingImportDto[] };
   resolve_fonts: { args: { items: FontNameDto[] }; result: FontMatchDto[] };
+  open_third_party_notices: { args: Record<string, never>; result: null };
   save_png: { args: { suggestedName: string; pngBase64: string }; result: string | null };
   duplicate_groups: { args: { q: FaceQueryDto }; result: DuplicateGroupDto[] };
   duplicate_summary: { args: { q: FaceQueryDto }; result: DuplicateSummaryDto };

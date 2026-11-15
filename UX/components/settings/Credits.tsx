@@ -1,8 +1,11 @@
+import type { Api } from '../../api';
 import { t } from '../../i18n';
+import { useNoticeStore } from '../../store/notices';
 import { CREDITS, CREDIT_GROUPS } from './creditsData';
 
 /** «Giới thiệu và ghi công»: dữ liệu, model và thư viện bên thứ ba cùng giấy phép (nghĩa vụ ghi công của Apache-2.0/MIT/BSD). */
-export function Credits(): React.JSX.Element {
+export function Credits({ api }: { api: Api }): React.JSX.Element {
+  const openAll = async () => { try { await api.openThirdPartyNotices(); } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('credits.allLicences.fail', { msg: e instanceof Error ? e.message : String(e) }) }); } };
   return (
     <div className="fa-credits" data-testid="credits">
       <p className="fa-set-note">{t('credits.intro')}</p>
@@ -22,6 +25,7 @@ export function Credits(): React.JSX.Element {
           </ul>
         </section>
       ))}
+      <p className="fa-set-note"><button type="button" data-testid="credits-all-licences" onClick={() => void openAll()}>{t('credits.allLicences')}</button> {t('credits.allLicences.note')}</p>
       <p className="fa-set-note">{t('credits.fonts')}</p>
     </div>
   );

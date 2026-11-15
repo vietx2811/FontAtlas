@@ -94,7 +94,7 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
           <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
         )}
         {group === 'help' && <Help api={api} onRerun={onRerunOnboarding} />}
-        {group === 'credits' && <Credits />}
+        {group === 'credits' && <Credits api={api} />}
       </section>
     </div>
   );

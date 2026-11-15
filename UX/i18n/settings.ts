@@ -210,5 +210,8 @@ export const SETTINGS_I18N = {
   'credits.what.react': 'Dựng giao diện, danh sách ảo hoá và quản lý trạng thái.',
   'credits.what.uiLibs': 'Chuyển động, biểu đồ và tiện ích kiểu dáng.',
   'credits.what.lucide': 'Bộ biểu tượng.',
+  'credits.allLicences': 'Toàn văn giấy phép của mọi thành phần',
+  'credits.allLicences.note': 'Mở file THIRD-PARTY-NOTICES.txt đi kèm app (khoảng 550 thành phần mã nguồn mở).',
+  'credits.allLicences.fail': 'Không mở được file giấy phép: {msg}',
   'credits.fonts': 'Font trong thư viện của bạn thuộc về tác giả của chúng; Font Atlas không đóng gói font nào của bạn.',
 } as const;

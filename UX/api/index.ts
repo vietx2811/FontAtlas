@@ -181,6 +181,8 @@ export interface Api extends LibraryApi {
   recordView(face: FaceKeyDto): Promise<void>;
   /** Xoá danh sách font vừa xem; trả số dòng đã xoá. */
   clearRecentViews(): Promise<number>;
+  /** Mở THIRD-PARTY-NOTICES.txt (toàn văn giấy phép các thành phần) bằng ứng dụng mặc định. */
+  openThirdPartyNotices(): Promise<void>;
   /** Nhập từ Figma (B6). Phân tích văn bản dán (JSON hoặc link fontatlas://); chỉ đọc. Lỗi: `import_empty|format|version|too_large|too_many_fonts`. */
   parseFigmaImport(text: string): Promise<FigmaImportDto>;
   /** Khớp tên font Figma với thư viện (≤200). Kết quả cùng thứ tự đầu vào; không điểm số. */

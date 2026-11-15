@@ -212,5 +212,8 @@ export const EN_SETTINGS: Record<keyof typeof SETTINGS_I18N, string> = {
   'credits.what.react': 'Interface rendering, virtualised lists and state.',
   'credits.what.uiLibs': 'Motion, charts and styling helpers.',
   'credits.what.lucide': 'Icon set.',
+  'credits.allLicences': 'Full licences of all components',
+  'credits.allLicences.note': 'Opens the THIRD-PARTY-NOTICES.txt file bundled with the app (about 550 open-source components).',
+  'credits.allLicences.fail': 'Couldn’t open the licences file: {msg}',
   'credits.fonts': 'The fonts in your library belong to their authors; Font Atlas does not bundle any of your fonts.',
 };

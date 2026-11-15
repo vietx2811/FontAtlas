@@ -191,6 +191,7 @@ export function createTauriApi(): Api {
     recentViews: limit => call('recent_views', { limit }),
     recordView: face => none(call('record_view', { face })),
     clearRecentViews: () => call('clear_recent_views'),
+    openThirdPartyNotices: () => none(call('open_third_party_notices')),
     parseFigmaImport: text => call('parse_figma_import', { text }),
     resolveFonts: items => call('resolve_fonts', { items }),
     takePendingImports: () => call('take_pending_imports'),

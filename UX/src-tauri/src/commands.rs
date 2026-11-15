@@ -143,6 +143,7 @@ macro_rules! command_list {
             async parse_figma_import(text: String) -> Result<FigmaImportDto, CmdError>;
             async take_pending_imports() -> Result<Vec<PendingImportDto>, CmdError>;
             async resolve_fonts(items: Vec<FontNameDto>) -> Result<Vec<FontMatchDto>, CmdError>;
+            async open_third_party_notices() -> Result<(), CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
@@ -310,6 +311,18 @@ pub async fn save_png<R: tauri::Runtime>(app: tauri::AppHandle<R>, suggested_nam
     })
     .await
     .map_err(|e| CmdError::internal(format!("tác vụ nền lỗi: {e}")))?
+}
+
+/// Mở `THIRD-PARTY-NOTICES.txt` (đóng gói trong Resources của app) bằng ứng dụng mặc định; bản dev thì dùng file trong cây nguồn.
+#[tauri::command]
+pub async fn open_third_party_notices<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), CmdError> {
+    use tauri::Manager;
+    let mut cands: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(d) = app.path().resource_dir() { cands.push(d.join("THIRD-PARTY-NOTICES.txt")); cands.push(d.join("resources").join("THIRD-PARTY-NOTICES.txt")); }
+    #[cfg(debug_assertions)]
+    cands.push(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("THIRD-PARTY-NOTICES.txt"));
+    let path = cands.into_iter().find(|p| p.is_file()).ok_or_else(|| CmdError::not_found("THIRD-PARTY-NOTICES.txt"))?;
+    tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| CmdError::internal(format!("không mở được file giấy phép: {e}")))
 }
 
 #[tauri::command]
