@@ -16,6 +16,7 @@ import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { SourcePriority } from './SourcePriority';
+import { shortcutText } from '../../platform';
 import { Credits } from './Credits';
 import { Modal } from '../Modal';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
@@ -91,7 +92,7 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
         )}
         {group === 'data' && <Data api={api} />}
         {group === 'shortcuts' && (
-          <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
+          <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{shortcutText(k)}</kbd></th><td>{d}</td></tr>)}</tbody></table>
         )}
         {group === 'help' && <Help api={api} onRerun={onRerunOnboarding} />}
         {group === 'credits' && <Credits api={api} />}

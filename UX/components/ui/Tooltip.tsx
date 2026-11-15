@@ -25,6 +25,7 @@ type Handlers = {
   'aria-describedby'?: string;
 };
 
+import { shortcutText } from '../../platform';
 let closeCurrent: (() => void) | null = null;
 
 export const isTruncated = (el: Element | null): boolean => !!el && el.scrollWidth > el.clientWidth + 1;
@@ -129,7 +130,7 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
       {open && createPortal(
         <div ref={tip} id={id} data-tip-id={id} role="tooltip" className="fa-tip" style={{ visibility: 'hidden' }}>
           <span>{label}</span>
-          {shortcut && <kbd>{shortcut}</kbd>}
+          {shortcut && <kbd>{shortcutText(shortcut)}</kbd>}
         </div>,
         document.body,
       )}

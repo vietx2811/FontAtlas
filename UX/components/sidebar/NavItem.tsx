@@ -4,6 +4,7 @@ import { useUiStore } from '../../store/ui';
 import { useFaceDragStore } from '../../store/faceDrag';
 import { useFinderDropStore } from '../../store/finderDrop';
 import { Tooltip } from '../ui/Tooltip';
+import { shortcutText } from '../../platform';
 
 type Props = {
   icon?: IconName; swatch?: string | null; label: string; count?: number | null; current?: boolean;
@@ -34,7 +35,7 @@ export function NavItem({ icon, swatch, label, count, current, unavailable, titl
         {swatch !== undefined && <span className="fa-swatch" style={{ background: swatch ?? 'var(--muted)' }} aria-hidden />}
         {icon && <Icon name={icon} />}
         <span className="fa-lbl">{label}</span>
-        {kbd && <span className="fa-kbd">{kbd}</span>}
+        {kbd && <span className="fa-kbd">{shortcutText(kbd)}</span>}
         {count != null && <span className="fa-n">{count}</span>}
       </button>
       </Tooltip>

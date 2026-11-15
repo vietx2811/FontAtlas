@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import type { FaceRow } from '../features/library-grid/types';
 import { useSelectionStore, rowKey } from './selection';
+import { modKey, modKeyName } from '../platform';
 
 export type DropKind = 'col' | 'case' | 'active' | 'tag' | 'compare' | 'role';
 export type DropTarget = { kind: DropKind; id: number; /** Chỉ `role`: tên vai (khoá lưu) của ô nhận. */ role?: string; name: string; /** false = đích không hợp lệ (đang xem chính dự án đó). */ valid: boolean };
@@ -63,10 +64,10 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
       dragging = true;
       document.body.dataset.faceDragging = 'true';
     }
-    meta = ev.metaKey === true; lastX = ev.clientX; lastY = ev.clientY;
+    meta = modKey(ev); lastX = ev.clientX; lastY = ev.clientY;
     set(ev.clientX, ev.clientY);
   };
-  const onMeta = (ev: KeyboardEvent) => { if (dragging && ev.key === 'Meta') { meta = ev.type === 'keydown'; set(lastX, lastY); } };
+  const onMeta = (ev: KeyboardEvent) => { if (dragging && ev.key === modKeyName()) { meta = ev.type === 'keydown'; set(lastX, lastY); } };
   const end = () => {
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerup', onUp, true);
@@ -87,7 +88,7 @@ export function beginFaceDrag(e: { button: number; clientX: number; clientY: num
   };
   const onUp = (ev: PointerEvent) => {
     const was = dragging; const target = was ? targetAt(ev.clientX, ev.clientY) : null; const picked = rows;
-    const mv = (ev.metaKey === true || meta) && moveFrom !== null ? moveFrom : null;
+    const mv = (modKey(ev) || meta) && moveFrom !== null ? moveFrom : null;
     end();
     if (!was) return;
     swallowClick();

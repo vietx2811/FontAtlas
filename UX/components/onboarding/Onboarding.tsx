@@ -19,6 +19,7 @@ import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
 import { ShortcutsOverlay } from '../help/ShortcutsOverlay';
+import { isMac } from '../../platform';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
   /** false: không có outro (test, QA). Giảm chuyển động của hệ thống cũng tắt nó. Phần mở đầu là Splash của App, không nằm ở đây. */ animated?: boolean; outroMs?: number };
@@ -42,10 +43,10 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   const [glass, setGlass] = useState(false);
   useEffect(() => {
     let alive = true;
-    api.setWindowGlass(true).then(on => { if (alive) setGlass(on); }, () => undefined);
-    return () => { alive = false; void api.setWindowGlass(false).catch(() => undefined); };
+    (isMac() ? api.setWindowGlass(true) : Promise.resolve(false)).then(on => { if (alive) setGlass(on); }, () => undefined);
+    return () => { alive = false; if (isMac()) void api.setWindowGlass(false).catch(() => undefined); };
   }, [api]);
-  const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && isMac(); // vibrancy/kính chỉ có trên macOS
   const reload = useCallback(async () => { const s = await api.onboardingState(); setState(s); return s; }, [api]);
 
   useEffect(() => {

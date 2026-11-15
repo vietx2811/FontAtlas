@@ -20,6 +20,7 @@ import { UI_I18N } from './ui';
 import { FACES_I18N } from './faces';
 import { SIDEBAR_I18N } from './sidebar';
 import { getLocale } from './locale';
+import { platformText } from './platformText';
 import { en } from './en';
 import { EN_ONE } from './en/plural';
 export { EN_ONE };
@@ -125,9 +126,9 @@ const lookup = (key: string): string | undefined => {
   if (hit === undefined && import.meta.env?.DEV && !warned.has(key)) { warned.add(key); console.warn(`[i18n] missing key: ${key}`); } // khoá ghép động (class.${x}…) thiếu bản dịch
   return hit;
 };
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => (lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => platformText((lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')), getLocale());
 /** Như `t()` nhưng chọn dạng số ít tiếng Anh khi `vars.n` = 1 (tiếng Việt giữ một dạng). Khoá phải có trong EN_ONE, nếu không dùng dạng thường. */
 export const tn = (key: I18nKey, vars: Record<string, string | number> = {}): string => {
-  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return EN_ONE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return platformText(EN_ONE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? '')), 'en');
   return t(key, vars);
 };
