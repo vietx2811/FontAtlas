@@ -61,6 +61,28 @@ fn cancelled_scan_marks_nothing_missing() {
 }
 
 #[test]
+fn cancel_during_analysis_stops_inside_the_batch() {
+    // huỷ lúc đang phân tích lô đầu (256 font): phải dừng giữa lô chứ không làm hết lô
+    let (_d, _f, mut s, src) = many(300);
+    let cancel = std::sync::Arc::new(AtomicBool::new(false));
+    let c2 = cancel.clone();
+    let st = s
+        .rescan_source_with(src, &mut |p| {
+            if p.phase == ScanPhase::Hashing {
+                let c = c2.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                    c.store(true, Ordering::SeqCst);
+                });
+            }
+        }, &cancel)
+        .unwrap();
+    assert_eq!(st.status, RescanStatus::Cancelled);
+    assert!(st.analyzed < 256, "đã phân tích cả lô: {}", st.analyzed);
+    assert_eq!(missing(&s), 0);
+}
+
+#[test]
 fn unplugged_mid_scan_marks_nothing_missing() {
     let (d, fonts, mut s, src) = many(600);
     let moved = d.path().join("Fonts-gone");
