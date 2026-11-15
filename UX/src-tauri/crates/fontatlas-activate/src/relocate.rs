@@ -107,7 +107,7 @@ impl<E: ActivationEngine> ActivationService<E> {
 
     fn relocate_one(&self, store: &Mutex<Store>, hash: [u8; 32], pick: Pick<'_>) -> Result<FileResult, ActivationError> {
         let mut res = FileResult { hash_hex: hex(&hash), path: None, requested_faces: vec![], extra_faces: vec![], outcome: FileOutcome::Busy, replaced: vec![], warning: None };
-        let Some(_guard) = self.take(hash) else { return Ok(res) };
+        let Some(_guard) = self.take_retry(hash) else { return Ok(res) };
         let (row, target) = {
             let s = relock(store);
             (s.activation_row(&hash)?, s.file_target(&hash)?)

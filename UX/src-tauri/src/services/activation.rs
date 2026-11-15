@@ -558,7 +558,7 @@ pub fn activate_case(
     let (present, gone): (Vec<_>, Vec<_>) = case.faces.into_iter().partition(|f| !f.missing);
     let keys: Vec<FaceKeyDto> = present.into_iter().map(|f| f.key).collect();
     let report = if keys.is_empty() {
-        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0 }
+        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0, busy: 0, busy_hashes: vec![] }
     } else {
         activate(state, &keys, scope, proceed, progress)?
     };
@@ -708,6 +708,42 @@ pub fn set_keep(state: &AppState, on: bool) -> Result<(), CmdError> {
 
 /// Đối soát DB ↔ hệ điều hành. `always`: gửi `Reconciled` cả khi không có gì mới (lúc mở app).
 pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
+    reconcile_pass(state, always, 0);
+}
+
+/// Hash bị thao tác khác giữ thì lượt đối soát bỏ qua nó; xếp tối đa 2 lượt BÙ (mỗi lượt sau ~1,5 s) để không phải đợi lần quét sau.
+const RECONCILE_MAKEUP_PASSES: u32 = 2;
+const RECONCILE_MAKEUP_DELAY: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Trạng thái các lượt đối soát bù: đếm lượt đang chờ/chạy (test chờ về 0 thay vì đoán theo đồng hồ) và cách chờ (tiêm được).
+#[derive(Default)]
+pub struct MakeupState {
+    pending: std::sync::atomic::AtomicUsize,
+    waiter: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+}
+
+impl MakeupState {
+    /// Số lượt bù đã xếp mà chưa chạy xong.
+    pub fn pending(&self) -> usize {
+        self.pending.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Thay cách chờ trước mỗi lượt bù (mặc định ngủ ~1,5 s). Chỉ cho test: biến "đợi bao lâu" thành "đợi sự kiện".
+    #[doc(hidden)]
+    pub fn set_waiter(&self, f: impl Fn() + Send + Sync + 'static) {
+        *self.waiter.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(f));
+    }
+
+    fn wait(&self) {
+        let w = self.waiter.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match w {
+            Some(f) => f(),
+            None => std::thread::sleep(RECONCILE_MAKEUP_DELAY),
+        }
+    }
+}
+
+fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32) {
     if !state.activation.supported() {
         return;
     }
@@ -717,6 +753,24 @@ pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
             let dto = ReconcileReportDto::from(&r);
             if always || dto.is_notable() {
                 state.hubs.activation.emit(ActivationEvent::Reconciled { report: dto });
+            }
+            if r.busy > 0 && attempt < RECONCILE_MAKEUP_PASSES && !state.scans.is_shutting_down() {
+                let st = Arc::clone(state);
+                st.reconcile_makeup.pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let spawned = std::thread::Builder::new().name("fontatlas-reconcile-makeup".into()).spawn({
+                    let st = Arc::clone(&st);
+                    move || {
+                        st.reconcile_makeup.wait();
+                        // app có thể đã tắt trong lúc chờ: không chạy lượt bù sau khi tắt
+                        if !st.scans.is_shutting_down() {
+                            reconcile_pass(&st, false, attempt + 1);
+                        }
+                        st.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    }
+                });
+                if spawned.is_err() {
+                    st.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                }
             }
         }
         Err(e) => log::warn!("đối soát kích hoạt lỗi: {e}"),

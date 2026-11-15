@@ -414,6 +414,10 @@ pub struct ActivationReportDto {
     pub changed: u32,
     pub needs_confirmation: u32,
     pub failed: u32,
+    /// Font còn bận sau khi đã chờ-thử-lại (thao tác khác đang giữ): chưa xong, giao diện báo "N font đang bận, thử lại".
+    pub busy: u32,
+    /// Hash (hex) các font còn bận (rỗng khi `busy = 0`).
+    pub busy_hashes: Vec<String>,
 }
 
 impl From<&fa::ActivationReport> for ActivationReportDto {
@@ -423,6 +427,8 @@ impl From<&fa::ActivationReport> for ActivationReportDto {
             changed: r.changed as u32,
             needs_confirmation: r.needs_confirmation as u32,
             failed: r.failed as u32,
+            busy: r.busy as u32,
+            busy_hashes: r.busy_hashes.clone(),
         }
     }
 }
@@ -477,6 +483,8 @@ pub struct ReconcileReportDto {
     pub not_downloaded: u32,
     pub cleaned: u32,
     pub failed: u32,
+    /// Hash bị bỏ qua vì đang bận (lượt bù sẽ làm).
+    pub busy: u32,
     pub results: Vec<FileResultDto>,
 }
 
@@ -501,6 +509,7 @@ impl From<&fa::ReconcileReport> for ReconcileReportDto {
             not_downloaded: r.not_downloaded as u32,
             cleaned: r.cleaned as u32,
             failed: r.failed as u32,
+            busy: r.busy as u32,
             results: r.results.iter().map(Into::into).collect(),
         }
     }

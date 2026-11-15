@@ -770,6 +770,8 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         changed: 2,
         needs_confirmation: 1,
         failed: 1,
+        busy: 1,
+        busy_hashes: vec!["05".repeat(32)],
     };
     assert_eq!(
         serde_json::to_value(ad::ActivationReportDto::from(&rep)).unwrap(),
@@ -794,6 +796,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         not_downloaded: 0,
         cleaned: 1,
         failed: 0,
+        busy: 0,
         results: vec![result(9, F::Activated)],
     };
     assert_eq!(

@@ -209,3 +209,79 @@ fn relocate_to_refuses_missing_wrong_hash_and_inactive_without_changing_anything
     assert_eq!(rep.results[0].outcome, FileOutcome::AlreadyInactive);
     assert!(regs(&svc).is_empty());
 }
+
+/// `relocate` đầu tiên bị chặn ở engine (giữ hash); trả (thread, barrier).
+fn hold_with_relocate(
+    env: &Arc<Env>,
+    svc: &Arc<ActivationService<FakeEngine>>,
+    k: fontatlas_store::FaceKey,
+    new_root: PathBuf,
+) -> (std::thread::JoinHandle<fontatlas_activate::ActivationReport>, Arc<std::sync::Barrier>) {
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    svc.engine().block_register_until(barrier.clone());
+    let (e2, s2) = (env.clone(), svc.clone());
+    let t = std::thread::spawn(move || s2.relocate(&e2.store, &[k.hash], Some(&new_root), &mut no_progress()).unwrap());
+    wait_blocked(svc);
+    (t, barrier)
+}
+
+#[test]
+fn relocate_reports_a_busy_hash_after_the_retries_and_lists_it_once() {
+    let (env, svc, k, _old, new) = setup(Scope::Session);
+    let (env, svc) = (Arc::new(env), Arc::new(svc.with_busy_retry(2, std::time::Duration::from_millis(10))));
+    let (t, barrier) = hold_with_relocate(&env, &svc, k, new.parent().unwrap().to_path_buf());
+    // hash trùng trong yêu cầu: vẫn chỉ đếm/liệt kê MỘT lần
+    let rep = svc.relocate(&env.store, &[k.hash, k.hash], new.parent(), &mut no_progress()).unwrap();
+    assert_eq!(rep.results.len(), 2);
+    assert!(rep.results.iter().all(|r| r.outcome == FileOutcome::Busy));
+    assert_eq!((rep.busy, rep.busy_hashes.len()), (1, 1), "{rep:?}");
+    barrier.wait();
+    let first = t.join().unwrap();
+    assert_eq!((first.busy, first.changed), (0, 1), "lượt giữ hash vẫn chuyển được: {first:?}");
+}
+
+#[test]
+fn relocate_waits_for_a_busy_hash_that_clears_within_the_retry_window() {
+    let (env, svc, k, _old, new) = setup(Scope::Session);
+    let (env, svc) = (Arc::new(env), Arc::new(svc)); // mặc định 30 × 100 ms
+    let (t, barrier) = hold_with_relocate(&env, &svc, k, new.parent().unwrap().to_path_buf());
+    let (e3, s3, root) = (env.clone(), svc.clone(), new.parent().unwrap().to_path_buf());
+    let w = std::thread::spawn(move || s3.relocate(&e3.store, &[k.hash], Some(&root), &mut no_progress()).unwrap());
+    std::thread::sleep(std::time::Duration::from_millis(200)); // chỉ để lượt thứ hai kịp vào vòng chờ; kết quả KHÔNG phụ thuộc đồng hồ
+    barrier.wait();
+    assert_eq!(t.join().unwrap().changed, 1);
+    let second = w.join().unwrap();
+    assert_eq!(second.busy, 0, "chờ được rồi: không báo bận oan ({second:?})");
+    assert!(second.results[0].outcome != FileOutcome::Busy);
+}
+
+/// `relocate` giữ hash trong lúc dòng vẫn Active+Registered ⇒ `set_scope` muốn đổi nhưng gặp bận.
+#[test]
+fn set_scope_reports_a_busy_hash_and_lists_it() {
+    let (env, svc, k, _old, new) = setup(Scope::Session);
+    let (env, svc) = (Arc::new(env), Arc::new(svc.with_busy_retry(2, std::time::Duration::from_millis(10))));
+    let (t, barrier) = hold_with_relocate(&env, &svc, k, new.parent().unwrap().to_path_buf());
+    let rep = svc.set_scope(&env.store, Some(&[k.hash]), Scope::Persistent).unwrap();
+    assert_eq!((rep.busy, rep.results[0].outcome.clone()), (1, FileOutcome::Busy), "{rep:?}");
+    assert_eq!(rep.busy_hashes.len(), 1);
+    barrier.wait();
+    t.join().unwrap();
+    let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(row.scope, ActivationScope::Session, "bận ⇒ chưa đổi phạm vi (không đổi nửa chừng)");
+}
+
+#[test]
+fn set_scope_waits_for_a_busy_hash_and_then_really_changes_the_scope() {
+    let (env, svc, k, _old, new) = setup(Scope::Session);
+    let (env, svc) = (Arc::new(env), Arc::new(svc));
+    let (t, barrier) = hold_with_relocate(&env, &svc, k, new.parent().unwrap().to_path_buf());
+    let (e3, s3) = (env.clone(), svc.clone());
+    let w = std::thread::spawn(move || s3.set_scope(&e3.store, Some(&[k.hash]), Scope::Persistent).unwrap());
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    barrier.wait();
+    t.join().unwrap();
+    let rep = w.join().unwrap();
+    assert_eq!((rep.busy, rep.results[0].outcome.clone()), (0, FileOutcome::Activated), "{rep:?}");
+    let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(row.scope, ActivationScope::Persistent, "phạm vi đổi thật sau khi chờ");
+}

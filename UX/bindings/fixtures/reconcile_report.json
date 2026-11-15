@@ -25,6 +25,7 @@
       ]
     }
   ],
+  "busy": 0,
   "cleaned": 1,
   "failed": 0,
   "missing": 1,

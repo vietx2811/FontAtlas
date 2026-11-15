@@ -43,13 +43,13 @@ describe('G7b — bản sao đổi tên', () => {
   it('Giữ cả hai qua activation_keep_both: toast nêu tên bản sao + ghi chú giấy phép; lỗi tạo bản sao nói lý do và đã bật như cũ', async () => {
     const api = createMockApi(); const first = (await api.queryFaces({ limit: 1 })).items[0];
     const key = { hashHex: first.hashHex, faceIndex: first.faceIndex };
-    const spy = vi.spyOn(api, 'activationKeepBoth').mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [key.faceIndex], outcome: { kind: 'activated' }, warning: 'renamed_copy_restricted' }] as never, changed: 1, needsConfirmation: 0, failed: 0 });
+    const spy = vi.spyOn(api, 'activationKeepBoth').mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [key.faceIndex], outcome: { kind: 'activated' }, warning: 'renamed_copy_restricted' }] as never, changed: 1, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] });
     await keepBoth(api, [key]);
     expect(spy).toHaveBeenCalledWith([key], null);
     const texts = useNoticeStore.getState().notices.map(n => n.text).join('|');
     expect(texts).toMatch(/Đã bật bản sao đổi tên «.* VF.*» để dùng cả hai/); expect(texts).toMatch(/hạn chế việc sửa đổi/);
     useNoticeStore.setState({ notices: [] });
-    spy.mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [0], outcome: { kind: 'activated' }, warning: 'rename_failed:disk_full' }] as never, changed: 1, needsConfirmation: 0, failed: 0 });
+    spy.mockResolvedValue({ results: [{ hashHex: key.hashHex, requestedFaces: [0], outcome: { kind: 'activated' }, warning: 'rename_failed:disk_full' }] as never, changed: 1, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] });
     await keepBoth(api, [key]);
     const err = useNoticeStore.getState().notices.find(n => n.kind === 'error')!; expect(err.text).toMatch(/Hết chỗ trống.*bật như cũ/);
   });
