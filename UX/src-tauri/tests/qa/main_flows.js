@@ -1046,11 +1046,14 @@
           }
           const placeBtn = await wait(() => { const b = document.querySelector('[data-testid=fc-place]'); return b && (b.closest('th')?.querySelector('.fa-cc-title')?.textContent ?? '').trim() ? b : null; }, 10000); // nút "Đặt" và tên cột vẽ xong
           const pname = placeBtn?.closest('th')?.querySelector('.fa-cc-title')?.textContent?.trim() ?? '';
+          const pkey = placeBtn?.closest('th')?.dataset.faceKey ?? ''; // so theo KHOÁ font (hash+face), không theo tên: thư viện QA có nhiều font cùng tên hiển thị (nguồn E là bản sửa 2 byte của font đã có), gợi ý có thể chứa cả hai
           {
-          const isPlaced = () => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && (f.querySelector('.fa-cc-title')?.textContent ?? '').includes(pname); };
+          const isPlaced = () => { const f = document.querySelector('[data-testid=fc-col]'); return f?.dataset.base === 'true' && f.dataset.faceKey === pkey; };
           for (let k = 0; k < 3 && !isPlaced(); k++) { (document.querySelector('[data-testid=fc-place]') ?? placeBtn)?.click(); await wait(isPlaced, 6000); } // bấm lại nếu lượt vẽ lại nuốt cú bấm
           const titles = [...document.querySelectorAll('[data-testid=fc-col] .fa-cc-title')].map(x => x.textContent.replace(/\s*·\s*mốc$/, '').trim());
-          await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && titles[0] === pname && new Set(titles).size === titles.length, { pname, titles: titles.length, first: titles[0] });
+          const keys = [...document.querySelectorAll('[data-testid=fc-col]')].map(x => x.dataset.faceKey ?? '');
+          // Đặt xong: font thành mốc (cột đầu) và KHÔNG còn lặp thành cột ứng viên (khoá duy nhất); tên trùng giữa hai font KHÁC nhau là hợp lệ.
+          await log('desk-compare-fonts-place', !!placeBtn && pname.length > 0 && pkey !== '' && keys[0] === pkey && new Set(keys).size === keys.length && titles[0] === pname, { pname, pkey: pkey.slice(0, 12), cols: keys.length, first: titles[0], sameNameOtherFace: titles.length - new Set(titles).size });
           }
         }
         document.querySelector('[data-testid=mode-pairing]')?.click(); await wait(() => deskEl() && !document.querySelector('[data-testid=font-compare], [data-testid=cc-col]'), 8000);
