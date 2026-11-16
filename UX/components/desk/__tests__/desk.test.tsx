@@ -292,6 +292,23 @@ describe('PairingDesk', () => {
     expect(screen.queryByTestId('pick-clear')).toBeNull(); expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(false);
   });
 
+  it('thiếu tiếng Việt: Case bật "Đủ tiếng Việt" → nhãn Yếu có tooltip nêu lý do; tắt → chỉ dấu "!" + tooltip', async () => {
+    const { api, desk } = await pickMount('body');
+    const real = api.suggestPartners.bind(api);
+    vi.spyOn(api, 'suggestPartners').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, roleFit: 'weak' as const, warnings: [...i.warnings, { code: 'missing_vietnamese', params: [] }] })) };
+    });
+    fireEvent.keyDown(desk, { key: '1' }); await settle();
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true); // Case mở với vi: true
+    const row = () => screen.getAllByTestId('desk-cand')[0];
+    expect(row().querySelector('[data-testid=cand-fit]')!.textContent).toBe('Yếu');
+    expect(row().querySelector('[data-testid=cand-vi-note]')).toBeNull();
+    expect(row().querySelector('[data-testid=cand-why]')!.textContent).not.toMatch(/tiếng Việt/); // lý do không lặp thành chữ
+    fireEvent.keyDown(desk, { key: 'v' }); await settle(); // tắt "Đủ tiếng Việt"
+    expect(row().querySelector('[data-testid=cand-vi-note]')!.getAttribute('aria-label')).toBe('Thiếu ký tự tiếng Việt');
+  });
+
   it('G5: a failing source shows the error with Retry and the other sources keep working', async () => {
     const { api, desk } = await pickMount('body');
     const spy = vi.spyOn(api, 'deskSuggest').mockRejectedValueOnce(new Error('boom'));
