@@ -303,7 +303,7 @@ describe('PairingDesk', () => {
     expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true); // Case mở với vi: true
     const row = () => screen.getAllByTestId('desk-cand')[0];
     expect(row().querySelector('[data-testid=cand-fit]')!.textContent).toBe('Yếu');
-    expect(row().querySelector('[data-testid=cand-vi-note]')).toBeNull();
+    expect(row().querySelector('[data-testid=cand-vi-note]')).toBeNull(); // weak + bật: tooltip trên nhãn là đủ
     expect(row().querySelector('[data-testid=cand-why]')!.textContent).not.toMatch(/tiếng Việt/); // lý do không lặp thành chữ
     fireEvent.keyDown(desk, { key: 'v' }); await settle(); // tắt "Đủ tiếng Việt"
     expect(row().querySelector('[data-testid=cand-vi-note]')!.getAttribute('aria-label')).toBe('Thiếu ký tự tiếng Việt');
