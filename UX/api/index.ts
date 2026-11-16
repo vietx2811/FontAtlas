@@ -92,7 +92,7 @@ export interface Api extends LibraryApi {
   /** Các bản sao của một font GỐC (hỏi "gỡ luôn bản sao?" trước khi xoá gốc). */
   derivedCopiesOf(face: FaceKeyDto): Promise<DerivedCopyInfoDto[]>;
   caseApps(caseId: number): Promise<CaseAppDto[]>;
-  caseSetApps(collectionId: number, apps: CaseAppDto[]): Promise<void>;
+  caseSetApps(caseId: number, apps: CaseAppDto[]): Promise<void>;
   /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */
   installedApps(): Promise<InstalledAppDto[]>;
   sourceDownloadCloud(sourceId: number, onProgress?: (p: CloudDownloadProgressDto) => void): Promise<CloudDownloadReportDto>;

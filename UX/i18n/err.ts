@@ -7,7 +7,7 @@ export const ERR_I18N = {
   'err.io': 'Không đọc hoặc ghi được tệp.',
   'err.exists': 'Đã có tệp trùng tên; hãy chọn tên khác.',
   'err.sqlite': 'Lỗi cơ sở dữ liệu của thư viện.',
-  'err.newer_schema': 'Dữ liệu được tạo bởi bản Font Atlas mới hơn.',
+  'err.newer_schema': 'Dữ liệu được tạo bởi bản Font Atlas mới hơn. Hãy cài lại bản mới hơn đó. Muốn quay về bản này: đóng app, chép bản sao lưu mới nhất trước lần nâng cấp (số v trong tên là phiên bản dữ liệu cũ) (thư mục backups trong thư mục dữ liệu, tệp user.v17.*, library.v*) thành user.db / library.db.',
   'err.migration': 'Không nâng cấp được dữ liệu thư viện.',
   'err.bad_hash': 'Mã định danh font không hợp lệ.',
   'err.legacy': 'Không đọc được dữ liệu cũ.',
