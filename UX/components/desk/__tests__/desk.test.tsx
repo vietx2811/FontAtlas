@@ -309,6 +309,21 @@ describe('PairingDesk', () => {
     expect(row().querySelector('[data-testid=cand-vi-note]')!.getAttribute('aria-label')).toBe('Thiếu ký tự tiếng Việt');
   });
 
+  it('thiếu tiếng Việt ngoài nguồn Ghép: nhãn mức không vẽ nên dấu "!" vẫn hiện dù Đủ tiếng Việt bật và mức Yếu', async () => {
+    const { api, desk } = await pickMount('body');
+    const real = api.deskSuggest.bind(api);
+    vi.spyOn(api, 'deskSuggest').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, fit: 'weak' as const, reasons: [{ code: 'missing_vietnamese', params: [] }, ...i.reasons] })) };
+    });
+    fireEvent.keyDown(desk, { key: '1' }); await settle(); fireEvent.keyDown(desk, { key: '2' }); await settle(); // đổi nguồn để nạp lại qua spy
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true);
+    const rows = screen.queryAllByTestId('desk-cand');
+    if (!rows.length) return;
+    expect(screen.queryAllByTestId('cand-fit').length).toBe(0);
+    expect(rows[0].querySelector('[data-testid=cand-vi-note]')).not.toBeNull();
+  });
+
   it('G5: a failing source shows the error with Retry and the other sources keep working', async () => {
     const { api, desk } = await pickMount('body');
     const spy = vi.spyOn(api, 'deskSuggest').mockRejectedValueOnce(new Error('boom'));
