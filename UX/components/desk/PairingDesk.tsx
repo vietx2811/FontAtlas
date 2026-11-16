@@ -23,6 +23,7 @@ import { ComboCompare } from './ComboCompare';
 import { ComboStepper } from './ComboStepper';
 import { FontCompare } from './FontCompare';
 import { DetailStrip } from './DetailStrip';
+import { RolePreview } from './RolePreview';
 import './desk.css';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { ClashNote } from '../ui/ClashNote';
@@ -44,6 +45,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const openCompare = useUiStore(s => s.openCompare);
   const [stripCollapsed, setStripCollapsed] = useState(false);
   const [mode, setMode] = useState<'pairing' | 'fonts' | 'combos'>('pairing');
+  // Đối tượng đang gợi ý: một vai (cột giữa = ứng viên cho vai) hoặc cả Combo (cột giữa = thẻ gợi ý combo).
+  const [scope, setScope] = useState<'role' | 'combo'>('role');
+  const [host, setHost] = useState<HTMLElement | null>(null);
   const [cmpRev, setCmpRev] = useState(0);
   const sample = useUiStore(s => s.sample);
   const [data, setData] = useState<CaseDto | null>(null);
@@ -145,13 +149,6 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   };
   const trial = idx >= 0 ? cands[idx] : undefined;
   useEffect(() => { selRef.current = trial ? { role, key: keyStr(trial.face) } : null; }, [trial, role]);
-  // Trang: tiêu đề dùng font của nhóm heading, đoạn văn dùng font nhóm body; vai đang thử thay font hiện tại.
-  const headingFace = (isHeadingLike(role) ? trial?.row : undefined) ?? ROLE_ORDER.filter(isHeadingLike).map(r => slotOf(r)?.row).find(Boolean) ?? null;
-  const bodyFace = (!isHeadingLike(role) ? trial?.row : undefined) ?? (['body', 'caption'] as const).map(r => slotOf(r)?.row).find(Boolean) ?? null;
-  const headFam = useFontFamily(api, headingFace);
-  const bodyFam = useFontFamily(api, bodyFace);
-  const css = (fam: string | null, row: FaceRowDto | null) => ({ fontFamily: fam ? `"${fam}", var(--font-ui)` : undefined, fontWeight: row?.weightClass ?? undefined, fontStyle: row?.isItalic ? 'italic' as const : undefined });
-
   const inUseSame = same(current?.key, trial?.face);
   const placeFace = useCallback(async (face: FaceKeyDto, row: FaceRowDto): Promise<boolean> => {
     if (!combo) return false;
@@ -200,7 +197,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     },
   };
   const step = (d: -1 | 1) => { if (!data || !combo) return; const i = data.combos.findIndex(c => c.id === combo.id); const n = data.combos[i + d]; if (n) goCombo(n.id); };
-  const selectRole = (r: ComboRoleDto) => { if (combo && r !== role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: r, trial: null }); };
+  const selectRole = (r: ComboRoleDto) => { setScope('role'); if (combo && r !== role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: r, trial: null }); };
 
   useEffect(() => { root.current?.focus(); }, []);
   // Nút vừa bị vô hiệu (‹ ở Combo 1, Xoá…) làm focus rơi về body: đưa về Desk để phím tắt còn sống.
@@ -214,24 +211,25 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const compareReason = cmpFaces.length < 2 ? t('desk.compareNeed') : null;
   const toCompare = () => { if (!compareReason) openCompare(cmpFaces); };
   const onKey = (e: React.KeyboardEvent) => {
+    const picking = mode === 'pairing' && scope === 'role'; // khi chọn Combo, phím của danh sách ứng viên (1–5, V, P, ↑↓…) không chạy ngầm
     if (confirmDel) return; // hộp xác nhận mở: không phím tắt nào của Desk chạy
     const tgt = e.target as HTMLElement;
     // Sự kiện nổi bọt từ portal (menu, hộp đổi tên) hoặc từ ô nhập không thuộc phím tắt của Desk.
     if (!root.current?.contains(tgt) || tgt.closest('input, textarea, select, [contenteditable]')) return;
     const onList = tgt === root.current || !!tgt.closest('[role=option]');
     if (e.key === 'Escape') { e.preventDefault(); leave(); }
-    else if (e.key === 'ArrowDown' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
-    else if (e.key === 'ArrowUp' && mode === 'pairing') { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
-    else if (e.key === 'Enter' && onList && !tgt.closest('button') && !e.repeat && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if (e.key === 'ArrowDown' && picking) { e.preventDefault(); setIdx(i => Math.min(cands.length - 1, i + 1)); }
+    else if (e.key === 'ArrowUp' && picking) { e.preventDefault(); setIdx(i => Math.max(0, i - 1)); }
+    else if (e.key === 'Enter' && onList && !tgt.closest('button') && !e.repeat && picking && trial && !inUseSame) { e.preventDefault(); void place(); }
     else if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'n' || e.key === 'N') && mode !== 'fonts') { e.preventDefault(); nameRef.current?.focus(); }
-    else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const src = SOURCES[Number(e.key) - 1]; if (!disabledSources[src]) chooseSource(src); }
-    else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); setViOnly(v => !v); }
-    else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'p' || e.key === 'P') && trial) { e.preventDefault(); void togglePin(trial); }
-    else if (mode === 'pairing' && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === '/' || e.key === 'f' || e.key === 'F')) { e.preventDefault(); root.current?.querySelector<HTMLElement>('[data-testid=pick-class]')?.focus(); }
-    else if ((e.key === '+' || e.key === '=') && onList && !tgt.closest('button') && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing' && trial && !inUseSame) { e.preventDefault(); void place(); }
+    else if (picking && !e.metaKey && !e.ctrlKey && !e.altKey && /^[1-5]$/.test(e.key)) { e.preventDefault(); const src = SOURCES[Number(e.key) - 1]; if (!disabledSources[src]) chooseSource(src); }
+    else if (picking && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); setViOnly(v => !v); }
+    else if (picking && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'p' || e.key === 'P') && trial) { e.preventDefault(); void togglePin(trial); }
+    else if (picking && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === '/' || e.key === 'f' || e.key === 'F')) { e.preventDefault(); root.current?.querySelector<HTMLElement>('[data-testid=pick-class]')?.focus(); }
+    else if ((e.key === '+' || e.key === '=') && onList && !tgt.closest('button') && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && picking && trial && !inUseSame) { e.preventDefault(); void place(); }
     else if ((e.key === '[' || e.key === ']') && mode !== 'fonts' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); step(e.key === '[' ? -1 : 1); }
-    else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey && mode === 'pairing') { e.preventDefault(); setStripCollapsed(c => !c); }
-    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && mode === 'pairing' && trial && !compareReason) { e.preventDefault(); toCompare(); }
+    else if ((e.key === 'i' || e.key === 'I') && !e.metaKey && !e.ctrlKey && !e.altKey && picking) { e.preventDefault(); setStripCollapsed(c => !c); }
+    else if ((e.key === 'c' || e.key === 'C') && e.shiftKey && picking && trial && !compareReason) { e.preventDefault(); toCompare(); }
   };
 
   const runActivateAll = async () => { setConfirmAll(false); setActivating(true); try { await activation.activateCase(desk.caseId); } finally { setActivating(false); } };
@@ -244,6 +242,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     return list;
   })();
 
+  const comboOn = scope === 'combo' && mode === 'pairing';
   return (
     <div ref={root} className="fa-desk" data-testid="pairing-desk" tabIndex={-1} onKeyDown={onKey}>
       <header className="fa-desk-head">
@@ -262,9 +261,14 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
           <button type="button" data-testid="mode-fonts" aria-pressed={mode === 'fonts'} onClick={() => setMode('fonts')}>{t('desk.mode.fonts')}</button>
           <button type="button" data-testid="mode-combos" aria-pressed={mode === 'combos'} onClick={() => setMode('combos')}>{t('desk.mode.combos')}</button>
         </span>
-        {data && combo && <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} />}
-        {data && combo && <ComboStepper data={data} combo={combo} ops={comboOps} />}
       </header>
+      {data && combo && (
+        <div className="fa-desk-combobar" data-testid="desk-combobar" data-selected={comboOn ? 'true' : undefined} onClick={() => { if (mode === 'pairing') setScope('combo'); }}>
+          <Tooltip label={t('desk.combobar.tip')}><span className="fa-desk-combobar-label">{t('desk.combobar')}</span></Tooltip>
+          <ComboStepper data={data} combo={combo} ops={comboOps} />
+          <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} open={comboOn} onOpenChange={o => { setScope(o ? 'combo' : 'role'); if (o) setMode('pairing'); }} host={host} />
+          <button type="button" className="fa-desk-combo-suggest" data-testid="desk-combo-suggest" aria-pressed={comboOn} onClick={e => { e.stopPropagation(); setScope('combo'); setMode('pairing'); }}>✦ {t('cs.open')}</button>
+        </div>)}
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}
       {mode === 'fonts' && data && combo ? (
         <FontCompare key={`${combo.id}:${role}`} api={api} role={role}
@@ -278,10 +282,11 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
       <div className="fa-desk-body">
         <section className="fa-desk-roles" aria-label={t('desk.roles')}>
           <h2>{t('desk.roles')}</h2>
-          {combo && <RoleList api={api} combo={combo} roles={shownRoles} role={role} onSelect={selectRole}
+          {combo && <RoleList api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} onSelect={selectRole}
             onCombo={(c, sel) => { setData(d => (d ? { ...d, combos: d.combos.map(x => (x.id === c.id ? c : x)) } : d)); setCmpRev(n => n + 1); if (sel && sel !== role) openDesk({ caseId: desk.caseId, comboId: c.id, role: sel, trial: null }); }}
             onRenamed={(from, to) => { if (from === role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: to, trial: null }); }} />}
         </section>
+        {comboOn ? <section className="fa-desk-picker fa-desk-combohost" aria-label={t('desk.combobar')} ref={setHost} data-testid="desk-combohost" /> : (
         <section className="fa-desk-picker" aria-label={t('desk.picker')}>
           <h2>{t('pick.title', { role: roleName(role) })}</h2>
           <PickerBar source={source} onSource={chooseSource} pairStyle={pairStyle} onPairStyle={setPairStyle} disabled={disabledSources} counts={{ pin: pinnedKeys.size }} classes={classes} onClasses={setClasses} viOnly={viOnly} onViOnly={setViOnly}
@@ -326,11 +331,11 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
             })}
           </ul>
           <p className="fa-desk-keys">{t('pick.keys')}</p>
-        </section>
+        </section>)}
         <section className="fa-desk-page" aria-label={t('desk.sampleLabel')}>
           <div className="fa-desk-sheet">
-            <div className="fa-desk-h" data-testid="desk-heading" style={{ ...css(headFam, headingFace), fontSize: 34, lineHeight: 1.15 }}>{sample.trim() && sample !== defaultSample() ? sample : t('desk.pageHeading')}</div>
-            <p className="fa-desk-p" data-testid="desk-body" style={{ ...css(bodyFam, bodyFace), fontSize: 16, lineHeight: 1.6 }}>{t('desk.pageBody')}</p>
+            <RolePreview api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} trial={trial?.row ?? null}
+              headline={sample.trim() && sample !== defaultSample() ? sample : t('desk.pageHeading')} body={t('desk.pageBody')} onSelect={selectRole} />
           </div>
           <div className="fa-desk-strip">
             {trial && <span className="fa-desk-trying" data-testid="desk-trying">{t('desk.trying')}: <b>{nameOf(trial.row)}</b><ClashNote faceId={trial.row.faceId} inline face={{ hashHex: trial.row.hashHex, faceIndex: trial.row.faceIndex }} /></span>}

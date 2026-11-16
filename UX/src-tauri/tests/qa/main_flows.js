@@ -994,6 +994,15 @@
       await wait(() => document.querySelectorAll('[data-testid=desk-cand]').length > 0 || document.querySelector('[data-testid=desk-noanchor]'), 15000);
       await wait(() => document.querySelectorAll('[data-testid=desk-role]').length >= 2, 8000);
       await log('desk-opens', !!desk && document.querySelectorAll('[data-testid=desk-role]').length >= 2 && !!document.querySelector('[data-testid=desk-heading]'), { roles: document.querySelectorAll('[data-testid=desk-role]').length, cands: document.querySelectorAll('[data-testid=desk-cand]').length });
+      {
+        // Bố cục theo ngữ cảnh: thanh Combo nằm trên danh sách vai và thấy ngay; xem trước có đủ mọi vai của Combo.
+        const bar = document.querySelector('[data-testid=desk-combobar]'); const r0 = document.querySelector('[data-testid=desk-role]');
+        const above = !!bar && !!r0 && !!(bar.compareDocumentPosition(r0) & Node.DOCUMENT_POSITION_FOLLOWING) && bar.offsetParent !== null && !!bar.querySelector('[data-testid=desk-combo-suggest]');
+        const listed = [...document.querySelectorAll('[data-testid=desk-role]')].map(x => x.dataset.role).join('|');
+        const previewed = [...document.querySelectorAll('[data-testid=desk-prev-role]')].map(x => x.dataset.role).join('|');
+        await log('desk-combobar-above-roles', above, { above });
+        await log('desk-preview-all-roles', !!listed && listed === previewed, { listed, previewed });
+      }
       const tb = document.querySelector('header.fa-topbar');
       await log('desk-is-the-only-page', !!desk && (!tb || tb.offsetParent === null) && !document.querySelector('.cmp-tbl, .pr') && !document.querySelector('[data-testid=duplicates-page]')?.offsetParent, { topbarHidden: !tb || tb.offsetParent === null });
       if (desk) {
@@ -1363,7 +1372,10 @@
           const snapDesk = () => ({ label: document.querySelector('[data-testid=combo-label]')?.textContent ?? '', filled: filled(), roles: roleNames().join('|') });
           const before = snapDesk();
           const name = document.querySelector('[data-testid=combo-name]');
-          name?.click(); name?.focus();
+          document.querySelector('[data-testid=desk-combo-suggest]')?.click(); // nút luôn thấy trên thanh Combo (không phải bấm vào ô tên)
+          await settle(150);
+          await log('desk-combo-scope-title', /Gợi ý cho: Combo|Suggestions for: Combo/.test(document.querySelector('[data-testid=cs-title]')?.textContent ?? ''), { title: document.querySelector('[data-testid=cs-title]')?.textContent });
+          name?.focus();
           const pop = await wait(() => document.querySelector('[data-testid=combo-suggest]'), 8000);
           if (name) setVal(name, 'Editorial');
           await wait(() => document.querySelectorAll('[data-testid=cs-card]').length > 0 || document.querySelector('[data-testid=cs-empty], [data-testid=cs-error], [role=alert]'), 25000);

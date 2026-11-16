@@ -30,8 +30,8 @@ function errText(e: unknown, name: string): string {
 }
 
 /** Cột vai của Pairing Desk (G3): chọn vai, + Role (tên tự do + gợi ý), đổi tên, đổi thứ tự, bỏ vai (có hoàn tác). */
-export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed }: {
-  api: Api; combo: ComboDto; /** Vai hiển thị theo thứ tự (gồm vai chỉ có ở giao diện khi Combo chưa lưu vai nào). */ roles: readonly ComboRoleDto[]; role: ComboRoleDto;
+export function RoleList({ api, combo, roles, role, selected = true, onSelect, onCombo, onRenamed }: {
+  api: Api; combo: ComboDto; /** Vai hiển thị theo thứ tự (gồm vai chỉ có ở giao diện khi Combo chưa lưu vai nào). */ roles: readonly ComboRoleDto[]; role: ComboRoleDto; /** false khi đang chọn Combo (không vai nào được tô chọn). */ selected?: boolean;
   onSelect(r: ComboRoleDto): void; onCombo(c: ComboDto, selectRole?: ComboRoleDto): void; onRenamed(from: ComboRoleDto, to: ComboRoleDto): void;
 }): React.JSX.Element {
   useNameClashes();
@@ -144,7 +144,7 @@ export function RoleList({ api, combo, roles, role, onSelect, onCombo, onRenamed
               ? <input className="fa-desk-roleinput" data-testid="role-rename" aria-label={t('role.rename', { role: roleLabel(r) })} autoFocus defaultValue={roleLabel(r)} maxLength={40}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void rename(r, e.currentTarget.value); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setRenaming(null); } }}
                   onBlur={e => { if (renaming === r) void rename(r, e.currentTarget.value); }} />
-              : <button type="button" className="fa-desk-role" data-testid="desk-role" data-role={r} aria-pressed={r === role} onClick={() => onSelect(r)}
+              : <button type="button" className="fa-desk-role" data-testid="desk-role" data-role={r} aria-pressed={selected && r === role} onClick={() => onSelect(r)}
                   onPointerDown={s && !s.missing ? e => beginFaceDrag(e, s.row as unknown as FaceRow, { solo: true, fromRole: r, ownButton: true }) : undefined}
                   onKeyDown={e => { if (e.key === 'F2') { e.preventDefault(); if (inStore(r)) setRenaming(r); } }}>
                   {gloss
