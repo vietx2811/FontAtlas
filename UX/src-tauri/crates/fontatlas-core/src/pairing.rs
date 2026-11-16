@@ -225,10 +225,9 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
 }
 
 pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
-    // P1: số đo vô lý thì không chấm (font "Guides"): `unknown` nên không lọt danh sách gợi ý (chỉ hiện good/ok).
-    if let Some(x) = t.x_height_em.filter(|x| *x > MAX_PLAUSIBLE_X_HEIGHT) {
-        return RoleFit { fit: Fit::Unknown, reasons: vec![Reason::with("measure_doubtful", "x_height", x)] };
-    }
+    // P1: số đo vô lý thì không chấm (font "Guides"): `unknown` nên không lọt danh sách gợi ý (chỉ hiện good/ok). Vẫn đi qua các
+    // cổng (tiếng Việt, lớp không hợp, tnum) để lệnh roleFit đơn lẻ nói đủ; trả về ngay sau cổng, trước phần chấm tiêu chí.
+    let doubtful = t.x_height_em.filter(|x| *x > MAX_PLAUSIBLE_X_HEIGHT);
     let mut cs: Vec<Crit> = match role {
         Role::Body => vec![
             // Vùng đích hiệu chuẩn theo phân vị 10–90 của 1722 họ OFL (Serif+Sans, mặt Regular), docs/team/eval/pairing/README.md.
@@ -322,6 +321,11 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
     if role == Role::Numerals && t.has_tnum == Some(false) {
         cap = cap.min(Fit::Ok);
         reasons.push(Reason::new("tnum_missing"));
+    }
+    if let Some(x) = doubtful {
+        reasons.insert(0, Reason::with("measure_doubtful", "x_height", x));
+        reasons.truncate(3);
+        return RoleFit { fit: Fit::Unknown, reasons };
     }
     // P2/P3/P4: một tiêu chí lệch XA (ngoài p1/p99 chữ đọc) không được bị trung bình pha loãng. Chữ thân (Body/Caption/Label): một
     // tiêu chí → trần ok, hai trở lên → weak. Heading/Quote (chỗ cho phép cá tính): chỉ hạ xuống ok. Nhờ đó lý do `far` không bao giờ

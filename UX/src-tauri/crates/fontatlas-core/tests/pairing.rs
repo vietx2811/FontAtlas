@@ -247,20 +247,67 @@ fn p2_width_only_ever_lowers_a_text_role_never_raises_it() {
 }
 
 #[test]
-fn p4_heading_far_outlier_only_drops_to_ok_never_below() {
+fn p4_heading_far_outlier_caps_at_ok_and_more_far_criteria_fall_only_by_the_mean() {
     let mut t = roboto_like();
     assert_eq!(role_fit(&t, Role::Heading).fit, Fit::Good);
-    t.contrast = Some(13.5); // Handjet: p99 contrast chữ đọc 8,4
+    // một tiêu chí lệch xa (Handjet: contrast 13,5; p99 chữ đọc 8,4): trần ok
+    t.contrast = Some(13.5);
     let r = role_fit(&t, Role::Heading);
     assert_eq!(r.fit, Fit::Ok, "{:?}", codes(&r));
     assert!(codes(&r).contains(&"contrast_high") && far_param(&r));
-    // Heading là chỗ cho phép cá tính: luật "lệch xa" chỉ đặt TRẦN ok (không phạt thêm khi nhiều tiêu chí); mức cuối vẫn do điểm trung bình
-    let mut two = t.clone();
-    two.stem = Some(0.6);
-    let r2 = role_fit(&two, Role::Heading);
-    assert!(r2.fit <= Fit::Ok, "{:?}", codes(&r2));
-    // một tiêu chí lệch xa: đúng ok (cap), và tiêu chí đó không làm Heading tụt dưới điểm của chính nó
-    assert_eq!(role_fit(&t, Role::Heading).fit, Fit::Ok);
+    // hai tiêu chí lệch xa: luật Heading KHÔNG phạt thêm (trần vẫn là ok); mức cuối do điểm trung bình quyết định.
+    // Ở đây stem và contrast (trọng số 2 + 2) đều 0, spacing (1) đạt: trung bình 1/5 = 0,2 → weak.
+    t.stem = Some(0.6);
+    let r2 = role_fit(&t, Role::Heading);
+    assert_eq!(r2.fit, Fit::Weak, "{:?}", codes(&r2));
+    assert!(far_param(&r2));
+}
+
+#[test]
+fn p1_unknown_still_reports_the_vietnamese_note_and_class_gate_in_order() {
+    // font "Guides": số đo vô lý nhưng roleFit đơn lẻ vẫn phải nói thiếu tiếng Việt và lớp không hợp
+    let mut t = roboto_like();
+    t.x_height_em = Some(1.075);
+    t.vi_missing = Some(12);
+    t.class = Class::Script;
+    let note = role_fit_with(&t, Role::Body, ViPolicy::Note);
+    assert_eq!(note.fit, Fit::Unknown);
+    assert_eq!(codes(&note), ["measure_doubtful", "missing_vietnamese", "class_unfit"]);
+    let strict = role_fit_with(&t, Role::Body, ViPolicy::Require);
+    assert_eq!(strict.fit, Fit::Unknown);
+    assert_eq!(codes(&strict), ["measure_doubtful", "vi_missing", "class_unfit"]);
+    // Numerals: không có ghi chú tiếng Việt (chữ số không cần dấu)
+    assert_eq!(codes(&role_fit_with(&t, Role::Numerals, ViPolicy::Note)), ["measure_doubtful"]);
+}
+
+#[test]
+fn reason_order_gates_first_then_far_after_truncate_to_three() {
+    // class biểu cảm + thiếu tiếng Việt (Note) + spacing lệch xa: hai cổng rồi lý do far, không bị truncate(3) cắt mất
+    let mut t = roboto_like();
+    t.class = Class::Script;
+    t.vi_missing = Some(12);
+    t.spacing = Some(0.47);
+    let r = role_fit_with(&t, Role::Body, ViPolicy::Note);
+    assert_eq!(codes(&r), ["missing_vietnamese", "class_unfit", "spacing_loose"]);
+    assert!(r.reasons[2].params.iter().any(|(k, _)| *k == "far"), "lý do thứ ba là lý do lệch xa");
+    assert_eq!(r.fit, Fit::Weak);
+}
+
+#[test]
+fn far_never_applies_to_display_or_numerals() {
+    // Display cần cá tính, Numerals chỉ có hai tiêu chí: không có trần far và không có tham số far trên lý do
+    let mut d = didone_display();
+    d.spacing = Some(0.5);
+    d.stem = Some(0.6);
+    d.contrast = Some(13.0);
+    let rd = role_fit(&d, Role::Display);
+    assert!(!far_param(&rd), "{:?}", codes(&rd));
+    assert_eq!(rd.fit, Fit::Good, "trần far không áp cho Display: {:?}", codes(&rd));
+    let mut n = roboto_like();
+    n.spacing = Some(0.5);
+    n.stem = Some(0.6);
+    let rn = role_fit(&n, Role::Numerals);
+    assert!(!far_param(&rn), "{:?}", codes(&rn));
 }
 
 #[test]
