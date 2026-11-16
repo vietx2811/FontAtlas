@@ -92,6 +92,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
   useEffect(() => { if (data && !viInit.current) { viInit.current = true; setViOnly(!!data.settings.vi); } }, [data]);
+  // projectVi gửi backend = công tắc "Đủ tiếng Việt" đang hiện (không phải cài đặt Case lúc mở). Trước lần khởi tạo đầu thì dùng cài đặt Case để khỏi tải hai lần.
+  const viEff = viInit.current ? viOnly : vi0;
   const profile: Profile | null = profiles[role] ?? null;
   const profileGuess = guessProfile(role);
   // Hồ sơ vai: vai preset tự biết; vai tuỳ ý dùng hồ sơ người dùng chọn (chưa chọn → backend trả fit unknown + role_unknown).
@@ -102,7 +104,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     let alive = true; setCandError(null); setLoading(true);
     const slotCur = slotOf(role);
     const run = async (src: PickSource): Promise<Trial[]> => {
-      const list = await loadSource(api, src, { role, profile, anchor: anchor?.key ?? null, anchorRole: anchor?.role ?? null, style: pairStyle, current: slotCur && !slotCur.missing ? slotCur.key : null, caseId: desk.caseId, projectVi: vi0, mode: mode0 });
+      const list = await loadSource(api, src, { role, profile, anchor: anchor?.key ?? null, anchorRole: anchor?.role ?? null, style: pairStyle, current: slotCur && !slotCur.missing ? slotCur.key : null, caseId: desk.caseId, projectVi: viEff, mode: mode0 });
       if (src !== 'pair' || !(desk.trial && desk.role === role)) return list;
       const r = await api.queryFaces({ faceKeys: [desk.trial], limit: 1 }).catch(() => null);
       const p: Trial | null = r?.items[0] ? { face: desk.trial, row: r.items[0], summary: '', fromPeek: true } : null;
@@ -124,7 +126,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, ready, mode0, vi0, anchorKey, role, trialKey, source, profile, classes, retry, currentKey, pairStyle]);
+  }, [api, ready, mode0, viEff, anchorKey, role, trialKey, source, profile, classes, retry, currentKey, pairStyle]);
 
   const cands = useMemo(() => all.filter(c => c.fromPeek || ((!viOnly || c.row.supportsVi) && (!passSet || passSet.has(keyStr(c.face))))), [all, viOnly, passSet]);
   const hiddenN = all.length - cands.length;
@@ -293,17 +295,18 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
           <ul className="fa-desk-cands" role="listbox" aria-label={t('desk.picker')} data-stale={loading && all.length > 0 ? 'true' : undefined}>
             {cands.map((c, i) => {
               const inUse = same(current?.key, c.face); const pinned = pinnedKeys.has(keyStr(c.face)); const unavailable = c.row.missing;
+              const weakVi = !!c.viMissing && viOnly && c.fit === 'weak' && source === 'pair'; // nhãn Yếu có tooltip lý do thay cho dấu "!"
               return (
               <li key={`${c.face.hashHex}:${c.face.faceIndex}`} role="option" aria-selected={i === idx} data-testid="desk-cand" data-trial={c.fromPeek ? 'peek' : undefined}
                 onPointerEnter={() => setIdx(i)} onPointerDown={e => beginFaceDrag(e, c.row as unknown as FaceRow, { solo: true })} onClick={() => { setIdx(i); }} onDoubleClick={() => { setIdx(i); void place(); }}>
                 <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline face={{ hashHex: c.row.hashHex, faceIndex: c.row.faceIndex }} />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
-                {(c.viMissing || (c.row.supportsVi === false && c.row.viMissing > 0)) && !(viOnly && c.fit === 'weak' && source === 'pair') && <NoteMark inline kind="warn" testId="cand-vi-note" text={t('pick.viMissing.note')} />}
+                {(c.viMissing || (c.row.supportsVi === false && c.row.viMissing > 0)) && !weakVi && <NoteMark inline kind="warn" testId="cand-vi-note" text={t('pick.viMissing.note')} />}
                 {(c.styles?.length || c.fit || c.gate) && source === 'pair' && (
                   <span className="fa-desk-cand-tags" data-testid="cand-tags">
                     {c.styles?.[0] && <span data-testid="cand-style">{t(`style.${c.styles[0]}` as 'style.contrast')}</span>}
-                    {c.fit && c.fit !== 'unknown' && (c.viMissing && viOnly && c.fit === 'weak'
+                    {c.fit && c.fit !== 'unknown' && (weakVi
                       ? <Tooltip label={t('pick.fit.weakVi')}><span data-testid="cand-fit" data-fit={c.fit} data-why="vi" tabIndex={0}>{t('pick.fit.weak')}</span></Tooltip>
                       : <span data-testid="cand-fit" data-fit={c.fit}>{t(`pick.fit.${c.fit}` as 'pick.fit.good')}</span>)}
                     {c.gate && c.gate !== 'safe' && <span data-testid="cand-gate">{t(`pick.gate.${c.gate}` as 'pick.gate.controlled')}</span>}

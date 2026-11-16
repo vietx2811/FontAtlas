@@ -324,6 +324,32 @@ describe('PairingDesk', () => {
     expect(rows[0].querySelector('[data-testid=cand-vi-note]')).not.toBeNull();
   });
 
+  it('đổi "Đủ tiếng Việt" gọi lại backend với projectVi mới (checkbox và phím V)', async () => {
+    const { api, desk } = await pickMount('body');
+    const spy = vi.spyOn(api, 'deskSuggest');
+    fireEvent.keyDown(desk, { key: '1' }); await settle(); fireEvent.keyDown(desk, { key: '2' }); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(true); // Case mở với vi: true
+    fireEvent.click(screen.getByTestId('pick-vi')); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(false);
+    fireEvent.keyDown(desk, { key: 'v' }); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(true);
+  });
+
+  it('nguồn Đã ghim: font thiếu tiếng Việt mức Ổn khi Đủ tiếng Việt bật vẫn có dấu "!"', async () => {
+    const { api, desk } = await pickMount('body');
+    fireEvent.click(screen.getAllByTestId('desk-cand')[0].querySelector('[data-testid=desk-cand-pin]')!); await settle();
+    const real = api.deskSuggest.bind(api);
+    vi.spyOn(api, 'deskSuggest').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, fit: 'ok' as const, reasons: [{ code: 'missing_vietnamese', params: [] }, ...i.reasons] })) };
+    });
+    fireEvent.keyDown(desk, { key: '4' }); await settle();
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true);
+    const rows = screen.getAllByTestId('desk-cand');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].querySelector('[data-testid=cand-vi-note]')).not.toBeNull();
+  });
+
   it('G5: a failing source shows the error with Retry and the other sources keep working', async () => {
     const { api, desk } = await pickMount('body');
     const spy = vi.spyOn(api, 'deskSuggest').mockRejectedValueOnce(new Error('boom'));
