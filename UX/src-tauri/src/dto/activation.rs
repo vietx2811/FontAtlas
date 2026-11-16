@@ -90,8 +90,9 @@ pub enum ReasonDto {
     #[serde(rename_all = "camelCase")]
     #[ts(rename_all = "camelCase")]
     CaseApp {
+        /// `cases.id` (Pairing Desk), không phải id của collection.
         #[ts(type = "number")]
-        collection_id: i64,
+        case_id: i64,
     },
 }
 
@@ -101,7 +102,7 @@ impl From<&ActivationReason> for ReasonDto {
             ActivationReason::Manual => ReasonDto::Manual,
             ActivationReason::Collection(id) => ReasonDto::Collection { collection_id: *id },
             ActivationReason::Auto(app) => ReasonDto::Auto { app: app.slug().to_string() },
-            ActivationReason::CaseApp(id) => ReasonDto::CaseApp { collection_id: *id },
+            ActivationReason::CaseApp(id) => ReasonDto::CaseApp { case_id: *id },
         }
     }
 }
@@ -557,7 +558,7 @@ pub enum AppSetEventKindDto {
 #[ts(export, rename_all = "camelCase")]
 pub struct AppSetEventDto {
     #[ts(type = "number")]
-    pub collection_id: i64,
+    pub case_id: i64,
     pub kind: AppSetEventKindDto,
     pub changed: u32,
     pub conflicts: u32,
@@ -567,7 +568,7 @@ pub struct AppSetEventDto {
 impl From<&fontatlas_activate::AppSetEvent> for AppSetEventDto {
     fn from(e: &fontatlas_activate::AppSetEvent) -> Self {
         AppSetEventDto {
-            collection_id: e.collection_id,
+            case_id: e.case_id,
             kind: match e.kind {
                 fontatlas_activate::AppSetEventKind::On => AppSetEventKindDto::On,
                 fontatlas_activate::AppSetEventKind::Off => AppSetEventKindDto::Off,

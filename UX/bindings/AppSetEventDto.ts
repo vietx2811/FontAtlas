@@ -4,4 +4,4 @@ import type { AppSetEventKindDto } from "./AppSetEventKindDto";
 /**
  * B5: sự kiện cho toast "Illustrator opened · 12 fonts on for <Case>".
  */
-export type AppSetEventDto = { collectionId: number, kind: AppSetEventKindDto, changed: number, conflicts: number, failed: number, };
+export type AppSetEventDto = { caseId: number, kind: AppSetEventKindDto, changed: number, conflicts: number, failed: number, };

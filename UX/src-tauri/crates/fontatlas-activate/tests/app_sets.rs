@@ -31,8 +31,8 @@ fn setup(apps: &[&str]) -> (Env, fontatlas_activate::ActivationService<fontatlas
     let k = key_of(&env, "libre_baskerville.ttf");
     let c = {
         let mut s = env.store.lock().unwrap();
-        let c = s.create_collection("Brand Kit A", None).unwrap();
-        s.add_to_collection(c, &[k]).unwrap();
+        let c = s.create_case("Brand Kit A", None, None).unwrap();
+        s.add_to_case(c, &[k], "added").unwrap();
         s.set_case_apps(c, &apps.iter().map(|b| app(b)).collect::<Vec<_>>()).unwrap();
         c
     };
@@ -52,7 +52,7 @@ fn launch_turns_on_and_quit_turns_off_after_grace() {
     // app chạy → bật, lý do caseapp, scope session
     let ev = svc.sync_app_sets(&env.store, &running(&[AI]), t0, GRACE, &mut tr).unwrap();
     assert_eq!(ev.len(), 1);
-    assert_eq!((ev[0].collection_id, ev[0].kind, ev[0].changed), (c, AppSetEventKind::On, 1));
+    assert_eq!((ev[0].case_id, ev[0].kind, ev[0].changed), (c, AppSetEventKind::On, 1));
     assert_eq!(reasons(&env, &k), vec![ActivationReason::CaseApp(c)]);
     let row = env.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
     assert_eq!(row.scope, fontatlas_store::ActivationScope::Session);
@@ -182,8 +182,9 @@ fn deleting_a_case_via_the_service_releases_its_app_reason() {
     let (env, svc, k, c) = setup(&[AI]);
     let mut tr = AppSetTracker::new();
     svc.sync_app_sets(&env.store, &running(&[AI]), Instant::now(), GRACE, &mut tr).unwrap();
-    svc.on_collection_deleted(&env.store, c, &mut |_| {}).unwrap();
-    env.store.lock().unwrap().delete_collection(c).unwrap();
+    env.store.lock().unwrap().delete_case(c).unwrap();
+    let ev = svc.sync_app_sets(&env.store, &running(&[AI]), Instant::now(), GRACE, &mut tr).unwrap();
+    assert_eq!(ev[0].kind, AppSetEventKind::Off, "Case vào thùng rác: app còn chạy vẫn gỡ ngay");
     assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
 }
 
@@ -194,7 +195,7 @@ fn release_all_on_exit_clears_every_case_app_reason() {
     svc.sync_app_sets(&env.store, &running(&[AI]), Instant::now(), GRACE, &mut tr).unwrap();
     assert_eq!(svc.release_all_case_apps(&env.store).unwrap(), 1);
     assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
-    assert!(env.store.lock().unwrap().case_app_reason_collections().unwrap().is_empty());
+    assert!(env.store.lock().unwrap().case_app_reason_cases().unwrap().is_empty());
 }
 
 #[test]
@@ -209,14 +210,14 @@ fn a_conflicting_font_is_not_turned_on_and_is_counted() {
     svc.activate_faces(&env.store, &[first], None, fontatlas_activate::ConflictPolicy::Ask, &mut |_| {}).unwrap();
     let c = {
         let mut s = env.store.lock().unwrap();
-        let c = s.create_collection("Brand Kit A", None).unwrap();
-        s.add_to_collection(c, &[fontatlas_store::FaceKey { hash: other, face_index: 0 }]).unwrap();
+        let c = s.create_case("Brand Kit A", None, None).unwrap();
+        s.add_to_case(c, &[fontatlas_store::FaceKey { hash: other, face_index: 0 }], "added").unwrap();
         s.set_case_apps(c, &[app(AI)]).unwrap();
         c
     };
     let mut tr = AppSetTracker::new();
     let ev = svc.sync_app_sets(&env.store, &running(&[AI]), Instant::now(), GRACE, &mut tr).unwrap();
-    assert_eq!((ev[0].collection_id, ev[0].changed, ev[0].conflicts), (c, 0, 1));
+    assert_eq!((ev[0].case_id, ev[0].changed, ev[0].conflicts), (c, 0, 1));
     assert_eq!(state(&env, &fontatlas_store::FaceKey { hash: other, face_index: 0 }), None, "không bật font xung đột");
     let _ = FileOutcome::Activated;
 }
@@ -278,4 +279,34 @@ fn suppress_with_two_apps_lasts_until_both_have_quit() {
     svc.sync_app_sets(&env.store, &running(&[ID, AI]), t0 + Duration::from_secs(4), GRACE, &mut tr).unwrap();
     assert_eq!(state(&env, &k), Some(DesiredState::Inactive));
     assert!(tr.is_suppressed(c));
+}
+
+/// L2: collection và Case trùng số nhưng khác font. App set bật font của CASE, không bao giờ của collection; xoá collection trùng số
+/// không nhả lý do `caseapp` của Case.
+#[test]
+fn same_id_collection_is_never_confused_with_the_case() {
+    let env = env_with(&["libre_baskerville.ttf", "roboto.ttf"]);
+    let svc = service(&env);
+    let case_font = key_of(&env, "libre_baskerville.ttf");
+    let coll_font = key_of(&env, "roboto.ttf");
+    let (case, coll) = {
+        let mut s = env.store.lock().unwrap();
+        let case = s.create_case("Case", None, None).unwrap();
+        s.add_to_case(case, &[case_font], "added").unwrap();
+        let coll = s.create_collection("Collection", None).unwrap();
+        s.add_to_collection(coll, &[coll_font]).unwrap();
+        s.set_case_apps(case, &[app(AI)]).unwrap();
+        (case, coll)
+    };
+    assert_eq!(case, coll, "điều kiện của test: trùng số");
+    let mut tr = AppSetTracker::new();
+    svc.sync_app_sets(&env.store, &running(&[AI]), Instant::now(), GRACE, &mut tr).unwrap();
+    assert_eq!(state(&env, &case_font), Some(DesiredState::Active), "font của Case được bật");
+    assert_eq!(state(&env, &coll_font), None, "font của collection cùng số KHÔNG được bật");
+    assert_eq!(reasons(&env, &case_font), vec![ActivationReason::CaseApp(case)]);
+    // xoá collection trùng số: lý do caseapp của Case phải còn nguyên
+    svc.on_collection_deleted(&env.store, coll, &mut |_| {}).unwrap();
+    env.store.lock().unwrap().delete_collection(coll).unwrap();
+    assert_eq!(state(&env, &case_font), Some(DesiredState::Active));
+    assert_eq!(reasons(&env, &case_font), vec![ActivationReason::CaseApp(case)]);
 }

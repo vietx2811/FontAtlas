@@ -33,19 +33,19 @@ export async function startActivationSync(api: Api): Promise<() => void> {
 }
 
 /** B5: toast khi font của Case tự bật/tắt theo app. Không có gì đổi và không xung đột thì không báo (đỡ ồn). Xung đột/lỗi thì nói thật. */
-export async function appSetNotice(api: Api, ev: { collectionId: number; kind: 'on' | 'off' | string; changed: number; conflicts: number; failed: number }): Promise<void> {
+export async function appSetNotice(api: Api, ev: { caseId: number; kind: 'on' | 'off' | string; changed: number; conflicts: number; failed: number }): Promise<void> {
   if (ev.changed === 0 && ev.conflicts === 0 && ev.failed === 0) return;
-  let name = `#${ev.collectionId}`;
-  try { name = (await api.getCase(ev.collectionId)).name; } catch { /* Case vừa bị xoá: vẫn báo bằng số */ }
+  let name = `#${ev.caseId}`;
+  try { name = (await api.getCase(ev.caseId)).name; } catch { /* Case vừa bị xoá: vẫn báo bằng số */ }
   const parts: string[] = [];
   if (ev.changed > 0) parts.push(t(ev.kind === 'on' ? 'app.on' : 'app.off', { n: ev.changed, name }));
   if (ev.conflicts > 0) parts.push(t('app.conflicts', { n: ev.conflicts }));
   if (ev.failed > 0) parts.push(t('app.failed', { n: ev.failed }));
   if (ev.kind === 'on' && ev.changed > 0) parts.push(t('appset.restart'));
-  const settings = { label: t('app.settings'), run: () => useAppPickerStore.getState().open(ev.collectionId, name) };
+  const settings = { label: t('app.settings'), run: () => useAppPickerStore.getState().open(ev.caseId, name) };
   // Bật tự động: [Tắt lần này] (chỉ gỡ lý do caseapp của lượt này; font còn lý do khác vẫn bật) + [Cài đặt…]. Tắt tự động: không hoàn tác; [Bật lại] bật cả Case thủ công.
-  const turnOffNow = { label: t('app.suppress'), run: () => { api.caseAppSuppress(ev.collectionId).then(() => { useNoticeStore.getState().push({ kind: 'info', text: t('app.suppressed', { name }) }); void refreshActivation(api); }, e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
-  const turnBackOn = { label: t('app.turnOn'), run: () => { api.activationActivateCase(ev.collectionId).then(() => void refreshActivation(api), e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
+  const turnOffNow = { label: t('app.suppress'), run: () => { api.caseAppSuppress(ev.caseId).then(() => { useNoticeStore.getState().push({ kind: 'info', text: t('app.suppressed', { name }) }); void refreshActivation(api); }, e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
+  const turnBackOn = { label: t('app.turnOn'), run: () => { api.activationActivateCase(ev.caseId).then(() => void refreshActivation(api), e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
   useNoticeStore.getState().push({
     kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. '),
     ...(ev.kind === 'on' ? { action: turnOffNow, action2: settings } : ev.changed > 0 ? { action: turnBackOn } : {}),

@@ -678,6 +678,26 @@ CREATE TABLE case_apps (
 CREATE INDEX case_apps_bundle ON case_apps(bundle_id);
 "#;
 
+/// B5 sửa (beta.2 L2): app set thuộc về CASE (`cases.id`, thực thể của Pairing Desk), không phải `collections`. Bản đầu khoá theo
+/// `collection_id` nhưng giao diện luôn gửi id của Case, nên hàng cũ thật ra mang case id (khi tình cờ có collection trùng id mới ghi được).
+/// Dựng lại bảng với khoá `case_id` → `cases`; GIỮ hàng cũ có Case tương ứng (hiểu id là case id), bỏ hàng mồ côi.
+/// Lý do `caseapp:<id>` chỉ sống trong phiên (thoát app là gỡ) nên không cần đổi.
+pub(crate) const USER_CASE_APPS_BY_CASE: &str = r#"
+ALTER TABLE case_apps RENAME TO case_apps_v14;
+DROP INDEX IF EXISTS case_apps_bundle;
+CREATE TABLE case_apps (
+  case_id   INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  bundle_id TEXT NOT NULL CHECK (length(bundle_id) BETWEEN 3 AND 255),
+  app_name  TEXT NOT NULL DEFAULT '',
+  added_at  INTEGER NOT NULL,
+  PRIMARY KEY (case_id, bundle_id)
+) WITHOUT ROWID;
+INSERT INTO case_apps (case_id, bundle_id, app_name, added_at)
+  SELECT collection_id, bundle_id, app_name, added_at FROM case_apps_v14 WHERE collection_id IN (SELECT id FROM cases);
+DROP TABLE case_apps_v14;
+CREATE INDEX case_apps_bundle ON case_apps(bundle_id);
+"#;
+
 /// B7 Organized Library: sổ các bản CHÉP vào thư viện có tổ chức (một bản cho mỗi hash) và nhật ký di chuyển của "Sắp xếp lại"
 /// (có Hoàn tác). Số phiên bản do vị trí trong `USER_MIGRATIONS` quyết định; khi merge cạnh migration khác chỉ cần đổi thứ tự.
 pub(crate) const USER_ORGANIZED: &str = r#"
@@ -726,7 +746,7 @@ CREATE TABLE derived_removals (
 );
 "#;
 
-pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED, USER_DERIVED_FONTS, USER_DERIVED_REMOVALS];
+pub(crate) const USER_MIGRATIONS: &[&str] = &[USER_V1, USER_V2, USER_V3, USER_V4, USER_V5, USER_V6, USER_TAXONOMY_V2, USER_DUP_RESOLVE, USER_REPLACED, USER_AUTO_ACTIVATION, USER_COMBO_ROLES, USER_RECENT_FACES, USER_SOURCE_KINDS, USER_CASE_APPS, USER_ORGANIZED, USER_DERIVED_FONTS, USER_DERIVED_REMOVALS, USER_CASE_APPS_BY_CASE];
 
 /// Chỉ cho test: user.db ngay TRƯỚC migration taxonomy v2 (mọi migration đứng trước nó trong danh sách).
 #[doc(hidden)]
@@ -809,6 +829,16 @@ pub fn create_user_pre_auto_for_test(path: &Path) {
 pub fn create_user_pre_case_apps_for_test(path: &Path) {
     let c = Connection::open(path).expect("open user pre-case-apps");
     let n = USER_MIGRATIONS.iter().position(|m| *m == USER_CASE_APPS).expect("case-apps migration in list");
+    for m in &USER_MIGRATIONS[..n] {
+        c.execute_batch(m).expect("USER_Vn");
+    }
+    c.execute_batch(&format!("PRAGMA user_version = {n};")).expect("user_version");
+}
+/// Chỉ cho test: user.db ngay TRƯỚC migration `USER_CASE_APPS_BY_CASE` (app set vẫn khoá theo collection_id).
+#[doc(hidden)]
+pub fn create_user_pre_case_apps_by_case_for_test(path: &Path) {
+    let c = Connection::open(path).expect("open user pre-case-apps-by-case");
+    let n = USER_MIGRATIONS.iter().position(|m| *m == USER_CASE_APPS_BY_CASE).expect("migration in list");
     for m in &USER_MIGRATIONS[..n] {
         c.execute_batch(m).expect("USER_Vn");
     }

@@ -71,12 +71,12 @@ impl<E: ActivationEngine> ActivationService<E> {
     pub fn release_case_app(
         &self,
         store: &Mutex<Store>,
-        collection_id: i64,
+        case_id: i64,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
-        let hashes = relock(store).hashes_with_reason(ActivationReason::CaseApp(collection_id))?;
+        let hashes = relock(store).hashes_with_reason(ActivationReason::CaseApp(case_id))?;
         let groups = hashes.into_iter().map(|h| (h, vec![])).collect();
-        self.deactivate_hashes(store, groups, Lift::CaseApp(collection_id), progress)
+        self.deactivate_hashes(store, groups, Lift::CaseApp(case_id), progress)
     }
 
     /// Gọi khi một collection bị xoá (6a gọi TRƯỚC `Store::delete_collection`; gọi sau cũng đúng).
@@ -88,10 +88,9 @@ impl<E: ActivationEngine> ActivationService<E> {
         collection_id: i64,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError> {
+        // Chỉ gỡ lý do `collection:<id>`. Lý do `caseapp:<id>` mang id của CASE (không phải collection) nên xoá collection
+        // không được đụng tới, kể cả khi trùng số; Case bị xoá thì bộ đồng bộ app set tự dọn.
         let mut rep = self.deactivate_collection(store, collection_id, progress)?;
-        for r in self.release_case_app(store, collection_id, progress)?.results {
-            rep.push(r);
-        }
         let orphans: Vec<_> = relock(store)
             .activation_rows()?
             .into_iter()
