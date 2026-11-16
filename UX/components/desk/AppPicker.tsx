@@ -11,7 +11,8 @@ import './appPicker.css';
 /** App nên hiện trước (khớp bundleId/tên): nhóm thiết kế mà font app-gắn-Case có ích nhất. */
 const PREFERRED = [/illustrator/i, /indesign/i, /photoshop/i, /affinity/i, /figma/i];
 /** Trình duyệt/app web: không gắn được (chỉ thấy font hệ thống, không có tín hiệu "app web đang mở"), nên không đề xuất. */
-export const BROWSERS = /^(com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|company\.thebrowser\.browser|com\.brave\.browser|com\.operasoftware\.opera|com\.vivaldi\.vivaldi)/i;
+/** macOS: bundle id (tiền tố). Windows (w1b §6.1): `win:exe:<exe>` khớp đủ tên, `win:pfn:` Arc theo tiền tố tên gói; heuristic, trình duyệt lạ vẫn hiện. */
+export const BROWSERS = /^(com\.apple\.safari|com\.google\.chrome|org\.mozilla\.firefox|com\.microsoft\.edgemac|company\.thebrowser\.browser|com\.brave\.browser|com\.operasoftware\.opera|com\.vivaldi\.vivaldi|win:exe:(chrome|msedge|firefox|brave|opera|vivaldi|iexplore)\.exe$|win:pfn:thebrowsercompany\.arc_)/i;
 export const isBrowserApp = (a: { bundleId: string }): boolean => BROWSERS.test(a.bundleId);
 const rank = (a: { bundleId: string; name: string }): number => { const i = PREFERRED.findIndex(r => r.test(a.bundleId) || r.test(a.name)); return i < 0 ? PREFERRED.length : i; };
 

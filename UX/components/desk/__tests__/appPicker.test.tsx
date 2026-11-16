@@ -70,4 +70,9 @@ describe('B5 — Mở cùng app', () => {
     expect(BROWSERS.test('com.example.eagle.safari-extension')).toBe(false);
     expect(BROWSERS.test('com.example.EagleForSafari')).toBe(false);
   });
+
+  it('id Windows: trình duyệt bị ẩn, app thiết kế và exe trùng đuôi thì không', () => {
+    for (const id of ['win:exe:chrome.exe', 'win:exe:msedge.exe', 'win:exe:firefox.exe', 'win:exe:brave.exe', 'win:exe:opera.exe', 'win:exe:vivaldi.exe', 'win:exe:iexplore.exe', 'win:pfn:TheBrowserCompany.Arc_ttt1ap7aakyb4', 'WIN:EXE:Chrome.exe']) expect(BROWSERS.test(id), id).toBe(true);
+    for (const id of ['win:exe:photoshop.exe', 'win:exe:illustrator.exe', 'win:exe:chrome.exe.bak', 'win:exe:mychrome.exe', 'win:exe:chromedriver.exe', 'win:pfn:Adobe.Photoshop_x']) expect(BROWSERS.test(id), id).toBe(false);
+  });
 });
