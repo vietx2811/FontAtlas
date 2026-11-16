@@ -486,7 +486,13 @@ pub fn import_with(
                 cancelled = true;
             }
         }
+        // Huỷ đã bấm lúc TẢI (lô cloud): font tải xong vẫn được chép bên dưới. Huỷ bấm lúc CHÉP thì dừng ngay ở file kế tiếp.
+        let cancelled_in_download = cancelled;
         for it in batch {
+            if cancel.load(Ordering::SeqCst) && !cancelled_in_download {
+                cancelled = true;
+                break; // không `continue`: các file còn lại chưa được đụng tới, kết quả báo đúng số đã chép
+            }
             let src = Path::new(&it.cand.src_path);
             let mut c = st.borrow_mut();
             if bi > 0
@@ -529,9 +535,6 @@ pub fn import_with(
                 }
                 st.borrow_mut().done += 1;
                 emit(OrganizePhaseDto::Copying, progress);
-                if cancel.load(Ordering::SeqCst) {
-                    cancelled = true;
-                }
                 continue;
             }
             c.done += 1;

@@ -364,3 +364,35 @@ fn cancelling_during_the_download_stops_further_batches() {
     assert_eq!(r.issue_count, 0, "huỷ không phải lỗi");
     assert_eq!(r.copied, 1, "font có sẵn trên máy đã chép trước khi tới lô cloud");
 }
+
+/// L1 (beta.2): Huỷ giữa lúc chép font có sẵn trên máy phải dừng thật: copied < total, lần chép nào đã xong thì nguyên vẹn, không còn file dở.
+#[test]
+fn cancelling_mid_copy_of_local_fonts_stops_the_batch_and_leaves_nothing_half_written() {
+    let names = ["roboto.ttf", "open_sans.ttf", "bebas_neue.ttf", "chonburi.ttf", "dm_serif_display.ttf", "fira_sans_regular.ttf", "miltonian.ttf", "playfair_display.ttf"];
+    let d = tempfile::tempdir().unwrap();
+    let (st, fonts) = scanned(d.path(), &names);
+    let root = make_library(&st, d.path());
+    let st2 = st.clone();
+    let mut asked = false;
+    let r = organized::import(&st, &OrganizeScopeDto::default(), &mut |p| {
+        // bấm Huỷ ngay sau file thứ 2 được chép xong
+        if p.done == 2 && !asked {
+            asked = true;
+            assert!(organized::cancel(&st2));
+        }
+    })
+    .unwrap();
+    assert!(r.cancelled);
+    assert_eq!(r.issue_count, 0, "huỷ không phải lỗi");
+    assert_eq!(r.copied, 2, "dừng ngay sau file đang chép, không chép nốt phần còn lại");
+    assert!((r.copied as usize) < names.len());
+    let copied = copied_names(&root);
+    assert_eq!(copied.len(), 2);
+    for n in &copied {
+        assert!(!n.contains(".tmp") && !n.starts_with('.'), "không có file chép dở: {n}");
+        assert_eq!(std::fs::read(walk(&root.join("Library")).into_iter().find(|p| p.file_name().unwrap().to_string_lossy() == *n).unwrap()).unwrap(), std::fs::read(fonts.join(n)).unwrap(), "file đã chép giống hệt bản gốc");
+    }
+    // lần sau chép tiếp phần còn lại
+    let again = organized::import_plan(&st, &OrganizeScopeDto::default()).unwrap();
+    assert_eq!((again.to_copy as usize, again.already_there), (names.len() - 2, 2));
+}
