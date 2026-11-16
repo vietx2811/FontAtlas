@@ -561,6 +561,7 @@ mod tests {
         assert_eq!(m.contains("iCloud"), cfg!(target_os = "macos"), "{m}");
     }
 
+    #[cfg(unix)] // đường dẫn kiểu macOS (/System, /Users); Windows có mô hình đường dẫn riêng (W1)
     #[test]
     fn classify_owner_table() {
         let home = Path::new("/Users/u");

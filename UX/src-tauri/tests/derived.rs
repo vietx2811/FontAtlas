@@ -62,7 +62,7 @@ fn derives_a_renamed_copy_only_for_a_real_clash_without_touching_the_original() 
     make_clash(&st);
     let (key, c) = derive_renamed_copy(&st, &vf).unwrap();
     assert!(c.created && !c.license_restricted);
-    assert!(c.path.starts_with(&*d.path().join("data/derived").to_string_lossy()), "ngoài Organized Library: <data>/derived: {}", c.path);
+    assert!(Path::new(&c.path).starts_with(d.path().join("data/derived")), "ngoài Organized Library: <data>/derived: {}", c.path);
     assert!(c.path.ends_with("oswald_vf-VF.ttf"));
     assert_eq!(std::fs::read(dir.join("oswald_vf.ttf")).unwrap(), before, "file gốc nguyên vẹn");
     assert!(!std::fs::read_dir(d.path().join("data/derived")).unwrap().flatten().any(|e| e.file_name().to_string_lossy().ends_with(".partial")));
@@ -112,7 +112,7 @@ fn with_an_organized_library_the_copy_goes_to_library_derived_and_survives_a_res
     organized::create(&st, root.to_str().unwrap()).unwrap();
     let vf = hash_of(&st, "Oswald");
     let (_k, c) = derive_renamed_copy(&st, &vf).unwrap();
-    assert!(c.path.starts_with(&*root.join("Library/Derived").to_string_lossy()), "{}", c.path);
+    assert!(Path::new(&c.path).starts_with(root.join("Library/Derived")), "{}", c.path);
     assert!(Path::new(&c.path).is_file());
     assert!(!d.path().join("data/derived").exists());
     // "Sắp xếp lại" chỉ đụng file có trong sổ chép: Derived/ nguyên chỗ
