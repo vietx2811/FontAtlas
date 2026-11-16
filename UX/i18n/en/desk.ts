@@ -284,6 +284,9 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'pick.fit.ok': 'OK fit',
   'pick.fit.weak': 'Weak fit',
   'pick.fit.unknown': 'Not measured',
+  'pick.fit.weakVi': 'Weak because Vietnamese glyphs are missing: "Full Vietnamese" is on',
+  'pick.viMissing.note': 'Missing Vietnamese glyphs',
+  'why.missing_vietnamese': 'missing Vietnamese glyphs',
   'pick.gate.controlled': 'Controlled',
   'pick.gate.experimental': 'Experimental',
 };

@@ -180,6 +180,9 @@ export const DESK_I18N = {
   'pick.fit.ok': 'Tạm được',
   'pick.fit.weak': 'Yếu',
   'pick.fit.unknown': 'Chưa đo',
+  'pick.fit.weakVi': 'Yếu vì thiếu ký tự tiếng Việt: đang bật "Đủ tiếng Việt"',
+  'pick.viMissing.note': 'Thiếu ký tự tiếng Việt',
+  'why.missing_vietnamese': 'thiếu ký tự tiếng Việt',
   'pick.gate.controlled': 'Có kiểm soát',
   'pick.gate.experimental': 'Thử nghiệm',
 } as const;

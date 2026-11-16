@@ -3,7 +3,7 @@ import { Modal } from '../Modal';
 import { useActivationFlow } from '../activation/useActivationFlow';
 import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
-import { t, tn } from '../../i18n';
+import { t } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { defaultSample, useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
@@ -299,11 +299,13 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
                 <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline face={{ hashHex: c.row.hashHex, faceIndex: c.row.faceIndex }} />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
-                {c.row.supportsVi === false && c.row.viMissing > 0 && <NoteMark inline kind="warn" text={tn('strip.viMissing', { n: c.row.viMissing })} />}
+                {(c.viMissing || (c.row.supportsVi === false && c.row.viMissing > 0)) && !viOnly && <NoteMark inline kind="warn" testId="cand-vi-note" text={t('pick.viMissing.note')} />}
                 {(c.styles?.length || c.fit || c.gate) && source === 'pair' && (
                   <span className="fa-desk-cand-tags" data-testid="cand-tags">
                     {c.styles?.[0] && <span data-testid="cand-style">{t(`style.${c.styles[0]}` as 'style.contrast')}</span>}
-                    {c.fit && c.fit !== 'unknown' && <span data-testid="cand-fit" data-fit={c.fit}>{t(`pick.fit.${c.fit}` as 'pick.fit.good')}</span>}
+                    {c.fit && c.fit !== 'unknown' && (c.viMissing && viOnly && c.fit === 'weak'
+                      ? <Tooltip label={t('pick.fit.weakVi')}><span data-testid="cand-fit" data-fit={c.fit} data-why="vi" tabIndex={0}>{t('pick.fit.weak')}</span></Tooltip>
+                      : <span data-testid="cand-fit" data-fit={c.fit}>{t(`pick.fit.${c.fit}` as 'pick.fit.good')}</span>)}
                     {c.gate && c.gate !== 'safe' && <span data-testid="cand-gate">{t(`pick.gate.${c.gate}` as 'pick.gate.controlled')}</span>}
                   </span>)}
                 {c.summary && <Tooltip label={c.summary}><span className="fa-desk-cand-why" data-testid="cand-why">{c.summary}</span></Tooltip>}
