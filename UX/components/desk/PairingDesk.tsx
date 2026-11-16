@@ -299,7 +299,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
                 <FaceTitle api={api} face={c.row} className="fa-desk-cand-name">{nameOf(c.row)}</FaceTitle><ClashNote faceId={c.row.faceId} inline face={{ hashHex: c.row.hashHex, faceIndex: c.row.faceIndex }} />
                 {inUse && <span className="fa-desk-cand-sum" data-testid="cand-inuse">{t('pick.inUse')}</span>}
                 {unavailable && <NoteMark inline text={t('pick.unavailable')} />}
-                {(c.viMissing || (c.row.supportsVi === false && c.row.viMissing > 0)) && !viOnly && <NoteMark inline kind="warn" testId="cand-vi-note" text={t('pick.viMissing.note')} />}
+                {(c.viMissing || (c.row.supportsVi === false && c.row.viMissing > 0)) && !(viOnly && c.fit === 'weak') && <NoteMark inline kind="warn" testId="cand-vi-note" text={t('pick.viMissing.note')} />}
                 {(c.styles?.length || c.fit || c.gate) && source === 'pair' && (
                   <span className="fa-desk-cand-tags" data-testid="cand-tags">
                     {c.styles?.[0] && <span data-testid="cand-style">{t(`style.${c.styles[0]}` as 'style.contrast')}</span>}
