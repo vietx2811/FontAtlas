@@ -173,8 +173,9 @@ export interface Api extends LibraryApi {
   suggestPartners(anchor: FaceKeyDto, req: SuggestPartnersReqDto): Promise<PartnerPageDto>;
   /** G6: gợi ý combo từ thư viện. Cùng `seed` cùng kết quả. Lỗi: `style_unknown`, `roles_invalid`, `locked_role_unknown`, `locked_duplicate`, `scope_unknown`, `case_required`. */
   suggestCombos(req: SuggestCombosReqDto): Promise<ComboSuggestionDto[]>;
-  /** Mức hợp vai của một font cho một vai (G4). */
-  roleFit(face: FaceKeyDto, role: RoleRefDto): Promise<RoleFitDto>;
+  /** Mức hợp vai của một font cho một vai (G4). `projectVi` = Case/Desk bật "Đủ tiếng Việt": thiếu ký tự thì hạ mức
+   *  (lý do `vi_missing`); không bật (mặc định) thì chấm theo hình dạng và chỉ thêm lý do `missing_vietnamese` (NoteMark "!"). */
+  roleFit(face: FaceKeyDto, role: RoleRefDto, projectVi?: boolean): Promise<RoleFitDto>;
   /** Font vừa xem (lưu ở backend, sống qua các lần mở app). */
   recentViews(limit: number): Promise<RecentViewDto[]>;
   /** Ghi một lần xem (mở Detail/Desk, không ghi khi lướt lưới). */

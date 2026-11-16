@@ -179,7 +179,23 @@ fn level(score: f32) -> Fit {
     }
 }
 
+/// Cách xử lý font thiếu ký tự tiếng Việt khi chấm hợp vai.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViPolicy {
+    /// Case/Desk bật "Đủ tiếng Việt": thiếu ký tự thì hạ trần mức (Body/Caption/Label → Weak, Heading/Quote/Display → Ok)
+    /// kèm lý do `vi_missing`. Đây là hành vi của `role_fit`.
+    Require,
+    /// Không đòi tiếng Việt: chấm theo hình dạng, không hạ mức; chỉ thêm lý do ghi chú `missing_vietnamese` (đứng đầu,
+    /// tham số `count`) để UI hiện NoteMark "!". Cổng khác (lớp không hợp, tnum) vẫn áp.
+    Note,
+}
+
+/// Hợp vai, đòi đủ tiếng Việt (`ViPolicy::Require`). Bộ vàng và bộ kiểm mù dùng hàm này.
 pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
+    role_fit_with(t, role, ViPolicy::Require)
+}
+
+pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
     let mut cs: Vec<Crit> = match role {
         Role::Body => vec![
             // Vùng đích hiệu chuẩn theo phân vị 10–90 của 1722 họ OFL (Serif+Sans, mặt Regular), docs/team/eval/pairing/README.md.
@@ -237,14 +253,21 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
     // Cổng: mức trần + lý do đứng đầu.
     let mut cap = Fit::Good;
     if let Some(n) = t.vi_missing.filter(|n| *n > 0) {
-        let c = match role {
-            Role::Body | Role::Caption | Role::Label => Fit::Weak,
-            Role::Heading | Role::Quote | Role::Display => Fit::Ok,
-            Role::Numerals => Fit::Good,
-        };
-        if c < Fit::Good {
-            cap = cap.min(c);
-            reasons.push(Reason::with("vi_missing", "count", n as f32));
+        match vi {
+            ViPolicy::Require => {
+                let c = match role {
+                    Role::Body | Role::Caption | Role::Label => Fit::Weak,
+                    Role::Heading | Role::Quote | Role::Display => Fit::Ok,
+                    Role::Numerals => Fit::Good,
+                };
+                if c < Fit::Good {
+                    cap = cap.min(c);
+                    reasons.push(Reason::with("vi_missing", "count", n as f32));
+                }
+            }
+            // chữ số không cần dấu tiếng Việt: không ghi chú (như nhánh Require không hạ Numerals)
+            ViPolicy::Note if role != Role::Numerals => reasons.push(Reason::with("missing_vietnamese", "count", n as f32)),
+            ViPolicy::Note => {}
         }
     }
     let unfit = match role {

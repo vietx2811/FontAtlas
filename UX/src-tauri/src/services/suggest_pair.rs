@@ -11,7 +11,7 @@ use crate::error::CmdError;
 use crate::index_bundle::IndexBundle;
 use crate::services::analysis::{bundle, dto_key, ix_of, rows_of};
 use crate::services::library::{EffMap, effective_classes, matching_keys};
-use crate::services::suggest::{fit_dto, reason_dto, resolve_role, traits_of, with_tnum_note};
+use crate::services::suggest::{fit_dto, reason_dto, resolve_role, traits_of, vi_policy, with_tnum_note};
 use crate::state::AppState;
 
 fn ix_role(r: Role) -> IxRole {
@@ -102,7 +102,7 @@ impl Scan<'_> {
                 continue;
             }
             let ct: Traits = traits_of(self.b, c, self.eff);
-            let rf = pairing::role_fit(&ct, target);
+            let rf = pairing::role_fit_with(&ct, target, vi_policy(project_vi));
             if !matches!(rf.fit, Fit::Good | Fit::Ok) {
                 continue;
             }
@@ -248,7 +248,7 @@ pub fn desk_suggest(state: &AppState, req: &DeskSuggestReqDto) -> Result<DeskPag
                 }
                 let (fit, reasons) = match (role, b.index.profile(&k)) {
                     (Some(r), Some(p)) => {
-                        let x = pairing::role_fit(&traits_of(&b, p, &eff), r);
+                        let x = pairing::role_fit_with(&traits_of(&b, p, &eff), r, vi_policy(req.project_vi));
                         (Some(fit_dto(x.fit)), with_tnum_note(r, x.reasons.iter().map(reason_dto).collect()))
                     }
                     _ => (None, vec![]),
@@ -326,7 +326,7 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
             if m.missing || m.non_latin_primary || (req.project_vi && p.vi_missing > 0) || allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) || locked_keys.contains(&p.key) {
                 continue;
             }
-            let f = pairing::role_fit(&traits_of(&b, p, &eff), roles[0]).fit;
+            let f = pairing::role_fit_with(&traits_of(&b, p, &eff), roles[0], vi_policy(req.project_vi)).fit;
             if matches!(f, Fit::Good | Fit::Ok) {
                 pool.push((f, mix(req.seed, &p.key), p));
             }
@@ -340,14 +340,14 @@ pub fn suggest_combos(state: &AppState, req: &SuggestCombosReqDto) -> Result<Vec
     for a in anchors {
         let mut used: HashSet<IxKey> = locked_keys.clone();
         used.insert(a.key.clone());
-        let mut picks: Vec<(usize, &FaceProfile, Fit, bool)> = vec![(0, a, pairing::role_fit(&traits_of(&b, a, &eff), roles[0]).fit, locked.contains_key(&0))];
+        let mut picks: Vec<(usize, &FaceProfile, Fit, bool)> = vec![(0, a, pairing::role_fit_with(&traits_of(&b, a, &eff), roles[0], vi_policy(req.project_vi)).fit, locked.contains_key(&0))];
         let (mut style, mut reasons, mut warnings, mut style_fit) = (None, Vec::<WhyDto>::new(), Vec::<WhyDto>::new(), Fit::Good);
         let mut ok = true;
         for (i, role) in roles.iter().enumerate().skip(1) {
             if let Some(k) = locked.get(&i) {
                 let p = b.index.profile(k).ok_or_else(|| CmdError::not_found("face"))?;
                 used.insert(p.key.clone());
-                picks.push((i, p, pairing::role_fit(&traits_of(&b, p, &eff), *role).fit, true));
+                picks.push((i, p, pairing::role_fit_with(&traits_of(&b, p, &eff), *role, vi_policy(req.project_vi)).fit, true));
                 continue;
             }
             // Đối tác của neo cho vai này; không có thì bỏ cả combo.
