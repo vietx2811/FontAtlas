@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi as vt } from 'vitest';
 import { createMockApi } from '../../api/mock';
 import { AdvancedFilters } from '../../components/filter/AdvancedFilters';
 import { ShortcutsOverlay } from '../../components/help/ShortcutsOverlay';
@@ -62,7 +62,9 @@ describe('detect(navigator)', () => {
     const linux = { platform: 'Linux x86_64', userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15' };
     const ipad = { platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15' };
     expect(detect(mac)).toBe('mac'); expect(detect(win)).toBe('windows'); expect(detect(linux)).toBe('linux'); expect(detect(ipad)).toBe('mac');
-    expect(detect({})).toBe('mac'); expect(detect(undefined)).toBe('mac');
+    expect(detect({})).toBe('mac');
+    // Không có navigator toàn cục (có điều khiển): không truyền undefined tường minh vì nó kích hoạt tham số mặc định = navigator của jsdom (linux trên runner CI).
+    vt.stubGlobal('navigator', undefined); try { expect(detect()).toBe('mac'); } finally { vt.unstubAllGlobals(); }
     expect(detect({ userAgent: 'Mozilla/5.0 (darwin) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.0' })).toBe('mac'); // jsdom trên máy mac
   });
 });
