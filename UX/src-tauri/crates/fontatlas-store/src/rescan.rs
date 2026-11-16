@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::UNIX_EPOCH;
 
-use fontatlas_core::{ANALYZER_VERSION, CoreError, analyze_paths};
+use fontatlas_core::{ANALYZER_VERSION, CoreError, analyze_paths, analyze_paths_cancellable};
 use rayon::prelude::*;
 use rusqlite::params;
 use serde::Serialize;
@@ -480,7 +480,11 @@ impl Store {
                 }
             }
             let paths: Vec<PathBuf> = pending.iter().map(|(f, _)| f.path.clone()).collect();
-            for ((f, h), (_, res)) in pending.into_iter().zip(analyze_paths(&paths)) {
+            // một par_iter cho cả lô, kiểm huỷ trước mỗi font: tắt app không phải chờ hết lô 256 font (Windows CI chậm mất
+            // hàng chục giây). Font chưa phân tích (`None`) bị bỏ, lần quét sau làm tiếp.
+            let analyzed = analyze_paths_cancellable(&paths, cancel);
+            for ((f, h), (_, res)) in pending.into_iter().zip(analyzed) {
+                let Some(res) = res else { continue };
                 match res {
                     // hash của report là chuẩn (file có thể đổi giữa lúc băm và lúc phân tích)
                     Ok(r) => items.push(IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) }),
