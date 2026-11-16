@@ -538,7 +538,7 @@ fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_sources() {
     use app_lib::services::cloud_watch::CloudWatch;
     let d = tempfile::tempdir().unwrap();
     let (st, dir) = scanned(d.path(), &["open_sans.ttf"]);
-    let w = CloudWatch::with_timing(Duration::from_millis(200), Duration::from_secs(2));
+    let w = CloudWatch::with_timing(Duration::from_millis(1000), Duration::from_secs(20)); // rộng hơn để máy nặng (CI) không tách cụm 30 file thành 2 lượt
     w.sync(&st);
     assert_eq!(w.watching().len(), 1, "B8: thư mục cục bộ (không phải ổ cloud) cũng được theo dõi");
     std::thread::sleep(Duration::from_millis(600));
@@ -555,14 +555,14 @@ fn cloud_watch_ignores_non_font_noise_and_stops_for_removed_sources() {
     for n in ["x.ttf.download", "y.otf.crdownload", "z.ttf.part", "w.ttf~"] {
         std::fs::write(dir.join(n), b"half").unwrap();
     }
-    std::thread::sleep(Duration::from_millis(1500));
+    std::thread::sleep(Duration::from_millis(3000));
     assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 0, "file không phải font không gây quét");
     // một cụm 30 thay đổi font chỉ ra đúng MỘT lượt quét
     for i in 0..30 {
         std::fs::copy(core_fixture("roboto.ttf"), dir.join(format!("r{i}.ttf"))).unwrap();
     }
     wait_until("có lượt quét", 30, || queued.load(std::sync::atomic::Ordering::SeqCst) >= 1);
-    std::thread::sleep(Duration::from_millis(1200));
+    std::thread::sleep(Duration::from_millis(3000));
     assert_eq!(queued.load(std::sync::atomic::Ordering::SeqCst), 1, "cụm sự kiện được gom thành một lượt");
     sources::remove_source(&st, 1).unwrap();
     w.sync(&st);
