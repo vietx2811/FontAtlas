@@ -154,6 +154,143 @@ fn note_policy_keeps_the_other_gates() {
     assert!(codes(&r).contains(&"missing_vietnamese"));
 }
 
+// ---- Bộ mù 2026-11-16 (docs/team/eval/pairing/blind/RESULTS-2026-11-16.md): P1–P4. Ngưỡng "lệch xa" = p1/p99 của chữ đọc
+// (1259 họ Sans+Serif OFL, tập eval 1722 họ), KHÔNG lấy từ thẻ nào của bộ mù.
+
+const ALL_ROLES: [Role; 7] = [Role::Body, Role::Caption, Role::Heading, Role::Display, Role::Quote, Role::Label, Role::Numerals];
+
+fn far_param(r: &fontatlas_core::pairing::RoleFit) -> bool {
+    r.reasons.iter().any(|x| x.params.iter().any(|(k, _)| *k == "far"))
+}
+
+#[test]
+fn p1_implausible_x_height_is_unknown_for_every_role() {
+    // font "Guides" (đường kẻ bị đo vào bbox): x-height > 0,8 em
+    let mut t = roboto_like();
+    t.x_height_em = Some(1.075);
+    for role in ALL_ROLES {
+        let r = role_fit(&t, role);
+        assert_eq!(r.fit, Fit::Unknown, "{role:?}");
+        assert_eq!(codes(&r).first(), Some(&"measure_doubtful"), "{role:?}: {:?}", codes(&r));
+    }
+    // biên: đúng 0,8 chưa đáng ngờ; chưa đo thì không đoán
+    t.x_height_em = Some(0.8);
+    assert_ne!(role_fit(&t, Role::Body).fit, Fit::Unknown);
+    t.x_height_em = None;
+    assert!(!codes(&role_fit(&t, Role::Body)).contains(&"measure_doubtful"));
+    // đúng cả với ViPolicy::Note
+    t.x_height_em = Some(0.9);
+    assert_eq!(role_fit_with(&t, Role::Display, ViPolicy::Note).fit, Fit::Unknown);
+}
+
+#[test]
+fn p2_one_far_outlier_caps_text_roles_at_ok_two_at_weak() {
+    // Lexend Peta/Tera: spacing 0,47–0,51 (p99 chữ đọc 0,294)
+    let mut one = roboto_like();
+    one.spacing = Some(0.47);
+    for role in [Role::Body, Role::Caption] {
+        let r = role_fit(&one, role);
+        assert_eq!(r.fit, Fit::Ok, "{role:?}: {:?}", codes(&r));
+        assert!(codes(&r).contains(&"spacing_loose"));
+        assert!(far_param(&r), "{role:?}: lý do lệch xa mang tham số far");
+    }
+    let mut two = one.clone();
+    two.width = Some(1.6); // vượt p99 width 1,379
+    assert_eq!(role_fit(&two, Role::Body).fit, Fit::Weak);
+    assert_eq!(role_fit(&two, Role::Caption).fit, Fit::Weak);
+    // Label: width là tiêu chí của Label; một tiêu chí lệch xa → ok, hai → weak
+    let mut label = roboto_like();
+    label.width = Some(1.6);
+    assert_eq!(role_fit(&label, Role::Label).fit, Fit::Ok);
+    label.stem = Some(0.6); // vượt p99 stem 0,478
+    assert_eq!(role_fit(&label, Role::Label).fit, Fit::Weak);
+}
+
+#[test]
+fn p2_outside_the_band_but_not_far_is_not_capped() {
+    // spacing 0,25 nằm giữa p90 (0,208) và p99 (0,294): lệch dải nhưng không "xa" → vẫn good như trước
+    let mut t = roboto_like();
+    t.spacing = Some(0.25);
+    assert_eq!(role_fit(&t, Role::Body).fit, Fit::Good);
+    assert!(!far_param(&role_fit(&t, Role::Body)));
+}
+
+#[test]
+fn p2_body_and_caption_now_score_width() {
+    let mut t = roboto_like();
+    t.width = Some(1.25); // quá rộng nhưng chưa tới p99 (1,379): điểm width thấp, hiện lý do
+    for role in [Role::Body, Role::Caption] {
+        assert!(codes(&role_fit(&t, role)).contains(&"width_wide"), "{role:?}");
+    }
+    t.width = Some(0.92); // dải thường: không có lý do width xấu
+    assert!(!codes(&role_fit(&t, Role::Body)).contains(&"width_wide"));
+}
+
+#[test]
+fn p2_width_only_ever_lowers_a_text_role_never_raises_it() {
+    // Cormorant-like: x-height thấp, tương phản cao; width bình thường (điểm width = 1). Thêm tiêu chí width KHÔNG được
+    // làm điểm trung bình tăng lên so với khi width chưa đo (bản đầu của P2 đã nâng 47 họ Body và 64 họ Caption ở tập 2014 họ).
+    // Body: điểm trung bình khi chưa có width ≈ 0,730 (ok); nếu width điểm 1 được tính vào trung bình thì ≈ 0,753 (good).
+    let mut t = roboto_like();
+    t.x_height_em = Some(0.42);
+    t.contrast = Some(4.5);
+    t.aperture = Some(120.0);
+    let mut with_width = t.clone();
+    with_width.width = Some(0.92);
+    let mut no_width = t.clone();
+    no_width.width = None;
+    assert_eq!(role_fit(&no_width, Role::Body).fit, Fit::Ok);
+    assert_eq!(role_fit(&with_width, Role::Body).fit, Fit::Ok, "width bình thường không được nâng Body từ ok lên good");
+    for role in [Role::Body, Role::Caption] {
+        assert!(role_fit(&with_width, role).fit <= role_fit(&no_width, role).fit, "{role:?}: width làm mức tăng");
+    }
+}
+
+#[test]
+fn p4_heading_far_outlier_only_drops_to_ok_never_below() {
+    let mut t = roboto_like();
+    assert_eq!(role_fit(&t, Role::Heading).fit, Fit::Good);
+    t.contrast = Some(13.5); // Handjet: p99 contrast chữ đọc 8,4
+    let r = role_fit(&t, Role::Heading);
+    assert_eq!(r.fit, Fit::Ok, "{:?}", codes(&r));
+    assert!(codes(&r).contains(&"contrast_high") && far_param(&r));
+    // Heading là chỗ cho phép cá tính: luật "lệch xa" chỉ đặt TRẦN ok (không phạt thêm khi nhiều tiêu chí); mức cuối vẫn do điểm trung bình
+    let mut two = t.clone();
+    two.stem = Some(0.6);
+    let r2 = role_fit(&two, Role::Heading);
+    assert!(r2.fit <= Fit::Ok, "{:?}", codes(&r2));
+    // một tiêu chí lệch xa: đúng ok (cap), và tiêu chí đó không làm Heading tụt dưới điểm của chính nó
+    assert_eq!(role_fit(&t, Role::Heading).fit, Fit::Ok);
+}
+
+#[test]
+fn p3_a_far_reason_never_comes_with_good() {
+    // lệch từng trục tới mức xa, mọi vai: nếu lý do mang `far` thì mức không bao giờ là Good
+    type Mutate = fn(&mut Traits);
+    let far: [(&str, Mutate); 7] = [
+        ("x_height", |t| t.x_height_em = Some(0.76)),
+        ("aperture", |t| t.aperture = Some(140.0)),
+        ("aperture_e", |t| t.aperture_e = Some(0.45)),
+        ("contrast", |t| t.contrast = Some(9.0)),
+        ("spacing", |t| t.spacing = Some(0.5)),
+        ("stem", |t| t.stem = Some(0.6)),
+        ("width", |t| t.width = Some(1.6)),
+    ];
+    let mut flagged = 0;
+    for (axis, apply) in far {
+        let mut t = roboto_like();
+        apply(&mut t);
+        for role in ALL_ROLES {
+            let r = role_fit(&t, role);
+            if far_param(&r) {
+                flagged += 1;
+                assert_ne!(r.fit, Fit::Good, "{axis} {role:?}: {:?}", codes(&r));
+            }
+        }
+    }
+    assert!(flagged >= 7, "ít nhất mỗi trục phải làm một vai có lý do far (đang {flagged})");
+}
+
 #[test]
 fn script_and_blackletter_are_weak_for_body() {
     let mut t = roboto_like();

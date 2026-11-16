@@ -143,3 +143,11 @@ Chủ app đồng ý (2026-11-15): font thiếu ký tự tiếng Việt **chỉ 
 | `false` / bỏ trống | Chấm theo hình dạng, **không hạ**; thêm lý do **`missing_vietnamese`** (+`count` = số ký tự thiếu), luôn đứng đầu `reasons`. UI hiện NoteMark "!" cạnh dòng. Cổng khác (class không hợp, tnum) vẫn áp. Numerals không có ghi chú (chữ số không cần dấu). |
 
 Chuỗi cần thêm (05): `why.missing_vietnamese` (vi + en, kèm `{count}`), NoteMark đỏ "!" theo motif chung. Không đổi hình dạng DTO; chỉ `role_fit` nhận thêm `projectVi: boolean | null` (bindings đã sinh lại).
+
+## 9. Bổ sung 2026-11-16 (04): số đo đáng ngờ và lệch xa
+
+Sau bộ mù 2026-11-16 (xem `docs/team/eval/pairing/population-impact-2026-11-16.md`):
+
+- Lý do **`measure_doubtful`** (tham số `x_height`): font có x-height > 0,8 em (số đo vô lý, vd họ "Guides") có `fit = unknown`, mọi vai. Các danh sách chỉ hiện good/ok nên font này không xuất hiện; lệnh `roleFit` đơn lẻ vẫn trả `unknown` + lý do này. Cần chuỗi vi + en `why.measure_doubtful` (05).
+- Tham số **`far = 1`** trên lý do của tiêu chí (`spacing_loose`, `stem_light`, `contrast_high`, `width_wide`…): tiêu chí lệch XA (ngoài p1/p99 của chữ đọc). Lý do mang `far` luôn đứng đầu và **không bao giờ đi cùng mức good**. UI có thể nhấn mạnh lý do này; không bắt buộc.
+- Mã lý do mới `width_narrow`/`width_wide` có thể xuất hiện ở Body và Caption (trước chỉ Label). Chuỗi `why.width_*` đã có.

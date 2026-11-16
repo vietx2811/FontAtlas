@@ -129,6 +129,30 @@ struct Crit {
     high: &'static str,
     value: Option<f32>,
     lo: f32,
+    /// Lệch XA: ngoài [p1, p99] của chữ đọc (`far_bounds`). Dùng để hạ trần mức (P2/P4), không pha loãng vào trung bình.
+    far: bool,
+    /// Chỉ tham gia trung bình khi kéo điểm XUỐNG (điểm thấp hơn trung bình của các tiêu chí còn lại). Tiêu chí thêm sau (width của
+    /// Body/Caption) dùng cách này để không nâng mức của font nào so với trước (bản đầu từng nâng 47 họ Body, 64 họ Caption).
+    penalty_only: bool,
+}
+
+/// x-height trên mức này (em) là số đo đáng ngờ, không phải chữ: font "Guides" (Playwrite…Guides, Edu… Guides) có đường kẻ hướng
+/// dẫn bị đo vào hộp bao nên x-height > 0,8 em (53/53 họ Guides, 0/51 họ Playwrite khác trong 2014 họ OFL; 8 họ khác đều là font trang trí).
+const MAX_PLAUSIBLE_X_HEIGHT: f32 = 0.8;
+
+/// Dải p1–p99 của chữ đọc: 1259 họ Sans+Serif OFL (`classify-small-serif/after_core-0.9.0_regular.csv`), mặt Regular.
+/// Hiệu chuẩn theo dân số, không theo thẻ nào của bộ mù. Ngoài dải này = lệch xa.
+fn far_bounds(code: &str) -> Option<(f32, f32)> {
+    Some(match code {
+        "x_height" => (0.36, 0.72),
+        "aperture" => (25.0, 131.0),
+        "aperture_e" => (0.035, 0.42),
+        "contrast" => (1.02, 8.4),
+        "spacing" => (0.027, 0.294),
+        "stem" => (0.048, 0.478),
+        "width" => (0.52, 1.38),
+        _ => return None,
+    })
 }
 
 #[allow(clippy::too_many_arguments)] // bảng khai báo tiêu chí; tuple hoá chỉ làm bảng khó đọc hơn
@@ -142,7 +166,12 @@ fn crit(
     low: &'static str,
     high: &'static str,
 ) -> Crit {
-    Crit { code, weight, score: v.map(|x| band(x, lo, hi, margin)), low, high, value: v, lo }
+    let far = v.is_some_and(|x| far_bounds(code).is_some_and(|(a, b)| x < a || x > b));
+    Crit { code, weight, score: v.map(|x| band(x, lo, hi, margin)), low, high, value: v, lo, far, penalty_only: false }
+}
+
+fn penalty(c: Crit) -> Crit {
+    Crit { penalty_only: true, ..c }
 }
 
 fn expressive_class(c: Class) -> bool {
@@ -196,6 +225,10 @@ pub fn role_fit(t: &Traits, role: Role) -> RoleFit {
 }
 
 pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
+    // P1: số đo vô lý thì không chấm (font "Guides"): `unknown` nên không lọt danh sách gợi ý (chỉ hiện good/ok).
+    if let Some(x) = t.x_height_em.filter(|x| *x > MAX_PLAUSIBLE_X_HEIGHT) {
+        return RoleFit { fit: Fit::Unknown, reasons: vec![Reason::with("measure_doubtful", "x_height", x)] };
+    }
     let mut cs: Vec<Crit> = match role {
         Role::Body => vec![
             // Vùng đích hiệu chuẩn theo phân vị 10–90 của 1722 họ OFL (Serif+Sans, mặt Regular), docs/team/eval/pairing/README.md.
@@ -205,6 +238,8 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
             crit("contrast", 2.0, t.contrast, 1.0, 3.5, 3.0, "contrast_low", "contrast_high"),
             crit("spacing", 1.0, t.spacing, 0.08, 0.20, 0.06, "spacing_tight", "spacing_loose"),
             crit("stem", 1.0, t.stem, 0.13, 0.20, 0.05, "stem_light", "stem_heavy"),
+            // P2: chữ thân không quá rộng/hẹp (Lexend Peta/Tera). Dải = p10–p90 width của chữ đọc (0,805–1,063).
+            penalty(crit("width", 1.0, t.width, 0.80, 1.06, 0.25, "width_narrow", "width_wide")),
         ],
         Role::Caption => vec![
             crit("x_height", 3.0, t.x_height_em, 0.50, 0.60, 0.06, "x_height_low", "x_height_high"),
@@ -212,6 +247,7 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
             crit("contrast", 2.0, t.contrast, 1.0, 3.0, 3.0, "contrast_low", "contrast_high"),
             crit("spacing", 2.0, t.spacing, 0.10, 0.22, 0.06, "spacing_tight", "spacing_loose"),
             crit("stem", 2.0, t.stem, 0.14, 0.22, 0.05, "stem_light", "stem_heavy"),
+            penalty(crit("width", 1.0, t.width, 0.80, 1.06, 0.25, "width_narrow", "width_wide")),
         ],
         Role::Heading => vec![
             crit("stem", 2.0, t.stem, 0.12, 0.30, 0.08, "stem_light", "stem_heavy"),
@@ -227,6 +263,8 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
                 high: "distinctiveness_low",
                 value: distinctiveness(t),
                 lo: 0.7,
+                far: false,
+                penalty_only: false,
             },
             crit("spacing", 1.0, t.spacing, 0.0, 0.20, 0.06, "spacing_tight", "spacing_loose"),
         ],
@@ -246,8 +284,9 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
         ],
     };
 
-    let total: f32 = cs.iter().map(|c| c.weight).sum();
-    let avail: f32 = cs.iter().filter(|c| c.score.is_some()).map(|c| c.weight).sum();
+    // `penalty_only` không tính vào tổng/khả dụng (không đổi ngưỡng "quá thiếu dữ kiện → unknown")
+    let total: f32 = cs.iter().filter(|c| !c.penalty_only).map(|c| c.weight).sum();
+    let avail: f32 = cs.iter().filter(|c| !c.penalty_only && c.score.is_some()).map(|c| c.weight).sum();
     let mut reasons: Vec<Reason> = vec![];
 
     // Cổng: mức trần + lý do đứng đầu.
@@ -284,18 +323,44 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
         cap = cap.min(Fit::Ok);
         reasons.push(Reason::new("tnum_missing"));
     }
+    // P2/P3/P4: một tiêu chí lệch XA (ngoài p1/p99 chữ đọc) không được bị trung bình pha loãng. Chữ thân (Body/Caption/Label): một
+    // tiêu chí → trần ok, hai trở lên → weak. Heading/Quote (chỗ cho phép cá tính): chỉ hạ xuống ok. Nhờ đó lý do `far` không bao giờ
+    // đi cùng mức good. Display/Numerals không áp (Display cần cá tính; Numerals chỉ có hai tiêu chí).
+    let far_n = cs.iter().filter(|c| c.far).count();
+    let far_active = matches!(role, Role::Body | Role::Caption | Role::Label | Role::Heading | Role::Quote);
+    if far_active && far_n > 0 {
+        let c = match role {
+            Role::Heading | Role::Quote => Fit::Ok,
+            _ if far_n >= 2 => Fit::Weak,
+            _ => Fit::Ok,
+        };
+        cap = cap.min(c);
+    }
 
     if avail * 2.0 < total {
         return RoleFit { fit: Fit::Unknown, reasons };
     }
-    let sum: f32 = cs.iter().filter_map(|c| c.score.map(|s| s * c.weight)).sum();
-    let base = level(sum / avail);
+    let mut sum: f32 = cs.iter().filter(|c| !c.penalty_only).filter_map(|c| c.score.map(|s| s * c.weight)).sum();
+    let mut wsum = avail;
+    let mean = sum / avail;
+    for c in cs.iter().filter(|c| c.penalty_only) {
+        // chỉ phạt: tiêu chí điểm cao không được nâng trung bình
+        if let Some(s) = c.score.filter(|s| *s < mean) {
+            sum += s * c.weight;
+            wsum += c.weight;
+        }
+    }
+    let base = level(sum / wsum);
     let fit = base.min(cap);
 
     // Lý do tiêu chí: kém nhất trước (< 0.75); nếu không có thì hai tiêu chí tốt nhất.
     cs.retain(|c| c.score.is_some());
-    cs.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
-    let weak: Vec<&Crit> = cs.iter().filter(|c| c.score.unwrap_or(1.0) < 0.75).collect();
+    // lệch xa đứng trước (chính nó là lý do bị hạ trần), rồi theo điểm tăng dần
+    cs.sort_by(|a, b| {
+        let (fa, fb) = (far_active && a.far, far_active && b.far);
+        fb.cmp(&fa).then(a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    let weak: Vec<&Crit> = cs.iter().filter(|c| c.score.unwrap_or(1.0) < 0.75 || (far_active && c.far)).collect();
     if weak.is_empty() {
         for c in cs.iter().rev().take(2) {
             reasons.push(Reason::with(ok_code(c.code), "value", c.value.unwrap_or(0.0)));
@@ -304,7 +369,11 @@ pub fn role_fit_with(t: &Traits, role: Role, vi: ViPolicy) -> RoleFit {
         for c in weak {
             let v = c.value.unwrap_or(0.0);
             let code = if v < c.lo { c.low } else { c.high };
-            reasons.push(Reason::with(code, "value", v));
+            let mut r = Reason::with(code, "value", v);
+            if far_active && c.far {
+                r.params.push(("far", 1.0));
+            }
+            reasons.push(r);
         }
     }
     reasons.truncate(3);
