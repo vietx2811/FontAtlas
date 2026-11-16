@@ -36,8 +36,6 @@ describe('G6 gợi ý combo', () => {
     expect(screen.getAllByTestId('cs-card').length).toBeGreaterThanOrEqual(3);
     await type('Dự án 7');
     expect(screen.getByTestId('cs-intent').textContent).toMatch(/Chưa nhận ra ý đồ/);
-    // Combo đã đủ vai: thư viện mock nhỏ có thể chỉ còn đúng combo hiện tại (bị loại) → bỏ giữ font để thấy gợi ý khác.
-    if (!screen.queryAllByTestId('cs-card').length) { fireEvent.click(screen.getByTestId('cs-keep')); await settle(); }
     expect(screen.getAllByTestId('cs-card').length).toBeGreaterThan(0);
   });
 
@@ -82,13 +80,33 @@ describe('G6 gợi ý combo', () => {
     expect(undone.slots.map(s => `${s.role}:${s.key.hashHex}`).sort()).toEqual(before.slots.map(s => `${s.role}:${s.key.hashHex}`).sort());
   });
 
-  it('Giữ font đã đặt: vai đã có font hiện khoá 🔒 và không có nút ＋; L bỏ khoá', async () => {
-    const { desk } = await mountWithDesk();
+  it('Mặc định không khoá vai nào; ghim một vai ở danh sách vai → vai đó hiện 🔒 trên thẻ và suggest_combos chỉ khoá vai ghim; Bỏ ghim tất cả', async () => {
+    const { api } = await mountWithDesk(); const spy = vi.spyOn(api, 'suggestCombos');
     await type('Editorial');
+    expect(spy.mock.calls.at(-1)![0].locked).toEqual([]);
+    expect(screen.getAllByTestId('cs-card')[0].textContent).not.toMatch(/🔒/);
+    const pin = screen.getAllByTestId('role-pin')[0];
+    fireEvent.click(pin); await wait(30); await settle();
+    expect(pin.getAttribute('aria-pressed')).toBe('true');
+    expect(spy.mock.calls.at(-1)![0].locked).toHaveLength(1);
     expect(screen.getAllByTestId('cs-card')[0].textContent).toMatch(/🔒/);
-    fireEvent.keyDown(screen.getByTestId('combo-suggest'), { key: 'l' }); await wait(30); await settle();
-    expect((screen.getByTestId('cs-keep') as HTMLInputElement).checked).toBe(false);
-    void desk;
+    fireEvent.click(screen.getByTestId('cs-unpin-all')); await wait(30); await settle();
+    expect(spy.mock.calls.at(-1)![0].locked).toEqual([]);
+  });
+
+  it('Mọi vai đã ghim: khung gợi ý nói rõ và có nút Bỏ ghim tất cả, không gọi backend', async () => {
+    const { api } = await mountWithDesk();
+    await type('Editorial');
+    const spy = vi.spyOn(api, 'suggestCombos');
+    for (const p of screen.getAllByTestId('role-pin')) fireEvent.click(p);
+    await wait(30); await settle();
+    const roles = screen.getAllByTestId('desk-role').length; const pins = screen.getAllByTestId('role-pin').length;
+    if (pins >= roles) {
+      expect(screen.getByTestId('cs-allpinned').textContent).toMatch(/Bỏ ghim tất cả/);
+      const n = spy.mock.calls.length;
+      fireEvent.click(screen.getByTestId('cs-unpin-all2')); await wait(30); await settle();
+      expect(screen.queryByTestId('cs-allpinned')).toBeNull(); expect(spy.mock.calls.length).toBeGreaterThan(n);
+    }
   });
 
   it('Esc đóng popover và giữ tên đã gõ; N ở Desk focus ô tên; R đổi seed (gọi lại)', async () => {

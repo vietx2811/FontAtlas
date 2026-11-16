@@ -37,9 +37,10 @@ function Sample({ api, row, heading, text }: { api: Api; row: FaceRowDto; headin
 type Ops = { refresh(): Promise<CaseDto>; go(id: number): void };
 
 /** Ô tên combo + popover "Gợi ý combo" (G6). Tên đã gõ giữ nguyên khi đóng; mọi lần nhận có hoàn tác. */
-export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenChange, host }: { api: Api; data: CaseDto; combo: ComboDto; ops: Ops; nameRef: React.RefObject<HTMLInputElement | null>;
+export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenChange, host, pinned, onUnpinAll }: { api: Api; data: CaseDto; combo: ComboDto; ops: Ops; nameRef: React.RefObject<HTMLInputElement | null>;
   /** Khung gợi ý mở = đang chọn "Combo" làm đối tượng gợi ý (Desk giữ trạng thái chọn). */ open: boolean; onOpenChange(o: boolean): void;
-  /** Nơi vẽ khung gợi ý nội tuyến (cột giữa của Desk); không có thì vẽ ngay sau ô tên. */ host?: HTMLElement | null }): React.JSX.Element {
+  /** Nơi vẽ khung gợi ý nội tuyến (cột giữa của Desk); không có thì vẽ ngay sau ô tên. */ host?: HTMLElement | null;
+  /** Vai người dùng ghim ("Giữ font này khi gợi ý combo"): chỉ những vai này bị khoá. Mặc định không vai nào. */ pinned: readonly string[]; onUnpinAll(): void }): React.JSX.Element {
   useNameClashes();
   const sample = useUiStore(s => s.sample);
   const savedName = combo.name && combo.name !== `Combo ${combo.idx}` ? combo.name : '';
@@ -47,11 +48,9 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
   const setOpen = onOpenChange;
   const [typed, setTyped] = useState(savedName); // đã debounce
   const [style, setStyle] = useState<string>(''); // '' = tất cả
-  const [keep, setKeep] = useState(true);
   const [caseOnly, setCaseOnly] = useState(false);
   const [seed, setSeed] = useState(1);
   const [retry, setRetry] = useState(0);
-  const [relaxed, setRelaxed] = useState(false);
   const [sugs, setSugs] = useState<ComboSuggestionDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSkel, setShowSkel] = useState(false);
@@ -79,20 +78,21 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
 
   /** Thẻ giống hệt combo đang dùng (mọi vai cùng font) không phải "gợi ý". */
   const isCurrent = (x: ComboSuggestionDto) => x.slots.length > 0 && x.slots.every(sl => { const cur = combo.slots.find(c => c.role.toLowerCase() === sl.role.name.toLowerCase()); return !!cur && !cur.missing && kOf(cur.key) === kOf(sl.face); });
+  const filledRoles = new Set(combo.slots.filter(s => !s.missing).map(s => s.role.toLowerCase()));
+  const allPinned = refs.length > 0 && refs.every(r => pinned.some(p => (presetKey(p) ?? p).toLowerCase() === r.name.toLowerCase()) && [...filledRoles].some(f => (presetKey(f) ?? f).toLowerCase() === r.name.toLowerCase()));
   useEffect(() => {
     if (!open) return;
     let alive = true; setLoading(true); setErr(null);
-    const lockedAll = keep ? combo.slots.filter(s => !s.missing && refs.some(r => r.name.toLowerCase() === (presetKey(s.role) ?? s.role).toLowerCase())).map(s => ({ role: refs.find(r => r.name.toLowerCase() === (presetKey(s.role) ?? s.role).toLowerCase())!, face: s.key })) : [];
+    const pins = new Set(pinned.map(x => x.toLowerCase()));
+    const locked0 = combo.slots.filter(s => !s.missing && pins.has(s.role.toLowerCase()) && refs.some(r => r.name.toLowerCase() === (presetKey(s.role) ?? s.role).toLowerCase())).map(s => ({ role: refs.find(r => r.name.toLowerCase() === (presetKey(s.role) ?? s.role).toLowerCase())!, face: s.key }));
     // Một font ở hai vai thì chỉ khoá lần đầu (backend báo locked_duplicate nếu khoá hai lần).
-    const seenKey = new Set<string>(); const uniq = lockedAll.filter(l => { const k = kOf(l.face); if (seenKey.has(k)) return false; seenKey.add(k); return true; });
-    // Mọi vai đã khoá thì backend chỉ trả lại đúng combo hiện tại: chỉ giữ vai đầu (Heading), đổi các vai còn lại.
-    const locked = uniq.length >= refs.length ? uniq.filter(l => l.role.name === refs[0].name) : uniq;
-    setRelaxed(uniq.length >= refs.length && uniq.length > 0);
+    const seenKey = new Set<string>(); const locked = locked0.filter(l => { const k = kOf(l.face); if (seenKey.has(k)) return false; seenKey.add(k); return true; });
+    if (allPinned) { setSugs([]); setLoading(false); return; } // mọi vai đã ghim: không còn gì để gợi ý
     api.suggestCombos({ styles: style ? [style] : intent?.styles ? [...intent.styles] : [], roles: refs, locked, scope: caseOnly ? 'case' : 'library', caseId: caseOnly ? data.id : null, projectVi: !!data.settings.vi, k: 6, seed })
       .then(r => { if (alive) { setSugs(r.filter(x => !isCurrent(x))); setActive(0); setLoading(false); } }, e => { if (alive) { setSugs(null); setLoading(false); setErr(errMsg(e)); } });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, api, data.id, combo.id, refs, style, keep, caseOnly, seed, retry, combo.slots.map(s => `${s.role}:${kOf(s.key)}`).join('|')]);
+  }, [open, api, data.id, combo.id, refs, style, pinned.join('|'), caseOnly, seed, retry, combo.slots.map(s => `${s.role}:${kOf(s.key)}`).join('|')]);
 
   const saveName = async () => {
     const n = draft.trim();
@@ -135,7 +135,6 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
     else if (e.key === 'ArrowDown') { e.preventDefault(); move(cols); } else if (e.key === 'ArrowUp') { e.preventDefault(); move(-cols); }
     else if (e.key === 'Enter' && !tgt.closest('button') && sugs?.[active]) { e.preventDefault(); void takeAll(sugs[active]); }
     else if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setSeed(n => n + 1); }
-    else if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setKeep(k => !k); }
   };
   const shownName = draft.trim() || '';
   const headText = sample.trim() && sample !== defaultSample() ? sample : t('desk.pageHeading');
@@ -147,7 +146,7 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
             <b data-testid="cs-title">{t('desk.suggestFor', { target: t('desk.target.combo', { n: combo.idx }) })}{shownName ? ` · ${shownName}` : ''}<BetaBadge /></b>
             <label>{t('cs.style')} <select data-testid="cs-style" value={style} onChange={e => setStyle(e.target.value)}>
               <option value="">{t('cs.style.all')}</option>{STYLE_IDS.map(s => <option key={s} value={s}>{t(`style.${s}` as 'style.contrast')}</option>)}</select></label>
-            <label><input type="checkbox" data-testid="cs-keep" checked={keep} onChange={e => setKeep(e.target.checked)} /> {t('cs.keep')}{keep && relaxed && <NoteMark inline kind="info" testId="cs-relaxed" text={t('cs.keep.relaxed', { role: roleLabel(refs[0]?.name ?? '') })} />}</label>
+            {pinned.length > 0 && <span className="fa-cs-pins" data-testid="cs-pins">{tn('cs.pins', { n: pinned.length })} <button type="button" data-testid="cs-unpin-all" onClick={onUnpinAll}>{t('cs.unpinAll')}</button></span>}
             <label><input type="checkbox" data-testid="cs-caseonly" checked={caseOnly} onChange={e => setCaseOnly(e.target.checked)} /> {t('cs.libOnly')}</label>
             <button type="button" data-testid="cs-again" onClick={() => setSeed(n => n + 1)}>⟳ {t('cs.again')}</button>
           </header>
@@ -155,8 +154,9 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
           <span className="fa-cs-live" role="status" aria-live="polite">{sugs && !loading ? t('cs.count', { n: sugs.length }) : ''}</span>
           {err && <div role="alert" className="fa-desk-err">{t('cs.fail', { msg: err })} <button type="button" data-testid="cs-retry" onClick={() => setRetry(n => n + 1)}>{t('cs.retry')}</button></div>}
           {loading && showSkel && !sugs && <p className="fa-desk-hint" data-testid="cs-loading" aria-busy="true">{t('cs.loading')}</p>}
-          {!loading && !err && sugs && sugs.length === 0 && (
-            <div className="fa-desk-hint" data-testid="cs-empty">{t('cs.empty')} {keep && <button type="button" onClick={() => setKeep(false)}>{t('cs.empty.unlock')}</button>} {style && <button type="button" onClick={() => setStyle('')}>{t('cs.empty.styles')}</button>}</div>
+          {allPinned && <div className="fa-desk-hint" data-testid="cs-allpinned">{t('cs.allPinned')} <button type="button" data-testid="cs-unpin-all2" onClick={onUnpinAll}>{t('cs.unpinAll')}</button></div>}
+          {!allPinned && !loading && !err && sugs && sugs.length === 0 && (
+            <div className="fa-desk-hint" data-testid="cs-empty">{t('cs.empty')} {pinned.length > 0 && <button type="button" onClick={onUnpinAll}>{t('cs.unpinAll')}</button>} {style && <button type="button" onClick={() => setStyle('')}>{t('cs.empty.styles')}</button>}</div>
           )}
           <div className="fa-cs-grid" role="listbox" aria-label={t('cs.dialog')} data-stale={loading && sugs ? 'true' : undefined}>
             {(sugs ?? []).map((s, i) => (

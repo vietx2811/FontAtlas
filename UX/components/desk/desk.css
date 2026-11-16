@@ -200,3 +200,9 @@
 .fa-prev-role-name { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .fa-prev-text { max-width: 62ch; overflow-wrap: anywhere; }
 .fa-prev-empty { color: var(--muted); font-size: var(--text-sm); padding: 6px 0; }
+.fa-desk-rolepin { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-md); color: var(--muted); opacity: .55; flex: none; }
+.fa-desk-roleitem:hover .fa-desk-rolepin, .fa-desk-rolepin:focus-visible, .fa-desk-rolepin[aria-pressed="true"] { opacity: 1; }
+.fa-desk-rolepin[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-soft); }
+.fa-cs-pins { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: var(--text-xs); }
+.fa-cs-pins button { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.fa-fc-title { margin: 0 0 8px; font-size: var(--text-xs); font-weight: 700; letter-spacing: .02em; color: var(--muted); }

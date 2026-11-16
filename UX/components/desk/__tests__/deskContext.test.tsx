@@ -61,16 +61,13 @@ describe('Desk theo ngữ cảnh (Combo / vai)', () => {
     expect(screen.getAllByTestId('desk-role').filter(b => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
   });
 
-  it('mọi vai đã có font: chỉ khoá vai đầu (không còn trả lại đúng combo hiện tại) và hiện ghi chú', async () => {
+  it('mặc định không khoá vai nào (kể cả khi mọi vai đã có font) và mỗi vai đã có font có nút ghim', async () => {
     const { api } = await mount();
     const spy = vi.spyOn(api, 'suggestCombos');
     fireEvent.click(screen.getByTestId('desk-combo-suggest')); await settle();
-    const req = spy.mock.calls.at(-1)![0];
-    const filled = screen.getAllByTestId('desk-role').filter(b => !b.querySelector('.fa-desk-role-empty')).length;
-    if (filled >= req.roles.length) {
-      expect(req.locked.length).toBeLessThanOrEqual(1);
-      expect(screen.getByTestId('cs-relaxed')).toBeTruthy();
-    }
+    expect(spy.mock.calls.at(-1)![0].locked).toEqual([]);
+    expect(screen.getAllByTestId('role-pin').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('role-pin')[0].getAttribute('aria-label')).toBe('Giữ font này khi gợi ý combo');
   });
 
   it('Combo chỉ có MỘT vai (mở từ một font): gợi ý vẫn có vai đối tác thay vì trả lại đúng font đó', async () => {

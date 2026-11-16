@@ -12,6 +12,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { SUGGESTED_ROLES, presetKey, roleGloss, roleLabel } from './deskRoles';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { ClashNote } from '../ui/ClashNote';
+import { Icon } from '../sidebar/icons';
 
 const nameOf = (r: { faceId: number; family: string; subfamily: string | null } | null): string => (r ? faceLabel(r) : '—');
 const say = (kind: 'info' | 'error', text: string, action?: { label: string; run(): void }) => void useNoticeStore.getState().push({ kind, text, action });
@@ -30,8 +31,8 @@ function errText(e: unknown, name: string): string {
 }
 
 /** Cột vai của Pairing Desk (G3): chọn vai, + Role (tên tự do + gợi ý), đổi tên, đổi thứ tự, bỏ vai (có hoàn tác). */
-export function RoleList({ api, combo, roles, role, selected = true, onSelect, onCombo, onRenamed }: {
-  api: Api; combo: ComboDto; /** Vai hiển thị theo thứ tự (gồm vai chỉ có ở giao diện khi Combo chưa lưu vai nào). */ roles: readonly ComboRoleDto[]; role: ComboRoleDto; /** false khi đang chọn Combo (không vai nào được tô chọn). */ selected?: boolean;
+export function RoleList({ api, combo, roles, role, selected = true, pinned = [], onTogglePin, onSelect, onCombo, onRenamed }: {
+  api: Api; combo: ComboDto; /** Vai hiển thị theo thứ tự (gồm vai chỉ có ở giao diện khi Combo chưa lưu vai nào). */ roles: readonly ComboRoleDto[]; role: ComboRoleDto; /** false khi đang chọn Combo (không vai nào được tô chọn). */ selected?: boolean; /** Vai đã ghim giữ font khi gợi ý combo + bật/tắt ghim (chỉ vai đã có font mới ghim được). */ pinned?: readonly string[]; onTogglePin?(r: ComboRoleDto): void;
   onSelect(r: ComboRoleDto): void; onCombo(c: ComboDto, selectRole?: ComboRoleDto): void; onRenamed(from: ComboRoleDto, to: ComboRoleDto): void;
 }): React.JSX.Element {
   useNameClashes();
@@ -155,6 +156,10 @@ export function RoleList({ api, combo, roles, role, selected = true, onSelect, o
                     : <span className="fa-desk-role-empty">{t('desk.roleEmpty')}</span>}
                   {s?.missing && <NoteMark inline text={t('desk.missing')} />}
                 </button>}
+            {renaming !== r && s && !s.missing && onTogglePin && (
+              <Tooltip label={pinned.includes(r) ? t('role.unpin') : t('role.pin')}>
+                <button type="button" className="fa-desk-rolepin" data-testid="role-pin" aria-pressed={pinned.includes(r)} aria-label={pinned.includes(r) ? t('role.unpin') : t('role.pin')} onClick={() => onTogglePin(r)}><Icon name="pin" size={13} /></button>
+              </Tooltip>)}
             {renaming !== r && inStore(r) && (
               <span className="fa-desk-roleact" role="group" aria-label={roleLabel(r)}>
                 <Tooltip label={t('role.up', { role: roleLabel(r) })}><button type="button" data-testid="role-up" aria-label={t('role.up', { role: roleLabel(r) })} disabled={i <= 0} onClick={() => move(r, -1)}>↑</button></Tooltip>

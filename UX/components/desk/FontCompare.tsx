@@ -144,6 +144,7 @@ export function FontCompare({ api, role, base, partner, suggestions, onPlace, on
 
   return (
     <div ref={root} className="fa-cc fa-fc" data-testid="font-compare">
+      <h2 className="fa-fc-title" data-testid="fc-title">{t('desk.suggestFor', { target: roleName(role) })}</h2>
       <div className="fa-fc-bar">
         <label>{t('fc.sort')}{' '}
           <select data-testid="fc-sort" value={sort} onChange={e => setSort(e.target.value as SortKey)}>

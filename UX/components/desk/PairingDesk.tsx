@@ -48,6 +48,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   // Đối tượng đang gợi ý: một vai (cột giữa = ứng viên cho vai) hoặc cả Combo (cột giữa = thẻ gợi ý combo).
   const [scope, setScope] = useState<'role' | 'combo'>('role');
   const [host, setHost] = useState<HTMLElement | null>(null);
+  // Vai ghim "Giữ font này khi gợi ý combo" theo từng Combo (trong phiên Desk). Mặc định không vai nào.
+  const [pins, setPins] = useState<Record<number, string[]>>({});
   const [cmpRev, setCmpRev] = useState(0);
   const sample = useUiStore(s => s.sample);
   const [data, setData] = useState<CaseDto | null>(null);
@@ -243,6 +245,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   })();
 
   const comboOn = scope === 'combo' && mode === 'pairing';
+  const pinnedRoles = (combo && pins[combo.id]) || [];
+  const togglePinRole = (r: ComboRoleDto) => { if (combo) setPins(p => { const cur = p[combo.id] ?? []; return { ...p, [combo.id]: cur.includes(r) ? cur.filter(x => x !== r) : [...cur, r] }; }); };
   return (
     <div ref={root} className="fa-desk" data-testid="pairing-desk" tabIndex={-1} onKeyDown={onKey}>
       <header className="fa-desk-head">
@@ -266,7 +270,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         <div className="fa-desk-combobar" data-testid="desk-combobar" data-selected={comboOn ? 'true' : undefined} onClick={() => { if (mode === 'pairing') setScope('combo'); }}>
           <Tooltip label={t('desk.combobar.tip')}><span className="fa-desk-combobar-label">{t('desk.combobar')}</span></Tooltip>
           <ComboStepper data={data} combo={combo} ops={comboOps} />
-          <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} open={comboOn} onOpenChange={o => { setScope(o ? 'combo' : 'role'); if (o) setMode('pairing'); }} host={host} />
+          <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} pinned={pinnedRoles} onUnpinAll={() => combo && setPins(p => ({ ...p, [combo.id]: [] }))} open={comboOn} onOpenChange={o => { setScope(o ? 'combo' : 'role'); if (o) setMode('pairing'); }} host={host} />
           <button type="button" className="fa-desk-combo-suggest" data-testid="desk-combo-suggest" aria-pressed={comboOn} onClick={e => { e.stopPropagation(); setScope('combo'); setMode('pairing'); }}>✦ {t('cs.open')}</button>
         </div>)}
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}
@@ -282,7 +286,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
       <div className="fa-desk-body">
         <section className="fa-desk-roles" aria-label={t('desk.roles')}>
           <h2>{t('desk.roles')}</h2>
-          {combo && <RoleList api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} onSelect={selectRole}
+          {combo && <RoleList api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} pinned={pinnedRoles} onTogglePin={togglePinRole} onSelect={selectRole}
             onCombo={(c, sel) => { setData(d => (d ? { ...d, combos: d.combos.map(x => (x.id === c.id ? c : x)) } : d)); setCmpRev(n => n + 1); if (sel && sel !== role) openDesk({ caseId: desk.caseId, comboId: c.id, role: sel, trial: null }); }}
             onRenamed={(from, to) => { if (from === role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: to, trial: null }); }} />}
         </section>

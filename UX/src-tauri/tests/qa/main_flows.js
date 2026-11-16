@@ -1002,6 +1002,11 @@
         const previewed = [...document.querySelectorAll('[data-testid=desk-prev-role]')].map(x => x.dataset.role).join('|');
         await log('desk-combobar-above-roles', above, { above });
         await log('desk-preview-all-roles', !!listed && listed === previewed, { listed, previewed });
+        // Bấm vai (ở xem trước; đúng vai đang chọn nên không đổi vai) → cột giữa là "Gợi ý cho: <vai>", chỉ một trạng thái chọn.
+        const selPrev = document.querySelector('[data-testid=desk-prev-role][data-selected=true] [data-testid=desk-prev-pick]') ?? document.querySelector('[data-testid=desk-prev-pick]');
+        selPrev?.click(); await settle(200);
+        const h2 = [...document.querySelectorAll('.fa-desk-picker h2')].map(x => x.textContent ?? '').join('|');
+        await log('desk-role-scope-title', /(Gợi ý cho|Suggestions for): /.test(h2) && document.querySelector('[data-testid=desk-combobar]')?.dataset.selected !== 'true', { h2 });
       }
       const tb = document.querySelector('header.fa-topbar');
       await log('desk-is-the-only-page', !!desk && (!tb || tb.offsetParent === null) && !document.querySelector('.cmp-tbl, .pr') && !document.querySelector('[data-testid=duplicates-page]')?.offsetParent, { topbarHidden: !tb || tb.offsetParent === null });
