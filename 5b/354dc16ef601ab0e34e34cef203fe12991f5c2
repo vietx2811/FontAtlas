@@ -1,0 +1,4 @@
+pass tree=43a9fd161cca845b3c5ad79bef4e29deb81524af qa=1
+2026-11-16T08:21:27Z vxmacmini 23063s
+npm-ci:ok:0 vite-build:ok:2 tsc:ok:3 vitest:ok:15 notices:ok:1 cargo-test:ok:19194 bindings-drift:ok:0 clippy:ok:2763 tauri-debug-build:ok:771 native-qa:ok:314
+cache: none
