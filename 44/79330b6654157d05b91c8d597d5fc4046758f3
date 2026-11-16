@@ -1,0 +1,4 @@
+fail tree=164895c3c46259d847bb9d1c6c9ed07b65e47e7c qa=1
+2026-11-16T10:45:03Z vxmacmini 6689s
+npm-ci:ok:0 vite-build:ok:1 tsc:ok:4 vitest:ok:15 notices:ok:1 cargo-test:fail:4052 bindings-drift:ok:0 clippy:ok:1819 tauri-debug-build:ok:491 native-qa:ok:306
+cache: none
