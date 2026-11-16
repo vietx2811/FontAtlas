@@ -17,6 +17,8 @@ Kết quả mới nhất: `after.md`.
 | Sau hiệu chuẩn | 15/16 | 10/11 |
 | Sau khi dùng `candidate` của bộ phân loại khi class Uncertain | 16/16 | 11/11 |
 
+**Kết quả bộ mù (độc lập, chủ app chấm 2026-11-16): mô hình Hợp+Tạm 65% (ngưỡng đăng ký trước ≥ 70%: không đạt), Không 35% (≤ 15%: không đạt), đối chứng Không 60% (≥ 60%: đạt sát). Chi tiết và nguyên nhân: `blind/RESULTS-2026-11-16.md`. Số 16/16 và 11/11 ở trên là số trên tập đã chỉnh, không phải chất lượng độc lập.**
+
 (Hai dòng sau đều là số trên tập đã chỉnh, xem cảnh báo bên dưới. Bộ kiểm mù `blind/` được dựng bằng mô hình ở `7ff93bb0`, trước thay đổi `candidate`: chấm theo `key.json` đó, đừng dựng lại bộ mù rồi so với kết quả cũ.)
 
 ## Cách hiệu chuẩn, và giới hạn của con số này
