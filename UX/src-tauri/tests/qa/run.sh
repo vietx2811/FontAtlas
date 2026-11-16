@@ -56,13 +56,17 @@ mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/H" "$QA/OrgRoot" "$QA/data
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
 cp "$F"/{playfair_display,libre_baskerville,libre_baskerville_italic_vf,fira_sans_regular}.ttf "$QA/B/"
 cp "$F"/{bebas_neue,oswald_vf,dancing_script_vf,miltonian,source_code_pro}.ttf "$QA/C/"
-# E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript, khác nội dung) để có xung đột kích hoạt thật.
-for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do cp "$F/$n.ttf" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
 # G (cuối QA): bản chép một font hệ thống (giống hệt từng byte) → trạng thái "Có sẵn trên máy". Không có thì QA bỏ qua bước.
 SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
 cp "$F/roboto_vf.ttf" "$QA/H/" # H (cuối QA): VF Roboto trùng PostScript "Roboto-Regular" với roboto.ttf static → bước «Giữ cả hai» G7b
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
-# Preflight: font của lượt QA này không được đã đăng ký từ file khác trên máy (cài đặt, Adobe Fonts, app khác, lượt QA cũ). Nếu có, các bước
+# Đổi tên (family/full/PostScript, hậu tố « FAQA») của MỌI bản sao fixture trừ G (font hệ thống), chỉ trong thư mục QA tạm: QA không phụ thuộc vào font
+# đã cài/đăng ký trên máy (RightFont, Adobe Fonts…), mà bản gốc trong repo không đổi. VF và static cùng họ vẫn cùng PostScript sau khi đổi.
+python3 "$HERE/patch_font_names.py" "$QA/A" "$QA/B" "$QA/C" "$QA/H" > "$QA/patched_names.tsv" || { echo "đổi tên font fixture thất bại"; exit 1; }
+# E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript ĐÃ ĐỔI, khác nội dung) để có xung đột kích hoạt thật,
+# tự QA đăng ký bản gốc trước rồi kiểm hộp thoại «đã có trên máy»: giữ nguyên độ phủ đường xung đột.
+for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do src="$(ls "$QA"/{A,B,C}/$n.ttf 2>/dev/null | head -1)"; cp "$src" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
+# Preflight: tên đã ĐỔI của fixture không được đã đăng ký từ file khác (app khác, lượt QA cũ chưa dọn). Font thật của chủ máy không còn va chạm. Nếu có, các bước
 # kích hoạt ra «Chưa bật» / «1 font đã có trên máy» và QA đỏ giả. Báo đường dẫn font trùng + người giữ khoá để biết ai gây ra. Bỏ qua có chủ đích:
 # FONTATLAS_QA_ALLOW_REGISTERED=1 (QA vẫn sẽ chạy và có thể đỏ ở các bước kích hoạt).
 if command -v swift >/dev/null; then

@@ -192,7 +192,7 @@
     const items = (acts ?? []).map(a => a.closest('li, article, div')?.parentElement?.textContent.replace(/\s+/g, ' ').slice(0, 70));
     const fams = (acts ?? []).map(a => (a.closest('li, article') ?? a.parentElement)?.querySelector('h3, h4, strong, b')?.textContent ?? '');
     await fontsReady(); await settle(300); await snap('similar');
-    await log('similar-families', !!acts && !fams.some(f => /^Roboto$/.test(f.trim())), { count: acts?.length ?? 0, fams, hasOpen: !!btn('Mở font'), hasFamily: !!btnHas('Xem family') });
+    await log('similar-families', !!acts && !fams.some(f => /^Roboto( FAQA)?$/.test(f.trim())), { count: acts?.length ?? 0, fams, hasOpen: !!btn('Mở font'), hasFamily: !!btnHas('Xem family') });
     // XEM FAMILY
     const xf = btnHas('Xem family'); const target = fams[0];
     xf?.click();
@@ -1455,8 +1455,8 @@
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     } catch (e) { await log('organized-library', false, String(e && e.stack || e).slice(0, 400)); }
 
-    // G7/G7b — «Giữ cả hai» cho cặp variable↔static trùng PostScript (fixture OFL thật: roboto.ttf static ở A + roboto_vf.ttf ở H, cùng "Roboto-Regular").
-    // Bật static trước → bật VF qua giao diện → hộp thoại cặp VF↔static → "Giữ cả hai" → bản sao "Roboto VF" bật cùng static, VF gốc không bật và không bị sửa.
+    // G7/G7b — «Giữ cả hai» cho cặp variable↔static trùng PostScript (fixture OFL thật: roboto.ttf static ở A + roboto_vf.ttf ở H, cùng "RobotoFAQA-Regular" (tên đã đổi, xem patch_font_names.py)).
+    // Bật static trước → bật VF qua giao diện → hộp thoại cặp VF↔static → "Giữ cả hai" → bản sao "Roboto FAQA VF" bật cùng static, VF gốc không bật và không bị sửa.
     // Dọn: tắt hết, gỡ nguồn H. Bản sao đổi tên nằm trong thư mục dữ liệu QA tạm (nguồn ẩn 'derived'); chưa có lệnh xoá bản sao nên nó bị bỏ cùng thư mục tạm.
     try {
       const actOn = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
@@ -1468,7 +1468,7 @@
       await inv('add_source', { path: '__QA_DIR__/H' });
       let srcH = null; for (let i = 0; i < 60 && !srcH; i++) { srcH = await srcByDir('H'); if (!srcH) await sleep(250); }
       const findRow = async (q, pred) => { for (let i = 0; i < 80; i++) { const r = ((await inv('query_faces', { q })).items || []).find(pred); if (r) return r; await sleep(250); } return null; };
-      const stRow = await findRow(mkq('Roboto', false, srcA ? [srcA.id] : []), r => !r.isVariable && r.family === 'Roboto' && /Regular/.test(r.subfamily ?? 'Regular'));
+      const stRow = await findRow(mkq('Roboto', false, srcA ? [srcA.id] : []), r => !r.isVariable && r.family === 'Roboto FAQA' && /Regular/.test(r.subfamily ?? 'Regular'));
       const vfRow = srcH ? await findRow(mkq('Roboto', true, [srcH.id]), r => r.isVariable) : null;
       await log('keep-both-fixtures', !!stRow && !!vfRow && stRow.hashHex !== vfRow.hashHex, { static: !!stRow, vf: !!vfRow });
       if (stRow && vfRow) {
@@ -1492,7 +1492,7 @@
         await wait(() => !document.querySelector('[role=dialog].fa-conf'), 20000);
         // Bản sao bật cùng static: đúng hai font bật hơn lúc đầu (static + bản sao), VF gốc không bật.
         let two = await actOn(); for (let i = 0; i < 80 && two.length < base + 2; i++) { await sleep(250); two = await actOn(); }
-        const copyRow = await findRow(mkq('Roboto VF', null, []), r => r.family === 'Roboto VF');
+        const copyRow = await findRow(mkq('Roboto FAQA VF', null, []), r => r.family === 'Roboto FAQA VF');
         const actNow = await actOn();
         const copyOn = !!copyRow && actNow.some(x => x.hashHex === copyRow.hashHex);
         const staticOn = actNow.some(x => x.hashHex === stRow.hashHex);
@@ -1502,7 +1502,7 @@
         const dv = await inv('get_face', { face: keyOf(vfRow), lang: 'vi' });
         const dc = copyRow ? await inv('get_face', { face: keyOf(copyRow), lang: 'vi' }) : null;
         const inH = ((await inv('query_faces', { q: mkq('Roboto', true, srcH ? [srcH.id] : []) })).items || []).filter(r => r.hashHex === vfRow.hashHex).length;
-        await log('keep-both-original-untouched', dv.row.hashHex === vfRow.hashHex && dv.row.isVariable && dv.row.family === 'Roboto' && dv.derivedFrom === null && inH === 1 && !!dc && !!dc.derivedFrom && /Roboto/.test(dc.derivedFrom.name) && dc.derivedFrom.faceKey.hashHex === vfRow.hashHex, { origFamily: dv.row.family, derived: dv.derivedFrom, inH, copyFrom: dc?.derivedFrom?.name ?? null });
+        await log('keep-both-original-untouched', dv.row.hashHex === vfRow.hashHex && dv.row.isVariable && dv.row.family === 'Roboto FAQA' && dv.derivedFrom === null && inH === 1 && !!dc && !!dc.derivedFrom && /Roboto/.test(dc.derivedFrom.name) && dc.derivedFrom.faceKey.hashHex === vfRow.hashHex, { origFamily: dv.row.family, derived: dv.derivedFrom, inH, copyFrom: dc?.derivedFrom?.name ?? null });
       }
       // Dọn: tắt hết (không để font bật cho các bước sau) và gỡ nguồn H.
       await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) });
