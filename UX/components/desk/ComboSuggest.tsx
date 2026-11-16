@@ -67,6 +67,8 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
   const baseRoles: string[] = useMemo(() => {
     const r = intent ? [...intent.roles] : combo.roles.length ? [...combo.roles] : ['heading', 'body'];
     for (const s of slotRoles) if (!r.some(x => x.toLowerCase() === s.toLowerCase())) r.push(s);
+    // Combo mới từ một font (chỉ một vai): gợi ý cần ít nhất một vai nữa để ghép, không thì chỉ lặp lại đúng font đó.
+    if (r.length < 2) { const add = r.length && !isHeadingLike(r[0]) ? 'heading' : 'body'; if (!r.some(x => x.toLowerCase() === add)) r.push(add); }
     return r;
   }, [intent, combo.roles, slotRoles.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
   const refsAll = useMemo(() => baseRoles.map(refOf).filter((x): x is RoleRefDto => !!x).sort((a, b) => Number(isHeadingLike(b.name)) - Number(isHeadingLike(a.name))), [baseRoles]);

@@ -72,4 +72,16 @@ describe('Desk theo ngữ cảnh (Combo / vai)', () => {
       expect(screen.getByTestId('cs-relaxed')).toBeTruthy();
     }
   });
+
+  it('Combo chỉ có MỘT vai (mở từ một font): gợi ý vẫn có vai đối tác thay vì trả lại đúng font đó', async () => {
+    const api = createMockApi();
+    const r = (await api.queryFaces({ limit: 200 })).items.find(x => x.family === 'Abril Fatface')!;
+    const res = await api.openCaseFromPeek({ face: { hashHex: r.hashHex, faceIndex: 0 }, as: 'heading', candidate: null, caseId: null, settings: { vi: true, mode: 'safe' }, replace: false });
+    const spy = vi.spyOn(api, 'suggestCombos');
+    render(<PairingDesk api={api} desk={{ caseId: res.case.id, comboId: res.comboId, role: res.otherRole, trial: res.trial }} />); await settle();
+    fireEvent.click(screen.getByTestId('desk-combo-suggest')); await settle();
+    const req = spy.mock.calls.at(-1)![0];
+    expect(req.roles.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByTestId('cs-card').length).toBeGreaterThan(0);
+  });
 });
