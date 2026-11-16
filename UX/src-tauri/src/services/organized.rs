@@ -366,7 +366,8 @@ pub fn copy_verified(src: &Path, dest: &Path, expect: &[u8; 32]) -> Result<(), (
     let tmp = dest.with_file_name(format!(".{}.partial", dest.file_name().and_then(|n| n.to_str()).unwrap_or("font")));
     let run = || -> Result<(), (String, std::io::Error)> {
         std::fs::copy(src, &tmp).map_err(io)?;
-        std::fs::File::open(&tmp).and_then(|f| f.sync_all()).map_err(io)?;
+        // Windows: FlushFileBuffers cần quyền ghi, `File::open` (chỉ đọc) báo từ chối truy cập → mở bằng quyền ghi.
+        std::fs::OpenOptions::new().write(true).open(&tmp).and_then(|f| f.sync_all()).map_err(io)?;
         let mut h = blake3::Hasher::new();
         let mut f = std::fs::File::open(&tmp).map_err(io)?;
         let mut buf = vec![0u8; 1 << 20];
