@@ -367,7 +367,7 @@ pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError>
     let rows = state.activation.state(state.store()?)?;
     state.with_store(|s| {
         let names: std::collections::HashMap<i64, String> = s.collections()?.into_iter().map(|c| (c.id, c.name)).collect();
-        let case_names: std::collections::HashMap<i64, String> = s.cases(false)?.into_iter().map(|c| (c.id, c.name)).collect();
+        let case_names: std::collections::HashMap<i64, String> = s.cases(true)?.into_iter().map(|c| (c.id, c.name)).collect();
         let mut apps: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
         for b in s.case_bindings()? {
             let list = s.case_apps(b.case_id)?.into_iter().map(|a| if a.app_name.is_empty() { a.bundle_id } else { a.app_name }).collect();

@@ -8,7 +8,7 @@ export const EN_ERR: Record<keyof typeof ERR_I18N, string> = {
   'err.io': 'Couldn’t read or write a file.',
   'err.exists': 'A file with that name already exists; choose another name.',
   'err.sqlite': 'The library database reported an error.',
-  'err.newer_schema': 'This data was created by a newer version of Font Atlas.',
+  'err.newer_schema': 'This data was created by a newer version of Font Atlas. Install that newer version again. To go back to this one: quit the app, then copy the backup made just before the upgrade (backups folder inside the data folder, files like user.v17.* or library.v*) over user.db / library.db.',
   'err.migration': 'Couldn’t upgrade the library data.',
   'err.bad_hash': 'The font identifier isn’t valid.',
   'err.legacy': 'Couldn’t read the old data.',
