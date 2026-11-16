@@ -29,6 +29,7 @@ export const SIDEBAR_I18N = {
   'side.needsAccess': '{name}: cần quyền truy cập',
   'side.notConnected': '{name}: chưa kết nối',
   'side.notDownloaded': '{n} font chưa tải về',
+  'side.readyTip': '{n} font đã có trên máy',
   'side.tags': 'Thẻ',
   'side.scanning': 'Đang quét',
   'side.scanningN': ' · {n} font',

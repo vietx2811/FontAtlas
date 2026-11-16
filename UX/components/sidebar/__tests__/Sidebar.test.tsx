@@ -232,7 +232,9 @@ describe('Sidebar', () => {
     it('a source whose last scan skipped placeholders says how many, with a tooltip on how to download them', async () => {
       await mount();
       const line = screen.getByTestId('not-downloaded');
-      expect(line.textContent).toBe('12 font chưa tải về');
+      expect(line.textContent).toBe('12'); // chỉ icon + số; câu đầy đủ ở aria-label và tooltip
+      expect(line.getAttribute('aria-label')).toBe('12 font chưa tải về');
+      expect(screen.getByTestId('cloud-ready').textContent).toMatch(/^\d+$/); // ✓ + số font đã có trên máy
       const tip = await tipOf(line);
       expect(tip).toMatch(/Finder/);
       expect(tip).toMatch(/Tải về/);

@@ -345,8 +345,12 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
               sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns
                 ? <>
-                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
-                    {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && <div className="fa-cloud fa-cloud-dl"><CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} /></div>}
+                    {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && (
+                      <div className="fa-cloud fa-cloud-stats">
+                        {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><span className="fa-cloud-n" data-testid="not-downloaded" role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)}</span></Tooltip>}
+                        {notDownloadedOf(s, cloud) > 0 && s.faceCount > 0 && <Tooltip label={tn('side.readyTip', { n: s.faceCount })}><span className="fa-cloud-n" data-testid="cloud-ready" role="img" aria-label={tn('side.readyTip', { n: s.faceCount })}><Icon name="check" size={12} />{s.faceCount}</span></Tooltip>}
+                        <CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} compact />
+                      </div>)}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
                   </>
                 : undefined} />

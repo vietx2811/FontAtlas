@@ -16,6 +16,7 @@ export const EN_ONE: Record<string, string> = {
   'dup.count': '{n} group',
   'dup.members': '{n} copy',
   'side.notDownloaded': '{n} font not downloaded',
+  'side.readyTip': '{n} font already on this device',
   'cdl.done': 'Downloaded {n} font from “{name}”; rescanning so it appears.',
   'strip.viMissing': 'Missing {n} Vietnamese character',
   'compare.viMissing': 'Missing {n} character',

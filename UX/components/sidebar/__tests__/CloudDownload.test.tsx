@@ -36,14 +36,14 @@ describe('Tải về máy — Sidebar', () => {
     expect(start).toHaveLength(1); // nguồn thường và nguồn mất kết nối không có nút
     fireEvent.click(start[0]); await settle();
     expect(api.sourceDownloadCloud).toHaveBeenCalledWith(2, expect.any(Function));
-    expect(screen.getByTestId('cloud-dl-running').textContent).toMatch(/Đang chuẩn bị tải/);
+    expect(screen.getByTestId('cloud-dl-running').getAttribute('aria-label')).toMatch(/Đang chuẩn bị tải/); // Sidebar chỉ icon + số
     act(() => progress({ done: 3, total: 12, failed: 0 }));
-    expect(screen.getByTestId('cloud-dl-running').textContent).toMatch(/Đang tải 3\/12/);
+    expect(screen.getByTestId('cloud-dl-running').textContent).toBe('3/12'); expect(screen.getByTestId('cloud-dl-running').getAttribute('aria-label')).toMatch(/Đang tải 3\/12/);
     expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
     // bấm nút lần nữa khi đang tải không mở lần thứ hai
     fireEvent.click(within(screen.getByTestId('cloud-dl-running')).getByTestId('cloud-dl-cancel')); await settle();
     expect(api.sourceDownloadCancel).toHaveBeenCalledWith(2);
-    expect(screen.getByTestId('cloud-dl-cancel').textContent).toBe('Đang huỷ…');
+    expect(screen.getByTestId('cloud-dl-cancel').getAttribute('aria-label')).toBe('Đang huỷ…');
     expect((screen.getByTestId('cloud-dl-cancel') as HTMLButtonElement).disabled).toBe(true);
     expect(api.sourceDownloadCloud).toHaveBeenCalledTimes(1);
   });
@@ -92,11 +92,11 @@ describe('Tải về máy — Sidebar', () => {
     setLocale('en');
     const { api, progress } = hangingApi();
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
-    expect(screen.getByTestId('cloud-dl-start').textContent).toBe('Download now');
+    expect(screen.getByTestId('cloud-dl-start').getAttribute('aria-label')).toBe('Download now'); expect(screen.getByTestId('cloud-dl-start').textContent).toBe('');
     fireEvent.click(screen.getByTestId('cloud-dl-start')); await settle();
     act(() => progress({ done: 1, total: 12, failed: 0 }));
-    expect(screen.getByTestId('cloud-dl-running').textContent).toMatch(/Downloading 1\/12/);
-    expect(screen.getByTestId('cloud-dl-cancel').textContent).toBe('Cancel');
+    expect(screen.getByTestId('cloud-dl-running').getAttribute('aria-label')).toMatch(/Downloading 1\/12/);
+    expect(screen.getByTestId('cloud-dl-cancel').getAttribute('aria-label')).toBe('Cancel');
   });
 });
 

@@ -30,6 +30,7 @@ export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
   'side.needsAccess': '{name}: needs access',
   'side.notConnected': '{name}: not connected',
   'side.notDownloaded': '{n} fonts not downloaded',
+  'side.readyTip': '{n} fonts already on this device',
   'side.tags': 'Tags',
   'side.scanning': 'Scanning',
   'side.scanningN': ' · {n} fonts',
