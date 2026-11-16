@@ -1,4 +1,7 @@
 //! B7 Organized Library: vị trí, chép an toàn (file gốc không đụng tới), xem trước, sắp xếp lại + hoàn tác, gói khôi phục.
+mod common;
+use common::nz;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -97,8 +100,8 @@ fn import_copies_without_touching_originals_keeps_names_verifies_and_snapshots()
         .map(|p| p.strip_prefix(root.join("Library")).unwrap().to_string_lossy().into_owned())
         .collect();
     assert_eq!(files.len(), 2);
-    assert!(files.iter().any(|f| f.ends_with("/roboto.ttf")) && files.iter().any(|f| f.ends_with("/open_sans.ttf")), "giữ tên file gốc: {files:?}");
-    assert!(files.iter().all(|f| f.split('/').count() == 3), "Class/Họ/file: {files:?}");
+    assert!(files.iter().any(|f| nz(f).ends_with("/roboto.ttf")) && files.iter().any(|f| nz(f).ends_with("/open_sans.ttf")), "giữ tên file gốc: {files:?}");
+    assert!(files.iter().all(|f| nz(f).split('/').count() == 3), "Class/Họ/file: {files:?}");
     // file gốc nguyên vẹn
     for (i, n) in ["roboto.ttf", "open_sans.ttf"].iter().enumerate() {
         assert_eq!(std::fs::read(fonts.join(n)).unwrap(), before[i]);
@@ -172,7 +175,7 @@ fn resort_only_proposes_never_auto_moves_and_undo_restores_everything() {
     assert_eq!((done.moved, done.failed), (1, 0));
     let after = walk(&root.join("Library"));
     assert_ne!(after, before);
-    assert!(after.iter().any(|p| p.to_string_lossy().contains(&format!("/{}/", if target_class == "mono" { "Mono" } else { "Script" }))));
+    assert!(after.iter().any(|p| nz(p.to_string_lossy()).contains(&format!("/{}/", if target_class == "mono" { "Mono" } else { "Script" }))));
     assert_eq!(organized::resort_preview(&st).unwrap().total, 0);
 
     let undone = organized::resort_undo(&st, done.batch_id).unwrap();
@@ -272,7 +275,7 @@ fn cloud_setup() -> (tempfile::TempDir, Arc<AppState>, PathBuf, PathBuf) {
 fn copied_names(root: &Path) -> Vec<String> {
     walk(&root.join("Library"))
         .iter()
-        .filter(|p| p.file_name().unwrap() != ".fontatlas-library" && !p.to_string_lossy().contains("/Snapshots/"))
+        .filter(|p| p.file_name().unwrap() != ".fontatlas-library" && !nz(p.to_string_lossy()).contains("/Snapshots/"))
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
         .collect()
 }

@@ -711,7 +711,7 @@ fn dropping_one_loose_file_does_not_turn_its_folder_into_a_source() {
     assert!(sources::list_sources(&st).unwrap().is_empty());
     let r = import(&st, &[&dl.join("roboto.ttf"), &dl.join("readme.txt"), &dl.join("ghost.ttf")], &t).unwrap();
     assert_eq!(r.added.len(), 1, "chỉ đúng một font được thả");
-    let reasons: Vec<_> = r.skipped.iter().map(|s| (s.path.rsplit('/').next().unwrap().to_string(), s.reason.clone())).collect();
+    let reasons: Vec<_> = r.skipped.iter().map(|s| (std::path::Path::new(&s.path).file_name().unwrap().to_string_lossy().into_owned(), s.reason.clone())).collect();
     assert_eq!(reasons, vec![("readme.txt".to_string(), "not_font".to_string()), ("ghost.ttf".to_string(), "missing".to_string())]);
     let list = sources::list_sources(&st).unwrap();
     assert_eq!((list.len(), list[0].kind.as_str(), list[0].path.is_none(), list[0].face_count), (1, "loose", true, r.added.len() as u32));

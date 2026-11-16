@@ -1,4 +1,7 @@
 //! Review của Lead (feat/duplicates-resolve @ce27e1d3), mục 3–9: activation, kế hoạch cũ, tệp đổi, undo an toàn, pending.
+mod common;
+use common::nz;
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -183,14 +186,14 @@ fn activation_changes_only_after_the_ledger_is_written_and_undo_restores_it() {
     assert!(saw_pending.load(Ordering::SeqCst), "activation chỉ đổi SAU khi sổ đã ghi");
     let regs: Vec<String> = eng.registrations().iter().map(|(p, _)| p.to_string_lossy().into_owned()).collect();
     assert_eq!(regs.len(), 1);
-    assert!(regs[0].ends_with("new/playfair.ttf"), "bản giữ được bật thay: {regs:?}");
+    assert!(nz(&regs[0]).ends_with("new/playfair.ttf"), "bản giữ được bật thay: {regs:?}");
     assert!(r.done[0].was_active && r.done[0].keeper_activated);
 
     let u = dup_resolve::resolve_undo(&st, &[r.done[0].id], 2000).unwrap();
     assert!(u.failed.is_empty(), "{:?}", u.failed);
     let regs: Vec<String> = eng.registrations().iter().map(|(p, _)| p.to_string_lossy().into_owned()).collect();
     assert_eq!(regs.len(), 1, "{regs:?}");
-    assert!(regs[0].ends_with("old/playfair.ttf"), "hoàn tác bật lại bản cũ, tắt bản mới: {regs:?}");
+    assert!(nz(&regs[0]).ends_with("old/playfair.ttf"), "hoàn tác bật lại bản cũ, tắt bản mới: {regs:?}");
     let _ = new;
 }
 
@@ -345,7 +348,7 @@ fn undo_of_a_chain_must_go_newest_first_but_a_batch_undo_orders_itself() {
     let st = versions(td.path(), &eng, &[("v1", 1.1), ("v2", 1.2), ("v3", 1.3)]);
     let p = plan(&st);
     let it = &p.items[0];
-    let path_of = |n: &str| it.member_paths.iter().find(|m| m.contains(&format!("/{n}/"))).unwrap().clone();
+    let path_of = |n: &str| it.member_paths.iter().find(|m| nz(m).contains(&format!("/{n}/"))).unwrap().clone();
     let item = |keeper: &str, losers: &[&str], members: Vec<String>| ResolveItemDto {
         kind: it.kind,
         key: it.key.clone(),
@@ -364,7 +367,7 @@ fn undo_of_a_chain_must_go_newest_first_but_a_batch_undo_orders_itself() {
     .unwrap();
     assert!(r1.failed.is_empty(), "{:?}", r1.failed);
     // 2) nhóm giờ chỉ còn v2, v3: v3 giữ, v2 (bản giữ của bước 1) bị ẩn
-    let members2: Vec<String> = all_members.iter().filter(|m| !m.contains("/v1/")).cloned().collect();
+    let members2: Vec<String> = all_members.iter().filter(|m| !nz(m).contains("/v1/")).cloned().collect();
     let r2 = dup_resolve::resolve_apply(
         &st,
         &ResolveRequestDto { items: vec![item("v3", &["v2"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },

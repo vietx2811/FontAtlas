@@ -50,7 +50,7 @@ fn blob_hash(v: Vec<u8>) -> Result<[u8; 32], StoreError> {
 impl Store {
     /// Mọi font (theo hash) đang hiện diện, kèm vị trí nên chép từ đó. `library_prefix`: thư mục của thư viện có tổ chức (không dấu `/` cuối).
     pub fn organize_candidates(&self, library_prefix: &str) -> Result<Vec<OrganizeCandidate>, StoreError> {
-        let under = |p: &str| p.strip_prefix(library_prefix).is_some_and(|r| r.starts_with('/'));
+        let under = |p: &str| p.strip_prefix(library_prefix).is_some_and(|r| r.starts_with(std::path::is_separator));
         let mut st = self.conn.prepare(
             "SELECT fi.file_id, fi.hash, fi.size, l.path, l.cloud_only, f.face_id, f.face_index, f.family_name
                FROM files fi

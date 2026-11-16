@@ -75,12 +75,12 @@ pub fn format_rank(fmt: &str) -> u8 {
 }
 
 fn depth(p: &str) -> usize {
-    p.matches('/').count()
+    p.matches(std::path::is_separator).count()
 }
 
 /// Tên kiểu "Font (1).ttf", "Font copy.ttf" là bản tải lại / sao chép.
 fn looks_like_copy(p: &str) -> bool {
-    let name = p.rsplit('/').next().unwrap_or(p).to_lowercase();
+    let name = p.rsplit(std::path::is_separator).next().unwrap_or(p).to_lowercase();
     name.contains(" copy") || name.contains(" (") && name.contains(')') || name.contains("-copy") || name.contains("_copy")
 }
 

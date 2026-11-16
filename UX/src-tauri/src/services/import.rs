@@ -110,7 +110,7 @@ pub fn import_paths_into(
         if cancel.load(Ordering::SeqCst) {
             break;
         }
-        let p = PathBuf::from(raw.trim_end_matches('/'));
+        let p = PathBuf::from(trim_trailing_sep(raw));
         if !seen.insert(p.clone()) {
             continue;
         }
@@ -216,4 +216,29 @@ pub fn import_paths_into(
     }
     emit(ImportPhaseDto::Adding, new_keys.len() as u32, new_keys.len() as u32, new_keys.len() as u32, &skipped);
     Ok(ImportResultDto { added: new_keys, already_there: already, skipped, cancelled: false })
+}
+
+/// Bỏ dấu phân cách cuối của đường dẫn người dùng thả vào. Giữ gốc ổ đĩa: `C:\` không được thành `C:` (đường dẫn tương đối theo ổ).
+fn trim_trailing_sep(raw: &str) -> &str {
+    let t = raw.trim_end_matches(std::path::is_separator);
+    let bare_drive = t.len() == 2 && t.as_bytes()[1] == b':' && t.as_bytes()[0].is_ascii_alphabetic();
+    if bare_drive && t.len() < raw.len() { &raw[..t.len() + 1] } else { t }
+}
+
+#[cfg(test)]
+mod trim_tests {
+    use super::trim_trailing_sep;
+
+    #[test]
+    fn trims_trailing_separators_but_keeps_a_drive_root() {
+        assert_eq!(trim_trailing_sep("/Users/u/Fonts/"), "/Users/u/Fonts");
+        assert_eq!(trim_trailing_sep("/Users/u/Fonts"), "/Users/u/Fonts");
+        assert_eq!(trim_trailing_sep("C:/"), "C:/");
+        assert_eq!(trim_trailing_sep("C:"), "C:");
+        if cfg!(windows) {
+            // `\` chỉ là dấu phân cách trên Windows
+            assert_eq!(trim_trailing_sep("C:\\"), "C:\\");
+            assert_eq!(trim_trailing_sep("D:\\Fonts\\"), "D:\\Fonts");
+        }
+    }
 }

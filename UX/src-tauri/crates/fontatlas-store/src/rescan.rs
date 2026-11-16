@@ -287,6 +287,9 @@ fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemo
     })
 }
 
+/// Dấu phân cách thứ hai khi khớp tiền tố thư mục: Windows nhận cả `/` lẫn `\\`, unix chỉ `/` (hai tham số trùng nhau).
+const ALT_SEP: &str = if cfg!(windows) { "\\" } else { "/" };
+
 impl Store {
     pub fn rescan_source(&mut self, source_id: i64) -> Result<RescanStats, StoreError> {
         self.rescan_source_with(source_id, &mut |_| {}, &AtomicBool::new(false))
@@ -747,11 +750,11 @@ impl Store {
         let mut st = self.conn.prepare(
             "SELECT l.path, fi.hash, f.face_index FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
                JOIN faces f ON f.file_id = fi.file_id
-              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) = ?2 || '/'))
+              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) IN (?2 || ?3, ?2 || ?4)))
               ORDER BY l.path, f.face_index",
         )?;
         let mut run = |exact: &str, prefix: &str| -> Result<(), StoreError> {
-            let rows = st.query_map(params![exact, prefix], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
+            let rows = st.query_map(params![exact, prefix, "/", ALT_SEP], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
             for row in rows {
                 let (path, hash, face_index) = row?;
                 let hash: [u8; 32] = hash.try_into().map_err(|_| StoreError::BadHash("hash không đủ 32 byte".into()))?;

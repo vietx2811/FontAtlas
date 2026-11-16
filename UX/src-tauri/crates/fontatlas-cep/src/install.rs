@@ -227,7 +227,7 @@ fn read_tree(root: &Path) -> std::io::Result<Vec<(String, Vec<u8>)>> {
         for e in std::fs::read_dir(dir)? {
             let e = e?;
             let p = e.path();
-            let rel = p.strip_prefix(root).map(|r| r.to_string_lossy().into_owned()).unwrap_or_default();
+            let rel = p.strip_prefix(root).map(|r| r.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/")).unwrap_or_default();
             if e.file_type()?.is_dir() {
                 if rel != "META-INF" {
                     walk(root, &p, out)?;
