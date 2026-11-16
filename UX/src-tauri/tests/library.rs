@@ -691,7 +691,7 @@ fn dropping_a_folder_adds_it_as_a_source_and_only_its_faces_to_the_case_then_rep
     }
     let t = target_case(&st);
     let r = import(&st, &[&fonts], &t).unwrap();
-    assert_eq!((r.added.len(), r.already_there, r.skipped.len(), r.cancelled), (2, 0, 0, false));
+    assert_eq!((r.added.len(), r.already_there, r.skipped.len(), r.cancelled), (2, 0, 0, false), "skipped: {:?}", r.skipped.iter().map(|s| (&s.path, &s.reason)).collect::<Vec<_>>());
     assert_eq!(sources::list_sources(&st).unwrap().len(), 1, "thư mục thả vào trở thành nguồn");
     assert_eq!(cases::get_case(&st, t.id).unwrap().faces.len(), 2);
     let again = import(&st, &[&fonts], &t).unwrap();
