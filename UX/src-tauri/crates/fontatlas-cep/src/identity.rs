@@ -82,11 +82,16 @@ fn write_atomic(path: &Path, data: &[u8], mode: u32) -> std::io::Result<()> {
     res
 }
 
+#[cfg(target_os = "macos")]
+const CERT_CN: &str = "Font Atlas panel (this Mac)";
+#[cfg(not(target_os = "macos"))]
+const CERT_CN: &str = "Font Atlas panel (this computer)";
+
 fn self_signed_cert(key: &RsaPrivateKey) -> Result<Vec<u8>, IdentityError> {
     let pem = key.to_pkcs8_pem(LineEnding::LF).map_err(|e| IdentityError::Rsa(e.to_string()))?;
     let kp = rcgen::KeyPair::from_pem_and_sign_algo(&pem, &rcgen::PKCS_RSA_SHA256).map_err(|e| IdentityError::Cert(e.to_string()))?;
     let mut p = rcgen::CertificateParams::new(Vec::<String>::new()).map_err(|e| IdentityError::Cert(e.to_string()))?;
-    p.distinguished_name.push(rcgen::DnType::CommonName, "Font Atlas panel (this Mac)");
+    p.distinguished_name.push(rcgen::DnType::CommonName, CERT_CN);
     p.distinguished_name.push(rcgen::DnType::OrganizationName, "Font Atlas");
     p.not_before = rcgen::date_time_ymd(2024, 1, 1);
     p.not_after = rcgen::date_time_ymd(2060, 1, 1);
