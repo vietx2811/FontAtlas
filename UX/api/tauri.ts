@@ -187,7 +187,7 @@ export function createTauriApi(): Api {
     deskSuggest: req => call('desk_suggest', { req }),
     suggestPartners: (anchor, req) => call('suggest_partners', { anchor, req }),
     suggestCombos: req => call('suggest_combos', { req }),
-    roleFit: (face, role) => call('role_fit', { face, role }),
+    roleFit: (face, role, projectVi) => call('role_fit', { face, role, projectVi: projectVi ?? null }),
     recentViews: limit => call('recent_views', { limit }),
     recordView: face => none(call('record_view', { face })),
     clearRecentViews: () => call('clear_recent_views'),

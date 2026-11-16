@@ -103,7 +103,13 @@ fn unknown_role() -> RoleFitDto {
     }
 }
 
-pub fn role_fit(state: &AppState, face: &FaceKeyDto, role: &RoleRefDto) -> Result<RoleFitDto, CmdError> {
+/// Chính sách tiếng Việt theo cờ của request: Case/Desk bật "Đủ tiếng Việt" (`project_vi`) → đòi đủ (hạ mức + `vi_missing`);
+/// không bật → chấm theo hình dạng, chỉ ghi chú `missing_vietnamese` (UI hiện NoteMark "!").
+pub(crate) fn vi_policy(project_vi: bool) -> pairing::ViPolicy {
+    if project_vi { pairing::ViPolicy::Require } else { pairing::ViPolicy::Note }
+}
+
+pub fn role_fit(state: &AppState, face: &FaceKeyDto, role: &RoleRefDto, project_vi: bool) -> Result<RoleFitDto, CmdError> {
     let b = bundle(state)?;
     let key = ix_of(&b, face)?;
     let Some(r) = resolve_role(role) else {
@@ -111,7 +117,7 @@ pub fn role_fit(state: &AppState, face: &FaceKeyDto, role: &RoleRefDto) -> Resul
     };
     let p = b.index.profile(&key).ok_or_else(|| CmdError::not_found("face"))?;
     let eff = effective_classes(state)?;
-    let x = pairing::role_fit(&traits_of(&b, p, &eff), r);
+    let x = pairing::role_fit_with(&traits_of(&b, p, &eff), r, vi_policy(project_vi));
     Ok(RoleFitDto { fit: fit_dto(x.fit), profile: Some(role_id(r)), reasons: with_tnum_note(r, x.reasons.iter().map(reason_dto).collect()) })
 }
 
@@ -147,7 +153,7 @@ pub(crate) fn role_fit_faces_excluding(
         if allowed.as_ref().is_some_and(|s| !s.contains(&p.key)) {
             continue;
         }
-        let x = pairing::role_fit(&traits_of(&b, p, &eff), r);
+        let x = pairing::role_fit_with(&traits_of(&b, p, &eff), r, vi_policy(opts.project_vi));
         if matches!(x.fit, Fit::Good | Fit::Ok) {
             hits.push((x.fit, p, x.reasons));
         }

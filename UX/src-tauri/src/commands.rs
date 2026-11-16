@@ -132,7 +132,7 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
-            async role_fit(face: FaceKeyDto, role: RoleRefDto) -> Result<RoleFitDto, CmdError>;
+            async role_fit(face: FaceKeyDto, role: RoleRefDto, project_vi: Option<bool>) -> Result<RoleFitDto, CmdError>;
             async role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError>;
             async suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError>;
             async desk_suggest(req: DeskSuggestReqDto) -> Result<DeskPageDto, CmdError>;
@@ -424,7 +424,7 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(axis_histogram(q: FaceQueryDto, bins: u32) -> Vec<AxisHistogramDto> => |s| analysis::axis_histograms(s, &q, bins));
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
-cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role));
+cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto, project_vi: Option<bool>) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role, project_vi.unwrap_or(false)));
 cmd!(role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> RoleFitPageDto => |s| suggest::role_fit_faces(s, &role, &opts));
 cmd!(suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> PartnerPageDto => |s| suggest_pair::suggest_partners(s, &anchor, &req));
 cmd!(desk_suggest(req: DeskSuggestReqDto) -> DeskPageDto => |s| suggest_pair::desk_suggest(s, &req));

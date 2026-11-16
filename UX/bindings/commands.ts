@@ -207,7 +207,7 @@ export interface TauriCommandMap {
   class_facets: { args: { q: FaceQueryDto }; result: ClassFacetDto[] };
   pair_candidates: { args: { face: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto[] };
   assess_pair: { args: { a: FaceKeyDto; b: FaceKeyDto; opts: PairOptsDto }; result: PairCandidateDto };
-  role_fit: { args: { face: FaceKeyDto; role: RoleRefDto }; result: RoleFitDto };
+  role_fit: { args: { face: FaceKeyDto; role: RoleRefDto; projectVi: boolean | null }; result: RoleFitDto };
   role_fit_faces: { args: { role: RoleRefDto; opts: RoleFitListOptsDto }; result: RoleFitPageDto };
   suggest_partners: { args: { anchor: FaceKeyDto; req: SuggestPartnersReqDto }; result: PartnerPageDto };
   desk_suggest: { args: { req: DeskSuggestReqDto }; result: DeskPageDto };

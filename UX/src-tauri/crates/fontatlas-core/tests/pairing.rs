@@ -1,7 +1,7 @@
 //! G4: điểm hợp vai + phong cách pair. Hàm thuần trên số đo; không điểm số trong kết quả, chỉ mức + mã lý do.
 use fontatlas_core::classify::Class;
 use fontatlas_core::pairing::{
-    Fit, PairCtx, PairStyle, Role, Traits, family_root, pair_style, role_fit, role_from_name,
+    Fit, PairCtx, PairStyle, Role, Traits, ViPolicy, family_root, pair_style, role_fit, role_fit_with, role_from_name,
 };
 
 fn roboto_like() -> Traits {
@@ -87,6 +87,71 @@ fn missing_vietnamese_caps_text_roles_but_only_notes_display() {
     let disp = role_fit(&d, Role::Display);
     assert_ne!(disp.fit, Fit::Weak);
     assert!(codes(&disp).contains(&"vi_missing"));
+}
+
+// Chính sách tiếng Việt (chủ app đồng ý 2026-11-15): chỉ hạ mức khi Case/Desk bật "Đủ tiếng Việt" (`ViPolicy::Require`);
+// không bật thì chấm theo hình dạng và chỉ ghi chú `missing_vietnamese` (UI hiện NoteMark "!").
+
+#[test]
+fn without_require_vietnamese_shape_decides_and_a_note_is_added() {
+    let mut t = roboto_like();
+    t.vi_missing = Some(12);
+    for role in [Role::Body, Role::Caption, Role::Label] {
+        let strict = role_fit_with(&t, role, ViPolicy::Require);
+        let loose = role_fit_with(&t, role, ViPolicy::Note);
+        assert_eq!(strict.fit, Fit::Weak, "{role:?} đòi đủ tiếng Việt vẫn hạ xuống Weak");
+        assert!(codes(&strict).contains(&"vi_missing"));
+        // cùng số đo nhưng đủ tiếng Việt: mức theo hình dạng
+        let mut full = t.clone();
+        full.vi_missing = Some(0);
+        assert_eq!(loose.fit, role_fit(&full, role).fit, "{role:?}: mức không còn bị hạ");
+        assert!(loose.fit > Fit::Weak, "{role:?}: {:?}", loose.fit);
+        assert_eq!(codes(&loose).first(), Some(&"missing_vietnamese"), "ghi chú đứng đầu: {:?}", codes(&loose));
+        assert!(!codes(&loose).contains(&"vi_missing"));
+        let n = loose.reasons[0].params.iter().find(|(k, _)| *k == "count").map(|(_, v)| *v);
+        assert_eq!(n, Some(12.0));
+    }
+}
+
+#[test]
+fn without_require_vietnamese_display_roles_are_not_capped_at_ok_either() {
+    let mut d = didone_display();
+    d.vi_missing = Some(40);
+    let mut full = d.clone();
+    full.vi_missing = Some(0);
+    let loose = role_fit_with(&d, Role::Display, ViPolicy::Note);
+    assert_eq!(loose.fit, role_fit(&full, Role::Display).fit);
+    assert_eq!(role_fit_with(&d, Role::Display, ViPolicy::Require).fit, Fit::Ok.min(loose.fit));
+    assert!(codes(&loose).contains(&"missing_vietnamese"));
+}
+
+#[test]
+fn no_note_when_vietnamese_is_complete_or_unknown() {
+    let t = roboto_like(); // vi_missing = Some(0)
+    assert!(!codes(&role_fit_with(&t, Role::Body, ViPolicy::Note)).contains(&"missing_vietnamese"));
+    let mut u = roboto_like();
+    u.vi_missing = None; // chưa đo: không đoán
+    assert!(!codes(&role_fit_with(&u, Role::Body, ViPolicy::Note)).contains(&"missing_vietnamese"));
+    assert_eq!(role_fit_with(&t, Role::Body, ViPolicy::Note).fit, role_fit(&t, Role::Body).fit);
+}
+
+#[test]
+fn numerals_never_get_a_vietnamese_note_because_digits_do_not_need_it() {
+    let mut t = roboto_like();
+    t.vi_missing = Some(30);
+    assert!(!codes(&role_fit_with(&t, Role::Numerals, ViPolicy::Note)).contains(&"missing_vietnamese"));
+    assert!(!codes(&role_fit_with(&t, Role::Numerals, ViPolicy::Require)).contains(&"vi_missing"));
+}
+
+#[test]
+fn note_policy_keeps_the_other_gates() {
+    let mut t = roboto_like();
+    t.vi_missing = Some(12);
+    t.class = Class::Script; // lớp không hợp chữ đọc: vẫn hạ xuống Weak dù không đòi tiếng Việt
+    let r = role_fit_with(&t, Role::Body, ViPolicy::Note);
+    assert_eq!(r.fit, Fit::Weak);
+    assert!(codes(&r).contains(&"class_unfit"));
+    assert!(codes(&r).contains(&"missing_vietnamese"));
 }
 
 #[test]
