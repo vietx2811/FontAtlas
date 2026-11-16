@@ -106,26 +106,26 @@ pub fn stop(state: &AppState) {
 
 /// Nút "Tắt lần này" trên toast tự bật: gỡ lý do `caseapp:<id>` của Case (không đụng lý do khác) và chặn bật lại cho tới khi
 /// mọi app của Case thoát rồi chạy lại.
-pub fn case_app_suppress(state: &AppState, collection_id: i64) -> Result<(), CmdError> {
+pub fn case_app_suppress(state: &AppState, case_id: i64) -> Result<(), CmdError> {
     if !state.activation.supported() {
         return Ok(());
     }
     let mut tracker = state.app_sets.tracker.lock().unwrap_or_else(|p| p.into_inner());
-    let rep = state.activation.suppress_case_app(state.store()?, collection_id, &mut tracker)?;
+    let rep = state.activation.suppress_case_app(state.store()?, case_id, &mut tracker)?;
     if rep.results.iter().any(|r| r.outcome == fontatlas_activate::FileOutcome::Deactivated) {
         state.hubs.activation.emit(ActivationEvent::Changed { hashes: vec![] });
     }
     Ok(())
 }
 
-pub fn case_apps(state: &AppState, collection_id: i64) -> Result<Vec<CaseAppDto>, CmdError> {
-    let apps = state.with_user(|u| Ok(u.case_apps(collection_id)?))?;
+pub fn case_apps(state: &AppState, case_id: i64) -> Result<Vec<CaseAppDto>, CmdError> {
+    let apps = state.with_user(|u| Ok(u.case_apps(case_id)?))?;
     Ok(apps.into_iter().map(|a| CaseAppDto { bundle_id: a.bundle_id, name: a.app_name }).collect())
 }
 
-pub fn set_case_apps(state: &AppState, collection_id: i64, apps: &[CaseAppDto]) -> Result<(), CmdError> {
+pub fn set_case_apps(state: &AppState, case_id: i64, apps: &[CaseAppDto]) -> Result<(), CmdError> {
     let rows: Vec<CaseApp> = apps.iter().map(|a| CaseApp { bundle_id: a.bundle_id.clone(), app_name: a.name.clone() }).collect();
-    state.with_user(|u| Ok(u.set_case_apps(collection_id, &rows)?))
+    state.with_user(|u| Ok(u.set_case_apps(case_id, &rows)?))
 }
 
 /// App đã cài, có bundle id, theo tên. `running` lấy từ lúc quét.

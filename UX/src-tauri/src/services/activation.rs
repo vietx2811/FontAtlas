@@ -348,10 +348,16 @@ fn policy(proceed: bool) -> ConflictPolicy {
     if proceed { ConflictPolicy::Proceed } else { ConflictPolicy::Ask }
 }
 
-fn reason_names(r: &ReasonDto, names: &std::collections::HashMap<i64, String>, apps: &std::collections::HashMap<i64, Vec<String>>) -> ReasonNamesDto {
+fn reason_names(
+    r: &ReasonDto,
+    names: &std::collections::HashMap<i64, String>,
+    case_names: &std::collections::HashMap<i64, String>,
+    apps: &std::collections::HashMap<i64, Vec<String>>,
+) -> ReasonNamesDto {
     match r {
         ReasonDto::Collection { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: vec![] },
-        ReasonDto::CaseApp { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: apps.get(collection_id).cloned().unwrap_or_default() },
+        // `collection_name` mang TÊN CASE ở đây: `case_id` là `cases.id`, tra trong bảng Case, không phải collections.
+        ReasonDto::CaseApp { case_id } => ReasonNamesDto { collection_name: case_names.get(case_id).cloned(), app_names: apps.get(case_id).cloned().unwrap_or_default() },
         ReasonDto::Manual | ReasonDto::Auto { .. } => ReasonNamesDto { collection_name: None, app_names: vec![] },
     }
 }
@@ -361,10 +367,11 @@ pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError>
     let rows = state.activation.state(state.store()?)?;
     state.with_store(|s| {
         let names: std::collections::HashMap<i64, String> = s.collections()?.into_iter().map(|c| (c.id, c.name)).collect();
+        let case_names: std::collections::HashMap<i64, String> = s.cases(false)?.into_iter().map(|c| (c.id, c.name)).collect();
         let mut apps: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
         for b in s.case_bindings()? {
-            let list = s.case_apps(b.collection_id)?.into_iter().map(|a| if a.app_name.is_empty() { a.bundle_id } else { a.app_name }).collect();
-            apps.insert(b.collection_id, list);
+            let list = s.case_apps(b.case_id)?.into_iter().map(|a| if a.app_name.is_empty() { a.bundle_id } else { a.app_name }).collect();
+            apps.insert(b.case_id, list);
         }
         let mut st = s
             .conn()
@@ -381,7 +388,7 @@ pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError>
                     .filter_map(|x| x.ok().map(|v| v as u32))
                     .collect();
                 let mut dto = ActivationStateDto::from_core(r, if faces.is_empty() { vec![0] } else { faces });
-                dto.reason_names = Some(dto.reasons.iter().map(|x| reason_names(x, &names, &apps)).collect());
+                dto.reason_names = Some(dto.reasons.iter().map(|x| reason_names(x, &names, &case_names, &apps)).collect());
                 Ok(dto)
             })
             .collect()

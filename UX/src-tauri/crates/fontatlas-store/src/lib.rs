@@ -54,5 +54,5 @@ pub use open::{BACKUP_DIR, LIBRARY_FILE, OpenReport, Store, USER_FILE};
 pub use overrides::ClassificationOverride;
 pub use pairs::{NewPair, SavedPair};
 pub use recent::RECENT_MAX;
-pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_library_v4_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test, create_user_pre_replaced_for_test, create_user_pre_auto_for_test, create_user_pre_case_apps_for_test, create_user_pre_combo_roles_for_test};
+pub use schema::{LIBRARY_VERSION, USER_VERSION, create_library_v1_for_test, create_library_v2_for_test, create_library_v3_for_test, create_library_v4_for_test, create_user_v1_for_test, create_user_v2_for_test, create_user_v3_for_test, create_user_v4_for_test, create_user_v5_for_test, create_user_pre_taxonomy_for_test, create_user_pre_replaced_for_test, create_user_pre_auto_for_test, create_user_pre_case_apps_for_test, create_user_pre_case_apps_by_case_for_test, create_user_pre_combo_roles_for_test};
 pub use user::{Collection, Source, SourceKind, Tag};

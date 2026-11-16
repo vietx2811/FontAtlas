@@ -300,9 +300,10 @@ impl<E: ActivationEngine> ActivationService<E> {
 
     /// B5: bật font của Case vì một app gắn với Case vừa chạy. Lý do `caseapp:<id>`, scope session, xung đột → không bật
     /// (không có ai để hỏi giữa lúc đang làm việc trong app khác). Font đã bật persistent chỉ thêm lý do.
-    pub fn activate_case_app(&self, store: &Mutex<Store>, collection_id: i64) -> Result<ActivationReport, ActivationError> {
-        let keys = relock(store).collection_faces(collection_id)?;
-        self.run(store, &keys, ActivationReason::CaseApp(collection_id), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
+    pub fn activate_case_app(&self, store: &Mutex<Store>, case_id: i64) -> Result<ActivationReport, ActivationError> {
+        // `case_id` là `cases.id` (Pairing Desk), KHÔNG phải `collections.collection_id`: font lấy từ `case_faces`.
+        let keys: Vec<FaceKey> = relock(store).case_faces(case_id)?.into_iter().map(|f| f.key).collect();
+        self.run(store, &keys, ActivationReason::CaseApp(case_id), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
     }
 
     pub fn activate_collection(

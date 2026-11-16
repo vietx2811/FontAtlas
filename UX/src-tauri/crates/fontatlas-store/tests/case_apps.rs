@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use fontatlas_store::{ActivationReason, ActivationRow, ActivationScope, ActivationStatus, CaseApp, DesiredState, Store, StoreError, USER_FILE, create_user_pre_case_apps_for_test};
+use fontatlas_store::{ActivationReason, ActivationRow, ActivationScope, ActivationStatus, CaseApp, DesiredState, Store, StoreError, USER_FILE, create_user_pre_case_apps_for_test, create_user_pre_case_apps_by_case_for_test};
 
 fn app(b: &str, n: &str) -> CaseApp {
     CaseApp { bundle_id: b.into(), app_name: n.into() }
@@ -28,7 +28,7 @@ fn row(hash: [u8; 32]) -> ActivationRow {
 fn set_get_replace_keeps_order_and_dedupes() {
     let d = tmp();
     let mut s = open_store(d.path());
-    let c = s.create_collection("Brand Kit A", None).unwrap();
+    let c = s.create_case("Brand Kit A", None, None).unwrap();
     assert!(s.case_apps(c).unwrap().is_empty());
     s.set_case_apps(c, &[app("com.adobe.Illustrator", "Adobe Illustrator"), app("com.adobe.InDesign", "Adobe InDesign"), app("com.adobe.Illustrator", "dup")]).unwrap();
     let got = s.case_apps(c).unwrap();
@@ -44,7 +44,7 @@ fn set_get_replace_keeps_order_and_dedupes() {
 fn rejects_bad_bundle_and_unknown_case() {
     let d = tmp();
     let mut s = open_store(d.path());
-    let c = s.create_collection("X", None).unwrap();
+    let c = s.create_case("X", None, None).unwrap();
     assert!(matches!(s.set_case_apps(c, &[app("a b", "")]), Err(StoreError::Invalid(_))));
     assert!(matches!(s.set_case_apps(c, &[app("ab", "")]), Err(StoreError::Invalid(_))));
     assert!(matches!(s.set_case_apps(9999, &[app("com.a.b", "")]), Err(StoreError::NotFound(_))));
@@ -55,18 +55,18 @@ fn rejects_bad_bundle_and_unknown_case() {
 fn bindings_group_by_case_and_cascade_on_delete() {
     let d = tmp();
     let mut s = open_store(d.path());
-    let a = s.create_collection("A", None).unwrap();
-    let b = s.create_collection("B", None).unwrap();
+    let a = s.create_case("A", None, None).unwrap();
+    let b = s.create_case("B", None, None).unwrap();
     s.set_case_apps(a, &[app("com.x.one", ""), app("com.x.two", "")]).unwrap();
     s.set_case_apps(b, &[app("com.x.one", "")]).unwrap();
     let bind = s.case_bindings().unwrap();
     assert_eq!(bind.len(), 2);
-    assert_eq!(bind[0].collection_id, a);
+    assert_eq!(bind[0].case_id, a);
     assert_eq!(bind[0].bundles, ["com.x.one", "com.x.two"]);
-    s.delete_collection(a).unwrap();
+    s.delete_case(a).unwrap();
     let bind = s.case_bindings().unwrap();
-    assert_eq!(bind.len(), 1, "xoá Case xoá luôn các liên kết app");
-    assert_eq!(bind[0].collection_id, b);
+    assert_eq!(bind.len(), 1, "Case vào thùng rác thì hết bị đồng bộ app set");
+    assert_eq!(bind[0].case_id, b);
 }
 
 #[test]
@@ -81,11 +81,11 @@ fn caseapp_reason_is_storable_sorted_and_listed() {
     assert!(s.add_activation_reason(&h, ActivationReason::CaseApp(7)).unwrap());
     assert!(!s.add_activation_reason(&h, ActivationReason::CaseApp(7)).unwrap(), "lần hai không thêm");
     assert_eq!(s.activation_row(&h).unwrap().unwrap().reasons, vec![ActivationReason::Manual, ActivationReason::CaseApp(7)]);
-    assert_eq!(s.case_app_reason_collections().unwrap(), vec![7]);
+    assert_eq!(s.case_app_reason_cases().unwrap(), vec![7]);
     assert_eq!(s.hashes_with_reason(ActivationReason::CaseApp(7)).unwrap(), vec![h]);
     let left = s.remove_activation_reason(&h, ActivationReason::CaseApp(7)).unwrap();
     assert_eq!(left, vec![ActivationReason::Manual], "gỡ lý do app không đụng lý do bật tay");
-    assert!(s.case_app_reason_collections().unwrap().is_empty());
+    assert!(s.case_app_reason_cases().unwrap().is_empty());
 }
 
 #[test]
@@ -122,4 +122,56 @@ fn check_rejects_malformed_caseapp_reason() {
     for bad in ["caseapp:", "caseapp:x", "caseapp:1x", "caseapps:1"] {
         assert!(s.conn().execute("INSERT INTO u.activation_reasons(hash,reason,added_at) VALUES (?1,?2,1)", rusqlite::params![&hash, bad]).is_err(), "{bad}");
     }
+}
+
+/// L2 (beta.2): app set thuộc về Case. Một id chỉ là collection (không có Case) KHÔNG nhận app set, và Case không cần có collection nào.
+#[test]
+fn app_set_belongs_to_the_case_not_to_a_collection_with_the_same_id() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    // Case #1 và collection #1 cùng số nhưng là hai thực thể khác nhau
+    let case = s.create_case("Case", None, None).unwrap();
+    let coll = s.create_collection("Collection", None).unwrap();
+    assert_eq!(case, coll, "điều kiện của test: trùng số");
+    s.set_case_apps(case, &[app("com.x.one", "")]).unwrap();
+    // collection thứ 2 không có Case cùng số: không được nhận app set (trước đây đây là đường chạy được còn Case thì báo "không tìm thấy")
+    let only_coll = s.create_collection("Only collection", None).unwrap();
+    assert_ne!(only_coll, case);
+    assert!(matches!(s.set_case_apps(only_coll, &[app("com.x.two", "")]), Err(StoreError::NotFound(_))));
+    // Case mới không cần collection nào
+    let case2 = s.create_case("Case 2", None, None).unwrap();
+    s.set_case_apps(case2, &[app("com.x.three", "")]).unwrap();
+    // xoá collection trùng số không đụng tới app set của Case
+    s.delete_collection(coll).unwrap();
+    assert_eq!(s.case_apps(case).unwrap().len(), 1);
+    // Case trong thùng rác: không còn là binding và không nhận ghi thêm; khôi phục thì quay lại
+    s.delete_case(case).unwrap();
+    assert!(s.case_bindings().unwrap().iter().all(|b| b.case_id != case));
+    assert!(matches!(s.set_case_apps(case, &[app("com.x.one", "")]), Err(StoreError::NotFound(_))));
+    s.restore_case(case).unwrap();
+    assert!(s.case_bindings().unwrap().iter().any(|b| b.case_id == case));
+}
+
+#[test]
+fn migration_to_case_keyed_app_sets_keeps_rows_whose_case_exists_and_drops_orphans() {
+    let d = tmp();
+    let user = d.path().join(USER_FILE);
+    create_user_pre_case_apps_by_case_for_test(&user);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        c.execute_batch("PRAGMA foreign_keys=OFF;").unwrap(); // dữ liệu cũ: hàng khoá theo collection_id mà collection đó không còn
+        // Case 1 và 2 có thật; hàng cho id 9 là mồ côi (không có Case)
+        for _ in 0..2 {
+            c.execute("INSERT INTO cases(name,brief,settings,created_at,updated_at,opened_at) VALUES ('c',NULL,'{}',1,1,1)", []).unwrap();
+        }
+        for (id, b) in [(1, "com.x.one"), (1, "com.x.two"), (2, "com.x.one"), (9, "com.x.orphan")] {
+            c.execute("INSERT INTO case_apps(collection_id,bundle_id,app_name,added_at) VALUES (?1,?2,'N',5)", rusqlite::params![id, b]).unwrap();
+        }
+    }
+    let (s, rep) = Store::open(d.path()).unwrap();
+    assert!(rep.user_backup.is_some());
+    assert_eq!(s.case_apps(1).unwrap().len(), 2);
+    assert_eq!(s.case_apps(2).unwrap().len(), 1);
+    assert!(s.case_apps(9).unwrap().is_empty());
+    assert_eq!(s.case_apps(1).unwrap()[0].app_name, "N");
 }

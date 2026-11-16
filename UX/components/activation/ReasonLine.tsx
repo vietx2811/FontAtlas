@@ -9,7 +9,7 @@ export function reasonText(r: ReasonDto, names: Record<string, string>): string 
   switch (r.kind) {
     case 'manual': return t('act.why.manual');
     case 'collection': return t('act.why.collection', { name: names[`c:${r.collectionId}`] ?? `#${r.collectionId}` });
-    case 'case_app': return t('act.why.caseApp', { app: names[`a:${r.collectionId}`] || t('act.why.anApp'), name: names[`c:${r.collectionId}`] ?? `#${r.collectionId}` });
+    case 'case_app': return t('act.why.caseApp', { app: names[`a:${r.caseId}`] || t('act.why.anApp'), name: names[`k:${r.caseId}`] ?? `#${r.caseId}` });
     case 'auto': return t('act.why.auto', { app: r.app });
   }
 }

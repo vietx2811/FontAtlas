@@ -47,12 +47,12 @@ impl AppSetTracker {
     }
 
     /// Đánh dấu Case bị tắt lần này (xem `ActivationService::suppress_case_app`).
-    pub fn suppress(&mut self, collection_id: i64) {
-        self.cases.insert(collection_id, CaseState::Suppressed);
+    pub fn suppress(&mut self, case_id: i64) {
+        self.cases.insert(case_id, CaseState::Suppressed);
     }
 
-    pub fn is_suppressed(&self, collection_id: i64) -> bool {
-        matches!(self.cases.get(&collection_id), Some(CaseState::Suppressed))
+    pub fn is_suppressed(&self, case_id: i64) -> bool {
+        matches!(self.cases.get(&case_id), Some(CaseState::Suppressed))
     }
 }
 
@@ -68,7 +68,7 @@ pub enum AppSetEventKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSetEvent {
-    pub collection_id: i64,
+    pub case_id: i64,
     pub kind: AppSetEventKind,
     /// Số file đổi trạng thái (bật mới / gỡ).
     pub changed: usize,
@@ -90,41 +90,41 @@ impl<E: ActivationEngine> ActivationService<E> {
     ) -> Result<Vec<AppSetEvent>, ActivationError> {
         let (bindings, with_reasons) = {
             let s = relock(store);
-            (s.case_bindings()?, s.case_app_reason_collections()?)
+            (s.case_bindings()?, s.case_app_reason_cases()?)
         };
         let mut events = vec![];
-        let bound: HashSet<i64> = bindings.iter().map(|b| b.collection_id).collect();
+        let bound: HashSet<i64> = bindings.iter().map(|b| b.case_id).collect();
 
         for b in &bindings {
             let any = b.bundles.iter().any(|x| running.contains(x));
-            let st = tracker.cases.get(&b.collection_id).copied();
+            let st = tracker.cases.get(&b.case_id).copied();
             match (any, st) {
                 (true, Some(CaseState::On)) | (true, Some(CaseState::Suppressed)) => {}
                 (true, Some(CaseState::Leaving(_))) => {
                     // Mở lại trong ân hạn: font vẫn đang bật, chỉ huỷ việc gỡ.
-                    tracker.cases.insert(b.collection_id, CaseState::On);
+                    tracker.cases.insert(b.case_id, CaseState::On);
                 }
                 (true, None) => {
-                    let rep = self.activate_case_app(store, b.collection_id)?;
+                    let rep = self.activate_case_app(store, b.case_id)?;
                     let (changed, conflicts, failed) = tally_on(&rep.results);
-                    tracker.cases.insert(b.collection_id, CaseState::On);
-                    events.push(AppSetEvent { collection_id: b.collection_id, kind: AppSetEventKind::On, changed, conflicts, failed });
+                    tracker.cases.insert(b.case_id, CaseState::On);
+                    events.push(AppSetEvent { case_id: b.case_id, kind: AppSetEventKind::On, changed, conflicts, failed });
                 }
                 (false, Some(CaseState::On)) => {
-                    tracker.cases.insert(b.collection_id, CaseState::Leaving(now));
+                    tracker.cases.insert(b.case_id, CaseState::Leaving(now));
                 }
                 (false, Some(CaseState::Leaving(t))) => {
                     if now.saturating_duration_since(t) >= grace {
-                        let rep = self.release_case_app(store, b.collection_id, &mut |_| {})?;
-                        tracker.cases.remove(&b.collection_id);
+                        let rep = self.release_case_app(store, b.case_id, &mut |_| {})?;
+                        tracker.cases.remove(&b.case_id);
                         let changed = rep.results.iter().filter(|r| r.outcome == FileOutcome::Deactivated).count();
                         let failed = rep.results.iter().filter(|r| matches!(r.outcome, FileOutcome::Failed { .. })).count();
-                        events.push(AppSetEvent { collection_id: b.collection_id, kind: AppSetEventKind::Off, changed, conflicts: 0, failed });
+                        events.push(AppSetEvent { case_id: b.case_id, kind: AppSetEventKind::Off, changed, conflicts: 0, failed });
                     }
                 }
                 // đã tắt lần này và app đã thoát hết: lần chạy sau bật lại bình thường
                 (false, Some(CaseState::Suppressed)) => {
-                    tracker.cases.remove(&b.collection_id);
+                    tracker.cases.remove(&b.case_id);
                 }
                 (false, None) => {}
             }
@@ -138,7 +138,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                 tracker.cases.remove(&id);
                 let changed = rep.results.iter().filter(|r| r.outcome == FileOutcome::Deactivated).count();
                 if changed > 0 {
-                    events.push(AppSetEvent { collection_id: id, kind: AppSetEventKind::Off, changed, conflicts: 0, failed: 0 });
+                    events.push(AppSetEvent { case_id: id, kind: AppSetEventKind::Off, changed, conflicts: 0, failed: 0 });
                 }
             }
         }
@@ -152,17 +152,17 @@ impl<E: ActivationEngine> ActivationService<E> {
     pub fn suppress_case_app(
         &self,
         store: &Mutex<Store>,
-        collection_id: i64,
+        case_id: i64,
         tracker: &mut AppSetTracker,
     ) -> Result<crate::types::ActivationReport, ActivationError> {
-        let rep = self.release_case_app(store, collection_id, &mut |_| {})?;
-        tracker.suppress(collection_id);
+        let rep = self.release_case_app(store, case_id, &mut |_| {})?;
+        tracker.suppress(case_id);
         Ok(rep)
     }
 
     /// Lúc thoát Font Atlas: gỡ MỌI lý do `caseapp:*` (font session sắp bị gỡ; lần mở sau đồng bộ lại từ app đang chạy).
     pub fn release_all_case_apps(&self, store: &Mutex<Store>) -> Result<usize, ActivationError> {
-        let ids = relock(store).case_app_reason_collections()?;
+        let ids = relock(store).case_app_reason_cases()?;
         let mut n = 0;
         for id in ids {
             n += self.release_case_app(store, id, &mut |_| {})?.results.len();

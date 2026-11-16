@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use app_lib::dto::activation::*;
 use app_lib::dto::events::ActivationEvent;
 use app_lib::dto::library::*;
-use app_lib::services::{app_sets, boot, library, sources};
+use app_lib::services::{app_sets, boot, cases, library, sources};
 use app_lib::state::{AppDirs, AppState};
 use fontatlas_activate::{ActivationEngine, ActivationService, AppSetTracker, EngineError, FakeEngine, Scope};
 
@@ -86,8 +86,8 @@ fn setup_case(d: &Path) -> (Arc<AppState>, Arc<FakeEngine>, i64, FaceKeyDto) {
     assert!(st.scans.wait_idle(Duration::from_secs(60)));
     let row = library::query_faces(&st, &FaceQueryDto { limit: 5, ..Default::default() }).unwrap().items.remove(0);
     let key = FaceKeyDto { hash_hex: row.hash_hex, face_index: row.face_index };
-    let case = library::create_collection(&st, "Brand Kit A", None).unwrap().id;
-    library::add_to_collection(&st, case, std::slice::from_ref(&key)).unwrap();
+    let case = cases::create_case(&st, Some("Brand Kit A"), None, None).unwrap().id;
+    cases::add_to_case(&st, Some(case), std::slice::from_ref(&key), None).unwrap();
     (st, eng, case, key)
 }
 
@@ -128,11 +128,11 @@ fn tick_turns_the_case_on_then_off_after_grace_and_emits_events() {
     assert_eq!(ev.len(), 1);
     assert_eq!(eng.registrations().len(), 1, "font đã đăng ký thật vào engine");
     let on = seen.lock().unwrap().clone();
-    assert_eq!((on[0].collection_id, on[0].kind, on[0].changed), (case, AppSetEventKindDto::On, 1));
+    assert_eq!((on[0].case_id, on[0].kind, on[0].changed), (case, AppSetEventKindDto::On, 1));
 
     // trạng thái hiển thị: lý do caseapp
     let rows = app_lib::services::activation::state_list(&st).unwrap();
-    assert!(matches!(rows[0].reasons[0], ReasonDto::CaseApp { collection_id } if collection_id == case));
+    assert!(matches!(rows[0].reasons[0], ReasonDto::CaseApp { case_id } if case_id == case));
     assert_eq!(serde_json::to_value(&rows[0].reasons[0]).unwrap()["kind"], "case_app");
     assert_eq!(rows[0].hash_hex, key.hash_hex);
 
@@ -210,4 +210,29 @@ fn activation_state_carries_display_names_for_each_reason() {
     assert!(names[m].collection_name.is_none() && names[m].app_names.is_empty());
     let j = serde_json::to_value(r).unwrap();
     assert_eq!(j["reasonNames"][i]["collectionName"], "Brand Kit A");
+}
+
+/// L2 (beta.2): "Mở cùng app" gửi id của CASE. Case không có collection nào vẫn lưu được; id chỉ là collection thì bị từ chối;
+/// khi collection trùng số với Case thì app set vẫn thuộc về Case (tên hiển thị cũng là tên Case).
+#[test]
+fn app_set_uses_the_case_id_even_when_no_or_a_same_id_collection_exists() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    let a = CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() };
+    // Case mới tạo qua Desk (chỉ có u.cases, không có collection): không còn "không tìm thấy: collection N"
+    let fresh = cases::create_case(&st, Some("Fresh"), None, None).unwrap().id;
+    app_sets::set_case_apps(&st, fresh, std::slice::from_ref(&a)).unwrap();
+    assert_eq!(app_sets::case_apps(&st, fresh).unwrap(), vec![a.clone()]);
+    // một id chỉ có collection (Case không tồn tại) bị từ chối
+    let only_coll = library::create_collection(&st, "Only collection", None).unwrap().id;
+    assert!(app_sets::set_case_apps(&st, only_coll + 1000, std::slice::from_ref(&a)).is_err());
+    // collection trùng số với Case `case`: app set của Case chạy và gọi tên Case
+    let _ = only_coll;
+    app_sets::set_case_apps(&st, case, std::slice::from_ref(&a)).unwrap();
+    app_lib::services::activation::activate(&st, std::slice::from_ref(&key), Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), Instant::now(), Duration::from_secs(30));
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let i = rows[0].reasons.iter().position(|x| matches!(x, ReasonDto::CaseApp { .. })).unwrap();
+    assert!(matches!(rows[0].reasons[i], ReasonDto::CaseApp { case_id } if case_id == case));
+    assert_eq!(rows[0].reason_names.as_ref().unwrap()[i].collection_name.as_deref(), Some("Brand Kit A"));
 }
