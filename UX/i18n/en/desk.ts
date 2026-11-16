@@ -201,6 +201,7 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   'why.spacing': 'different spacing',
   'why.stem': 'different stem',
   'why.width': 'different width',
+  'why.measure_doubtful': 'this font’s measurements look unreliable, so role fit isn’t rated',
   'why.distinctiveness_low': 'weakest point for this role: distinctive character is less pronounced',
   'term.beta.label': 'Beta', 'term.beta.gloss': 'An experimental feature: suggestions may be off and the method may still change. Treat them as a starting point; you always have the final say.',
   'case.openWith': 'Open with app…', 'case.openWith.tip': 'Turn on this Case’s fonts when the apps you pick open, and off when they quit',
