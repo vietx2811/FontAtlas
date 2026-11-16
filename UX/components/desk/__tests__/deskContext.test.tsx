@@ -81,4 +81,32 @@ describe('Desk theo ngữ cảnh (Combo / vai)', () => {
     expect(req.roles.length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByTestId('cs-card').length).toBeGreaterThan(0);
   });
+
+  it('chỉ nhãn Combo / ô tên / nút ✦ chọn Combo; bấm bước ‹ › hay menu thì không; focus ô tên không đổi chế độ', async () => {
+    await mount();
+    const bar = screen.getByTestId('desk-combobar');
+    fireEvent.click(within(bar).getByTestId('combo-label')); await settle(); // mở menu của stepper
+    expect(bar.dataset.selected).toBeUndefined();
+    fireEvent.keyDown(document.body, { key: 'Escape' }); await settle();
+    fireEvent.click(bar.querySelector('.fa-desk-combobar-label')!); await settle();
+    expect(bar.dataset.selected).toBe('true');
+    fireEvent.click(screen.getAllByTestId('desk-role')[0]); await settle();
+    // sang chế độ Combos: không còn chọn Combo, và focus ô tên ở đó không kéo về Pairing
+    fireEvent.click(screen.getByTestId('mode-combos')); await settle();
+    expect(bar.dataset.selected).toBeUndefined();
+    fireEvent.focus(screen.getByTestId('combo-name')); await settle();
+    expect(screen.getByTestId('mode-combos').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('mode-pairing')); await settle();
+    expect(screen.queryByTestId('combo-suggest')).toBeNull(); expect(bar.dataset.selected).toBeUndefined(); // không tự mở lại
+  });
+
+  it('Esc trên một thẻ gợi ý đóng khung và trả focus ô tên mà KHÔNG mở lại', async () => {
+    await mount();
+    fireEvent.click(screen.getByTestId('desk-combo-suggest')); await settle();
+    const card = screen.getAllByTestId('cs-card')[0]; card.focus();
+    fireEvent.keyDown(card, { key: 'Escape' }); await settle();
+    expect(screen.queryByTestId('combo-suggest')).toBeNull();
+    expect(screen.getByTestId('desk-combobar').dataset.selected).toBeUndefined();
+    expect(document.activeElement).toBe(screen.getByTestId('combo-name'));
+  });
 });

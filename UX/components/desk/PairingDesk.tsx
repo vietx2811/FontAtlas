@@ -245,6 +245,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   })();
 
   const comboOn = scope === 'combo' && mode === 'pairing';
+  useEffect(() => { if (mode !== 'pairing') setScope('role'); }, [mode]); // đổi sang Fonts/Combos: không để trạng thái "đang chọn Combo" nằm chờ
   const pinnedRoles = (combo && pins[combo.id]) || [];
   const togglePinRole = (r: ComboRoleDto) => { if (combo) setPins(p => { const cur = p[combo.id] ?? []; return { ...p, [combo.id]: cur.includes(r) ? cur.filter(x => x !== r) : [...cur, r] }; }); };
   return (
@@ -267,10 +268,10 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         </span>
       </header>
       {data && combo && (
-        <div className="fa-desk-combobar" data-testid="desk-combobar" data-selected={comboOn ? 'true' : undefined} onClick={() => { if (mode === 'pairing') setScope('combo'); }}>
-          <Tooltip label={t('desk.combobar.tip')}><span className="fa-desk-combobar-label">{t('desk.combobar')}</span></Tooltip>
+        <div className="fa-desk-combobar" data-testid="desk-combobar" data-selected={comboOn ? 'true' : undefined}>
+          <Tooltip label={t('desk.combobar.tip')}><span className="fa-desk-combobar-label" onClick={() => { if (mode === 'pairing') setScope('combo'); }}>{t('desk.combobar')}</span></Tooltip>
           <ComboStepper data={data} combo={combo} ops={comboOps} />
-          <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} pinned={pinnedRoles} onUnpinAll={() => combo && setPins(p => ({ ...p, [combo.id]: [] }))} open={comboOn} onOpenChange={o => { setScope(o ? 'combo' : 'role'); if (o) setMode('pairing'); }} host={host} />
+          <ComboNameSuggest api={api} data={data} combo={combo} nameRef={nameRef} ops={{ refresh: refreshCase, go: goCombo }} pinned={pinnedRoles} onUnpinAll={() => combo && setPins(p => ({ ...p, [combo.id]: [] }))} open={comboOn} onOpenChange={o => { if (o && mode !== 'pairing') return; setScope(o ? 'combo' : 'role'); }} host={host} />
           <button type="button" className="fa-desk-combo-suggest" data-testid="desk-combo-suggest" aria-pressed={comboOn} onClick={e => { e.stopPropagation(); setScope('combo'); setMode('pairing'); }}>✦ {t('cs.open')}</button>
         </div>)}
       {error && <p role="alert" className="fa-desk-err">{t('desk.loadFail', { msg: error })}</p>}
@@ -290,7 +291,9 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
             onCombo={(c, sel) => { setData(d => (d ? { ...d, combos: d.combos.map(x => (x.id === c.id ? c : x)) } : d)); setCmpRev(n => n + 1); if (sel && sel !== role) openDesk({ caseId: desk.caseId, comboId: c.id, role: sel, trial: null }); }}
             onRenamed={(from, to) => { if (from === role) openDesk({ caseId: desk.caseId, comboId: combo.id, role: to, trial: null }); }} />}
         </section>
-        {comboOn ? <section className="fa-desk-picker fa-desk-combohost" aria-label={t('desk.combobar')} ref={setHost} data-testid="desk-combohost" /> : (
+        {/* Luôn dựng khung chứa gợi ý combo (ẩn khi không chọn Combo) để khung vẽ đúng chỗ ngay khung hình đầu. */}
+        <section className="fa-desk-picker fa-desk-combohost" aria-label={t('desk.combobar')} ref={setHost} data-testid="desk-combohost" hidden={!comboOn} />
+        {comboOn ? null : (
         <section className="fa-desk-picker" aria-label={t('desk.picker')}>
           <h2>{t('pick.title', { role: roleName(role) })}</h2>
           <PickerBar source={source} onSource={chooseSource} pairStyle={pairStyle} onPairStyle={setPairStyle} disabled={disabledSources} counts={{ pin: pinnedKeys.size }} classes={classes} onClasses={setClasses} viOnly={viOnly} onViOnly={setViOnly}
@@ -338,7 +341,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
         </section>)}
         <section className="fa-desk-page" aria-label={t('desk.sampleLabel')}>
           <div className="fa-desk-sheet">
-            <RolePreview api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} trial={trial?.row ?? null}
+            <RolePreview api={api} combo={combo} roles={shownRoles} role={role} selected={!comboOn} trial={comboOn ? null : trial?.row ?? null}
               headline={sample.trim() && sample !== defaultSample() ? sample : t('desk.pageHeading')} body={t('desk.pageBody')} onSelect={selectRole} />
           </div>
           <div className="fa-desk-strip">

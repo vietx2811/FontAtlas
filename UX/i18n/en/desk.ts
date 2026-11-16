@@ -251,8 +251,6 @@ export const EN_DESK: Record<keyof typeof DESK_I18N, string> = {
   // G6 combo ideas
   'cs.name.ph': 'Name this combo… (e.g. Editorial)',
   'cs.name.label': 'Combo name',
-  'cs.title': 'Combo ideas for “{name}”',
-  'cs.title.none': 'Combo ideas',
   'cs.dialog': 'Combo ideas',
   'cs.understood': 'Read as: {intent}',
   'cs.unknown': 'Didn’t recognise the intent, showing common pairs',

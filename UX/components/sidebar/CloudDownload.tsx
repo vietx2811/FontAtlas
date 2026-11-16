@@ -13,16 +13,16 @@ export function CloudDownloadControl({ api, source, notDownloaded, className, co
     const label = run.total > 0 ? t('cdl.running', { done: run.done, total: run.total }) : t('cdl.starting');
     const cancel = run.cancelling ? t('cdl.cancelling') : t('cdl.cancel');
     return (
-      <span className={className} data-testid="cloud-dl-running" role="status" aria-label={label}>
-        <Tooltip label={label}><span className="fa-cloud-run"><Icon name="download" size={12} />{run.total > 0 ? `${run.done}/${run.total}` : '…'}</span></Tooltip>
+      <span className={className}>
+        <span data-testid="cloud-dl-running" role="status" aria-label={label}><Tooltip label={label}><span className="fa-cloud-run" tabIndex={0}><Icon name="download" size={12} />{run.total > 0 ? `${run.done}/${run.total}` : '…'}</span></Tooltip></span>
         <Tooltip label={cancel}><button type="button" className="fa-link fa-cloud-x" data-testid="cloud-dl-cancel" aria-label={cancel} disabled={run.cancelling} onClick={() => void cancelSourceDownload(api, source.id)}><Icon name="x" size={11} /></button></Tooltip>
       </span>
     );
   }
   if (run) {
     return (
-      <span className={className} data-testid="cloud-dl-running" role="status">
-        {run.total > 0 ? t('cdl.running', { done: run.done, total: run.total }) : t('cdl.starting')}
+      <span className={className}>
+        <span data-testid="cloud-dl-running" role="status">{run.total > 0 ? t('cdl.running', { done: run.done, total: run.total }) : t('cdl.starting')}</span>{' '}
         <button type="button" className="fa-link" data-testid="cloud-dl-cancel" disabled={run.cancelling} onClick={() => void cancelSourceDownload(api, source.id)}>
           {run.cancelling ? t('cdl.cancelling') : t('cdl.cancel')}
         </button>

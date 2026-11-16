@@ -347,8 +347,8 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
                 ? <>
                     {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && (
                       <div className="fa-cloud fa-cloud-stats">
-                        {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><span className="fa-cloud-n" data-testid="not-downloaded" role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)}</span></Tooltip>}
-                        {notDownloadedOf(s, cloud) > 0 && s.faceCount > 0 && <Tooltip label={tn('side.readyTip', { n: s.faceCount })}><span className="fa-cloud-n" data-testid="cloud-ready" role="img" aria-label={tn('side.readyTip', { n: s.faceCount })}><Icon name="check" size={12} />{s.faceCount}</span></Tooltip>}
+                        {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><span className="fa-cloud-n" data-testid="not-downloaded" tabIndex={0} role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)}</span></Tooltip>}
+                        {notDownloadedOf(s, cloud) > 0 && s.faceCount > 0 && <Tooltip label={tn('side.readyTip', { n: s.faceCount })}><span className="fa-cloud-n" data-testid="cloud-ready" tabIndex={0} role="img" aria-label={tn('side.readyTip', { n: s.faceCount })}><Icon name="check" size={12} />{s.faceCount}</span></Tooltip>}
                         <CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} compact />
                       </div>)}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}

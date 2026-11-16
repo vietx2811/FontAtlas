@@ -147,8 +147,6 @@ export const DESK_I18N = {
   // G6 gợi ý combo
   'cs.name.ph': 'Đặt tên combo… (vd Editorial)',
   'cs.name.label': 'Tên combo',
-  'cs.title': 'Gợi ý combo cho «{name}»',
-  'cs.title.none': 'Gợi ý combo',
   'cs.dialog': 'Gợi ý combo',
   'cs.understood': 'Hiểu là: {intent}',
   'cs.unknown': 'Chưa nhận ra ý đồ, gợi ý theo các cặp phổ biến',

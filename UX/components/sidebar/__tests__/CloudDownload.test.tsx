@@ -41,7 +41,7 @@ describe('Tải về máy — Sidebar', () => {
     expect(screen.getByTestId('cloud-dl-running').textContent).toBe('3/12'); expect(screen.getByTestId('cloud-dl-running').getAttribute('aria-label')).toMatch(/Đang tải 3\/12/);
     expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
     // bấm nút lần nữa khi đang tải không mở lần thứ hai
-    fireEvent.click(within(screen.getByTestId('cloud-dl-running')).getByTestId('cloud-dl-cancel')); await settle();
+    fireEvent.click(screen.getByTestId('cloud-dl-cancel')); await settle();
     expect(api.sourceDownloadCancel).toHaveBeenCalledWith(2);
     expect(screen.getByTestId('cloud-dl-cancel').getAttribute('aria-label')).toBe('Đang huỷ…');
     expect((screen.getByTestId('cloud-dl-cancel') as HTMLButtonElement).disabled).toBe(true);

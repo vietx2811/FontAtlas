@@ -57,6 +57,7 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const pop = useRef<HTMLDivElement>(null);
+  const skipFocusOpen = useRef(false);
   useEffect(() => { setDraft(savedName); setTyped(savedName); }, [combo.id, savedName]);
   useEffect(() => { const id = setTimeout(() => setTyped(draft), SUGGEST_DEBOUNCE_MS); return () => clearTimeout(id); }, [draft]);
   useEffect(() => { if (!loading) { setShowSkel(false); return; } const id = setTimeout(() => setShowSkel(true), 150); return () => clearTimeout(id); }, [loading]);
@@ -129,7 +130,7 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
   const move = (d: number) => setActive(i => Math.max(0, Math.min((sugs?.length ?? 1) - 1, i + d)));
   const onPopKey = (e: React.KeyboardEvent) => {
     const tgt = e.target as HTMLElement;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); nameRef.current?.focus(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); skipFocusOpen.current = true; setOpen(false); nameRef.current?.focus(); return; } // trả focus về ô tên mà không mở lại
     if (tgt.closest('input, select, textarea') ) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); move(1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); move(cols); } else if (e.key === 'ArrowUp') { e.preventDefault(); move(-cols); }
@@ -181,8 +182,8 @@ export function ComboNameSuggest({ api, data, combo, ops, nameRef, open, onOpenC
 
   return (
     <span className="fa-comboname">
-      <input ref={nameRef} className="fa-comboname-input" data-testid="combo-name" value={draft} placeholder={t('cs.name.ph')} aria-label={t('cs.name.label')} maxLength={120} aria-expanded={open} aria-haspopup="dialog"
-        onChange={e => { setDraft(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onClick={() => setOpen(true)}
+      <input ref={nameRef} className="fa-comboname-input" data-testid="combo-name" value={draft} placeholder={t('cs.name.ph')} aria-label={t('cs.name.label')} maxLength={120} aria-expanded={open}
+        onChange={e => { setDraft(e.target.value); setOpen(true); }} onFocus={() => { if (skipFocusOpen.current) { skipFocusOpen.current = false; return; } setOpen(true); }} onClick={() => setOpen(true)}
         onKeyDown={e => {
           if (e.key === 'Enter') { e.preventDefault(); void saveName(); }
           else if (e.key === 'Escape') { e.stopPropagation(); if (open) setOpen(false); else { setDraft(savedName); (e.currentTarget as HTMLInputElement).blur(); } }
