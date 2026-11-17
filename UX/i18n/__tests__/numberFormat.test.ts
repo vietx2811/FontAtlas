@@ -32,4 +32,15 @@ describe('định dạng số theo ngôn ngữ UI', () => {
     expect(formatDecimal(1234.5, 2)).toBe('1234.50');
     expect(formatDecimal(-0.25, 1)).toBe('-0.3');
   });
+
+  it('mb/gb thập phân không bị làm tròn thành số nguyên: 1,5 / 1.5; số lớn vẫn có ngăn nghìn', () => {
+    setLocale('vi');
+    expect(formatNumber(1.5)).toBe('1,5');
+    expect(t('set.vis.once', { mb: 1.5 })).toMatch(/1,5 MB/);
+    expect(t('set.vis.once', { mb: 1500 })).toMatch(/1\.500 MB/);
+    setLocale('en');
+    expect(formatNumber(1.5)).toBe('1.5');
+    expect(t('set.vis.once', { mb: 1.5 })).toMatch(/1\.5 MB/);
+    expect(t('set.vis.once', { mb: 1500 })).toMatch(/1,500 MB/);
+  });
 });
