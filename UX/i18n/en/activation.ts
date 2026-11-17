@@ -1,7 +1,7 @@
 import type { ACTIVATION_I18N } from '../activation';
 
 export const EN_ACTIVATION: Record<keyof typeof ACTIVATION_I18N, string> = {
-  'act.why.manual': 'Turned on manually', 'act.why.collection': 'From “{name}”', 'act.why.caseApp': 'Opens with {app} · Case “{name}”', 'act.why.auto': 'Auto-on for {app}', 'act.why.anApp': 'a tied app', 'act.why.all': 'All {n} reasons it is on',
+  'act.why.manual': 'Turned on manually', 'act.why.case': 'Whole Case “{name}” turned on', 'act.why.collection': 'From “{name}”', 'act.why.caseApp': 'Opens with {app} · Case “{name}”', 'act.why.auto': 'Auto-on for {app}', 'act.why.anApp': 'a tied app', 'act.why.all': 'All {n} reasons it is on',
   'act.busy':'{n} fonts busy, will retry', 'act.busy.cleared':'Done: no fonts are busy any more.', 'act.busy.retry':'Try again',
   'act.label': 'Active',
   'act.switch.on': 'Deactivate this font',

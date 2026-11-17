@@ -101,6 +101,8 @@ impl ActivationStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ActivationReason {
     Manual,
+    /// Người dùng bật cả Case (Pairing Desk "Bật tất cả"). `cases.id`, KHÔNG phải collection. Cộng dồn với lý do khác.
+    Case(i64),
     Collection(i64),
     /// Font tự bật khi một app thiết kế hỏi (broker / helper). Luôn scope session.
     Auto(crate::auto::AutoApp),
@@ -112,6 +114,7 @@ impl ActivationReason {
     pub fn as_db(&self) -> String {
         match self {
             ActivationReason::Manual => "manual".into(),
+            ActivationReason::Case(id) => format!("case:{id}"),
             ActivationReason::Collection(id) => format!("collection:{id}"),
             ActivationReason::Auto(app) => format!("auto:{}", app.slug()),
             ActivationReason::CaseApp(id) => format!("caseapp:{id}"),
@@ -123,6 +126,12 @@ impl ActivationReason {
         }
         if let Some(app) = s.strip_prefix("auto:") {
             return crate::auto::AutoApp::from_slug(app).map(ActivationReason::Auto);
+        }
+        if let Some(id) = s.strip_prefix("case:") {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            return id.parse().ok().map(ActivationReason::Case);
         }
         if let Some(id) = s.strip_prefix("caseapp:") {
             if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
@@ -158,6 +167,12 @@ impl Serialize for ActivationReason {
                 let mut st = s.serialize_struct("ActivationReason", 2)?;
                 st.serialize_field("kind", "auto")?;
                 st.serialize_field("app", app.slug())?;
+                st.end()
+            }
+            ActivationReason::Case(id) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "case")?;
+                st.serialize_field("caseId", id)?;
                 st.end()
             }
             ActivationReason::CaseApp(id) => {

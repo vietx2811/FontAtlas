@@ -213,6 +213,7 @@ macro_rules! command_list {
             async activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<CaseActivationDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_deactivate_case(case_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_relocate_to(targets: Vec<RelocateTargetDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
@@ -612,6 +613,11 @@ cmd!(activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>,
 });
 cmd!(activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::deactivate(s, &faces, force, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_deactivate_case(case_id: i64, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::deactivate_case(s, case_id, &mut |p| {
         let _ = on_progress.send(p);
     })
 });

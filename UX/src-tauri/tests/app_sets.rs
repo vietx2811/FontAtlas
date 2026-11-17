@@ -311,3 +311,32 @@ fn app_set_uses_the_case_id_even_when_no_or_a_same_id_collection_exists() {
     assert!(matches!(rows[0].reasons[i], ReasonDto::CaseApp { case_id } if case_id == case));
     assert_eq!(rows[0].reason_names.as_ref().unwrap()[i].collection_name.as_deref(), Some("Brand Kit A"));
 }
+
+/// Bật cả Case (Pairing Desk "Bật tất cả") ghi lý do `case:<id>`; tên hiển thị là tên Case kể cả khi Case đã vào thùng rác, và
+/// collection trùng số với Case có tên riêng (hai không gian id không lẫn).
+#[test]
+fn activating_a_case_gives_a_case_reason_named_even_when_trashed_and_never_confused_with_a_collection() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    // collection trùng số với Case, tên khác
+    let mut coll = library::create_collection(&st, "Dự án trùng số", None).unwrap().id;
+    while coll < case {
+        coll = library::create_collection(&st, "Dự án trùng số", None).unwrap().id;
+    }
+    assert_eq!(coll, case, "chuẩn bị: collection phải trùng id với Case");
+    app_lib::services::activation::activate_case(&st, case, Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let r = &rows[0];
+    assert!(matches!(r.reasons.as_slice(), [ReasonDto::Case { case_id }] if *case_id == case), "{:?}", r.reasons);
+    assert_eq!(r.reason_names.as_ref().unwrap()[0].collection_name.as_deref(), Some("Brand Kit A"));
+    assert_eq!(serde_json::to_value(r).unwrap()["reasons"][0], serde_json::json!({"kind": "case", "caseId": case}));
+    // Case vào thùng rác: vẫn có tên
+    cases::delete_case(&st, case).unwrap();
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    assert_eq!(rows[0].reason_names.as_ref().unwrap()[0].collection_name.as_deref(), Some("Brand Kit A"));
+    // tắt Case: gỡ đúng lý do của nó
+    let rep = app_lib::services::activation::deactivate_case(&st, case, &mut |_| {}).unwrap();
+    assert_eq!(rep.changed, 1);
+    assert!(app_lib::services::activation::state_list(&st).unwrap()[0].reasons.is_empty());
+    let _ = key;
+}

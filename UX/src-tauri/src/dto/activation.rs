@@ -84,6 +84,14 @@ pub enum ReasonDto {
         #[ts(type = "number")]
         collection_id: i64,
     },
+    /// Người dùng bật cả Case (Pairing Desk).
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Case {
+        /// `cases.id`.
+        #[ts(type = "number")]
+        case_id: i64,
+    },
     /// Một app thiết kế (photoshop, illustrator, indesign…) đã xin font này.
     Auto { app: String },
     /// B5: một app gắn với Case này đang chạy.
@@ -101,6 +109,7 @@ impl From<&ActivationReason> for ReasonDto {
         match r {
             ActivationReason::Manual => ReasonDto::Manual,
             ActivationReason::Collection(id) => ReasonDto::Collection { collection_id: *id },
+            ActivationReason::Case(id) => ReasonDto::Case { case_id: *id },
             ActivationReason::Auto(app) => ReasonDto::Auto { app: app.slug().to_string() },
             ActivationReason::CaseApp(id) => ReasonDto::CaseApp { case_id: *id },
         }

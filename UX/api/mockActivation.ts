@@ -20,7 +20,7 @@ export const VF_PAIR_FAMILY = 'Bebas Neue';
 type Entry = { reasons: ReasonDto[]; scope: 'session' | 'persistent' };
 type Deps = { rowOf(k: FaceKeyDto): FaceRow | undefined; collectionFaces(id: number): FaceKeyDto[] };
 
-const same = (a: ReasonDto, b: ReasonDto) => a.kind === b.kind && (a.kind !== 'collection' || (b.kind === 'collection' && a.collectionId === b.collectionId));
+const same = (a: ReasonDto, b: ReasonDto) => a.kind === b.kind && (a.kind !== 'collection' || (b.kind === 'collection' && a.collectionId === b.collectionId)) && (a.kind !== 'case' || (b.kind === 'case' && a.caseId === b.caseId)) && (a.kind !== 'case_app' || (b.kind === 'case_app' && a.caseId === b.caseId));
 
 export function createActivationSim(d: Deps) {
   const state = new Map<string, Entry>();
@@ -150,6 +150,18 @@ export function createActivationSim(d: Deps) {
       state.delete(e.hashHex);
       emit({ type: 'changed', hashes: [e.hashHex] });
       return 'restored' as const;
+    },
+    /** Bật cả Case: lý do `case` (không phải thủ công). `faces` do mock.ts lọc font thiếu. */
+    async activationActivateCaseFaces(caseId: number, faces: FaceKeyDto[], o: ActivateOptions = {}) {
+      return finish(hashes(faces).map(f => result(f, activateOne(f, { kind: 'case', caseId }, o))), o.onProgress);
+    },
+    async activationDeactivateCase(caseId: number, o: Pick<DeactivateOptions, 'onProgress'> = {}) {
+      return finish([...state.keys()].filter(h => state.get(h)!.reasons.some(r => r.kind === 'case' && r.caseId === caseId)).map(h => {
+        const f = { hashHex: h, faceIndex: 0 };
+        if (drop(h, { kind: 'case', caseId })) return result(f, { kind: 'deactivated' });
+        const left = state.get(h)!.reasons;
+        return result(f, { kind: 'kept_active', manual: left.some(r => r.kind === 'manual'), collectionIds: left.flatMap(r => (r.kind === 'collection' ? [r.collectionId] : [])) });
+      }), o.onProgress);
     },
     async activationActivateCollection(id: number, o: ActivateOptions = {}) {
       return finish(hashes(d.collectionFaces(id)).map(f => result(f, activateOne(f, { kind: 'collection', collectionId: id }, o))), o.onProgress);

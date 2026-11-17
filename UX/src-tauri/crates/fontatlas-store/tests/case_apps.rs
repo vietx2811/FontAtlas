@@ -183,3 +183,51 @@ fn migration_to_case_keyed_app_sets_keeps_rows_whose_case_exists_and_drops_orpha
     let n: i64 = c.query_row("SELECT COUNT(*) FROM collections WHERE name='Khác'", [], |r| r.get(0)).unwrap();
     assert_eq!(n, 2);
 }
+
+/// v19: lý do `case:<id>` (bật cả Case). Chuỗi DB khép kín, CHECK chặn dạng sai, xếp sau `manual`.
+#[test]
+fn case_reason_roundtrips_is_checked_and_sorts_after_manual() {
+    let r = ActivationReason::Case(42);
+    assert_eq!(r.as_db(), "case:42");
+    assert_eq!(ActivationReason::parse_db("case:42"), Some(r));
+    for bad in ["case:", "case:x", "case:4x", "cases:1"] {
+        assert_eq!(ActivationReason::parse_db(bad), None, "{bad}");
+    }
+    assert!(ActivationReason::Manual < ActivationReason::Case(1) && ActivationReason::Case(1) < ActivationReason::Collection(1));
+    let d = tmp();
+    let s = open_store(d.path());
+    let hash = vec![4u8; 32];
+    s.conn().execute("INSERT INTO u.activation_state(hash,state,scope,method,status,updated_at) VALUES (?1,'active','session','fake','registered',1)", [&hash]).unwrap();
+    s.conn().execute("INSERT INTO u.activation_reasons(hash,reason,added_at) VALUES (?1,'case:7',1)", [&hash]).unwrap();
+    for bad in ["case:", "case:x", "case:1x", "cases:1"] {
+        assert!(s.conn().execute("INSERT INTO u.activation_reasons(hash,reason,added_at) VALUES (?1,?2,1)", rusqlite::params![&hash, bad]).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn migration_to_case_reason_keeps_every_reason_and_backs_up() {
+    use fontatlas_store::create_user_pre_case_reason_for_test;
+    let d = tmp();
+    let user = d.path().join(USER_FILE);
+    create_user_pre_case_reason_for_test(&user);
+    let (h1, h2) = (vec![1u8; 32], vec![2u8; 32]);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        for h in [&h1, &h2] {
+            c.execute("INSERT INTO activation_state(hash,state,scope,method,status,updated_at) VALUES (?1,'active','session','fake','registered',1)", [h]).unwrap();
+        }
+        // Case từng bật trước v19 chỉ có `manual`: giữ nguyên, không đoán ngược thành `case:`
+        for (h, r) in [(&h1, "manual"), (&h1, "collection:3"), (&h2, "manual"), (&h2, "caseapp:2"), (&h2, "auto:illustrator")] {
+            c.execute("INSERT INTO activation_reasons(hash,reason,added_at) VALUES (?1,?2,5)", rusqlite::params![h, r]).unwrap();
+        }
+    }
+    let (s, rep) = Store::open(d.path()).unwrap();
+    assert!(rep.user_backup.is_some());
+    let name = rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().into_owned();
+    assert!(name.starts_with("user.v18."), "{name}");
+    let n: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.activation_reasons", [], |r| r.get(0)).unwrap();
+    assert_eq!(n, 5);
+    let none: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.activation_reasons WHERE reason LIKE 'case:%'", [], |r| r.get(0)).unwrap();
+    assert_eq!(none, 0);
+    s.conn().execute("INSERT INTO u.activation_reasons(hash,reason,added_at) VALUES (?1,'case:9',6)", [&h1]).unwrap();
+}

@@ -285,9 +285,11 @@ export interface Api extends LibraryApi {
   activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
   /**
    * "Bật tất cả" của một Dự án: font không `missing` đi qua đúng luồng `activationActivate` (xung đột → `needsConfirmation`,
-   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Kích hoạt thủ công, không gắn lý do "dự án".
+   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Lý do `case` (không phải thủ công, không phải Dự án).
    */
   activationActivateCase(caseId: number, opts?: ActivateOptions): Promise<CaseActivationDto>;
+  /** Tắt cả Case: gỡ lý do `case` của Case; font còn lý do khác (bật tay, Dự án, app) vẫn bật. */
+  activationDeactivateCase(caseId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;

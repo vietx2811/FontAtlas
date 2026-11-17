@@ -186,6 +186,7 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     await api.activationActivateCollection(7, { scope: 'persistent' });
     expect(last().args).toMatchObject({ collectionId: 7, scope: 'persistent', proceed: false });
     await api.activationDeactivateCollection(7); expect(last().args).toMatchObject({ collectionId: 7 });
+    await api.activationDeactivateCase(8); expect(last().cmd).toBe('activation_deactivate_case'); expect(last().args).toMatchObject({ caseId: 8 });
     await api.activationDeactivateAll(); expect(last().cmd).toBe('activation_deactivate_all');
     await api.activationSetKeep(true); expect(last()).toEqual({ cmd: 'activation_set_keep', args: { on: true } });
     await api.activationSetScope([{ hashHex: 'aa', faceIndex: 0 }], 'persistent'); expect(last()).toEqual({ cmd: 'activation_set_scope', args: { faces: [{ hashHex: 'aa', faceIndex: 0 }], scope: 'persistent' } });

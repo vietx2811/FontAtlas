@@ -17,6 +17,7 @@ export function ActiveRow({ face, flow, api }: { face: FaceKeyDto | null; flow: 
   const on = useUiStore(s => (face ? s.active.has(face.hashHex) : false));
   const scope = useUiStore(s => (face ? s.activeScope.get(face.hashHex) ?? 'session' : 'session'));
   const reasons = useUiStore(s => (face && on ? s.activeReasons.get(face.hashHex) : undefined));
+  const reasonNames = useUiStore(s => (face && on ? s.activeReasonNames.get(face.hashHex) : undefined));
   const avail = useUiStore(s => (face && !s.active.has(face.hashHex) ? s.available.get(face.hashHex) : undefined));
   const who = avail ? ownerNote({ owner: avail.owner, existingPath: avail.path }) : '';
   const switchLabel = t(on ? 'act.switch.on' : 'act.switch.off');
@@ -40,7 +41,7 @@ export function ActiveRow({ face, flow, api }: { face: FaceKeyDto | null; flow: 
         </Tooltip>
       )}
     </div>
-    {api && reasons && <ReasonLine api={api} reasons={reasons} />}
+    {api && reasons && <ReasonLine api={api} reasons={reasons} reasonNames={reasonNames} />}
     </>
   );
 }

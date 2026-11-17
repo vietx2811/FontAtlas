@@ -440,7 +440,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async activationActivateCase(caseId, o = {}) {
       const c = await this.getCase(caseId);
-      const report = await this.activationActivate(c.faces.filter(f => !f.missing).map(f => f.key), o);
+      const report = await this.activationActivateCaseFaces(caseId, c.faces.filter(f => !f.missing).map(f => f.key), o);
       return { report, skippedMissing: c.faces.filter(f => f.missing).map(f => f.key) };
     },
     async familyGroups(q = {}) {

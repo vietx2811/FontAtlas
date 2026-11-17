@@ -306,6 +306,20 @@ impl<E: ActivationEngine> ActivationService<E> {
         self.run(store, &keys, ActivationReason::CaseApp(case_id), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
     }
 
+    /// Người dùng bật cả Case (Pairing Desk): lý do `case:<id>` (cộng dồn với lý do khác), scope như bật tay. `keys` do
+    /// tầng trên lọc (bỏ font thiếu file); `case_id` là `cases.id`.
+    pub fn activate_case(
+        &self,
+        store: &Mutex<Store>,
+        case_id: i64,
+        keys: &[FaceKey],
+        scope: Option<Scope>,
+        policy: ConflictPolicy,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        self.activate_files(store, keys, ActivationReason::Case(case_id), scope, policy, progress)
+    }
+
     pub fn activate_collection(
         &self,
         store: &Mutex<Store>,

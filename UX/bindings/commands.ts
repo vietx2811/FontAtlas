@@ -288,6 +288,7 @@ export interface TauriCommandMap {
   activation_activate_case: { args: { caseId: number; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: CaseActivationDto };
   activation_activate_collection: { args: { collectionId: number; scope: ScopeDto | null; proceed: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate: { args: { faces: FaceKeyDto[]; force: boolean; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
+  activation_deactivate_case: { args: { caseId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_collection: { args: { collectionId: number; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_deactivate_all: { args: { onProgress: Channel<ProgressDto> }; result: ActivationReportDto };
   activation_relocate_to: { args: { targets: RelocateTargetDto[]; onProgress: Channel<ProgressDto> }; result: ActivationReportDto };

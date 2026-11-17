@@ -48,6 +48,8 @@ pub trait ActivationApi: Send + Sync {
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError>;
     fn deactivate_collection(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
+    fn activate_case(&self, s: &Mutex<Store>, case_id: i64, keys: &[FaceKey], scope: Option<Scope>, p: ConflictPolicy, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
+    fn deactivate_case(&self, s: &Mutex<Store>, case_id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn on_collection_deleted(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn set_scope(&self, s: &Mutex<Store>, hashes: Option<&[[u8; 32]]>, scope: Scope) -> Result<ActivationReport, ActivationError>;
@@ -141,6 +143,12 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     }
     fn deactivate_collection(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         ActivationService::deactivate_collection(self, s, id, progress)
+    }
+    fn activate_case(&self, s: &Mutex<Store>, case_id: i64, keys: &[FaceKey], scope: Option<Scope>, p: ConflictPolicy, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        ActivationService::activate_case(self, s, case_id, keys, scope, p, progress)
+    }
+    fn deactivate_case(&self, s: &Mutex<Store>, case_id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        ActivationService::deactivate_case(self, s, case_id, progress)
     }
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         ActivationService::deactivate_all(self, s, progress)
@@ -239,6 +247,12 @@ impl ActivationApi for NoActivation {
         Err(ActivationError::Unsupported)
     }
     fn deactivate_collection(&self, _: &Mutex<Store>, _: i64, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn activate_case(&self, _: &Mutex<Store>, _: i64, _: &[FaceKey], _: Option<Scope>, _: ConflictPolicy, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn deactivate_case(&self, _: &Mutex<Store>, _: i64, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
     fn deactivate_all(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
@@ -355,6 +369,7 @@ fn reason_names(
     apps: &std::collections::HashMap<i64, Vec<String>>,
 ) -> ReasonNamesDto {
     match r {
+        ReasonDto::Case { case_id } => ReasonNamesDto { collection_name: case_names.get(case_id).cloned(), app_names: vec![] },
         ReasonDto::Collection { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: vec![] },
         // `collection_name` mang TÊN CASE ở đây: `case_id` là `cases.id`, tra trong bảng Case, không phải collections.
         ReasonDto::CaseApp { case_id } => ReasonNamesDto { collection_name: case_names.get(case_id).cloned(), app_names: apps.get(case_id).cloned().unwrap_or_default() },
@@ -567,11 +582,20 @@ pub fn activate_case(
     let report = if keys.is_empty() {
         ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0, busy: 0, busy_hashes: vec![] }
     } else {
-        activate(state, &keys, scope, proceed, progress)?
+        // Lý do `case:<id>` (không phải `manual`): màn "Đang bật" cho thấy font đến từ Case nào.
+        let fks = keys_of(&keys)?;
+        let r = state.activation.activate_case(state.store()?, case_id, &fks, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+        finish(state, r)
     };
     Ok(CaseActivationDto { report, skipped_missing: gone.into_iter().map(|f| f.key).collect() })
 }
 
+/// Tắt cả Case: gỡ lý do `case:<id>`; font còn lý do khác (bật tay, Dự án, app) vẫn bật.
+pub fn deactivate_case(state: &AppState, case_id: i64, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let r = state.activation.deactivate_case(state.store()?, case_id, &mut |p| progress((&p).into()))?;
+    Ok(finish(state, r))
+}
 pub fn activate_collection(
     state: &AppState,
     collection_id: i64,
