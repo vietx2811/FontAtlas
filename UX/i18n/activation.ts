@@ -1,5 +1,6 @@
 /** Chuỗi cho Activation dễ thấy (công tắc Active, trạng thái, phạm vi, Top Bar, family). "Active" là thuật ngữ, giữ tiếng Anh; gloss ở term.activate.gloss. */
 export const ACTIVATION_I18N = {
+  'act.why.s.manual': 'Thủ công', 'act.why.s.case': 'Case {name}', 'act.why.s.collection': 'Dự án {name}', 'act.why.s.app': 'App {app}', 'act.why.s.auto': 'Tự bật',
   'act.why.manual': 'Bật thủ công', 'act.why.case': 'Bật cả Case «{name}»', 'act.why.collection': 'Từ «{name}»', 'act.why.caseApp': 'Mở cùng {app} · Case «{name}»', 'act.why.auto': 'Tự bật cho {app}', 'act.why.anApp': 'app đã gắn', 'act.why.all': 'Tất cả {n} lý do đang bật',
   'act.busy':'{n} font đang bận, sẽ thử lại', 'act.busy.cleared':'Đã xong: không còn font nào bận.', 'act.busy.retry':'Thử lại',
   'act.label': 'Active', 'act.switch.on': 'Tắt Active cho font này', 'act.switch.off': 'Bật Active cho font này',

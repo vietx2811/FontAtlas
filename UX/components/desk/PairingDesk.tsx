@@ -3,7 +3,7 @@ import { Modal } from '../Modal';
 import { useActivationFlow } from '../activation/useActivationFlow';
 import type { Api, FaceKeyDto, PairCandidateDto } from '../../api';
 import type { CaseDto, ComboDto, ComboRoleDto, FaceRowDto } from '../../bindings';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { useNoticeStore } from '../../store/notices';
 import { defaultSample, useUiStore, type DeskState } from '../../store/ui';
 import { useFontFamily } from '../detail/useFontFamily';
@@ -74,6 +74,8 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   const activation = useActivationFlow(api);
   const [confirmAll, setConfirmAll] = useState(false);
   const [activating, setActivating] = useState(false);
+  /** Sau «Tắt cả Case»: số font vẫn bật vì lý do khác (0 = không báo). */
+  const [keptOther, setKeptOther] = useState(0);
   const role = desk.role;
 
   useEffect(() => {
@@ -235,6 +237,7 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
   };
 
   const runActivateAll = async () => { setConfirmAll(false); setActivating(true); try { await activation.activateCase(desk.caseId); } finally { setActivating(false); } };
+  const runDeactivateAll = async () => { setActivating(true); try { const k = await activation.deactivateCase(desk.caseId); setKeptOther(Math.max(0, k)); } finally { setActivating(false); } };
   // Vai theo thứ tự đã lưu; Combo chưa lưu vai nào thì dùng bộ mặc định (các vai đã có font) và luôn có vai đang chọn.
   const shownRoles: ComboRoleDto[] = (() => {
     if (!combo) return [role];
@@ -261,6 +264,13 @@ export function PairingDesk({ api, desk }: { api: Api; desk: DeskState }): React
               onClick={() => { if (activating || data.faces.length === 0) return; if (data.faces.length > CONFIRM_ACTIVATE_FROM) setConfirmAll(true); else void runActivateAll(); }}>{t('desk.activateAll')}</button>
           </Tooltip>
         )}
+        {data && (
+          <Tooltip label={t('desk.deactivateAll.tip')}>
+            <button type="button" className="fa-desk-activate" data-testid="desk-deactivate-all" aria-disabled={activating || data.faces.length === 0 || undefined}
+              onClick={() => { if (activating || data.faces.length === 0) return; setKeptOther(0); void runDeactivateAll(); }}>{t('desk.deactivateAll')}</button>
+          </Tooltip>
+        )}
+        {keptOther > 0 && <NoteMark kind="info" testId="desk-kept-other" text={tn('desk.deactivateAll.kept', { n: keptOther })} />}
         <span className="fa-desk-mode" role="group" aria-label={t('desk.mode.tip')}>
           <button type="button" data-testid="mode-pairing" aria-pressed={mode === 'pairing'} onClick={() => setMode('pairing')}>{t('desk.mode.pairing')}</button>
           <button type="button" data-testid="mode-fonts" aria-pressed={mode === 'fonts'} onClick={() => setMode('fonts')}>{t('desk.mode.fonts')}</button>

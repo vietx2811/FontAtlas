@@ -12,3 +12,9 @@
 .fa-act-why { display: flex; align-items: center; gap: 6px; margin: -2px 0 6px; padding-left: 13px; font-size: 11px; color: var(--muted); }
 .fa-act-why-more { padding: 0 6px; border: 1px solid var(--border); border-radius: 8px; line-height: 15px; cursor: help; }
 .fa-act-why-all { display: flex; flex-direction: column; gap: 2px; }
+
+/* Lý do chính trên thẻ ở «Đang bật»: icon + tên ngắn, không xuống dòng (thẻ không đổi chiều cao). */
+.fa-reason { display: inline-flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; max-width: 55%; margin-left: auto; font-size: 11px; color: var(--muted); cursor: help; }
+.fa-reason > svg { flex: none; }
+.fa-reason-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fa-reason-n { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: 7px; line-height: 13px; }

@@ -412,6 +412,30 @@ describe('PairingDesk', () => {
     fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
     expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /engine down/.test(n.text))).toBe(true);
   });
+  it('Tắt cả Case: chỉ gỡ lý do của Case; font còn lý do khác vẫn bật và được báo bằng NoteMark', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const spy = vi.spyOn(api, 'activationDeactivateCase');
+    const first = (await api.getCase(res.case.id)).faces[0].key;
+    await api.activationActivate([first]); // lý do thủ công
+    await api.activationActivateCase(res.case.id); // thêm lý do Case
+    await settle();
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
+    expect(spy).toHaveBeenCalledWith(res.case.id);
+    expect(screen.getByTestId('desk-kept-other')).toBeTruthy();
+    const still = (await api.activationState()).find(x => x.hashHex === first.hashHex);
+    expect(still?.state).toBe('active');
+    expect(still?.reasons.some(r => r.kind === 'case')).toBe(false);
+    expect(still?.reasons.some(r => r.kind === 'manual')).toBe(true);
+  });
+  it('Tắt cả Case: không còn lý do nào khác thì không có ghi chú; lỗi API được báo', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    await api.activationActivateCase(res.case.id); await settle();
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
+    expect(screen.queryByTestId('desk-kept-other')).toBeNull();
+    vi.spyOn(api, 'activationDeactivateCase').mockRejectedValueOnce(new Error('engine down'));
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
+    expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /engine down/.test(n.text))).toBe(true);
+  });
   it('Bật tất cả: more than 200 fonts asks first (cancel does nothing)', async () => {
     const { api, res } = await seeded(); await mount(api, res);
     const c = await api.getCase(res.case.id);

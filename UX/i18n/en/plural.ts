@@ -1,5 +1,6 @@
 /** Dạng số ít (n = 1) của tiếng Anh cho các khoá đếm; tiếng Việt không chia số ít/nhiều. Dùng qua `tn(key, vars)`. */
 export const EN_ONE: Record<string, string> = {
+  'desk.deactivateAll.kept': '{n} font stays active for another reason (manual, from a Project, or per app).',
   'app.count': '{n} app selected',
   'act.busy': '{n} font busy, will retry',
   'faces.nFonts': '{n} font',

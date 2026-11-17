@@ -14,7 +14,7 @@ import { describeOutcome } from './messages';
 /** Báo các kết quả đáng báo (lỗi, bận…); thành công thì im lặng. */
 export const sayOutcomes = (outcomes: FileOutcomeDto[]): void => outcomes.forEach(o => { const m = describeOutcome(o); if (m) useNoticeStore.getState().push(m); });
 
-export type ActivationFlow = { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; activateCase(caseId: number): Promise<void>; activateCollection(collectionId: number): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void> };
+export type ActivationFlow = { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; activateCase(caseId: number): Promise<void>; /** Gỡ lý do «Bật cả Case»; trả số font vẫn bật vì lý do khác (-1 nếu lỗi). */ deactivateCase(caseId: number): Promise<number>; activateCollection(collectionId: number): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void> };
 
 /**
  * Bật/tắt kích hoạt cho một nhóm face. Hộp thoại (xung đột, đang được dự án giữ) KHÔNG nằm ở đây: chúng vào hàng đợi chung
@@ -101,6 +101,17 @@ export function useActivationFlow(api: Api): ActivationFlow {
     } catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); }
     await refresh();
   }), [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** "Tắt cả Case": chỉ gỡ lý do `case`; font còn lý do khác (thủ công, Dự án, app) vẫn bật, đếm để báo. */
+  const deactivateCase = useCallback(async (caseId: number): Promise<number> => {
+    let kept = 0;
+    try {
+      const rep = await api.activationDeactivateCase(caseId);
+      kept = new Set(rep.results.filter(r => r.outcome.kind === 'kept_active').map(r => r.hashHex)).size;
+      sayOutcomes(rep.results.map(r => r.outcome));
+    } catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); kept = -1; }
+    await refresh();
+    return kept;
+  }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
   /** "Bật tất cả" của một Dự án (collection). */
   const activateCollection = useCallback((collectionId: number) => once(`col:${collectionId}`, async () => {
     try { const rep = await api.activationActivateCollection(collectionId); await afterActivate(rep, uniq(rep)); }
@@ -119,5 +130,5 @@ export function useActivationFlow(api: Api): ActivationFlow {
     await refresh();
   }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { toggle, activateCase, activateCollection, setScope };
+  return { toggle, activateCase, deactivateCase, activateCollection, setScope };
 }
