@@ -65,12 +65,12 @@ cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf
 python3 "$HERE/patch_font_names.py" "$QA/A" "$QA/B" "$QA/C" "$QA/H" > "$QA/patched_names.tsv" || { echo "đổi tên font fixture thất bại"; exit 1; }
 # E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript ĐÃ ĐỔI, khác nội dung) để có xung đột kích hoạt thật,
 # tự QA đăng ký bản gốc trước rồi kiểm hộp thoại «đã có trên máy»: giữ nguyên độ phủ đường xung đột.
-for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do src="$(ls "$QA"/{A,B,C}/$n.ttf 2>/dev/null | head -1)"; cp "$src" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
+for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do src="$(ls "$QA"/{A,B,C}/$n.ttf 2>/dev/null | head -1 || true)"; [ -n "$src" ] || { echo "thiếu fixture đã đổi tên: $n"; exit 1; }; cp "$src" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
 # Preflight: tên đã ĐỔI của fixture không được đã đăng ký từ file khác (app khác, lượt QA cũ chưa dọn). Font thật của chủ máy không còn va chạm. Nếu có, các bước
 # kích hoạt ra «Chưa bật» / «1 font đã có trên máy» và QA đỏ giả. Báo đường dẫn font trùng + người giữ khoá để biết ai gây ra. Bỏ qua có chủ đích:
 # FONTATLAS_QA_ALLOW_REGISTERED=1 (QA vẫn sẽ chạy và có thể đỏ ở các bước kích hoạt).
 if command -v swift >/dev/null; then
-  PRE="$(swift "$HERE/qa_preflight_fonts.swift" "$QA/A" "$QA/B" "$QA/C" "$QA/H" 2>/dev/null)"; PRC=$?
+  PRC=0; PRE="$(swift "$HERE/qa_preflight_fonts.swift" "$QA/A" "$QA/B" "$QA/C" "$QA/H" 2>/dev/null)" || PRC=$?   # set -e: không để mã 2 giết script trước khi in
   if [ $PRC -eq 2 ]; then
     echo "QA preflight: font fixture đã được đăng ký ở nơi khác trên máy:"; echo "$PRE" | sed 's/^/  /'
     echo "  (khoá QA: pid $$, người giữ trước: ${LAST_HOLDER:-không}; app đang chạy có thể đã đăng ký: Adobe Fonts/Illustrator, Font Book, lượt QA/worktree khác)"
