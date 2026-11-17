@@ -229,9 +229,10 @@
   if (on('vf')) {
     try {
       const vs = await addSource('vfpair'); const vfRow = (await facesOf(vs.id)).find(f => f.isVariable);
-      const stRow = R.smallFaces.find(f => !f.isVariable && f.family === 'Roboto');
+      const stRow = R.smallFaces.find(f => !f.isVariable && (f.family || '').indexOf('Roboto') === 0);
       await inv('activation_deactivate_all', { onProgress: quiet() });
-      await inv('activation_activate', { faces: [keyOf(stRow)], scope: null, proceed: false, onProgress: quiet() });
+      const act0 = await inv('activation_activate', { faces: [keyOf(stRow)], scope: null, proceed: false, onProgress: quiet() });
+      await log('q7-3.0-static-activate', true, { act0: JSON.stringify(act0).slice(0, 500) });
       const pf = await inv('activation_preflight', { faces: [keyOf(vfRow)] });
       const kb = await inv('activation_keep_both', { faces: [keyOf(vfRow)], scope: null, onProgress: quiet() });
       const copies = await inv('derived_copies_of', { face: keyOf(vfRow) });

@@ -8,7 +8,7 @@ Mã: `8407a0e0` (int/0.5.0-i). Chỉ bản **debug**, `FONTATLAS_DATA_DIR` mới
 1. Organized Library: tạo kho, xem trước, chép, cấu trúc `Class/Họ/file`, nguồn nguyên vẹn, chuyển sang kho + Hoàn tác, xem trước sắp xếp lại, gói khôi phục: **Đạt**.
 2. **Lỗi Medium (L1):** nút **Huỷ** khi chép không dừng được cuộc chép ở nguồn local (copy chạy hết rồi mới dừng).
 3. **Lỗi High (L2, chưa tái hiện qua nút bấm vì Case cần model ảnh):** "Mở cùng app…" dùng **id của Case** như `collection_id`; backend kiểm bảng `collections` ⇒ Case mới báo "không tìm thấy: collection N"; nếu trùng id với một collection khác thì app bật font của collection đó.
-4. App Font Sets (kiểm bằng collection thật + Calculator): mở app ⇒ bật sau ~2 s, thoát ⇒ tắt sau ~33 s, font bật tay / do collection khác giữ nguyên, lý do trong `activation_state` đúng. «Tắt lần này», VF «Giữ cả hai», chuỗi tiếng Anh: xem bảng (một phần chưa chạy xong).
+4. App Font Sets (kiểm bằng collection thật + Calculator): mở app ⇒ bật sau ~2 s, thoát ⇒ tắt sau ~33 s, font bật tay / do collection khác giữ nguyên, lý do trong `activation_state` đúng. «Tắt lần này» **Đạt** (chạy lại từ trạng thái sạch). VF «Giữ cả hai» / «Gỡ bản sao này» + Hoàn tác: **Đạt**. Chuỗi tiếng Anh của Organized Library: **Đạt**, không khoá thô.
 5. Auto-activation trong Illustrator/InDesign/Affinity: **Chưa thử** (app của chủ máy, bỏ qua theo yêu cầu).
 
 ## 1. Organized Library
@@ -40,7 +40,7 @@ App thử: **Calculator** (không có tài liệu). TextEdit của chủ máy đ
 | 3 | App đã mở sẵn | **Đạt** | Gắn app sau khi app đã chạy ⇒ font bật trong ≤ 40 s (sự kiện `on`). |
 | 4 | Thoát app → ~30 s sau font tắt; «Bật lại» | **Đạt** | `off` sau **32,9 s**; bật lại Case/collection bật được. Nút «Bật lại» trên thông báo: **Chưa thử** (giao diện). |
 | 5 | Font bật tay / do Case khác bật không bị tắt theo | **Đạt** | Font bật tay + thuộc collection khác vẫn bật sau khi app thoát. |
-| 6 | «Tắt lần này», «Cài đặt…» | «Tắt lần này»: **chưa kết luận** — lần 1 font còn bật vì còn lý do khác; lần chạy lại từ trạng thái sạch bị ngắt (xem ghi chú cuối). «Cài đặt…»: **Chưa thử** | |
+| 6 | «Tắt lần này», «Cài đặt…» | «Tắt lần này»: **Đạt** (gọi `case_app_suppress` ở mức API). Chạy từ trạng thái sạch (`activation_deactivate_all`): mở app ⇒ font bật, «Tắt lần này» ⇒ 0 font còn bật; thoát rồi mở lại app ⇒ font bật lại (sự kiện `on`, `changed=2`). Lần chạy đầu font còn bật chỉ vì còn lý do khác (đã giải thích). Nút bấm «Tắt lần này» trên thông báo và «Cài đặt…»: **Chưa thử** (cần Case ⇒ model ảnh). | |
 
 ### L2 — Case ↔ collection (High, chưa tái hiện qua giao diện)
 - Giao diện: `Sidebar.tsx` (`openWithApp`) và `PairingDesk` mở bộ chọn với **id của Case**; `AppPicker` gọi `case_apps/case_set_apps(collectionId = id Case)`; thông báo `appSetNotice` (`activationSync.ts`) gọi `getCase(ev.collectionId)` và `activationActivateCase(ev.collectionId)`.
@@ -51,9 +51,11 @@ App thử: **Calculator** (không có tài liệu). TextEdit của chủ máy đ
 ## 3. Font VF trùng tên với bản static
 | # | Việc | Kết quả | Ghi chú |
 |---|---|---|---|
-| 1 | «Giữ cả hai» tạo bản sao «<tên> VF», bật cùng bản static | **Chưa chạy** (chờ cửa sổ QA) | Kịch bản `vf` đã viết (`activation_keep_both`, `derived_copies_of`, `remove_derived_copy`, `restore_derived_copy`). |
+| 1 | «Giữ cả hai» tạo bản sao «<tên> VF», bật cùng bản static | **Đạt** (mức API) | Static Roboto đang bật; «Giữ cả hai» cho VF cùng PostScript ⇒ tạo bản sao «Roboto FAQA VF Regular» trong dữ liệu app (`derived/roboto_vf-VF.ttf`), `warning: renamed_copy`, bản sao bật, static vẫn bật, VF gốc không bật. Preflight báo 1 cần xác nhận trước đó (đúng). |
 | 2 | Thấy cả hai trong app thiết kế | **Chưa thử** | Không mở app của chủ máy. |
-| 3 | «Gỡ bản sao này» → Thùng rác, Hoàn tác | **Chưa chạy** | Như trên. |
+| 3 | «Gỡ bản sao này» → Thùng rác, Hoàn tác | **Đạt** (mức API) | `remove_derived_copy`: `trashed=true`, bản sao hết bật; Hoàn tác: `restore_derived_copy` đưa file về đúng đường cũ trong `derived/`. Nút bấm: **Chưa thử**. |
+
+Lưu ý khi thử: bản đầu tiên của bước 1 ra «Lỗi» giả vì static `roboto.ttf` xung đột với Roboto của thư viện RightFont của chủ máy (`needs_confirmation`, `owner: right_font`), nên static không bật được. Đây là nhiễu môi trường chứ không phải lỗi app. Sau khi đổi tên bản sao fixture trong thư mục thử bằng `tests/qa/patch_font_names.py` (hậu tố « FAQA», VF và static vẫn cùng PostScript), bước đạt.
 
 ## 4. Màn "Đang bật"
 Qua `activation_state` (lúc app thử đang chạy): font bật tay + thuộc collection khác + thuộc app của collection ⇒ `reasons = [manual, collection, case_app]` với tên «QA07 Set B» và «QA07 Set A · Calculator»; font chỉ do app ⇒ `[case_app]`. **Lý do đúng.** Màn hình **Đang bật** liệt kê đúng 2 font («DM Serif Display Regular», «Chonburi Regular») và số «2», nhưng trong danh sách **không thấy nhãn lý do** (cần mở chi tiết); nên ghi nhận: người dùng khó biết vì sao font đang bật nếu không mở panel. Lý do «tự bật (auto)»: **Chưa thử** (cần app thiết kế).
@@ -68,7 +70,7 @@ Qua `activation_state` (lúc app thử đang chạy): font bật tay + thuộc c
 ## 6. Chung (chữ khó hiểu, thiếu vi/en, chậm)
 - Định dạng số không nhất quán: «159,3 GB» (dấu phẩy) ở một lần chạy và «159.2 GB» (dấu chấm) ở lần khác, cùng màn Organized Library, cùng ngôn ngữ `vi` (Low; nghi chuỗi định dạng phụ thuộc thời điểm đặt locale).
 - Màn Organized Library hiển thị mục «Library · 0 font · Sẵn sàng» như một nguồn bình thường, cạnh nguồn `small` (có thể gây nhầm: người dùng tưởng là nguồn riêng).
-- Kiểm chuỗi tiếng Anh/khoá thô: kịch bản `i18n` đã viết; **chưa chạy** (chờ cửa sổ QA). Trên màn tiếng Việt đã chụp chữ của Organized Library và hộp thoại: **không thấy khoá thô**.
+- Chuỗi tiếng Anh/khoá thô (`QA_LANG` en, kịch bản `i18n`): **Đạt**. Panel và hộp thoại Organized Library đọc trọn tiếng Anh («ORGANIZED LIBRARY», «Choose where to keep the library…», «Restore from a pack…», «Re-sort»…); 0 khoá i18n thô trong chữ hiển thị. Các màn khác (App Font Sets, Pairing Desk) bằng tiếng Anh: **Chưa thử** (cần Case ⇒ model ảnh). Trên màn tiếng Việt đã chụp chữ của Organized Library và hộp thoại: **không thấy khoá thô**.
 - Chậm: bản debug chép 12 font 0,2–0,4 s; quét nguồn 100 file × 16 MB (1,5 GB) mất vài chục giây trước khi liệt kê; chép 1,5 GB ~21 s. Không thấy chỗ chậm bất thường khác.
 
 ## Danh sách lỗi
@@ -81,4 +83,6 @@ Qua `activation_state` (lúc app thử đang chạy): font bật tay + thuộc c
 | L5 | Low | Màn «Đang bật» không hiện lý do bật ngoài chi tiết | Bật font qua nhiều đường rồi mở «Đang bật» |
 
 ## Ghi chú về quy trình (07)
-Instance debug của tôi có font fixture bật (DM Serif Display, Chonburi, phạm vi session) trong cùng khoảng giờ CI native QA của Lead chạy; Lead yêu cầu dừng, tôi đã dừng và quét CoreText (0 font còn đăng ký). Phần chưa chạy xong ở trên chờ Lead báo «QA window free».
+Lần đầu instance debug của tôi chạy trùng giờ CI native QA của Lead; Lead yêu cầu dừng, tôi đã dừng và quét CoreText. Các phần còn lại chạy sau khi Lead báo «QA window free»: không có khoá QA nào bị giữ, không app thử nào của chủ máy đang chạy (Calculator), mỗi lượt giữ khoá `/tmp/fontatlas-native-qa.lock` và nhả khi xong, dữ liệu mỗi lượt ở thư mục mới trên VXData.
+
+Còn lại cho lần chạy sau, khi có model ảnh: bấm tay «Mở cùng app…» để tái hiện L2 qua giao diện, thông báo «Bật lại» / «Tắt lần này», chuỗi tiếng Anh của Pairing Desk và App Font Sets, cảnh báo cloud với ổ cloud thật.
