@@ -49,4 +49,15 @@ describe('B5 — vì sao đang bật', () => {
     expect(getCase).not.toHaveBeenCalled();
     expect(screen.getByTestId('active-why').textContent).toBe('Từ «Dự án tra lẻ»');
   });
+
+  it('mock activationState trả reasonNames như backend (tên Case/Dự án), cùng thứ tự reasons', async () => {
+    const api = createMockApi(); const c = await api.createCase('Khách Z');
+    const f = (await api.queryFaces({ limit: 1 })).items[0]; const key = { hashHex: f.hashHex, faceIndex: 0 };
+    vi.spyOn(api, 'getCase').mockResolvedValue({ ...(await api.getCase(c.id)), faces: [{ key, missing: false } as never] });
+    await api.activationActivateCase(c.id);
+    const st = (await api.activationState()).find(x => x.hashHex === f.hashHex)!;
+    expect(st.reasonNames).toHaveLength(st.reasons.length);
+    const i = st.reasons.findIndex(r => r.kind === 'case');
+    expect(st.reasonNames![i].collectionName).toBe('Khách Z');
+  });
 });

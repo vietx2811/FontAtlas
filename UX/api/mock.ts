@@ -154,6 +154,11 @@ export function createMockApi(o: MockOptions = {}): Api {
   const act = createActivationSim({
     rowOf: k => byKey.get(keyOf(k)),
     collectionFaces: id => [...(collections.get(id)?.faces ?? [])].map(k => { const [h, i] = k.split(':'); return { hashHex: h, faceIndex: Number(i) }; }),
+    names: {
+      collection: id => collections.get(id)?.name ?? null,
+      caseName: async id => { try { return (await caseApi.getCase(id)).name; } catch { return null; } },
+      caseApps: async id => (caseAppStore.get(id) ?? []).map(a => a.name),
+    },
   });
   const sim = createModelSim({ tickMs: o.tickMs, initial: o.initial, embedEnabled: () => settings.embedEnabled });
   const lib = createMockLibraryApi(rows, { latencyMs: o.latencyMs });

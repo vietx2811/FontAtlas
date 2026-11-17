@@ -1529,6 +1529,45 @@
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     } catch (e) { await log('khối-lỗi: Giữ cả hai G7b', false, String(e && e.stack || e).slice(0, 400)); }
 
+    // LÝ DO BẬT (L5): Desk "Bật tất cả font" → màn "Đang bật" có huy hiệu «Case …» trên thẻ → Desk "Tắt cả Case" → hết lý do Case.
+    try {
+      const actOnR = async () => (await inv('activation_state', {})).filter(x => x.state === 'active');
+      const sidebarBtn = re => [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => re.test(b.textContent.trim()));
+      const openDeskR = async () => {
+        sidebarBtn(/^Tất cả/)?.click();
+        await wait(() => cells().length >= 10, 15000);
+        (await wait(() => cells().find(c => /Playfair Display/.test(c.textContent)), 10000))?.click();
+        (await wait(() => document.querySelector('aside.fa-panel [role=tab][aria-label="Ghép cặp"]'), 8000))?.click();
+        (await wait(() => document.querySelector('[data-testid=open-desk]'), 15000))?.click();
+        return wait(() => document.querySelector('[data-testid=pairing-desk]'), 15000);
+      };
+      const leaveDeskR = async () => { document.querySelector('[data-testid=desk-back]')?.click(); await wait(() => !document.querySelector('[data-testid=pairing-desk]'), 8000); };
+      const baseR = (await actOnR()).length;
+      let deskR = await openDeskR();
+      await wait(() => document.querySelector('[data-testid=desk-activate-all]'), 10000);
+      document.querySelector('[data-testid=desk-activate-all]')?.click();
+      let stR = await actOnR(); for (let i = 0; i < 60 && stR.length <= baseR; i++) { await sleep(250); stR = await actOnR(); }
+      const caseOn = stR.filter(x => (x.reasons || []).some(r => r.kind === 'case'));
+      await log('reason-case-activated', !!deskR && caseOn.length > 0 && caseOn.every(x => (x.reasonNames || []).length === (x.reasons || []).length), { n: caseOn.length, base: baseR });
+      await leaveDeskR();
+      sidebarBtn(/^Đang bật/)?.click();
+      await wait(() => cells().length > 0 && document.querySelector('[data-testid=cell-reason]'), 15000);
+      const badges = [...document.querySelectorAll('[data-testid=cell-reason]')].map(x => x.textContent.trim());
+      await settle(200); await snap('active-reason-badge');
+      await log('reason-badge-case', badges.some(x => /^Case /.test(x)) && badges.length === cells().length, { badges: badges.slice(0, 4), cells: cells().length });
+      deskR = await openDeskR();
+      await wait(() => document.querySelector('[data-testid=desk-deactivate-all]'), 10000);
+      document.querySelector('[data-testid=desk-deactivate-all]')?.click();
+      let st2 = await actOnR(); for (let i = 0; i < 60 && st2.some(x => (x.reasons || []).some(r => r.kind === 'case')); i++) { await sleep(250); st2 = await actOnR(); }
+      const caseLeft = st2.filter(x => (x.reasons || []).some(r => r.kind === 'case')).length;
+      const keptNote = !!document.querySelector('[data-testid=desk-kept-other]');
+      await log('reason-deactivate-case', !!deskR && caseLeft === 0 && (st2.length === baseR || keptNote), { caseLeft, active: st2.length, base: baseR, keptNote });
+      await leaveDeskR();
+      await inv('activation_deactivate_all', { onProgress: '__CHANNEL__:' + T.transformCallback(() => {}) });
+      let l2 = -1; for (let i = 0; i < 60 && l2 !== 0; i++) { l2 = (await actOnR()).length; if (l2 !== 0) await sleep(250); }
+      sidebarBtn(/^Tất cả/)?.click();
+    } catch (e) { await log('khối-lỗi: Lý do bật L5', false, String(e && e.stack || e).slice(0, 400)); }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

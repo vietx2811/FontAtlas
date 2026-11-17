@@ -2,7 +2,7 @@
 import type { FaceRow } from '../features/library-grid/types';
 import { CmdError } from './types';
 import type {
-  ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, FaceKeyDto, FileOutcomeDto, FileResultDto, ReasonDto,
+  ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, FaceKeyDto, FileOutcomeDto, FileResultDto, ReasonDto, ReasonNamesDto,
 } from './types';
 import type { ActivateOptions, DeactivateOptions } from './index';
 import type { AvailabilityDto, ConfirmedConflictDto, ConflictDto, VfPolicyDto } from './types';
@@ -18,7 +18,9 @@ export const SAME_FILE_FAMILY = 'Pacifico';
 export const VF_PAIR_FAMILY = 'Bebas Neue';
 
 type Entry = { reasons: ReasonDto[]; scope: 'session' | 'persistent' };
-type Deps = { rowOf(k: FaceKeyDto): FaceRow | undefined; collectionFaces(id: number): FaceKeyDto[] };
+type Deps = { rowOf(k: FaceKeyDto): FaceRow | undefined; collectionFaces(id: number): FaceKeyDto[];
+  /** Tên cho `reasonNames` (như backend): Dự án, Case, app gắn với Case. Thiếu → không trả reasonNames. */
+  names?: { collection(id: number): string | null; caseName(id: number): Promise<string | null>; caseApps(id: number): Promise<string[]> } };
 
 const same = (a: ReasonDto, b: ReasonDto) => a.kind === b.kind && (a.kind !== 'collection' || (b.kind === 'collection' && a.collectionId === b.collectionId)) && (a.kind !== 'case' || (b.kind === 'case' && a.caseId === b.caseId)) && (a.kind !== 'case_app' || (b.kind === 'case_app' && a.caseId === b.caseId));
 
@@ -101,9 +103,19 @@ export function createActivationSim(d: Deps) {
     failNextAutoDeactivate: new Set<string>(),
     async activationCaps() { return { method: 'fake', supported: true }; },
     async activationState(): Promise<ActivationStateDto[]> {
-      return [...state].map(([hashHex, e]) => ({
-        hashHex, faces: [0], state: 'active', scope: e.scope, status: 'registered', reasons: e.reasons.map(r => ({ ...r })), activePath: null, conflictPs: null, lastError: null,
-      }));
+      const nm = d.names;
+      const nameOf = async (r: ReasonDto): Promise<ReasonNamesDto> => {
+        if (!nm) return { collectionName: null, appNames: [] };
+        switch (r.kind) {
+          case 'collection': return { collectionName: nm.collection(r.collectionId), appNames: [] };
+          case 'case': return { collectionName: await nm.caseName(r.caseId), appNames: [] };
+          case 'case_app': return { collectionName: await nm.caseName(r.caseId), appNames: await nm.caseApps(r.caseId) };
+          default: return { collectionName: null, appNames: [] };
+        }
+      };
+      return Promise.all([...state].map(async ([hashHex, e]) => ({
+        hashHex, faces: [0], state: 'active' as const, scope: e.scope, status: 'registered' as const, reasons: e.reasons.map(r => ({ ...r })), ...(nm ? { reasonNames: await Promise.all(e.reasons.map(nameOf)) } : {}), activePath: null, conflictPs: null, lastError: null,
+      })));
     },
     async activationPreflight(faces: FaceKeyDto[]) {
       return report(hashes(faces).map(f => result(f, conflictOf(d.rowOf(f)).length ? { kind: 'needs_confirmation', conflicts: conflictOf(d.rowOf(f)) } : { kind: 'ready' })));
