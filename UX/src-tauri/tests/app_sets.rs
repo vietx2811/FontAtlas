@@ -62,6 +62,30 @@ fn scan_reads_bundle_id_name_one_level_down_dedupes_and_sorts() {
     assert_eq!(apps[0].bundle_id, "com.adobe.illustrator");
 }
 
+fn fake_app_with(root: &Path, rel: &str, bundle: &str, extra: &str) {
+    let c = root.join(rel).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let p = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>{bundle}</string><key>CFBundleName</key><string>{rel}</string>{extra}</dict></plist>");
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_skips_extensions_plugins_and_background_helpers_but_keeps_real_and_menubar_apps() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app_with(r, "Main.app", "com.example.main", "<key>CFBundlePackageType</key><string>APPL</string>");
+    fake_app_with(r, "Menubar.app", "com.example.menubar", "<key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>");
+    fake_app_with(r, "SafariExt.app", "com.example.safari.ext", "<key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.Safari.web-extension</string></dict>");
+    fake_app_with(r, "Plug.app", "com.example.plug", "<key>CFBundlePackageType</key><string>BNDL</string>");
+    fake_app_with(r, "Helper.app", "com.example.helper", "<key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>");
+    fake_app_with(r, "Helper2.app", "com.example.helper2", "<key>LSBackgroundOnly</key><string>1</string>");
+    // gói lồng trong app khác không được quét tới
+    fake_app_with(r, "Main.app/Contents/Library/LoginItems/Inner.app", "com.example.inner", "");
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    let ids: Vec<&str> = apps.iter().map(|a| a.bundle_id.as_str()).collect();
+    assert_eq!(ids, ["com.example.main", "com.example.menubar"]);
+}
+
 #[test]
 fn installed_apps_finds_real_system_apps() {
     // Chỉ kiểm không panic và ra danh sách có bundle id hợp lệ (máy CI Linux không có /Applications: rỗng).

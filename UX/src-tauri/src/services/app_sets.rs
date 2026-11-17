@@ -171,11 +171,24 @@ pub fn scan_apps(roots: &[PathBuf], running: &HashSet<String>) -> Vec<InstalledA
     out
 }
 
+/// Chỉ app chính người dùng mở được: loại gói tiện ích (có `NSExtension`, vd tiện ích Safari), gói không phải `APPL`
+/// (plug-in, framework, bundle) và app chạy nền thuần (`LSBackgroundOnly`, helper/agent). App thanh menu (`LSUIElement`) vẫn giữ.
+fn is_main_app(d: &plist::Dictionary) -> bool {
+    if d.contains_key("NSExtension") {
+        return false;
+    }
+    if d.get("CFBundlePackageType").and_then(|x| x.as_string()).is_some_and(|t| t != "APPL") {
+        return false;
+    }
+    let bg = d.get("LSBackgroundOnly");
+    !(bg.and_then(|x| x.as_boolean()) == Some(true) || bg.and_then(|x| x.as_string()).is_some_and(|t| t == "1" || t.eq_ignore_ascii_case("true")))
+}
+
 fn read_app(app: &Path, running: &HashSet<String>) -> Option<InstalledAppDto> {
     let v = plist::Value::from_file(app.join("Contents/Info.plist")).ok()?;
     let d = v.as_dictionary()?;
     let bundle_id = d.get("CFBundleIdentifier")?.as_string()?.to_string();
-    if bundle_id.len() < 3 {
+    if bundle_id.len() < 3 || !is_main_app(d) {
         return None;
     }
     let name = ["CFBundleDisplayName", "CFBundleName"]
