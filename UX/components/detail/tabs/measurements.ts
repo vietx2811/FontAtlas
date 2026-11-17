@@ -1,5 +1,5 @@
 import { termName } from '../../ui/termNames';
-import { t, localeTag } from '../../../i18n';
+import { t, formatDecimal, localeTag } from '../../../i18n';
 // Nhãn UI cho các phép đo canonical. Đơn vị thực tế của từng reading do Rust trả.
 /** Nhãn trục = tên EN dùng chung với Compare (components/ui/termNames.ts); phần tiếng Việt nằm ở gloss trong TermTip. */
 const AXIS_KEYS = ['x_height', 'weight', 'serif', 'stress', 'slant', 'x_height_em', 'x_height_cap', 'cap_height_em', 'ascender_em', 'descender_em', 'stem', 'darkness', 'contrast', 'contrast_h', 'stress_deg', 'slant_deg', 'aperture', 'aperture_e', 'width', 'mean_advance', 'width_cv', 'spacing', 'serif_foot', 'counter', 'terminal', 'a_storeys', 'g_storeys'];
@@ -16,5 +16,5 @@ export function roundedValue(value: number, unit: string | null | undefined, dir
   const integer = direction === 'down' ? Math.floor(shifted) : direction === 'up' ? Math.ceil(shifted) : Math.round(shifted);
   return integer / 10 ** digits;
 }
-export const numberText = (value: number, unit?: string | null): string => new Intl.NumberFormat(localeTag(), { useGrouping: false, minimumFractionDigits: precisionFor(unit), maximumFractionDigits: precisionFor(unit) }).format(value);
+export const numberText = (value: number, unit?: string | null): string => formatDecimal(value, precisionFor(unit));
 export const unitText = (unit: string | null): string => unit ? unitLabels()[unit] ?? unit : '';

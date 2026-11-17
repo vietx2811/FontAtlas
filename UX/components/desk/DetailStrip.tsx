@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { buildCompare, COMPARE_METRICS, type CompareFace, type CompareMetric } from '../../api/compare';
 import type { FaceDetailDto, FaceRowDto } from '../../bindings';
-import { t, getLocale, tn } from '../../i18n';
+import { t, getLocale, tn, formatNumber } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { NoteMark } from '../ui/noteMark';
@@ -42,7 +42,7 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
   return { a: get(ik), b: get(tk), loading: busy(ik) || busy(tk), aLoading: busy(ik), bLoading: busy(tk) };
 }
 
-const nf = (n: number) => new Intl.NumberFormat(getLocale() === 'vi' ? 'vi-VN' : 'en-US').format(n);
+const nf = (n: number) => formatNumber(n);
 const axisText = (a: VariableAxisDto) => `${a.tag} ${a.min}–${a.max}`;
 const MAX_AXES_INLINE = 2;
 

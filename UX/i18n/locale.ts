@@ -46,4 +46,6 @@ export const resetChosenForTests = (): void => { chosenThisSession = false; };
 /** Định dạng số/ngày theo ngôn ngữ giao diện. */
 export const localeTag = (l: Locale = current): string => (l === 'vi' ? 'vi-VN' : 'en-US');
 export const formatNumber = (n: number, opts?: Intl.NumberFormatOptions): string => new Intl.NumberFormat(localeTag(), opts).format(n);
+/** Số thập phân cố định `digits` chữ số, không dấu ngăn nghìn, dấu thập phân theo ngôn ngữ UI (vi "0,85" / en "0.85"): khớp câu giải thích của backend. */
+export const formatDecimal = (v: number, digits = 2): string => new Intl.NumberFormat(localeTag(), { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false }).format(v);
 export const formatDate = (d: Date | number, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string => new Intl.DateTimeFormat(localeTag(), opts).format(d);

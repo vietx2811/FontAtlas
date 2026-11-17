@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GLYPHS, UPM } from './glyphOutlines';
+import { formatDecimal } from '../../i18n';
 import { TERM_NAMES, TermTip, termKey } from '../ui/terms';
 import './blueprint.css';
 
@@ -105,7 +106,7 @@ export function useCountUp(to: number, ms = 700, startAt = 0): number {
 }
 export function Readout({ x, y, to, digits = 3, unit = 'em', at = 0, anchor = 'start' }: { x: number; y: number; to: number; digits?: number; unit?: string; at?: number; anchor?: 'start' | 'end' | 'middle' }): React.JSX.Element {
   const v = useCountUp(to, 700, at);
-  return <text x={x} y={y} textAnchor={anchor} className="bp-read" data-final={to.toFixed(digits)}>{v.toFixed(digits)} {unit}</text>;
+  return <text x={x} y={y} textAnchor={anchor} className="bp-read" data-final={to.toFixed(digits)}>{formatDecimal(v, digits)} {unit}</text>;
 }
 
 /** Dấu đo kích thước dọc: hai vạch chặn, đường nối, mũi tên. */
