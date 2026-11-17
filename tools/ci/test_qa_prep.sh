@@ -3,6 +3,8 @@
 # bash tools/ci/test_qa_prep.sh
 set -uo pipefail
 cd "$(dirname "$0")/../.."
+command -v python3 >/dev/null || { echo "SKIP không có python3 (patch_font_names.py cần)"; exit 0; }
+[ "$(uname)" = Darwin ] || { echo "SKIP chỉ chạy trên macOS (run.sh dùng sed -i '' / base64 -D)"; exit 0; }
 RUN=UX/src-tauri/tests/qa/run.sh; fail=0
 check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: muốn '$3', được '$2'"; fail=1; fi; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

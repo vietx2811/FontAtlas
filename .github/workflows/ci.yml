@@ -63,6 +63,8 @@ jobs:
         run: |
           npm ci
           npx vite build
+      - name: QA prep (run.sh chuẩn bị, không mở app)
+        run: bash tools/ci/test_qa_prep.sh
       - name: cargo test --workspace (sinh lại bindings)
         working-directory: UX/src-tauri
         env: { UPDATE_BINDINGS: '1' }

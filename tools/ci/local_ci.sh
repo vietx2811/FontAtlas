@@ -128,7 +128,7 @@ compute_keys() {
   local tauri; tauri="$(cargo tauri -V 2>&1 | shasum | cut -c1-8)"
   RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/|\tUX/src-tauri/resources/THIRD-PARTY-NOTICES.txt' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
   # Frontend còn đọc 3 file trong src-tauri (fixture face_row.json, Cargo.toml, tauri.conf.json): đưa vào khoá frontend.
-  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json)-$fe"
+  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json UX/src-tauri/tests/qa/main_flows.js)-$fe"
   # THIRD-PARTY-NOTICES.txt chỉ là văn bản (cargo-test/clippy không đọc) nên không nằm trong RUST_KEY, nhưng nó được đóng vào .app → vào khoá bundle.
   BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri$(tree_hash '' UX/src-tauri/resources/THIRD-PARTY-NOTICES.txt)" | shasum | cut -c1-16)"
 }
@@ -279,6 +279,8 @@ fi
 # THIRD-PARTY-NOTICES phải khớp Cargo.lock/node_modules (vài giây, không tải gì). Đỏ ⇒ dừng sớm các bước Rust/QA (hàng giờ) để lỗi hiện ngay lúc merge, không đợi ngày phát hành.
 NOTICES=0
 if [ $FRONT = 1 ]; then step notices . bash tools/release/third_party_notices.sh --check && NOTICES=1; else skip notices "npm ci đỏ"; fi
+# Phần chuẩn bị của run.sh dưới set -euo pipefail (vài giây, không mở app): bắt lỗi chết im lặng trước khi QA native tốn hàng giờ. Không chặn các bước khác.
+step qa-prep-test . bash tools/ci/test_qa_prep.sh
 
 # Doc-tests: cargo test --workspace chạy rustdoc cho TỪNG crate dù có 0 ví dụ (~9 phút/crate khi máy tải, ~2 giờ cho 13 crate).
 # Chỉ chạy lib/bin/tests; riêng crate nào CÓ khối ``` trong doc comment thì vẫn chạy `cargo test --doc` cho crate đó.
