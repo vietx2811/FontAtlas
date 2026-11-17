@@ -128,12 +128,14 @@ compute_keys() {
   local tauri; tauri="$(cargo tauri -V 2>&1 | shasum | cut -c1-8)"
   RUST_KEY="$(tree_hash $'\tUX/src-tauri/tests/qa/|\tUX/src-tauri/resources/THIRD-PARTY-NOTICES.txt' UX/src-tauri UX/bindings docs/team/eval UX/python-sidecar UX/binaries)-$tc"
   # Frontend còn đọc 3 file trong src-tauri (fixture face_row.json, Cargo.toml, tauri.conf.json): đưa vào khoá frontend.
-  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json UX/src-tauri/tests/qa/main_flows.js)-$fe"
+  FRONT_KEY="$(tree_hash $'\tUX/src-tauri/' UX)$(tree_hash '' UX/src-tauri/Cargo.toml UX/src-tauri/tauri.conf.json UX/src-tauri/crates/fontatlas-store/tests/fixtures/face_row.json)-$fe"
+  # vitest còn đọc tests/qa/main_flows.js (appPicker.test.tsx): khoá RIÊNG cho vitest, để sửa kịch bản QA chạy lại vitest mà KHÔNG build lại bundle (BUNDLE_KEY dùng FRONT_KEY).
+  VITEST_KEY="$(printf %s "$FRONT_KEY$(tree_hash '' UX/src-tauri/tests/qa/main_flows.js)" | shasum | cut -c1-16)"
   # THIRD-PARTY-NOTICES.txt chỉ là văn bản (cargo-test/clippy không đọc) nên không nằm trong RUST_KEY, nhưng nó được đóng vào .app → vào khoá bundle.
   BUNDLE_KEY="$(printf %s "$RUST_KEY$FRONT_KEY$tauri$(tree_hash '' UX/src-tauri/resources/THIRD-PARTY-NOTICES.txt)" | shasum | cut -c1-16)"
 }
 compute_keys "$(git rev-parse --show-toplevel 2>/dev/null)"
-if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo "bundle=$BUNDLE_KEY"; exit 0; fi
+if [ $PRINTKEYS = 1 ]; then echo "rust=$RUST_KEY"; echo "front=$FRONT_KEY"; echo "vitest=$VITEST_KEY"; echo "bundle=$BUNDLE_KEY"; exit 0; fi
 
 # Một lần chạy một lúc: target/ và node_modules dùng chung. Hàng đợi FIFO giữ thứ tự giữa các lần chạy.
 if [ $PRIO = 1 ] && [ "${FONTATLAS_CI_PRIORITY:-}" != 1 ]; then echo "--priority chỉ dành cho Lead (đặt FONTATLAS_CI_PRIORITY=1)"; exit 2; fi
@@ -271,7 +273,7 @@ step npm-ci UX npm_install && FRONT=1 || FRONT=0
 if [ $FRONT = 1 ]; then
   step vite-build UX npx vite build || FRONT=0   # luôn chạy: tạo UX/dist cho cargo và bản build debug (2 s)
   cstep tsc "$FRONT_KEY" UX npx tsc --noEmit
-  cstep vitest "$FRONT_KEY" UX npm test
+  cstep vitest "$VITEST_KEY" UX npm test
 else
   skip vite-build "npm ci đỏ"; skip tsc "npm ci đỏ"; skip vitest "npm ci đỏ"
 fi
@@ -287,8 +289,11 @@ step qa-prep-test . bash tools/ci/test_qa_prep.sh
 doc_crates() {
   local root="${1:-$WT/UX/src-tauri}" f d
   # Có thể thừa (chạy --doc cho crate không cần) nhưng không sót: ``` trong ///, //!, /** */, /*! */, #[doc = "..."], #![doc = include_str!(...)].
+  # Khối /// hay //! chỉ tính khi hàng mở rào ``` là Rust chạy được (không info, hoặc rust/no_run/should_panic/compile_fail/edition…): ```text, ```ignore, ```toml… rustdoc không biên dịch.
   grep -rlE '^[[:space:]]*(///|//!)[[:space:]]*```|#!?\[doc[[:space:]]*=|/\*[*!]' --include='*.rs' "$root" 2>/dev/null | grep -v '/target/' | while IFS= read -r f; do
-    grep -qE '```|include_str!' "$f" || continue
+    if grep -qE '#!?\[doc[[:space:]]*=|/\*[*!]' "$f"; then grep -qE '```|include_str!' "$f" || continue
+    else awk '/^[[:space:]]*(\/\/\/|\/\/!)[[:space:]]*```/ { l=$0; sub(/^[[:space:]]*(\/\/\/|\/\/!)[[:space:]]*```/,"",l); gsub(/[[:space:]]/,"",l)
+        if (inf) { inf=0; next } inf=1; if (l=="" || l ~ /^(rust|no_run|should_panic|compile_fail|edition|ignore-)/) { run=1 } } END { exit !run }' "$f" || continue; fi
     d="$(dirname "$f")"; while [ "$d" != "/" ] && [ ! -f "$d/Cargo.toml" ]; do d="$(dirname "$d")"; done
     [ -f "$d/src/lib.rs" ] || grep -q '^\[lib\]' "$d/Cargo.toml" || continue   # crate chỉ có bin: không có doc-test
     awk '/^\[package\]/{p=1;next} /^\[/{p=0} p && /^name[[:space:]]*=/{gsub(/^name[[:space:]]*=[[:space:]]*"|"[[:space:]]*$/,""); print; exit}' "$d/Cargo.toml"

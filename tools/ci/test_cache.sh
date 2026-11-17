@@ -15,6 +15,7 @@ base="$(git rev-parse HEAD)"
 q="$(mk UX/src-tauri/tests/qa/main_flows.js)"
 check "đổi main_flows.js: khoá Rust giữ nguyên" "$(key $q rust)" "$(key $base rust)"
 check "đổi main_flows.js: khoá frontend giữ nguyên" "$(key $q front)" "$(key $base front)"
+check "đổi main_flows.js: khoá vitest ĐỔI (appPicker.test.tsx đọc file này)" "$([ "$(key $q vitest)" != "$(key $base vitest)" ] && echo diff)" diff
 check "đổi main_flows.js: khoá bundle giữ nguyên" "$(key $q bundle)" "$(key $base bundle)"
 f="$(git ls-files 'UX/components/*.tsx' | head -1)"
 c="$(mk "$f")"
@@ -31,7 +32,7 @@ check "đổi THIRD-PARTY-NOTICES: khoá bundle đổi (file nằm trong .app)" 
 
 # doc_crates: crate nào có khối ``` trong doc comment thì được chạy cargo test --doc.
 eval "$(sed -n '/^doc_crates() {/,/^}/p' tools/ci/local_ci.sh)"
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+T="$(mktemp -d)"; trap 'rm -rf "$T" "${T2:-}"' EXIT
 mkdir -p "$T/a/src" "$T/b/src"; printf '[package]\nname = "crate_a"\n' > "$T/a/Cargo.toml"; printf '[package]\nname = "crate_b"\n' > "$T/b/Cargo.toml"
 printf '/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n' > "$T/a/src/lib.rs"; printf '/// chỉ văn bản\npub fn g() {}\n' > "$T/b/src/lib.rs"
 check "doc_crates chỉ trả crate có ví dụ" "$(doc_crates "$T")" crate_a
@@ -39,6 +40,9 @@ mkdir -p "$T/c/src" "$T/d/src" "$T/e/src"
 printf '[package]\nname = "crate_c"\n[lib]\n' > "$T/c/Cargo.toml"; printf '/**\n```\nlet _ = 1;\n```\n*/\npub fn h() {}\n' > "$T/c/src/lib.rs"
 printf '[package]\nname = "bin_d"\n' > "$T/d/Cargo.toml"; printf '//! ```\n//! x\n//! ```\nfn main() {}\n' > "$T/d/src/main.rs"
 printf '[package]\nversion = "1"\nname = "crate_e"\n[dependencies]\nname = "no"\n' > "$T/e/Cargo.toml"; printf '#![doc = include_str!("../README.md")]\n' > "$T/e/src/lib.rs"
+T2="$(mktemp -d)"; mkdir -p "$T2/f/src" "$T2/g/src"; printf '[package]\nname = "crate_f"\n' > "$T2/f/Cargo.toml"; printf '//! ```text\n//! không biên dịch\n//! ```\n///\n/// ```ignore\n/// x\n/// ```\npub fn f() {}\n' > "$T2/f/src/lib.rs"
+printf '[package]\nname = "crate_g"\n' > "$T2/g/Cargo.toml"; printf '//! ```text\n//! t\n//! ```\n/// ```\n/// assert!(true);\n/// ```\npub fn g() {}\n' > "$T2/g/src/lib.rs"
+check 'doc_crates bỏ khối ```text và ```ignore, vẫn thấy khối Rust đứng sau khối text' "$(doc_crates "$T2/f" ; doc_crates "$T2/g")" crate_g
 check "doc_crates thấy khối /** */, bỏ crate chỉ có bin, lấy name từ [package], thấy #![doc = include_str!]" "$(doc_crates "$T" | tr '\n' ' ')" "crate_a crate_c crate_e "
 check "cây hiện tại không có doc-test" "$(WT="$PWD"; doc_crates)" ""
 
@@ -56,6 +60,6 @@ check "FAIL không ghi cache" "$([ -e "$CI/cache/demo-k2" ] && echo yes || echo 
 # Chốt cảnh báo: đường dẫn trèo ra ngoài UX/src-tauri (>= 3 cấp ../ từ crate) chưa nằm trong khoá Rust của local_ci.sh. Xuất hiện đường mới → thêm vào RUST_KEY.
 outside="$(grep -rnE '(\.\./){3,}' --include='*.rs' UX/src-tauri | grep -v '/target/' | grep -v 'docs/team/eval' | grep -v 'safe_name' | grep -v '#\[path' || true)"
 check "không có đường dẫn ngoài src-tauri nào ngoài docs/team/eval" "$outside" ""
-ts_in="$(grep -rhoE "['\"][./]*src-tauri/[^'\"]*['\"]" --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=src-tauri UX | sort -u | grep -v 'target/release' | grep -vE 'Cargo.toml|tauri.conf.json|face_row.json' || true)"
-check "frontend không đọc file nào khác trong src-tauri (ngoài những file đã vào khoá frontend)" "$ts_in" ""
+ts_in="$(grep -rhoE "['\"][./]*src-tauri/[^'\"]*['\"]" --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=src-tauri UX | sort -u | grep -v 'target/release' | grep -vE 'Cargo.toml|tauri.conf.json|face_row.json|tests/qa/main_flows.js' || true)"
+check "frontend không đọc file nào khác trong src-tauri (ngoài những file đã vào khoá frontend / vitest)" "$ts_in" ""
 exit $fail
