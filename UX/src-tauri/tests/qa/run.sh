@@ -5,7 +5,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
-test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
+# FONTATLAS_QA_PREP_ONLY=1: chỉ chạy phần chuẩn bị (khoá, quét, chép + đổi tên fixture, preflight) rồi dừng, không mở app; dùng cho tools/ci/test_qa_prep.sh.
+test -x "$APP" || [ "${FONTATLAS_QA_PREP_ONLY:-}" = 1 ] || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
 # QA phải chạy qua CI cục bộ (khoá + hàng đợi) và đúng bundle của SHA đang checkout: bundle nằm ở target/ DÙNG CHUNG nên run khác có thể đã ghi đè nó.
 # Chạy lại riêng: bash tools/ci/local_ci.sh <ref> --qa-only. Bỏ qua kiểm (chỉ khi tự biết mình đang làm gì): FONTATLAS_QA_NO_GUARD=1.
 if [ "${FONTATLAS_QA_NO_GUARD:-}" != 1 ]; then
@@ -77,6 +78,7 @@ if command -v swift >/dev/null; then
     if [ "${FONTATLAS_QA_ALLOW_REGISTERED:-}" = 1 ]; then echo "  FONTATLAS_QA_ALLOW_REGISTERED=1: vẫn chạy"; else echo "  Dừng (exit 3). Gỡ các font trên rồi chạy lại, hoặc đặt FONTATLAS_QA_ALLOW_REGISTERED=1."; exit 3; fi
   fi
 fi
+if [ "${FONTATLAS_QA_PREP_ONLY:-}" = 1 ]; then echo "PREP-OK $QA"; exit 0; fi
 sed -e "s#__QA_DIR__#$QA#g" -e "s#__QA_LANG__#${QA_LANG:-vi}#g" "$HERE/main_flows.js" > "$QA/qa.js"
 # QA_LANG=en: các bộ chọn theo aria-label viết bằng tiếng Việt đổi sang đúng chuỗi tiếng Anh của app (khoá i18n tương ứng), để các bước vẫn tìm được phần tử và chụp ảnh bản tiếng Anh.
 if [ "${QA_LANG:-vi}" = "en" ]; then
