@@ -164,6 +164,10 @@ fn migration_to_case_keyed_app_sets_keeps_rows_whose_case_exists_and_drops_orpha
         for _ in 0..2 {
             c.execute("INSERT INTO cases(name,brief,settings,created_at,updated_at,opened_at) VALUES ('c',NULL,'{}',1,1,1)", []).unwrap();
         }
+        // collection trùng id 1 và 2: nâng cấp không được đụng tới chúng
+        for _ in 0..2 {
+            c.execute("INSERT INTO collections(name,created_at,updated_at) VALUES ('Khác',1,1)", []).unwrap();
+        }
         for (id, b) in [(1, "com.x.one"), (1, "com.x.two"), (2, "com.x.one"), (9, "com.x.orphan")] {
             c.execute("INSERT INTO case_apps(collection_id,bundle_id,app_name,added_at) VALUES (?1,?2,'N',5)", rusqlite::params![id, b]).unwrap();
         }
@@ -174,4 +178,8 @@ fn migration_to_case_keyed_app_sets_keeps_rows_whose_case_exists_and_drops_orpha
     assert_eq!(s.case_apps(2).unwrap().len(), 1);
     assert!(s.case_apps(9).unwrap().is_empty());
     assert_eq!(s.case_apps(1).unwrap()[0].app_name, "N");
+    // collection cùng id vẫn nguyên và không bị liên kết với app set
+    let c = rusqlite::Connection::open(&user).unwrap();
+    let n: i64 = c.query_row("SELECT COUNT(*) FROM collections WHERE name='Khác'", [], |r| r.get(0)).unwrap();
+    assert_eq!(n, 2);
 }
