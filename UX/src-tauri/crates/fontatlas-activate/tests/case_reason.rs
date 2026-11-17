@@ -37,14 +37,17 @@ fn deactivate_case_lifts_only_its_own_reason_and_keeps_fonts_held_otherwise() {
     let (env, svc, k, c) = setup();
     // một Case khác cũng giữ font, và font còn lý do bật tay
     svc.activate_case(&env.store, c, &[k], None, ConflictPolicy::Ask, &mut |_| {}).unwrap();
-    svc.activate_case(&env.store, c + 100, &[k], None, ConflictPolicy::Ask, &mut |_| {}).unwrap();
-    assert_eq!(reasons(&env, &k), vec![ActivationReason::Case(c), ActivationReason::Case(c + 100)]);
+    let c2 = env.store.lock().unwrap().create_case("Brand Kit B", None, None).unwrap();
+    env.store.lock().unwrap().add_to_case(c2, &[k], "added").unwrap();
+    assert_ne!(c, c2);
+    svc.activate_case(&env.store, c2, &[k], None, ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    assert_eq!(reasons(&env, &k), vec![ActivationReason::Case(c), ActivationReason::Case(c2)]);
     let r = svc.deactivate_case(&env.store, c, &mut |_| {}).unwrap();
     assert!(matches!(r.results[0].outcome, FileOutcome::KeptActive { .. }), "{:?}", r.results[0].outcome);
-    assert_eq!(reasons(&env, &k), vec![ActivationReason::Case(c + 100)]);
+    assert_eq!(reasons(&env, &k), vec![ActivationReason::Case(c2)]);
     assert!(on(&env, &k));
     // Case cuối cùng gỡ → font tắt
-    let r = svc.deactivate_case(&env.store, c + 100, &mut |_| {}).unwrap();
+    let r = svc.deactivate_case(&env.store, c2, &mut |_| {}).unwrap();
     assert_eq!(r.results[0].outcome, FileOutcome::Deactivated);
     assert!(!on(&env, &k));
     assert!(reasons(&env, &k).is_empty());

@@ -223,11 +223,41 @@ fn migration_to_case_reason_keeps_every_reason_and_backs_up() {
     }
     let (s, rep) = Store::open(d.path()).unwrap();
     assert!(rep.user_backup.is_some());
-    let name = rep.user_backup.unwrap().file_name().unwrap().to_string_lossy().into_owned();
+    let rep_backup = rep.user_backup.clone().unwrap();
+    let name = rep_backup.file_name().unwrap().to_string_lossy().into_owned();
     assert!(name.starts_with("user.v18."), "{name}");
     let n: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.activation_reasons", [], |r| r.get(0)).unwrap();
     assert_eq!(n, 5);
     let none: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.activation_reasons WHERE reason LIKE 'case:%'", [], |r| r.get(0)).unwrap();
     assert_eq!(none, 0);
     s.conn().execute("INSERT INTO u.activation_reasons(hash,reason,added_at) VALUES (?1,'case:9',6)", [&h1]).unwrap();
+    // index theo `reason` còn; FK cascade còn (xoá activation_state kéo theo lý do)
+    let idx: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.sqlite_master WHERE type='index' AND name='activation_reasons_reason'", [], |r| r.get(0)).unwrap();
+    assert_eq!(idx, 1);
+    s.conn().execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+    s.conn().execute("DELETE FROM u.activation_state WHERE hash=?1", [&h1]).unwrap();
+    let left: i64 = s.conn().query_row("SELECT COUNT(*) FROM u.activation_reasons WHERE hash=?1", [&h1], |r| r.get(0)).unwrap();
+    assert_eq!(left, 0, "xoá activation_state phải xoá cả lý do");
+    // bản sao lưu v18 giữ CHECK cũ: không nhận `case:`
+    let bk = rusqlite::Connection::open(rep_backup).unwrap();
+    bk.execute_batch("PRAGMA foreign_keys=OFF;").unwrap();
+    assert!(bk.execute("INSERT INTO activation_reasons(hash,reason,added_at) VALUES (?1,'case:9',6)", [&h2]).is_err());
+    let kept: i64 = bk.query_row("SELECT COUNT(*) FROM activation_reasons", [], |r| r.get(0)).unwrap();
+    assert_eq!(kept, 5, "bản sao lưu còn nguyên 5 lý do");
+}
+
+/// DB do bản mới hơn (v20, ngay sau v19) bị từ chối và không bị sửa.
+#[test]
+fn user_db_one_version_above_current_is_refused_untouched() {
+    use fontatlas_store::USER_VERSION;
+    let d = tmp();
+    let user = d.path().join(USER_FILE);
+    {
+        let c = rusqlite::Connection::open(&user).unwrap();
+        c.execute_batch(&format!("CREATE TABLE keep(x); PRAGMA user_version = {};", USER_VERSION + 1)).unwrap();
+    }
+    let before = std::fs::read(&user).unwrap();
+    let err = Store::open(d.path()).err().expect("phải từ chối");
+    assert_eq!(err.code(), "newer_schema");
+    assert_eq!(std::fs::read(&user).unwrap(), before);
 }

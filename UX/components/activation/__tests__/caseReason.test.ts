@@ -23,4 +23,14 @@ describe('lý do case', () => {
     expect(st.map(x => x.hashHex)).toEqual([faces[0].hashHex]);
     expect(st[0].reasons).toEqual([{ kind: 'manual' }]);
   });
+
+  it('tắt tay một font xoá cả lý do case (giống backend), không để font mồ côi lý do', async () => {
+    const api = createMockApi();
+    const c = await api.createCase('Bộ B');
+    const faces = (await api.queryFaces({ limit: 1 })).items.map(r => ({ hashHex: r.hashHex, faceIndex: r.faceIndex }));
+    await api.addToCase(c.id, faces);
+    await api.activationActivateCase(c.id);
+    await api.activationDeactivate(faces);
+    expect(await api.activationState()).toEqual([]);
+  });
 });
