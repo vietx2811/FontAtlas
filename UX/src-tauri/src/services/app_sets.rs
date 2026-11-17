@@ -171,24 +171,54 @@ pub fn scan_apps(roots: &[PathBuf], running: &HashSet<String>) -> Vec<InstalledA
     out
 }
 
-/// Chỉ app chính người dùng mở được: loại gói tiện ích (có `NSExtension`, vd tiện ích Safari), gói không phải `APPL`
-/// (plug-in, framework, bundle) và app chạy nền thuần (`LSBackgroundOnly`, helper/agent). App thanh menu (`LSUIElement`) vẫn giữ.
-fn is_main_app(d: &plist::Dictionary) -> bool {
+/// Chỉ app chính người dùng mở được. Loại: gói tiện ích (có `NSExtension`), gói `BNDL`/`FMWK`/`KEXT` (plug-in, framework, kext),
+/// app chạy nền thuần (`LSBackgroundOnly`), và app chứa chỉ để phân phối tiện ích Safari (xem `is_safari_extension_container`).
+/// Giữ: `APPL`, `AAPL` (web app Safari), `XPC!` (một số app hệ thống), gói không khai báo kiểu, app thanh menu (`LSUIElement`).
+fn is_main_app(app: &Path, d: &plist::Dictionary) -> bool {
     if d.contains_key("NSExtension") {
         return false;
     }
-    if d.get("CFBundlePackageType").and_then(|x| x.as_string()).is_some_and(|t| t != "APPL") {
+    if d.get("CFBundlePackageType").and_then(|x| x.as_string()).is_some_and(|t| matches!(t, "BNDL" | "FMWK" | "KEXT")) {
         return false;
     }
     let bg = d.get("LSBackgroundOnly");
-    !(bg.and_then(|x| x.as_boolean()) == Some(true) || bg.and_then(|x| x.as_string()).is_some_and(|t| t == "1" || t.eq_ignore_ascii_case("true")))
+    if bg.and_then(|x| x.as_boolean()) == Some(true) || bg.and_then(|x| x.as_string()).is_some_and(|t| t == "1" || t.eq_ignore_ascii_case("true")) {
+        return false;
+    }
+    !is_safari_extension_container(app, d)
+}
+
+/// App chứa tiện ích Safari: có ≥1 `Contents/PlugIns/*.appex`, MỌI appex có `NSExtensionPointIdentifier` bắt đầu `com.apple.Safari.`,
+/// và app không khai báo loại tài liệu nào (`CFBundleDocumentTypes` vắng hoặc rỗng) nên không có gì để mở font cùng.
+/// Có thêm appex loại khác (chia sẻ, Finder Sync…) hoặc có loại tài liệu thì coi là app thật.
+fn is_safari_extension_container(app: &Path, d: &plist::Dictionary) -> bool {
+    if d.get("CFBundleDocumentTypes").and_then(|x| x.as_array()).is_some_and(|a| !a.is_empty()) {
+        return false;
+    }
+    let Ok(rd) = std::fs::read_dir(app.join("Contents/PlugIns")) else { return false };
+    let mut n = 0;
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.extension().is_none_or(|x| x != "appex") {
+            continue;
+        }
+        let point = plist::Value::from_file(p.join("Contents/Info.plist"))
+            .ok()
+            .and_then(|v| v.into_dictionary())
+            .and_then(|d| d.get("NSExtension").and_then(|x| x.as_dictionary()).and_then(|x| x.get("NSExtensionPointIdentifier")).and_then(|x| x.as_string()).map(str::to_string));
+        if !point.is_some_and(|id| id.starts_with("com.apple.Safari.")) {
+            return false;
+        }
+        n += 1;
+    }
+    n > 0
 }
 
 fn read_app(app: &Path, running: &HashSet<String>) -> Option<InstalledAppDto> {
     let v = plist::Value::from_file(app.join("Contents/Info.plist")).ok()?;
     let d = v.as_dictionary()?;
     let bundle_id = d.get("CFBundleIdentifier")?.as_string()?.to_string();
-    if bundle_id.len() < 3 || !is_main_app(d) {
+    if bundle_id.len() < 3 || !is_main_app(app, d) {
         return None;
     }
     let name = ["CFBundleDisplayName", "CFBundleName"]
