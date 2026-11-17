@@ -127,7 +127,7 @@ const lookup = (key: string): string | undefined => {
   return hit;
 };
 /** Biến ĐẾM (số nguyên đặt tên theo quy ước) tự đi qua formatNumber: vi "1.234", en "1,234". Biến khác (id, px, năm…) và chuỗi đã định dạng giữ nguyên. */
-const COUNT_VARS = new Set(['n', 'k', 'm', 'total', 'done', 'skipped', 'failed', 'ok', 'kept', 'seen', 'rest', 'have', 'miss', 'max', 'exact', 'ambiguous', 'safe', 'review', 'hide', 'analyzed', 'written', 'pairs', 'classes']);
+export const COUNT_VARS: ReadonlySet<string> = new Set(['n', 'k', 'm', 'total', 'done', 'skipped', 'failed', 'ok', 'kept', 'seen', 'rest', 'have', 'miss', 'max', 'exact', 'ambiguous', 'safe', 'review', 'hide', 'analyzed', 'written', 'pairs', 'classes', 'files', 'faces', 'fonts', 'collections', 'sources', 'favorites', 'tags', 'full', 'near', 'shown', 'mb', 'gb', 'free', 'need', 'missing', 'glyphs']);
 const fill = (tpl: string, vars: Record<string, string | number>): string => tpl.replace(/\{(\w+)\}/g, (_, k) => { const v = vars[k]; return typeof v === 'number' && COUNT_VARS.has(k) && Number.isFinite(v) ? formatNumber(v) : String(v ?? ''); });
 /** Chữ theo nền tảng áp lên MẪU thô, TRƯỚC khi nội suy {biến}: tên font/thư mục của người dùng không bao giờ bị đổi. */
 export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => fill(platformText(lookup(key) ?? key, getLocale()), vars);
