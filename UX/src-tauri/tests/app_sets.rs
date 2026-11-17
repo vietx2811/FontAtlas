@@ -62,6 +62,81 @@ fn scan_reads_bundle_id_name_one_level_down_dedupes_and_sorts() {
     assert_eq!(apps[0].bundle_id, "com.adobe.illustrator");
 }
 
+fn fake_app_with(root: &Path, rel: &str, bundle: &str, extra: &str) {
+    let c = root.join(rel).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let p = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>{bundle}</string><key>CFBundleName</key><string>{rel}</string>{extra}</dict></plist>");
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_skips_extensions_plugins_and_background_helpers_but_keeps_real_and_menubar_apps() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app_with(r, "Main.app", "com.example.main", "<key>CFBundlePackageType</key><string>APPL</string>");
+    fake_app_with(r, "Menubar.app", "com.example.menubar", "<key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>");
+    fake_app_with(r, "SafariExt.app", "com.example.safari.ext", "<key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.Safari.web-extension</string></dict>");
+    fake_app_with(r, "Plug.app", "com.example.plug", "<key>CFBundlePackageType</key><string>BNDL</string>");
+    fake_app_with(r, "Fw.app", "com.example.fw", "<key>CFBundlePackageType</key><string>FMWK</string>");
+    fake_app_with(r, "Kx.app", "com.example.kx", "<key>CFBundlePackageType</key><string>KEXT</string>");
+    fake_app_with(r, "Helper.app", "com.example.helper", "<key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>");
+    fake_app_with(r, "Helper2.app", "com.example.helper2", "<key>LSBackgroundOnly</key><string>1</string>");
+    // gói lồng trong app khác không được quét tới
+    fake_app_with(r, "Main.app/Contents/Library/LoginItems/Inner.app", "com.example.inner", "");
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    let ids: Vec<&str> = apps.iter().map(|a| a.bundle_id.as_str()).collect();
+    assert_eq!(ids, ["com.example.main", "com.example.menubar"]);
+}
+
+#[test]
+fn scan_keeps_safari_web_apps_and_xpc_typed_apps() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app_with(r, "ExampleWebApp.app", "com.example.safari.webapp.1", "<key>CFBundlePackageType</key><string>AAPL</string>");
+    fake_app_with(r, "ExampleSystem.app", "com.example.system", "<key>CFBundlePackageType</key><string>XPC!</string>");
+    fake_app_with(r, "ExampleNoType.app", "com.example.notype", "");
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    assert_eq!(apps.len(), 3);
+}
+
+fn add_appex(root: &Path, app: &str, name: &str, point: &str) {
+    let c = root.join(app).join("Contents/PlugIns").join(format!("{name}.appex")).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let p = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>x.{name}</string><key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>{point}</string></dict></dict></plist>");
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_drops_containers_that_only_ship_safari_extensions() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    let appl = "<key>CFBundlePackageType</key><string>APPL</string>";
+    // chỉ có tiện ích Safari (một hoặc nhiều) → loại
+    fake_app_with(r, "ExampleClipper.app", "com.example.clipper", appl);
+    add_appex(r, "ExampleClipper.app", "Ext", "com.apple.Safari.web-extension");
+    fake_app_with(r, "ExampleTwo.app", "com.example.two", appl);
+    add_appex(r, "ExampleTwo.app", "A", "com.apple.Safari.web-extension");
+    add_appex(r, "ExampleTwo.app", "B", "com.apple.Safari.extension");
+    // tiện ích Safari + loại tài liệu → giữ
+    fake_app_with(r, "ExampleEditor.app", "com.example.editor", &format!("{appl}<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Doc</string></dict></array>"));
+    add_appex(r, "ExampleEditor.app", "Ext", "com.apple.Safari.web-extension");
+    // DocumentTypes rỗng → vẫn là container → loại
+    fake_app_with(r, "ExampleEmptyDocs.app", "com.example.emptydocs", &format!("{appl}<key>CFBundleDocumentTypes</key><array/>"));
+    add_appex(r, "ExampleEmptyDocs.app", "Ext", "com.apple.Safari.web-extension");
+    // tiện ích Safari + tiện ích chia sẻ → giữ
+    fake_app_with(r, "ExampleShare.app", "com.example.share", appl);
+    add_appex(r, "ExampleShare.app", "Ext", "com.apple.Safari.web-extension");
+    add_appex(r, "ExampleShare.app", "Share", "com.apple.share-services");
+    // không có PlugIns → giữ
+    fake_app_with(r, "ExamplePlain.app", "com.example.plain", appl);
+    // PlugIns có appex không rõ loại → giữ (không chắc thì không loại)
+    fake_app_with(r, "ExampleOdd.app", "com.example.odd", appl);
+    std::fs::create_dir_all(r.join("ExampleOdd.app/Contents/PlugIns/Odd.appex/Contents")).unwrap();
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    let ids: Vec<&str> = apps.iter().map(|a| a.bundle_id.as_str()).collect();
+    assert_eq!(ids, ["com.example.editor", "com.example.odd", "com.example.plain", "com.example.share"]);
+}
+
 #[test]
 fn installed_apps_finds_real_system_apps() {
     // Chỉ kiểm không panic và ra danh sách có bundle id hợp lệ (máy CI Linux không có /Applications: rỗng).
