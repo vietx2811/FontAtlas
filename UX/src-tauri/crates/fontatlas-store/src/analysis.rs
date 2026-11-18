@@ -268,8 +268,8 @@ impl Store {
     /// Số face có bản còn là placeholder cloud ở nguồn này (để gợi ý "chưa tải về máy"). Theo lần quét gần nhất.
     pub fn cloud_only_count(&self, source_id: i64) -> Result<u32, StoreError> {
         let n: i64 = self.conn.query_row(
-            "SELECT count(*) FROM faces f WHERE EXISTS (SELECT 1 FROM file_locations l
-               WHERE l.file_id = f.file_id AND l.source_id = ?1 AND l.missing = 0 AND l.cloud_only = 1)",
+            "SELECT count(*) FROM faces f WHERE f.file_id IN
+               (SELECT file_id FROM file_locations WHERE source_id = ?1 AND missing = 0 AND cloud_only = 1)",
             [source_id],
             |r| r.get(0),
         )?;

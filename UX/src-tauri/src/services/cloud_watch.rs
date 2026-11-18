@@ -19,6 +19,9 @@ use crate::state::AppState;
 
 /// Yên lặng bao lâu thì quét (gom các đợt đồng bộ dài).
 pub const QUIET: Duration = Duration::from_secs(2);
+/// Khi lô sự kiện có stub `.icloud` hoặc file dataless (đang tải từ cloud): các file về rời rạc cách nhau vài giây, quét cả
+/// nguồn sau mỗi file là phí và làm UI nháy. Chờ lâu hơn (`QUIET × CLOUD_QUIET_FACTOR` = 8 s) để gom cả đợt.
+pub const CLOUD_QUIET_FACTOR: u32 = 4;
 /// Nhưng không để một nguồn liên tục có sự kiện chờ quá lâu mới được quét.
 pub const MAX_WAIT: Duration = Duration::from_secs(30);
 
@@ -40,7 +43,12 @@ pub fn is_relevant(path: &Path, roots: &[PathBuf]) -> bool {
         return false;
     }
     let l = last.to_ascii_lowercase();
-    const PARTIAL: [&str; 10] = [".tmp", ".temp", ".part", ".partial", ".crdownload", ".download", ".opdownload", ".aria2", ".swp", "~"];
+    // file tạm/đang tải dở: chung (.tmp, .part…) và đặc trưng từng hãng cloud (Drive `.tmp.driveupload`/`.tmp.drivedownload`,
+    // Dropbox `.dropbox`/`.dropbox.attrs`/`.dropbox.cache`, OneDrive `~tmp`/`.~tmp`, Box `.boxsync`/`.boxtmp`)
+    const PARTIAL: [&str; 20] = [
+        ".tmp", ".temp", ".part", ".partial", ".crdownload", ".download", ".opdownload", ".aria2", ".swp", "~", ".tmp.driveupload",
+        ".tmp.drivedownload", ".dropbox", ".dropbox.attrs", ".dropbox.cache", "~tmp", ".boxsync", ".boxtmp", ".sync", ".lock",
+    ];
     if l.contains(".sb-") || l.starts_with("~$") || PARTIAL.iter().any(|x| l.ends_with(x)) {
         return false;
     }
@@ -58,26 +66,55 @@ fn is_change(kind: &EventKind) -> bool {
     !matches!(kind, EventKind::Access(_))
 }
 
+/// Sự kiện này thuộc về việc tải từ cloud? Stub `.Tên.ttf.icloud` (đổi tên/xoá khi tải xong) hoặc file font đang là placeholder dataless.
+/// Chỉ `stat` (không đọc nội dung, không ghi gì).
+pub fn is_cloud_event(path: &Path) -> bool {
+    // nguồn nằm trên ổ cloud (File Provider: OneDrive/Google Drive/Dropbox/Box…, iCloud Drive): dùng chung bộ nhận diện với cột Folder
+    if fontatlas_store::cloud_provider_of(path).is_some() {
+        return true;
+    }
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()) else { return false };
+    if name.starts_with('.') && name.ends_with(".icloud") {
+        return true;
+    }
+    let is_font = path.extension().and_then(|e| e.to_str()).is_some_and(|e| FONT_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)));
+    is_font && fontatlas_store::is_dataless(path)
+}
+
 /// Bộ gom sự kiện theo nguồn (thuần, kiểm bằng giờ giả).
 #[derive(Debug, Default)]
 pub struct Debounce {
     pending: HashMap<i64, (Instant, Instant)>, // id → (lần đầu, lần cuối)
+    /// Nguồn có sự kiện cloud trong lô đang chờ: dùng `slow_quiet` thay vì `quiet`.
+    slow: HashSet<i64>,
 }
 
 impl Debounce {
     pub fn push(&mut self, id: i64, now: Instant) {
         self.pending.entry(id).and_modify(|e| e.1 = now).or_insert((now, now));
     }
+    /// Như `push`, đánh dấu lô này có sự kiện cloud (chờ `slow_quiet` thay vì `quiet`).
+    pub fn push_cloud(&mut self, id: i64, now: Instant) {
+        self.push(id, now);
+        self.slow.insert(id);
+    }
+    fn quiet_of(&self, id: i64, quiet: Duration, slow_quiet: Duration) -> Duration {
+        if self.slow.contains(&id) { slow_quiet.max(quiet) } else { quiet }
+    }
     /// Các id đã tới hạn (yên lặng ≥ `quiet` hoặc chờ ≥ `max_wait`); đồng thời bỏ chúng khỏi hàng.
     pub fn take_due(&mut self, now: Instant, quiet: Duration, max_wait: Duration) -> Vec<i64> {
+        self.take_due_with(now, quiet, quiet, max_wait)
+    }
+    pub fn take_due_with(&mut self, now: Instant, quiet: Duration, slow_quiet: Duration, max_wait: Duration) -> Vec<i64> {
         let due: Vec<i64> = self
             .pending
             .iter()
-            .filter(|(_, (first, last))| now.duration_since(*last) >= quiet || now.duration_since(*first) >= max_wait)
+            .filter(|(id, (first, last))| now.duration_since(*last) >= self.quiet_of(**id, quiet, slow_quiet) || now.duration_since(*first) >= max_wait)
             .map(|(id, _)| *id)
             .collect();
         for id in &due {
             self.pending.remove(id);
+            self.slow.remove(id);
         }
         let mut due = due;
         due.sort_unstable();
@@ -85,13 +122,17 @@ impl Debounce {
     }
     /// Còn bao lâu tới hạn gần nhất (để ngủ đúng lúc); `None` khi không có gì chờ.
     pub fn next_wait(&self, now: Instant, quiet: Duration, max_wait: Duration) -> Option<Duration> {
+        self.next_wait_with(now, quiet, quiet, max_wait)
+    }
+    pub fn next_wait_with(&self, now: Instant, quiet: Duration, slow_quiet: Duration, max_wait: Duration) -> Option<Duration> {
         self.pending
-            .values()
-            .map(|(first, last)| (*last + quiet).min(*first + max_wait).saturating_duration_since(now))
+            .iter()
+            .map(|(id, (first, last))| (*last + self.quiet_of(*id, quiet, slow_quiet)).min(*first + max_wait).saturating_duration_since(now))
             .min()
     }
     pub fn forget(&mut self, id: i64) {
         self.pending.remove(&id);
+        self.slow.remove(&id);
     }
     pub fn is_empty(&self) -> bool {
         self.pending.is_empty()
@@ -99,7 +140,8 @@ impl Debounce {
 }
 
 enum Msg {
-    Changed(i64),
+    /// (nguồn, sự kiện này thuộc việc tải cloud)
+    Changed(i64, bool),
     Forget(i64),
 }
 
@@ -226,12 +268,14 @@ impl CloudWatch {
             }
             let tx = self.ensure_worker(&mut g, state);
             let roots: Vec<PathBuf> = std::iter::once(root.clone()).chain(root.canonicalize().ok()).collect();
+            let cloud_root = roots.iter().any(|r| fontatlas_store::cloud_provider_of(r).is_some());
             let handler = move |res: notify::Result<notify::Event>| {
                 if let Ok(ev) = res
                     && is_change(&ev.kind)
                     && (ev.paths.is_empty() || ev.paths.iter().any(|p| is_relevant(p, &roots)))
                 {
-                    let _ = tx.send(Msg::Changed(id));
+                    let cloud = cloud_root || ev.paths.iter().any(|p| is_relevant(p, &roots) && is_cloud_event(p));
+                    let _ = tx.send(Msg::Changed(id, cloud));
                 }
             };
             match notify::recommended_watcher(handler).and_then(|mut w| w.watch(&root, RecursiveMode::Recursive).map(|_| w)) {
@@ -250,26 +294,28 @@ impl CloudWatch {
         let (tx, rx) = mpsc::channel::<Msg>();
         let weak: Weak<AppState> = Arc::downgrade(state);
         let (quiet, max_wait) = (self.quiet, self.max_wait);
+        let slow_quiet = quiet * CLOUD_QUIET_FACTOR;
         g.worker = Some(std::thread::spawn(move || {
             let mut deb = Debounce::default();
             loop {
                 let now = Instant::now();
-                let msg = match deb.next_wait(now, quiet, max_wait) {
+                let msg = match deb.next_wait_with(now, quiet, slow_quiet, max_wait) {
                     Some(w) => rx.recv_timeout(w),
                     None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
                 };
                 match msg {
-                    Ok(Msg::Changed(id)) => deb.push(id, Instant::now()),
+                    Ok(Msg::Changed(id, true)) => deb.push_cloud(id, Instant::now()),
+                    Ok(Msg::Changed(id, false)) => deb.push(id, Instant::now()),
                     Ok(Msg::Forget(id)) => deb.forget(id),
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => break,
                 }
-                let due = deb.take_due(Instant::now(), quiet, max_wait);
+                let due = deb.take_due_with(Instant::now(), quiet, slow_quiet, max_wait);
                 if due.is_empty() {
                     continue;
                 }
                 let Some(state) = weak.upgrade() else { break };
-                state.scans.enqueue_follow_up(&state, &due);
+                state.scans.enqueue_follow_up_as(&state, &due, crate::dto::events::ScanTrigger::Watcher);
             }
         }));
         g.tx = Some(tx.clone());
@@ -336,6 +382,58 @@ mod tests {
         d.push(3, t0);
         d.forget(3);
         assert!(d.is_empty());
+    }
+
+    #[test]
+    fn cloud_batches_wait_four_times_longer_but_never_past_max_wait() {
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        let slow = Q * CLOUD_QUIET_FACTOR; // 8 s
+        d.push_cloud(1, t0);
+        d.push(2, t0); // nguồn khác, không cloud
+        assert_eq!(d.take_due_with(t0 + Q, Q, slow, M), vec![2], "nguồn thường vẫn 2 s");
+        assert!(d.take_due_with(t0 + Duration::from_secs(7), Q, slow, M).is_empty(), "lô cloud chưa tới 8 s");
+        assert_eq!(d.next_wait_with(t0 + Duration::from_secs(7), Q, slow, M), Some(Duration::from_secs(1)));
+        assert_eq!(d.take_due_with(t0 + slow, Q, slow, M), vec![1]);
+        // sự kiện cloud liên tục: trần 30 s vẫn áp dụng
+        for s in 0..40 {
+            d.push_cloud(3, t0 + Duration::from_secs(s));
+        }
+        assert!(d.take_due_with(t0 + Duration::from_secs(29), Q, slow, M).is_empty());
+        assert_eq!(d.take_due_with(t0 + Duration::from_secs(30), Q, slow, M), vec![3]);
+        // lượt kế của nguồn đó (không còn sự kiện cloud) quay về 2 s
+        d.push(3, t0 + Duration::from_secs(40));
+        assert_eq!(d.take_due_with(t0 + Duration::from_secs(42), Q, slow, M), vec![3]);
+    }
+
+    #[test]
+    fn every_cloud_provider_path_counts_as_cloud_and_vendor_temp_files_are_filtered() {
+        for p in [
+            "/Users/a/Library/CloudStorage/OneDrive-Personal/Fonts/a.ttf",
+            "/Users/a/Library/CloudStorage/GoogleDrive-x@y.com/My Drive/a.otf",
+            "/Users/a/Library/CloudStorage/Dropbox/Fonts/a.ttf",
+            "/Users/a/Library/CloudStorage/Box-Box/a.ttf",
+            "/Users/a/Library/Mobile Documents/com~apple~CloudDocs/Fonts/a.ttf",
+        ] {
+            assert!(is_cloud_event(Path::new(p)), "{p}");
+        }
+        assert!(!is_cloud_event(Path::new("/Users/a/Fonts/a.ttf")), "thư mục cục bộ không phải cloud");
+        // file tạm từng hãng: không đáng đánh thức
+        let root = vec![PathBuf::from("/r")];
+        for tmp in [
+            "/r/a.ttf.tmp.driveupload", "/r/a.otf.tmp.drivedownload", "/r/a.ttf.dropbox", "/r/a.ttf.dropbox.attrs", "/r/a.ttf.dropbox.cache",
+            "/r/a.ttf~tmp", "/r/a.ttf.~tmp", "/r/a.ttf.boxsync", "/r/a.ttf.boxtmp", "/r/.dropbox.cache/a.ttf", "/r/a.ttf.lock", "/r/a.ttf.sync",
+        ] {
+            assert!(!is_relevant(Path::new(tmp), &root), "{tmp}");
+        }
+        assert!(is_relevant(Path::new("/r/a.ttf"), &root));
+    }
+
+    #[test]
+    fn icloud_stub_events_count_as_cloud_events_plain_fonts_do_not() {
+        assert!(is_cloud_event(Path::new("/r/.Name.ttf.icloud")));
+        assert!(!is_cloud_event(Path::new("/r/a-file-that-does-not-exist.ttf")));
+        assert!(!is_cloud_event(Path::new("/r/readme.txt")));
     }
 
     #[test]

@@ -19,7 +19,7 @@ async function setup() {
 describe('source access problems', () => {
   it('a refused or timed-out open marks the source as needing access and tells the user, with a way to grant it', async () => {
     const { s, push } = await setup();
-    push({ type: 'queued', sourceId: 3 });
+    push({ type: 'queued', sourceId: 3, trigger: 'user' as const });
     push({ type: 'failed', sourceId: 3, error: denied('timeout') });
     await new Promise(r => setTimeout(r, 0));
     expect(s.getState().access[3]).toBe('timeout');
@@ -48,10 +48,10 @@ describe('source access problems', () => {
     const { api, s, push } = await setup();
     push({ type: 'failed', sourceId: 3, error: denied('timeout') });
     expect(s.getState().access[3]).toBe('timeout');
-    push({ type: 'queued', sourceId: 3 });
+    push({ type: 'queued', sourceId: 3, trigger: 'user' as const });
     expect(s.getState().access[3]).toBeUndefined();
     push({ type: 'failed', sourceId: 3, error: denied('timeout') });
-    push({ type: 'finished', sourceId: 3, stats: { status: 'ok', seen: 1, unchanged: 1, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [], notDownloaded: 0 } });
+    push({ type: 'finished', sourceId: 3, stats: { status: 'ok', seen: 1, unchanged: 1, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [], notDownloaded: 0 }, changed: true, trigger: 'user' as const });
     expect(s.getState().access[3]).toBeUndefined();
     expect((await api.queryFaces({ sourceIds: [3] })).total).toBeGreaterThan(0); // vẫn còn font của nguồn đó
   });
