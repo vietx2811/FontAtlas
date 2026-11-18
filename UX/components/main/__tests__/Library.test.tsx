@@ -14,6 +14,17 @@ describe('Library', () => {
   beforeEach(() => useUiStore.setState(initial, true));
   afterEach(() => vi.restoreAllMocks());
 
+  it('scanVersion đổi (bump quét) không remount lưới, nhưng gridRev đổi thì có', async () => {
+    const api = createMockApi();
+    render(<Library api={api} width={1200} height={700} />);
+    await settle();
+    const scroller = screen.getByTestId('library-grid-scroller');
+    act(() => useScanStore.getState().bump()); await settle();
+    expect(screen.getByTestId('library-grid-scroller')).toBe(scroller);
+    act(() => useUiStore.getState().bumpLibrary(true)); await settle();
+    expect(screen.getByTestId('library-grid-scroller')).not.toBe(scroller);
+  });
+
   it('sends the store filters to query_faces', async () => {
     const api = createMockApi();
     const spy = vi.spyOn(api, 'queryFaces');

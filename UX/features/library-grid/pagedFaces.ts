@@ -52,6 +52,7 @@ export class PagedFaces {
     this.query = q;
     this.snap = { ...this.snap, query: q, queryKey: JSON.stringify(q) };
     this.epoch++;
+    this.zeroPending = false; // số 0 đầu tiên của truy vấn mới vẫn phải qua bước xác nhận
     this.pages.clear();
     this.inflight.clear();
     this.failed.clear();
@@ -80,15 +81,16 @@ export class PagedFaces {
   refresh(scanning = false) {
     if (this.disposed) return;
     const mySeq = ++this.refreshSeq;
+    this.inflight.clear(); // fetch bắt đầu trước lần làm tươi sẽ bị bỏ (fetchPage kiểm refreshSeq); trang thiếu được tải lại qua ensureRange
     const e = this.epoch;
     const want = [...new Set<number>([0, ...this.pages.keys()])];
     void Promise.allSettled(want.map(n => this.api.queryFaces({ ...this.query, offset: n * PAGE_SIZE, limit: PAGE_SIZE }).then(page => ({ n, page })))).then(rs => {
       if (this.disposed || e !== this.epoch || mySeq !== this.refreshSeq) return;
       const ok = rs.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
       const first = ok.find(x => x.n === 0);
-      if (!first) return; // trang 0 lỗi: giữ nguyên, lần bump sau thử lại
+      if (!first) { this.ensureRange(...this.lastRange); return; } // trang 0 lỗi: giữ nguyên, lần bump sau thử lại
       const total = first.page.total;
-      if (total === 0 && scanning && (this.snap.total ?? 0) > 0 && !this.zeroPending) { this.zeroPending = true; return; }
+      if (total === 0 && scanning && (this.snap.total ?? 0) > 0 && !this.zeroPending) { this.zeroPending = true; this.ensureRange(...this.lastRange); return; }
       this.zeroPending = false;
       const next = new Map<number, FaceRow[]>();
       for (const { n, page } of ok) if (n === 0 || page.items.length > 0) next.set(n, page.items);
@@ -119,17 +121,17 @@ export class PagedFaces {
   }
 
   private fetchPage(n: number) {
-    const e = this.epoch;
+    const e = this.epoch; const r = this.refreshSeq;
     this.inflight.add(n);
     this.api.queryFaces({ ...this.query, offset: n * PAGE_SIZE, limit: PAGE_SIZE }).then(
       page => {
-        if (this.disposed || e !== this.epoch) return;
+        if (this.disposed || e !== this.epoch || r !== this.refreshSeq) return; // bắt đầu trước lần làm tươi: dữ liệu cũ, bỏ
         this.inflight.delete(n);
         this.pages.set(n, page.items);
         this.emit({ total: page.total, error: null });
       },
       err => {
-        if (this.disposed || e !== this.epoch) return;
+        if (this.disposed || e !== this.epoch || r !== this.refreshSeq) return;
         this.inflight.delete(n);
         this.failed.add(n);
         this.emit({ error: err?.message ?? String(err) });

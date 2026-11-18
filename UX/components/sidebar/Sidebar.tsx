@@ -100,22 +100,28 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanningNow = useScanStore(s => s.scanning);
 
   // Mỗi nhánh tự setState ngay khi xong; lỗi/chậm của một nhánh (vd đếm trùng khi đang quét) không chặn các nhánh khác.
+  // `seq`: lần nạp mới nhất thắng (phản hồi chậm của lần cũ bị bỏ); `alive`: không set sau khi unmount.
+  const seq = useRef(0); const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const refresh = useCallback(async () => {
+    const my = ++seq.current;
+    const live = () => alive.current && seq.current === my;
     const core = Promise.all([
-      api.listSources().then(setSources),
-      api.listCollections().then(setCols),
+      api.listSources().then(x => { if (live()) setSources(x); }),
+      api.listCollections().then(x => { if (live()) setCols(x); }),
       api.listTags().then(t => {
+        if (!live()) return;
         setTags(t); useTagsStore.getState().set(t);
         // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
         const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
         if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
       }),
     ]);
-    api.queryFaces({ limit: 1 }).then(r => setCounts(c => ({ ...c, all: r.total })), () => undefined);
-    api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => setCounts(c => ({ ...c, star: r.total })), () => undefined);
-    // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…").
-    api.duplicateSummary({}).then(d => setCounts(c => ({ ...c, dups: d.total })), () => setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)));
-    api.listCases().then(cs => setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)), () => undefined); // Case lỗi không làm hỏng thanh bên
+    api.queryFaces({ limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, all: r.total })); }, () => undefined);
+    api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, star: r.total })); }, () => undefined);
+    // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…", lỗi lần đầu → 0).
+    api.duplicateSummary({}).then(d => { if (live()) setCounts(c => ({ ...c, dups: d.total })); }, () => { if (live()) setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)); });
+    api.listCases().then(cs => { if (live()) setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); }, () => undefined); // Case lỗi không làm hỏng thanh bên
     await core;
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);

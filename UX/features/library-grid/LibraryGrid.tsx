@@ -129,6 +129,12 @@ export function LibraryGrid({
     seenRefresh.current = refreshKey;
     paged.refresh(scanningRef.current);
   }, [paged, refreshKey]);
+  // Quét kết thúc bằng 'failed' không bump: khi hết quét, làm tươi một lần với scanning=false để số 0 (nếu có) được xác nhận.
+  const wasScanning = useRef(scanning);
+  useEffect(() => {
+    const was = wasScanning.current; wasScanning.current = scanning;
+    if (was && !scanning) paged?.refresh(false);
+  }, [paged, scanning]);
   // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
   const [ownVelocity] = useState(() => new ScrollVelocity());
   const velocity = velocityProp ?? ownVelocity;

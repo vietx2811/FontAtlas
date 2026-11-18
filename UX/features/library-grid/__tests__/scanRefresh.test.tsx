@@ -1,6 +1,6 @@
 // Beta.3: bump quét không được làm lưới trống / dựng lại, sidebar không chờ truy vấn chậm nhất.
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { Sidebar } from '../../../components/sidebar/Sidebar';
 import { createMockLibraryApi, makeRow } from '../api';
@@ -103,7 +103,58 @@ describe('bump quét → LibraryGrid làm tươi tại chỗ', () => {
   });
 });
 
+describe('quét kết thúc bằng failed (không bump)', () => {
+  it('scanning true→false làm tươi một lần với scanning=false → số 0 được xác nhận', async () => {
+    const base = createMockLibraryApi(rows);
+    let zero = false;
+    const api = gated(base, () => (zero ? zeroPage() : null));
+    const r = render(<Harness api={api} rev={0} scanning />);
+    await flush();
+    zero = true;
+    r.rerender(<Harness api={api} rev={1} scanning />);
+    await flush();
+    expect(cells().length).toBeGreaterThan(0); // đang quét: giữ
+    r.rerender(<Harness api={api} rev={1} scanning={false} />); // không đổi refreshKey (failed không bump)
+    await flush();
+    expect(screen.getByTestId('empty')).toBeInTheDocument();
+  });
+});
+
 describe('Sidebar.refresh độc lập từng nhánh', () => {
+  it('hai lần nạp chồng nhau: phản hồi cũ chậm không đè phản hồi mới', async () => {
+    const api = createMockApi();
+    const real = api.listSources.bind(api);
+    const holds: Array<() => void> = [];
+    let call = 0;
+    api.listSources = async () => {
+      const mine = ++call; const data = await real();
+      if (mine === 1) { await new Promise<void>(r => holds.push(r)); return data.slice(0, 1); } // lần đầu: cũ, chậm, chỉ 1 nguồn
+      return data;
+    };
+    const r = render(<Sidebar api={api} pickFolder={async () => null} />);
+    await act(async () => { await new Promise(x => setTimeout(x, 10)); });
+    act(() => { window.dispatchEvent(new Event('focus')); }); // lần nạp thứ hai (nhanh)
+    await act(async () => { await new Promise(x => setTimeout(x, 20)); });
+    expect(screen.getByRole('button', { name: /Dự án khách/ })).toBeInTheDocument();
+    await act(async () => { holds.forEach(h => h()); await new Promise(x => setTimeout(x, 20)); });
+    expect(screen.getByRole('button', { name: /Dự án khách/ })).toBeInTheDocument(); // phản hồi cũ không xoá
+    r.unmount();
+  });
+
+  it('phản hồi về sau unmount không set state (không cảnh báo)', async () => {
+    const api = createMockApi();
+    let release: (() => void) | null = null;
+    const real = api.listTags.bind(api);
+    api.listTags = async () => { await new Promise<void>(x => { release = x; }); return real(); };
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = render(<Sidebar api={api} pickFolder={async () => null} />);
+    await act(async () => { await new Promise(x => setTimeout(x, 10)); });
+    r.unmount();
+    await act(async () => { release?.(); await new Promise(x => setTimeout(x, 10)); });
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
   it('đếm trùng chậm không giữ Folder; Duplicates hiện "…" thay vì 0 rồi ra số', async () => {
     const api = createMockApi();
     let release: (() => void) | null = null;
