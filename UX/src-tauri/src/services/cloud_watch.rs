@@ -24,6 +24,10 @@ pub const QUIET: Duration = Duration::from_secs(2);
 pub const CLOUD_QUIET_FACTOR: u32 = 4;
 /// Nhưng không để một nguồn liên tục có sự kiện chờ quá lâu mới được quét.
 pub const MAX_WAIT: Duration = Duration::from_secs(30);
+/// "Cơn bão" quét: một nguồn đã tới hạn ≥ `STORM_FIRES` lần trong `STORM_WINDOW` thì quiet giãn dần (×2 rồi ×4, tối đa 8 s với QUIET 2 s;
+/// `MAX_WAIT` giữ nguyên). Yên `STORM_WINDOW` thì về `QUIET`. Áp cho mọi nguồn (không riêng cloud): thay đổi lẻ không bị ảnh hưởng.
+pub const STORM_WINDOW: Duration = Duration::from_secs(60);
+pub const STORM_FIRES: usize = 3;
 
 /// Sự kiện này có đáng đánh thức không? Chỉ nhìn tên (không chạm đĩa): font, stub iCloud, hoặc thư mục (không đuôi).
 /// Bỏ file/thư mục ẩn (trừ stub `.Tên.ttf.icloud`), file tạm/đang tải dở (`*.sb-*`, `~$*`, `~`, `.tmp`, `.temp`, `.part`, `.partial`,
@@ -87,6 +91,8 @@ pub struct Debounce {
     pending: HashMap<i64, (Instant, Instant)>, // id → (lần đầu, lần cuối)
     /// Nguồn có sự kiện cloud trong lô đang chờ: dùng `slow_quiet` thay vì `quiet`.
     slow: HashSet<i64>,
+    /// Các lần nguồn tới hạn gần đây (để giãn quiet khi quét dồn dập).
+    fires: HashMap<i64, Vec<Instant>>,
 }
 
 impl Debounce {
@@ -98,8 +104,15 @@ impl Debounce {
         self.push(id, now);
         self.slow.insert(id);
     }
-    fn quiet_of(&self, id: i64, quiet: Duration, slow_quiet: Duration) -> Duration {
-        if self.slow.contains(&id) { slow_quiet.max(quiet) } else { quiet }
+    fn quiet_of(&self, id: i64, quiet: Duration, slow_quiet: Duration, now: Instant) -> Duration {
+        let recent = self.fires.get(&id).map_or(0, |v| v.iter().filter(|t| now.saturating_duration_since(**t) < STORM_WINDOW).count());
+        let storm = match recent {
+            n if n < STORM_FIRES => 1,
+            n if n == STORM_FIRES => 2,
+            _ => 4,
+        };
+        let base = quiet * storm;
+        if self.slow.contains(&id) { slow_quiet.max(base) } else { base }
     }
     /// Các id đã tới hạn (yên lặng ≥ `quiet` hoặc chờ ≥ `max_wait`); đồng thời bỏ chúng khỏi hàng.
     pub fn take_due(&mut self, now: Instant, quiet: Duration, max_wait: Duration) -> Vec<i64> {
@@ -109,12 +122,15 @@ impl Debounce {
         let due: Vec<i64> = self
             .pending
             .iter()
-            .filter(|(id, (first, last))| now.duration_since(*last) >= self.quiet_of(**id, quiet, slow_quiet) || now.duration_since(*first) >= max_wait)
+            .filter(|(id, (first, last))| now.duration_since(*last) >= self.quiet_of(**id, quiet, slow_quiet, now) || now.duration_since(*first) >= max_wait)
             .map(|(id, _)| *id)
             .collect();
         for id in &due {
             self.pending.remove(id);
             self.slow.remove(id);
+            let v = self.fires.entry(*id).or_default();
+            v.retain(|t| now.saturating_duration_since(*t) < STORM_WINDOW);
+            v.push(now);
         }
         let mut due = due;
         due.sort_unstable();
@@ -127,12 +143,13 @@ impl Debounce {
     pub fn next_wait_with(&self, now: Instant, quiet: Duration, slow_quiet: Duration, max_wait: Duration) -> Option<Duration> {
         self.pending
             .iter()
-            .map(|(id, (first, last))| (*last + self.quiet_of(*id, quiet, slow_quiet)).min(*first + max_wait).saturating_duration_since(now))
+            .map(|(id, (first, last))| (*last + self.quiet_of(*id, quiet, slow_quiet, now)).min(*first + max_wait).saturating_duration_since(now))
             .min()
     }
     pub fn forget(&mut self, id: i64) {
         self.pending.remove(&id);
         self.slow.remove(&id);
+        self.fires.remove(&id);
     }
     pub fn is_empty(&self) -> bool {
         self.pending.is_empty()
@@ -382,6 +399,72 @@ mod tests {
         d.push(3, t0);
         d.forget(3);
         assert!(d.is_empty());
+    }
+
+    #[test]
+    fn a_source_that_keeps_firing_backs_off_to_four_times_quiet_then_recovers() {
+        const Q: Duration = Duration::from_secs(2);
+        const M: Duration = Duration::from_secs(30);
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        // 3 lần đầu: quiet thường 2 s
+        let mut now = t0;
+        for _ in 0..3 {
+            d.push(1, now);
+            now += Q;
+            assert_eq!(d.take_due(now, Q, M), vec![1]);
+        }
+        // lần 4 (đã 3 lần trong 60 s): quiet 4 s
+        d.push(1, now);
+        assert!(d.take_due(now + Duration::from_secs(3), Q, M).is_empty());
+        assert_eq!(d.take_due(now + Duration::from_secs(4), Q, M), vec![1]);
+        // lần 5: 8 s, nhưng không quá MAX_WAIT
+        let now2 = now + Duration::from_secs(4);
+        d.push(1, now2);
+        assert!(d.take_due(now2 + Duration::from_secs(7), Q, M).is_empty());
+        assert_eq!(d.take_due(now2 + Duration::from_secs(8), Q, M), vec![1]);
+        // yên đủ STORM_WINDOW: về 2 s
+        let later = now2 + Duration::from_secs(8) + STORM_WINDOW;
+        d.push(1, later);
+        assert_eq!(d.take_due(later + Q, Q, M), vec![1]);
+        // nguồn khác không bị ảnh hưởng
+        d.push(2, later);
+        assert_eq!(d.take_due(later + Q, Q, M), vec![2]);
+    }
+
+    /// Case C của QA: 30 file cách 4 s trên nguồn local. Mô phỏng giờ giả qua vòng lặp thật của Debounce.
+    #[test]
+    fn thirty_events_four_seconds_apart_make_far_fewer_than_thirty_scans_but_a_lone_event_still_waits_only_quiet() {
+        const Q: Duration = Duration::from_secs(2);
+        const M: Duration = Duration::from_secs(30);
+        let t0 = Instant::now();
+        let mut d = Debounce::default();
+        let mut fires = 0;
+        let mut t = Duration::ZERO;
+        let end = Duration::from_secs(4 * 30 + 40);
+        while t <= end {
+            if t.as_secs().is_multiple_of(4) && t.as_secs() < 4 * 30 {
+                d.push(1, t0 + t);
+            }
+            if !d.take_due(t0 + t, Q, M).is_empty() {
+                fires += 1;
+            }
+            t += Duration::from_millis(500);
+        }
+        assert!(fires <= 8, "30 file cách 4 s: {fires} lượt quét (trước backoff: 30)");
+        assert!(fires >= 3, "vẫn phải quét đều, không bỏ đói: {fires}");
+
+        // ghi/xoá lẻ trên nguồn yên: tới hạn đúng QUIET (≤ 2 s), kể cả sau cơn bão khi đã yên đủ STORM_WINDOW
+        let mut lone = Debounce::default();
+        lone.push(7, t0);
+        assert!(lone.take_due(t0 + Q - Duration::from_millis(1), Q, M).is_empty());
+        assert_eq!(lone.take_due(t0 + Q, Q, M), vec![7]);
+        let later = t0 + Q + STORM_WINDOW + Duration::from_secs(1);
+        lone.push(7, later);
+        assert_eq!(lone.take_due(later + Q, Q, M), vec![7], "sau 60 s yên lại 2 s");
+        // hai lần lẻ cách xa nhau không kích hoạt backoff
+        lone.push(7, later + Duration::from_secs(20));
+        assert_eq!(lone.take_due(later + Duration::from_secs(22), Q, M), vec![7]);
     }
 
     #[test]

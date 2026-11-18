@@ -870,6 +870,7 @@ fn dto_serializes_like_core() {
         failed: 4,
         missing: 6,
         pending_absent: 0,
+        touched: 0,
         purged: 0,
         unreadable: vec![("a".into(), "io: x".into())],
     };
