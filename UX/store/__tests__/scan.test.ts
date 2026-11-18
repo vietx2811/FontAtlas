@@ -100,3 +100,31 @@ describe('scan store: finished + idle liền nhau chỉ một bump', () => {
     expect(s.getState().version).toBe(v0 + 1);
   });
 });
+
+describe('scan store: trigger + changed (02)', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    let push: (e: import('../../api').ScanEvent) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    return { s, push: (e: object) => push(e as never) };
+  };
+  it('watcher quét không đổi: không "đang quét", không bump', async () => {
+    const { s, push } = await setup();
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'watcher' });
+    expect(s.getState().scanning).toBe(false);
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'watcher', stats: {} });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0);
+  });
+  it('finished changed=true bump; quét người dùng bấm hiện "đang quét"', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    expect(s.getState().scanning).toBe(true);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: {} });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});
