@@ -22,6 +22,13 @@ import { dropFacesOn } from '../dnd/dropFaces';
 type Props = { api: Api; width?: number; height?: number };
 
 /** Nối store → GridQuery → LibraryGrid. Không lọc ở client. */
+function useStableByContent<T>(v: T): T {
+  const ref = useRef<{ json: string; v: T }>({ json: JSON.stringify(v), v });
+  const json = JSON.stringify(v);
+  if (ref.current.json !== json) ref.current = { json, v };
+  return ref.current.v;
+}
+
 export function Library({ api, width, height }: Props): React.JSX.Element {
   useGroupShortcut();
   const filters = useUiStore(s => s.filters);
@@ -71,7 +78,9 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const inRecent = view === 'recent';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const frozenRecents = useMemo(() => recentViews, [inRecent]);
-  const gridQuery = useMemo(() => toGridQuery({ view, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
+  const gridQueryRaw = useMemo(() => toGridQuery({ view, query, viOnly, recentViews: frozenRecents, active, filters, familyScope, sort }), [view, query, viOnly, frozenRecents, active, filters, familyScope, sort]);
+  // So theo nội dung: `active` (Map) đổi tham chiếu mỗi lần nạp lại kích hoạt nhưng không đổi thành viên → không đổi truy vấn.
+  const gridQuery = useStableByContent(gridQueryRaw);
   // Vùng chọn gắn với view/truy vấn; "Gần đây"/"Đang bật" đổi thành viên khi bấm chọn nên không tính vào khoá.
   const scopeKey = useMemo(() => JSON.stringify([view, query, viOnly, filters, familyScope?.name ?? null, locked ? null : gridQuery.sort ? [gridQuery.sort, gridQuery.descending ?? false] : null]), [view, query, viOnly, filters, familyScope, locked, gridQuery.sort, gridQuery.descending]);
   const hiddenRanges = useRef<Ranges>([]);
@@ -139,7 +148,7 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const shared = useMemo(() => sharedFontLoader(api), [api]);
   return (
     <div ref={wrap} className="fa-lib" style={{ position: 'relative', width: width ?? '100%', height: height ?? '100%' }}>
-      <LibraryGrid key={`${gridRev}:${scanVersion}`} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
+      <LibraryGrid key={gridRev} refreshKey={scanVersion} scanning={scanning} api={api} loader={shared.loader} velocity={shared.velocity} query={gridQuery} sampleText={sample.trim() ? sample : 'Ặa'} bottomInset={COMPOSER_INSET} emptyState={<ZeroState glyph={empty.glyph} text={empty.text} action={empty.action} secondary={empty.secondary} onAction={onEmptyAction} />} fontSize={fontSize} layout={layout} isActive={isActive} activeScopeOf={activeScopeOf} onToggleActive={toggleActive} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} width={width} height={height} selectedFaceId={selectedFaceId} selectedKey={selectedKey} onSelect={onSelect}
         selectedKeys={selection.keys} onPick={selection.pick} onHiddenRanges={onHiddenRanges} collapsed={collapsedGroups} onToggleGroup={onToggleGroup} onContextMenu={onContextMenu ?? undefined} />
       <DragLayer />
     </div>

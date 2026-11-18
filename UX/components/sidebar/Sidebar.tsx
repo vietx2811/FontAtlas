@@ -99,23 +99,29 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const recentCount = useUiStore(s => s.recentViews.length);
   const scanningNow = useScanStore(s => s.scanning);
 
+  // Mỗi nhánh tự setState ngay khi xong; lỗi/chậm của một nhánh (vd đếm trùng khi đang quét) không chặn các nhánh khác.
   const refresh = useCallback(async () => {
-    const [s, c, t, all, star, dup, cs] = await Promise.all([
-      api.listSources(), api.listCollections(), api.listTags(),
-      api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
-      api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
-      api.listCases().catch(() => [] as CaseSummaryDto[]), // Case lỗi không làm hỏng thanh bên
+    const core = Promise.all([
+      api.listSources().then(setSources),
+      api.listCollections().then(setCols),
+      api.listTags().then(t => {
+        setTags(t); useTagsStore.getState().set(t);
+        // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
+        const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
+        if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
+      }),
     ]);
-    setSources(s); setCols(c); setTags(t); setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); useTagsStore.getState().set(t);
-    // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
-    const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
-    if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
-    setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
+    api.queryFaces({ limit: 1 }).then(r => setCounts(c => ({ ...c, all: r.total })), () => undefined);
+    api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => setCounts(c => ({ ...c, star: r.total })), () => undefined);
+    // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…").
+    api.duplicateSummary({}).then(d => setCounts(c => ({ ...c, dups: d.total })), () => setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)));
+    api.listCases().then(cs => setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)), () => undefined); // Case lỗi không làm hỏng thanh bên
+    await core;
   }, [api]);
   useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
   // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
   useEffect(() => {
-    const onFocus = () => { refresh().catch(() => undefined); };
+    const onFocus = () => { if (!useScanStore.getState().scanning) refresh().catch(() => undefined); }; // đang quét: đã có nhịp bump, không chồng thêm truy vấn
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
@@ -307,7 +313,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         <NavItem icon="star" label={t('side.favorites')} count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />
         <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} drop={{ kind: 'active', id: 0, name: t('side.active'), here: false }} />
-        {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
+        {(counts.dups === null || counts.dups > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups ?? '…'} current={cur('dups')} onClick={() => setView('dups')} />}
         {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} drop={{ kind: 'compare', id: 0, name: t('compare.session', { n: cmpSession.faces.length }), here: false }} />}
 
         {notice && (

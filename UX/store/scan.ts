@@ -61,7 +61,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
             action: { label: t('scan.grant'), run: () => { void openPrivacySettings(); } },
           }));
       } else useNoticeStore.getState().push({ kind: 'error', text: t('scan.fail', { code: e.error.code, msg: e.error.message }) });
-    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (Date.now() - last > 200) bumpNow(); } // `finished` vừa tải lại rồi
+    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); bumpNow(); } // luôn bump lần cuối: lưới làm tươi tại chỗ (rẻ) và cần lần này để xác nhận total=0 khi đã hết quét
   });
   try {
     const st = await api.scanStatus();

@@ -34,7 +34,7 @@ describe('scan store', () => {
     await run(450); // 4 facesAdded trong 400 ms
     const distinct = new Set(seen).size;
     expect(distinct).toBeGreaterThanOrEqual(1);
-    expect(distinct).toBeLessThanOrEqual(1 + Math.ceil(450 / BUMP_THROTTLE_MS) + 1);
+    expect(distinct).toBeLessThanOrEqual(1 + Math.ceil(450 / BUMP_THROTTLE_MS) + 2); // +1 cho bump cuối lúc idle (luôn chạy, xác nhận total=0)
   });
 
   it('a scan already running when the app opens is picked up from scan_status', async () => {

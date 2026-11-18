@@ -1568,6 +1568,23 @@
       sidebarBtn(/^Tất cả/)?.click();
     } catch (e) { await log('khối-lỗi: Lý do bật L5', false, String(e && e.stack || e).slice(0, 400)); }
 
+    // Beta.3: quét lại nguồn đang theo dõi (giống font cloud vừa tải xong) → lưới làm tươi tại chỗ: không về 0 thẻ, không dựng lại.
+    try {
+      const sideAll = [...document.querySelectorAll('[aria-label="Thanh bên"] button')].find(b => /^Tất cả/.test(b.textContent.trim()));
+      sideAll?.click();
+      await wait(() => cells().length > 0, 15000);
+      const scrollerBefore = document.querySelector('[data-testid=library-grid-scroller]');
+      const before = cells().length; let minCells = before, sampled = 0;
+      const sampler = setInterval(() => { const c = cells().length; sampled++; if (c < minCells) minCells = c; }, 25);
+      await inv('rescan_sources', { sourceIds: null });
+      await sleep(600); // cho sự kiện queued/progress/finished/idle chạy qua các lần bump
+      for (let i = 0; i < 120 && (await inv('scan_status', {})).running; i++) await sleep(250);
+      await sleep(1800); // quá một nhịp throttle của bump cuối
+      clearInterval(sampler);
+      const scrollerAfter = document.querySelector('[data-testid=library-grid-scroller]');
+      await log('scan-bump-no-blank', before > 0 && minCells > 0 && cells().length > 0 && scrollerBefore === scrollerAfter, { before, minCells, after: cells().length, sampled, sameScroller: scrollerBefore === scrollerAfter });
+    } catch (e) { await log('khối-lỗi: scan-bump', false, String(e && e.stack || e).slice(0, 400)); }
+
     await log('done', true, '');
   } catch (e) { await log('error', false, String(e && e.stack || e)); }
 })();

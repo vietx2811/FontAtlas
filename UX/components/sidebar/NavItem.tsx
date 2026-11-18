@@ -7,7 +7,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { shortcutText } from '../../platform';
 
 type Props = {
-  icon?: IconName; swatch?: string | null; label: string; count?: number | null; current?: boolean;
+  icon?: IconName; swatch?: string | null; label: string; count?: number | string | null; current?: boolean;
   unavailable?: boolean; title?: string; kbd?: string; onClick(): void;
   /** Chuột phải, phím Menu hoặc ⇧F10; `rect` có khi mở bằng bàn phím. Không có → không chặn menu hệ thống. */
   onContextMenu?(at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void; onRename?(): void; /** Khoá để tìm lại nút (trả focus sau khi đổi tên). */ navId?: string; /** Mục đang được menu nhắm tới. */ context?: boolean; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
