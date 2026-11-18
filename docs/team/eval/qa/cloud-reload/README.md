@@ -23,6 +23,24 @@ Khi lưới rỗng: thanh trên vẫn ghi đúng tổng (ví dụ «1573»), vù
 | Thẻ đầu tiên ở lưới | 6,15 s | 5,00 | 5,60 | 5,23 |
 Lúc khởi động có 3 đợt nạp (t ≈ 0,84 / 1,08 / 1,22 s: tổng 9 `list_sources`, 16–17 `query_faces`, 4 `duplicate_summary`); các lệnh đầu trả sau 3,1–4,9 s (`list_sources` 3,1–4,9 s, `duplicate_summary` 4,9 s, `query_faces` 3,4 s). Có 2 lượt quét (queued/finished) ở mỗi lần khởi động.
 
+## So sánh sau khi sửa FE: `85384aac` → `e662e788` (cùng dữ liệu, máy load 5–7)
+| Chỉ số | 85384aac | e662e788 |
+|---|---|---|
+| A (1 file): lưới rỗng | 1 lần, 0,86 s | 0 |
+| B (30 file cách 1 s): lưới rỗng | 1 lần, 3,0 s | 0 |
+| C (30 file cách 4 s): quét / lưới rỗng | 30 / 30 lần (53 % thời gian) | 26 / 0 |
+| D (chỉ đổi mtime): quét / lưới rỗng | 10 / 10 lần | 10 / 0 |
+| Vùng cuộn gắn lại (C) | 37 (cộng dồn) | 0 |
+| query_faces: A,B / C / D | 8 / 240 / 40 | 13 / 302 / 90 |
+| list_sources: A,B / C / D | 7 / 181 / 31 | 10 / 211 / 61 |
+| duplicate_summary: A,B / C / D | 2 / 60 / 10 | 3 / 70 / 20 |
+| p50 list_sources (độ trễ) | 1,9–3,1 s | 3,4–5,7 s |
+| p50 query_faces | 0,2–2,3 s | 2,4–4,4 s |
+| Khởi động: thẻ đầu tiên | 5,0–6,2 s | 5,2–6,1 s |
+| Khởi động: số All + Sources + Duplicates | 5,6–6,2 s | 7,8–8,1 s |
+| Khởi động: list_sources / query_faces / duplicate_summary | 9 / 16–17 / 4 | 12 / 25 / 5 |
+Kết luận: hết lưới rỗng và gắn lại vùng cuộn, nhưng nạp lại thừa (nhất là query_faces: 9 mỗi lượt quét ở D, trước 4) làm độ trễ và thời gian hiện số thanh bên tệ hơn. Lượt khởi động thứ 4 gặp máy nặng hơn (rustc) nên không dùng để so sánh.
+
 ## Nguyên nhân nghi ngờ (cho 02 BE / 05 FE, chưa sửa gì)
 1. `UX/store/scan.ts`: sự kiện `finished` luôn `bumpNow()` (và `facesAdded` `bumpSoon()` mỗi 1,5 s) → `version` đổi → `Sidebar.refresh` (7 lệnh IPC trong một `Promise.all`, `Sidebar.tsx` ~dòng 102–115) và `LibraryGrid` nạp lại. Kịch bản D cho thấy lượt quét không đổi gì cũng bump và gây lưới rỗng.
 2. Lưới bỏ nội dung cũ trong lúc chờ `query_faces` mới: thanh trên còn đúng tổng nhưng không có hàng thẻ. Nên giữ ảnh chụp cũ tới khi có trang mới.
