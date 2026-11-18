@@ -120,7 +120,7 @@ export const DESK_I18N = {
   'app.web': 'App web (ArtCraft…) và trình duyệt không có trong danh sách: chúng chỉ thấy font hệ thống. Dùng «Bật tất cả» của Case.', 'app.web.tip': 'App web chạy trong trình duyệt, nên không có cách biết «app đang mở» và font bật theo phiên không hiện ở đó. Hãy bật cả Case bằng tay, rồi tải lại tab nếu app web lưu sẵn danh sách font.',
   'app.count': 'Đã chọn {n} app', 'app.cancel': 'Huỷ', 'app.save': 'Lưu',
   'app.saved': 'Case «{name}» sẽ tự bật font khi mở {n} app đã chọn', 'app.cleared': 'Case «{name}» không còn gắn với app nào', 'app.undone': 'Đã hoàn tác: danh sách app của Case «{name}» trở lại như cũ', 'app.fail': 'Không lưu được danh sách app: {msg}',
-  'app.on': 'Đã bật {n} font cho Case «{name}» (app gắn với Case vừa mở)', 'app.off': 'Đã tắt {n} font của Case «{name}» (app gắn với Case đã thoát)',
+  'app.on': 'Đã bật {n} font cho Case «{name}»', 'app.off': 'Đã tắt {n} font của Case «{name}»', 'app.onWhy': 'App gắn với Case vừa mở', 'app.offWhy': 'App gắn với Case đã thoát',
   'app.conflicts': '{n} font trùng tên nhưng khác nội dung nên không bật', 'app.failed': '{n} font không bật được', 'appset.restart': 'App đã mở trước đó có thể cần khởi động lại để thấy font.',
   'app.settings': 'Cài đặt…', 'app.turnOn': 'Bật lại',
   'app.suppress': 'Tắt lần này', 'app.suppressed': 'Đã tắt font của Case «{name}» lần này; sẽ tự bật lại ở lần mở app sau (app đang mở thì không bật lại).',

@@ -41,12 +41,23 @@ describe('B5 — Mở cùng app', () => {
     expect(await api.caseApps(caseId)).toEqual([]);
   });
 
+  it('app đích đã đóng (sự kiện tắt của chính Case đó): toast "đã bật" biến mất, kể cả khi lần tắt không đổi gì; Case khác thì giữ', async () => {
+    const api = createMockApi();
+    await appSetNotice(api, { caseId: 77, kind: 'on', changed: 3, conflicts: 0, failed: 0 });
+    await appSetNotice(api, { caseId: 88, kind: 'on', changed: 2, conflicts: 0, failed: 0 });
+    expect(useNoticeStore.getState().notices).toHaveLength(2);
+    await appSetNotice(api, { caseId: 77, kind: 'off', changed: 0, conflicts: 0, failed: 0 });
+    expect(useNoticeStore.getState().notices.map(n => n.key)).toEqual(['app:88']);
+    await appSetNotice(api, { caseId: 88, kind: 'off', changed: 2, conflicts: 0, failed: 0 });
+    expect(useNoticeStore.getState().notices.map(n => n.text)).toEqual(['Đã tắt 2 font của Case «#88»']); // toast "bật" được thay bằng "tắt"
+  });
+
   it('toast appSet: nói số font, xung đột/lỗi thành thông báo lỗi, không có gì đổi thì im lặng', async () => {
     const api = createMockApi();
     await appSetNotice(api, { caseId: 77, kind: 'on', changed: 0, conflicts: 0, failed: 0 });
     expect(useNoticeStore.getState().notices).toHaveLength(0);
     await appSetNotice(api, { caseId: 77, kind: 'on', changed: 12, conflicts: 0, failed: 0 });
-    expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'info' }); expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/Đã bật 12 font.*khởi động lại/);
+    expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'info' }); expect(useNoticeStore.getState().notices.at(-1)!.text).toBe('Đã bật 12 font cho Case «#77»'); expect(useNoticeStore.getState().notices.at(-1)!.detail).toMatch(/App gắn với Case vừa mở.*khởi động lại/); // câu chính ngắn, chi tiết ở NoteMark
     await appSetNotice(api, { caseId: 77, kind: 'off', changed: 3, conflicts: 2, failed: 1 });
     const n = useNoticeStore.getState().notices.at(-1)!; expect(n.kind).toBe('error'); expect(n.text).toMatch(/Đã tắt 3 font/); expect(n.text).toMatch(/2 font trùng tên/); expect(n.text).toMatch(/1 font không bật được/);
   });

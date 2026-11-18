@@ -34,6 +34,8 @@ export async function startActivationSync(api: Api): Promise<() => void> {
 
 /** B5: toast khi font của Case tự bật/tắt theo app. Không có gì đổi và không xung đột thì không báo (đỡ ồn). Xung đột/lỗi thì nói thật. */
 export async function appSetNotice(api: Api, ev: { caseId: number; kind: 'on' | 'off' | string; changed: number; conflicts: number; failed: number }): Promise<void> {
+  const key = `app:${ev.caseId}`;
+  if (ev.kind === 'off') useNoticeStore.getState().dismissKey(key); // app đích đã đóng: toast "đã bật" của Case này hết còn đúng, dù lần tắt có đổi gì hay không
   if (ev.changed === 0 && ev.conflicts === 0 && ev.failed === 0) return;
   let name = `#${ev.caseId}`;
   try { name = (await api.getCase(ev.caseId)).name; } catch { /* Case vừa bị xoá: vẫn báo bằng số */ }
@@ -41,13 +43,13 @@ export async function appSetNotice(api: Api, ev: { caseId: number; kind: 'on' | 
   if (ev.changed > 0) parts.push(t(ev.kind === 'on' ? 'app.on' : 'app.off', { n: ev.changed, name }));
   if (ev.conflicts > 0) parts.push(t('app.conflicts', { n: ev.conflicts }));
   if (ev.failed > 0) parts.push(t('app.failed', { n: ev.failed }));
-  if (ev.kind === 'on' && ev.changed > 0) parts.push(t('appset.restart'));
+  const detail = ev.changed > 0 ? [t(ev.kind === 'on' ? 'app.onWhy' : 'app.offWhy'), ...(ev.kind === 'on' ? [t('appset.restart')] : [])].join('. ') : undefined;
   const settings = { label: t('app.settings'), run: () => useAppPickerStore.getState().open(ev.caseId, name) };
   // Bật tự động: [Tắt lần này] (chỉ gỡ lý do caseapp của lượt này; font còn lý do khác vẫn bật) + [Cài đặt…]. Tắt tự động: không hoàn tác; [Bật lại] bật cả Case thủ công.
   const turnOffNow = { label: t('app.suppress'), run: () => { api.caseAppSuppress(ev.caseId).then(() => { useNoticeStore.getState().push({ kind: 'info', text: t('app.suppressed', { name }) }); void refreshActivation(api); }, e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
   const turnBackOn = { label: t('app.turnOn'), run: () => { api.activationActivateCase(ev.caseId).then(() => void refreshActivation(api), e => useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) })); } };
   useNoticeStore.getState().push({
-    kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. '),
+    kind: ev.conflicts > 0 || ev.failed > 0 ? 'error' : 'info', text: parts.join('. '), key, ...(detail ? { detail } : {}),
     ...(ev.kind === 'on' ? { action: turnOffNow, action2: settings } : ev.changed > 0 ? { action: turnBackOn } : {}),
   });
 }
