@@ -2,16 +2,25 @@
 
 Mục tiêu: một nơi duy nhất cho mọi việc nền (quét, phân tích, tải cloud, nhúng, kích hoạt hàng loạt…) để FE vẽ khay "Tác vụ" ở sidebar. Nút ẩn khi rảnh, không giữ lịch sử.
 
-## DTO `TaskDto`
-`{ id: string, kind: TaskKind, titleKey: string, titleArgs: Record<string,string|number>, done: number, total: number|null, state: "queued"|"running"|"cancelling", cancellable: boolean, startedAt: number }`
-- `TaskKind`: scan | analyze | embed | cloudDownload | activation | export | other.
-- `total=null` = không xác định (thanh chạy). Xong/huỷ/lỗi → task biến mất (event `removed`, kèm `outcome: "done"|"cancelled"|"failed"` để FE báo toast một lần). Không lưu lịch sử.
-
-## Events
-`task://upsert(TaskDto)` (throttle ≤4 Hz/task, bắt buộc phát khi đổi state), `task://removed {id, outcome, errorKey?}`.
+## DTO `TaskDto` (đã chốt sau góp ý 05)
+```
+{ id: string, rev: number, kind: TaskKind, trigger: "watcher"|"user"|"launch",
+  titleKey: string, titleArgs: Record<string,string|number>,   // không chứa đường dẫn đầy đủ, chỉ tên nguồn/Case
+  done: number, total: number|null, unit: "items"|"percent"|"bytes",
+  state: "queued"|"running"|"cancelling", cancellable: boolean,
+  cancelConfirmKey?: string,                                    // có = FE hỏi nhỏ trong dòng; không = huỷ ngay
+  groupKey?: string,                                            // vd kind+nguồn; FE tự gộp khi >3 dòng cùng kind
+  startedAt: number }                                           // epoch ms
+```
+- `TaskKind`: scan | analyze | embed | cloudDownload | activation | resolveDuplicates | export | other.
+- `rev`: bộ đếm đơn điệu toàn hub, tăng ở mọi upsert VÀ removed. `list_tasks` trả `{ rev, tasks }`; FE subscribe trước rồi list, bỏ sự kiện có rev ≤ rev đã có (chống đua đồng bộ đầu).
+- `total=null` = không xác định, không bao giờ dùng 0 làm "chưa biết".
+- `trigger`: Watcher chưa biết có đổi hay không lúc queued; FE ẩn task watcher cho tới khi done>0 hoặc có facesAdded (tránh khay nháy khi quét không đổi).
+- `cancelling` vẫn gửi done/total cuối để dòng không nhảy.
+- Xong/huỷ/lỗi → `removed`, không lưu lịch sử. Lỗi báo một lần (toast ngắn + NoteMark "!"), không giữ dòng.
 
 ## Commands (async, không giữ Mutex store)
-- `list_tasks() -> TaskDto[]` — đọc từ `TaskHub` (Mutex riêng, không chạm store).
+- `list_tasks() -> { rev, tasks: TaskDto[] }` — đọc từ `TaskHub` (Mutex riêng, không chạm store).
 - `cancel_task(id)` — gọi `CancelToken` của task; idempotent; trả ngay.
 
 ## BE
@@ -32,3 +41,5 @@ Mục tiêu: một nơi duy nhất cho mọi việc nền (quét, phân tích, t
 - Cancel phải an toàn: task ghi theo từng đơn vị nguyên tử (một file/nhóm một lần). Resolve duplicates dừng giữa chừng → phần đã làm vẫn có undo/Trash, phần chưa làm giữ nguyên; huỷ chỉ kiểm tra token giữa các đơn vị, không bỏ dở một đơn vị. Cần test: huỷ ở giữa → danh sách undo khớp đúng phần đã làm.
 - Khay ẩn khi rảnh, không lưu lịch sử.
 - Chưa code cho tới khi beta.4 phát hành.
+- Hub chỉ để HIỂN THỊ: `removed outcome:"done"` không kích bump thư viện. Bump vẫn theo `ScanEvent::Finished.changed` cho tới khi bỏ ScanEvent (tránh bump đôi).
+- titleKey: BE liệt kê key; 05 thêm bản vi+en vào i18n.
