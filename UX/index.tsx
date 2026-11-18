@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { setApi } from './api';
 import { createApi } from './api/select';
+import { withInflightDedupe } from './api/inflight';
 import { applyDevBoot, applyDevPreset, devInitial } from './store/devPreset';
 import { LocaleBoundary } from './i18n/LocaleBoundary';
 import { chooseLocale, initLocale, hasChosenThisSession } from './i18n';
@@ -11,7 +12,7 @@ import { chooseLocale, initLocale, hasChosenThisSession } from './i18n';
 // Trong cửa sổ Tauri: lệnh thật (UX/bindings). Ngoài Tauri hoặc VITE_FA_API=mock: mock, kèm preset trạng thái cho dev/QA.
 const dev = import.meta.env.DEV;
 const { api } = createApi(dev ? { initial: devInitial(location.hash), tickMs: 1500, firstRun: /[#&]first=1(&|$)/.test(location.hash) } : {}); // #first=1: mở như lần đầu (onboarding) — chỉ dev/QA
-setApi(api);
+setApi(withInflightDedupe(api));
 // QA native chọn ngôn ngữ xác định (không phụ thuộc ngôn ngữ của máy chạy QA).
 (window as unknown as { __faLocale?: typeof chooseLocale }).__faLocale = chooseLocale;
 

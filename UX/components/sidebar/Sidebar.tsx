@@ -100,12 +100,11 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const scanningNow = useScanStore(s => s.scanning);
 
   // Mỗi nhánh tự setState ngay khi xong; lỗi/chậm của một nhánh (vd đếm trùng khi đang quét) không chặn các nhánh khác.
-  // `seq`: lần nạp mới nhất thắng (phản hồi chậm của lần cũ bị bỏ); `alive`: không set sau khi unmount.
-  const seq = useRef(0); const alive = useRef(true);
+  // Một lần nạp chạy tại một thời điểm: yêu cầu đến lúc đang chạy gộp thành đúng 1 lần chạy lại (không xếp chồng IPC tranh khoá DB).
+  const alive = useRef(true); const running = useRef(false); const again = useRef(false); const loaded = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const refresh = useCallback(async () => {
-    const my = ++seq.current;
-    const live = () => alive.current && seq.current === my;
+  const loadOnce = useCallback(async () => {
+    const live = () => alive.current;
     const core = Promise.all([
       api.listSources().then(x => { if (live()) setSources(x); }),
       api.listCollections().then(x => { if (live()) setCols(x); }),
@@ -117,14 +116,23 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
         if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
       }),
     ]);
-    api.queryFaces({ limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, all: r.total })); }, () => undefined);
-    api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, star: r.total })); }, () => undefined);
-    // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…", lỗi lần đầu → 0).
-    api.duplicateSummary({}).then(d => { if (live()) setCounts(c => ({ ...c, dups: d.total })); }, () => { if (live()) setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)); });
-    api.listCases().then(cs => { if (live()) setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); }, () => undefined); // Case lỗi không làm hỏng thanh bên
-    await core;
+    const rest = [
+      api.queryFaces({ limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, all: r.total })); }, () => undefined),
+      api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, star: r.total })); }, () => undefined),
+      // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…", lỗi lần đầu → 0).
+      api.duplicateSummary({}).then(d => { if (live()) setCounts(c => ({ ...c, dups: d.total })); }, () => { if (live()) setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)); }),
+      api.listCases().then(cs => { if (live()) setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); }, () => undefined), // Case lỗi không làm hỏng thanh bên
+    ];
+    await core; await Promise.all(rest);
   }, [api]);
-  useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
+  const refresh = useCallback(async () => {
+    if (running.current) { again.current = true; return; }
+    running.current = true;
+    try { do { again.current = false; await loadOnce(); } while (again.current && alive.current); }
+    finally { running.current = false; loaded.current = true; }
+  }, [loadOnce]);
+  // Lần nạp đầu chưa xong thì bump/libraryRev đến sớm không kích thêm lần nạp: lần đang chạy sẽ lấy số mới nhất.
+  useEffect(() => { if (running.current && !loaded.current) return; refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
   // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
   useEffect(() => {
     const onFocus = () => { if (!useScanStore.getState().scanning) refresh().catch(() => undefined); }; // đang quét: đã có nhịp bump, không chồng thêm truy vấn

@@ -133,7 +133,7 @@ export function LibraryGrid({
   const wasScanning = useRef(scanning);
   useEffect(() => {
     const was = wasScanning.current; wasScanning.current = scanning;
-    if (was && !scanning) paged?.refresh(false);
+    if (was && !scanning && paged?.hasZeroPending()) paged.refresh(false); // chỉ khi còn số 0 chờ xác nhận (tránh nạp thừa)
   }, [paged, scanning]);
   // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
   const [ownVelocity] = useState(() => new ScrollVelocity());

@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
 import { Sidebar } from '../../../components/sidebar/Sidebar';
+import { useScanStore } from '../../../store/scan';
 import { createMockLibraryApi, makeRow } from '../api';
 import { LibraryGrid } from '../LibraryGrid';
 import type { FacePage, FaceQuery } from '../types';
@@ -121,23 +122,27 @@ describe('quét kết thúc bằng failed (không bump)', () => {
 });
 
 describe('Sidebar.refresh độc lập từng nhánh', () => {
-  it('hai lần nạp chồng nhau: phản hồi cũ chậm không đè phản hồi mới', async () => {
+  it('yêu cầu nạp đến lúc đang chạy gộp thành đúng 1 lần chạy lại, không xếp chồng', async () => {
     const api = createMockApi();
     const real = api.listSources.bind(api);
     const holds: Array<() => void> = [];
-    let call = 0;
-    api.listSources = async () => {
-      const mine = ++call; const data = await real();
-      if (mine === 1) { await new Promise<void>(r => holds.push(r)); return data.slice(0, 1); } // lần đầu: cũ, chậm, chỉ 1 nguồn
-      return data;
-    };
+    let calls = 0;
+    api.listSources = async () => { calls++; const data = await real(); if (calls === 1) await new Promise<void>(r => holds.push(r)); return data; };
     const r = render(<Sidebar api={api} pickFolder={async () => null} />);
     await act(async () => { await new Promise(x => setTimeout(x, 10)); });
-    act(() => { window.dispatchEvent(new Event('focus')); }); // lần nạp thứ hai (nhanh)
-    await act(async () => { await new Promise(x => setTimeout(x, 20)); });
+    useScanStore.getState().bump(); useScanStore.getState().bump(); // bump trong lúc nạp đầu: bỏ qua
+    await act(async () => { await new Promise(x => setTimeout(x, 10)); });
+    expect(calls).toBe(1);
+    await act(async () => { holds.forEach(h => h()); await new Promise(x => setTimeout(x, 30)); });
+    expect(calls).toBe(1); // bump sớm không kích lần nạp thứ hai
     expect(screen.getByRole('button', { name: /Dự án khách/ })).toBeInTheDocument();
-    await act(async () => { holds.forEach(h => h()); await new Promise(x => setTimeout(x, 20)); });
-    expect(screen.getByRole('button', { name: /Dự án khách/ })).toBeInTheDocument(); // phản hồi cũ không xoá
+    // sau khi đã nạp xong: mỗi đợt bump (kể cả nhiều bump cùng một lượt vẽ) cho đúng 1 lần nạp
+    calls = 1; holds.length = 0;
+    act(() => { useScanStore.getState().bump(); });
+    await act(async () => { await new Promise(x => setTimeout(x, 10)); });
+    act(() => { useScanStore.getState().bump(); useScanStore.getState().bump(); });
+    await act(async () => { await new Promise(x => setTimeout(x, 30)); });
+    expect(calls).toBe(3); // 1 + 1 (bump đơn) + 1 (hai bump cùng lượt)
     r.unmount();
   });
 

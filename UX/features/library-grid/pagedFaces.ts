@@ -83,7 +83,10 @@ export class PagedFaces {
     const mySeq = ++this.refreshSeq;
     this.inflight.clear(); // fetch bắt đầu trước lần làm tươi sẽ bị bỏ (fetchPage kiểm refreshSeq); trang thiếu được tải lại qua ensureRange
     const e = this.epoch;
-    const want = [...new Set<number>([0, ...this.pages.keys()])];
+    // Chỉ tải lại các trang đang nhìn (viewport ± 1 trang) + trang 0 (nơi lấy total); trang khác bị bỏ (stale) và tải lại khi cuộn tới.
+    const [a, b] = this.lastRange;
+    const lo = Math.max(0, Math.floor(a / PAGE_SIZE) - 1), hi = Math.floor(b / PAGE_SIZE) + 1;
+    const want = [...new Set<number>([0, ...[...this.pages.keys()].filter(n => n >= lo && n <= hi)])];
     void Promise.allSettled(want.map(n => this.api.queryFaces({ ...this.query, offset: n * PAGE_SIZE, limit: PAGE_SIZE }).then(page => ({ n, page })))).then(rs => {
       if (this.disposed || e !== this.epoch || mySeq !== this.refreshSeq) return;
       const ok = rs.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
@@ -100,6 +103,9 @@ export class PagedFaces {
       this.ensureRange(...this.lastRange);
     });
   }
+
+  /** Lần làm tươi trước nhận total=0 khi đang quét và chưa được xác nhận. */
+  hasZeroPending(): boolean { return this.zeroPending; }
 
   /** Thử lại các trang còn thiếu quanh vùng đang xem (sau lỗi). */
   retry() {

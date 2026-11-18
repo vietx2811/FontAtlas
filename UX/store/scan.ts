@@ -8,6 +8,8 @@ import { refreshNameClashes } from './nameClash';
 import { useUiStore } from './ui';
 
 export const BUMP_THROTTLE_MS = 1500;
+/** `finished` rồi `idle` liền nhau trong khoảng này chỉ tính một lần bump. */
+export const IDLE_COALESCE_MS = 500;
 
 export type AccessProblem = 'denied' | 'timeout';
 type State = {
@@ -61,7 +63,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
             action: { label: t('scan.grant'), run: () => { void openPrivacySettings(); } },
           }));
       } else useNoticeStore.getState().push({ kind: 'error', text: t('scan.fail', { code: e.error.code, msg: e.error.message }) });
-    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); bumpNow(); } // luôn bump lần cuối: lưới làm tươi tại chỗ (rẻ) và cần lần này để xác nhận total=0 khi đã hết quét
+    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (Date.now() - last > IDLE_COALESCE_MS) bumpNow(); } // `finished` vừa bump liền trước thì gộp (1 lần nạp, không 2); xác nhận total=0 khi hết quét do LibraryGrid tự làm (scanning true→false)
   });
   try {
     const st = await api.scanStatus();

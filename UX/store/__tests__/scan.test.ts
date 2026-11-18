@@ -86,3 +86,17 @@ describe('scan store', () => {
     expect(s.getState().cloud).toEqual({}); // quét lại: đếm lại từ đầu
   });
 });
+
+describe('scan store: finished + idle liền nhau chỉ một bump', () => {
+  it('idle ngay sau finished (< IDLE_COALESCE_MS) không bump thêm', async () => {
+    const api = createMockApi();
+    let push: (e: import('../../api').ScanEvent) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 1, unchanged: 1, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } } as never);
+    push({ type: 'idle' } as never);
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});

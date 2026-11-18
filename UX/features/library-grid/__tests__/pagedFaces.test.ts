@@ -148,5 +148,22 @@ describe('PagedFaces', () => {
       p.refresh(false); await flush();
       expect(p.getSnapshot().total).toBe(0);
     });
+
+    it('chỉ tải lại các trang đang nhìn (± 1) + trang 0; trang xa bị bỏ và tải lại khi cuộn tới', async () => {
+      const api = createMockLibraryApi(Array.from({ length: 3000 }, (_, i) => makeRow(i)));
+      const p = new PagedFaces(api, {});
+      await flush();
+      for (const r of [[0, 40], [1000, 1040], [2600, 2640]] as const) { p.ensureRange(r[0], r[1]); await flush(); }
+      expect(api.calls.map(c => c.offset).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 800, 1000, 1200, 2400, 2600, 2800].filter(o => api.calls.some(c => c.offset === o)));
+      const before = api.calls.length;
+      p.refresh(false); await flush();
+      const fetched = api.calls.slice(before).map(c => c.offset);
+      expect(fetched).not.toContain(1000); // trang 5 (xa vùng đang nhìn quanh 2600) không tải lại
+      expect(fetched.length).toBeLessThanOrEqual(4);
+      expect(p.rowAt(2600)).toBeDefined();
+      expect(p.rowAt(1000)).toBeUndefined(); // đánh dấu stale
+      p.ensureRange(1000, 1040); await flush();
+      expect(p.rowAt(1000)).toBeDefined(); // cuộn tới thì tải lại
+    });
   });
 });
