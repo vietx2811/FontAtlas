@@ -371,8 +371,7 @@ fn schedule_verify(state: &Arc<AppState>, id: i64) {
 /// kéo theo dựng lại Index (đắt với thư viện lớn).
 fn changed_library(s: &fontatlas_store::RescanStats) -> bool {
     s.status != fontatlas_store::RescanStatus::Ok
-        || s.analyzed + s.relinked + s.failed + s.missing + s.purged > 0
-        || s.seen > s.unchanged
+        || s.analyzed + s.relinked.saturating_sub(s.touched) + s.failed + s.missing + s.purged > 0
 }
 
 /// Việc nối tiếp khi hàng đợi quét về rỗng (mỗi task sau thêm móc của mình).

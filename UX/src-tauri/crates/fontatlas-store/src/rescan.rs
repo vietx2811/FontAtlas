@@ -77,6 +77,9 @@ pub struct RescanStats {
     /// Vị trí vắng lần đầu (hoặc chưa đủ hạn ân hạn): CHƯA đánh `missing`, cần một lượt quét xác nhận nữa.
     #[serde(skip)]
     pub pending_absent: usize,
+    /// Trong `relinked`: file chỉ bị chạm (mtime/size đổi) mà vị trí đang sống vẫn trỏ đúng cùng hash → thư viện không đổi gì.
+    #[serde(skip)]
+    pub touched: usize,
     /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
     pub purged: usize,
     pub unreadable: Vec<(String, String)>,
@@ -443,6 +446,9 @@ impl Store {
                 "SELECT count(*) FROM pipeline_state WHERE hash=?1 AND face_index=-1 AND stage='load'
                    AND status IN ('done','failed') AND version=?2",
             )?;
+            let mut same_loc = self.conn.prepare(
+                "SELECT count(*) FROM file_locations l JOIN files fi USING(file_id) WHERE l.path=?1 AND fi.hash=?2 AND l.missing=0",
+            )?;
             for (f, h) in hashed {
                 match h {
                     Err(e) => {
@@ -455,6 +461,8 @@ impl Store {
                     Ok(h) => {
                         let n: i64 = fresh.query_row(params![&h[..], ANALYZER_VERSION], |r| r.get(0))?;
                         if n > 0 {
+                            let same: i64 = same_loc.query_row(params![f.path.to_string_lossy(), &h[..]], |r| r.get(0))?;
+                            stats.touched += same as usize;
                             work.push(Work::Known(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known }));
                         } else {
                             work.push(Work::Analyze(f, h));

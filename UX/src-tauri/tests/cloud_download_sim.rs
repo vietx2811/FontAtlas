@@ -401,6 +401,34 @@ fn be1_finished_reports_changed_false_for_an_unchanged_scan_and_true_when_a_font
     assert_eq!(fin, vec![(false, 0), (true, 0)], "quét không đổi → changed=false; có font mới → true");
 }
 
+/// Case D của QA: ghi đè file bằng đúng nội dung cũ (chỉ mtime đổi) → thư viện không đổi → changed=false;
+/// một bản sao mới của font đã có (vị trí mới, cùng hash) là thay đổi thật → changed=true.
+#[test]
+fn be1_rewriting_a_font_with_identical_bytes_is_not_a_change_but_a_new_copy_is() {
+    use app_lib::dto::events::ScanTrigger;
+    let root = sim_root();
+    let (st, dir) = seeded(root.path(), 6);
+    let ev = record(&st);
+    let first = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "ttf")).unwrap();
+    let bytes = std::fs::read(&first).unwrap();
+    for _ in 0..3 {
+        std::thread::sleep(Duration::from_millis(30));
+        std::fs::write(&first, &bytes).unwrap(); // cùng nội dung, mtime mới
+        assert!(st.scans.enqueue_follow_up_as(&st, &[1], ScanTrigger::Watcher));
+        assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    }
+    std::fs::write(dir.join("copy-of-first.ttf"), &bytes).unwrap();
+    assert!(st.scans.enqueue_follow_up_as(&st, &[1], ScanTrigger::Watcher));
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let fin: Vec<bool> = ev.lock().unwrap().iter().filter_map(|e| if let ScanEvent::Finished { changed, .. } = e { Some(*changed) } else { None }).collect();
+    for e in ev.lock().unwrap().iter() {
+        if let ScanEvent::Finished { .. } = e {
+            println!("[d-sample] {}", serde_json::to_string(e).unwrap());
+        }
+    }
+    assert_eq!(fin, vec![false, false, false, true], "ghi đè cùng byte ×3 → false; bản sao mới → true");
+}
+
 #[test]
 fn be2_every_scan_event_carries_who_triggered_it_and_a_user_request_outranks_a_queued_watcher_one() {
     use app_lib::dto::events::ScanTrigger;
