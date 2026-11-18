@@ -8,7 +8,7 @@ Bản: DEBUG `85384aac` (bundle do `local_ci` dựng, chép sang thư mục th�
 | 0. Không làm gì 45 s | 0 | 0 | 0 |
 | A. 1 file cloud «tải xong» (stub `.icloud` → font thật) | 1 | 2 đợt (query_faces 8, list_sources 7, duplicate_summary 2) | 1 lần, **0,86 s** (đối chứng 100 font: 1,0 s) |
 | B. 30 file liên tiếp, cách 1 s | 1 (watcher gom, chạy ở mốc `MAX_WAIT` 30 s) | 2 đợt | 1 lần, **3,0 s** (đối chứng: 0) |
-| C. 30 file, cách 4 s (ghi đè file 0 byte bằng font thật) | **30** (queued 30, finished 30) | **30 đợt** (query_faces 240, list_sources 181, duplicate_summary 60, name_clashes 30) | **30 lần**, mỗi lần 1,8–3,2 s (trung vị 3,0 s), tổng **82,7 s trong cửa sổ 154,9 s (53 %)**; gỡ/mount lại lưới 37 lần (đối chứng: 2 lần rỗng ~1 s, 34 lần mount lại) |
+| C. 30 file, cách 4 s (ghi đè file 0 byte bằng font thật) | **30** (queued 30, finished 30) | **30 đợt** (query_faces 240, list_sources 181, duplicate_summary 60, name_clashes 30) | **30 lần**, mỗi lần 1,8–3,2 s (trung vị 3,0 s), tổng **82,7 s trong cửa sổ 154,9 s (53 %)**; vùng cuộn bị gắn lại 37 lần (cộng dồn từ đầu lượt chạy; đối chứng 100 font: chỉ 2 lần rỗng ~1 s, 34 lần gắn lại) |
 | D. 10 lần ghi đè file đã có bằng đúng nội dung cũ (chỉ đổi mtime), cách 4 s, KHÔNG có font mới | 10 | 10 đợt (query_faces 40) | **10 lần**, 1,0–2,2 s, tổng 19,5 s trong 65 s |
 
 Khi lưới rỗng: thanh trên vẫn ghi đúng tổng (ví dụ «1573»), vùng cuộn tồn tại (`library-grid-scroller`, `scrollTop=0`) nhưng không có hàng thẻ nào (`face-name` = 0), không có thông báo rỗng. Thanh bên (Sources, All, Duplicates) KHÔNG nhấp nháy sau khi đã hiện (0 mẫu rỗng).
