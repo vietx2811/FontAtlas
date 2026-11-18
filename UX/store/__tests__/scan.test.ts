@@ -143,3 +143,43 @@ describe('scan store: changed=false / purged', () => {
     expect(s.getState().version).toBe(v0 + 1);
   });
 });
+
+describe('scan store: một lượt một bump', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    return { s, push: (e: object) => push(e) };
+  };
+  const stats = (o: object = {}) => ({ missing: 0, purged: 0, relinked: 0, failed: 0, ...o });
+  it('facesAdded → finished → idle chỉ 1 bump', async () => {
+    const { s, push } = await setup();
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 2, trigger: 'user' });
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats() });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+  it('bump đang chờ (throttle) được finished xả, vẫn đúng 1 lần thêm', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' }); // bump ngay
+    const v1 = s.getState().version;
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' }); // chờ throttle
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats() });
+    expect(s.getState().version).toBe(v1 + 1);
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v1 + 1);
+  });
+  it('có xoá/đổi chỗ (missing/purged) mà facesAdded không báo: finished vẫn bump lại', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' });
+    const v1 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats({ missing: 2 }) });
+    expect(s.getState().version).toBe(v1 + 1);
+  });
+});

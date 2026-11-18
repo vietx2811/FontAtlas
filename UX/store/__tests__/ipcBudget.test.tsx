@@ -60,4 +60,39 @@ describe('ngân sách lệnh api', () => {
     expect(budget(h.counts).duplicate_summary).toBeLessThanOrEqual(1);
     stop();
   });
+
+  const pass = async (events: (emit: (e: object) => void) => void) => {
+    const h = counting();
+    const stop = await startScanSync(h.api);
+    render(<div><Sidebar api={h.api} pickFolder={async () => null} /><TopBar api={h.api} /><Library api={h.api} width={1200} height={700} /></div>);
+    await settle(200);
+    h.reset();
+    act(() => { events(e => h.emit(e as ScanEvent)); });
+    await settle(400);
+    const b = budget(h.counts);
+    stop();
+    return b;
+  };
+  const okStats = (o: object = {}) => ({ status: 'ok', seen: 9, unchanged: 0, notDownloaded: 0, relinked: 0, analyzed: 9, failed: 0, missing: 0, purged: 0, unreadable: [], ...o });
+
+  it('một lượt có facesAdded rồi finished(changed) rồi idle: ≤3 query_faces (một lần refresh)', async () => {
+    const b = await pass(emit => {
+      emit({ type: 'queued', sourceId: 1, trigger: 'user' });
+      emit({ type: 'facesAdded', sourceId: 1, count: 3, trigger: 'user' });
+      emit({ type: 'finished', sourceId: 1, stats: okStats(), changed: true, trigger: 'user' });
+      emit({ type: 'idle' });
+    });
+    expect(b.query_faces).toBeLessThanOrEqual(3);
+    expect(b.list_sources).toBeLessThanOrEqual(1);
+  });
+
+  it('lượt changed=false: 0 query_faces, 0 list_sources', async () => {
+    const b = await pass(emit => {
+      emit({ type: 'queued', sourceId: 1, trigger: 'user' });
+      emit({ type: 'finished', sourceId: 1, stats: okStats({ analyzed: 0, unchanged: 9 }), changed: false, trigger: 'user' });
+      emit({ type: 'idle' });
+    });
+    expect(b.query_faces).toBe(0);
+    expect(b.list_sources).toBe(0);
+  });
 });
