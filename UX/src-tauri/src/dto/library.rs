@@ -69,6 +69,8 @@ pub struct RescanStatsDto {
     pub analyzed: u32,
     pub failed: u32,
     pub missing: u32,
+    /// Vị trí `missing` quá hạn đã được dọn khỏi thư viện trong lượt này.
+    pub purged: u32,
     pub unreadable: Vec<(String, String)>,
 }
 
@@ -87,6 +89,7 @@ impl From<&RescanStats> for RescanStatsDto {
             analyzed: s.analyzed as u32,
             failed: s.failed as u32,
             missing: s.missing as u32,
+            purged: s.purged as u32,
             unreadable: s.unreadable.clone(),
         }
     }

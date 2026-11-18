@@ -57,7 +57,8 @@ fn rename_relinks_without_reanalysis_and_keeps_user_data() {
     std::fs::create_dir_all(fonts.join("moved")).unwrap();
     std::fs::rename(fonts.join("roboto.ttf"), fonts.join("moved/Roboto Renamed.ttf")).unwrap();
     let st = s.rescan_source(src).unwrap();
-    assert_eq!((st.relinked, st.analyzed, st.missing), (1, 0, 1));
+    assert_eq!((st.relinked, st.analyzed, st.missing, st.pending_absent), (1, 0, 0, 1), "vắng lần đầu: chưa đánh missing");
+    assert_eq!(s.rescan_source(src).unwrap().missing, 1, "vắng lượt thứ hai liền sau: missing");
     let old_missing: i64 = s.conn().query_row(
         "SELECT missing FROM file_locations WHERE path=?1", [fonts.join("roboto.ttf").to_string_lossy()], |r| r.get(0)).unwrap();
     assert_eq!(old_missing, 1);
@@ -97,7 +98,10 @@ fn removed_file_marked_missing_and_comes_back() {
     s.rescan_source(src).unwrap();
     let bytes = std::fs::read(fonts.join("roboto.ttf")).unwrap();
     std::fs::remove_file(fonts.join("roboto.ttf")).unwrap();
-    assert_eq!(s.rescan_source(src).unwrap().missing, 1);
+    let first = s.rescan_source(src).unwrap();
+    assert_eq!((first.missing, first.pending_absent), (0, 1), "vắng lần đầu: chưa ẩn");
+    assert_eq!(total(&s), 6);
+    assert_eq!(s.rescan_source(src).unwrap().missing, 1, "vắng lượt thứ hai liền sau");
     assert_eq!(total(&s), 5);
     std::fs::write(fonts.join("roboto.ttf"), bytes).unwrap();
     let st = s.rescan_source(src).unwrap();
@@ -200,6 +204,7 @@ fn missing_does_not_depend_on_clock() {
     s.rescan_source(src).unwrap();
     s.conn().execute("UPDATE file_locations SET last_seen_at = 9999999999999", []).unwrap(); // đồng hồ "tương lai"
     std::fs::remove_file(fonts.join("roboto.ttf")).unwrap();
+    s.rescan_source(src).unwrap(); // vắng lần đầu
     assert_eq!(s.rescan_source(src).unwrap().missing, 1);
 }
 

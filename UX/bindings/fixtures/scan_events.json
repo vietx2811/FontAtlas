@@ -1,6 +1,7 @@
 [
   {
     "sourceId": 1,
+    "trigger": "user",
     "type": "queued"
   },
   {
@@ -12,26 +13,31 @@
       "total": 1200
     },
     "sourceId": 1,
+    "trigger": "launch",
     "type": "progress"
   },
   {
     "count": 256,
     "sourceId": 1,
+    "trigger": "watcher",
     "type": "facesAdded"
   },
   {
+    "changed": true,
     "sourceId": 1,
     "stats": {
       "analyzed": 1200,
       "failed": 2,
       "missing": 0,
       "notDownloaded": 3,
+      "purged": 0,
       "relinked": 0,
       "seen": 1200,
       "status": "ok",
       "unchanged": 0,
       "unreadable": []
     },
+    "trigger": "user",
     "type": "finished"
   },
   {

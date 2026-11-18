@@ -82,13 +82,13 @@ describe('libraryEmpty', () => {
   });
 
   it('a source whose files are all still in the cloud says so (no auto-download), offering a rescan once they are downloaded', () => {
-    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } })] }));
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] } })] }));
     expect(e.kind).toBe('source-cloud');
     expect(e.text).toMatch(/đám mây/);
     expect(e.action).toEqual({ id: 'rescan', label: 'Quét lại' });
   });
   it('the same for the whole library when every source is only cloud placeholders', () => {
-    const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] };
+    const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
     expect(libraryEmpty(ctx({ sources: [src({ faceCount: 0, lastScan: stats })] })).kind).toBe('source-cloud');
   });
   it('an empty source with no cloud files stays "source-empty"', () => {

@@ -74,8 +74,10 @@ pub struct RescanStats {
     pub analyzed: usize,
     pub failed: usize,
     pub missing: usize,
-    /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
+    /// Vị trí vắng lần đầu (hoặc chưa đủ hạn ân hạn): CHƯA đánh `missing`, cần một lượt quét xác nhận nữa.
     #[serde(skip)]
+    pub pending_absent: usize,
+    /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
     pub purged: usize,
     pub unreadable: Vec<(String, String)>,
 }
@@ -262,7 +264,7 @@ fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemo
     // face SẼ RỜI LƯỚI: không còn vị trí nào ở nguồn khác mà hiện diện (missing = 0) và chưa bị ẩn bởi Trùng lặp
     const GONE: &str = "WITH gone(hash, face_index) AS (
         SELECT fi.hash, f.face_index FROM faces f JOIN files fi ON fi.file_id = f.file_id
-         WHERE EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id = ?1)
+         WHERE f.file_id IN (SELECT file_id FROM file_locations WHERE source_id = ?1)
            AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id <> ?1 AND l.missing = 0
                            AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)))";
     let n = |sql: String| -> Result<u32, StoreError> { Ok(c.query_row(&sql, [source_id], |r| r.get::<_, i64>(0))? as u32) };
@@ -541,14 +543,27 @@ impl Store {
             st.query_map(params![source_id, generation], |r| Ok((r.get(0)?, r.get(1)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         };
+        let now = now_ms();
+        let mut still_absent: HashMap<String, (i64, i64)> = HashMap::new();
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         for (id, p) in stale {
             if failed_dirs.iter().any(|d| Path::new(&p).starts_with(d)) {
                 continue; // nằm trong thư mục không đọc được: không biết đã xoá hay chưa
             }
-            stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
+            // vắng lần đầu → ghi nhớ, chưa ẩn (stub .icloud ↔ file thật, ghi tạm rồi đổi tên: khoảng hở chỉ vài ms);
+            // vắng lượt thứ hai liền sau → đánh missing (lượt quét xác nhận do `ScanManager` xếp sau ít giây)
+            let seen_absent_before = self.absent.get(&p).is_some_and(|&(src, _)| src == source_id);
+            if seen_absent_before {
+                stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
+            } else {
+                still_absent.insert(p, (source_id, now));
+                stats.pending_absent += 1;
+            }
         }
         tx.commit()?;
+        // quên mọi vị trí của nguồn này đã thấy lại hoặc đã đánh missing; giữ lại những cái vẫn đang chờ xác nhận
+        self.absent.retain(|_, (src, _)| *src != source_id);
+        self.absent.extend(still_absent);
         // quét trọn vẹn → tự dọn, nhưng CHỈ vị trí missing của chính nguồn này và CHỈ khi lần quét thấy ít nhất một font
         // (thư mục gốc còn đó mà trống — điểm gắn kết rỗng của ổ mạng/ổ rút — không chứng minh được font đã mất).
         // Nguồn khác (kể cả ổ đang rút) không bao giờ bị dọn bởi lần quét này.
@@ -568,6 +583,16 @@ impl Store {
         stats.failed += sum.failed;
         stats.relinked += sum.relinked;
         Ok(())
+    }
+
+    /// Lấy bộ nhớ "vắng lần đầu" ra khỏi kết nối (để giữ qua lúc luồng quét nghỉ rồi mở kết nối mới).
+    pub fn take_absent(&mut self) -> HashMap<String, (i64, i64)> {
+        std::mem::take(&mut self.absent)
+    }
+
+    /// Nạp lại bộ nhớ "vắng lần đầu" đã giữ từ lần trước.
+    pub fn set_absent(&mut self, absent: HashMap<String, (i64, i64)>) {
+        self.absent = absent;
     }
 
     /// Số liệu thật cho câu xác nhận "Gỡ nguồn" — chỉ đọc, không đổi gì (xem [`SourceRemovalReport`]).

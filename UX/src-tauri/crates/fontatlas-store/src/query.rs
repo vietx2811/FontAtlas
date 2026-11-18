@@ -247,7 +247,8 @@ pub(crate) fn where_clause(q: &FaceQuery) -> (String, Vec<Value>) {
     }
     if !q.source_ids.is_empty() {
         w.push(format!(
-            "EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id IN ({}))",
+            // IN (subquery): EXISTS tương quan theo source_id làm planner duyệt cả nguồn cho mỗi face (O(face × vị trí))
+            "f.file_id IN (SELECT file_id FROM file_locations WHERE source_id IN ({}))",
             in_list(q.source_ids.len())
         ));
         p.extend(q.source_ids.iter().map(|&i| Value::Integer(i)));

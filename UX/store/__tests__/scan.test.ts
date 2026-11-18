@@ -74,15 +74,15 @@ describe('scan store', () => {
     vi.spyOn(api, 'scanSubscribe').mockImplementation(async l => { push = l; return () => {}; });
     const s = createScanStore();
     await startScanSync(api, s);
-    const prog = (id: number, nd: number) => ({ type: 'progress' as const, sourceId: id, progress: { phase: 'walking' as const, done: 1, total: 9, facesWritten: 0, notDownloaded: nd } });
+    const prog = (id: number, nd: number) => ({ type: 'progress' as const, sourceId: id, progress: { phase: 'walking' as const, done: 1, total: 9, facesWritten: 0, notDownloaded: nd }, trigger: 'user' as const });
     push(prog(1, 3)); push(prog(2, 4));
     expect(s.getState().cloud).toEqual({ 1: 3, 2: 4 });
     expect(s.getState().cloudTotal()).toBe(7);
     push(prog(1, 5));
     expect(s.getState().cloudTotal()).toBe(9);
-    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 9, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } });
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 9, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] }, changed: true, trigger: 'user' as const });
     expect(s.getState().cloud).toEqual({ 2: 4 });
-    push({ type: 'queued', sourceId: 2 });
+    push({ type: 'queued', sourceId: 2, trigger: 'user' as const });
     expect(s.getState().cloud).toEqual({}); // quét lại: đếm lại từ đầu
   });
 });

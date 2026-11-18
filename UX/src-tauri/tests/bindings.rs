@@ -540,7 +540,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
         (
             "scan_events",
             v(&vec![
-                ScanEvent::Queued { source_id: 1 },
+                ScanEvent::Queued { source_id: 1, trigger: ScanTrigger::User },
                 ScanEvent::Progress {
                     source_id: 1,
                     progress: ScanProgressDto {
@@ -550,10 +550,12 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                         faces_written: 256,
                         not_downloaded: 3,
                     },
+                    trigger: ScanTrigger::Launch,
                 },
                 ScanEvent::FacesAdded {
                     source_id: 1,
                     count: 256,
+                    trigger: ScanTrigger::Watcher,
                 },
                 ScanEvent::Finished {
                     source_id: 1,
@@ -566,8 +568,11 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                         analyzed: 1200,
                         failed: 2,
                         missing: 0,
+                        purged: 0,
                         unreadable: vec![],
                     },
+                    changed: true,
+                    trigger: ScanTrigger::User,
                 },
                 ScanEvent::Idle,
             ]),
@@ -864,6 +869,7 @@ fn dto_serializes_like_core() {
         analyzed: 3,
         failed: 4,
         missing: 6,
+        pending_absent: 0,
         purged: 0,
         unreadable: vec![("a".into(), "io: x".into())],
     };

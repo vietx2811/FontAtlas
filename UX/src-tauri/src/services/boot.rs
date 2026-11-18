@@ -104,7 +104,7 @@ fn after_ready(state: &Arc<AppState>) {
     let seen = state.with_user(|u| Ok(u.setting(keys::ANALYZER_SEEN)?)).ok().flatten();
     let version_changed = seen.as_deref() != Some(fontatlas_core::ANALYZER_VERSION);
     if rescan_pref || version_changed {
-        let _ = state.scans.enqueue_all_directories(state);
+        let _ = state.scans.enqueue_all_directories_as(state, crate::dto::events::ScanTrigger::Launch);
     }
     mark_analyzer_seen_if_current(state);
     refresh_loose_fonts(state);

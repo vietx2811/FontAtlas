@@ -219,6 +219,7 @@ export type { ScanEvent } from './ScanEvent';
 export type { ScanPhaseDto } from './ScanPhaseDto';
 export type { ScanProgressDto } from './ScanProgressDto';
 export type { ScanStatusDto } from './ScanStatusDto';
+export type { ScanTrigger } from './ScanTrigger';
 export type { ScopeDto } from './ScopeDto';
 export type { SettingsDto } from './SettingsDto';
 export type { SettingsPatchDto } from './SettingsPatchDto';

@@ -18,8 +18,9 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
         Ok(st
             .conn()
             .query_row(
-                "SELECT count(*) FROM faces f WHERE EXISTS (SELECT 1 FROM file_locations l \
-                 WHERE l.file_id = f.file_id AND l.source_id = ?1 AND l.missing = 0)",
+                // IN (subquery) chứ không EXISTS tương quan: EXISTS duyệt cả nguồn cho MỖI face (O(face × vị trí), 1,5k font ≈ 50 ms/lệnh)
+                "SELECT count(*) FROM faces f WHERE f.file_id IN \
+                 (SELECT file_id FROM file_locations WHERE source_id = ?1 AND missing = 0)",
                 [s.id],
                 |r| r.get(0),
             )

@@ -2,5 +2,11 @@
 import type { CmdError } from "./CmdError";
 import type { RescanStatsDto } from "./RescanStatsDto";
 import type { ScanProgressDto } from "./ScanProgressDto";
+import type { ScanTrigger } from "./ScanTrigger";
 
-export type ScanEvent = { "type": "queued", sourceId: number, } | { "type": "progress", sourceId: number, progress: ScanProgressDto, } | { "type": "facesAdded", sourceId: number, count: number, } | { "type": "paused" } | { "type": "resumed" } | { "type": "finished", sourceId: number, stats: RescanStatsDto, } | { "type": "failed", sourceId: number, error: CmdError, } | { "type": "idle" };
+export type ScanEvent = { "type": "queued", sourceId: number, trigger: ScanTrigger, } | { "type": "progress", sourceId: number, progress: ScanProgressDto, trigger: ScanTrigger, } | { "type": "facesAdded", sourceId: number, count: number, trigger: ScanTrigger, } | { "type": "paused" } | { "type": "resumed" } | { "type": "finished", sourceId: number, stats: RescanStatsDto, 
+/**
+ * Lượt quét có làm đổi thư viện không (font mới/đổi/mất/lỗi/dọn, hoặc huỷ/nguồn không truy cập được)?
+ * `false` = mọi thứ như cũ: FE không cần nạp lại lưới/sidebar.
+ */
+changed: boolean, trigger: ScanTrigger, } | { "type": "failed", sourceId: number, error: CmdError, } | { "type": "idle" };

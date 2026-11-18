@@ -79,7 +79,9 @@ fn rescan_collects_garbage_after_a_file_is_deleted_for_good() {
         .unwrap();
     std::fs::remove_file(fonts.join("roboto.ttf")).unwrap();
 
-    // vừa xoá: đánh missing nhưng còn trong thời gian ân hạn (file có thể chỉ chuyển chỗ)
+    // vừa xoá: lượt đầu chỉ ghi nhớ (stub↔file thật có khoảng hở), lượt thứ hai đánh missing; còn trong thời gian ân hạn
+    let st = s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    assert_eq!((st.missing, st.pending_absent, st.purged), (0, 1, 0));
     let st = s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
     assert_eq!((st.missing, st.purged), (1, 0));
     assert_eq!(count(&s, "SELECT count(*) FROM files"), 2);
@@ -191,7 +193,8 @@ fn an_empty_mount_point_does_not_prove_the_fonts_are_gone() {
         let p = e.unwrap().path();
         std::fs::rename(&p, p.with_extension("held")).unwrap(); // đổi đuôi: gốc "rỗng" font
     }
-    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap(); // vắng lần đầu
+    s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap(); // lượt xác nhận: missing
     assert_eq!(count(&s, "SELECT count(*) FROM file_locations WHERE missing = 1"), 2);
     age_missing(&s);
     let st = s.rescan_source_with(src, &mut |_| {}, &AtomicBool::new(false)).unwrap();
