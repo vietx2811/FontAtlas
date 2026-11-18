@@ -41,6 +41,22 @@ Lúc khởi động có 3 đợt nạp (t ≈ 0,84 / 1,08 / 1,22 s: tổng 9 `li
 | Khởi động: list_sources / query_faces / duplicate_summary | 9 / 16–17 / 4 | 12 / 25 / 5 |
 Kết luận: hết lưới rỗng và gắn lại vùng cuộn, nhưng nạp lại thừa (nhất là query_faces: 9 mỗi lượt quét ở D, trước 4) làm độ trễ và thời gian hiện số thanh bên tệ hơn. Lượt khởi động thứ 4 gặp máy nặng hơn (rustc) nên không dùng để so sánh.
 
+## Đo lại trên `3cce68ae` (FE cắt lệnh thừa; BE chưa đổi). Máy load 10–23 (syspolicyd + Illustrator + dựng của CI), nặng hơn các lượt trước
+| Chỉ số | 85384aac | e662e788 | 3cce68ae |
+|---|---|---|---|
+| Lưới rỗng khi quét A / B / C / D | 1 / 1 / 30 / 10 lần | 0 / 0 / 0 / 0 | **0 / 0 / 0 / 0** |
+| Vùng cuộn gắn lại | 37 (C) | 0 | 0 |
+| Lượt quét / query_faces mỗi lượt, D (không đổi gì) | 10 / 4 | 10 / 9 | 10 / **3** (30) |
+| query_faces: A,B / C / D | 8 / 240 / 40 | 13 / 302 / 90 | 7 / 210 / 30 |
+| list_sources: A,B / C / D | 7 / 181 / 31 | 10 / 211 / 61 | 4 / 88 / 11 |
+| duplicate_summary: A,B / C / D | 2 / 60 / 10 | 3 / 70 / 20 | 2 / 60 / 10 |
+| p50 list_sources | 1,9–3,1 s | 3,4–5,7 s | 0,7–1,9 s |
+| p50 query_faces | 0,2–2,3 s | 2,4–4,4 s | 0,08–1,1 s |
+| Khởi động: thẻ đầu tiên | 5,0–6,2 s | 5,2–6,1 s | 3,1 / 3,5 s (8,9 s ở lượt load 19) |
+| Khởi động: số All / Sources / Duplicates | 5,6–6,2 s (cùng lúc) | 7,8–8,1 s (cùng lúc) | 4,1–4,3 s; lượt load 19: All 3,4 s, Sources 11,9 s (độc lập nhau) |
+| Khởi động: list_sources / query_faces / duplicate_summary | 9 / 16–17 / 4 | 12 / 25 / 5 | 4 / 10–11 / 2 |
+Còn lại: (1) quét có font mới vẫn ~7 query_faces mỗi lượt (C: 210/30); (2) ở một lượt khởi động (load 19) lưới rỗng 5,5 s: số All (3,4 s) hiện trước thẻ đầu tiên (8,9 s); (3) vẫn 30 lượt quét cho 30 file cách 4 s (phần của 02: watcher/quiet thích nghi).
+
 ## Nguyên nhân nghi ngờ (cho 02 BE / 05 FE, chưa sửa gì)
 1. `UX/store/scan.ts`: sự kiện `finished` luôn `bumpNow()` (và `facesAdded` `bumpSoon()` mỗi 1,5 s) → `version` đổi → `Sidebar.refresh` (7 lệnh IPC trong một `Promise.all`, `Sidebar.tsx` ~dòng 102–115) và `LibraryGrid` nạp lại. Kịch bản D cho thấy lượt quét không đổi gì cũng bump và gây lưới rỗng.
 2. Lưới bỏ nội dung cũ trong lúc chờ `query_faces` mới: thanh trên còn đúng tổng nhưng không có hàng thẻ. Nên giữ ảnh chụp cũ tới khi có trang mới.
