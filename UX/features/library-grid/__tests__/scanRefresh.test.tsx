@@ -104,6 +104,23 @@ describe('bump quét → LibraryGrid làm tươi tại chỗ', () => {
   });
 });
 
+describe('trang đầu chưa về', () => {
+  it('hiện khung xương cùng kích thước thẻ (không vùng trắng, không ZeroState), rồi thay bằng thẻ thật', async () => {
+    const base = createMockLibraryApi(rows);
+    let hold: ((p: FacePage) => void) | null = null;
+    const api = gated(base, () => new Promise<FacePage>(r => { hold = r; }));
+    render(<Harness api={api} rev={0} />);
+    await flush();
+    const skel = screen.queryAllByRole('gridcell');
+    expect(skel.length).toBeGreaterThan(0);
+    expect(skel.every(c => c.getAttribute('data-state') === 'loading')).toBe(true);
+    expect(screen.queryByTestId('empty')).toBeNull();
+    act(() => hold?.({ total: 300, offset: 0, items: rows.slice(0, 200) }));
+    await flush();
+    expect(cells().some(c => c.getAttribute('data-state') !== 'loading')).toBe(true);
+  });
+});
+
 describe('quét kết thúc bằng failed (không bump)', () => {
   it('scanning true→false làm tươi một lần với scanning=false → số 0 được xác nhận', async () => {
     const base = createMockLibraryApi(rows);

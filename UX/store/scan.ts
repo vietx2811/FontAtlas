@@ -7,7 +7,8 @@ import { t } from '../i18n';
 import { refreshNameClashes } from './nameClash';
 import { useUiStore } from './ui';
 
-export const BUMP_THROTTLE_MS = 1500;
+/** Nhịp tải lại tối đa khi font đang về (quét/tải cloud): 3 s, đủ thấy thư viện lớn lên mà không dồn lệnh vào DB đang bận ghi. */
+export const BUMP_THROTTLE_MS = 3000;
 /** `finished` rồi `idle` liền nhau trong khoảng này chỉ tính một lần bump. */
 export const IDLE_COALESCE_MS = 500;
 

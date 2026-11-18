@@ -212,7 +212,9 @@ export function LibraryGrid({
     boxHeight = ch + 48 + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
     rowH = rowH + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
   }
-  const total = snap.total ?? 0;
+  // Trang đầu chưa về (total chưa biết, không lỗi): dựng sẵn khung xương cùng kích thước thẻ thay vì vùng trắng (máy nặng: có thể chờ vài giây).
+  const skeletonCount = snap.total === null && !snap.error ? cols * (Math.ceil(size.height / Math.max(1, rowH)) + 1) : 0;
+  const total = snap.total ?? skeletonCount;
   // Nhóm theo Family (R3): chỉ dùng khi chỉ mục nhóm phủ đúng toàn bộ kết quả; chưa có/lệch/lỗi → lưới phẳng.
   // Theo truy vấn mà các trang đang thuộc về (snap.query), không theo prop mới nhất: chỉ mục nhóm và các trang luôn cùng một truy vấn.
   const pagedQuery = snap.query;
