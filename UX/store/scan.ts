@@ -36,7 +36,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
   let timer: ReturnType<typeof setTimeout> | undefined;
   /** Lượt hiện tại có đổi gì không: watcher quét không đổi (changed=false) thì không bump/không hiện "đang quét". */
   let dirty = false;
-  const quiet = (e: object) => (e as { trigger?: string }).trigger === 'watcher';
+  const quiet = (e: { trigger?: string }) => e.trigger === 'watcher';
   const bumpNow = () => { clearTimeout(timer); timer = undefined; last = Date.now(); store.getState().bump(); };
   void refreshNameClashes(api);
   // Xoá nguồn, giải quyết trùng…: mọi nơi đổi thư viện đều bump `libraryRev` → nạp lại danh sách trùng tên.
@@ -54,7 +54,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     else if (e.type === 'facesAdded') { dirty = true; bumpSoon(); }
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if ((e as { changed?: boolean }).changed !== false) { dirty = true; bumpNow(); void refreshNameClashes(api); } } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
+    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if (e.changed !== false || e.stats.purged > 0) { dirty = true; bumpNow(); void refreshNameClashes(api); } } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
     else if (e.type === 'failed') {
       set({ scanning: false });
       const d = e.error.detail as { source?: string; op?: string; reason?: string } | null;

@@ -128,3 +128,18 @@ describe('scan store: trigger + changed (02)', () => {
     expect(s.getState().version).toBe(v0 + 1);
   });
 });
+
+describe('scan store: changed=false / purged', () => {
+  it('finished changed=false không bump; purged>0 coi như có đổi', async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'user', stats: { purged: 0 } });
+    expect(s.getState().version).toBe(v0);
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'user', stats: { purged: 2 } });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});

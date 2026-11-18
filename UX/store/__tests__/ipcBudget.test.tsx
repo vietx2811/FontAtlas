@@ -49,9 +49,9 @@ describe('ngân sách lệnh api', () => {
     render(<div><Sidebar api={h.api} pickFolder={async () => null} /><TopBar api={h.api} /><Library api={h.api} width={1200} height={700} /></div>);
     await settle(200);
     h.reset();
-    const stats = { status: 'ok', seen: 9, unchanged: 9, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } as never;
-    act(() => { h.emit({ type: 'queued', sourceId: 1 } as ScanEvent); });
-    act(() => { h.emit({ type: 'finished', sourceId: 1, stats } as ScanEvent); });
+    const stats = { status: 'ok', seen: 9, unchanged: 9, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] } as never;
+    act(() => { h.emit({ type: 'queued', sourceId: 1, trigger: 'user' } as ScanEvent); });
+    act(() => { h.emit({ type: 'finished', sourceId: 1, stats, changed: true, trigger: 'user' } as ScanEvent); });
     act(() => { h.emit({ type: 'idle' } as ScanEvent); }); // liền sau finished: gộp
     await settle(300);
     console.log('SCAN_PASS', JSON.stringify(budget(h.counts)), JSON.stringify(h.counts));
