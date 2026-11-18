@@ -355,7 +355,11 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
           {sources.map(s => (
             <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.kind === 'loose' ? t('side.loose') : s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
-              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns
+              // Mặc định hàng Folder chỉ có tên + số + (nếu cần) 1 icon trạng thái. ☁N/✓M/tải về/gợi ý chỉ hiện khi CHỌN nguồn hoặc đang tải.
+              status={notDownloadedOf(s, cloud) > 0 && !cur(`src:${s.id}`) && !(s.id in dlRuns)
+                ? <Tooltip label={`${cloudTip()} · ${tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}`}><span className="fa-status" data-testid="src-cloud-status" role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} /></span></Tooltip>
+                : undefined}
+              sub={(cur(`src:${s.id}`) || s.id in dlRuns) && (notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns)
                 ? <>
                     {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && (
                       <div className="fa-cloud fa-cloud-stats">

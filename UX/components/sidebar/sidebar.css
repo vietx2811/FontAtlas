@@ -84,6 +84,8 @@
 .fa-scan-cloud { margin-left: 4px; }
 .fa-cloud-dl { cursor: default; gap: 8px; margin-top: 0; }
 .fa-cloud-stats { gap: 10px; cursor: default; }
+.fa-status { display: inline-grid; place-items: center; margin-left: 4px; color: var(--muted); cursor: help; }
+.fa-side[data-collapsed="true"] .fa-status { display: none; }
 .fa-cloud-n, .fa-cloud-run { display: inline-flex; align-items: center; gap: 3px; cursor: help; font-variant-numeric: tabular-nums; }
 .fa-cloud-stats [data-testid="cloud-dl-running"] { display: inline-flex; align-items: center; gap: 4px; }
 .fa-cloud-btn, .fa-cloud-x { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: var(--radius-md); text-decoration: none; }

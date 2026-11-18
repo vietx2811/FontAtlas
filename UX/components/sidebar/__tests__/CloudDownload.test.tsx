@@ -32,6 +32,7 @@ describe('Tải về máy — Sidebar', () => {
   it('only a source with files still in the cloud gets the button; clicking asks the backend and shows progress with Cancel', async () => {
     const { api, progress } = hangingApi();
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    act(() => useUiStore.getState().setView('src:2')); await settle(); // chi tiết ☁/tải về chỉ hiện khi chọn nguồn
     const start = screen.getAllByTestId('cloud-dl-start');
     expect(start).toHaveLength(1); // nguồn thường và nguồn mất kết nối không có nút
     fireEvent.click(start[0]); await settle();
@@ -51,6 +52,7 @@ describe('Tải về máy — Sidebar', () => {
   it('when it finishes the line goes back to the button and a notice says what happened', async () => {
     const { api, finish } = hangingApi();
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    act(() => useUiStore.getState().setView('src:2')); await settle(); // chi tiết ☁/tải về chỉ hiện khi chọn nguồn
     fireEvent.click(screen.getByTestId('cloud-dl-start')); await settle();
     await act(async () => { finish(report()); }); await settle();
     expect(screen.queryByTestId('cloud-dl-running')).toBeNull();
@@ -60,6 +62,7 @@ describe('Tải về máy — Sidebar', () => {
   it('the source menu has Tải về máy for a cloud source (and Huỷ while running), none for a local source', async () => {
     const { api } = hangingApi();
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    act(() => useUiStore.getState().setView('src:2')); await settle(); // chi tiết ☁/tải về chỉ hiện khi chọn nguồn
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Fonts/ })); await settle();
     expect(screen.queryByRole('menuitem', { name: /Tải về máy/ })).toBeNull();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' }); await settle();
@@ -78,6 +81,7 @@ describe('Tải về máy — Sidebar', () => {
     const reveal = vi.spyOn(api, 'revealSource');
     const legacy = vi.spyOn(api, 'revealLocation');
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    act(() => useUiStore.getState().setView('src:2')); await settle(); // chi tiết ☁/tải về chỉ hiện khi chọn nguồn
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Dự án khách/ })); await settle();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Hiện trong Finder' })); await settle();
     expect(reveal).toHaveBeenCalledWith(2);
@@ -92,6 +96,7 @@ describe('Tải về máy — Sidebar', () => {
     setLocale('en');
     const { api, progress } = hangingApi();
     render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+    act(() => useUiStore.getState().setView('src:2')); await settle(); // chi tiết ☁/tải về chỉ hiện khi chọn nguồn
     expect(screen.getByTestId('cloud-dl-start').getAttribute('aria-label')).toBe('Download now'); expect(screen.getByTestId('cloud-dl-start').textContent).toBe('');
     fireEvent.click(screen.getByTestId('cloud-dl-start')); await settle();
     act(() => progress({ done: 1, total: 12, failed: 0 }));

@@ -10,11 +10,11 @@ type Props = {
   icon?: IconName; swatch?: string | null; label: string; count?: number | string | null; current?: boolean;
   unavailable?: boolean; title?: string; kbd?: string; onClick(): void;
   /** Chuột phải, phím Menu hoặc ⇧F10; `rect` có khi mở bằng bàn phím. Không có → không chặn menu hệ thống. */
-  onContextMenu?(at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void; onRename?(): void; /** Khoá để tìm lại nút (trả focus sau khi đổi tên). */ navId?: string; /** Mục đang được menu nhắm tới. */ context?: boolean; more?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
+  onContextMenu?(at: { x: number; y: number; keyboard: boolean; el: HTMLElement }): void; onRename?(): void; /** Khoá để tìm lại nút (trả focus sau khi đổi tên). */ navId?: string; /** Mục đang được menu nhắm tới. */ context?: boolean; more?: ReactNode; /** Icon trạng thái nhỏ cạnh tên (vd còn file chỉ trên cloud): mặc định chỉ có thế, chi tiết nằm ở `sub` khi chọn. */ status?: ReactNode; /** Dòng phụ nhỏ dưới mục (không bấm được). */ sub?: ReactNode;
   /** Mục nhận font thả vào (dự án). `here` = đang xem chính mục này: không thả được. */ drop?: { kind?: 'col' | 'case' | 'active' | 'compare'; id: number; name: string; here: boolean };
 };
 
-export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, sub, onContextMenu, onRename, context, navId, drop }: Props): React.JSX.Element {
+export function NavItem({ icon, swatch, label, count, current, unavailable, title, kbd, onClick, more, status, sub, onContextMenu, onRename, context, navId, drop }: Props): React.JSX.Element {
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const over = useFaceDragStore(s => (drop && s.drag?.over?.kind === (drop.kind ?? 'col') && s.drag.over.id === drop.id ? (s.drag.over.valid ? 'ok' : 'no') : undefined));
   const finderOver = useFinderDropStore(s => (drop && s.over?.kind === (drop.kind ?? 'col') && s.over.id === drop.id ? 'ok' : undefined));
@@ -35,6 +35,7 @@ export function NavItem({ icon, swatch, label, count, current, unavailable, titl
         {swatch !== undefined && <span className="fa-swatch" style={{ background: swatch ?? 'var(--muted)' }} aria-hidden />}
         {icon && <Icon name={icon} />}
         <span className="fa-lbl">{label}</span>
+        {status}
         {kbd && <span className="fa-kbd">{shortcutText(kbd)}</span>}
         {count != null && <span className="fa-n">{count}</span>}
       </button>

@@ -229,8 +229,21 @@ describe('Sidebar', () => {
   });
 
   describe('files still in the cloud (not downloaded)', () => {
+    it('mặc định hàng Folder chỉ có 1 icon trạng thái; ☁N/✓M/gợi ý chỉ hiện khi chọn nguồn', async () => {
+      await mount();
+      expect(screen.getByTestId('src-cloud-status')).toBeTruthy();
+      expect(screen.queryByTestId('not-downloaded')).toBeNull();
+      expect(screen.queryByTestId('cloud-ready')).toBeNull();
+      expect(screen.queryByTestId('cloud-hint')).toBeNull();
+      expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
+      act(() => useUiStore.getState().setView('src:2'));
+      expect(screen.queryByTestId('src-cloud-status')).toBeNull(); // chi tiết thay icon, không hiện cả hai
+      expect(screen.getByTestId('not-downloaded')).toBeTruthy();
+    });
+
     it('a source whose last scan skipped placeholders says how many, with a tooltip on how to download them', async () => {
       await mount();
+      act(() => useUiStore.getState().setView('src:2'));
       const line = screen.getByTestId('not-downloaded');
       expect(line.textContent).toBe('12'); // chỉ icon + số; câu đầy đủ ở aria-label và tooltip
       expect(line.getAttribute('aria-label')).toBe('12 font chưa tải về');
@@ -244,6 +257,7 @@ describe('Sidebar', () => {
 
     it('a cloud source warns with the real share and the Finder advice; a local source has no hint', async () => {
       await mount();
+      act(() => useUiStore.getState().setView('src:2'));
       const hints = screen.getAllByTestId('cloud-hint');
       expect(hints).toHaveLength(1);
       const tip = await tipOf(hints[0]);
