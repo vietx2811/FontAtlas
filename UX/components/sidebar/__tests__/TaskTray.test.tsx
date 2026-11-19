@@ -132,4 +132,14 @@ describe('TaskTray', () => {
     put(store, ...['1', '2', '3', '4'].map(i => task(i, { kind: 'cloudDownload' })));
     expect(screen.getByTestId('task-cancel').getAttribute('aria-label')).toMatch(/^Huỷ tất cả/);
   });
+
+  it('sidebar thu gọn: popover ra ngoài qua portal (không bị overflow của sidebar cắt)', () => {
+    const store = createTaskHubStore();
+    render(<div className="fa-side" data-collapsed="true"><TaskTray api={createMockApi()} store={store} /></div>);
+    put(store, task('a'));
+    fireEvent.click(screen.getByTestId('task-button'));
+    const pop = screen.getByTestId('task-popover');
+    expect(pop.parentElement).toBe(document.body);
+    expect(pop.className).toContain('fixed');
+  });
 });

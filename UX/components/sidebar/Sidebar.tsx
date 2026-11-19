@@ -70,7 +70,6 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
-  const scanned = useScanStore(s => s.written);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
   const dlRuns = useCloudDownloadStore(s => s.runs);
@@ -397,7 +396,8 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? tn('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
+        {/* Khay Tác vụ nền là chỗ duy nhất báo việc nền (quét…); ở đây chỉ còn cảnh báo font chưa tải về trong lúc quét. */}
+        {scanning && cloudNow > 0 && <div className="fa-scan"><Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip></div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
           <TaskTray api={api} />

@@ -10,8 +10,7 @@
 .fa-side[data-collapsed="true"] .fa-task-count { display: none; }
 .fa-side[data-collapsed="true"] .fa-taskwrap { margin-right: 0; }
 .fa-taskpop { position: absolute; left: 6px; right: 6px; bottom: 46px; z-index: 50; box-sizing: border-box; padding: 6px; border-radius: 12px; background: var(--float); border: 1px solid var(--border); box-shadow: 0 12px 36px rgba(0,0,0,.28); color: var(--fg); }
-.fa-side[data-collapsed="true"] .fa-taskwrap { position: relative; }
-.fa-side[data-collapsed="true"] .fa-taskpop { left: 100%; right: auto; bottom: 0; width: 288px; max-width: calc(100vw - 24px); margin-left: 6px; }
+.fa-taskpop.fixed { position: fixed; right: auto; top: auto; width: 288px; max-width: calc(100vw - 24px); }
 .fa-task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .fa-task-row { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 24px; align-items: center; gap: 8px; padding: 7px 6px 9px; font-size: 12px; }
 .fa-task-kind { display: grid; place-items: center; color: var(--muted); }

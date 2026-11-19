@@ -200,16 +200,16 @@ describe('Sidebar', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('refreshes counts when a scan finishes, and shows scan progress in the footer', async () => {
+  it('refreshes counts when a scan finishes, and no longer shows a scan line in the footer (the task tray does)', async () => {
     const { api } = await mount();
     const spy = vi.spyOn(api, 'listSources');
     act(() => useScanStore.getState().bump());
     await settle();
     expect(spy).toHaveBeenCalled();
     act(() => useScanStore.setState({ scanning: true, written: 120 }));
-    expect(screen.getByRole('status', { name: 'Đang quét' }).textContent).toMatch(/Đang quét · 120 font/);
+    expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull(); // khay Tác vụ nền là chỗ duy nhất báo quét
+    expect(screen.queryByText(/Đang quét/)).toBeNull();
     act(() => useScanStore.setState({ scanning: false }));
-    expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull();
   });
 
   it('opens the folder picker when another part of the UI asks for it', async () => {
@@ -268,8 +268,7 @@ describe('Sidebar', () => {
     it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
       await mount();
       act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));
-      const status = screen.getByRole('status', { name: 'Đang quét' });
-      expect(within(status).getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
+      expect(screen.getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
       act(() => useScanStore.setState({ scanning: false, cloud: {} }));
       expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
     });

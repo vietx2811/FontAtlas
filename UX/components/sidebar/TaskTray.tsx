@@ -1,5 +1,6 @@
 // Khay "Tác vụ nền" ở chân thanh bên (beta.5). Ẩn hẳn khi rảnh; không lịch sử; chỉ có huỷ.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Api } from '../../api';
 import type { TaskDto } from '../../api/taskTypes';
 import { formatNumber, t, tn, hasKey, type I18nKey } from '../../i18n';
@@ -67,6 +68,8 @@ export function TaskTray({ api, store = useTaskHubStore }: { api: Api; store?: T
   const rows = useMemo(() => buildRows(running, finished), [running, finished]);
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // Sidebar thu gọn có overflow:hidden → popover vẽ ra ngoài bằng portal + position:fixed cạnh nút.
+  const [fixedAt, setFixedAt] = useState<{ left: number; bottom: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -94,21 +97,23 @@ export function TaskTray({ api, store = useTaskHubStore }: { api: Api; store?: T
   const num = running.length === 0 ? '' : sum.single && sum.total !== null ? progressText({ done: sum.done, total: sum.total, unit: running[0].unit }) : sum.count > 1 ? formatNumber(sum.count) : '';
   const cancel = (r: TaskRow) => { setConfirming(null); r.tasks.filter(x => x.cancellable && x.state !== 'cancelling').forEach(x => { void api.taskCancel(x.id).catch(() => undefined); }); };
 
-  return (
-    <div className="fa-taskwrap">
-      <Tooltip label={`${label} · ${head}`} disabled={open}>
-        <button ref={btn} type="button" className="fa-iconbtn fa-taskbtn" data-testid="task-button" aria-label={label} aria-expanded={open} aria-controls={id} aria-haspopup="dialog" onClick={() => setOpen(o => !o)}>
-          {running.length === 0 ? <Icon name="check" size={16} /> : <Ring value={sum.progress} />}
-          {num && <span className="fa-task-count" data-testid="task-count">{num}</span>}
-        </button>
-      </Tooltip>
-      {open && (
-        <div ref={pop} id={id} className="fa-taskpop" role="dialog" aria-label={t('task.title')} data-testid="task-popover">
+  const popover = (
+        <div ref={pop} id={id} className={`fa-taskpop${fixedAt ? ' fixed' : ''}`} style={fixedAt ?? undefined} role="dialog" aria-label={t('task.title')} data-testid="task-popover">
           <ul className="fa-task-list">
             {rows.map(r => <Row key={r.key} row={r} confirming={confirming === r.key} onAsk={() => setConfirming(r.key)} onKeep={() => setConfirming(null)} onCancel={() => cancel(r)} />)}
           </ul>
         </div>
-      )}
+  );
+
+  return (
+    <div className="fa-taskwrap">
+      <Tooltip label={`${label} · ${head}`} disabled={open}>
+        <button ref={btn} type="button" className="fa-iconbtn fa-taskbtn" data-testid="task-button" aria-label={label} aria-expanded={open} aria-controls={id} aria-haspopup="dialog" onClick={() => { if (!open) { const r = btn.current?.getBoundingClientRect(); const col = !!btn.current?.closest('.fa-side[data-collapsed="true"]'); setFixedAt(col && r ? { left: r.right + 6, bottom: Math.max(8, window.innerHeight - r.bottom) } : null); } setOpen(o => !o); }}>
+          {running.length === 0 ? <Icon name="check" size={16} /> : <Ring value={sum.progress} />}
+          {num && <span className="fa-task-count" data-testid="task-count">{num}</span>}
+        </button>
+      </Tooltip>
+      {open && (fixedAt ? createPortal(popover, document.body) : popover)}
     </div>
   );
 }
