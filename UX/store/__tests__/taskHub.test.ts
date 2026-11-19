@@ -131,7 +131,7 @@ describe('buildRows / summarize', () => {
       expect(name).not.toContain('task.');
       expect(name).not.toContain('{');
     }
-    for (const k of ['task.resolveDuplicates.keepDone', 'task.organize.keepCopied', 'task.error.resolveDuplicates', 'task.error.cloudDownload', 'task.error.organize', 'task.error.import']) expect(hasKey(k)).toBe(true);
+    for (const k of ['task.resolveDuplicates.cancelConfirm', 'task.organize.cancelConfirm', 'task.error.resolveDuplicates', 'task.error.cloudDownload', 'task.error.organize', 'task.error.import']) expect(hasKey(k)).toBe(true);
   });
   it('tóm tắt: trung bình phần đã biết tổng; không biết → null', () => {
     expect(summarize([task('a', { done: 5, total: 10 }), task('b', { done: 0, total: 10 })]).progress).toBeCloseTo(0.25);

@@ -7,7 +7,7 @@ import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } fro
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
-import type { TaskEvent, TaskListDto } from './taskTypes';
+import type { TaskEvent } from './taskTypes';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
 import { t, getLocale, hasKey } from '../i18n';
 
@@ -51,8 +51,6 @@ function channel<T>(onEvent: ((e: T) => void) | undefined): { ch: Channel<T>; of
   ch.onmessage = e => { if (on) onEvent?.(e); };
   return { ch, off: () => { on = false; } };
 }
-async function rawCall<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
-  try { return await invoke<T>(cmd, args); } catch (e) { throw toCmdError(e); }
 }
 async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe', onEvent: (e: T) => void): Promise<Unsubscribe> {
   const { ch, off } = channel<T>(onEvent);
@@ -143,9 +141,9 @@ export function createTauriApi(): Api {
     scanStatus: () => call('scan_status'),
     scanSubscribe: onEvent => subscribe('scan_subscribe', onEvent),
     // TaskHub: lệnh chưa có trong TauriCommandMap tới khi 02 sinh bindings → gọi invoke thẳng.
-    taskList: () => rawCall<TaskListDto>('list_tasks'),
-    taskCancel: id => rawCall<void>('cancel_task', { id }).then(() => undefined),
-    taskSubscribe: async onEvent => { const { ch, off } = channel<TaskEvent>(onEvent); await rawCall<void>('task_subscribe', { onEvent: ch }); return off; },
+    taskList: () => call('list_tasks'),
+    taskCancel: id => call('cancel_task', { id }).then(() => undefined),
+    taskSubscribe: async onEvent => { const { ch, off } = channel<TaskEvent>(onEvent); await call('task_subscribe', { onEvent: ch }); return off; },
     // Thư viện
     getFamilyStyles: family => call('get_family_styles', { family }),
     setFavorite: (face, on) => none(call('set_favorite', { face, on })),
