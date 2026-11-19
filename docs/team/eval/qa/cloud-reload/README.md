@@ -78,3 +78,19 @@ KEEP_DATA=1 Q=$Q MAXWAIT=700 bash run08.sh scen.js   # A, B, C, D; ONLY="A B" đ
 ```
 `run08.sh` giữ khoá QA native, chỉ dừng PID của chính nó, ghi kết quả vào bảng `settings` của dữ liệu tạm (`ui.qa.NNN`) và in ra. Với đối chứng nhỏ: `ONLY=cloudonly` khi chạy `setup.js` (thêm `small100` thay vì `base`), `resetcloud.py` trước, rồi `ONLY="A B C"` cho `scen.js`.
 Bộ đo (`lib8.js`): móc `fetch` (mọi lệnh IPC của app đi qua `ipc://`, ghi thời điểm + độ trễ), kênh `scan_subscribe` riêng (đếm queued/progress/facesAdded/finished/idle), thăm dò DOM 50 ms (số thẻ `face-name`, ô tìm, số trên thanh bên, mục Duplicates, chỉ báo đang quét). Giới hạn: không đặt được cờ `SF_DATALESS` thật nên «cloud» chỉ là stub `.icloud` và file 0 byte; kịch bản đo đúng luồng watcher → quét → bump → nạp lại, không đo việc tải thật.
+
+## Số đo cuối trên 0753e378 (05 bd10eb24 + 02 974c3ac5)
+
+Debug build, thư viện 1.512 font + nguồn cloud thử 61 file (stub/0 byte), load máy 3–15 (CI chạy song song một phần). Harness có p95 và payload `Finished` (changed/trigger/stats).
+
+| Kịch bản (nguồn local) | lượt quét | lưới trắng | remount | query_faces | list_sources p50/p95/max (ms) | changed |
+|---|---|---|---|---|---|---|
+| A 1 file | 1 | 0 | 0 | 3 | 19/19/19 | true |
+| B 30 file/1 s | 1 | 0 | 0 | 3 | 146/146/146 | true |
+| C 30 file/4 s | 9 | 0 | 0 | 27 (3/lượt) | 25/145/145 | true |
+| D 10 lần ghi đè, không font mới | 5 | 0 | 0 | **0** | 3/3/3 | **false** |
+
+Nguồn dưới `…/Library/CloudStorage/cloud` (quiet 8 s): C 4 lượt, 12 query_faces, p95 174 ms; D 0 lượt quét.
+Khởi động (3 lần, load 9–15): "All" hiện ở 1,37 / 1,27 / 1,16 s, thẻ đầu cùng lúc; chỉ báo "đang quét" không hiện.
+
+Lịch sử các mốc: 85384aac (C 30 lượt, 25–30 lưới trắng) → d2a448ca (lưới trắng 0, D còn 3 qf/lượt vì relinked=1 ⇒ changed=true) → 0753e378 (D changed=false, 0 qf).

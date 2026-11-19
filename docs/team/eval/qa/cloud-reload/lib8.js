@@ -14,7 +14,7 @@ const REL = ['query_faces', 'list_sources', 'list_collections', 'list_tags', 'du
 const ipcCount = (from, to = Infinity) => { const o = {}; ipc.filter(x => x[0] >= from && x[0] < to && REL.includes(x[1])).forEach(x => o[x[1]] = (o[x[1]] || 0) + 1); return o; };
 // --- sự kiện scan (kênh của riêng mình, app vẫn có kênh của nó)
 const scanEv = [];
-const scanSub = async () => { try { await raw('scan_subscribe', { onEvent: ch(e => scanEv.push([now(), e.type, e.sourceId ?? null, e.type === 'finished' ? (e.stats && (e.stats.added ?? e.stats.facesWritten ?? null)) : (e.type === 'facesAdded' ? e.count : (e.type === 'progress' ? e.progress.notDownloaded : null))])) }); return true; } catch (e) { return E(e); } };
+const scanSub = async () => { try { await raw('scan_subscribe', { onEvent: ch(e => scanEv.push([now(), e.type, e.sourceId ?? null, e.type === 'finished' ? { changed: e.changed ?? null, trigger: e.trigger ?? null, stats: e.stats ?? null } : (e.type === 'facesAdded' ? e.count : (e.type === 'progress' ? e.progress.notDownloaded : null))])) }); return true; } catch (e) { return E(e); } };
 const evCount = (from, to = Infinity) => { const o = {}; scanEv.filter(x => x[0] >= from && x[0] < to).forEach(x => o[x[1]] = (o[x[1]] || 0) + 1); return o; };
 // --- DOM
 const side = () => document.querySelector('[data-testid=sidebar]');
@@ -43,4 +43,4 @@ const go = async name => { await log('q8-wait-' + name, true, { epochMs: now() }
 const scanIdle = async (ms = 180000) => wait(async () => { const st = await raw('scan_status', {}); return !st.running && !st.scanning; }, ms);
 
 const lat = (from, to = Infinity) => { const o = {}; ipc.filter(x => x[0] >= from && x[0] < to && REL.includes(x[1]) && x[2] != null).forEach(x => (o[x[1]] = o[x[1]] || []).push(x[2]));
-  const r = {}; for (const k in o) { const a = o[k].sort((p, q) => p - q); r[k] = { n: a.length, p50: a[Math.floor(a.length / 2)], max: a[a.length - 1] }; } return r; };
+  const r = {}; for (const k in o) { const a = o[k].sort((p, q) => p - q); r[k] = { n: a.length, p50: a[Math.floor(a.length / 2)], p95: a[Math.min(a.length - 1, Math.ceil(a.length * 0.95) - 1)], max: a[a.length - 1] }; } return r; };
