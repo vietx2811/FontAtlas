@@ -541,3 +541,36 @@ fn resolve_progress_counts_unique_losers_and_reaches_the_total() {
     assert_eq!(r.done.len(), 2);
     assert_eq!(*seen.lock().unwrap(), vec![(0, Some(2)), (1, Some(2))], "total đếm duy nhất; done tăng sau mỗi đơn vị");
 }
+
+/// Lỗi sau commit (đọc lại dòng sổ) KHÔNG làm mất kết quả: trả Ok kèm batch_id, lỗi nằm trong `failed`, phần đã commit vẫn hoàn tác được.
+#[test]
+fn a_failure_after_the_commit_keeps_the_batch_id_reports_the_error_and_the_work_stays_undoable() {
+    use std::sync::atomic::Ordering;
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let trash_dir = td.path().join("trash");
+    st.faults.resolution_readback.store(true, Ordering::SeqCst);
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &fake_trash(&trash_dir),
+        1000,
+    )
+    .expect("lỗi sau commit không được trả Err");
+    st.faults.resolution_readback.store(false, Ordering::SeqCst);
+    assert!(r.batch_id.starts_with("dup-"), "vẫn có batch_id: {}", r.batch_id);
+    assert!(r.done.is_empty(), "không đọc lại được nên không có dòng trong done");
+    assert_eq!(r.failed.iter().filter(|f| f.code == "db_error").count(), 2, "{:?}", r.failed);
+    // việc đã commit thật: tệp nằm trong Thùng rác, sổ có 2 dòng hoàn tác được
+    let live = dup_resolve::resolve_list(&st, false).unwrap();
+    assert_eq!(live.len(), 2);
+    assert!(live.iter().all(|x| x.can_undo && x.batch_id == r.batch_id));
+    let ids: Vec<i64> = live.iter().map(|x| x.id).collect();
+    let u = dup_resolve::resolve_undo(&st, &ids, 2000).unwrap();
+    assert!(u.failed.is_empty(), "{:?}", u.failed);
+    assert!(st.tasks.list().tasks.is_empty(), "việc phải gỡ khỏi khay");
+}

@@ -15,6 +15,21 @@ use crate::services::embed::EmbedSupervisor;
 use crate::services::model::ModelRuntime;
 use crate::services::scan::ScanManager;
 
+/// Cờ tiêm lỗi cho test tích hợp (không có tác dụng khi tắt).
+#[derive(Default)]
+pub struct Faults {
+    /// `organized_record` (ghi sổ sau khi chép) trả lỗi.
+    pub organized_record: std::sync::atomic::AtomicBool,
+    /// Đọc lại dòng sổ `resolution(id)` SAU khi đơn vị resolve đã commit trả lỗi.
+    pub resolution_readback: std::sync::atomic::AtomicBool,
+}
+
+impl Faults {
+    pub fn on(flag: &std::sync::atomic::AtomicBool) -> bool {
+        flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AppDirs {
     pub data: PathBuf,
@@ -67,6 +82,9 @@ pub struct AppState {
     pub scans: ScanManager,
     /// Danh sách việc nền cho khay "Tác vụ" (chỉ hiển thị + huỷ).
     pub tasks: crate::services::tasks::TaskHub,
+    /// Móc tiêm lỗi CHỈ để test (mặc định tắt, một lần đọc cờ nguyên tử): kiểm đường lỗi sau commit mà không cần phá DB thật.
+    #[doc(hidden)]
+    pub faults: Faults,
     /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
     /// Đối soát kích hoạt BÙ (hash bận ở lượt trước): số lượt đang chờ/đang chạy và cách chờ (mặc định ngủ ~1,5 s; test tiêm cổng sự kiện).
@@ -119,6 +137,7 @@ impl AppState {
             hubs: Hubs::default(),
             scans: ScanManager::default(),
             tasks: Default::default(),
+            faults: Faults::default(),
             cloud_jobs: Default::default(),
             imports: Default::default(),
             organize: Default::default(),
