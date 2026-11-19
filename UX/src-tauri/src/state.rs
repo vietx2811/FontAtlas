@@ -65,6 +65,8 @@ pub struct AppState {
     pub boot: RwLock<BootStatusDto>,
     pub hubs: Hubs,
     pub scans: ScanManager,
+    /// Danh sách việc nền cho khay "Tác vụ" (chỉ hiển thị + huỷ).
+    pub tasks: crate::services::tasks::TaskHub,
     /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
     /// Đối soát kích hoạt BÙ (hash bận ở lượt trước): số lượt đang chờ/đang chạy và cách chờ (mặc định ngủ ~1,5 s; test tiêm cổng sự kiện).
@@ -116,6 +118,7 @@ impl AppState {
             boot: RwLock::new(BootStatusDto::default()),
             hubs: Hubs::default(),
             scans: ScanManager::default(),
+            tasks: Default::default(),
             cloud_jobs: Default::default(),
             imports: Default::default(),
             organize: Default::default(),

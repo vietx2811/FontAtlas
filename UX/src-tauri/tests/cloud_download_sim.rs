@@ -429,6 +429,54 @@ fn be1_rewriting_a_font_with_identical_bytes_is_not_a_change_but_a_new_copy_is()
     assert_eq!(fin, vec![false, false, false, true], "ghi đè cùng byte ×3 → false; bản sao mới → true");
 }
 
+/// TaskHub: một lượt quét hiện thành việc trong khay (chờ → chạy → gỡ), rev tăng đơn điệu, hết việc thì danh sách rỗng;
+/// huỷ việc đang chờ gỡ nó ngay và nguồn đó không bị quét.
+#[test]
+fn taskhub_a_scan_shows_up_runs_and_disappears_and_a_queued_one_can_be_cancelled() {
+    use app_lib::dto::events::ScanTrigger;
+    use app_lib::dto::tasks::{TaskEvent, TaskKind, TaskOutcome, TaskState};
+    let root = sim_root();
+    let (st, _dir) = seeded(root.path(), 6);
+    let evs: Arc<Mutex<Vec<TaskEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    // nguồn 2 giữ luồng quét (đang tạm dừng) để nguồn 1 nằm chờ
+    let dir2 = root.path().join("Hold");
+    std::fs::create_dir_all(&dir2).unwrap();
+    std::fs::write(dir2.join("h.ttf"), unique_font(901)).unwrap();
+    sources::add_source(&st, dir2.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty(), "hết việc → khay rỗng");
+    evs.lock().unwrap().clear();
+
+    st.scans.pause(&st);
+    st.scans.enqueue_as(&st, &[2], ScanTrigger::User);
+    wait_until("nguồn 2 đang quét", 10, || st.scans.is_current(2));
+    assert!(st.scans.enqueue_follow_up_as(&st, &[1], ScanTrigger::Watcher));
+    let l = st.tasks.list();
+    let states: Vec<(TaskState, ScanTrigger)> = l.tasks.iter().map(|t| (t.state, t.trigger)).collect();
+    assert!(states.contains(&(TaskState::Queued, ScanTrigger::Watcher)), "{states:?}");
+    assert!(l.tasks.iter().all(|t| t.kind == TaskKind::Scan && t.cancellable));
+    // tiêu đề chỉ có tên ngắn, không đường dẫn đầy đủ
+    for t in &l.tasks {
+        let a = serde_json::to_string(&t.title_args).unwrap();
+        assert!(!a.contains('/') && !a.contains("tmp"), "{a}");
+    }
+    // huỷ việc đang chờ (nguồn 1): gỡ ngay, không quét nguồn 1
+    let queued = l.tasks.iter().find(|t| t.state == TaskState::Queued).unwrap().id.clone();
+    assert!(st.tasks.cancel(&queued));
+    assert!(!st.tasks.list().tasks.iter().any(|t| t.id == queued), "việc chờ bị huỷ phải biến mất ngay");
+    assert!(!st.scans.is_queued(1));
+    st.scans.resume(&st);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty());
+    let ev = evs.lock().unwrap();
+    let revs: Vec<u64> = ev.iter().map(|e| match e { TaskEvent::Upsert { task } => task.rev, TaskEvent::Removed { rev, .. } => *rev }).collect();
+    assert!(revs.windows(2).all(|w| w[0] < w[1]), "rev đơn điệu: {revs:?}");
+    let outcomes: Vec<TaskOutcome> = ev.iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
+    assert!(outcomes.contains(&TaskOutcome::Cancelled) && outcomes.contains(&TaskOutcome::Done), "{outcomes:?}");
+}
+
 #[test]
 fn be2_every_scan_event_carries_who_triggered_it_and_a_user_request_outranks_a_queued_watcher_one() {
     use app_lib::dto::events::ScanTrigger;

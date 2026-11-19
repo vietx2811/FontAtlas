@@ -16,6 +16,7 @@ use crate::dto::cases::*;
 use crate::dto::dup_resolve::*;
 use crate::dto::figma::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::tasks::{TaskEvent, TaskListDto};
 use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
@@ -95,6 +96,9 @@ macro_rules! command_list {
             async scan_cancel() -> Result<(), CmdError>;
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
             async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
+            async task_subscribe(on_event: Channel<TaskEvent>) -> Result<(), CmdError>;
+            async list_tasks() -> Result<TaskListDto, CmdError>;
+            async cancel_task(id: String) -> Result<bool, CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
             async family_groups(q: FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError>;
             async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
@@ -756,6 +760,25 @@ pub async fn scan_subscribe(
         .scan
         .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
+}
+
+/// Khay "Tác vụ": nhận sự kiện (đăng ký TRƯỚC, rồi `list_tasks`; FE bỏ sự kiện có rev ≤ rev của danh sách).
+#[tauri::command]
+pub async fn task_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>) -> Result<(), CmdError> {
+    state.tasks.events.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+    Ok(())
+}
+
+/// Không chạm store/Index: chỉ đọc bảng việc trong bộ nhớ.
+#[tauri::command]
+pub async fn list_tasks(state: State<'_, Arc<AppState>>) -> Result<TaskListDto, CmdError> {
+    Ok(state.tasks.list())
+}
+
+/// Đặt cờ huỷ và trả ngay (`false` = việc đã hết hoặc không huỷ được). Việc dừng ở ranh giới an toàn.
+#[tauri::command]
+pub async fn cancel_task(state: State<'_, Arc<AppState>>, id: String) -> Result<bool, CmdError> {
+    Ok(state.tasks.cancel(&id))
 }
 
 #[tauri::command]

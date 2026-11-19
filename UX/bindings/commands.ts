@@ -126,6 +126,8 @@ import type { SuggestCombosReqDto } from './SuggestCombosReqDto';
 import type { SuggestPartnersReqDto } from './SuggestPartnersReqDto';
 import type { SystemTagGroupDto } from './SystemTagGroupDto';
 import type { TagDto } from './TagDto';
+import type { TaskEvent } from './TaskEvent';
+import type { TaskListDto } from './TaskListDto';
 import type { UiStateDto } from './UiStateDto';
 import type { VfPolicyDto } from './VfPolicyDto';
 
@@ -170,6 +172,9 @@ export interface TauriCommandMap {
   scan_cancel: { args: Record<string, never>; result: null };
   scan_status: { args: Record<string, never>; result: ScanStatusDto };
   scan_subscribe: { args: { onEvent: Channel<ScanEvent> }; result: null };
+  task_subscribe: { args: { onEvent: Channel<TaskEvent> }; result: null };
+  list_tasks: { args: Record<string, never>; result: TaskListDto };
+  cancel_task: { args: { id: string }; result: boolean };
   query_faces: { args: { q: FaceQueryDto }; result: FacePageDto };
   family_groups: { args: { q: FaceQueryDto }; result: FamilyGroupDto[] };
   get_family_styles: { args: { family: string }; result: FamilyStyleDto[] };
