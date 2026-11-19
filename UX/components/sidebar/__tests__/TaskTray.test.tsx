@@ -102,4 +102,34 @@ describe('TaskTray', () => {
     act(() => { store.setState({ done: {} }); });
     expect(screen.queryByTestId('task-button')).toBeNull();
   });
+
+  it('khoá xác nhận thiếu bản dịch: nhóm xác nhận không lộ khoá thô', () => {
+    const store = createTaskHubStore();
+    render(<TaskTray api={createMockApi()} store={store} />);
+    put(store, task('d', { cancelConfirmKey: 'task.confirm.khong.co' }));
+    fireEvent.click(screen.getByTestId('task-button'));
+    fireEvent.click(screen.getByTestId('task-cancel'));
+    expect(screen.getByTestId('task-confirm').getAttribute('aria-label')).not.toContain('task.confirm');
+  });
+
+  it('khay về rảnh khi popover đang mở: focus trả về nút Cài đặt', () => {
+    const store = createTaskHubStore();
+    render(<div className="fa-foot-actions"><TaskTray api={createMockApi()} store={store} /><button type="button" aria-label="Cài đặt">⚙</button></div>);
+    put(store, task('a'));
+    const btn = screen.getByTestId('task-button');
+    fireEvent.click(btn); btn.focus();
+    put(store);
+    expect(screen.queryByTestId('task-button')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cài đặt' }));
+  });
+
+  it('tổng chưa biết: dòng hiện "Đang đếm…"; dòng gộp có tên "Huỷ tất cả"; watcher có chú giải tự động', () => {
+    const store = createTaskHubStore();
+    render(<TaskTray api={createMockApi()} store={store} />);
+    put(store, task('a', { total: null, done: 0 }));
+    fireEvent.click(screen.getByTestId('task-button'));
+    expect(screen.getByTestId('task-num').textContent).toBe('Đang đếm…');
+    put(store, ...['1', '2', '3', '4'].map(i => task(i, { kind: 'cloudDownload' })));
+    expect(screen.getByTestId('task-cancel').getAttribute('aria-label')).toMatch(/^Huỷ tất cả/);
+  });
 });

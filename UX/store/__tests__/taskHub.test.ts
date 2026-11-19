@@ -109,6 +109,15 @@ describe('buildRows / summarize', () => {
     const unknown = buildRows([...many.slice(0, 3), task('x', { kind: 'cloudDownload', total: null })], []);
     expect(unknown[0].total).toBeNull();
   });
+  it('failed của việc không có trong danh sách (bắt đầu và lỗi giữa subscribe và list): vẫn một toast theo errorKey', async () => {
+    const { notices, push } = await setup();
+    push({ type: 'removed', id: 'ghost', rev: 4, outcome: 'failed', errorKey: 'task.error.scan' });
+    const n = notices.getState().notices;
+    expect(n).toHaveLength(1);
+    expect(n[0].kind).toBe('error');
+    expect(n[0].detail).toBeTruthy();
+    expect(n[0].text).not.toContain('task.');
+  });
   it('tóm tắt: trung bình phần đã biết tổng; không biết → null', () => {
     expect(summarize([task('a', { done: 5, total: 10 }), task('b', { done: 0, total: 10 })]).progress).toBeCloseTo(0.25);
     expect(summarize([task('a', { total: null })]).progress).toBeNull();

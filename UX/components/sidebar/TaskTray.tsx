@@ -34,8 +34,9 @@ function Row({ row, confirming, onAsk, onCancel, onKeep }: { row: TaskRow; confi
   const grouped = row.tasks.length > 1;
   const title = grouped ? t('task.group', { n: row.tasks.length }) : taskTitle(first);
   const frac = row.total && row.total > 0 ? Math.min(1, row.done / row.total) : null;
-  const text = row.finished ? t('task.done') : row.state === 'queued' && row.done === 0 ? t('task.queued') : progressText({ done: row.done, total: row.total, unit: first.unit });
-  const kindTip = hasKey(`task.kindTip.${row.kind}`) ? t(`task.kindTip.${row.kind}` as I18nKey) : kindLabel(row.kind);
+  const text = row.finished ? t('task.done') : row.state === 'queued' && row.done === 0 ? t('task.queued') : row.total === null && row.done === 0 ? t('task.unknownTotal') : progressText({ done: row.done, total: row.total, unit: first.unit });
+  const kindTip = first.trigger === 'watcher' ? t('task.watcherHint') : hasKey(`task.kindTip.${row.kind}`) ? t(`task.kindTip.${row.kind}` as I18nKey) : kindLabel(row.kind);
+  const cancelLabel = grouped ? t('task.cancelAll') : t('task.cancel');
   return (
     <li className="fa-task-row" data-testid="task-row" data-kind={row.kind} data-state={row.state}>
       <Tooltip label={kindTip}><span className="fa-task-kind"><Icon name={row.finished ? 'check' : KIND_ICON[row.kind]} size={15} /></span></Tooltip>
@@ -44,10 +45,10 @@ function Row({ row, confirming, onAsk, onCancel, onKeep }: { row: TaskRow; confi
       {!row.finished && row.cancellable && !confirming && (
         row.state === 'cancelling'
           ? <span className="fa-task-cancelling">{t('task.cancelling')}</span>
-          : <Tooltip label={t('task.cancel')}><button type="button" className="fa-task-x" aria-label={`${t('task.cancel')}: ${title}`} data-testid="task-cancel" onClick={row.confirmKey ? onAsk : onCancel}><Icon name="x" size={13} /></button></Tooltip>
+          : <Tooltip label={cancelLabel}><button type="button" className="fa-task-x" aria-label={`${cancelLabel}: ${title}`} data-testid="task-cancel" onClick={row.confirmKey ? onAsk : onCancel}><Icon name="x" size={13} /></button></Tooltip>
       )}
       {confirming && row.confirmKey && (
-        <span className="fa-task-confirm" role="group" aria-label={t(row.confirmKey as I18nKey)} data-testid="task-confirm">
+        <span className="fa-task-confirm" role="group" aria-label={hasKey(row.confirmKey) ? t(row.confirmKey) : t('task.cancel')} data-testid="task-confirm">
           <span>{hasKey(row.confirmKey) ? t(row.confirmKey) : ''}</span>
           <button type="button" data-testid="task-keep" onClick={onKeep}>{t('task.keep')}</button>
           <button type="button" className="danger" data-testid="task-confirm-yes" onClick={onCancel}>{t('task.cancelYes')}</button>
@@ -71,7 +72,13 @@ export function TaskTray({ api, store = useTaskHubStore }: { api: Api; store?: T
   const id = useId();
   const idle = running.length === 0 && finished.length === 0;
 
-  useEffect(() => { if (idle) { setOpen(false); setConfirming(null); } }, [idle]);
+  useEffect(() => {
+    if (!idle) return;
+    // Khay đã unmount cùng popover đang mở: focus rơi về <body>; trả về nút Cài đặt (cùng chân sidebar) để bàn phím không mất chỗ.
+    const a = document.activeElement;
+    if (open && (!a || a === document.body)) document.querySelector<HTMLElement>(`.fa-foot-actions button[aria-label="${t('side.settings')}"]`)?.focus();
+    setOpen(false); setConfirming(null);
+  }, [idle, open]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => { const n = e.target as Node; if (!pop.current?.contains(n) && !btn.current?.contains(n)) setOpen(false); };

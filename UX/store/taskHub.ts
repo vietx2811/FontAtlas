@@ -89,8 +89,8 @@ export async function startTaskHub(api: Api, store: TaskHubStore = useTaskHubSto
       timers.add(timer);
     }
     store.setState(next);
-    if (e.outcome === 'failed' && prev) {
-      const name = taskTitle(prev);
+    if (e.outcome === 'failed') {
+      const name = prev ? taskTitle(prev) : t('task.kind.other');
       const detail = e.errorKey ? (hasKey(e.errorKey) ? t(e.errorKey) : undefined) : undefined;
       notices.getState().push({ kind: 'error', key: `task:${e.id}`, text: t('task.failed', { name }), detail });
     }
