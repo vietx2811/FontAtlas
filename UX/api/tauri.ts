@@ -51,7 +51,6 @@ function channel<T>(onEvent: ((e: T) => void) | undefined): { ch: Channel<T>; of
   ch.onmessage = e => { if (on) onEvent?.(e); };
   return { ch, off: () => { on = false; } };
 }
-}
 async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe', onEvent: (e: T) => void): Promise<Unsubscribe> {
   const { ch, off } = channel<T>(onEvent);
   await call(cmd, { onEvent: ch } as never);
