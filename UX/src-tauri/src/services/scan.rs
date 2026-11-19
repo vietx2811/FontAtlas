@@ -215,6 +215,9 @@ impl ScanManager {
             let mut q = lock(&self.inner.q);
             if q.current == Some(id) {
                 self.inner.cancel.store(true, Ordering::SeqCst);
+                // người dùng đã huỷ: bỏ luôn lượt chờ tiếp của CÙNG nguồn (nếu không nó chạy lại và hiện lại sau khi đã huỷ)
+                q.queue.retain(|x| *x != id);
+                q.triggers.remove(&id);
                 (CancelOutcome::Running, false)
             } else {
                 let before = q.queue.len();
@@ -224,7 +227,8 @@ impl ScanManager {
                 (if removed { CancelOutcome::Queued } else { CancelOutcome::Nothing }, removed && q.queue.is_empty() && q.current.is_none())
             }
         };
-        if out == CancelOutcome::Queued {
+        // đang chờ HOẶC không còn gì (worker vừa xong nguồn này): việc còn lại trong khay là việc cũ, gỡ ngay (không kẹt "cancelling")
+        if out != CancelOutcome::Running {
             if let Some(t) = state.tasks.id_of(&scan_key(id)) {
                 state.tasks.finish(&t, TaskOutcome::Cancelled, None);
             }
