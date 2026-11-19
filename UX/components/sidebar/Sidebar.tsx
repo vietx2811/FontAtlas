@@ -15,6 +15,7 @@ import { useAppPickerStore } from '../../store/appPicker';
 import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
+import { TaskTray } from './TaskTray';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
 import { t, tn } from '../../i18n';
@@ -399,6 +400,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? tn('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
+          <TaskTray api={api} />
           <Tooltip label={dark ? t('side.themeLight') : t('side.themeDark')}><button type="button" className="fa-iconbtn" aria-label={t('side.themeToggle')} aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>
           <Tooltip label={t('side.settings')} shortcut="⌘,"><button type="button" className="fa-iconbtn" aria-label={t('side.settings')} onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button></Tooltip>
         </div>

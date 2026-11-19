@@ -585,6 +585,9 @@ export function createMockApi(o: MockOptions = {}): Api {
     async scanStatus() { return ok({ running: scanning, paused: false, currentSourceId: null, queued: [] }); },
     async scanPause() {}, async scanResume() {}, async scanCancel() {},
     async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
+    async taskList() { return { rev: 0, tasks: [] }; },
+    async taskCancel() {},
+    async taskSubscribe() { return () => {}; },
     ...act,
     ...auto,
   };

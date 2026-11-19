@@ -1,5 +1,6 @@
 // Mọi lệnh backend đi qua một interface; tên phương thức = tên lệnh 6a (camelCase).
 // Cài đặt thật: api/tauri.ts (invoke + Channel). Cài đặt giả: api/mock.ts (dev không có Tauri, Vitest).
+import type { TaskEvent, TaskListDto } from './taskTypes';
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
@@ -103,6 +104,11 @@ export interface Api extends LibraryApi {
   scanCancel(): Promise<void>;
   scanStatus(): Promise<ScanStatusDto>;
   scanSubscribe(onEvent: (e: ScanEvent) => void): Promise<Unsubscribe>;
+  /** TaskHub: danh sách việc nền hiện có (kèm `rev` để bỏ sự kiện cũ). */
+  taskList(): Promise<TaskListDto>;
+  /** Huỷ một việc nền; idempotent, trả ngay. */
+  taskCancel(id: string): Promise<void>;
+  taskSubscribe(onEvent: (e: TaskEvent) => void): Promise<Unsubscribe>;
   // Thư viện
   getFamilyStyles(family: string): Promise<FamilyStyleDto[]>;
   setFavorite(face: FaceKeyDto, on: boolean): Promise<void>;

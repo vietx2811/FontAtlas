@@ -23,6 +23,7 @@ import { ActivationDialogHost } from './components/activation/ActivationDialogHo
 import { AppPickerHost } from './components/desk/AppPicker';
 import { DeriveCopyDialog } from './components/activation/DeriveCopyDialog';
 import { startScanSync } from './store/scan';
+import { startTaskHub } from './store/taskHub';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
@@ -71,6 +72,12 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
         startScanSync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('scan sync failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
+
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
+        startTaskHub(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('task hub sync failed', e));
         return () => { dead = true; stop?.(); };
     }, [api]);
 
