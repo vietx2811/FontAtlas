@@ -13,3 +13,4 @@ pub mod preview;
 pub mod settings;
 pub mod figma;
 pub mod suggest;
+pub mod tasks;
