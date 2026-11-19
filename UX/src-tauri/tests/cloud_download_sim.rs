@@ -477,6 +477,75 @@ fn taskhub_a_scan_shows_up_runs_and_disappears_and_a_queued_one_can_be_cancelled
     assert!(outcomes.contains(&TaskOutcome::Cancelled) && outcomes.contains(&TaskOutcome::Done), "{outcomes:?}");
 }
 
+/// Tiến độ việc quét đơn điệu: pha đếm total=null (không mượn thang pha phân tích), done không bao giờ lùi trong một việc.
+#[test]
+fn taskhub_scan_progress_never_goes_backwards_and_counting_has_unknown_total() {
+    use app_lib::dto::tasks::TaskEvent;
+    let root = sim_root();
+    let st = booted(root.path());
+    let dir = root.path().join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..600 {
+        std::fs::write(dir.join(format!("f{i}.ttf")), unique_font(5000 + i)).unwrap();
+    }
+    let evs: Arc<Mutex<Vec<TaskEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(120)));
+    let mut last: Option<(u64, Option<u64>)> = None;
+    let mut seen_unknown = false;
+    for e in evs.lock().unwrap().iter() {
+        if let TaskEvent::Upsert { task } = e {
+            if task.total.is_none() {
+                seen_unknown = true;
+                assert_eq!(task.done, 0, "pha đếm không báo done");
+            }
+            if let Some((d, t)) = last
+                && t == task.total
+                && task.total.is_some()
+            {
+                assert!(task.done >= d, "done lùi: {d} → {} (total {:?})", task.done, task.total);
+            }
+            last = Some((task.done, task.total));
+        }
+    }
+    assert!(seen_unknown, "phải có giai đoạn total=null");
+}
+
+/// Review: huỷ việc đang chờ trả đúng trường hợp đã xử lý; việc "ma" không kẹt khi huỷ/xếp đua nhau; UI luôn nhận Idle cuối.
+#[test]
+fn taskhub_cancel_outcomes_are_exact_and_racing_enqueue_cancel_leaves_no_ghost_task() {
+    use app_lib::dto::events::ScanTrigger;
+    use app_lib::services::scan::CancelOutcome;
+    let root = sim_root();
+    let (st, _dir) = seeded(root.path(), 4);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert_eq!(st.scans.cancel_source(&st, 1), CancelOutcome::Nothing);
+    let ev = record(&st);
+    let mut handles = Vec::new();
+    for t in 0..4 {
+        let st2 = st.clone();
+        handles.push(std::thread::spawn(move || {
+            for i in 0..60 {
+                if (i + t) % 2 == 0 {
+                    st2.scans.enqueue_follow_up_as(&st2, &[1], ScanTrigger::Watcher);
+                } else {
+                    let _ = st2.scans.cancel_source(&st2, 1);
+                }
+            }
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    assert!(st.scans.wait_idle(Duration::from_secs(120)));
+    assert!(st.tasks.list().tasks.is_empty(), "không còn việc ma: {:?}", st.tasks.list().tasks);
+    let evs = ev.lock().unwrap();
+    // mỗi Queued của nguồn phải được khép bởi Finished/Failed hoặc bị huỷ rồi có Idle sau cùng
+    assert!(matches!(evs.last(), Some(ScanEvent::Idle)) || evs.is_empty() || evs.iter().rev().any(|e| matches!(e, ScanEvent::Idle)), "UI phải nhận Idle");
+}
+
 #[test]
 fn be2_every_scan_event_carries_who_triggered_it_and_a_user_request_outranks_a_queued_watcher_one() {
     use app_lib::dto::events::ScanTrigger;

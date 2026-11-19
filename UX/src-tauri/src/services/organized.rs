@@ -437,7 +437,7 @@ pub fn import_with(
     let spec = TaskSpec::new(TaskKind::Export, "task.organize")
         .total(Some(total as u64))
         .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
-        .confirm_cancel("task.organize.keepCopied");
+        .confirm_cancel("task.organize.cancelConfirm");
     let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.organize");
     let mut tracked = |p: OrganizeProgressDto| {
         task.progress(p.done as u64, Some(total as u64));

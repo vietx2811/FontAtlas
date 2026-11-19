@@ -461,7 +461,7 @@ pub fn resolve_apply(
     let spec = TaskSpec::new(TaskKind::ResolveDuplicates, "task.resolveDuplicates")
         .total(total_units)
         .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
-        .confirm_cancel("task.resolveDuplicates.keepDone");
+        .confirm_cancel("task.resolveDuplicates.cancelConfirm");
     let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.resolveDuplicates");
     let mut units_seen = 0u64;
     let mut was_cancelled = false;

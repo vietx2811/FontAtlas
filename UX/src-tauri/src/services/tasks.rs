@@ -182,7 +182,8 @@ impl TaskHub {
 
     pub fn progress(&self, id: &str, done: u64, total: Option<u64>) {
         self.update(id, false, |d| {
-            d.done = done;
+            // trong một việc `done` không bao giờ lùi khi thang (total) giữ nguyên; đổi thang (null → có số) thì được đặt lại
+            d.done = if d.total == total { done.max(d.done) } else { done };
             d.total = total;
         });
     }
@@ -354,13 +355,13 @@ mod tests {
             let _ = h2.list();
             hit2.store(true, Ordering::SeqCst);
         });
-        let id = h.begin(None, TaskSpec::new(TaskKind::ResolveDuplicates, "t").cancellable(f).confirm_cancel("task.keepDone"), TaskState::Running);
+        let id = h.begin(None, TaskSpec::new(TaskKind::ResolveDuplicates, "t").cancellable(f).confirm_cancel("task.cancelConfirm"), TaskState::Running);
         h.progress(&id, 3, Some(12));
         assert!(h.cancel(&id));
         assert!(h.cancel(&id));
         assert!(hit.load(Ordering::SeqCst));
         let t = h.list().tasks.remove(0);
-        assert_eq!((t.state, t.done, t.total, t.cancel_confirm_key.as_deref()), (TaskState::Cancelling, 3, Some(12), Some("task.keepDone")));
+        assert_eq!((t.state, t.done, t.total, t.cancel_confirm_key.as_deref()), (TaskState::Cancelling, 3, Some(12), Some("task.cancelConfirm")));
         h.running(&id); // không kéo Cancelling về Running
         assert_eq!(h.list().tasks[0].state, TaskState::Cancelling);
         assert!(!h.cancel("t999"));
@@ -374,6 +375,18 @@ mod tests {
         assert!(!h.cancel(&id));
         let t = h.list().tasks.remove(0);
         assert!(!t.cancellable && t.total.is_none());
+    }
+
+    #[test]
+    fn done_never_goes_backwards_on_the_same_scale() {
+        let h = TaskHub::default();
+        let id = h.begin(None, TaskSpec::new(TaskKind::Scan, "t"), TaskState::Running);
+        h.progress(&id, 0, None); // pha đếm
+        h.progress(&id, 5, Some(10));
+        h.progress(&id, 3, Some(10)); // báo trễ/lùi: bị chặn
+        assert_eq!(h.list().tasks[0].done, 5);
+        h.progress(&id, 2, Some(20)); // đổi thang: được đặt lại
+        assert_eq!((h.list().tasks[0].done, h.list().tasks[0].total), (2, Some(20)));
     }
 
     #[test]

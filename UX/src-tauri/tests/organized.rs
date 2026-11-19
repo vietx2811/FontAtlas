@@ -419,7 +419,7 @@ fn the_organize_copy_is_a_cancellable_export_task_and_cancelling_it_stops_the_co
     let s = seen.borrow();
     assert_eq!(s.len(), 1);
     assert_eq!((s[0].0, s[0].1, s[0].2), (TaskKind::Export, Some(3), TaskState::Running));
-    assert_eq!(s[0].3.as_deref(), Some("task.organize.keepCopied"));
+    assert_eq!(s[0].3.as_deref(), Some("task.organize.cancelConfirm"));
     assert!(r.cancelled, "huỷ từ khay dừng lượt chép");
     assert!(copied_names(&root).len() < 3);
     assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Export), "xong thì gỡ");
