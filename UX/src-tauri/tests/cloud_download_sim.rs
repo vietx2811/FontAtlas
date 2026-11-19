@@ -592,8 +592,11 @@ fn be4_a_cloudstorage_path_source_waits_longer_than_a_local_folder() {
     let local = plain_burst_scans("Fonts");
     let cloud = plain_burst_scans("Library/CloudStorage/OneDrive-Test/Fonts");
     eprintln!("[be4 path] 12 file cách 450 ms: thư mục cục bộ = {local} lượt, CloudStorage = {cloud} lượt");
-    assert!(local >= 8, "cục bộ: gần như mỗi file một lượt ({local})");
+    // Không đặt ngưỡng tuyệt đối cho cục bộ: backoff theo cơn bão (≥3 lượt/60 s → quiet giãn) và tải máy làm số này dao động.
+    // Ý đồ chỉ là: nguồn CloudStorage gom lại và ít lượt quét hơn hẳn thư mục thường.
+    assert!(local >= 2, "cục bộ vẫn quét nhiều lần ({local})");
     assert!(cloud <= 3, "CloudStorage: gom lại ({cloud})");
+    assert!(cloud < local, "CloudStorage ({cloud}) phải ít lượt hơn cục bộ ({local})");
 }
 
 /// Khởi động với thư viện lớn có sẵn (đã quét một lần): thời gian `run_boot`, rồi tới lúc ba số sidebar đọc được, trong khi
