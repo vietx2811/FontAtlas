@@ -89,9 +89,10 @@ export async function startTaskHub(api: Api, store: TaskHubStore = useTaskHubSto
       timers.add(timer);
     }
     store.setState(next);
-    if (e.outcome === 'failed') {
+    // Không có errorKey = lệnh đã tự báo lỗi (BE: kích hoạt/tắt/chuyển đường dẫn) → hub không toast thêm.
+    if (e.outcome === 'failed' && e.errorKey) {
       const name = prev ? taskTitle(prev) : t('task.kind.other');
-      const detail = e.errorKey ? (hasKey(e.errorKey) ? t(e.errorKey) : undefined) : undefined;
+      const detail = hasKey(e.errorKey) ? t(e.errorKey) : undefined;
       notices.getState().push({ kind: 'error', key: `task:${e.id}`, text: t('task.failed', { name }), detail });
     }
   };

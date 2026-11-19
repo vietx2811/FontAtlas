@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../api/mock';
 import type { TaskDto, TaskEvent } from '../../api/taskTypes';
-import { buildRows, createTaskHubStore, DONE_LINGER_MS, shownTasks, startTaskHub, summarize } from '../taskHub';
+import { hasKey } from '../../i18n';
+import { buildRows, taskTitle, createTaskHubStore, DONE_LINGER_MS, shownTasks, startTaskHub, summarize } from '../taskHub';
 import { createNoticeStore } from '../notices';
 
 const task = (id: string, o: Partial<TaskDto> = {}): TaskDto => ({
@@ -117,6 +118,20 @@ describe('buildRows / summarize', () => {
     expect(n[0].kind).toBe('error');
     expect(n[0].detail).toBeTruthy();
     expect(n[0].text).not.toContain('task.');
+  });
+  it('failed không có errorKey (lệnh đã tự báo lỗi): hub không toast', async () => {
+    const { store, notices, push } = await setup({ rev: 1, tasks: [task('a', { rev: 1, kind: 'activation', cancellable: false })] });
+    push({ type: 'removed', id: 'a', rev: 2, outcome: 'failed' });
+    expect(notices.getState().notices).toEqual([]);
+    expect(store.getState().tasks.a).toBeUndefined();
+  });
+  it('khoá thật của mốc 2: tên việc dịch được, không lộ khoá thô', () => {
+    for (const [key, args] of [['task.resolveDuplicates', {}], ['task.cloudDownload', { source: 'Drive' }], ['task.organize', {}], ['task.import', { count: 3 }], ['task.activate', {}], ['task.deactivate', {}], ['task.relocate', {}]] as const) {
+      const name = taskTitle({ titleKey: key, titleArgs: args, kind: 'other' });
+      expect(name).not.toContain('task.');
+      expect(name).not.toContain('{');
+    }
+    for (const k of ['task.resolveDuplicates.keepDone', 'task.organize.keepCopied', 'task.error.resolveDuplicates', 'task.error.cloudDownload', 'task.error.organize', 'task.error.import']) expect(hasKey(k)).toBe(true);
   });
   it('tóm tắt: trung bình phần đã biết tổng; không biết → null', () => {
     expect(summarize([task('a', { done: 5, total: 10 }), task('b', { done: 0, total: 10 })]).progress).toBeCloseTo(0.25);
