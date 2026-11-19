@@ -431,6 +431,20 @@ fn check_joinable_batch(state: &AppState, batch: &str) -> Result<String, CmdErro
     Ok(batch.to_string())
 }
 
+/// Một đơn vị (bản thua) xong, kể cả `continue`: tăng `done` và báo tiến độ. Làm ở `Drop` để mọi lối thoát vòng đều tính.
+struct UnitTick<'a, 'b> {
+    task: &'a TaskGuard<'b>,
+    done: &'a std::cell::Cell<u64>,
+    total: Option<u64>,
+}
+
+impl Drop for UnitTick<'_, '_> {
+    fn drop(&mut self) {
+        self.done.set(self.done.get() + 1);
+        self.task.progress(self.done.get(), self.total);
+    }
+}
+
 /// Áp dụng. Mỗi bản thua độc lập; mọi lỗi nằm trong `failed` (xem `ResolveFailureDto.code`).
 /// `trasher` chuyển tệp vào Thùng rác và trả đường dẫn mới (tiêm để test).
 pub fn resolve_apply(
@@ -456,26 +470,48 @@ pub fn resolve_apply(
     // khay "Tác vụ": mỗi bản thua là một đơn vị nguyên tử (bước 1–5 bên dưới, tự đảo khi lỗi). Huỷ chỉ được kiểm TRƯỚC mỗi đơn vị,
     // không bao giờ giữa chừng: phần đã làm vẫn có sổ + hoàn tác/Thùng rác, phần chưa làm giữ nguyên.
     let cancel = Arc::new(AtomicBool::new(false));
-    let total_units = (req.mode == ResolveModeDto::Chosen).then(|| req.items.iter().map(|i| i.loser_paths.len() as u64).sum::<u64>());
+    // số bản thua DUY NHẤT của từng mục (mục bị bỏ qua vì plan_stale/not_found… không được tính vào tổng): tổng còn lại từ mục i trở đi
+    let uniq = |i: &ResolveItemDto| i.loser_paths.iter().collect::<BTreeSet<_>>().len() as u64;
+    let chosen = req.mode == ResolveModeDto::Chosen;
+    let mut suffix: Vec<u64> = vec![0; req.items.len() + 1];
+    for k in (0..req.items.len()).rev() {
+        suffix[k] = suffix[k + 1] + uniq(&req.items[k]);
+    }
+    let total_units = chosen.then(|| suffix[0]);
     let flag = Arc::clone(&cancel);
     let spec = TaskSpec::new(TaskKind::ResolveDuplicates, "task.resolveDuplicates")
         .total(total_units)
         .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
         .confirm_cancel("task.resolveDuplicates.cancelConfirm");
     let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.resolveDuplicates");
-    let mut units_seen = 0u64;
+    let units_done = std::cell::Cell::new(0u64);
     let mut was_cancelled = false;
+    // mọi lỗi KHÔNG chặn sau khi một đơn vị đã commit: ghi vào `failed`, bỏ mục/đơn vị đó, KHÔNG trả Err (mất `batch_id` của phần đã làm)
+    macro_rules! soft {
+        ($e:expr, $path:expr, $code:expr) => {
+            match $e {
+                Ok(v) => v,
+                Err(e) => {
+                    failed.push(fail($path, $code, e.message));
+                    continue;
+                }
+            }
+        };
+    }
 
-    'items: for item in &req.items {
+    'items: for (item_idx, item) in req.items.iter().enumerate() {
         if cancel.load(Ordering::SeqCst) {
             was_cancelled = true;
             break 'items;
         }
+        // thang của mục này: đã làm + còn lại từ mục này trở đi
+        let item_total = chosen.then(|| units_done.get() + suffix[item_idx]);
+        task.progress(units_done.get(), item_total);
         let Some(g) = all_groups.iter().find(|g| g.kind == item.kind && g.key == item.key) else {
             failed.push(fail(&item.keeper_path, "not_found", ""));
             continue;
         };
-        let Some(built) = build(state, &ctx, g)? else {
+        let Some(built) = soft!(build(state, &ctx, g), &item.keeper_path, "db_error") else {
             failed.push(fail(&item.keeper_path, "not_found", ""));
             continue;
         };
@@ -507,7 +543,7 @@ pub fn resolve_apply(
             failed.push(fail(&keeper_path, "keeper_not_in_group", ""));
             continue;
         };
-        if state.with_store(|s| Ok(s.is_hidden_path(&keeper_path)?))? {
+        if soft!(state.with_store(|s| Ok(s.is_hidden_path(&keeper_path)?)), &keeper_path, "db_error") {
             failed.push(fail(&keeper_path, "keeper_is_hidden", ""));
             continue;
         }
@@ -527,8 +563,8 @@ pub fn resolve_apply(
                 was_cancelled = true;
                 break 'items;
             }
-            task.progress(units_seen, total_units);
-            units_seen += 1;
+            // đơn vị này tính xong (kể cả `continue`/lỗi) khi `_tick` bị huỷ ở cuối vòng: tiến độ đi TỚI total
+            let _tick = UnitTick { task: &task, done: &units_done, total: item_total };
             if *lp == keeper_path {
                 failed.push(fail(lp, "not_allowed", "keeper_is_loser"));
                 continue;
@@ -542,7 +578,7 @@ pub fn resolve_apply(
                 continue;
             }
             let same_hash = loser.member.key == keeper.member.key;
-            let row = state.with_store(|s| Ok(s.activation_row(&loser.member.key.hash)?))?;
+            let row = soft!(state.with_store(|s| Ok(s.activation_row(&loser.member.key.hash)?)), lp, "db_error");
             let was_active = row.as_ref().is_some_and(|r| r.state == DesiredState::Active);
             if same_hash && was_active && row.as_ref().and_then(|r| r.active_path.as_deref()) == Some(lp.as_str()) {
                 failed.push(fail(lp, "active_copy_in_use", ""));
@@ -655,7 +691,14 @@ pub fn resolve_apply(
             }
             // 5. bật bản giữ giúp người dùng nếu nó chưa bật (cùng phạm vi); lỗi chỉ là cảnh báo, sổ đã xong
             if deactivated {
-                let keeper_active = state.with_store(|s| Ok(s.activation_row(&keeper.member.key.hash)?))?.is_some_and(|a| a.state == DesiredState::Active);
+                // sổ đã commit: lỗi đọc ở đây chỉ là cảnh báo (coi như bản giữ đã bật để không bật nhầm)
+                let keeper_active = match state.with_store(|s| Ok(s.activation_row(&keeper.member.key.hash)?)) {
+                    Ok(r) => r.is_some_and(|a| a.state == DesiredState::Active),
+                    Err(e) => {
+                        failed.push(fail(lp, "db_error", e.message));
+                        true
+                    }
+                };
                 if !keeper_active {
                     match set_active(state, &keeper.member.key, true, scope_parse(loser_scope.as_deref())) {
                         Ok(()) => {
@@ -669,8 +712,11 @@ pub fn resolve_apply(
             }
             failed.append(&mut side); // cảnh báo không chặn (vd không đánh dấu missing được) KHÔNG được nuốt
             lost.insert(lp.clone());
-            let r = state.with_store(|s| Ok(s.resolution(id)?))?;
-            done.push(to_dto(&r, Some((loser.row.family.clone(), loser.row.subfamily.clone())), true));
+            // đã commit: không đọc lại được dòng sổ thì báo cảnh báo (kết quả vẫn trả, `batch_id` còn), không bỏ cả mẻ
+            match state.with_store(|s| Ok(s.resolution(id)?)) {
+                Ok(r) => done.push(to_dto(&r, Some((loser.row.family.clone(), loser.row.subfamily.clone())), true)),
+                Err(e) => failed.push(fail(lp, "db_error", e.message)),
+            }
         }
         if done.len() > done_before {
             kept.insert(keeper_path.clone());

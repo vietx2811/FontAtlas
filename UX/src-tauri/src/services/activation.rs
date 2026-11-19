@@ -631,6 +631,15 @@ pub fn activate_collection(
     Ok(finish(state, r))
 }
 
+/// Như `deactivate` nhưng KHÔNG hiện việc trong khay: dành cho lời gọi nội bộ (một việc khác đã hiện, hoặc gọi lặp từng face).
+pub fn deactivate_quiet(state: &AppState, faces: &[FaceKeyDto], force: bool) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let pol = if force { DeactivatePolicy::Force } else { DeactivatePolicy::Ask };
+    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |_| {})?;
+    Ok(finish(state, r))
+}
+
 pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
     let task = track(state, "task.deactivate");
@@ -643,6 +652,17 @@ pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress:
 
 /// B7: chuyển đăng ký của các font ĐANG BẬT sang bản chép (hoặc đường dẫn mới). Người dùng bấm "Switch active fonts to the
 /// organized copies"; không bao giờ tự chạy. `prefer_under` = gốc Organized Library (chỉ nhận vị trí dưới đó).
+/// Như `relocate` nhưng không hiện việc trong khay (lời gọi nội bộ sau khi chép Organized Library).
+pub fn relocate_quiet(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let mut hashes: Vec<[u8; 32]> = keys_of(faces)?.into_iter().map(|k| k.hash).collect();
+    hashes.sort();
+    hashes.dedup();
+    let root = prefer_under.map(std::path::Path::new);
+    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |_| {})?;
+    Ok(finish(state, r))
+}
+
 pub fn relocate(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
     let task = track(state, "task.relocate");

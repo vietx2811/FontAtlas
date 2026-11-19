@@ -532,10 +532,17 @@ pub fn import_with(
                             family: safe_component(&it.cand.family, "Unnamed"),
                             copied_at: crate::services::dup_resolve::now_ms(),
                         };
-                        state.with_store(|s| Ok(s.organized_record(&rec)?))?;
-                        let mut c = st.borrow_mut();
-                        c.copied += 1;
-                        c.bytes += it.cand.size.max(0) as u64;
+                        // copy đã xong mà không ghi sổ được: KHÔNG trả Err (mất kết quả các file đã chép trước đó). Bản chép vừa tạo ở
+                        // đây (không phải file của người dùng) bị gỡ để không để file mồ côi ngoài sổ; báo thành một vấn đề của file này.
+                        if let Err(e) = state.with_store(|s| Ok(s.organized_record(&rec)?)) {
+                            log::warn!("organized: ghi sổ {} lỗi: {}", it.cand.src_path, e.message);
+                            let _ = std::fs::remove_file(&it.dest);
+                            st.borrow_mut().issue("record_failed", &it.cand.src_path);
+                        } else {
+                            let mut c = st.borrow_mut();
+                            c.copied += 1;
+                            c.bytes += it.cand.size.max(0) as u64;
+                        }
                     }
                     Err((code, e)) => {
                         log::warn!("organized: chép {} lỗi ({code}): {e}", it.cand.src_path);
@@ -818,7 +825,7 @@ fn relocate_active(state: &Arc<AppState>, hashes: &[[u8; 32]], lib: &Path) {
             faces.extend(ks.iter().take(1).map(FaceKeyDto::from));
         }
     }
-    if let Err(e) = crate::services::activation::relocate(state, &faces, Some(&lib.to_string_lossy()), &mut |_| {}) {
+    if let Err(e) = crate::services::activation::relocate_quiet(state, &faces, Some(&lib.to_string_lossy())) {
         log::debug!("organized: relocate font đang bật bỏ qua: {} {}", e.code, e.message);
     }
 }

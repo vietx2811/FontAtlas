@@ -546,6 +546,29 @@ fn taskhub_cancel_outcomes_are_exact_and_racing_enqueue_cancel_leaves_no_ghost_t
     assert!(matches!(evs.last(), Some(ScanEvent::Idle)) || evs.is_empty() || evs.iter().rev().any(|e| matches!(e, ScanEvent::Idle)), "UI phải nhận Idle");
 }
 
+/// Review: huỷ lượt đang chạy bỏ luôn lượt chờ tiếp của cùng nguồn (không chạy lại sau khi người dùng đã huỷ).
+#[test]
+fn taskhub_cancelling_a_running_scan_also_drops_its_queued_follow_up() {
+    use app_lib::dto::events::ScanTrigger;
+    use app_lib::services::scan::CancelOutcome;
+    let root = sim_root();
+    let (st, _dir) = seeded(root.path(), 6);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let ev = record(&st);
+    st.scans.pause(&st);
+    st.scans.enqueue_as(&st, &[1], ScanTrigger::User);
+    wait_until("nguồn 1 đang quét", 10, || st.scans.is_current(1));
+    assert!(st.scans.enqueue_follow_up_as(&st, &[1], ScanTrigger::Watcher));
+    assert!(st.scans.is_queued(1), "có lượt chờ tiếp");
+    assert_eq!(st.scans.cancel_source(&st, 1), CancelOutcome::Running);
+    assert!(!st.scans.is_queued(1), "huỷ lượt đang chạy xoá luôn lượt chờ cùng nguồn");
+    st.scans.resume(&st);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let finished = ev.lock().unwrap().iter().filter(|e| matches!(e, ScanEvent::Finished { source_id: 1, .. })).count();
+    assert!(finished <= 1, "không chạy lại sau khi huỷ: {finished} lượt Finished");
+    assert!(st.tasks.list().tasks.is_empty());
+}
+
 #[test]
 fn be2_every_scan_event_carries_who_triggered_it_and_a_user_request_outranks_a_queued_watcher_one() {
     use app_lib::dto::events::ScanTrigger;

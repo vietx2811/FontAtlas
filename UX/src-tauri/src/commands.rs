@@ -339,6 +339,7 @@ pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, 
 pub async fn boot_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<BootEvent>,
+    subscriber: Option<String>,
     webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     // đăng ký TRƯỚC rồi mới gửi pha hiện tại (có thể trùng, không mất `Ready` rơi giữa hai bước)
@@ -346,7 +347,7 @@ pub async fn boot_subscribe<R: tauri::Runtime>(
     state
         .hubs
         .boot
-        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "boot"), Box::new(move |e| on_event.send(e).is_ok()));
     let _ = ch.send(BootEvent::Phase {
         phase: boot::snapshot(&state).phase,
     });
@@ -580,13 +581,14 @@ pub async fn model_redownload(
 pub async fn embed_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<EmbedEvent>,
+    subscriber: Option<String>,
     webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     let ch = on_event.clone();
     state
         .hubs
         .embed
-        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "embed"), Box::new(move |e| on_event.send(e).is_ok()));
     if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
         let _ = ch.send(EmbedEvent::Status { status });
     }
@@ -666,12 +668,13 @@ cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Activation
 pub async fn activation_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ActivationEvent>,
+    subscriber: Option<String>,
     webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .activation
-        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "activation"), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -757,19 +760,27 @@ pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, Cmd
 pub async fn scan_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ScanEvent>,
+    subscriber: Option<String>,
     webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .scan
-        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "scan"), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
+}
+
+/// Khoá đăng ký: nhãn webview + tên người nhận (mặc định = tên kênh). Hai nơi trong CÙNG webview muốn cùng một kênh thì truyền
+/// `subscriber` khác nhau để không thay nhau; cùng khoá (reload/effect chạy lại) thì thay sink cũ.
+fn sub_key(label: &str, subscriber: Option<&str>, channel: &str) -> String {
+    format!("{label}:{channel}:{}", subscriber.unwrap_or("default"))
 }
 
 /// Khay "Tác vụ": nhận sự kiện (đăng ký TRƯỚC, rồi `list_tasks`; FE bỏ sự kiện có rev ≤ rev của danh sách).
 #[tauri::command]
-pub async fn task_subscribe<R: tauri::Runtime>(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>, webview: tauri::Webview<R>) -> Result<(), CmdError> {
-    state.tasks.events.subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn task_subscribe<R: tauri::Runtime>(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>, subscriber: Option<String>,
+    webview: tauri::Webview<R>) -> Result<(), CmdError> {
+    state.tasks.events.subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "task"), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -854,4 +865,17 @@ pub fn async_violations(table: &[CommandSig], src: &str) -> Vec<String> {
         }
     }
     v
+}
+
+#[cfg(test)]
+mod sub_key_tests {
+    use super::sub_key;
+
+    #[test]
+    fn the_key_is_label_channel_and_subscriber_so_two_consumers_in_one_webview_do_not_replace_each_other() {
+        assert_eq!(sub_key("main", None, "scan"), "main:scan:default");
+        assert_ne!(sub_key("main", None, "scan"), sub_key("main", Some("sidebar"), "scan"));
+        assert_ne!(sub_key("main", None, "scan"), sub_key("main", None, "task"));
+        assert_ne!(sub_key("main", None, "scan"), sub_key("other", None, "scan"));
+    }
 }

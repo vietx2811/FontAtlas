@@ -196,7 +196,7 @@ pub fn remove_derived_copy_with(
     // 1. tắt trước (font đang bật trỏ vào file sắp rời đi)
     let mut was_active = false;
     if state.activation.supported() {
-        let rep = crate::services::activation::deactivate(state, std::slice::from_ref(face), true, &mut |_| {})
+        let rep = crate::services::activation::deactivate_quiet(state, std::slice::from_ref(face), true)
             .map_err(|e| CmdError::new("deactivate_failed", e.message))?;
         was_active = rep.changed > 0;
     }

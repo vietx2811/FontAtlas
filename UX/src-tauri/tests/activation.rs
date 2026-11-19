@@ -352,3 +352,24 @@ fn a_bulk_activation_is_a_non_cancellable_task_while_it_runs_and_gone_afterwards
     assert!(!seen2.is_empty() && seen2.iter().all(|k| k == "task.deactivate"), "{seen2:?}");
     assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Activation));
 }
+
+/// Lời gọi nội bộ (derived/organized) không được spam khay: bản `_quiet` không tạo việc nào.
+#[test]
+fn internal_quiet_activation_calls_do_not_show_up_in_the_tray() {
+    use app_lib::dto::tasks::TaskEvent;
+    let d = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let (st, faces, _dir) = library3(d.path(), &eng);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    activation::activate(&st, &faces[..1], Some(ScopeDto::Persistent), false, &mut noop).unwrap();
+    let n = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let n2 = n.clone();
+    st.tasks.events.subscribe(Box::new(move |e| {
+        if let TaskEvent::Upsert { .. } = e {
+            n2.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }));
+    activation::deactivate_quiet(&st, &faces[..1], true).unwrap();
+    activation::relocate_quiet(&st, &faces[..1], None).unwrap();
+    assert_eq!(n.load(std::sync::atomic::Ordering::SeqCst), 0, "bản quiet không tạo việc");
+}

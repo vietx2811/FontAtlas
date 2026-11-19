@@ -510,3 +510,34 @@ fn a_resolve_that_fails_early_leaves_no_task_behind() {
     let o: Vec<TaskOutcome> = evs.lock().unwrap().iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
     assert!(o.is_empty() || o == vec![TaskOutcome::Failed], "{o:?}");
 }
+
+/// Tiến độ resolveDuplicates tính theo bản thua DUY NHẤT và đi tới total: bản thứ hai thấy done=1/total=2 (đường dẫn trùng không đếm hai lần).
+#[test]
+fn resolve_progress_counts_unique_losers_and_reaches_the_total() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let trash_dir = td.path().join("trash");
+    let inner = fake_trash(&trash_dir);
+    let seen = std::sync::Mutex::new(Vec::new());
+    let st2 = st.clone();
+    let trasher = |p: &Path| {
+        let l = st2.tasks.list();
+        let t = l.tasks.iter().find(|t| t.title_key == "task.resolveDuplicates").unwrap();
+        seen.lock().unwrap().push((t.done, t.total));
+        inner(p)
+    };
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &trasher,
+        1000,
+    )
+    .unwrap();
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert_eq!(r.done.len(), 2);
+    assert_eq!(*seen.lock().unwrap(), vec![(0, Some(2)), (1, Some(2))], "total đếm duy nhất; done tăng sau mỗi đơn vị");
+}
