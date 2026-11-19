@@ -183,3 +183,19 @@ describe('scan store: một lượt một bump', () => {
     expect(s.getState().version).toBe(v1 + 1);
   });
 });
+
+describe('scan store: payload thật của 02 (ghi đè cùng byte)', () => {
+  it('changed=false dù stats.relinked=1: không bump, không scanning (watcher)', async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'watcher' });
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 6, unchanged: 5, notDownloaded: 0, relinked: 1, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] }, changed: false, trigger: 'watcher' });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0);
+    expect(s.getState().scanning).toBe(false);
+  });
+});
