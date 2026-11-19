@@ -12,6 +12,8 @@ use fontatlas_store::{FaceKey, Store};
 use crate::dto::activation::*;
 use crate::dto::events::ActivationEvent;
 use crate::dto::library::{FaceKeyDto, keys_of};
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -416,6 +418,19 @@ pub fn preflight(state: &AppState, faces: &[FaceKeyDto]) -> Result<ActivationRep
     Ok(ActivationReportDto::from(&state.activation.preflight(state.store()?, &keys)?))
 }
 
+/// Khay "Tác vụ": kích hoạt/tắt hàng loạt hiện như một việc (không huỷ được: engine không dừng giữa chừng an toàn). Lỗi đã được lệnh
+/// báo qua kết quả nên khay không thêm toast (không `errorKey`).
+fn track<'a>(state: &'a AppState, title_key: &str) -> TaskGuard<'a> {
+    let id = state.tasks.begin(None, TaskSpec::new(TaskKind::Activation, title_key), TaskState::Running);
+    TaskGuard::with_error(&state.tasks, id, None)
+}
+
+fn tracked(task: &TaskGuard<'_>, progress: &mut dyn FnMut(ProgressDto), p: &fontatlas_activate::Progress) {
+    let d = ProgressDto::from(p);
+    task.progress(d.done as u64, Some(d.total as u64));
+    progress(d);
+}
+
 pub fn activate(
     state: &AppState,
     faces: &[FaceKeyDto],
@@ -424,8 +439,10 @@ pub fn activate(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.activate");
     let keys = keys_of(faces)?;
-    let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+    let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
@@ -576,6 +593,7 @@ pub fn activate_case(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<CaseActivationDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.activate");
     let case = crate::services::cases::get_case(state, case_id)?;
     let (present, gone): (Vec<_>, Vec<_>) = case.faces.into_iter().partition(|f| !f.missing);
     let keys: Vec<FaceKeyDto> = present.into_iter().map(|f| f.key).collect();
@@ -584,16 +602,19 @@ pub fn activate_case(
     } else {
         // Lý do `case:<id>` (không phải `manual`): màn "Đang bật" cho thấy font đến từ Case nào.
         let fks = keys_of(&keys)?;
-        let r = state.activation.activate_case(state.store()?, case_id, &fks, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+        let r = state.activation.activate_case(state.store()?, case_id, &fks, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
         finish(state, r)
     };
+    task.end(TaskOutcome::Done);
     Ok(CaseActivationDto { report, skipped_missing: gone.into_iter().map(|f| f.key).collect() })
 }
 
 /// Tắt cả Case: gỡ lý do `case:<id>`; font còn lý do khác (bật tay, Dự án, app) vẫn bật.
 pub fn deactivate_case(state: &AppState, case_id: i64, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.deactivate_case(state.store()?, case_id, &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_case(state.store()?, case_id, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 pub fn activate_collection(
@@ -604,15 +625,19 @@ pub fn activate_collection(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.activate_collection(state.store()?, collection_id, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.activate");
+    let r = state.activation.activate_collection(state.store()?, collection_id, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.deactivate");
     let keys = keys_of(faces)?;
     let pol = if force { DeactivatePolicy::Force } else { DeactivatePolicy::Ask };
-    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |p| progress((&p).into()))?;
+    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
@@ -620,35 +645,43 @@ pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress:
 /// organized copies"; không bao giờ tự chạy. `prefer_under` = gốc Organized Library (chỉ nhận vị trí dưới đó).
 pub fn relocate(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.relocate");
     let mut hashes: Vec<[u8; 32]> = keys_of(faces)?.into_iter().map(|k| k.hash).collect();
     hashes.sort();
     hashes.dedup();
     let root = prefer_under.map(std::path::Path::new);
-    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |p| progress((&p).into()))?;
+    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 /// B7 Hoàn tác: đưa đăng ký của từng font về đường cụ thể (đường cũ đã ghi trước khi chuyển). Kết quả theo file như `relocate`.
 pub fn relocate_to(state: &AppState, targets: &[RelocateTargetDto], progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.relocate");
     let mut list = Vec::with_capacity(targets.len());
     for t in targets {
         let key = keys_of(std::slice::from_ref(&t.face))?.remove(0);
         list.push((key.hash, std::path::PathBuf::from(&t.path)));
     }
-    let r = state.activation.relocate_to(state.store()?, &list, &mut |p| progress((&p).into()))?;
+    let r = state.activation.relocate_to(state.store()?, &list, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 pub fn deactivate_collection(state: &AppState, collection_id: i64, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.deactivate_collection(state.store()?, collection_id, &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_collection(state.store()?, collection_id, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 pub fn deactivate_all(state: &AppState, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.deactivate_all(state.store()?, &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_all(state.store()?, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 

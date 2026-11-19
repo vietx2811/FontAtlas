@@ -396,3 +396,32 @@ fn cancelling_mid_copy_of_local_fonts_stops_the_batch_and_leaves_nothing_half_wr
     let again = organized::import_plan(&st, &OrganizeScopeDto::default()).unwrap();
     assert_eq!((again.to_copy as usize, again.already_there), (names.len() - 2, 2));
 }
+
+/// TaskHub: chép vào Organized Library hiện trong khay (loại Export, có xác nhận huỷ vì phần đã chép được giữ), huỷ từ khay dừng lượt
+/// chép (`cancelled`), việc biến mất sau đó.
+#[test]
+fn the_organize_copy_is_a_cancellable_export_task_and_cancelling_it_stops_the_copy() {
+    use app_lib::dto::tasks::{TaskKind, TaskState};
+    let (_d, st, _fonts, root) = cloud_setup();
+    assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+    let fetch = |_: &Path, _: app_lib::services::cloud::Permit, _: &AtomicBool| Ok(());
+    let seen = std::cell::RefCell::new(Vec::new());
+    let st2 = st.clone();
+    let r = organized::import_with(&st, &OrganizeScopeDto { download_first: true, ..Default::default() }, &fetch, &mut |_p| {
+        let l = st2.tasks.list();
+        if seen.borrow().is_empty() {
+            let t = l.tasks.iter().find(|t| t.kind == TaskKind::Export).expect("việc chép trong khay");
+            seen.borrow_mut().push((t.kind, t.total, t.state, t.cancel_confirm_key.clone()));
+            assert!(st2.tasks.cancel(&t.id));
+        }
+    })
+    .unwrap();
+    let s = seen.borrow();
+    assert_eq!(s.len(), 1);
+    assert_eq!((s[0].0, s[0].1, s[0].2), (TaskKind::Export, Some(3), TaskState::Running));
+    assert_eq!(s[0].3.as_deref(), Some("task.organize.keepCopied"));
+    assert!(r.cancelled, "huỷ từ khay dừng lượt chép");
+    assert!(copied_names(&root).len() < 3);
+    assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Export), "xong thì gỡ");
+    assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+}

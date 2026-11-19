@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 use fontatlas_activate::{EnsureLocalError, FileProbe};
 
 use crate::dto::library::{CloudDownloadProgressDto, CloudDownloadReportDto};
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
 use crate::error::CmdError;
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::services::cloud::{CLOUD_QUEUE_WAIT, CloudGate, MAX_CLOUD_DOWNLOADS, Permit, global_gate};
 use crate::state::AppState;
 
@@ -218,8 +220,22 @@ pub fn download_source_with(
     };
     let paths = pending(state, source_id)?;
     progress(CloudDownloadProgressDto { done: 0, total: paths.len() as u32, failed: 0 });
+    // khay "Tác vụ": huỷ chỉ đặt cờ; file đang tải dở dừng theo `cancel`, file đã về giữ nguyên (không mất gì → huỷ ngay, không xác nhận)
+    let name = state.with_user(|u| Ok(u.source(source_id)?)).map(|s| s.name).unwrap_or_default();
+    let flag = Arc::clone(&cancel);
+    let spec = TaskSpec::new(TaskKind::CloudDownload, "task.cloudDownload")
+        .arg("source", name)
+        .group(&format!("cloudDownload:{source_id}"))
+        .total(Some(paths.len() as u64))
+        .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)));
+    let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.cloudDownload");
     // cổng CHUNG của cả app: nhiều nguồn tải cùng lúc hay đang xem trước cũng không vượt MAX_CLOUD_DOWNLOADS lần tải thật
-    let mut report = run(&paths, global_gate(), BULK_WORKERS, &cancel, fetch, progress);
+    let total = paths.len() as u64;
+    let mut report = run(&paths, global_gate(), BULK_WORKERS, &cancel, fetch, &mut |p| {
+        task.progress(p.done as u64, Some(total));
+        progress(p);
+    });
+    task.end(if report.cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
     // có font mới về máy (kể cả khi huỷ giữa chừng) → quét lại đúng nguồn này để chúng hiện ra; nguồn đang quét thì xếp
     // thêm một lượt sau lượt hiện tại (lượt đó có thể đã đi qua chỗ vừa đổi). `rescan_queued` chỉ true khi thật sự đã xếp.
     if report.downloaded > 0 {

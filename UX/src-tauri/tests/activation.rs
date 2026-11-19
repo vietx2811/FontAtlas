@@ -322,3 +322,33 @@ fn activate_case_uses_the_normal_flow_and_skips_missing_fonts() {
     let r = activation::activate_case(&st, empty.id, None, false, &mut noop).unwrap();
     assert_eq!((r.report.results.len(), r.skipped_missing.len()), (0, 1));
 }
+
+/// TaskHub: kích hoạt/tắt hàng loạt hiện trong khay khi đang chạy (loại Activation, không huỷ được) và gỡ khi xong, kể cả khi lỗi.
+#[test]
+fn a_bulk_activation_is_a_non_cancellable_task_while_it_runs_and_gone_afterwards() {
+    use app_lib::dto::tasks::TaskKind;
+    let d = tempfile::tempdir().unwrap();
+    let eng = Arc::new(FakeEngine::new());
+    let (st, faces, _dir) = library3(d.path(), &eng);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let mut seen = Vec::new();
+    let st2 = st.clone();
+    activation::activate(&st, &faces[..2], Some(ScopeDto::Persistent), false, &mut |_| {
+        if let Some(t) = st2.tasks.list().tasks.into_iter().find(|t| t.kind == TaskKind::Activation) {
+            seen.push((t.title_key.clone(), t.cancellable));
+        }
+    })
+    .unwrap();
+    assert!(!seen.is_empty(), "việc phải hiện trong khay khi đang chạy");
+    assert!(seen.iter().all(|(k, c)| k == "task.activate" && !c));
+    assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Activation));
+    let mut seen2: Vec<String> = Vec::new();
+    activation::deactivate(&st, &faces[..2], false, &mut |_| {
+        if let Some(t) = st2.tasks.list().tasks.into_iter().find(|t| t.kind == TaskKind::Activation) {
+            seen2.push(t.title_key.clone());
+        }
+    })
+    .unwrap();
+    assert!(!seen2.is_empty() && seen2.iter().all(|k| k == "task.deactivate"), "{seen2:?}");
+    assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Activation));
+}

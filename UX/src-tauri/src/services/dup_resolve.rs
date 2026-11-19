@@ -6,6 +6,8 @@
 //! Mọi thay đổi ngoài sổ đều SAU khi sổ đã ghi, và mọi bước lỗi đều đảo lại các bước trước (lỗi đảo lại được báo, không nuốt).
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use fontatlas_activate::{ConflictPolicy, DeactivatePolicy, FileProbe, Scope, probe_file};
 use fontatlas_store::{ActivationScope, DesiredState, FaceKey, MemberInfo, NewResolution, ResolutionRow, Source};
@@ -13,9 +15,11 @@ use fontatlas_store::{ActivationScope, DesiredState, FaceKey, MemberInfo, NewRes
 use crate::dto::analysis::DuplicateKindDto;
 use crate::dto::dup_resolve::*;
 use crate::dto::library::{FaceKeyDto, FaceQueryDto, FaceRowDto};
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
 use crate::error::CmdError;
 use crate::services::dup_pick::{Cand, Decision, Reason, pick_keeper};
 use crate::services::duplicates::{self, Member, RawGroup};
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::state::AppState;
 
 pub fn now_ms() -> i64 {
@@ -449,7 +453,24 @@ pub fn resolve_apply(
     let mut kept: HashSet<String> = HashSet::new();
     let mut lost: HashSet<String> = HashSet::new();
 
-    for item in &req.items {
+    // khay "Tác vụ": mỗi bản thua là một đơn vị nguyên tử (bước 1–5 bên dưới, tự đảo khi lỗi). Huỷ chỉ được kiểm TRƯỚC mỗi đơn vị,
+    // không bao giờ giữa chừng: phần đã làm vẫn có sổ + hoàn tác/Thùng rác, phần chưa làm giữ nguyên.
+    let cancel = Arc::new(AtomicBool::new(false));
+    let total_units = (req.mode == ResolveModeDto::Chosen).then(|| req.items.iter().map(|i| i.loser_paths.len() as u64).sum::<u64>());
+    let flag = Arc::clone(&cancel);
+    let spec = TaskSpec::new(TaskKind::ResolveDuplicates, "task.resolveDuplicates")
+        .total(total_units)
+        .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
+        .confirm_cancel("task.resolveDuplicates.keepDone");
+    let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.resolveDuplicates");
+    let mut units_seen = 0u64;
+    let mut was_cancelled = false;
+
+    'items: for item in &req.items {
+        if cancel.load(Ordering::SeqCst) {
+            was_cancelled = true;
+            break 'items;
+        }
         let Some(g) = all_groups.iter().find(|g| g.kind == item.kind && g.key == item.key) else {
             failed.push(fail(&item.keeper_path, "not_found", ""));
             continue;
@@ -502,6 +523,12 @@ pub fn resolve_apply(
         let done_before = done.len();
 
         for lp in &loser_paths {
+            if cancel.load(Ordering::SeqCst) {
+                was_cancelled = true;
+                break 'items;
+            }
+            task.progress(units_seen, total_units);
+            units_seen += 1;
             if *lp == keeper_path {
                 failed.push(fail(lp, "not_allowed", "keeper_is_loser"));
                 continue;
@@ -650,6 +677,7 @@ pub fn resolve_apply(
         }
     }
     duplicates::invalidate_cache();
+    task.end(if was_cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
     Ok(ResolveResultDto { batch_id, done, failed, needs_rescan: false })
 }
 

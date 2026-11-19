@@ -58,6 +58,10 @@ impl TaskSpec {
         self.unit = u;
         self
     }
+    pub fn total(mut self, t: Option<u64>) -> Self {
+        self.total = t;
+        self
+    }
     pub fn group(mut self, g: &str) -> Self {
         self.group_key = Some(g.to_string());
         self
@@ -233,6 +237,41 @@ impl TaskHub {
         };
         for id in stale {
             self.finish(&id, outcome, None);
+        }
+    }
+}
+
+/// Giữ một việc đang chạy trong một hàm đồng bộ: thoát sớm bằng `?`/panic thì tự gỡ với kết quả LỖI; gọi `done`/`cancelled` khi
+/// kết thúc bình thường.
+pub struct TaskGuard<'a> {
+    hub: &'a TaskHub,
+    pub id: String,
+    error_key: Option<&'static str>,
+    finished: std::cell::Cell<bool>,
+}
+
+impl<'a> TaskGuard<'a> {
+    pub fn new(hub: &'a TaskHub, id: String, error_key: &'static str) -> Self {
+        Self::with_error(hub, id, Some(error_key))
+    }
+    /// `None` = lỗi vẫn được báo bởi chính lệnh (toast từ kết quả lệnh), khay không thêm toast thứ hai.
+    pub fn with_error(hub: &'a TaskHub, id: String, error_key: Option<&'static str>) -> Self {
+        TaskGuard { hub, id, error_key, finished: std::cell::Cell::new(false) }
+    }
+    pub fn progress(&self, done: u64, total: Option<u64>) {
+        self.hub.progress(&self.id, done, total);
+    }
+    pub fn end(&self, outcome: TaskOutcome) {
+        if !self.finished.replace(true) {
+            self.hub.finish(&self.id, outcome, None);
+        }
+    }
+}
+
+impl Drop for TaskGuard<'_> {
+    fn drop(&mut self) {
+        if !self.finished.replace(true) {
+            self.hub.finish(&self.id, TaskOutcome::Failed, self.error_key);
         }
     }
 }

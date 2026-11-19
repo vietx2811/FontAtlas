@@ -438,3 +438,75 @@ fn groups_that_need_a_human_are_not_in_all_safe_but_are_counted() {
     let one = dup_resolve::resolve_preview(&st, &ResolveScopeDto::Group { kind: item.kind, key: item.key.clone() }, &all()).unwrap();
     assert_eq!(one.items.len(), 1, "xem trước từng nhóm vẫn có quyết định mặc định để người dùng đổi");
 }
+
+/// TaskHub: huỷ giữa chừng một mẻ Thùng rác. Bản thua đã làm xong vẫn có sổ + hoàn tác, bản chưa làm giữ nguyên tệp,
+/// việc biến mất khỏi khay với kết quả "cancelled".
+#[test]
+fn cancelling_a_trash_batch_midway_keeps_what_was_done_undoable_and_leaves_the_rest_untouched() {
+    use app_lib::dto::tasks::{TaskEvent, TaskOutcome, TaskState};
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let evs: Arc<std::sync::Mutex<Vec<TaskEvent>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    let trash_dir = td.path().join("trash");
+    let inner = fake_trash(&trash_dir);
+    // trasher huỷ việc ngay sau khi chuyển tệp đầu tiên vào Thùng rác
+    let st2 = st.clone();
+    let trasher = move |p: &Path| {
+        let r = inner(p);
+        let l = st2.tasks.list();
+        assert_eq!(l.tasks.len(), 1);
+        assert_eq!(l.tasks[0].state, TaskState::Running);
+        assert!(l.tasks[0].cancel_confirm_key.is_some(), "huỷ một phần phải có xác nhận");
+        assert!(st2.tasks.cancel(&l.tasks[0].id));
+        r
+    };
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &trasher,
+        1000,
+    )
+    .unwrap();
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert_eq!(r.done.len(), 1, "chỉ bản thua đầu tiên được làm");
+    let (done_path, untouched) = {
+        let d = nz(&r.done[0].loser_path);
+        if d.contains("/v1/") { (it.member_paths.iter().find(|m| nz(m).contains("/v1/")).unwrap().clone(), it.member_paths.iter().find(|m| nz(m).contains("/v2/")).unwrap().clone()) } else { (it.member_paths.iter().find(|m| nz(m).contains("/v2/")).unwrap().clone(), it.member_paths.iter().find(|m| nz(m).contains("/v1/")).unwrap().clone()) }
+    };
+    assert!(!Path::new(&done_path).exists(), "bản đã làm nằm trong Thùng rác");
+    assert!(Path::new(&untouched).is_file(), "bản chưa làm giữ nguyên tệp");
+    assert!(st.tasks.list().tasks.is_empty(), "việc phải biến mất khỏi khay");
+    let outcomes: Vec<TaskOutcome> = evs.lock().unwrap().iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
+    assert_eq!(outcomes, vec![TaskOutcome::Cancelled]);
+    // phần đã làm vẫn hoàn tác được
+    let live = dup_resolve::resolve_list(&st, false).unwrap();
+    assert_eq!(live.len(), 1);
+    assert!(live[0].can_undo);
+    let u = dup_resolve::resolve_undo(&st, &[live[0].id], 2000).unwrap();
+    assert!(u.failed.is_empty(), "{:?}", u.failed);
+    assert!(Path::new(&done_path).is_file(), "hoàn tác đưa tệp về");
+}
+
+/// Lỗi giữa chừng (thoát sớm bằng `?`) không để việc kẹt trong khay.
+#[test]
+fn a_resolve_that_fails_early_leaves_no_task_behind() {
+    use app_lib::dto::tasks::{TaskEvent, TaskOutcome};
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2))]);
+    let evs: Arc<std::sync::Mutex<Vec<TaskEvent>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    let r = ResolveRequestDto { items: vec![], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: Some("dup-1-999999".into()) };
+    assert!(dup_resolve::resolve_apply(&st, &r, &no_trash, 5).is_err());
+    assert!(st.tasks.list().tasks.is_empty());
+    let o: Vec<TaskOutcome> = evs.lock().unwrap().iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
+    assert!(o.is_empty() || o == vec![TaskOutcome::Failed], "{o:?}");
+}
