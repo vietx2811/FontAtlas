@@ -12,7 +12,9 @@ use fontatlas_store::{OrganizeCandidate, OrganizedFile, SourceKind, cloud_provid
 
 use crate::dto::library::FaceKeyDto;
 use crate::dto::organized::*;
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
 use crate::error::CmdError;
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::services::{cloud_download, keys, library, sources};
 use crate::state::AppState;
 
@@ -430,6 +432,18 @@ pub fn import_with(
     }
     let total = p.items.len() as u32;
     let download_total = p.items.iter().filter(|i| i.cloud).count() as u32;
+    // khay "Tác vụ": CHÉP (không di chuyển) nên huỷ giữa chừng giữ nguyên phần đã chép — báo cho người dùng bằng cancelConfirmKey
+    let flag = Arc::clone(&cancel);
+    let spec = TaskSpec::new(TaskKind::Export, "task.organize")
+        .total(Some(total as u64))
+        .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
+        .confirm_cancel("task.organize.keepCopied");
+    let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.organize");
+    let mut tracked = |p: OrganizeProgressDto| {
+        task.progress(p.done as u64, Some(total as u64));
+        progress(p);
+    };
+    let progress: &mut dyn FnMut(OrganizeProgressDto) = &mut tracked;
     let st = std::cell::RefCell::new(Counters::default());
     let emit = |phase: OrganizePhaseDto, progress: &mut dyn FnMut(OrganizeProgressDto)| {
         let c = st.borrow();
@@ -555,6 +569,7 @@ pub fn import_with(
         snapshot = snapshot_now(state).ok();
     }
     let _ = root;
+    task.end(if cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
     let skipped_cloud = if scope.download_first { 0 } else { p.cloud };
     let (groups, downloaded) = (c.groups(), c.downloaded.saturating_sub(c.download_failed()));
     Ok(OrganizeResultDto {

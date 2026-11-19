@@ -745,3 +745,65 @@ fn import_into_a_collection_rejects_unknown_targets_and_cancel_is_false_when_idl
     assert_eq!(library::list_collections(&st).unwrap()[0].item_count, 1);
     assert!(!app_lib::services::import::cancel_import(&st), "không có lượt nào để huỷ");
 }
+
+/// TaskHub: "Tải về máy" hiện trong khay khi đang chạy (đúng loại, tổng, tên ngắn), huỷ từ khay đặt cờ huỷ của nguồn,
+/// và việc biến mất khi xong.
+#[test]
+fn download_source_is_a_cancellable_task_while_it_runs_and_gone_afterwards() {
+    use app_lib::dto::tasks::{TaskKind, TaskState};
+    let d = tempfile::tempdir().unwrap();
+    let (st, dir) = scanned(d.path(), &["roboto.ttf"]);
+    let id = sources::list_sources(&st).unwrap()[0].id;
+    std::fs::write(dir.join(".open_sans.ttf.icloud"), b"").unwrap();
+    let st2 = Arc::clone(&st);
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+    let go_rx = std::sync::Mutex::new(go_rx);
+    let h = std::thread::spawn(move || {
+        let fetch = |p: &Path, permit: app_lib::services::cloud::Permit, c: &std::sync::atomic::AtomicBool| {
+            started_tx.send(()).unwrap();
+            go_rx.lock().unwrap().recv().unwrap();
+            fake_os_download(p, permit, c)
+        };
+        cloud_download::download_source_with(&st2, id, &fetch, &mut |_| {})
+    });
+    started_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let l = st.tasks.list();
+    assert_eq!(l.tasks.len(), 1, "{:?}", l.tasks);
+    let t = &l.tasks[0];
+    assert_eq!((t.kind, t.total, t.state, t.cancellable), (TaskKind::CloudDownload, Some(1), TaskState::Running, true));
+    assert_eq!(t.title_key, "task.cloudDownload");
+    assert!(!serde_json::to_string(&t.title_args).unwrap().contains('/'), "tiêu đề không có đường dẫn");
+    assert!(st.tasks.cancel(&t.id));
+    assert_eq!(st.tasks.list().tasks[0].state, TaskState::Cancelling);
+    go_tx.send(()).unwrap();
+    h.join().unwrap().unwrap();
+    assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::CloudDownload), "xong thì gỡ việc tải khỏi khay");
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty(), "lượt quét nối tiếp cũng gỡ khi xong");
+}
+
+/// TaskHub: nhập đường dẫn là một việc huỷ được trong khay khi đang chạy và gỡ khi xong.
+#[test]
+fn import_paths_is_a_cancellable_task_while_it_runs_and_gone_afterwards() {
+    use app_lib::dto::tasks::TaskKind;
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let t = target_case(&st);
+    let font = d.path().join("loose").join("roboto.ttf");
+    std::fs::create_dir_all(font.parent().unwrap()).unwrap();
+    std::fs::copy(core_fixture("roboto.ttf"), &font).unwrap();
+    let mut seen_task = false;
+    let st2 = st.clone();
+    let r = app_lib::services::import::import_paths_into(&st, vec![font.to_string_lossy().into_owned()], &t, &mut |_| {
+        if let Some(x) = st2.tasks.list().tasks.iter().find(|x| x.kind == TaskKind::Other) {
+            assert!(x.cancellable && x.title_key == "task.import");
+            seen_task = true;
+        }
+    })
+    .unwrap();
+    assert!(seen_task, "việc nhập phải hiện trong khay khi đang chạy");
+    assert!(!r.cancelled);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty());
+}

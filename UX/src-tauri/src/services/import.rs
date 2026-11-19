@@ -11,7 +11,9 @@ use fontatlas_store::{FONT_EXTENSIONS, FaceKey, FileImportOutcome, SourceKind, i
 use crate::dto::library::{
     FaceKeyDto, ImportPhaseDto, ImportProgressDto, ImportResultDto, ImportSkipDto, ImportTargetDto, ImportTargetKindDto,
 };
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
 use crate::error::CmdError;
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::services::{cases, library, sources};
 use crate::state::AppState;
 
@@ -82,6 +84,17 @@ pub fn import_paths_into(
             }
         }
     }
+    // khay "Tác vụ": nhập chỉ thêm nguồn/liên kết vào đích, huỷ không để lại gì dở (kết quả `cancelled` không thêm gì)
+    let flag = Arc::clone(&cancel);
+    let spec = TaskSpec::new(TaskKind::Other, "task.import")
+        .arg("count", paths.len() as i64)
+        .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)));
+    let task = TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.import");
+    let mut tracked = |p: ImportProgressDto| {
+        task.progress(p.done as u64, (p.total > 0).then_some(p.total as u64));
+        progress(p);
+    };
+    let progress: &mut dyn FnMut(ImportProgressDto) = &mut tracked;
     let mut skipped: Vec<ImportSkipDto> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     let total_paths = paths.len() as u32;
@@ -171,6 +184,7 @@ pub fn import_paths_into(
         std::thread::sleep(Duration::from_millis(100));
     }
     if cancel.load(Ordering::SeqCst) {
+        task.end(TaskOutcome::Cancelled);
         return Ok(ImportResultDto { added: vec![], already_there: 0, skipped, cancelled: true });
     }
 
@@ -215,6 +229,7 @@ pub fn import_paths_into(
         }
     }
     emit(ImportPhaseDto::Adding, new_keys.len() as u32, new_keys.len() as u32, new_keys.len() as u32, &skipped);
+    task.end(TaskOutcome::Done);
     Ok(ImportResultDto { added: new_keys, already_there: already, skipped, cancelled: false })
 }
 
