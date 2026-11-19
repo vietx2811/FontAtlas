@@ -72,4 +72,6 @@ export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
   'task.watcherHint': 'Automatic: a folder changed.',
   'task.unknownTotal': 'Counting…',
   'task.cancelAll': 'Cancel all',
+  'task.scan': 'Scan “{source}”',
+  'task.error.scan': 'The scan was interrupted; fonts already scanned are kept.',
 };

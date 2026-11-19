@@ -71,4 +71,6 @@ export const SIDEBAR_I18N = {
   'task.watcherHint': 'Tự động: thư mục có thay đổi.',
   'task.unknownTotal': 'Đang đếm…',
   'task.cancelAll': 'Huỷ tất cả',
+  'task.scan': 'Quét «{source}»',
+  'task.error.scan': 'Quét bị gián đoạn; font đã quét vẫn giữ nguyên.',
 } as const;

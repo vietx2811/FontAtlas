@@ -87,6 +87,19 @@ describe('taskHub store', () => {
   });
 });
 
+describe('khoá thật của BE (mốc 1: quét)', () => {
+  it('task.scan có tên theo nguồn; task.error.scan hiện làm chi tiết của toast lỗi', async () => {
+    const { taskTitle } = await import('../taskHub');
+    expect(taskTitle({ kind: 'scan', titleKey: 'task.scan', titleArgs: { source: 'Dự án khách' } })).toBe('Quét «Dự án khách»');
+    vi.useFakeTimers();
+    const { notices, push } = await setup();
+    push({ type: 'upsert', task: task('a', { rev: 1, titleKey: 'task.scan', titleArgs: { source: 'X' } }) });
+    push({ type: 'removed', id: 'a', rev: 2, outcome: 'failed', errorKey: 'task.error.scan' });
+    expect(notices.getState().notices[0].detail).toMatch(/gián đoạn/);
+    vi.useRealTimers();
+  });
+});
+
 describe('buildRows / summarize', () => {
   it('quá 3 dòng cùng loại thì gộp; total null nếu có phần chưa biết; khác loại giữ riêng', () => {
     const many = ['1', '2', '3', '4'].map((i, n) => task(i, { kind: 'cloudDownload', done: n, total: 10 }));
