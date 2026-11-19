@@ -336,16 +336,17 @@ pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, 
 }
 
 #[tauri::command]
-pub async fn boot_subscribe(
+pub async fn boot_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<BootEvent>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     // đăng ký TRƯỚC rồi mới gửi pha hiện tại (có thể trùng, không mất `Ready` rơi giữa hai bước)
     let ch = on_event.clone();
     state
         .hubs
         .boot
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
     let _ = ch.send(BootEvent::Phase {
         phase: boot::snapshot(&state).phase,
     });
@@ -576,15 +577,16 @@ pub async fn model_redownload(
 }
 
 #[tauri::command]
-pub async fn embed_subscribe(
+pub async fn embed_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<EmbedEvent>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     let ch = on_event.clone();
     state
         .hubs
         .embed
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
     if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
         let _ = ch.send(EmbedEvent::Status { status });
     }
@@ -661,14 +663,15 @@ cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => 
 cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
 
 #[tauri::command]
-pub async fn activation_subscribe(
+pub async fn activation_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ActivationEvent>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .activation
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -751,21 +754,22 @@ pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, Cmd
 }
 
 #[tauri::command]
-pub async fn scan_subscribe(
+pub async fn scan_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ScanEvent>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .scan
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
 /// Khay "Tác vụ": nhận sự kiện (đăng ký TRƯỚC, rồi `list_tasks`; FE bỏ sự kiện có rev ≤ rev của danh sách).
 #[tauri::command]
-pub async fn task_subscribe(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>) -> Result<(), CmdError> {
-    state.tasks.events.subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+pub async fn task_subscribe<R: tauri::Runtime>(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>, webview: tauri::Webview<R>) -> Result<(), CmdError> {
+    state.tasks.events.subscribe_keyed(webview.label(), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 

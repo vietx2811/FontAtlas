@@ -99,7 +99,7 @@ pub fn remove_source_preview(state: &Arc<AppState>, id: i64) -> Result<RemoveSou
 
 pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceReportDto, CmdError> {
     // nguồn đang quét/chờ quét phải dừng trước, kẻo quét ghi vị trí mồ côi sau khi xoá
-    if !state.scans.forget(id) {
+    if !state.scans.forget(state, id) {
         return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
     }
     let report: RemoveSourceReportDto = state.with_store(|s| Ok(s.remove_source(id)?.into()))?;
@@ -116,7 +116,7 @@ pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceRepor
 pub fn rebuild_library(state: &Arc<AppState>) -> Result<RebuildLibraryReportDto, CmdError> {
     let ids: Vec<i64> = state.with_user(|u| Ok(u.sources()?.into_iter().map(|s| s.id).collect()))?;
     for id in &ids {
-        if !state.scans.forget(*id) {
+        if !state.scans.forget(state, *id) {
             return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
         }
     }
