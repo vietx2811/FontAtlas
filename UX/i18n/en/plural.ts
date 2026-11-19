@@ -26,7 +26,6 @@ export const EN_ONE: Record<string, string> = {
   'act.held.title': 'This font is held by {n} project',
   'sim.styles': '{n} style',
   'dd.count': '{n} style',
-  'side.scanningN': ' · {n} font',
   'set.src.meta': '{n} font · {state}',
   'set.data.problems': '{n} font has a problem',
   'set.act.offBody': '{n} font will be deactivated. It stays in your library. Do this before uninstalling the app.',

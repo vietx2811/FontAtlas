@@ -32,8 +32,6 @@ export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
   'side.notDownloaded': '{n} fonts not downloaded',
   'side.readyTip': '{n} fonts already on this device',
   'side.tags': 'Tags',
-  'side.scanning': 'Scanning',
-  'side.scanningN': ' · {n} fonts',
   'side.themeLight': 'Switch to the light theme',
   'side.themeDark': 'Switch to the dark theme',
   'side.themeToggle': 'Light/dark theme',

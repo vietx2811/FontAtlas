@@ -31,8 +31,6 @@ export const SIDEBAR_I18N = {
   'side.notDownloaded': '{n} font chưa tải về',
   'side.readyTip': '{n} font đã có trên máy',
   'side.tags': 'Thẻ',
-  'side.scanning': 'Đang quét',
-  'side.scanningN': ' · {n} font',
   'side.themeLight': 'Chuyển sang giao diện sáng',
   'side.themeDark': 'Chuyển sang giao diện tối',
   'side.themeToggle': 'Giao diện sáng/tối',
