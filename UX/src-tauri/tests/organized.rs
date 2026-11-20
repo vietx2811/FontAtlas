@@ -425,3 +425,23 @@ fn the_organize_copy_is_a_cancellable_export_task_and_cancelling_it_stops_the_co
     assert!(st.tasks.list().tasks.iter().all(|t| t.kind != TaskKind::Export), "xong thì gỡ");
     assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
 }
+
+/// Lỗi ghi sổ SAU khi chép xong: không trả Err (mất kết quả), không để file mồ côi ngoài sổ, báo `record_failed`; lần sau chép lại bình thường.
+#[test]
+fn a_record_failure_after_the_copy_leaves_no_orphan_file_and_is_reported_not_thrown() {
+    use std::sync::atomic::Ordering as O;
+    let (_d, st, _fonts, root) = cloud_setup();
+    assert!(st.scans.wait_idle(std::time::Duration::from_secs(60)));
+    let fetch = |_: &Path, _: app_lib::services::cloud::Permit, _: &AtomicBool| Ok(());
+    st.faults.organized_record.store(true, O::SeqCst);
+    let r = organized::import_with(&st, &OrganizeScopeDto::default(), &fetch, &mut |_| {}).expect("lỗi ghi sổ không được trả Err");
+    st.faults.organized_record.store(false, O::SeqCst);
+    assert_eq!(r.copied, 0);
+    assert!(r.issues.iter().any(|i| i.code == "record_failed"), "{:?}", r.issues.iter().map(|i| &i.code).collect::<Vec<_>>());
+    assert!(copied_names(&root).is_empty(), "không có file mồ côi: {:?}", copied_names(&root));
+    assert!(st.tasks.list().tasks.iter().all(|t| t.kind != app_lib::dto::tasks::TaskKind::Export));
+    // hết lỗi → chép được bình thường
+    let again = organized::import_with(&st, &OrganizeScopeDto::default(), &fetch, &mut |_| {}).unwrap();
+    assert_eq!(again.copied, 1);
+    assert_eq!(copied_names(&root), vec!["roboto.ttf".to_string()]);
+}

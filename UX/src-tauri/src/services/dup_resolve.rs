@@ -713,7 +713,12 @@ pub fn resolve_apply(
             failed.append(&mut side); // cảnh báo không chặn (vd không đánh dấu missing được) KHÔNG được nuốt
             lost.insert(lp.clone());
             // đã commit: không đọc lại được dòng sổ thì báo cảnh báo (kết quả vẫn trả, `batch_id` còn), không bỏ cả mẻ
-            match state.with_store(|s| Ok(s.resolution(id)?)) {
+            let readback = if crate::state::Faults::on(&state.faults.resolution_readback) {
+                Err(CmdError::new("db_error", "lỗi tiêm cho test"))
+            } else {
+                state.with_store(|s| Ok(s.resolution(id)?))
+            };
+            match readback {
                 Ok(r) => done.push(to_dto(&r, Some((loser.row.family.clone(), loser.row.subfamily.clone())), true)),
                 Err(e) => failed.push(fail(lp, "db_error", e.message)),
             }

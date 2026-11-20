@@ -534,7 +534,12 @@ pub fn import_with(
                         };
                         // copy đã xong mà không ghi sổ được: KHÔNG trả Err (mất kết quả các file đã chép trước đó). Bản chép vừa tạo ở
                         // đây (không phải file của người dùng) bị gỡ để không để file mồ côi ngoài sổ; báo thành một vấn đề của file này.
-                        if let Err(e) = state.with_store(|s| Ok(s.organized_record(&rec)?)) {
+                        let record = if crate::state::Faults::on(&state.faults.organized_record) {
+                            Err(CmdError::new("db_error", "lỗi tiêm cho test"))
+                        } else {
+                            state.with_store(|s| Ok(s.organized_record(&rec)?))
+                        };
+                        if let Err(e) = record {
                             log::warn!("organized: ghi sổ {} lỗi: {}", it.cand.src_path, e.message);
                             let _ = std::fs::remove_file(&it.dest);
                             st.borrow_mut().issue("record_failed", &it.cand.src_path);
