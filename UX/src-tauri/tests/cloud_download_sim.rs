@@ -546,6 +546,147 @@ fn taskhub_cancel_outcomes_are_exact_and_racing_enqueue_cancel_leaves_no_ghost_t
     assert!(matches!(evs.last(), Some(ScanEvent::Idle)) || evs.is_empty() || evs.iter().rev().any(|e| matches!(e, ScanEvent::Idle)), "UI phải nhận Idle");
 }
 
+/// Huỷ khi KHÔNG có gì chạy hay chờ: id lạ → `false`, không phát gì; việc "cũ" còn sót trong khay (worker vừa xong nguồn đó) →
+/// gỡ ngay, không kẹt `cancelling`, đúng hai sự kiện (Upsert cancelling rồi Removed) và không có `Idle` hay upsert thừa.
+#[test]
+fn taskhub_cancelling_when_nothing_runs_returns_false_and_a_stale_task_never_sticks_in_cancelling()
+{
+    use app_lib::dto::tasks::{TaskEvent, TaskKind, TaskOutcome, TaskState};
+    use app_lib::services::scan::CancelOutcome;
+    use app_lib::services::tasks::TaskSpec;
+    let root = sim_root();
+    let (st, _dir) = seeded(root.path(), 3);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty());
+    let tev: Arc<Mutex<Vec<TaskEvent>>> = Arc::default();
+    let t2 = tev.clone();
+    st.tasks
+        .events
+        .subscribe(Box::new(move |e| t2.lock().unwrap().push(e)));
+    let sev = record(&st);
+
+    // id lạ: false, không sự kiện
+    assert!(!st.tasks.cancel("khong-co-viec-nay"));
+    assert_eq!(st.scans.cancel_source(&st, 1), CancelOutcome::Nothing);
+    assert!(
+        tev.lock().unwrap().is_empty() && sev.lock().unwrap().is_empty(),
+        "không có gì để huỷ thì không phát gì"
+    );
+
+    // việc cũ còn sót trong khay (không có lượt quét nào chạy/chờ): huỷ gỡ ngay
+    let weak = Arc::downgrade(&st);
+    let spec = TaskSpec::new(TaskKind::Scan, "task.scan")
+        .group("scan:1")
+        .cancellable(Arc::new(move || {
+            if let Some(s) = weak.upgrade() {
+                s.scans.cancel_source(&s, 1);
+            }
+        }));
+    let id = st.tasks.begin(Some("scan:1"), spec, TaskState::Queued);
+    tev.lock().unwrap().clear();
+    assert!(st.tasks.cancel(&id), "việc còn trong khay thì huỷ được");
+    assert!(
+        st.tasks.list().tasks.is_empty(),
+        "không kẹt cancelling: {:?}",
+        st.tasks.list().tasks
+    );
+    {
+        let ev = tev.lock().unwrap();
+        assert_eq!(
+            ev.len(),
+            2,
+            "đúng Upsert(cancelling) rồi Removed, không upsert thừa: {ev:?}"
+        );
+        assert!(
+            matches!(&ev[0], TaskEvent::Upsert { task } if task.state == TaskState::Cancelling)
+        );
+        assert!(matches!(
+            &ev[1],
+            TaskEvent::Removed {
+                outcome: TaskOutcome::Cancelled,
+                ..
+            }
+        ));
+    }
+    assert!(
+        sev.lock().unwrap().is_empty(),
+        "không có lượt quét nào nên không phát ScanEvent (kể cả Idle)"
+    );
+    // lần hai: việc đã hết → false, vẫn không phát gì thêm
+    assert!(!st.tasks.cancel(&id));
+    assert_eq!(tev.lock().unwrap().len(), 2);
+}
+
+/// Hàng đợi cạn do huỷ: nguồn nằm chờ trong lúc worker đã báo Idle nhưng chưa thoát (cửa sổ `current = None`, `running = true`).
+/// Huỷ nguồn đó phải tự báo `Idle` (không ai khác sẽ báo). Giữ worker đúng chỗ bằng sink chặn trên kênh — không sleep, không timing.
+#[test]
+fn taskhub_cancelling_the_last_queued_source_after_the_worker_said_idle_emits_idle_itself() {
+    use app_lib::dto::events::ScanTrigger;
+    use app_lib::services::scan::CancelOutcome;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::mpsc;
+    let root = sim_root();
+    let (st, _dir) = seeded(root.path(), 3);
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+
+    let (reached_tx, reached_rx) = mpsc::channel::<()>();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let reached_tx = Mutex::new(reached_tx);
+    let release_rx = Mutex::new(release_rx);
+    let first = AtomicBool::new(true);
+    // sink chạy trong luồng worker: Idle ĐẦU TIÊN báo "đã tới" rồi chờ được thả; Idle sau đó (từ luồng khác) đi thẳng
+    st.hubs.scan.subscribe(Box::new(move |e| {
+        if matches!(e, ScanEvent::Idle) && first.swap(false, Ordering::SeqCst) {
+            reached_tx.lock().unwrap().send(()).unwrap();
+            release_rx.lock().unwrap().recv().unwrap();
+        }
+    }));
+    let ev = record(&st);
+
+    st.scans.enqueue_as(&st, &[1], ScanTrigger::User);
+    reached_rx
+        .recv_timeout(Duration::from_secs(60))
+        .expect("worker tới Idle");
+    // worker đang kẹt trong sink Idle: current = None, running = true. Xếp rồi huỷ nguồn 1.
+    assert!(
+        st.scans
+            .enqueue_follow_up_as(&st, &[1], ScanTrigger::Watcher)
+    );
+    assert!(st.scans.is_queued(1) && !st.scans.is_current(1));
+    assert_eq!(st.tasks.list().tasks.len(), 1);
+    let before = ev
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|e| matches!(e, ScanEvent::Idle))
+        .count();
+    assert_eq!(st.scans.cancel_source(&st, 1), CancelOutcome::Queued);
+    let after = ev
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|e| matches!(e, ScanEvent::Idle))
+        .count();
+    assert_eq!(
+        after,
+        before + 1,
+        "huỷ nguồn chờ cuối cùng phải tự báo Idle"
+    );
+    assert!(st.tasks.list().tasks.is_empty());
+    assert!(!st.scans.is_queued(1));
+
+    release_tx.send(()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert!(st.tasks.list().tasks.is_empty());
+    let finished = ev
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|e| matches!(e, ScanEvent::Finished { .. }))
+        .count();
+    assert_eq!(finished, 1, "chỉ lượt đầu chạy; lượt chờ đã bị huỷ");
+}
+
 /// Review: huỷ lượt đang chạy bỏ luôn lượt chờ tiếp của cùng nguồn (không chạy lại sau khi người dùng đã huỷ).
 #[test]
 fn taskhub_cancelling_a_running_scan_also_drops_its_queued_follow_up() {

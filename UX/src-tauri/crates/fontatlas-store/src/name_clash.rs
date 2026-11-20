@@ -63,7 +63,7 @@ impl Store {
         }
         let mut st = self.conn.prepare(&format!(
             "SELECT f.face_id, f.postscript_name, \
-                    (SELECT a.metadata_json FROM analyses a WHERE a.hash = fi.hash AND a.face_index = f.face_index \
+                    (SELECT json_extract(a.metadata_json, '$.named_instances') FROM analyses a WHERE a.hash = fi.hash AND a.face_index = f.face_index \
                      ORDER BY a.analyzed_at DESC, a.rowid DESC LIMIT 1) \
              FROM faces f JOIN files fi ON fi.file_id = f.file_id \
              WHERE f.is_variable = 1 AND f.postscript_name IS NOT NULL AND f.postscript_name <> '' AND {visible} \
@@ -81,12 +81,8 @@ impl Store {
                 ids.extend(v.iter().copied());
                 names.insert(ps.clone());
             }
-            let styles: Vec<String> = meta
-                .as_deref()
-                .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                .and_then(|j| j.get("named_instances").cloned())
-                .and_then(|n| serde_json::from_value::<Vec<String>>(n).ok())
-                .unwrap_or_default();
+            // SQLite đã trích riêng mảng `named_instances` (không parse cả metadata_json bên Rust cho từng face VF)
+            let styles: Vec<String> = meta.as_deref().and_then(|m| serde_json::from_str(m).ok()).unwrap_or_default();
             for style in styles {
                 for cand in instance_ps_candidates(&ps, &style) {
                     if let Some(v) = statics.get(&cand) {
