@@ -12,4 +12,7 @@ git mv docs/shot.png docs/shot2.png; git commit -qm rn; bash "$S" $h HEAD >/dev/
 echo x > Shot.JPEG; git add -A; git commit -qm up; bash "$S" HEAD~1 HEAD >/dev/null; check "JPEG viết hoa bị chặn" "$?" 1
 git rm -q docs/shot2.png Shot.JPEG; git commit -qm rm; bash "$S" HEAD~1 HEAD >/dev/null; check "xoá ảnh không bị chặn" "$?" 0
 echo x > doc.md; git add -A; git commit -qm md; bash "$S" HEAD~1 HEAD >/dev/null; check "file không phải ảnh bỏ qua" "$?" 0
+mkdir -p docs/readme/sub; echo x > docs/readme/lib.png; git add -A; git commit -qm rd; bash "$S" HEAD~1 HEAD >/dev/null; check "docs/readme/*.png được phép" "$?" 0
+echo x > docs/readme/sub/x.png; git add -A; git commit -qm rs; bash "$S" HEAD~1 HEAD >/dev/null; check "docs/readme/sub/*.png bị chặn" "$?" 1
+echo x > docs/readme/x.jpg; git add -A; git commit -qm rj; bash "$S" HEAD~1 HEAD >/dev/null; check "docs/readme/*.jpg bị chặn" "$?" 1
 exit $fail
