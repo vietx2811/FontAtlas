@@ -1,4 +1,4 @@
-fail tree=0cfbea53001e0ac502fa82fe6f5379c007fee08a qa=1
-2026-11-22T18:12:30Z vxmacmini 33s
-npm-ci:ok:0 vite-build:ok:2 tsc:ok:5 vitest:ok:23 notices:fail:0 qa-prep-test:ok:3 cargo-test:skip:0 bindings-drift:skip:0 clippy:skip:0 native-qa:skip:0
-cache: none
+pass tree=0cfbea53001e0ac502fa82fe6f5379c007fee08a qa=1
+2026-11-22T18:54:45Z vxmacmini 2515s
+npm-ci:ok:0 vite-build:ok:3 tsc:ok:0 vitest:ok:0 notices:ok:1 qa-prep-test:ok:3 cargo-test:ok:0 bindings-drift:ok:0 clippy:ok:0 tauri-debug-build:ok:2052 native-qa:ok:456
+cache: tsc=d29cf56c9 vitest=d29cf56c9 cargo-test=ffe2cfc0f bindings-drift=unit clippy=ffe2cfc0f
