@@ -220,6 +220,10 @@ pub fn download_source_with(
     };
     let paths = pending(state, source_id)?;
     progress(CloudDownloadProgressDto { done: 0, total: paths.len() as u32, failed: 0 });
+    // không còn file nào cần tải: trả 0 ngay, KHÔNG tạo việc (khay không nháy "Tải từ cloud — Xong" cho một việc rỗng)
+    if paths.is_empty() {
+        return Ok(CloudDownloadReportDto { total: 0, downloaded: 0, failed: 0, cancelled: false, rescan_queued: false, first_failure_code: None });
+    }
     // khay "Tác vụ": huỷ chỉ đặt cờ; file đang tải dở dừng theo `cancel`, file đã về giữ nguyên (không mất gì → huỷ ngay, không xác nhận)
     let name = state.with_user(|u| Ok(u.source(source_id)?)).map(|s| s.name).unwrap_or_default();
     let flag = Arc::clone(&cancel);

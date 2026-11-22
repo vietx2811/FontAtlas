@@ -167,3 +167,29 @@ fn pause_then_resume_completes() {
     let ev = log.lock().unwrap();
     assert!(ev.iter().any(|e| matches!(e, ScanEvent::Paused)) && ev.iter().any(|e| matches!(e, ScanEvent::Resumed)));
 }
+
+/// Hai nơi nghe quét (khoá khác nhau) đều nhận Finished; nghe lại CÙNG khoá thì thay chứ không nhân đôi (webview tải lại).
+#[test]
+fn scan_subscribers_with_different_keys_all_get_finished_and_the_same_key_replaces_not_doubles() {
+    let d = tempfile::tempdir().unwrap();
+    let st = booted(d.path());
+    let dir = fonts_dir(d.path(), 3);
+    let count = |n: &Arc<Mutex<u32>>| *n.lock().unwrap();
+    let sink = |n: &Arc<Mutex<u32>>| {
+        let n = n.clone();
+        Box::new(move |e: ScanEvent| {
+            if matches!(e, ScanEvent::Finished { .. }) {
+                *n.lock().unwrap() += 1;
+            }
+            true
+        }) as Box<dyn Fn(ScanEvent) -> bool + Send + Sync>
+    };
+    let (sidebar, onboarding, reloaded) = (Arc::new(Mutex::new(0u32)), Arc::new(Mutex::new(0u32)), Arc::new(Mutex::new(0u32)));
+    st.hubs.scan.subscribe_keyed(&app_lib::commands::sub_key("main", Some("sidebar"), "scan"), sink(&sidebar));
+    st.hubs.scan.subscribe_keyed(&app_lib::commands::sub_key("main", Some("onboarding"), "scan"), sink(&onboarding));
+    // "tải lại": cùng khoá với sidebar → thay sink cũ (sink cũ không nhận thêm, sink mới nhận đúng một lần)
+    st.hubs.scan.subscribe_keyed(&app_lib::commands::sub_key("main", Some("sidebar"), "scan"), sink(&reloaded));
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    assert_eq!((count(&sidebar), count(&onboarding), count(&reloaded)), (0, 1, 1), "sidebar cũ bị thay; hai khoá còn lại mỗi bên đúng một Finished");
+}
