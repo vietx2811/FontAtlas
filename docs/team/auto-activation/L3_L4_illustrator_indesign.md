@@ -57,3 +57,12 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 - **Nguyên nhân panel không gửi `ensure`: `textRange.textRuns` trả 0 run trong Illustrator 2027 dù text frame có chữ** (log: `frame=1 run=0`, không lỗi). Code cũ chỉ đọc font qua textRuns nên không bao giờ thấy font nào (cả font có lẫn font thiếu).
 - Sửa: nếu textRuns rỗng/`length` không phải số thì đọc từng paragraph, rồi cả `textRange`; log ghi `qua[run/đoạn/frame]` và `dò{runs=0 paras=1 via=paras}`. Lần thử sau sửa: `run=1 qua[run/đoạn/frame]=0/1/0 thấy=[DMSerifDisplay-Regular(có)]`.
 - Chưa kiểm được trọn vòng "font thiếu → panel gửi → font bật" trong Illustrator: app.textFonts có vẻ giữ tên font vài chục giây sau khi font bị tắt (nên font vừa tắt vẫn "có"), và tài liệu import SVG thay font thiếu bằng font khác. Cần tài liệu .ai gốc được lưu với font rồi mở khi font đang tắt.
+
+### Sau review (2026-11-23): các điểm đã sửa trong panel
+
+- **Broker đổi (Font Atlas khởi động lại):** panel nhớ `port:token` lần đọc trước; đổi thì xoá `last/retry/lastSig` rồi quét lại mọi tài liệu (log: `broker đổi …`). Cần vì lượt startup của app xoá auto-on phiên cũ, nên tài liệu đang mở lại thiếu font.
+- **Broker vắng:** không quét (không có chỗ gửi) và không ghi log lặp; broker.json xuất hiện/đổi thì quét ngay.
+- **Log "quét xong"** chỉ ghi khi kết quả khác lần trước.
+- **Đoạn/vùng chữ trộn nhiều font:** nếu `characterAttributes.textFont` của đoạn/vùng là undefined hoặc ném lỗi thì lấy mẫu từng ký tự (tối đa ~200 lần đọc mỗi mục, luôn gồm ký tự cuối); log `qua[run/đoạn/frame/ký tự]`.
+- **Nạp tay host.jsx:** bộ đếm tối đa 3 lần cho một chuỗi lỗi `EvalScript error.`; `faSig` trả `err` tạm (hộp modal…) không tính.
+

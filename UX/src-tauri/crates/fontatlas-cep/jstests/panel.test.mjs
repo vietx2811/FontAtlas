@@ -205,11 +205,11 @@ test("host.jsx chưa được nạp (ScriptPath không chạy cho panel nền): 
   assert.match(p.log(), /faSig lỗi/); assert.match(p.log(), /nạp host\.jsx bằng tay/);
 });
 
-test("host.jsx hỏng hẳn: không lặp vô hạn, chỉ nạp tay một lần", async () => {
+test("host.jsx hỏng hẳn: không lặp vô hạn, nạp tay tối đa 3 lần", async () => {
   const host = makeHost({ docs: [], loaded: false });
   host.evalScript = (src, cb) => { host.st.calls.push(src); if (cb) setImmediate(() => cb("EvalScript error.")); };
   const p = makePanel(host); await p.advance(70000);
-  assert.equal(host.st.calls.filter((c) => c.startsWith("$.evalFile(")).length, 1);
+  assert.equal(host.st.calls.filter((c) => c.startsWith("$.evalFile(")).length, 3);
 });
 
 test("ensure trả busy/not_downloaded: hỏi lại sau 5 s, tối đa 6 lần", async () => {
@@ -246,7 +246,7 @@ test("2027: textRuns rỗng (length 0) → đọc từng paragraph, thấy font 
   assert.match(r.stats.probe, /runs=0 paras=2 via=paras/);
   const p = makePanel(makeHost({ docs: [doc([frame2027([], [para("DMSerifDisplay-Regular")])])] })); await p.advance(1000);
   assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["DMSerifDisplay-Regular"]);
-  assert.match(p.log(), /qua\[run\/đoạn\/frame\]=0\/1\/0/);
+  assert.match(p.log(), /qua\[run\/đoạn\/frame\/ký tự\]=0\/1\/0\/0/);
 });
 
 test("2027: textRuns.length không phải số (undefined) và không có paragraph → đọc font của cả textRange", async () => {
@@ -261,4 +261,78 @@ test("2027: textRuns.length không phải số (undefined) và không có paragr
 test("textRuns hoạt động bình thường thì KHÔNG dùng đường dự phòng", () => {
   const r = scanJson(makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] }));
   assert.equal(r.stats.viaRuns, 1); assert.equal(r.stats.viaParas, 0); assert.equal(r.stats.viaFrame, 0);
+});
+
+test("faSig lỗi tạm ('err' lúc có hộp modal) KHÔNG tính vào số lần nạp host.jsx; sau đó vẫn nạp được khi host thật sự chưa nạp", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  let n = 0; const real = host.evalScript;
+  host.evalScript = (src, cb) => { if (src === "faSig()" && n++ < 2) { host.st.calls.push(src); return setImmediate(() => cb("err")); } real(src, cb); };
+  const p = makePanel(host); await p.advance(50000);
+  assert.equal(host.st.calls.filter((c) => c.startsWith("$.evalFile(")).length, 0, "err tạm không được ăn lượt nạp tay");
+  assert.equal(p.posts.length, 1, "poll sau đó chạy lại bình thường");
+});
+
+test("Font Atlas khởi động lại (cổng/token đổi): tài liệu đang mở được hỏi lại ngay cả khi tập tài liệu không đổi", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.equal(p.posts.length, 1);
+  p.files.set(BROKER, JSON.stringify({ port: 7777, token: "b".repeat(64) }));
+  await p.advance(21000);
+  assert.equal(p.posts.length, 2, "phải hỏi lại sau khi broker đổi");
+  assert.ok(p.posts[1].url.includes(":7777") && p.posts[1].auth === "Bearer " + "b".repeat(64));
+  assert.match(p.log(), /broker đổi/);
+  await p.advance(65000);
+  assert.equal(p.posts.length, 2, "không hỏi lại khi broker không đổi nữa");
+});
+
+test("broker vắng: poll KHÔNG quét lại mỗi 20 s và không ghi log lặp; broker.json xuất hiện thì quét ngay", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host, { broker: null }); await p.advance(1000);
+  const scans = () => host.st.calls.filter((c) => c.startsWith("faScan(")).length;
+  const logBefore = p.log();
+  await p.advance(180000);
+  assert.equal(scans(), 0, "không có chỗ gửi thì không quét");
+  assert.equal(p.log(), logBefore, "không thêm dòng log nào trong lúc vắng");
+  p.files.set(BROKER, JSON.stringify({ port: 4321, token: TOKEN }));
+  await p.advance(21000);
+  assert.equal(p.posts.length, 1);
+});
+
+test("log 'quét xong' chỉ ghi khi kết quả khác lần trước", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  for (let i = 0; i < 4; i++) { p.listeners.documentOpened.forEach((f) => f()); await p.advance(600); }
+  assert.equal((p.log().match(/quét xong/g) || []).length, 1);
+});
+
+// Đoạn TRỘN font: Illustrator không trả font đơn cho đoạn (undefined hoặc ném lỗi) → phải lấy mẫu từng ký tự, không sót font thứ hai.
+const ch = (ps) => ({ characterAttributes: { textFont: { name: ps, family: "F", style: "R" } } });
+const mixedPara = (chars, mode) => {
+  const ca = {};
+  if (mode === "throw") Object.defineProperty(ca, "textFont", { get() { throw new Error("mixed"); } }); else ca.textFont = undefined;
+  return { characterAttributes: ca, characters: chars };
+};
+
+test("đoạn trộn font (textFont undefined) → lấy mẫu ký tự, thấy cả hai font", async () => {
+  const chars = [ch("ArialMT"), ch("ArialMT"), ch("Chonburi-Regular"), ch("ArialMT")];
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "undef")])])] }));
+  assert.equal(r.stats.viaChars, 1);
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+  const p = makePanel(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "undef")])])] })); await p.advance(1000);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});
+
+test("đoạn trộn font mà textFont ném lỗi → vẫn lấy mẫu ký tự, không sập", () => {
+  const chars = [ch("DMSerifDisplay-Regular"), ch("ArialMT")];
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "throw")])])] }));
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["DMSerifDisplay-Regular"]);
+});
+
+test("đoạn dài: lấy mẫu có trần (~200 lần đọc) nhưng luôn gồm ký tự cuối", () => {
+  const n = 5000; let reads = 0;
+  const chars = Array.from({ length: n }, (_, i) => ({ get characterAttributes() { reads++; return { textFont: { name: i === n - 1 ? "Chonburi-Regular" : "ArialMT", family: "F", style: "R" } }; } }));
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "undef")])])] }));
+  assert.ok(reads <= 260, "số lần đọc: " + reads);
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
 });

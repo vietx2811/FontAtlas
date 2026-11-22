@@ -53,6 +53,18 @@
     logOnce("broker", "broker.json ok");
     return { port: port, token: b.token };
   }
+  // Font Atlas khởi động lại → cổng/token đổi: tài liệu đang mở phải được hỏi lại (lần trước có thể đã bị prune/auto-on của phiên cũ mất).
+  // Chưa có broker thì KHÔNG quét (không có chỗ gửi, và poll sẽ lặp 20 s một lần rồi đẩy mất dòng log chẩn đoán đầu).
+  var brokerKey;                                                // undefined = chưa đọc lần nào; null = vắng/hỏng
+  function syncBroker() {
+    var b = broker(), k = b ? b.port + ":" + b.token : null, changed = false;
+    if (k !== brokerKey) {
+      changed = !!k;
+      if (k) { if (brokerKey) log("broker đổi (Font Atlas khởi động lại?): hỏi lại mọi tài liệu"); last = {}; retry = {}; lastSig = null; lastScanLog = ""; }
+      brokerKey = k;
+    }
+    return { b: b, changed: changed };
+  }
   function post(b, body, done) {
     var x = new XMLHttpRequest(); x.timeout = 12000;
     x.open("POST", "http://127.0.0.1:" + b.port + "/v1/ensure");
@@ -68,7 +80,7 @@
     if (!doc.fonts.length) { delete last[key]; delete retry[key]; return; }  // không font thiếu (đã ghi trong log quét)
     var sig = doc.fonts.map(function (f) { return f.ps; }).sort().join("|");
     if (last[key] === sig) return;
-    var b = broker(); if (!b) { lastSig = null; return; }       // Font Atlas chưa chạy: lượt poll sau PHẢI quét lại (lastSig=null), không được coi là đã xử lý
+    var b = broker(); if (!b) { lastSig = null; return; }       // broker vừa biến mất giữa chừng: lượt poll sau PHẢI quét lại (lastSig=null), không được coi là đã xử lý
     log("gửi ensure: font thiếu=" + names(doc.fonts));
     post(b, { v: 1, app: "Adobe Illustrator", doc: doc.name, fonts: doc.fonts }, function (status, r) {
       if (status !== 200 || !r) { log("ensure lỗi http=" + status); return; }
@@ -84,13 +96,16 @@
   // ---- quét ----
   // Dựa vào SỰ KIỆN tài liệu; poll chỉ là dự phòng thưa (POLL_MS) và chỉ hỏi chữ ký rẻ `faSig()`: tài liệu không đổi thì
   // không quét gì cả. Quét thật đi theo lát ngắn (SLICE_MS) để không giữ luồng chính của Illustrator.
-  var lastSig = null, scanning = false, again = false, timer = null, hostLoaded = false, sigN = 0;
+  var lastSig = null, scanning = false, again = false, timer = null, hostLoads = 0, lastScanLog = "";
+  var HOST_LOAD_MAX = 3;                                      // lần nạp tay host.jsx tối đa cho một chuỗi lỗi (về 0 khi faSig chạy được)
   var SLICE_MS = 700, POLL_MS = 20000;
 
   function logScan(r) {
     var s = r.stats; if (!s) { log("quét xong: " + r.docs.length + " tài liệu (host cũ, không có stats)"); return; }
-    log("quét xong: tài liệu=" + s.docs + " frame=" + s.frames + " run=" + s.runs + " runKhôngFont=" + s.noFont + " lỗi=" + s.errs + " fontCài=" + s.installed + " qua[run/đoạn/frame]=" + (s.viaRuns || 0) + "/" + (s.viaParas || 0) + "/" + (s.viaFrame || 0) + (s.probe ? " dò{" + s.probe + "}" : "") +
+    var line = ("quét xong: tài liệu=" + s.docs + " frame=" + s.frames + " run=" + s.runs + " runKhôngFont=" + s.noFont + " lỗi=" + s.errs + " fontCài=" + s.installed + " qua[run/đoạn/frame/ký tự]=" + (s.viaRuns || 0) + "/" + (s.viaParas || 0) + "/" + (s.viaFrame || 0) + "/" + (s.viaChars || 0) + (s.probe ? " dò{" + s.probe + "}" : "") +
       " thấy=[" + (s.seen || []).map(function (x) { return x.ps + (x.miss ? "(thiếu)" : "(có)"); }).join(",") + "]" + ((s.errMsgs || []).length ? " lỗiMẫu=" + s.errMsgs.join(" | ") : ""));
+    if (line === lastScanLog) return;                          // chỉ ghi khi kết quả khác lần trước (không đẩy mất dòng chẩn đoán đầu)
+    lastScanLog = line; log(line);
   }
 
   function runScan(sig) {
@@ -113,15 +128,22 @@
 
   function trigger(force) {
     if (scanning) { if (force) again = true; return; }
+    var sb = syncBroker();
+    if (!sb.b) { lastSig = null; return; }                     // chưa có broker: không quét; khi broker.json xuất hiện/đổi thì quét lại
+    if (sb.changed) force = true;
     cs.evalScript("faSig()", function (sig) {
-      if (sig === "EvalScript error." || sig === "undefined" || sig === "err") {
-        // host.jsx chưa nạp (ScriptPath không chạy cho panel nền?) hoặc faSig lỗi: nạp tay MỘT lần rồi thử lại.
-        log("faSig lỗi: '" + String(sig).substring(0, 40) + "'" + (hostLoaded ? "" : "; nạp host.jsx bằng tay"));
-        if (!hostLoaded) { hostLoaded = true; cs.evalScript('$.evalFile(' + JSON.stringify(here() + "/jsx/host.jsx") + ')', function (x) { log("evalFile host.jsx → '" + String(x).substring(0, 40) + "'"); trigger(true); }); }
+      if (sig === "EvalScript error.") {
+        // host.jsx chưa nạp (ScriptPath không chạy cho panel nền?): nạp tay, tối đa HOST_LOAD_MAX lần cho một chuỗi lỗi, rồi thử lại.
+        if (hostLoads < HOST_LOAD_MAX) {
+          hostLoads++; log("faSig lỗi 'EvalScript error.'; nạp host.jsx bằng tay (lần " + hostLoads + "/" + HOST_LOAD_MAX + ")");
+          cs.evalScript('$.evalFile(' + JSON.stringify(here() + "/jsx/host.jsx") + ')', function (x) { log("evalFile host.jsx → '" + String(x).substring(0, 40) + "'"); trigger(true); });
+        } else logOnce("faSig-bo", "faSig vẫn lỗi sau " + HOST_LOAD_MAX + " lần nạp host.jsx");
         return;
       }
+      if (sig === "undefined" || sig === "err") { logOnce("faSig", "faSig lỗi tạm: '" + sig + "'"); return; }   // vd lúc có hộp modal: KHÔNG tính vào số lần nạp
+      hostLoads = 0;
       if (!force && sig === lastSig) return;
-      sigN++; if (sigN <= 3 || sig !== lastSig) log("tập tài liệu: " + (sig ? sig.split("\n").length : 0) + " tài liệu, quét");
+      if (sig !== lastSig) log("tập tài liệu: " + (sig ? sig.split("\n").length : 0) + " tài liệu, quét");
       runScan(sig);
     });
   }

@@ -39,7 +39,29 @@ function faStatsJson(st) {
   for (i = 0; i < st.seenList.length; i++) a.push('{"ps":' + faQ(st.seenList[i].ps) + ',"miss":' + st.seenList[i].miss + "}");
   for (i = 0; i < st.errMsgs.length; i++) b.push(faQ(st.errMsgs[i]));
   return '{"docs":' + s.docs + ',"frames":' + s.frames + ',"runs":' + s.runs + ',"noFont":' + s.noFont + ',"errs":' + s.errs +
-    ',"installed":' + s.installed + ',"viaRuns":' + (s.via_runs || 0) + ',"viaParas":' + (s.via_paras || 0) + ',"viaFrame":' + (s.via_frame || 0) + ',"probe":' + faQ(st.probe || "") + ',"seen":[' + a.join(",") + '],"errMsgs":[' + b.join(",") + "]}";
+    ',"installed":' + s.installed + ',"viaRuns":' + (s.via_runs || 0) + ',"viaParas":' + (s.via_paras || 0) + ',"viaFrame":' + (s.via_frame || 0) + ',"viaChars":' + (s.via_chars || 0) + ',"probe":' + faQ(st.probe || "") + ',"seen":[' + a.join(",") + '],"errMsgs":[' + b.join(",") + "]}";
+}
+
+// Font của MỘT mục (run/đoạn/cả vùng chữ). Run: đọc thẳng. Đoạn/vùng chữ trộn nhiều font: Illustrator không trả font đơn (undefined hoặc ném lỗi)
+// → lấy mẫu từng ký tự (tối đa ~200 lần đọc mỗi mục, bước nhảy theo độ dài, luôn gồm ký tự cuối) để không sót font thứ hai.
+function faFontsOfItem(st, item, kind) {
+  var out = [], f = null, ca = null, chars = null, n = 0, i, step, g, nm, seen = {};
+  try { ca = item.characterAttributes; } catch (e) { faNote(st, kind, e); }
+  if (ca) { try { f = ca.textFont; } catch (e) { faNote(st, kind === "runs" ? "textFont" : kind, e); } }
+  if (f) { out.push(f); return out; }
+  if (kind === "runs") return out;
+  try { chars = item.characters; n = chars ? Number(chars.length) : 0; if (isNaN(n)) n = 0; } catch (e) { faNote(st, "chars", e); n = 0; }
+  if (n > 0) {
+    step = Math.ceil(n / 200);
+    for (i = 0; i < n; i += step) {
+      g = null; try { g = chars[i].characterAttributes.textFont; } catch (e) { faNote(st, "char", e); }
+      nm = ""; if (g) { try { nm = g.name; } catch (e) {} }
+      if (nm && !seen[nm]) { seen[nm] = 1; out.push(g); }
+      if (i + step >= n && i !== n - 1) i = n - 1 - step;      // chạm ký tự cuối
+    }
+  }
+  if (out.length) st.stats.via_chars = (st.stats.via_chars || 0) + 1;
+  return out;
 }
 
 function faSig() {
@@ -89,21 +111,22 @@ function faScan(reset, budgetMs) {
         if (!st.probe) st.probe = "runs=" + n0 + " paras=" + pn + " via=" + kind;
         while (st.ri < n) {
           if (new Date().getTime() - t0 > budgetMs) return '{"ok":true,"done":false}';
-          var f = null, ps = "", fam = "", sty = "";
-          try { f = items[st.ri].characterAttributes.textFont; } catch (e) { faNote(st, kind === "runs" ? "textFont" : kind, e); }
-          if (f) {
+          var fl = faFontsOfItem(st, items[st.ri], kind), fi;
+          if (!fl.length) st.stats.noFont++;
+          st.stats.runs++;
+          st.stats["via_" + kind] = (st.stats["via_" + kind] || 0) + 1;
+          for (fi = 0; fi < fl.length; fi++) {
+            var f = fl[fi], ps = "", fam = "", sty = "";
             try { ps = f.name; } catch (e) { faNote(st, "name", e); }
             try { fam = f.family || ""; } catch (e) {}
             try { sty = f.style || ""; } catch (e) {}
-          } else st.stats.noFont++;
-          st.stats.runs++;
-          st.stats["via_" + kind] = (st.stats["via_" + kind] || 0) + 1;
-          if (ps) {
-            var miss = !st.installed[ps];
-            faSeen(st, String(ps), miss);
-            if (miss && !rec.seen[ps]) {
-              rec.seen[ps] = 1;
-              rec.fonts.push({ ps: String(ps), family: String(fam), style: String(sty) });
+            if (ps) {
+              var miss = !st.installed[ps];
+              faSeen(st, String(ps), miss);
+              if (miss && !rec.seen[ps]) {
+                rec.seen[ps] = 1;
+                rec.fonts.push({ ps: String(ps), family: String(fam), style: String(sty) });
+              }
             }
           }
           st.ri++;
