@@ -795,6 +795,7 @@ fn activation_dtos_match_plan7_contract_fixtures() {
             removed_reasons: vec![],
             cause: "no_reason".into(),
         }],
+        session_auto_cleared: 0,
         reregistered: 3,
         moved: 1,
         missing: 1,

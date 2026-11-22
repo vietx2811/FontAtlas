@@ -14,6 +14,23 @@ use crate::engine::{ActivationEngine, Scope};
 use crate::service::{ActivationService, Located, engine_failure, hex, locate, now_ms, path_str, relock};
 use crate::types::{ActivationError, EngineError, FileOutcome, FileResult, Progress};
 
+/// Lượt đối soát nào: `Startup` = đúng MỘT lần lúc mở app (chạy trước khi broker/fontreq nhận yêu cầu) — lượt duy nhất được xoá lý do
+/// auto-on của phiên trước. `Routine` = mọi lượt khác (sau quét, remove/rebuild nguồn, lượt bù): KHÔNG đụng lý do auto, vì font auto-on
+/// của phiên hiện tại đang được dùng.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReconcileMode {
+    Startup,
+    Routine,
+}
+
+/// Dữ liệu dùng chung của một lượt đối soát (gom lại để `reconcile_one` không có quá nhiều tham số).
+struct Pass<'a> {
+    pruned: &'a PrunedReasons,
+    existing: &'a HashSet<i64>,
+    auto_cleared: &'a HashSet<[u8; 32]>,
+    mode: ReconcileMode,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoDeactivated {
@@ -31,6 +48,9 @@ pub struct ReconcileReport {
     /// Như `auto_deactivated` nhưng hệ điều hành từ chối gỡ: font còn đăng ký, `reconcile` lần sau thử lại.
     pub auto_deactivate_failed: Vec<AutoDeactivated>,
     pub reregistered: usize,
+    /// Font chỉ còn lý do auto-on của phiên trước nên bị tắt lúc mở lại app (auto-on là tạm thời; không hiện như "bị tắt âm thầm").
+    #[serde(skip)] // chỉ để test/log; không đổi hợp đồng JSON của báo cáo
+    pub session_auto_cleared: usize,
     pub moved: usize,
     pub missing: usize,
     pub not_downloaded: usize,
@@ -54,17 +74,40 @@ fn maybe_registered(r: &ActivationRow) -> bool {
 }
 
 impl<E: ActivationEngine> ActivationService<E> {
+    /// Lượt đối soát thường (không đụng lý do auto-on của phiên hiện tại).
     pub fn reconcile(
         &self,
         store: &Mutex<Store>,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ReconcileReport, ActivationError> {
-        let (pruned, existing, rows): (PrunedReasons, HashSet<i64>, Vec<ActivationRow>) = {
+        self.reconcile_with(store, ReconcileMode::Routine, progress)
+    }
+
+    /// Lượt đối soát lúc mở app: như `reconcile` nhưng trước đó xoá lý do auto-on của phiên trước (xem `ReconcileMode`).
+    pub fn reconcile_startup(
+        &self,
+        store: &Mutex<Store>,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ReconcileReport, ActivationError> {
+        self.reconcile_with(store, ReconcileMode::Startup, progress)
+    }
+
+    pub fn reconcile_with(
+        &self,
+        store: &Mutex<Store>,
+        mode: ReconcileMode,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ReconcileReport, ActivationError> {
+        let (pruned, existing, auto_cleared, rows): (PrunedReasons, HashSet<i64>, HashSet<[u8; 32]>, Vec<ActivationRow>) = {
             let mut s = relock(store);
             let pruned = s.prune_collection_reasons()?;
+            // Auto-on chỉ sống trong một phiên của app: bỏ lý do auto của lần chạy trước (kể cả khi app bị kill, không chạy `shutdown`).
+            // CHỈ ở lượt Startup: lượt Routine chạy giữa phiên (sau quét, bù…) mà xoá thì gỡ mất font vừa bật cho app thiết kế.
+            let auto_cleared = if mode == ReconcileMode::Startup { s.prune_session_auto_reasons()?.into_iter().collect() } else { HashSet::new() };
             let existing = s.collections()?.into_iter().map(|c| c.id).collect();
-            (pruned, existing, s.activation_rows()?)
+            (pruned, existing, auto_cleared, s.activation_rows()?)
         };
+        let pass = Pass { pruned: &pruned, existing: &existing, auto_cleared: &auto_cleared, mode };
         let mut rep = ReconcileReport::default();
         self.finish_pending_relocations(store);
         let total = rows.len();
@@ -85,7 +128,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                 res.outcome = match fresh {
                     Some(fresh) => {
                         res.path = fresh.active_path.clone();
-                        self.reconcile_one(store, fresh, &pruned, &existing, &mut rep)?
+                        self.reconcile_one(store, fresh, &pass, &mut rep)?
                     }
                     None => FileOutcome::AlreadyInactive,
                 };
@@ -106,10 +149,10 @@ impl<E: ActivationEngine> ActivationService<E> {
         &self,
         store: &Mutex<Store>,
         mut row: ActivationRow,
-        pruned: &PrunedReasons,
-        existing: &HashSet<i64>,
+        pass: &Pass,
         rep: &mut ReconcileReport,
     ) -> Result<FileOutcome, ActivationError> {
+        let Pass { pruned, existing, auto_cleared, mode } = *pass;
         // Không còn được mong muốn: gỡ nếu có thể còn đăng ký.
         if row.state == DesiredState::Inactive {
             if !maybe_registered(&row) {
@@ -129,6 +172,16 @@ impl<E: ActivationEngine> ActivationService<E> {
             let out = self.unregister_row(store, &mut row, uncertain)?;
             if out == FileOutcome::Deactivated {
                 rep.cleaned += 1;
+            }
+            // Chỉ còn lý do auto-on của phiên trước (và không có collection nào bị xoá): tắt có chủ ý, tạm thời theo thiết kế, không báo như sự cố.
+            // Lượt Startup còn coi dòng "Active, không lý do, scope session" là đã dọn: app có thể đã chết giữa lúc xoá lý do auto và lúc tắt
+            // dòng này (lần chạy trước), nên lần này không còn dấu vết của auto nữa.
+            let session_cleared = auto_cleared.contains(&row.hash) || (mode == ReconcileMode::Startup && row.scope == Scope::Session);
+            if session_cleared && !pruned.iter().any(|(h, _)| *h == row.hash) {
+                if out == FileOutcome::Deactivated {
+                    rep.session_auto_cleared += 1;
+                }
+                return Ok(out);
             }
             // Không tắt âm thầm: mọi file bị tắt vì hết lý do đều được báo cho UI.
             let faces = relock(store)
