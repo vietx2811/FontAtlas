@@ -31,6 +31,9 @@ pub struct ReconcileReport {
     /// Như `auto_deactivated` nhưng hệ điều hành từ chối gỡ: font còn đăng ký, `reconcile` lần sau thử lại.
     pub auto_deactivate_failed: Vec<AutoDeactivated>,
     pub reregistered: usize,
+    /// Font chỉ còn lý do auto-on của phiên trước nên bị tắt lúc mở lại app (auto-on là tạm thời; không hiện như "bị tắt âm thầm").
+    #[serde(skip)] // chỉ để test/log; không đổi hợp đồng JSON của báo cáo
+    pub session_auto_cleared: usize,
     pub moved: usize,
     pub missing: usize,
     pub not_downloaded: usize,
@@ -59,11 +62,13 @@ impl<E: ActivationEngine> ActivationService<E> {
         store: &Mutex<Store>,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ReconcileReport, ActivationError> {
-        let (pruned, existing, rows): (PrunedReasons, HashSet<i64>, Vec<ActivationRow>) = {
+        let (pruned, existing, auto_cleared, rows): (PrunedReasons, HashSet<i64>, HashSet<[u8; 32]>, Vec<ActivationRow>) = {
             let mut s = relock(store);
             let pruned = s.prune_collection_reasons()?;
+            // Auto-on chỉ sống trong một phiên của app: bỏ lý do auto của lần chạy trước (kể cả khi app bị kill, không chạy `shutdown`).
+            let auto_cleared = s.prune_session_auto_reasons()?.into_iter().collect();
             let existing = s.collections()?.into_iter().map(|c| c.id).collect();
-            (pruned, existing, s.activation_rows()?)
+            (pruned, existing, auto_cleared, s.activation_rows()?)
         };
         let mut rep = ReconcileReport::default();
         self.finish_pending_relocations(store);
@@ -85,7 +90,7 @@ impl<E: ActivationEngine> ActivationService<E> {
                 res.outcome = match fresh {
                     Some(fresh) => {
                         res.path = fresh.active_path.clone();
-                        self.reconcile_one(store, fresh, &pruned, &existing, &mut rep)?
+                        self.reconcile_one(store, fresh, &pruned, &existing, &auto_cleared, &mut rep)?
                     }
                     None => FileOutcome::AlreadyInactive,
                 };
@@ -108,6 +113,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         mut row: ActivationRow,
         pruned: &PrunedReasons,
         existing: &HashSet<i64>,
+        auto_cleared: &HashSet<[u8; 32]>,
         rep: &mut ReconcileReport,
     ) -> Result<FileOutcome, ActivationError> {
         // Không còn được mong muốn: gỡ nếu có thể còn đăng ký.
@@ -129,6 +135,13 @@ impl<E: ActivationEngine> ActivationService<E> {
             let out = self.unregister_row(store, &mut row, uncertain)?;
             if out == FileOutcome::Deactivated {
                 rep.cleaned += 1;
+            }
+            // Chỉ còn lý do auto-on của phiên trước (và không có collection nào bị xoá): tắt có chủ ý, tạm thời theo thiết kế, không báo như sự cố.
+            if auto_cleared.contains(&row.hash) && !pruned.iter().any(|(h, _)| *h == row.hash) {
+                if out == FileOutcome::Deactivated {
+                    rep.session_auto_cleared += 1;
+                }
+                return Ok(out);
             }
             // Không tắt âm thầm: mọi file bị tắt vì hết lý do đều được báo cho UI.
             let faces = relock(store)

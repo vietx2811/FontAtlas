@@ -444,6 +444,31 @@ impl Store {
         Ok(out)
     }
 
+    /// Auto-on (`auto:<app>`) chỉ sống trong MỘT phiên của app: lúc mở lại, xoá lý do `auto:*` của mọi dòng scope **session**
+    /// (dòng đã "Giữ bật" = scope persistent thì giữ nguyên). Dòng còn lý do khác (manual/collection/case…) không đổi;
+    /// dòng hết lý do sẽ được `reconcile` tắt. Trả (hash đã xoá lý do, theo thứ tự hash). Chạy lúc mở app nên cũng đúng khi app bị kill
+    /// (không chạy `shutdown`).
+    pub fn prune_session_auto_reasons(&mut self) -> Result<Vec<[u8; 32]>, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let hashes: Vec<Vec<u8>> = {
+            let mut st = tx.prepare(
+                "SELECT DISTINCT r.hash FROM u.activation_reasons r
+                 JOIN u.activation_state a ON a.hash = r.hash
+                 WHERE r.reason LIKE 'auto:%' AND a.scope = 'session'
+                 ORDER BY r.hash",
+            )?;
+            st.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        tx.execute(
+            "DELETE FROM u.activation_reasons
+             WHERE reason LIKE 'auto:%'
+               AND hash IN (SELECT hash FROM u.activation_state WHERE scope = 'session')",
+            [],
+        )?;
+        tx.commit()?;
+        hashes.into_iter().map(hash_from_blob).collect()
+    }
+
     /// Mọi vị trí và tên PostScript của một file; `None` nếu `files` không có hash.
     pub fn file_target(&self, hash: &[u8; 32]) -> Result<Option<FileTarget>, StoreError> {
         let Some(file_id) = self

@@ -112,6 +112,7 @@ fn reconcile_report_json_matches_contract_fixture() {
             removed_reasons: vec![],
             cause: "no_reason".into(),
         }],
+        session_auto_cleared: 0,
         reregistered: 3,
         moved: 1,
         missing: 1,

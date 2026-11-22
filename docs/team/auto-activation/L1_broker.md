@@ -76,3 +76,8 @@ Thư viện thật của chủ app nằm dưới `~/Library/CloudStorage/` (OneD
 ## Để sau (review 2026-11-11, mục 4)
 
 Khi một tên PostScript có nhiều bản (nhiều hash), `pick()` hiện chọn: đang bật → `first_seen_at` mới nhất → hash nhỏ nhất. **Chưa dùng `fontRevision`** của font (bản cao hơn nên thắng khi cả hai cùng tên); cần đọc `head.fontRevision` lúc quét và lưu vào `faces`, nên để một đợt sau. Mọi ca nhiều bản vẫn được ghi `ambiguous` trong nhật ký.
+
+## Auto-on theo phiên (2026-11-23, quyết định của Lead)
+
+Font bật bởi `auto:<app>` là TẠM THỜI, khớp nhãn "On · this session": lúc mở lại app, `reconcile` gọi `Store::prune_session_auto_reasons` xoá lý do `auto:*` của mọi dòng **scope session**; dòng nào hết lý do thì bị tắt (và gỡ đăng ký OS nếu còn). Chạy ở đầu `reconcile` nên đúng cả khi app bị kill (không chạy `shutdown`; đăng ký session còn trong OS tới lúc đó). "Giữ bật" (scope persistent) giữ nguyên dòng và lý do. Lý do khác (manual, collection, case, caseapp) không đổi. Dòng chỉ còn auto bị tắt có chủ ý: đếm vào `ReconcileReport.session_auto_cleared` (không serialize, hợp đồng JSON không đổi) và KHÔNG hiện như "bị tắt âm thầm" ở `auto_deactivated`; nếu cùng lúc có collection bị prune (rời collection) thì vẫn báo như cũ. Ca `delete_collection` (lý do collection gỡ trong cùng giao dịch, không còn dấu vết) kèm auto: tắt im lặng. Test: `fontatlas-activate/tests/auto_session.rs` (8 test).
+
