@@ -25,6 +25,9 @@ import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { AutoActivation } from './AutoActivation';
 import { takeSettingsGroup } from './groupRequest';
+import { Icon, type IconName } from '../sidebar/icons';
+
+const GROUP_ICON: Record<string, IconName> = { general: 'cog', library: 'book', vision: 'eye', activation: 'power', auto: 'bolt', license: 'doc', data: 'db', shortcuts: 'keyboard', help: 'help', credits: 'heart' };
 
 export const SETTINGS_GROUPS = [
   { id: 'general', get label() { return t('set.g.general'); } }, { id: 'library', get label() { return t('set.g.library'); } }, { id: 'vision', get label() { return t('set.g.vision'); } },
@@ -74,11 +77,11 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
     <div className="fa-settings" data-testid="settings">
       <nav className="fa-set-nav" aria-label={t('set.nav')}>
         {SETTINGS_GROUPS.map(g => (
-          <button key={g.id} type="button" aria-current={group === g.id ? 'true' : undefined} onClick={() => setGroup(g.id)}>{g.label}</button>
+          <button key={g.id} type="button" aria-current={group === g.id ? 'true' : undefined} onClick={() => setGroup(g.id)}><Icon name={GROUP_ICON[g.id]} size={16} /><span>{g.label}</span></button>
         ))}
       </nav>
       <section className="fa-set-body">
-        <header><h2>{label}</h2><button type="button" className="fa-set-done" onClick={onClose}>{t('set.done')}</button></header>
+        <header><h2><Icon name={GROUP_ICON[group]} size={20} /><span>{label}</span></h2><button type="button" className="fa-set-done" onClick={onClose}>{t('set.done')}</button></header>
         {s && group === 'general' && <General api={api} s={s} patch={patch} />}
         {s && group === 'library' && <Library api={api} s={s} patch={patch} />}
         {s && group === 'vision' && <Vision api={api} s={s} patch={patch} store={modelStore} />}

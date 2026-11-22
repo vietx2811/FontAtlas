@@ -25,6 +25,19 @@ const go = async (name: string) => { await act(async () => { fireEvent.click(scr
 describe('Settings', () => {
   beforeEach(() => { useUiStore.setState(initial, true); document.documentElement.removeAttribute('data-theme'); });
 
+  it('mỗi mục nav có icon svg aria-hidden khác nhau; h2 mục đang chọn có cùng icon', async () => {
+    await mount();
+    const nav = screen.getByRole('navigation');
+    const buttons = within(nav).getAllByRole('button');
+    expect(buttons).toHaveLength(SETTINGS_GROUPS.length);
+    const paths = buttons.map(b => { const svg = b.querySelector('svg'); expect(svg).not.toBeNull(); expect(svg!.getAttribute('aria-hidden')).toBe('true'); return svg!.querySelector('path')!.getAttribute('d'); });
+    expect(new Set(paths).size).toBe(paths.length);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2.querySelector('svg path')!.getAttribute('d')).toBe(paths[0]);
+    await go('Thư viện và nguồn');
+    expect(screen.getByRole('heading', { level: 2 }).querySelector('svg path')!.getAttribute('d')).toBe(paths[1]);
+  });
+
   it('has the groups of spec 5 in a left column and shows one group at a time', async () => {
     await mount();
     expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp', 'Giới thiệu và ghi công']);
