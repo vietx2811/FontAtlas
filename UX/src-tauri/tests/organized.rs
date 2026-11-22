@@ -172,7 +172,7 @@ fn resort_only_proposes_never_auto_moves_and_undo_restores_everything() {
     assert_eq!(walk(&root.join("Library")), before, "xem trước không di chuyển gì");
 
     let done = organized::resort_apply(&st).unwrap();
-    assert_eq!((done.moved, done.failed), (1, 0));
+    assert_eq!((done.moved, done.failed, done.cancelled), (1, 0, false));
     let after = walk(&root.join("Library"));
     assert_ne!(after, before);
     assert!(after.iter().any(|p| nz(p.to_string_lossy()).contains(&format!("/{}/", if target_class == "mono" { "Mono" } else { "Script" }))));
@@ -472,7 +472,7 @@ fn resort_is_a_cancellable_task_cancel_midway_leaves_no_half_file_and_undo_retur
     st.faults.resort_cancel_after.store(2, O::SeqCst);
     let r = organized::resort_apply(&st).unwrap();
     st.faults.resort_cancel_after.store(0, O::SeqCst);
-    assert_eq!((r.moved, r.failed), (2, 0), "huỷ sau file thứ 2: đúng 2 file đã chuyển");
+    assert_eq!((r.moved, r.failed, r.cancelled), (2, 0, true), "huỷ sau file thứ 2: đúng 2 file đã chuyển");
     {
         let ev = evs.lock().unwrap();
         let first = ev.iter().find_map(|e| if let TaskEvent::Upsert { task } = e { Some(task.clone()) } else { None }).expect("việc hiện trong khay");
@@ -497,15 +497,15 @@ fn resort_is_a_cancellable_task_cancel_midway_leaves_no_half_file_and_undo_retur
     st.faults.resort_cancel_after.store(1, O::SeqCst);
     let u1 = organized::resort_undo(&st, r.batch_id).unwrap();
     st.faults.resort_cancel_after.store(0, O::SeqCst);
-    assert_eq!((u1.moved, u1.failed), (1, 0));
+    assert_eq!((u1.moved, u1.failed, u1.cancelled), (1, 0, true));
     assert!(matches!(evs.lock().unwrap().last(), Some(TaskEvent::Removed { outcome: TaskOutcome::Cancelled, .. })));
     let u2 = organized::resort_undo(&st, r.batch_id).unwrap();
-    assert_eq!((u2.moved, u2.failed), (1, 0));
+    assert_eq!((u2.moved, u2.failed, u2.cancelled), (1, 0, false));
     assert!(matches!(evs.lock().unwrap().last(), Some(TaskEvent::Removed { outcome: TaskOutcome::Done, .. })));
     assert_eq!(walk(&root.join("Library")), before, "hoàn tác đủ: mọi file về chỗ cũ");
     // không còn gì để hoàn tác → không tạo việc rỗng
     evs.lock().unwrap().clear();
     let u3 = organized::resort_undo(&st, r.batch_id).unwrap();
-    assert_eq!((u3.moved, u3.failed), (0, 0));
+    assert_eq!((u3.moved, u3.failed, u3.cancelled), (0, 0, false));
     assert!(evs.lock().unwrap().is_empty());
 }

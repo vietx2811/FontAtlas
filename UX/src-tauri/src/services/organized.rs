@@ -814,7 +814,7 @@ pub fn resort_apply(state: &Arc<AppState>) -> Result<ResortResultDto, CmdError> 
     if let Some(t) = &task {
         t.end(if cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
     }
-    Ok(ResortResultDto { batch_id: batch, moved, failed })
+    Ok(ResortResultDto { batch_id: batch, moved, failed, cancelled })
 }
 
 /// Hoàn tác một lượt sắp xếp lại. Cũng hiện trong khay và huỷ được (xét cờ trước mỗi file); phần chưa hoàn tác vẫn nằm trong
@@ -875,7 +875,7 @@ pub fn resort_undo(state: &Arc<AppState>, batch_id: i64) -> Result<ResortResultD
     if let Some(t) = &task {
         t.end(if cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
     }
-    Ok(ResortResultDto { batch_id, moved, failed })
+    Ok(ResortResultDto { batch_id, moved, failed, cancelled })
 }
 
 /// Sau khi file trong thư viện đổi chỗ: font đang bật trỏ đường cũ phải được đăng ký lại ở đường mới (06: `relocate`, đăng ký mới
