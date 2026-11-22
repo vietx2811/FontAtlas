@@ -137,7 +137,7 @@ test("textFont null (run không có font) và textFrames/textRuns ném lỗi: đ
   const d3 = doc([{ get textRange() { throw new Error("no range"); } }]);
   const r = scanJson(makeHost({ docs: [d1, d2, d3] }));
   assert.equal(r.ok, true); assert.equal(r.stats.noFont, 1); assert.equal(r.stats.docs, 3);
-  assert.ok(r.stats.errMsgs.some((m) => m.startsWith("frames:")) && r.stats.errMsgs.some((m) => m.startsWith("runs:")), JSON.stringify(r.stats.errMsgs));
+  assert.ok(r.stats.errMsgs.some((m) => m.startsWith("frames:")) && r.stats.errMsgs.some((m) => m.startsWith("range:")), JSON.stringify(r.stats.errMsgs));
 });
 
 test("quét theo lát: hết ngân sách thì trả done:false, gọi tiếp thì xong, không bỏ sót run nào", () => {
@@ -232,4 +232,33 @@ test("log bị chặn kích thước, giữ phần cuối, cắt ở ranh giới
   assert.ok(p.log().length <= 12000, String(p.log().length));
   assert.ok(p.log().endsWith("\n"));
   assert.match(p.log().split("\n")[0], /^\d{4}-\d\d-\d\dT/, "dòng đầu còn nguyên, không bị cắt giữa chừng");
+});
+
+// Illustrator 2027 thật (log lần thử 2026-11-23): `frame=1 run=0` — textRuns không liệt kê được gì dù frame có chữ, nên panel không
+// bao giờ thấy font nào. Các test dưới mô phỏng đúng hiện tượng đó: textRuns rỗng / length không phải số.
+const para = (ps) => ({ characterAttributes: { textFont: { name: ps, family: "F", style: "Regular" } } });
+const frame2027 = (textRuns, paragraphs, whole) => ({ textRange: { textRuns, paragraphs, characterAttributes: whole ? { textFont: { name: whole, family: "F", style: "Regular" } } : {} } });
+
+test("2027: textRuns rỗng (length 0) → đọc từng paragraph, thấy font thiếu và gửi", async () => {
+  const host = makeHost({ docs: [doc([frame2027([], [para("DMSerifDisplay-Regular"), para("ArialMT")])])] });
+  const r = scanJson(host);
+  assert.equal(r.stats.viaParas, 2); assert.equal(r.stats.viaRuns, 0);
+  assert.match(r.stats.probe, /runs=0 paras=2 via=paras/);
+  const p = makePanel(makeHost({ docs: [doc([frame2027([], [para("DMSerifDisplay-Regular")])])] })); await p.advance(1000);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["DMSerifDisplay-Regular"]);
+  assert.match(p.log(), /qua\[run\/đoạn\/frame\]=0\/1\/0/);
+});
+
+test("2027: textRuns.length không phải số (undefined) và không có paragraph → đọc font của cả textRange", async () => {
+  const host = makeHost({ docs: [doc([frame2027({}, undefined, "Chonburi-Regular")])] });
+  const r = scanJson(host);
+  assert.equal(r.stats.viaFrame, 1);
+  assert.match(r.stats.probe, /via=frame/);
+  const p = makePanel(makeHost({ docs: [doc([frame2027({}, undefined, "Chonburi-Regular")])] })); await p.advance(1000);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});
+
+test("textRuns hoạt động bình thường thì KHÔNG dùng đường dự phòng", () => {
+  const r = scanJson(makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] }));
+  assert.equal(r.stats.viaRuns, 1); assert.equal(r.stats.viaParas, 0); assert.equal(r.stats.viaFrame, 0);
 });

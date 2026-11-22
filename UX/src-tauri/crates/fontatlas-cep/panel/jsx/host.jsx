@@ -39,7 +39,7 @@ function faStatsJson(st) {
   for (i = 0; i < st.seenList.length; i++) a.push('{"ps":' + faQ(st.seenList[i].ps) + ',"miss":' + st.seenList[i].miss + "}");
   for (i = 0; i < st.errMsgs.length; i++) b.push(faQ(st.errMsgs[i]));
   return '{"docs":' + s.docs + ',"frames":' + s.frames + ',"runs":' + s.runs + ',"noFont":' + s.noFont + ',"errs":' + s.errs +
-    ',"installed":' + s.installed + ',"seen":[' + a.join(",") + '],"errMsgs":[' + b.join(",") + "]}";
+    ',"installed":' + s.installed + ',"viaRuns":' + (s.via_runs || 0) + ',"viaParas":' + (s.via_paras || 0) + ',"viaFrame":' + (s.via_frame || 0) + ',"probe":' + faQ(st.probe || "") + ',"seen":[' + a.join(",") + '],"errMsgs":[' + b.join(",") + "]}";
 }
 
 function faSig() {
@@ -74,19 +74,30 @@ function faScan(reset, budgetMs) {
       try { frames = d.textFrames; } catch (e) { faNote(st, "frames", e); }
       while (st.fi < frames.length) {
         // Vị trí quét gồm cả chỉ số text run (st.ri): frame có rất nhiều run được quét tiếp ở lát sau, không cắt bớt.
-        var runs = null;
-        try { runs = frames[st.fi].textRange.textRuns; } catch (e) { faNote(st, "runs", e); }
-        var n = runs ? runs.length : 0;
+        // Nguồn các đoạn chữ để đọc font: (1) textRuns; nếu rỗng/length không phải số (Illustrator 2027 thấy 0 run dù có chữ) thì
+        // (2) từng paragraph; nếu vẫn không có thì (3) cả textRange của frame. Chọn lại (idempotent) mỗi lần vào frame, kể cả khi quét tiếp ở lát sau.
+        var items = null, n = 0, kind = "runs", fr = frames[st.fi], rg = null;
+        try { rg = fr.textRange; } catch (e) { faNote(st, "range", e); }
+        try { items = rg ? rg.textRuns : null; n = items ? Number(items.length) : 0; if (isNaN(n)) n = 0; } catch (e) { faNote(st, "runs", e); items = null; n = 0; }
+        var n0 = n, pn = -1;
+        if (!(n > 0) && rg) {
+          kind = "paras";
+          try { items = rg.paragraphs; n = items ? Number(items.length) : 0; if (isNaN(n)) n = 0; } catch (e) { faNote(st, "paras", e); items = null; n = 0; }
+          pn = n;
+          if (!(n > 0)) { kind = "frame"; items = [rg]; n = 1; }
+        }
+        if (!st.probe) st.probe = "runs=" + n0 + " paras=" + pn + " via=" + kind;
         while (st.ri < n) {
           if (new Date().getTime() - t0 > budgetMs) return '{"ok":true,"done":false}';
           var f = null, ps = "", fam = "", sty = "";
-          try { f = runs[st.ri].characterAttributes.textFont; } catch (e) { faNote(st, "textFont", e); }
+          try { f = items[st.ri].characterAttributes.textFont; } catch (e) { faNote(st, kind === "runs" ? "textFont" : kind, e); }
           if (f) {
             try { ps = f.name; } catch (e) { faNote(st, "name", e); }
             try { fam = f.family || ""; } catch (e) {}
             try { sty = f.style || ""; } catch (e) {}
           } else st.stats.noFont++;
           st.stats.runs++;
+          st.stats["via_" + kind] = (st.stats["via_" + kind] || 0) + 1;
           if (ps) {
             var miss = !st.installed[ps];
             faSeen(st, String(ps), miss);

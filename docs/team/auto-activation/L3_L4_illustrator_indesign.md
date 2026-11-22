@@ -50,3 +50,10 @@ Lần thử thật trên Illustrator 2027: panel nạp được (không cần Pl
 - `gửi ensure: font thiếu=…` rồi `ensure xong: bật=… chưa có=…` hoặc `ensure lỗi http=…` ⇒ đường tới broker.
 
 Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.test.mjs` (cũng chạy trong `cargo test -p fontatlas-cep`): host.jsx và main.js chạy trong vm của Node với `app` giả (font thiếu, textFont ném lỗi, font bị thay thế như tài liệu import, textFrames lỗi), đồng hồ giả cho vòng poll 20 s và sự kiện, broker giả.
+
+### Kết quả lần thử thật 2026-11-23 (Illustrator 2027, tài liệu SVG import)
+
+- Panel tự ký nạp được KHÔNG cần PlayerDebugMode; `host.jsx` nạp bình thường (không `EvalScript error`).
+- **Nguyên nhân panel không gửi `ensure`: `textRange.textRuns` trả 0 run trong Illustrator 2027 dù text frame có chữ** (log: `frame=1 run=0`, không lỗi). Code cũ chỉ đọc font qua textRuns nên không bao giờ thấy font nào (cả font có lẫn font thiếu).
+- Sửa: nếu textRuns rỗng/`length` không phải số thì đọc từng paragraph, rồi cả `textRange`; log ghi `qua[run/đoạn/frame]` và `dò{runs=0 paras=1 via=paras}`. Lần thử sau sửa: `run=1 qua[run/đoạn/frame]=0/1/0 thấy=[DMSerifDisplay-Regular(có)]`.
+- Chưa kiểm được trọn vòng "font thiếu → panel gửi → font bật" trong Illustrator: app.textFonts có vẻ giữ tên font vài chục giây sau khi font bị tắt (nên font vừa tắt vẫn "có"), và tài liệu import SVG thay font thiếu bằng font khác. Cần tài liệu .ai gốc được lưu với font rồi mở khi font đang tắt.

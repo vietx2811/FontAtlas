@@ -89,7 +89,7 @@
 
   function logScan(r) {
     var s = r.stats; if (!s) { log("quét xong: " + r.docs.length + " tài liệu (host cũ, không có stats)"); return; }
-    log("quét xong: tài liệu=" + s.docs + " frame=" + s.frames + " run=" + s.runs + " runKhôngFont=" + s.noFont + " lỗi=" + s.errs + " fontCài=" + s.installed +
+    log("quét xong: tài liệu=" + s.docs + " frame=" + s.frames + " run=" + s.runs + " runKhôngFont=" + s.noFont + " lỗi=" + s.errs + " fontCài=" + s.installed + " qua[run/đoạn/frame]=" + (s.viaRuns || 0) + "/" + (s.viaParas || 0) + "/" + (s.viaFrame || 0) + (s.probe ? " dò{" + s.probe + "}" : "") +
       " thấy=[" + (s.seen || []).map(function (x) { return x.ps + (x.miss ? "(thiếu)" : "(có)"); }).join(",") + "]" + ((s.errMsgs || []).length ? " lỗiMẫu=" + s.errMsgs.join(" | ") : ""));
   }
 
