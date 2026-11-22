@@ -7,7 +7,7 @@ Mã: `ffe2cfc0` (origin/dev/mvp = beta.5 + test/perf của 02). Chỉ bản **de
 | 1 | Bật / tắt / chuyển chỗ | **PASS** |
 | 2 | Thêm font bằng kéo thả (50 file) | **PASS** |
 | 3 | Tải từ cloud (mô phỏng CloudStorage) | **PASS một phần**: chưa xác nhận được tải thật |
-| 4 | Huỷ giữa chừng (quét, font trùng, chép vào kho) | **PASS** |
+| 4 | Huỷ giữa chừng (quét, font trùng, chép vào kho, sắp xếp lại) | **PASS**; sắp xếp lại: không có khay/không huỷ được |
 | 5 | Sidebar thu gọn + giao diện tối, ≥3 việc | **PASS** |
 | 6 | Số đo đối chiếu beta.4 | **PASS** |
 
@@ -26,7 +26,7 @@ Ghi chú: khi không còn gì để tải mà gọi tải, khay vẫn nháy "T�
 - Quét: huỷ ở 256/1.150, không hỏi lại (đúng thiết kế), dừng hẳn, giữ 274 font đã quét; quét lại lên đủ 1.150.
 - Xử lý font trùng (4.000 bản trùng, 10 nhóm): có hộp hỏi lại; "Giữ chạy" chạy tiếp; "Huỷ việc này" dừng ở 2.519/3.990, còn 4 nhóm nguyên; **Undo hoàn lại 2.519, về đủ 10 nhóm**.
 - Chép vào kho Organized: có hộp hỏi lại; huỷ sau 189 file; trên đĩa 189 `.ttf` đúng bằng nguồn, 0 file `.part/.tmp`, checksum nguồn nguyên vẹn.
-- Chưa thử: "sắp xếp lại kho" (resort) khi áp dụng; chỉ chép vào kho.
+- "Sắp xếp lại kho" (resort), thử bổ sung: 300 font chép vào kho, đổi lớp 200 font sang Serif ⇒ xem trước 160 di chuyển; áp dụng 160/160 trong 176 ms (0 lỗi); Undo trả đủ 160, bố cục thư mục y hệt ban đầu, 300 file giống nguồn, 0 file `.part/.tmp`, nguồn nguyên vẹn. **Không có dòng khay** (áp dụng chạy đồng bộ, không qua TaskHub) và **không huỷ được**: `organized_cancel` trả `true` nhưng đợt áp dụng vẫn chạy hết 160/160. Với thư viện hàng nghìn file, thao tác này không có tiến độ lẫn nút huỷ (đề xuất cho 02/05: đưa vào TaskHub + kiểm cờ huỷ giữa các lần đổi tên).
 - Lưới trắng: 1 mẫu 53 ms tại đúng lúc huỷ quét (256 font); các lượt khác 0.
 
 ## 5. Sidebar thu gọn + tối (4 quét cùng lúc)
