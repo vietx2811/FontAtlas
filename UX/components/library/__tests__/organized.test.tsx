@@ -55,6 +55,52 @@ describe('B7 — Organized Library (Cài đặt ▸ Thư viện)', () => {
     expect(useNoticeStore.getState().notices.at(-1)!.text).toMatch(/Đã hoàn tác: 2 font về chỗ cũ/);
   });
 
+  it('sắp xếp lại: hộp đóng ngay khi chạy (tiến độ ở khay); huỷ giữa chừng ghi "Đã huỷ: dời N font" và vẫn Hoàn tác được', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    api.organizedResortApply = async () => ({ batchId: 7, moved: 3, failed: 0, cancelled: true });
+    const undo = vi.spyOn(api, 'organizedResortUndo');
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-resort')); await settle();
+    fireEvent.click(screen.getByTestId('org-resort-apply')); await settle();
+    expect(screen.queryByTestId('org-resort-apply')).toBeNull();
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toBe('Đã huỷ: dời 3 font, hoàn tác được.');
+    expect(n.kind).toBe('info'); expect(n.action?.label).toBe('Hoàn tác');
+    act(() => n.action!.run()); await settle();
+    expect(undo).toHaveBeenCalledWith(7);
+  });
+
+  it('sắp xếp lại: huỷ khi chưa dời gì → báo "chưa dời font nào", không có Hoàn tác', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    api.organizedResortApply = async () => ({ batchId: 8, moved: 0, failed: 0, cancelled: true });
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-resort')); await settle();
+    fireEvent.click(screen.getByTestId('org-resort-apply')); await settle();
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toBe('Đã huỷ: chưa dời font nào.'); expect(n.action).toBeUndefined();
+  });
+
+  it('hoàn tác bị huỷ giữa chừng: báo phần đã về chỗ cũ và cho hoàn tác tiếp', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    api.organizedResortUndo = async batchId => ({ batchId, moved: 1, failed: 0, cancelled: true });
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-resort')); await settle();
+    fireEvent.click(screen.getByTestId('org-resort-apply')); await settle();
+    act(() => useNoticeStore.getState().notices.at(-1)!.action!.run()); await settle();
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toMatch(/Đã huỷ hoàn tác: 1 font đã về chỗ cũ/); expect(n.action?.label).toBe('Hoàn tác');
+  });
+
+  it('sắp xếp lại lỗi trước khi chạy (vd. đang bận chép): báo lỗi bằng thông báo', async () => {
+    const api = createMockApi(); await api.organizedCreate('/Users/example/Fonts');
+    api.organizedResortApply = async () => { throw new Error('đang chép vào Organized Library'); };
+    render(<OrganizedPanel api={api} />); await settle();
+    fireEvent.click(screen.getByTestId('org-open-resort')); await settle();
+    fireEvent.click(screen.getByTestId('org-resort-apply')); await settle();
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.kind).toBe('error'); expect(n.text).toMatch(/đang chép/);
+  });
+
   it('khôi phục từ gói: kiểm gói, xếp lịch, nhắc khởi động lại; gói hỏng báo rõ', async () => {
     const api = createMockApi();
     const { unmount } = render(<OrganizedPanel api={api} pick={picker('/Volumes/Backup/pack-bad')} />); await settle();
