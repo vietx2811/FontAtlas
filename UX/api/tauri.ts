@@ -58,7 +58,8 @@ function channel<T>(onEvent: ((e: T) => void) | undefined): { ch: Channel<T>; of
  */
 async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe' | 'task_subscribe', onEvent: (e: T) => void, subscriber?: string): Promise<Unsubscribe> {
   const { ch, off } = channel<T>(onEvent);
-  await call(cmd, { onEvent: ch, subscriber: subscriber ?? null } as never);
+  // Kiểu lỏng chỉ ở Channel<T> (T chung cho 5 kênh); `subscriber` đã được bindings bắt buộc nên không còn cần ép kiểu cả đối số.
+  await call(cmd, { onEvent: ch as never, subscriber: subscriber ?? null });
   return off;
 }
 
