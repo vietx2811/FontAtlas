@@ -41,6 +41,10 @@ handler() {
         (cd "$Q/fonts" && find . -type f -exec shasum {} \; | sort -k2) > "$RUN/src.after"
         echo "   nguồn nguyên vẹn: $(diff -q "$RUN/src.before" "$RUN/src.after" >/dev/null && echo CÓ || echo KHÔNG)"
         echo "   bản chép khớp nguồn: $(cd "$L" && find . -type f ! -name '.*' | head -400 | while read f; do b=$(basename "$f"); s=$(find "$Q/fonts" -name "$b" | head -1); cmp -s "$f" "$s" || echo "KHÁC $b"; done | head -5 | tr '\n' ' ')"; } >> "$H" ;;
+    resort-before|resort-applied|resort-undone|resort-cancelled|resort-final) { L="$Q/OrgR/Library"; echo "== $1 $(date +%T): ttf=$(find "$L" -name '*.ttf' | wc -l | tr -d ' ') partial=$(find "$Q/OrgR" \( -name '*.part' -o -name '*.tmp' \) | wc -l | tr -d ' ') phân bố: $(cd "$L" && for d in */; do echo -n "$d$(find "$d" -name '*.ttf' | wc -l | tr -d ' ') "; done)"
+        [ "$1" = resort-before ] && (cd "$Q/fonts" && find . -type f -exec shasum {} \; | sort -k2) > "$RUN/src.rb"
+        (cd "$Q/fonts" && find . -type f -exec shasum {} \; | sort -k2) > "$RUN/src.now"; echo "   nguồn nguyên vẹn: $(diff -q "$RUN/src.rb" "$RUN/src.now" >/dev/null 2>&1 && echo CÓ || echo KHÔNG/NA)"
+        echo "   .ttf khác bản gốc: $(cd "$L" && find . -name '*.ttf' -print0 | while IFS= read -r -d '' f; do b=$(basename "$f"); s=$(find "$Q/fonts/lib" -name "$b" | head -1); cmp -s "$f" "$s" || echo x; done | wc -l | tr -d ' ')"; } >> "$H" ;;
     *) echo "(không có việc cho $1)" >> "$H" ;;
   esac
 }

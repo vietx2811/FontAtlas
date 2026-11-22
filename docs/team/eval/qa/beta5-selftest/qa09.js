@@ -247,6 +247,34 @@
       } catch (e) { await log('q9-ctl-error', false, E(e)); }
     }
 
+    if (on('resort')) {
+      try {
+        const sl = await addSource('__Q__/fonts/lib', 'lib'); const fl = await facesOf(sl.id);
+        await inv('organized_create', { path: '__Q__/OrgR' });
+        const imp = await inv('organized_import', { scope: { sourceIds: [sl.id], downloadFirst: false }, onProgress: quiet() });
+        await waitNoTray(30000);
+        await log('q9-6.0-org-copy', imp.copied === fl.length, { faces: fl.length, copied: imp.copied, issues: imp.issueCount });
+        await go('resort-before', 2500);
+        const ov = fl.slice(0, 200); for (const f of ov) await inv('set_classification_override', { over: { face: keyOf(f), class: 'serif', subclass: null } });
+        const pv = await inv('organized_resort_preview', {});
+        await log('q9-6.1-preview', pv.total > 0, { total: pv.total, sample: pv.moves.slice(0, 2).map(m => [m.from, m.to]) });
+        // áp dụng: quan sát khay + thời gian
+        let t = obStart(); const t1 = Date.now(); const ap = await inv('organized_resort_apply', {}); const ms = Date.now() - t1; await sleep(500);
+        const rowsSeen = OB.ev.filter(e => e.t >= t && e.rows.length).length; const btnSeen = OB.ev.filter(e => e.t >= t && e.btn).length; obStop();
+        await log('q9-6.2-apply', ap.moved === pv.total && ap.failed === 0, { moved: ap.moved, failed: ap.failed, planned: pv.total, ms, trayRowsSeen: rowsSeen, trayButtonSeen: btnSeen });
+        await go('resort-applied', 2500);
+        const st = await inv('activation_state', {}).catch(() => []);
+        const pv2 = await inv('organized_resort_preview', {}); await log('q9-6.3-after-apply-preview', pv2.total === 0, { total: pv2.total });
+        const und = await inv('organized_resort_undo', { batchId: ap.batchId }); await log('q9-6.4-undo', und.moved === ap.moved && und.failed === 0, { moved: und.moved, failed: und.failed });
+        await go('resort-undone', 2500);
+        // huỷ giữa chừng: bắn organized_cancel ngay khi bắt đầu áp dụng lần 2
+        t = obStart(); const pa = inv('organized_resort_apply', {}).then(r => ({ ok: true, r }), e => ({ ok: false, e: E(e) })); const cancelRes = await inv('organized_cancel', {}).catch(e => E(e)); const ra = await pa; obStop();
+        await log('q9-6.5-cancel-during-apply', true, { cancelReturned: cancelRes, apply: ra.ok ? { moved: ra.r.moved, failed: ra.r.failed } : ra.e, plannedTotal: pv.total, trayRows: OB.ev.filter(e => e.t >= t && e.rows.length).length });
+        await go('resort-cancelled', 2500);
+        if (ra.ok) { const u2 = await inv('organized_resort_undo', { batchId: ra.r.batchId }); await log('q9-6.6-undo-again', u2.failed === 0, { moved: u2.moved, failed: u2.failed }); await go('resort-final', 2500); }
+      } catch (e) { await log('q9-6-error', false, E(e)); }
+    }
+
     // ───── 5. sidebar thu gọn + giao diện tối với ≥3 việc ─────
     if (on('ui')) {
       try {
