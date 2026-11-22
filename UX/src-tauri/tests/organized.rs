@@ -445,3 +445,67 @@ fn a_record_failure_after_the_copy_leaves_no_orphan_file_and_is_reported_not_thr
     assert_eq!(again.copied, 1);
     assert_eq!(copied_names(&root), vec!["roboto.ttf".to_string()]);
 }
+
+/// Sắp xếp lại là việc trong khay (done/total đơn điệu, có hộp xác nhận khi huỷ). Huỷ giữa chừng: 0 file dở (mỗi file hoặc ở chỗ cũ hoặc
+/// ở chỗ mới có trong sổ), phần đã chuyển hoàn tác đủ qua batch_id, rồi hoàn tác cũng là việc huỷ được.
+#[test]
+fn resort_is_a_cancellable_task_cancel_midway_leaves_no_half_file_and_undo_returns_what_was_done() {
+    use app_lib::dto::tasks::{TaskEvent, TaskKind, TaskOutcome, TaskState};
+    use std::sync::atomic::Ordering as O;
+    use std::sync::Mutex;
+    let d = tempfile::tempdir().unwrap();
+    let (st, _fonts) = scanned(d.path(), &["roboto.ttf", "open_sans.ttf", "bebas_neue.ttf", "chonburi.ttf"]);
+    let root = make_library(&st, d.path());
+    organized::import(&st, &OrganizeScopeDto::default(), &mut |_| {}).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    for r in all(&st).items {
+        let face = FaceKeyDto { hash_hex: r.hash_hex.clone(), face_index: r.face_index };
+        analysis::set_classification_override(&st, &ClassificationOverrideDto { face, class: "mono".into(), subclass: None }).unwrap();
+    }
+    let before = walk(&root.join("Library"));
+    let planned = organized::resort_preview(&st).unwrap().total;
+    assert!(planned >= 3, "cần đủ file để huỷ giữa chừng: {planned}");
+
+    let evs: Arc<Mutex<Vec<TaskEvent>>> = Arc::default();
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    st.faults.resort_cancel_after.store(2, O::SeqCst);
+    let r = organized::resort_apply(&st).unwrap();
+    st.faults.resort_cancel_after.store(0, O::SeqCst);
+    assert_eq!((r.moved, r.failed), (2, 0), "huỷ sau file thứ 2: đúng 2 file đã chuyển");
+    {
+        let ev = evs.lock().unwrap();
+        let first = ev.iter().find_map(|e| if let TaskEvent::Upsert { task } = e { Some(task.clone()) } else { None }).expect("việc hiện trong khay");
+        assert_eq!((first.kind, first.state, first.total), (TaskKind::Export, TaskState::Running, Some(planned as u64)));
+        assert_eq!(first.title_key, "task.resort");
+        assert_eq!(first.cancel_confirm_key.as_deref(), Some("task.resort.cancelConfirm"));
+        let dones: Vec<u64> = ev.iter().filter_map(|e| if let TaskEvent::Upsert { task } = e { Some(task.done) } else { None }).collect();
+        assert!(dones.windows(2).all(|w| w[0] <= w[1]), "tiến độ đơn điệu: {dones:?}");
+        assert!(matches!(ev.last(), Some(TaskEvent::Removed { outcome: TaskOutcome::Cancelled, .. })), "{:?}", ev.last());
+    }
+    assert!(st.tasks.list().tasks.is_empty());
+    // 0 file dở: số file không đổi (không mất, không nhân đôi), đúng 2 file đổi chỗ, sổ có đúng 2 dòng chưa hoàn tác
+    let mid = walk(&root.join("Library"));
+    assert_eq!(mid.len(), before.len());
+    assert_eq!(mid.iter().filter(|p| !before.contains(p)).count(), 2);
+    let logged = st.with_store(|s| Ok(s.organized_moves(r.batch_id).unwrap())).unwrap();
+    assert_eq!(logged.iter().filter(|m| !m.undone).count(), 2);
+    assert!(logged.iter().all(|m| Path::new(&m.to_path).exists() && !Path::new(&m.from_path).exists()));
+
+    // hoàn tác trả đủ phần đã làm; cũng là việc huỷ được (huỷ sau 1 file → còn 1 file chưa hoàn tác, hoàn tác tiếp được)
+    evs.lock().unwrap().clear();
+    st.faults.resort_cancel_after.store(1, O::SeqCst);
+    let u1 = organized::resort_undo(&st, r.batch_id).unwrap();
+    st.faults.resort_cancel_after.store(0, O::SeqCst);
+    assert_eq!((u1.moved, u1.failed), (1, 0));
+    assert!(matches!(evs.lock().unwrap().last(), Some(TaskEvent::Removed { outcome: TaskOutcome::Cancelled, .. })));
+    let u2 = organized::resort_undo(&st, r.batch_id).unwrap();
+    assert_eq!((u2.moved, u2.failed), (1, 0));
+    assert!(matches!(evs.lock().unwrap().last(), Some(TaskEvent::Removed { outcome: TaskOutcome::Done, .. })));
+    assert_eq!(walk(&root.join("Library")), before, "hoàn tác đủ: mọi file về chỗ cũ");
+    // không còn gì để hoàn tác → không tạo việc rỗng
+    evs.lock().unwrap().clear();
+    let u3 = organized::resort_undo(&st, r.batch_id).unwrap();
+    assert_eq!((u3.moved, u3.failed), (0, 0));
+    assert!(evs.lock().unwrap().is_empty());
+}
