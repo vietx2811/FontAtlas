@@ -75,7 +75,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
           }));
       } else useNoticeStore.getState().push({ kind: 'error', text: t('scan.fail', { code: e.error.code, msg: e.error.message }) });
     } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (dirty && Date.now() - last > IDLE_COALESCE_MS) bumpNow(); dirty = false; } // `finished` vừa bump liền trước thì gộp (1 lần nạp, không 2); xác nhận total=0 khi hết quét do LibraryGrid tự làm (scanning true→false)
-  });
+  }, 'scan.store');
   try {
     const st = await api.scanStatus();
     if (st.running) store.setState({ scanning: true, paused: st.paused });

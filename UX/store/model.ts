@@ -158,7 +158,7 @@ export function createModelStore(): ModelStore {
         const off = await api.embedSubscribe(e => {
           if (e.kind === 'status') set({ embed: e.status });
           else { set({ justFinished: true }); clearTimeout(timer); timer = setTimeout(() => get().clearFinished(), 5000); }
-        });
+        }, 'model.store');
         return () => { off(); clearTimeout(timer); };
       },
       async enable(api) {

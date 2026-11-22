@@ -20,7 +20,7 @@ export type DeactivateOptions = { force?: boolean; onProgress?(p: ProgressDto): 
 export interface Api extends LibraryApi {
   // Khởi động và onboarding
   startupStatus(): Promise<BootStatusDto>;
-  bootSubscribe(onEvent: (e: BootEvent) => void): Promise<Unsubscribe>;
+  bootSubscribe(onEvent: (e: BootEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   onboardingState(): Promise<OnboardingDto>;
   setOnboardingStep(step: string | null): Promise<void>;
   /** Bật/tắt kính thật (Liquid Glass) sau webview cho màn hướng dẫn. Trả true khi kính đang hiện; false = không có (giữ vibrancy). */
@@ -103,12 +103,12 @@ export interface Api extends LibraryApi {
   scanResume(): Promise<void>;
   scanCancel(): Promise<void>;
   scanStatus(): Promise<ScanStatusDto>;
-  scanSubscribe(onEvent: (e: ScanEvent) => void): Promise<Unsubscribe>;
+  scanSubscribe(onEvent: (e: ScanEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   /** TaskHub: danh sách việc nền hiện có (kèm `rev` để bỏ sự kiện cũ). */
   taskList(): Promise<TaskListDto>;
   /** Huỷ một việc nền; idempotent, trả ngay. */
   taskCancel(id: string): Promise<void>;
-  taskSubscribe(onEvent: (e: TaskEvent) => void): Promise<Unsubscribe>;
+  taskSubscribe(onEvent: (e: TaskEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   // Thư viện
   getFamilyStyles(family: string): Promise<FamilyStyleDto[]>;
   setFavorite(face: FaceKeyDto, on: boolean): Promise<void>;
@@ -274,7 +274,7 @@ export interface Api extends LibraryApi {
   embedStatus(): Promise<EmbedStatusDto>;
   embedPause(): Promise<void>;
   embedResume(): Promise<void>;
-  embedSubscribe(onEvent: (e: EmbedEvent) => void): Promise<Unsubscribe>;
+  embedSubscribe(onEvent: (e: EmbedEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   // Kích hoạt (Plan 7)
   activationCaps(): Promise<{ method: string; supported: boolean }>;
   activationState(): Promise<ActivationStateDto[]>;
@@ -306,7 +306,7 @@ export interface Api extends LibraryApi {
   activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<ActivationReportDto>;
   /** Font nào đang "Có sẵn trên máy" (file giống hệt do bên khác cung cấp). Tính lại mỗi lần; `faces` kiểm thêm ngoài tập đã nhớ. */
   activationAvailability(faces?: FaceKeyDto[]): Promise<AvailabilityDto[]>;
-  activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
+  activationSubscribe(onEvent: (e: ActivationEvent) => void, subscriber?: string): Promise<Unsubscribe>;
 }
 
 let current: Api | null = null;

@@ -37,7 +37,7 @@ export function BootGate({ api, children }: { api: Api; children: React.ReactNod
           else setGate(g => (g.kind === 'loading' ? { kind: 'loading', phase: e.phase } : g)); // pha đến muộn không kéo cổng đã sẵn sàng/onboarding/lỗi về "đang tải"
         }
         else if (e.type === 'failed') setGate({ kind: 'failed', code: e.error.code, message: e.error.message, backup: null });
-      });
+      }, 'boot.gate');
       await advance(await api.startupStatus());
     })().catch(e => fail(null, e));
     return () => { alive = false; off?.(); };

@@ -24,7 +24,7 @@ export async function startActivationSync(api: Api): Promise<() => void> {
       reconcileNotices(e.report).forEach(m => useNoticeStore.getState().push(m));
       void refresh();
     }
-  });
+  }, 'activation.sync');
   await refresh();
   // Bên khác (FontBase, hệ thống…) có thể thêm/gỡ font lúc ta không nhìn: quay lại cửa sổ thì tính lại.
   const onFocus = () => { void refresh(); };

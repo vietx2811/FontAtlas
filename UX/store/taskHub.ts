@@ -97,7 +97,7 @@ export async function startTaskHub(api: Api, store: TaskHubStore = useTaskHubSto
     }
   };
 
-  const off = await api.taskSubscribe(e => { if (!alive) return; if (ready) apply(e); else buffer.push(e); });
+  const off = await api.taskSubscribe(e => { if (!alive) return; if (ready) apply(e); else buffer.push(e); }, 'taskhub');
   try {
     const list = await api.taskList();
     if (alive) store.setState({ rev: list.rev, tasks: Object.fromEntries(list.tasks.map(x => [x.id, x])) });

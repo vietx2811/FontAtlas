@@ -230,7 +230,7 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
       if (e.type === 'finished' || e.type === 'failed') setScanning(ids => ids.filter(id => id !== e.sourceId));
       if (e.type === 'idle') setScanning([]);
       if (e.type === 'finished' || e.type === 'idle') void refresh().catch(err => { if (!dead) setLoadError(sourceError(err)); });
-    }).then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([t('onb.o3.trackFail', { msg: sourceError(e) })]); });
+    }, 'onboarding.sources').then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([t('onb.o3.trackFail', { msg: sourceError(e) })]); });
     api.scanStatus().then(s => { if (!dead && !eventSeen) setScanning([...s.queued, ...(s.currentSourceId === null ? [] : [s.currentSourceId])]); }).catch(e => { if (!dead) setMessages([t('onb.o3.statusFail', { msg: sourceError(e) })]); });
     return () => { dead = true; alive.current = false; off?.(); };
   }, [api, load, refresh]);
@@ -309,7 +309,7 @@ function O4({ api, next, stage }: Ctx) {
       else if (e.type === 'progress') { setSeen(e.progress.total); setWritten(e.progress.facesWritten); setSt({ scanning: true, done: false, progress: e.progress.total > 0 ? e.progress.done / e.progress.total : null }); }
       else if (e.type === 'finished') setStats(d => ({ seen: d.seen + e.stats.seen, analyzed: d.analyzed + e.stats.analyzed, failed: d.failed + e.stats.failed, finished: true }));
       else if (e.type === 'idle') setSt({ scanning: false, progress: 1, done: true });
-    }).then(u => { if (dead) u(); else off = u; });
+    }, 'onboarding.scan').then(u => { if (dead) u(); else off = u; });
     // Quét đã xong từ trước khi vào bước này (hoặc chưa chạy): hiện dấu tick luôn.
     void api.scanStatus().then(s => { if (!dead) setSt(p => (s.running ? { ...p, scanning: true } : p.scanning ? p : { scanning: false, progress: 1, done: true })); });
     return () => { dead = true; off?.(); };

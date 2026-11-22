@@ -51,9 +51,14 @@ function channel<T>(onEvent: ((e: T) => void) | undefined): { ch: Channel<T>; of
   ch.onmessage = e => { if (on) onEvent?.(e); };
   return { ch, off: () => { on = false; } };
 }
-async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe', onEvent: (e: T) => void): Promise<Unsubscribe> {
+/**
+ * `subscriber` là tên CỐ ĐỊNH theo nơi gọi ("scan.store", "onboarding.scan"…), không dùng bộ đếm:
+ * backend khoá sink theo (webview, kênh, subscriber) — nơi gọi khác nhau cùng nhận sự kiện, còn tải lại trang
+ * (cùng tên) thì thay đúng sink cũ thay vì nhân đôi. Thiếu tên thì mọi nơi trong webview dùng chung "default" và đá nhau.
+ */
+async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe' | 'task_subscribe', onEvent: (e: T) => void, subscriber?: string): Promise<Unsubscribe> {
   const { ch, off } = channel<T>(onEvent);
-  await call(cmd, { onEvent: ch } as never);
+  await call(cmd, { onEvent: ch, subscriber: subscriber ?? null } as never);
   return off;
 }
 
@@ -93,7 +98,7 @@ export function createTauriApi(): Api {
     previewUrl, fontUrl,
     // Khởi động, onboarding
     startupStatus: () => call('startup_status'),
-    bootSubscribe: onEvent => subscribe('boot_subscribe', onEvent),
+    bootSubscribe: (onEvent, subscriber) => subscribe('boot_subscribe', onEvent, subscriber),
     onboardingState: () => call('onboarding_state'),
     setOnboardingStep: step => none(call('set_onboarding_step', { step })),
     setWindowGlass: on => call('set_window_glass', { on }),
@@ -138,11 +143,11 @@ export function createTauriApi(): Api {
     sourceDownloadCancel: sourceId => call('source_download_cancel', { sourceId }),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),
     scanStatus: () => call('scan_status'),
-    scanSubscribe: onEvent => subscribe('scan_subscribe', onEvent),
+    scanSubscribe: (onEvent, subscriber) => subscribe('scan_subscribe', onEvent, subscriber),
     // TaskHub: lệnh chưa có trong TauriCommandMap tới khi 02 sinh bindings → gọi invoke thẳng.
     taskList: () => call('list_tasks'),
     taskCancel: id => call('cancel_task', { id }).then(() => undefined),
-    taskSubscribe: async onEvent => { const { ch, off } = channel<TaskEvent>(onEvent); await call('task_subscribe', { onEvent: ch }); return off; },
+    taskSubscribe: (onEvent, subscriber) => subscribe<TaskEvent>('task_subscribe', onEvent, subscriber),
     // Thư viện
     getFamilyStyles: family => call('get_family_styles', { family }),
     setFavorite: (face, on) => none(call('set_favorite', { face, on })),
@@ -263,7 +268,7 @@ export function createTauriApi(): Api {
     modelRemove: () => none(call('model_remove')),
     embedStatus: () => call('embed_status'),
     embedPause: () => none(call('embed_pause')), embedResume: () => none(call('embed_resume')),
-    embedSubscribe: onEvent => subscribe('embed_subscribe', onEvent),
+    embedSubscribe: (onEvent, subscriber) => subscribe('embed_subscribe', onEvent, subscriber),
     // Kích hoạt
     activationCaps: () => call('activation_caps'),
     activationState: () => call('activation_state'),
@@ -283,6 +288,6 @@ export function createTauriApi(): Api {
     activationSetVfPolicy: policy => none(call('activation_set_vf_policy', { policy })),
     activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
     activationAvailability: (faces = []) => call('activation_availability', { faces }),
-    activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),
+    activationSubscribe: (onEvent, subscriber) => subscribe('activation_subscribe', onEvent, subscriber),
   };
 }
