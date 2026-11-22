@@ -134,7 +134,7 @@ import type { VfPolicyDto } from './VfPolicyDto';
 /** Tên lệnh snake_case; khoá đối số camelCase; `Channel` nhận sự kiện đẩy. */
 export interface TauriCommandMap {
   startup_status: { args: Record<string, never>; result: BootStatusDto };
-  boot_subscribe: { args: { onEvent: Channel<BootEvent> }; result: null };
+  boot_subscribe: { args: { onEvent: Channel<BootEvent>; subscriber: string | null }; result: null };
   onboarding_state: { args: Record<string, never>; result: OnboardingDto };
   set_onboarding_step: { args: { step: string | null }; result: null };
   legacy_import: { args: Record<string, never>; result: LegacyStateDto };
@@ -171,8 +171,8 @@ export interface TauriCommandMap {
   scan_resume: { args: Record<string, never>; result: null };
   scan_cancel: { args: Record<string, never>; result: null };
   scan_status: { args: Record<string, never>; result: ScanStatusDto };
-  scan_subscribe: { args: { onEvent: Channel<ScanEvent> }; result: null };
-  task_subscribe: { args: { onEvent: Channel<TaskEvent> }; result: null };
+  scan_subscribe: { args: { onEvent: Channel<ScanEvent>; subscriber: string | null }; result: null };
+  task_subscribe: { args: { onEvent: Channel<TaskEvent>; subscriber: string | null }; result: null };
   list_tasks: { args: Record<string, never>; result: TaskListDto };
   cancel_task: { args: { id: string }; result: boolean };
   query_faces: { args: { q: FaceQueryDto }; result: FacePageDto };
@@ -280,7 +280,7 @@ export interface TauriCommandMap {
   embed_status: { args: Record<string, never>; result: EmbedStatusDto };
   embed_pause: { args: Record<string, never>; result: null };
   embed_resume: { args: Record<string, never>; result: null };
-  embed_subscribe: { args: { onEvent: Channel<EmbedEvent> }; result: null };
+  embed_subscribe: { args: { onEvent: Channel<EmbedEvent>; subscriber: string | null }; result: null };
   embed_failures: { args: Record<string, never>; result: EmbedFailureDto[] };
   queue_pause_all: { args: Record<string, never>; result: null };
   queue_resume_all: { args: Record<string, never>; result: null };
@@ -308,7 +308,7 @@ export interface TauriCommandMap {
   case_app_suppress: { args: { caseId: number }; result: null };
   activation_availability: { args: { faces: FaceKeyDto[] }; result: AvailabilityDto[] };
   activation_set_scope: { args: { faces: FaceKeyDto[]; scope: ScopeDto }; result: ActivationReportDto };
-  activation_subscribe: { args: { onEvent: Channel<ActivationEvent> }; result: null };
+  activation_subscribe: { args: { onEvent: Channel<ActivationEvent>; subscriber: string | null }; result: null };
   preview_info: { args: Record<string, never>; result: PreviewInfoDto };
   preview_bump_generation: { args: Record<string, never>; result: number };
   preview_prewarm: { args: { items: PreviewItemDto[] }; result: null };

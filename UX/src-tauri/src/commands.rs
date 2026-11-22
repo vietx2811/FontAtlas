@@ -58,7 +58,7 @@ macro_rules! command_list {
     ($cb:ident) => {
         $crate::$cb! {
             sync startup_status() -> Result<BootStatusDto, CmdError>;
-            async boot_subscribe(on_event: Channel<BootEvent>) -> Result<(), CmdError>;
+            async boot_subscribe(on_event: Channel<BootEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             async onboarding_state() -> Result<OnboardingDto, CmdError>;
             async set_onboarding_step(step: Option<String>) -> Result<(), CmdError>;
             async legacy_import() -> Result<LegacyStateDto, CmdError>;
@@ -95,8 +95,8 @@ macro_rules! command_list {
             async scan_resume() -> Result<(), CmdError>;
             async scan_cancel() -> Result<(), CmdError>;
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
-            async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
-            async task_subscribe(on_event: Channel<TaskEvent>) -> Result<(), CmdError>;
+            async scan_subscribe(on_event: Channel<ScanEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
+            async task_subscribe(on_event: Channel<TaskEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             async list_tasks() -> Result<TaskListDto, CmdError>;
             async cancel_task(id: String) -> Result<bool, CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
@@ -204,7 +204,7 @@ macro_rules! command_list {
             async embed_status() -> Result<EmbedStatusDto, CmdError>;
             async embed_pause() -> Result<(), CmdError>;
             async embed_resume() -> Result<(), CmdError>;
-            async embed_subscribe(on_event: Channel<EmbedEvent>) -> Result<(), CmdError>;
+            async embed_subscribe(on_event: Channel<EmbedEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             async embed_failures() -> Result<Vec<EmbedFailureDto>, CmdError>;
             async queue_pause_all() -> Result<(), CmdError>;
             async queue_resume_all() -> Result<(), CmdError>;
@@ -232,7 +232,7 @@ macro_rules! command_list {
             async case_app_suppress(case_id: i64) -> Result<(), CmdError>;
             async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
             async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
-            async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
+            async activation_subscribe(on_event: Channel<ActivationEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             sync preview_info() -> Result<PreviewInfoDto, CmdError>;
             async preview_bump_generation() -> Result<u64, CmdError>;
             async preview_prewarm(items: Vec<PreviewItemDto>) -> Result<(), CmdError>;
