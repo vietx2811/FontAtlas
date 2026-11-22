@@ -58,6 +58,8 @@ pub trait ActivationApi: Send + Sync {
     fn state(&self, s: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError>;
     fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
+    /// Lượt đối soát lúc mở app (duy nhất được xoá lý do auto-on của phiên trước).
+    fn reconcile_startup(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
     /// B5: đồng bộ font của Case theo tập app đang chạy (bundle id). Xem `fontatlas_activate::app_sets`.
     fn sync_app_sets(
@@ -170,6 +172,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
         ActivationService::reconcile(self, s, progress)
     }
+    fn reconcile_startup(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
+        ActivationService::reconcile_startup(self, s, progress)
+    }
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
     }
@@ -273,6 +278,9 @@ impl ActivationApi for NoActivation {
         Ok(Vec::new())
     }
     fn reconcile(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
+        Ok(ReconcileReport::default())
+    }
+    fn reconcile_startup(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
         Ok(ReconcileReport::default())
     }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
@@ -792,7 +800,13 @@ pub fn set_keep(state: &AppState, on: bool) -> Result<(), CmdError> {
 
 /// Đối soát DB ↔ hệ điều hành. `always`: gửi `Reconciled` cả khi không có gì mới (lúc mở app).
 pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
-    reconcile_pass(state, always, 0);
+    reconcile_pass(state, always, 0, false);
+}
+
+/// Lượt đối soát lúc mở app (gọi đúng một lần từ `boot`, TRƯỚC khi broker/fontreq nhận yêu cầu): ngoài việc đối soát còn xoá lý do auto-on
+/// của phiên trước. Các lượt bù của lượt này đã là lượt thường.
+pub fn reconcile_startup(state: &Arc<AppState>) {
+    reconcile_pass(state, true, 0, true);
 }
 
 /// Hash bị thao tác khác giữ thì lượt đối soát bỏ qua nó; xếp tối đa 2 lượt BÙ (mỗi lượt sau ~1,5 s) để không phải đợi lần quét sau.
@@ -843,12 +857,14 @@ impl MakeupState {
     }
 }
 
-fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32) {
+fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32, startup: bool) {
     if !state.activation.supported() {
         return;
     }
     let Ok(store) = state.store() else { return };
-    match state.activation.reconcile(store, &mut |p| state.hubs.activation.emit(ActivationEvent::Progress { progress: (&p).into() })) {
+    let mut progress = |p: Progress| state.hubs.activation.emit(ActivationEvent::Progress { progress: (&p).into() });
+    let result = if startup { state.activation.reconcile_startup(store, &mut progress) } else { state.activation.reconcile(store, &mut progress) };
+    match result {
         Ok(r) => {
             let dto = ReconcileReportDto::from(&r);
             if always || dto.is_notable() {
@@ -862,7 +878,7 @@ fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32) {
                     st.reconcile_makeup.wait();
                     // app có thể đã tắt trong lúc chờ: không chạy lượt bù sau khi tắt
                     if !st.scans.is_shutting_down() {
-                        reconcile_pass(&st, false, attempt + 1);
+                        reconcile_pass(&st, false, attempt + 1, false); // lượt bù luôn là lượt thường: không xoá lý do auto của phiên hiện tại
                     }
                     drop(guard);
                 });

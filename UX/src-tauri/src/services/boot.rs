@@ -84,7 +84,7 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
         log::warn!("dựng Index lúc khởi động lỗi: {e}");
     }
     set_phase(state, BootPhase::Activation);
-    crate::services::activation::reconcile_now(state, true);
+    crate::services::activation::reconcile_startup(state); // trước broker/fontreq: xoá auto-on của phiên trước rồi mới nhận yêu cầu mới
     crate::services::broker::start(state);
     crate::services::fontreq::start(state);
     crate::services::app_sets::start(state);

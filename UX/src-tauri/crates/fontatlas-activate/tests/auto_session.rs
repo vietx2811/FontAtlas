@@ -8,7 +8,12 @@ use fontatlas_store::{ActivationReason, AutoApp, DesiredState, FaceKey};
 
 const LIBRE: &str = "libre_baskerville.ttf";
 
+/// Lượt mở app (xoá auto-on của phiên trước).
 fn reconcile(svc: &ActivationService<FakeEngine>, env: &Env) -> fontatlas_activate::ReconcileReport {
+    svc.reconcile_startup(&env.store, &mut no_progress()).unwrap()
+}
+/// Lượt thường giữa phiên (sau quét, remove/rebuild nguồn, lượt bù): KHÔNG được đụng auto-on.
+fn routine(svc: &ActivationService<FakeEngine>, env: &Env) -> fontatlas_activate::ReconcileReport {
     svc.reconcile(&env.store, &mut no_progress()).unwrap()
 }
 fn row(env: &Env, k: &FaceKey) -> fontatlas_store::ActivationRow {
@@ -159,4 +164,41 @@ fn reopening_twice_is_idempotent() {
     assert_eq!(rep.session_auto_cleared, 0);
     assert_eq!(row(&env, &k).state, DesiredState::Inactive);
     assert_eq!(registered(&svc), 0);
+}
+
+#[test]
+fn routine_reconcile_passes_in_mid_session_keep_the_auto_font_on() {
+    // Hồi quy (review Lead): reconcile_now còn chạy sau mỗi lượt quét/remove_source/rebuild/lượt bù. Xoá auto ở đó sẽ gỡ font vừa bật
+    // cho app thiết kế giữa phiên, và panel không gửi lại vì đã đánh dấu tài liệu "đã xử lý".
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    auto(&svc, &env, k);
+    for _ in 0..3 {
+        let rep = routine(&svc, &env);
+        assert_eq!(rep.session_auto_cleared, 0);
+        assert!(rep.auto_deactivated.is_empty());
+    }
+    let r = row(&env, &k);
+    assert_eq!(r.state, DesiredState::Active, "{r:?}");
+    assert_eq!(r.reasons, vec![ActivationReason::Auto(AutoApp::Illustrator)], "lý do auto còn nguyên giữa phiên");
+    assert_eq!(registered(&svc), 1);
+    // …và đến lần mở app KẾ TIẾP mới bị xoá
+    reconcile(&svc, &env);
+    assert_eq!(row(&env, &k).state, DesiredState::Inactive);
+}
+
+#[test]
+fn startup_treats_an_orphan_active_session_row_without_reasons_as_cleared_not_as_a_silent_failure() {
+    // App chết giữa lúc xoá lý do auto và lúc tắt dòng: lần mở sau thấy "Active, không lý do, scope session".
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    auto(&svc, &env, k);
+    env.store.lock().unwrap().remove_activation_reason(&k.hash, ActivationReason::Auto(AutoApp::Illustrator)).unwrap();
+    let rep = reconcile(&svc, &env);
+    assert_eq!(row(&env, &k).state, DesiredState::Inactive);
+    assert_eq!(registered(&svc), 0);
+    assert!(rep.auto_deactivated.is_empty(), "{rep:?}");
+    assert_eq!(rep.session_auto_cleared, 1);
 }
