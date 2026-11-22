@@ -22,6 +22,8 @@ pub struct Faults {
     pub organized_record: std::sync::atomic::AtomicBool,
     /// Đọc lại dòng sổ `resolution(id)` SAU khi đơn vị resolve đã commit trả lỗi.
     pub resolution_readback: std::sync::atomic::AtomicBool,
+    /// Sắp xếp lại / hoàn tác: tự bấm huỷ sau đơn vị thứ N (0 = tắt) để test huỷ giữa chừng mà không cần đua thời gian.
+    pub resort_cancel_after: std::sync::atomic::AtomicUsize,
 }
 
 impl Faults {

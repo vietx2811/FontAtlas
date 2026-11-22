@@ -189,6 +189,8 @@ pub struct ResortResultDto {
     pub batch_id: i64,
     pub moved: u32,
     pub failed: u32,
+    /// Người dùng huỷ giữa chừng: phần đã làm giữ nguyên (hoàn tác được qua `batchId`), phần còn lại chưa đụng tới.
+    pub cancelled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, TS)]

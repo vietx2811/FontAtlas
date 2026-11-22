@@ -19,15 +19,26 @@ export function ResortDialog({ api, onClose }: { api: Api; onClose(): void }): R
   const apply = async () => {
     if (!plan) return;
     setBusy(true);
+    // Tiến độ và nút Huỷ nằm ở khay Tác vụ: đóng hộp ngay, kết quả báo bằng thông báo khi việc kết thúc (xong hoặc huỷ).
+    onClose();
     try {
       const r = await api.organizedResortApply();
       useUiStore.getState().bumpLibrary(false);
-      onClose();
+      const text = r.cancelled ? (r.moved > 0 ? t('org.resort.cancelled', { n: formatNumber(r.moved) }) : t('org.resort.cancelledNone'))
+        : r.failed > 0 ? t('org.resort.doneFail', { n: formatNumber(r.moved), k: formatNumber(r.failed) }) : t('org.resort.done', { n: formatNumber(r.moved) });
       useNoticeStore.getState().push({
-        kind: r.failed > 0 ? 'error' : 'info', text: r.failed > 0 ? t('org.resort.doneFail', { n: formatNumber(r.moved), k: formatNumber(r.failed) }) : t('org.resort.done', { n: formatNumber(r.moved) }),
-        action: { label: t('dnd.undo'), run: () => { api.organizedResortUndo(r.batchId).then(u => { useUiStore.getState().bumpLibrary(false); useNoticeStore.getState().push({ kind: 'info', text: t('org.resort.undone', { n: formatNumber(u.moved) }) }); }, e => useNoticeStore.getState().push({ kind: 'error', text: t('dnd.undoFail', { msg: (e as Error)?.message ?? String(e) }) })); } },
+        kind: r.failed > 0 ? 'error' : 'info', text,
+        // Huỷ giữa chừng vẫn Hoàn tác được phần đã dời (cùng batchId); huỷ khi chưa dời gì thì không có gì để hoàn tác.
+        ...(r.moved > 0 ? { action: { label: t('dnd.undo'), run: () => undo(r.batchId) } } : {}),
       });
-    } catch (e) { setErr((e as Error).message); setBusy(false); }
+    } catch (e) { useNoticeStore.getState().push({ kind: 'error', text: (e as Error)?.message ?? String(e) }); }
+  };
+  const undo = (batchId: number) => {
+    api.organizedResortUndo(batchId).then(u => {
+      useUiStore.getState().bumpLibrary(false);
+      useNoticeStore.getState().push({ kind: 'info', text: u.cancelled ? t('org.resort.undoCancelled', { n: formatNumber(u.moved) }) : t('org.resort.undone', { n: formatNumber(u.moved) }),
+        ...(u.cancelled ? { action: { label: t('dnd.undo'), run: () => undo(batchId) } } : {}) });
+    }, e => useNoticeStore.getState().push({ kind: 'error', text: t('dnd.undoFail', { msg: (e as Error)?.message ?? String(e) }) }));
   };
   return (
     <Modal title={t('org.resort.title')} onClose={onClose} className="fa-org-dialog">

@@ -762,60 +762,120 @@ pub fn resort_preview(state: &AppState) -> Result<ResortPlanDto, CmdError> {
 }
 
 /// Di chuyển trong CHÍNH thư viện (cùng ổ, đổi tên nguyên tử), ghi nhật ký để hoàn tác. Dọn thư mục trống bị bỏ lại (chỉ thư mục rỗng).
+/// Hiện trong khay "Tác vụ" (done/total theo file). Mỗi file là một ĐƠN VỊ nguyên tử (đổi tên + ghi nhật ký, lỗi ghi sổ thì đổi tên
+/// lại); cờ huỷ chỉ xét TRƯỚC mỗi đơn vị, nên huỷ giữa chừng không để file dở và phần đã chuyển vẫn hoàn tác được qua `batch_id`.
 pub fn resort_apply(state: &Arc<AppState>) -> Result<ResortResultDto, CmdError> {
-    let Some((_c, _g)) = state.organize.begin() else {
+    let Some((cancel, _g)) = state.organize.begin() else {
         return Err(CmdError::busy("đang chép vào Organized Library"));
     };
     let lib = need_root(state).map(|r| lib_dir(&r))?;
     let moves = resort_moves(state)?;
     let batch = state.with_store(|s| Ok(s.organized_next_batch()?))?;
-    let (mut moved, mut failed) = (0u32, 0u32);
+    let total = moves.len() as u64;
+    let task = (total > 0).then(|| {
+        let flag = Arc::clone(&cancel);
+        let spec = TaskSpec::new(TaskKind::Export, "task.resort")
+            .total(Some(total))
+            .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
+            .confirm_cancel("task.resort.cancelConfirm");
+        TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.resort")
+    });
+    let (mut moved, mut failed, mut cancelled) = (0u32, 0u32, false);
     let mut moved_hashes: Vec<[u8; 32]> = Vec::new();
-    for m in &moves {
+    for (i, m) in moves.iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
         let ok = m.to.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::rename(&m.from, &m.to).is_ok();
         if !ok {
             failed += 1;
-            continue;
+        } else {
+            let (f, t) = (m.from.to_string_lossy().into_owned(), m.to.to_string_lossy().into_owned());
+            if state.with_store(|s| Ok(s.organized_apply_move(batch, &m.hash, &f, &t, &m.class_key, &m.family)?)).is_err() {
+                // không ghi được sổ: trả file về chỗ cũ (không để file đã đổi chỗ mà không có nhật ký)
+                let _ = std::fs::rename(&m.to, &m.from);
+                failed += 1;
+            } else {
+                prune_empty_dirs(m.from.parent(), &lib);
+                moved_hashes.push(m.hash);
+                moved += 1;
+            }
         }
-        let (f, t) = (m.from.to_string_lossy().into_owned(), m.to.to_string_lossy().into_owned());
-        state.with_store(|s| Ok(s.organized_apply_move(batch, &m.hash, &f, &t, &m.class_key, &m.family)?))?;
-        prune_empty_dirs(m.from.parent(), &lib);
-        moved_hashes.push(m.hash);
-        moved += 1;
+        if let Some(t) = &task {
+            t.progress(i as u64 + 1, Some(total));
+        }
+        if state.faults.resort_cancel_after.load(Ordering::SeqCst) == i + 1 {
+            cancel.store(true, Ordering::SeqCst);
+        }
     }
     relocate_active(state, &moved_hashes, &lib);
     let _ = crate::services::preview::bump_generation(state);
-    Ok(ResortResultDto { batch_id: batch, moved, failed })
+    if let Some(t) = &task {
+        t.end(if cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
+    }
+    Ok(ResortResultDto { batch_id: batch, moved, failed, cancelled })
 }
 
+/// Hoàn tác một lượt sắp xếp lại. Cũng hiện trong khay và huỷ được (xét cờ trước mỗi file); phần chưa hoàn tác vẫn nằm trong
+/// nhật ký của `batch_id` nên hoàn tác tiếp lần sau.
 pub fn resort_undo(state: &Arc<AppState>, batch_id: i64) -> Result<ResortResultDto, CmdError> {
-    let Some((_c, _g)) = state.organize.begin() else {
+    let Some((cancel, _g)) = state.organize.begin() else {
         return Err(CmdError::busy("đang chép vào Organized Library"));
     };
     let lib = need_root(state).map(|r| lib_dir(&r))?;
     let moves = state.with_store(|s| Ok(s.organized_moves(batch_id)?))?;
-    let (mut moved, mut failed) = (0u32, 0u32);
+    let todo: Vec<_> = moves.iter().rev().filter(|m| !m.undone).collect();
+    let total = todo.len() as u64;
+    let task = (total > 0).then(|| {
+        let flag = Arc::clone(&cancel);
+        let spec = TaskSpec::new(TaskKind::Export, "task.resortUndo")
+            .total(Some(total))
+            .cancellable(Arc::new(move || flag.store(true, Ordering::SeqCst)))
+            .confirm_cancel("task.resortUndo.cancelConfirm");
+        TaskGuard::new(&state.tasks, state.tasks.begin(None, spec, TaskState::Running), "task.error.resortUndo")
+    });
+    let (mut moved, mut failed, mut cancelled) = (0u32, 0u32, false);
     let mut moved_hashes: Vec<[u8; 32]> = Vec::new();
-    for m in moves.iter().rev().filter(|m| !m.undone) {
+    for (i, m) in todo.iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            cancelled = true;
+            break;
+        }
         let (to, from) = (PathBuf::from(&m.to_path), PathBuf::from(&m.from_path));
         let ok = to.exists() && !from.exists() && from.parent().is_none_or(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::rename(&to, &from).is_ok();
         if !ok {
             failed += 1;
-            continue;
+        } else {
+            let (class_key, family) = state
+                .with_store(|s| Ok(s.organized_file(&m.hash)?.map(|f| (f.class_key, f.family))))
+                .ok()
+                .flatten()
+                .unwrap_or(("uncertain".into(), "Unnamed".into()));
+            // class/họ "trước khi chuyển" = thư mục cũ; không lưu riêng nên suy từ đường dẫn cũ
+            let (ck, fam) = old_class_family(&from, &lib).unwrap_or((class_key, family));
+            if state.with_store(|s| Ok(s.organized_mark_undone(m, &ck, &fam)?)).is_err() {
+                let _ = std::fs::rename(&from, &to); // không ghi được sổ: trả về chỗ đã sắp, lần sau hoàn tác lại
+                failed += 1;
+            } else {
+                prune_empty_dirs(to.parent(), &lib);
+                moved_hashes.push(m.hash);
+                moved += 1;
+            }
         }
-        let (class_key, family) = state
-            .with_store(|s| Ok(s.organized_file(&m.hash)?.map(|f| (f.class_key, f.family))))?
-            .unwrap_or(("uncertain".into(), "Unnamed".into()));
-        // class/họ "trước khi chuyển" = thư mục cũ; không lưu riêng nên suy từ đường dẫn cũ
-        let (ck, fam) = old_class_family(&from, &lib).unwrap_or((class_key, family));
-        state.with_store(|s| Ok(s.organized_mark_undone(m, &ck, &fam)?))?;
-        prune_empty_dirs(to.parent(), &lib);
-        moved_hashes.push(m.hash);
-        moved += 1;
+        if let Some(t) = &task {
+            t.progress(i as u64 + 1, Some(total));
+        }
+        if state.faults.resort_cancel_after.load(Ordering::SeqCst) == i + 1 {
+            cancel.store(true, Ordering::SeqCst);
+        }
     }
     relocate_active(state, &moved_hashes, &lib);
     let _ = crate::services::preview::bump_generation(state);
-    Ok(ResortResultDto { batch_id, moved, failed })
+    if let Some(t) = &task {
+        t.end(if cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done });
+    }
+    Ok(ResortResultDto { batch_id, moved, failed, cancelled })
 }
 
 /// Sau khi file trong thư viện đổi chỗ: font đang bật trỏ đường cũ phải được đăng ký lại ở đường mới (06: `relocate`, đăng ký mới
