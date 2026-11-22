@@ -772,7 +772,8 @@ pub async fn scan_subscribe<R: tauri::Runtime>(
 
 /// Khoá đăng ký: nhãn webview + tên người nhận (mặc định = tên kênh). Hai nơi trong CÙNG webview muốn cùng một kênh thì truyền
 /// `subscriber` khác nhau để không thay nhau; cùng khoá (reload/effect chạy lại) thì thay sink cũ.
-fn sub_key(label: &str, subscriber: Option<&str>, channel: &str) -> String {
+#[doc(hidden)]
+pub fn sub_key(label: &str, subscriber: Option<&str>, channel: &str) -> String {
     format!("{label}:{channel}:{}", subscriber.unwrap_or("default"))
 }
 

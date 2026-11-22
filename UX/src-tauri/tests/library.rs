@@ -289,8 +289,13 @@ fn download_source_materializes_placeholders_then_rescans_so_the_fonts_appear() 
     assert!(all(&st).total > before, "quét lại xong thì font mới tải hiện ra");
     assert!(!st.cloud_jobs.is_running(id), "xong thì nhả đăng ký");
     // không còn gì để tải: báo 0, không quét lại vô ích
+    let evs: std::sync::Arc<std::sync::Mutex<Vec<app_lib::dto::tasks::TaskEvent>>> = Default::default();
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
     let again = cloud_download::download_source_with(&st, id, &fake_os_download, &mut |_| {}).unwrap();
     assert_eq!((again.total, again.rescan_queued), (0, false));
+    assert!(evs.lock().unwrap().is_empty(), "không có gì để tải thì không tạo việc cloudDownload: {:?}", evs.lock().unwrap());
+    assert!(st.tasks.list().tasks.is_empty());
 }
 
 #[test]
