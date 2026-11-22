@@ -1,0 +1,235 @@
+// Test panel CEP + host.jsx KHÔNG cần Illustrator: chạy host.jsx (ExtendScript) và main.js (panel) trong vm của Node,
+// với `app` giả (tài liệu giả có textFont.name thiếu / ném lỗi / bị thay thế) và đồng hồ giả để thử vòng poll.
+// Chạy: node --test crates/fontatlas-cep/jstests   (cargo test -p fontatlas-cep cũng chạy nó nếu có `node`).
+import test from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const HOST = fs.readFileSync(path.join(here, "../panel/jsx/host.jsx"), "utf8");
+const MAIN = fs.readFileSync(path.join(here, "../panel/main.js"), "utf8");
+const TOKEN = "a".repeat(64);
+const BROKER = "/data/broker.json";
+const LOG = "/data/cep-panel.log";
+const SECRET_DOC = "Khách-hàng-BÍ-MẬT.ai";
+
+const run = (name, ps, fam = "F", sty = "Regular") => ({ characterAttributes: { textFont: { name: ps, family: fam, style: sty } }, _n: name });
+const frameOf = (...runs) => ({ textRange: { textRuns: runs } });
+const doc = (frames, name = SECRET_DOC) => ({ name, fullName: { fsName: "/Users/x/" + name }, textFrames: frames });
+
+// Môi trường Illustrator giả: app + $ trong một vm; evalScript chạy chuỗi trong vm đó.
+function makeHost({ installed = ["ArialMT"], docs = [], loaded = true } = {}) {
+  const app = { textFonts: installed.map((n) => ({ name: n })), documents: docs };
+  const ctx = vm.createContext({ app, $: { global: {}, writeln() {} }, Date });
+  const st = { loaded, calls: [] };
+  if (loaded) vm.runInContext(HOST, ctx);
+  const evalScript = (src, cb) => {
+    st.calls.push(src);
+    let r;
+    if (src.startsWith("$.evalFile(")) { vm.runInContext(HOST, ctx); st.loaded = true; r = ""; }
+    else if (!st.loaded) r = "EvalScript error.";
+    else { try { r = vm.runInContext(src, ctx); } catch (e) { r = "EvalScript error."; } }
+    if (cb) setImmediate(() => cb(String(r)));
+  };
+  return { app, ctx, st, evalScript };
+}
+
+// Panel giả: main.js chạy trong vm với CEP/XHR/đồng hồ giả.
+function makePanel(host, { broker = { port: 4321, token: TOKEN }, respond } = {}) {
+  const files = new Map([[HERE_CFG, JSON.stringify({ broker: BROKER })]]);
+  if (broker) files.set(BROKER, JSON.stringify(broker));
+  const posts = [], timers = [], listeners = {};
+  let now = 0;
+  class XHR {
+    open(m, url) { this.m = m; this.url = url; this.h = {}; }
+    setRequestHeader(k, v) { this.h[k] = v; }
+    send(body) {
+      const b = JSON.parse(body); posts.push({ url: this.url, auth: this.h.Authorization, body: b });
+      const out = (respond ? respond(b, posts.length) : { status: 200, json: { ok: true, results: b.fonts.map((f) => ({ name: f.ps, status: "activated" })), found: b.fonts.map((f) => f.ps), missing: [] } });
+      setImmediate(() => { this.status = out.status; this.responseText = JSON.stringify(out.json); this.onload && this.onload(); });
+    }
+  }
+  const window = {
+    __adobe_cep__: { evalScript: host.evalScript, addEventListener: (n, f) => { (listeners[n] ||= []).push(f); }, getSystemPath: () => "file://" + HERE_EXT.replace(/ /g, "%20") },
+    cep: { fs: {
+      readFile: (p) => (files.has(p) ? { err: 0, data: files.get(p) } : { err: 2 }),
+      writeFile: (p, d) => { files.set(p, d); return { err: 0 }; },
+    } },
+  };
+  const sandbox = {
+    window, JSON, Date: class extends Date { constructor(...a) { super(...(a.length ? a : [now])); } static now() { return now; } },
+    XMLHttpRequest: XHR, decodeURI, Math, Number, String, Array, RegExp, console,
+    setTimeout: (f, ms) => { const t = { f, at: now + ms, id: timers.length + 1, iv: 0 }; timers.push(t); return t.id; },
+    clearTimeout: (id) => { const t = timers.find((x) => x.id === id); if (t) t.f = null; },
+    setInterval: (f, ms) => { const t = { f, at: now + ms, id: timers.length + 1, iv: ms }; timers.push(t); return t.id; },
+  };
+  vm.runInContext(MAIN, vm.createContext(sandbox));
+  const flush = async () => { for (let i = 0; i < 40; i++) await new Promise((r) => setImmediate(r)); };
+  const advance = async (ms) => {
+    const end = now + ms;
+    for (;;) {
+      await flush();
+      const due = timers.filter((t) => t.f && t.at <= end).sort((a, b) => a.at - b.at)[0];
+      if (!due) break;
+      now = due.at; if (due.iv) due.at += due.iv; else { const f = due.f; due.f = null; f(); continue; } due.f();
+    }
+    now = end; await flush();
+  };
+  return { posts, files, listeners, advance, flush, log: () => files.get(LOG) || "" };
+}
+const HERE_EXT = "/Users/x/Library/Application Support/Adobe/CEP/extensions/com.fontatlas.autoactivate";
+const HERE_CFG = HERE_EXT + "/fontatlas.json";
+const scanJson = (host) => JSON.parse(vm.runInContext("faScan(true, 1000)", host.ctx));
+
+test("font thiếu (không có trong app.textFonts) được gửi tới broker, log có tên font, KHÔNG có tên tài liệu", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular", "DM Serif Display"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.equal(p.posts.length, 1);
+  assert.equal(p.posts[0].body.app, "Adobe Illustrator");
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["DMSerifDisplay-Regular"]);
+  assert.equal(p.posts[0].auth, "Bearer " + TOKEN);
+  assert.match(p.log(), /gửi ensure: font thiếu=DMSerifDisplay-Regular/);
+  assert.match(p.log(), /ensure xong: bật=DMSerifDisplay-Regular/);
+  assert.ok(!p.log().includes("BÍ-MẬT") && !p.log().includes("Khách") && !p.log().includes("/Users/x/"), "log không được chứa tên/đường dẫn tài liệu");
+});
+
+test("mỗi text run có font riêng: font thứ hai trong cùng frame cũng được gửi", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"), run("b", "Chonburi-Regular"), run("c", "Chonburi-Regular"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});
+
+test("font có sẵn: không gửi gì, log ghi font đã thấy (có)", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.equal(p.posts.length, 0);
+  assert.match(p.log(), /thấy=\[ArialMT\(có\)\]/);
+});
+
+test("tài liệu IMPORT (SVG/PDF): Illustrator thay font bằng font cài sẵn → không có font thiếu, nhưng log lộ rõ chuyện bị thay thế", async () => {
+  // Đây là chẩn đoán cho lần thử thật: nếu log ghi thấy=[ArialMT(có)] dù chữ thiết kế bằng DM Serif thì textFont KHÔNG giữ tên gốc.
+  const host = makeHost({ docs: [doc([frameOf(run("svg", "ArialMT"))], "import.svg")] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.equal(p.posts.length, 0);
+  assert.match(p.log(), /runKhôngFont=0/);
+  assert.match(p.log(), /thấy=\[ArialMT\(có\)\]/);
+});
+
+test("textFont ném lỗi khi font thiếu: KHÔNG còn bị nuốt im lặng, log ghi lỗi mẫu và số lỗi", async () => {
+  const bad = { characterAttributes: {} };
+  Object.defineProperty(bad.characterAttributes, "textFont", { get() { throw new Error("Missing font 1346458189 PARM"); } });
+  const host = makeHost({ docs: [doc([frameOf(bad, bad)])] });
+  const r = scanJson(host);
+  assert.equal(r.ok, true); assert.equal(r.stats.errs, 2); assert.equal(r.stats.runs, 2);
+  assert.match(r.stats.errMsgs[0], /^textFont:Missing font/);
+  const p = makePanel(makeHost({ docs: [doc([frameOf(bad)])] })); await p.advance(1000);
+  assert.equal(p.posts.length, 0);
+  assert.match(p.log(), /lỗi=1/); assert.match(p.log(), /lỗiMẫu=textFont:Missing font/);
+});
+
+test("textFont null (run không có font) và textFrames/textRuns ném lỗi: đếm và ghi, không làm sập quét", () => {
+  const nullRun = { characterAttributes: { textFont: null } };
+  const d1 = doc([frameOf(nullRun)]);
+  const d2 = { name: "x", fullName: { fsName: "/x" }, get textFrames() { throw new Error("no frames"); } };
+  const d3 = doc([{ get textRange() { throw new Error("no range"); } }]);
+  const r = scanJson(makeHost({ docs: [d1, d2, d3] }));
+  assert.equal(r.ok, true); assert.equal(r.stats.noFont, 1); assert.equal(r.stats.docs, 3);
+  assert.ok(r.stats.errMsgs.some((m) => m.startsWith("frames:")) && r.stats.errMsgs.some((m) => m.startsWith("runs:")), JSON.stringify(r.stats.errMsgs));
+});
+
+test("quét theo lát: hết ngân sách thì trả done:false, gọi tiếp thì xong, không bỏ sót run nào", () => {
+  const many = Array.from({ length: 5 }, (_, i) => run("r" + i, "F" + i));
+  const host = makeHost({ docs: [doc([frameOf(...many)])] });
+  let r = JSON.parse(vm.runInContext("faScan(true, -1)", host.ctx)); // ngân sách âm → dừng ngay
+  assert.equal(r.done, false);
+  let guard = 0; while (!r.done && guard++ < 50) r = JSON.parse(vm.runInContext("faScan(false, 0)", host.ctx));
+  assert.equal(r.done, true);
+  assert.equal(r.docs[0].fonts.length, 5);
+  assert.equal(r.stats.frames, 1); assert.equal(r.stats.runs, 5);
+});
+
+test("VÒNG POLL: không có sự kiện nào, tài liệu mở sau khi panel nạp → poll 20 s thấy chữ ký đổi, quét và gửi", async () => {
+  const host = makeHost({ docs: [] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.equal(p.posts.length, 0);
+  host.app.documents.push(doc([frameOf(run("a", "DMSerifDisplay-Regular"))]));
+  await p.advance(18000); assert.equal(p.posts.length, 0, "chưa tới mốc poll 20 s");
+  await p.advance(3000);
+  assert.equal(p.posts.length, 1);
+});
+
+test("poll không quét lại khi chữ ký tài liệu không đổi (rẻ)", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  const scans = () => host.st.calls.filter((c) => c.startsWith("faScan(")).length;
+  const before = scans(); await p.advance(65000);
+  assert.equal(scans(), before);
+});
+
+test("sự kiện tài liệu (documentAfterActivate…) gộp 400 ms rồi quét ngay, không đợi poll", async () => {
+  const host = makeHost({ docs: [] });
+  const p = makePanel(host); await p.advance(1000);
+  host.app.documents.push(doc([frameOf(run("a", "Chonburi-Regular"))]));
+  p.listeners.documentOpened.forEach((f) => f()); p.listeners.documentAfterActivate.forEach((f) => f());
+  await p.advance(500);
+  assert.equal(p.posts.length, 1);
+});
+
+test("Font Atlas chưa chạy (chưa có broker.json): không gửi, log nói rõ; broker xuất hiện sau thì poll kế tiếp VẪN gửi (không kẹt)", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host, { broker: null }); await p.advance(1000);
+  assert.equal(p.posts.length, 0);
+  assert.match(p.log(), /chưa có broker\.json/);
+  p.files.set(BROKER, JSON.stringify({ port: 5555, token: TOKEN }));
+  await p.advance(21000);
+  assert.equal(p.posts.length, 1, "lỗi cũ: lastSig đã đặt nên poll không bao giờ quét lại");
+  assert.ok(p.posts[0].url.includes(":5555"));
+});
+
+test("broker.json hỏng (cổng/token sai dạng): không gửi, log nêu lý do", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host, { broker: { port: 99999, token: TOKEN } }); await p.advance(1000);
+  assert.equal(p.posts.length, 0); assert.match(p.log(), /cổng không hợp lệ/);
+  const q = makePanel(makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] }), { broker: { port: 1234, token: "xyz" } }); await q.advance(1000);
+  assert.equal(q.posts.length, 0); assert.match(q.log(), /token sai dạng/);
+});
+
+test("host.jsx chưa được nạp (ScriptPath không chạy cho panel nền): panel nạp tay bằng $.evalFile rồi tiếp tục", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])], loaded: false });
+  const p = makePanel(host); await p.advance(2000);
+  assert.ok(host.st.calls.some((c) => c.startsWith("$.evalFile(") && c.includes("/jsx/host.jsx")));
+  assert.equal(p.posts.length, 1);
+  assert.match(p.log(), /faSig lỗi/); assert.match(p.log(), /nạp host\.jsx bằng tay/);
+});
+
+test("host.jsx hỏng hẳn: không lặp vô hạn, chỉ nạp tay một lần", async () => {
+  const host = makeHost({ docs: [], loaded: false });
+  host.evalScript = (src, cb) => { host.st.calls.push(src); if (cb) setImmediate(() => cb("EvalScript error.")); };
+  const p = makePanel(host); await p.advance(70000);
+  assert.equal(host.st.calls.filter((c) => c.startsWith("$.evalFile(")).length, 1);
+});
+
+test("ensure trả busy/not_downloaded: hỏi lại sau 5 s, tối đa 6 lần", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host, { respond: (b) => ({ status: 200, json: { ok: true, results: b.fonts.map((f) => ({ name: f.ps, status: "busy" })), found: [], missing: [] } }) });
+  await p.advance(60000);
+  assert.equal(p.posts.length, 7, "1 lần đầu + 6 lần hỏi lại");
+});
+
+test("ensure thành công có font bật thì panel gọi faRedraw()", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host); await p.advance(1000);
+  assert.ok(host.st.calls.includes("faRedraw()"));
+});
+
+test("log bị chặn kích thước, giữ phần cuối, cắt ở ranh giới dòng", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "DMSerifDisplay-Regular"))])] });
+  const p = makePanel(host, { respond: () => ({ status: 500, json: {} }) });
+  await p.advance(200000);
+  assert.ok(p.log().length <= 12000, String(p.log().length));
+  assert.ok(p.log().endsWith("\n"));
+  assert.match(p.log().split("\n")[0], /^\d{4}-\d\d-\d\dT/, "dòng đầu còn nguyên, không bị cắt giữa chừng");
+});
