@@ -3,14 +3,15 @@
 //! So khớp theo tên file thực thi của chính mình: tên chung chung (vd. "app" ở bản debug) chỉ làm ta bỏ qua dọn, an toàn hơn là gỡ nhầm.
 use std::path::{Path, PathBuf};
 
-/// Thuần: có process nào khác (pid khác, cùng tên file thực thi) trong danh sách không.
-pub fn other_in(own_pid: u32, own_exe: &Path, procs: impl IntoIterator<Item = (u32, PathBuf)>) -> bool {
+/// Thuần: có process nào khác (pid khác, cùng tên file thực thi) trong danh sách không. Process CON của chính mình (ppid == pid của ta, vd. probe
+/// font-request chạy lại `current_exe`) không tính là instance khác.
+pub fn other_in(own_pid: u32, own_exe: &Path, procs: impl IntoIterator<Item = (u32, u32, PathBuf)>) -> bool {
     let Some(name) = own_exe.file_name() else { return false };
-    procs.into_iter().any(|(pid, p)| pid != own_pid && p.file_name() == Some(name))
+    procs.into_iter().any(|(pid, ppid, p)| pid != own_pid && ppid != own_pid && p.file_name() == Some(name))
 }
 
 #[cfg(target_os = "macos")]
-fn processes() -> Vec<(u32, PathBuf)> {
+fn processes() -> Vec<(u32, u32, PathBuf)> {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     // SAFETY: gọi libproc với bộ đệm do ta cấp đúng kích thước; kết quả chỉ đọc.
@@ -29,7 +30,10 @@ fn processes() -> Vec<(u32, PathBuf)> {
             let mut buf = vec![0u8; 4096];
             let len = libc::proc_pidpath(pid, buf.as_mut_ptr().cast(), buf.len() as u32);
             if len > 0 {
-                out.push((pid as u32, PathBuf::from(OsStr::from_bytes(&buf[..len as usize]))));
+                let mut info: libc::proc_bsdinfo = std::mem::zeroed();
+                let sz = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+                let ppid = if libc::proc_pidinfo(pid, libc::PROC_PIDTBSDINFO, 0, (&raw mut info).cast(), sz) == sz { info.pbi_ppid } else { 0 };
+                out.push((pid as u32, ppid, PathBuf::from(OsStr::from_bytes(&buf[..len as usize]))));
             }
         }
         out
@@ -37,7 +41,7 @@ fn processes() -> Vec<(u32, PathBuf)> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn processes() -> Vec<(u32, PathBuf)> {
+fn processes() -> Vec<(u32, u32, PathBuf)> {
     vec![]
 }
 
@@ -58,13 +62,21 @@ mod tests {
     #[test]
     fn same_name_other_pid_is_another_instance() {
         let me = p("/Applications/Font Atlas.app/Contents/MacOS/Font Atlas");
-        assert!(other_in(10, &me, [(10, me.clone()), (11, p("/Volumes/X/Font Atlas.app/Contents/MacOS/Font Atlas"))]));
+        assert!(other_in(10, &me, [(10, 1, me.clone()), (11, 1, p("/Volumes/X/Font Atlas.app/Contents/MacOS/Font Atlas"))]));
+    }
+
+    #[test]
+    fn my_own_child_process_is_not_another_instance() {
+        // probe font-request: current_exe chạy lại với PROBE_FLAG, ppid = pid của ta
+        let me = p("/a/Font Atlas");
+        assert!(!other_in(10, &me, [(10, 1, me.clone()), (50, 10, me.clone())]));
+        assert!(other_in(10, &me, [(10, 1, me.clone()), (50, 10, me.clone()), (60, 1, me.clone())]));
     }
 
     #[test]
     fn only_myself_or_other_names_is_not() {
         let me = p("/a/Font Atlas");
-        assert!(!other_in(10, &me, [(10, me.clone()), (12, p("/usr/bin/zsh")), (13, p("/Applications/Adobe Illustrator 2027/Adobe Illustrator"))]));
+        assert!(!other_in(10, &me, [(10, 1, me.clone()), (12, 1, p("/usr/bin/zsh")), (13, 1, p("/Applications/Adobe Illustrator 2027/Adobe Illustrator"))]));
         assert!(!other_in(10, &me, []));
     }
 
@@ -73,7 +85,7 @@ mod tests {
         // không khẳng định "không có instance khác" (máy QA có thể chạy nhiều bản); chỉ kiểm hàm không panic và thấy chính mình
         if cfg!(target_os = "macos") {
             let me = std::process::id();
-            assert!(processes().iter().any(|(pid, _)| *pid == me));
+            assert!(processes().iter().any(|(pid, _, _)| *pid == me));
         }
         let _ = another_running();
     }

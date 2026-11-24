@@ -821,15 +821,23 @@ pub fn reconcile_startup(state: &Arc<AppState>) {
 /// Dọn đăng ký session mồ côi (chạy nền sau khi UI lên, không chặn boot). Bỏ qua lượt này nếu phát hiện process Font Atlas KHÁC đang sống:
 /// đăng ký session là của cả phiên đăng nhập nên instance kia có thể đang dùng đúng font mà DB của ta ghi là tắt. Chỉ đọc danh sách process, không kill.
 pub fn sweep_orphans(state: &Arc<AppState>) {
-    if instances::another_running() {
-        log::info!("có Font Atlas khác đang chạy: bỏ qua dọn đăng ký session mồ côi lượt này");
-        return;
+    // Instance khác có thể chỉ vừa khởi động/đang thoát: thử lại vài lần ngắn trước khi bỏ qua lượt này.
+    const TRIES: u32 = 3;
+    for attempt in 1..=TRIES {
+        if !instances::another_running() {
+            break;
+        }
+        if attempt == TRIES {
+            log::info!("có Font Atlas khác đang chạy: bỏ qua dọn đăng ký session mồ côi lượt này");
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
     }
     let Ok(store) = state.store() else { return };
     match state.activation.unregister_orphans(store) {
         Ok(r) if r.listing_failed => log::warn!("không liệt kê được font hệ thống: bỏ qua dọn đăng ký mồ côi"),
         Ok(r) if r.unregistered > 0 || r.failed > 0 => log::info!("dọn đăng ký session mồ côi: gỡ {} (lỗi {})", r.unregistered, r.failed),
-        Ok(_) => {}
+        Ok(_) => log::info!("dọn đăng ký session mồ côi: không có gì để dọn"),
         Err(e) => log::warn!("dọn đăng ký session mồ côi lỗi: {e:?}"),
     }
 }

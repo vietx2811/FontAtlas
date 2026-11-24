@@ -325,8 +325,11 @@ impl<E: ActivationEngine> ActivationService<E> {
             }
             // Giữ guard để không đè lên một thao tác bật/tắt đang chạy; đọc lại dòng SAU khi giữ guard.
             let Some(_guard) = self.take(row.hash) else { continue };
-            let still_off = relock(store).activation_row(&row.hash)?.is_some_and(|r| r.state == DesiredState::Inactive);
-            if !still_off {
+            // Tính lại SAU khi giữ guard: trong lúc quét, một hash KHÁC có thể vừa được bật trên cùng đường file (file thay tại chỗ).
+            let fresh = relock(store).activation_rows()?;
+            let still_off = fresh.iter().any(|r| r.hash == row.hash && r.state == DesiredState::Inactive);
+            let wanted_now = fresh.iter().any(|r| r.state == DesiredState::Active && r.active_path.as_deref() == row.active_path.as_deref());
+            if !still_off || wanted_now {
                 continue;
             }
             match self.engine().unregister(&path, Scope::Session) {

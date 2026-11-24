@@ -133,3 +133,75 @@ fn an_empty_or_unlistable_state_does_nothing_and_is_idempotent() {
     assert_eq!(svc.unregister_orphans(&env.store).unwrap().unregistered, 1);
     assert_eq!(svc.unregister_orphans(&env.store).unwrap().unregistered, 0, "lần hai không còn gì");
 }
+
+#[test]
+fn listing_failure_is_reported_and_nothing_is_removed() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    on(&svc, &env, k);
+    let p = path_of(&env, &k);
+    off(&svc, &env, k);
+    svc.engine().register(&p, Scope::Session).unwrap();
+    svc.engine().fail_available_font_paths();
+    let rep = svc.unregister_orphans(&env.store).unwrap();
+    assert!(rep.listing_failed, "{rep:?}");
+    assert_eq!(rep.unregistered, 0);
+    assert_eq!(regs(&svc), 1);
+}
+
+#[test]
+fn a_busy_hash_is_skipped_and_picked_up_next_time() {
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    on(&svc, &env, k);
+    let p = path_of(&env, &k);
+    off(&svc, &env, k);
+    svc.engine().register(&p, Scope::Session).unwrap();
+    {
+        let _busy = svc.hold_for_test(k.hash).expect("giữ guard");
+        let rep = svc.unregister_orphans(&env.store).unwrap();
+        assert_eq!(rep.unregistered, 0, "thao tác khác đang giữ hash: bỏ qua");
+        assert_eq!(regs(&svc), 1);
+    }
+    assert_eq!(svc.unregister_orphans(&env.store).unwrap().unregistered, 1, "hết bận: dọn được");
+}
+
+#[test]
+fn a_hash_turned_on_for_the_same_path_while_sweeping_keeps_the_registration() {
+    // Hai dòng Inactive cùng đường file P (file thay tại chỗ → hash khác). Khi quét dòng thứ nhất (đang giữ guard của nó), một thao tác khác
+    // bật dòng thứ hai trên P: P KHÔNG được gỡ.
+    let env = env_with(&[LIBRE]);
+    let svc = service(&env);
+    let k = key_of(&env, LIBRE);
+    on(&svc, &env, k);
+    let p = path_of(&env, &k);
+    off(&svc, &env, k);
+    svc.engine().register(&p, Scope::Session).unwrap();
+    let base = row(&env, &k);
+    let (mut a, mut b) = (base.clone(), base.clone());
+    a.hash = [1u8; 32];
+    b.hash = [2u8; 32];
+    for r in [&a, &b] {
+        env.store.lock().unwrap().put_activation(r).unwrap();
+    }
+    // bỏ dòng gốc khỏi tập ứng viên: chỉ còn a, b
+    env.store.lock().unwrap().delete_activation(&k.hash).ok();
+    let store_addr = &env.store as *const std::sync::Mutex<fontatlas_store::Store> as usize;
+    let mut on_b = b.clone();
+    on_b.state = DesiredState::Active;
+    on_b.status = ActivationStatus::Registered;
+    let fired = std::sync::atomic::AtomicBool::new(false);
+    let fired = std::sync::Arc::new(fired);
+    let f2 = fired.clone();
+    svc.engine().on_call(move |op, _| {
+        if op == "available" && !f2.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            // SAFETY: `env` sống hết test; khoá Mutex trong hook không giữ qua lời gọi nào khác.
+            let st = unsafe { &*(store_addr as *const std::sync::Mutex<fontatlas_store::Store>) };
+            st.lock().unwrap().put_activation(&on_b).unwrap();
+        }
+    });
+    let _ = svc.unregister_orphans(&env.store).unwrap();
+    assert_eq!(regs(&svc), 1, "P còn đăng ký vì một hash khác vừa được bật trên cùng đường file");
+}
