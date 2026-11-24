@@ -309,7 +309,7 @@ test("log 'quét xong' chỉ ghi khi kết quả khác lần trước", async ()
 const ch = (ps) => ({ characterAttributes: { textFont: { name: ps, family: "F", style: "R" } } });
 const mixedPara = (chars, mode) => {
   const ca = {};
-  if (mode === "throw") Object.defineProperty(ca, "textFont", { get() { throw new Error("mixed"); } }); else ca.textFont = undefined;
+  if (mode === "throw") Object.defineProperty(ca, "textFont", { get() { throw new Error("mixed"); } }); else if (mode === "first") ca.textFont = chars[0].characterAttributes.textFont; else ca.textFont = undefined;
   return { characterAttributes: ca, characters: chars };
 };
 
@@ -335,4 +335,12 @@ test("đoạn dài: lấy mẫu có trần (~200 lần đọc) nhưng luôn gồ
   const r = scanJson(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "undef")])])] }));
   assert.ok(reads <= 260, "số lần đọc: " + reads);
   assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});
+
+// Illustrator 2027 thật: đoạn trộn 3 font trả font ĐẦU TIÊN (không undefined) → phải vẫn lấy mẫu ký tự, thấy font 2 và 3.
+test("đoạn trộn font trả font đầu tiên (hành vi Illustrator 2027) → vẫn thấy font thứ 2, 3", () => {
+  const chars = [ch("Chonburi-Regular"), ch("Chonburi-Regular"), ch("DMSerifDisplay-Regular"), ch("ArialMT")];
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "first")])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps).sort(), ["Chonburi-Regular", "DMSerifDisplay-Regular"]);
+  assert.equal(r.stats.viaChars, 1);
 });
