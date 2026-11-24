@@ -1,7 +1,7 @@
 import { setLocale } from '../../../i18n';
 import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
-import { cloudHint, libraryEmpty, notDownloadedOf, type EmptyCtx } from '../zeroStates';
+import { cloudHint, downloadTargets, libraryEmpty, notDownloadedOf, type EmptyCtx } from '../zeroStates';
 
 const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 10, lastScan: null, scanning: false, ...o });
 const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
@@ -133,5 +133,23 @@ describe('cloudHint', () => {
   it('never says more than 100% and rounds like a person would', () => {
     expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 3, cloudOnlyCount: 5 }))).toMatch(/^100%/);
     expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 1000, cloudOnlyCount: 1 }))).toMatch(/^<1%|^1%/);
+  });
+});
+
+describe('downloadTargets (nút Tải về máy của trạng thái trống)', () => {
+  const a = src({ id: 1, faceCount: 0, cloudOnlyCount: 3 });
+  const b = src({ id: 2, faceCount: 0, cloudOnlyCount: 4 });
+  it('xem một nguồn: chỉ nguồn đó', () => {
+    expect(downloadTargets('src:2', [a, b]).map(x => x.id)).toEqual([2]);
+  });
+  it('xem tất cả: bỏ nguồn tắt, nguồn không cắm và nguồn đã tải hết', () => {
+    const off = src({ id: 3, enabled: false, faceCount: 0, cloudOnlyCount: 5 });
+    const unplugged = src({ id: 4, available: false, faceCount: 0, cloudOnlyCount: 5 });
+    const done = src({ id: 5, faceCount: 10, cloudOnlyCount: 0 });
+    expect(downloadTargets('all', [a, off, unplugged, done, b]).map(x => x.id)).toEqual([1, 2]);
+  });
+  it('đã tải hết (cloudOnlyCount 0, lastScan.notDownloaded 0): không còn nguồn nào, nên không có gì để tải', () => {
+    const stats = { status: 'ok' as const, seen: 3, unchanged: 3, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
+    expect(downloadTargets('all', [src({ faceCount: 3, cloudOnlyCount: 0, lastScan: stats })])).toEqual([]);
   });
 });

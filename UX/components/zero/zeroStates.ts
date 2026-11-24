@@ -43,6 +43,12 @@ export function keepActionOf(provider: string | null): string {
  */
 export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}): number => cloud[s.id] ?? (s.cloudOnlyCount > 0 ? s.cloudOnlyCount : s.lastScan?.notDownloaded ?? 0);
 
+/** Nguồn mà nút "Tải về máy" của trạng thái trống sẽ tải: nguồn đang chọn, hoặc (xem tất cả) mọi nguồn bật, đang cắm và còn mục chưa tải. */
+export function downloadTargets(view: string, sources: SourceDto[], cloud: Record<number, number> = {}): SourceDto[] {
+  const pool = view.startsWith('src:') ? sources.filter(x => `src:${x.id}` === view) : sources;
+  return pool.filter(x => x.enabled && x.available && notDownloadedOf(x, cloud) > 0);
+}
+
 export function libraryEmpty(c: EmptyCtx): Empty {
   const blocked = (id: number) => id in c.access;
   const access = (): Empty => ({ kind: 'source-access', glyph: 'ụ', text: t('zero.access'), action: { id: 'grant', label: t('zero.grant') }, secondary: { id: 'rescan', label: t('zero.retry') } });
