@@ -344,3 +344,33 @@ test("đoạn trộn font trả font đầu tiên (hành vi Illustrator 2027) �
   assert.deepEqual(r.docs[0].fonts.map((f) => f.ps).sort(), ["Chonburi-Regular", "DMSerifDisplay-Regular"]);
   assert.equal(r.stats.viaChars, 1);
 });
+
+// Lấy mẫu thưa rồi dày; bỏ khoảng trắng; đoạn đồng nhất không tốn lần đọc dày và không tính viaChars.
+const bigPara = (n, fontAt, textAt) => {
+  let reads = 0;
+  const chars = Array.from({ length: n }, (_, i) => ({ get characterAttributes() { reads++; return { textFont: { name: fontAt(i), family: "F", style: "R" } }; } }));
+  const ca = { textFont: { name: fontAt(0), family: "F", style: "R" } };
+  return { para: { characterAttributes: ca, characters: chars, contents: textAt ? textAt(n) : "x".repeat(n) }, reads: () => reads };
+};
+
+test("đoạn >200 ký tự trả font đầu tiên, font khác ở cuối → thấy cả hai, đọc có trần", () => {
+  const b = bigPara(1000, (i) => (i >= 990 ? "DMSerifDisplay-Regular" : "Chonburi-Regular"));
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps).sort(), ["Chonburi-Regular", "DMSerifDisplay-Regular"]);
+  assert.ok(b.reads() <= 260, "số lần đọc: " + b.reads());
+});
+
+test("đoạn đồng nhất >200 ký tự: chỉ ~16 mẫu thưa, viaChars không tăng", () => {
+  const b = bigPara(5000, () => "Chonburi-Regular");
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+  assert.ok(b.reads() <= 20, "số lần đọc: " + b.reads());
+  assert.ok(!r.stats.viaChars);
+});
+
+test("ký tự trắng khác font (MyriadPro) bị bỏ qua khi lấy mẫu", () => {
+  const text = "ab cd ef gh ij kl";
+  const b = bigPara(text.length, (i) => (text.charAt(i) === " " ? "MyriadPro-Regular" : "Chonburi-Regular"), () => text);
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});
