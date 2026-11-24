@@ -103,6 +103,9 @@ pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
     walk_fonts_report(root, &os_placeholder).0
 }
 
+/// Khoá `meta` giữ số font dataless chưa từng phân tích của một nguồn (lần quét gần nhất): `cloud_unseen:<source_id>`.
+pub(crate) const CLOUD_UNSEEN_PREFIX: &str = "cloud_unseen:";
+
 /// Hàm kiểm "file giữ chỗ chưa tải về" (thay được trong test).
 pub type PlaceholderProbe<'a> = &'a (dyn Fn(&Path, &std::fs::Metadata) -> bool + Sync);
 
@@ -384,6 +387,13 @@ impl Store {
         });
         {
             let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // placeholder CHƯA từng được phân tích (không có bản ghi vị trí): không có face nào để đếm, nên ghi số file lại
+            // để nguồn "toàn file chưa tải về" vẫn hiện "N chưa tải về" + nút tải thay vì trống
+            let unseen = placeholders.iter().filter(|(p, _)| !known.contains_key(p.to_string_lossy().as_ref())).count();
+            tx.execute(
+                "INSERT INTO meta(key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![format!("{CLOUD_UNSEEN_PREFIX}{source_id}"), unseen as i64],
+            )?;
             // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
             for (p, meta) in &placeholders {
                 let path = p.to_string_lossy();

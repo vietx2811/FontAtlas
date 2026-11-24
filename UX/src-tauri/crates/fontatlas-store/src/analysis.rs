@@ -273,7 +273,13 @@ impl Store {
             [source_id],
             |r| r.get(0),
         )?;
-        Ok(n.max(0) as u32)
+        // cộng font dataless chưa từng phân tích (chưa có face): ghi bởi lần quét gần nhất
+        let unseen: i64 = self
+            .conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", [format!("{}{source_id}", crate::rescan::CLOUD_UNSEEN_PREFIX)], |r| r.get(0))
+            .optional()?
+            .unwrap_or(0);
+        Ok((n.max(0) + unseen.max(0)).min(u32::MAX as i64) as u32)
     }
 
     /// Sao lưu user.db (VACUUM INTO) vào `<dir>/backups/user-<ms>.db`; trả đường dẫn.
