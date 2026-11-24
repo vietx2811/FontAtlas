@@ -92,4 +92,78 @@ describe('PagedFaces', () => {
     await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
     expect(api.calls).toHaveLength(1);
   });
+
+  describe('refresh()', () => {
+    const page = (total: number, ids: number[]): FacePage => ({ total, offset: 0, items: ids.map(i => makeRow(i)) });
+
+    it('fetch bắt đầu trước refresh nhưng về sau bị bỏ, không ghi đè dữ liệu mới', async () => {
+      const api = deferredApi();
+      const p = new PagedFaces(api, {});
+      api.resolvers[0](page(10, [1, 2]));
+      await flush();
+      p.ensureRange(0, 5);
+      p.refresh(false); // gọi trang 0 mới (calls[1])
+      p.ensureRange(400, 410); // trang 2 bắt đầu SAU refresh; chỉ để chắc có fetch khác
+      api.resolvers[1](page(50, [7, 8]));
+      await flush();
+      expect(p.getSnapshot().total).toBe(50);
+      // một fetch cũ (trước refresh) về muộn: mô phỏng bằng cách khởi tạo mới rồi refresh trong lúc trang 0 ban đầu còn treo
+      const api2 = deferredApi();
+      const q = new PagedFaces(api2, {});
+      q.refresh(false); // trang 0 ban đầu (calls[0]) còn treo; refresh gọi calls[1]
+      api2.resolvers[1](page(50, [7]));
+      await flush();
+      api2.resolvers[0](page(3, [1])); // dữ liệu CŨ về muộn
+      await flush();
+      expect(q.getSnapshot().total).toBe(50);
+      expect(q.rowAt(0)?.faceId).toBe(8);
+    });
+
+    it('apply() đặt lại zeroPending: số 0 đầu của truy vấn mới vẫn phải xác nhận khi đang quét', async () => {
+      let mode: 'data' | 'zero' = 'data';
+      const api = { queryFaces: async () => (mode === 'zero' ? page(0, []) : page(5, [1, 2])) };
+      const p = new PagedFaces(api, { text: 'a' });
+      await flush();
+      mode = 'zero';
+      p.refresh(true); await flush(); // lần 1: zeroPending = true, dữ liệu giữ
+      expect(p.getSnapshot().total).toBe(5);
+      mode = 'data';
+      p.setQuery({ text: 'a', viOnly: true } as never); await flush(); // đổi query → apply: reset
+      expect(p.getSnapshot().total).toBe(5);
+      mode = 'zero';
+      p.refresh(true); await flush();
+      expect(p.getSnapshot().total).toBe(5); // vẫn là lần "đầu" của truy vấn này, chưa tin
+      p.refresh(true); await flush();
+      expect(p.getSnapshot().total).toBe(0);
+    });
+
+    it('thứ tự thật: finished(đang quét) giữ, idle(không quét) xác nhận số 0', async () => {
+      let zero = false;
+      const api = { queryFaces: async () => (zero ? page(0, []) : page(5, [1])) };
+      const p = new PagedFaces(api, {});
+      await flush();
+      zero = true;
+      p.refresh(true); await flush();
+      expect(p.getSnapshot().total).toBe(5);
+      p.refresh(false); await flush();
+      expect(p.getSnapshot().total).toBe(0);
+    });
+
+    it('chỉ tải lại các trang đang nhìn (± 1) + trang 0; trang xa bị bỏ và tải lại khi cuộn tới', async () => {
+      const api = createMockLibraryApi(Array.from({ length: 3000 }, (_, i) => makeRow(i)));
+      const p = new PagedFaces(api, {});
+      await flush();
+      for (const r of [[0, 40], [1000, 1040], [2600, 2640]] as const) { p.ensureRange(r[0], r[1]); await flush(); }
+      expect(api.calls.map(c => c.offset).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([0, 800, 1000, 1200, 2400, 2600, 2800].filter(o => api.calls.some(c => c.offset === o)));
+      const before = api.calls.length;
+      p.refresh(false); await flush();
+      const fetched = api.calls.slice(before).map(c => c.offset);
+      expect(fetched).not.toContain(1000); // trang 5 (xa vùng đang nhìn quanh 2600) không tải lại
+      expect(fetched.length).toBeLessThanOrEqual(4);
+      expect(p.rowAt(2600)).toBeDefined();
+      expect(p.rowAt(1000)).toBeUndefined(); // đánh dấu stale
+      p.ensureRange(1000, 1040); await flush();
+      expect(p.rowAt(1000)).toBeDefined(); // cuộn tới thì tải lại
+    });
+  });
 });

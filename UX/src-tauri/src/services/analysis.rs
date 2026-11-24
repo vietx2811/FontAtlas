@@ -902,7 +902,19 @@ pub fn get_face(
         .and_then(|x| Some([x.first()?.as_f64()? as f32, x.get(1)?.as_f64()? as f32]));
     let flag = |k: &str| v.get(k).and_then(Value::as_bool).unwrap_or(false);
 
+    let derived_from = FaceKey::from_hex(&row.hash_hex, row.face_index).ok().and_then(|k| {
+        state
+            .with_store(|s| {
+                Ok(s.derived_from(&k.hash)?.and_then(|from| {
+                    let name = s.face_label(&from, 0).ok().flatten()?;
+                    Some(DerivedFromDto { face_key: FaceKeyDto::from(&FaceKey { hash: from, face_index: 0 }), name })
+                }))
+            })
+            .ok()
+            .flatten()
+    });
     Ok(FaceDetailDto {
+        derived_from,
         row,
         summary: summarize_face(profile, reference, l),
         classification,

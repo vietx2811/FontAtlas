@@ -1,3 +1,4 @@
+import { useNoticeStore } from '../../../store/notices';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockApi } from '../../../api/mock';
@@ -24,11 +25,24 @@ const go = async (name: string) => { await act(async () => { fireEvent.click(scr
 describe('Settings', () => {
   beforeEach(() => { useUiStore.setState(initial, true); document.documentElement.removeAttribute('data-theme'); });
 
+  it('mỗi mục nav có icon svg aria-hidden khác nhau; h2 mục đang chọn có cùng icon', async () => {
+    await mount();
+    const nav = screen.getByRole('navigation');
+    const buttons = within(nav).getAllByRole('button');
+    expect(buttons).toHaveLength(SETTINGS_GROUPS.length);
+    const paths = buttons.map(b => { const svg = b.querySelector('svg'); expect(svg).not.toBeNull(); expect(svg!.getAttribute('aria-hidden')).toBe('true'); return svg!.querySelector('path')!.getAttribute('d'); });
+    expect(new Set(paths).size).toBe(paths.length);
+    const h2 = screen.getByRole('heading', { level: 2 });
+    expect(h2.querySelector('svg path')!.getAttribute('d')).toBe(paths[0]);
+    await go('Thư viện và nguồn');
+    expect(screen.getByRole('heading', { level: 2 }).querySelector('svg path')!.getAttribute('d')).toBe(paths[1]);
+  });
+
   it('has the groups of spec 5 in a left column and shows one group at a time', async () => {
     await mount();
-    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp']);
+    expect(SETTINGS_GROUPS.map(g => g.label)).toEqual(['Chung', 'Thư viện và nguồn', 'Phân tích hình ảnh', 'Kích hoạt font', 'Bật font tự động', 'Giấy phép', 'Dữ liệu', 'Phím tắt', 'Trợ giúp', 'Giới thiệu và ghi công']);
     const nav = screen.getByRole('navigation', { name: 'Nhóm cài đặt' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(9);
+    expect(within(nav).getAllByRole('button')).toHaveLength(10);
     expect(within(nav).getByRole('button', { name: 'Chung' }).getAttribute('aria-current')).toBe('true');
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Chung');
     await go('Giấy phép');
@@ -111,7 +125,7 @@ describe('Settings', () => {
     it('shows how many files of a source are still in the cloud', async () => {
       await mount();
       await go('Thư viện và nguồn');
-      expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/12 chưa tải về/);
+      expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/18 chưa tải về/);
       expect(screen.getAllByTestId('source-row')[0].textContent).not.toMatch(/chưa tải về/);
     });
 
@@ -137,19 +151,19 @@ describe('Settings', () => {
       expect(within(rows[0]).queryByTestId('cloud-hint')).toBeNull();
     });
 
-    it('"Tự phát hiện thay đổi trên ổ cloud" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
+    it('"Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn" bật mặc định, lưu khi bấm, có lời giải thích; tiếng Anh cũng có', async () => {
       const { api } = await mount();
       await go('Thư viện và nguồn');
-      const sw = screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' });
+      const sw = screen.getByRole('switch', { name: 'Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn' });
       expect(sw.getAttribute('aria-checked')).toBe('true');
       expect(document.body.textContent).toMatch(/tự quét lại thư mục đó sau vài giây/);
       const set = vi.spyOn(api, 'setSettings');
       fireEvent.click(sw);
       await settle();
       expect(set).toHaveBeenLastCalledWith({ cloudWatch: false });
-      expect(screen.getByRole('switch', { name: 'Tự phát hiện thay đổi trên ổ cloud' }).getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole('switch', { name: 'Tự phát hiện font thêm, xoá hoặc đổi trong thư mục nguồn' }).getAttribute('aria-checked')).toBe('false');
       setLocale('en');
-      expect(t('cloud.watch')).toBe('Detect changes on cloud drives automatically');
+      expect(t('cloud.watch')).toBe('Detect fonts added, deleted or changed in source folders automatically');
       expect(t('cloud.watch.note')).toMatch(/rescans that folder/);
       setLocale('vi');
     });
@@ -297,6 +311,24 @@ describe('Settings', () => {
       await settle();
       expect(spy).toHaveBeenCalled();
       expect(await api.activationState()).toEqual([]);
+    });
+    it('Tắt tất cả ở Cài đặt gặp font bận: thông báo gộp + Thử lại chạy lại activation_deactivate_all; lỗi hiện thông báo', async () => {
+      const api = createMockApi();
+      const [a] = (await api.queryFaces({ limit: 1 })).items;
+      await api.activationActivate([{ hashHex: a.hashHex, faceIndex: 0 }]);
+      await mount({}, api);
+      await act(async () => { await useUiStore.getState().refreshActive(api); });
+      await go('Kích hoạt font');
+      const spy = vi.spyOn(api, 'activationDeactivateAll')
+        .mockResolvedValueOnce({ results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }] as never, changed: 0, needsConfirmation: 0, failed: 0, busy: 1, busyHashes: ['b1'] })
+        .mockRejectedValueOnce(new Error('boom'));
+      useNoticeStore.setState({ notices: [] });
+      fireEvent.click(screen.getByRole('button', { name: /Tắt mọi font đã kích hoạt/ }));
+      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Tắt tất cả' })); }); await settle();
+      const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toBe('1 font đang bận, sẽ thử lại'); expect(n.action?.label).toBe('Thử lại');
+      await act(async () => { n.action!.run(); await new Promise(r => setTimeout(r, 0)); }); await settle();
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(useNoticeStore.getState().notices.at(-1)).toMatchObject({ kind: 'error' }); // lỗi của lần thử lại không bị nuốt
     });
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { t } from '../../i18n';
+import { t, formatDecimal } from '../../i18n';
 import { GLYPHS, UPM } from './glyphOutlines';
 import { Sheet, circlePath, delay, usePrefersReducedMotion } from './blueprint';
 import './scanBlocks.css';
@@ -78,7 +78,7 @@ export function ScanBlocks({ seed, scanning, progress, done, count = 9 }: Props)
           );
         })}
         <rect x={X0 - 4} y={Y0 - 8} width="26" height={3 * CELL_H + 2 * GAP + 16} className="bp-beam scan" style={{ ...delay(0), ['--travel' as string]: `${3 * (CELL_W + GAP) - 18}px` }} />
-        <text x={X0} y="288" className="bp-read" aria-hidden>{blocks[Math.min(focus, blocks.length - 1)].char}  adv {(cur.adv / UPM).toFixed(3)} em · h {((cur.top - cur.bottom) / UPM).toFixed(3)} em</text>
+        <text x={X0} y="288" className="bp-read" aria-hidden>{blocks[Math.min(focus, blocks.length - 1)].char}  adv {formatDecimal(cur.adv / UPM, 3)} em · h {formatDecimal((cur.top - cur.bottom) / UPM, 3)} em</text>
         </Sheet>
       </svg>
       {done ? (

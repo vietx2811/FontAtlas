@@ -7,6 +7,7 @@ import { anchorPairRole } from './deskRoles';
 export const SOURCES = ['pair', 'role', 'sim', 'pin', 'recent'] as const;
 export type PickSource = typeof SOURCES[number];
 export type PickItem = { face: FaceKeyDto; row: FaceRowDto; /** Câu "vì sao" đã dịch (≤ 1 dòng). */ summary: string; fit?: FitDto | null; pinned?: boolean; fromPeek?: boolean;
+  /** Backend báo font thiếu ký tự tiếng Việt (mã lý do `missing_vietnamese`). Hiện dấu "!" thay vì chữ. */ viMissing?: boolean;
   /** Nguồn Ghép (G4): phong cách pair của dòng, mức hợp phong cách, cổng (safe/controlled/experimental). Chỉ nhãn, không số. */ styles?: string[]; styleFit?: FitDto; gate?: string };
 export const PROFILES = ['body', 'caption', 'heading', 'display', 'quote', 'label', 'numerals'] as const;
 export type Profile = typeof PROFILES[number];
@@ -42,7 +43,7 @@ export async function loadSource(api: Api, src: PickSource, c: LoadCtx): Promise
       // Ghép theo vai + phong cách pair (G4). Cổng theo chế độ của Case: safe = chỉ an toàn; controlled = + có kiểm soát; còn lại mọi cổng.
       const page = await api.suggestPartners(c.anchor, { anchorRole: aRef, targetRole: tRef, styles: c.style ? [c.style] : [], projectVi: c.projectVi, limit: CLAMP, offset: 0, filter: null });
       const allow = c.mode === 'safe' ? ['safe'] : c.mode === 'controlled' ? ['safe', 'controlled'] : ['safe', 'controlled', 'experimental'];
-      return page.items.filter(p => allow.includes(p.gate)).map(p => ({ face: p.face, row: p.row, fit: p.roleFit, styles: p.styles, styleFit: p.styleFit, gate: p.gate, summary: [...p.reasons, ...p.warnings].map(whyText).filter(Boolean).slice(0, 2).join(' · ') }));
+      return page.items.filter(p => allow.includes(p.gate)).map(p => ({ face: p.face, row: p.row, fit: p.roleFit, styles: p.styles, styleFit: p.styleFit, gate: p.gate, summary: summaryOf([...p.reasons, ...p.warnings]), viMissing: hasViMissing([...p.reasons, ...p.warnings]) }));
     }
     const r = await api.pairCandidates(c.anchor, { role: anchorPairRole(c.role), mode: c.mode as never, projectVi: c.projectVi, k: 20, collectionId: null, lang: getLocale() });
     return r.filter(x => !(x.face.hashHex === c.anchor!.hashHex && x.face.faceIndex === c.anchor!.faceIndex)).map(x => ({ face: x.face, row: x.row, summary: x.summary }));
@@ -53,7 +54,7 @@ export async function loadSource(api: Api, src: PickSource, c: LoadCtx): Promise
   }
   const page = await api.deskSuggest({ source: src === 'role' ? 'fits_role' : src === 'sim' ? 'similar' : 'pinned', anchor: src === 'sim' ? c.current : src === 'role' ? c.anchor : null, // Role fit loại chính font ở vai đối diện (không tự ghép với chính nó)
      caseId: src === 'pin' ? c.caseId : null, targetRole: target, filter: null, projectVi: c.projectVi, limit: CLAMP, offset: 0 });
-  return page.items.map(i => ({ face: i.face, row: i.row, fit: i.fit, pinned: i.pinned, summary: i.reasons.map(whyText).filter(Boolean).slice(0, 2).join(' · ') }));
+  return page.items.map(i => ({ face: i.face, row: i.row, fit: i.fit, pinned: i.pinned, summary: summaryOf(i.reasons), viMissing: hasViMissing(i.reasons) }));
 }
 
 /** Giữ các font thuộc `classes` (OR). Lọc phía backend bằng query_faces({faceKeys, classes}) vì dòng không mang class. */
@@ -62,6 +63,12 @@ export async function keepClasses(api: Api, items: readonly PickItem[], classes:
   const r = await api.queryFaces({ faceKeys: items.map(i => i.face), classes: [...classes], limit: items.length });
   return new Set(r.items.map(x => `${x.hashHex}:${x.faceIndex}`));
 }
+
+/** Mã lý do "thiếu ký tự tiếng Việt" (tên chính `missing_vietnamese`; `vi_missing` là tên cũ còn gặp). */
+const VI_CODES = ['missing_vietnamese', 'vi_missing'];
+export const hasViMissing = (ws: readonly WhyDto[]): boolean => ws.some(w => VI_CODES.includes(w.code));
+/** Dòng "vì sao" (≤ 2 lý do). Lý do thiếu tiếng Việt không vào dòng này: nó hiện bằng dấu "!" riêng. */
+export const summaryOf = (ws: readonly WhyDto[]): string => ws.filter(w => !VI_CODES.includes(w.code)).map(whyText).filter(Boolean).slice(0, 2).join(' · ');
 
 /** Mã lý do của backend → câu vi/en. Tham số số KHÔNG in ra như điểm (Lead); mã chưa có bản dịch → bỏ dòng, không hiện mã thô. */
 export function whyText(w: WhyDto): string {

@@ -1,5 +1,5 @@
 import type { CompareMetric } from '../../api/compare';
-import { localeTag } from '../../i18n';
+import { formatDecimal, localeTag } from '../../i18n';
 
 export type Delta = { kind: 'percent' | 'degrees'; value: number };
 const DEGREE_METRICS = new Set(['slant_deg', 'stress_deg']);
@@ -16,7 +16,7 @@ export function deltaOf(key: string, v: CompareMetric, base: CompareMetric): Del
   return { kind: 'percent', value: (v.value - base.value) / base.value * 100 };
 }
 
-const nf = (v: number, digits: number) => new Intl.NumberFormat(localeTag(), { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false }).format(Math.abs(v));
+const nf = (v: number, digits: number) => formatDecimal(Math.abs(v), digits);
 export function deltaText(d: Delta): { text: string; tone: 'up' | 'down' | 'zero' } {
   const tiny = d.kind === 'percent' ? Math.abs(d.value) < 1 : Math.abs(d.value) < 0.5;
   if (tiny) return { text: '±0', tone: 'zero' };

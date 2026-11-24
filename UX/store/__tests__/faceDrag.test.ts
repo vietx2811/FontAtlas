@@ -36,7 +36,7 @@ describe('G1 faceDrag', () => {
     expect(useFaceDragStore.getState().drag?.over).toMatchObject({ id: 7, valid: true });
     expect(document.body.dataset.faceDragging).toBe('true');
     ptr('pointerup', 40, 40);
-    expect(h).toHaveBeenCalledWith([a], expect.objectContaining({ id: 7, name: 'Menu' }));
+    expect(h).toHaveBeenCalledWith([a], expect.objectContaining({ id: 7, name: 'Menu' }), { moveFrom: null });
     expect(useFaceDragStore.getState().drag).toBeNull(); expect(document.body.dataset.faceDragging).toBeUndefined(); off();
   });
 
@@ -109,6 +109,12 @@ describe('G1 thả vào Case', () => {
     const el = document.querySelector('div');
     (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => el;
     expect(targetAt(1, 1)).toEqual({ kind: 'case', id: 4, name: 'Poster', valid: true });
+  });
+  it('targetAt nhận data-drop-active và data-drop-tag', () => {
+    document.body.innerHTML = '<div id="a" data-drop-active="0" data-drop-name="Đang bật"></div><div id="t" data-drop-tag="9" data-drop-name="Logo"></div>';
+    const at = (id: string) => { const el = document.getElementById(id); (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => el; return targetAt(1, 1); };
+    expect(at('a')).toEqual({ kind: 'active', id: 0, name: 'Đang bật', valid: true });
+    expect(at('t')).toEqual({ kind: 'tag', id: 9, name: 'Logo', valid: true });
   });
   it('thêm vào Case chỉ phần chưa có; Hoàn tác chỉ gỡ phần vừa thêm', async () => {
     const api = createMockApi(); const [a, b] = await rowsOf(api);

@@ -9,11 +9,15 @@ import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { CloudDownloadControl } from '../sidebar/CloudDownload';
 import { NoteMark } from '../ui/noteMark';
 import { TermTip } from '../ui/terms';
+import { pushBusyOnly } from '../activation/busyNotice';
+import { OrganizedPanel } from '../library/OrganizedPanel';
 import { chooseLocale, t, useLocale, tn } from '../../i18n';
 import { useModelStore, useModelUi, type ModelStore } from '../../store/model';
 import { useUiStore } from '../../store/ui';
 import { applyTheme, type ThemeMode } from '../../theme';
 import { SourcePriority } from './SourcePriority';
+import { shortcutText } from '../../platform';
+import { Credits } from './Credits';
 import { Modal } from '../Modal';
 import { RemoveSourceDialog } from '../sources/RemoveSourceDialog';
 import { useNoticeStore } from '../../store/notices';
@@ -21,11 +25,14 @@ import './settings.css';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { AutoActivation } from './AutoActivation';
 import { takeSettingsGroup } from './groupRequest';
+import { Icon, type IconName } from '../sidebar/icons';
+
+const GROUP_ICON: Record<string, IconName> = { general: 'cog', library: 'book', vision: 'eye', activation: 'power', auto: 'bolt', license: 'doc', data: 'db', shortcuts: 'keyboard', help: 'help', credits: 'heart' };
 
 export const SETTINGS_GROUPS = [
   { id: 'general', get label() { return t('set.g.general'); } }, { id: 'library', get label() { return t('set.g.library'); } }, { id: 'vision', get label() { return t('set.g.vision'); } },
   { id: 'activation', get label() { return t('set.g.activation'); } }, { id: 'auto', get label() { return t('auto.group'); } }, { id: 'license', get label() { return t('set.g.license'); } }, { id: 'data', get label() { return t('set.g.data'); } },
-  { id: 'shortcuts', get label() { return t('set.g.shortcuts'); } }, { id: 'help', get label() { return t('set.g.help'); } },
+  { id: 'shortcuts', get label() { return t('set.g.shortcuts'); } }, { id: 'help', get label() { return t('set.g.help'); } }, { id: 'credits', get label() { return t('set.g.credits'); } },
 ] as const;
 type GroupId = typeof SETTINGS_GROUPS[number]['id'];
 
@@ -70,11 +77,11 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
     <div className="fa-settings" data-testid="settings">
       <nav className="fa-set-nav" aria-label={t('set.nav')}>
         {SETTINGS_GROUPS.map(g => (
-          <button key={g.id} type="button" aria-current={group === g.id ? 'true' : undefined} onClick={() => setGroup(g.id)}>{g.label}</button>
+          <button key={g.id} type="button" aria-current={group === g.id ? 'true' : undefined} onClick={() => setGroup(g.id)}><Icon name={GROUP_ICON[g.id]} size={16} /><span>{g.label}</span></button>
         ))}
       </nav>
       <section className="fa-set-body">
-        <header><h2>{label}</h2><button type="button" className="fa-set-done" onClick={onClose}>{t('set.done')}</button></header>
+        <header><h2><Icon name={GROUP_ICON[group]} size={20} /><span>{label}</span></h2><button type="button" className="fa-set-done" onClick={onClose}>{t('set.done')}</button></header>
         {s && group === 'general' && <General api={api} s={s} patch={patch} />}
         {s && group === 'library' && <Library api={api} s={s} patch={patch} />}
         {s && group === 'vision' && <Vision api={api} s={s} patch={patch} store={modelStore} />}
@@ -88,9 +95,10 @@ export function Settings({ api, onClose, onRerunOnboarding, modelStore = useMode
         )}
         {group === 'data' && <Data api={api} />}
         {group === 'shortcuts' && (
-          <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
+          <table className="fa-set-keys"><tbody>{shortcuts().map(([k, d]) => <tr key={k}><th scope="row"><kbd>{shortcutText(k)}</kbd></th><td>{d}</td></tr>)}</tbody></table>
         )}
         {group === 'help' && <Help api={api} onRerun={onRerunOnboarding} />}
+        {group === 'credits' && <Credits api={api} />}
       </section>
     </div>
   );
@@ -135,6 +143,7 @@ function Library({ api, s, patch }: { api: Api } & SubProps) {
   const state = (x: SourceDto) => (x.id in access ? t('set.src.access') : !x.available ? t('set.src.unavail') : x.scanning ? t('set.src.scanning') : t('set.src.ready'));
   return (
     <>
+      <OrganizedPanel api={api} />
       <div className="fa-set-bar"><button type="button" onClick={() => useUiStore.getState().requestAddFolder()}>{t('set.src.add')}</button></div>
       <ul className="fa-set-sources">
         {sources.map(x => (
@@ -188,6 +197,12 @@ function Vision({ api, s, patch, store }: { api: Api; store: ModelStore } & SubP
 function Activation({ api, s, patch }: { api: Api } & SubProps) {
   const [ob, setOb] = useState<OnboardingDto | null>(null);
   const [confirm, setConfirm] = useState(false);
+  /** Tắt hết: lỗi hiện thông báo; font bận → thông báo gộp + [Thử lại] = chạy lại ĐÚNG "Tắt hết" (không phải tắt tay: font còn lý do Dự án sẽ bị giữ). */
+  const offAll = async (retried: boolean): Promise<void> => {
+    try { pushBusyOnly(await api.activationDeactivateAll(), () => void offAll(true), retried); }
+    catch (e) { useNoticeStore.getState().push({ kind: 'error', text: t('act.fail', { msg: (e as Error)?.message ?? String(e) }) }); }
+    await useUiStore.getState().refreshActive(api).catch(() => undefined);
+  };
   const active = useUiStore(x => x.active);
   const [replaced, setReplaced] = useState<ReplacedEntryDto[]>([]);
   const reloadReplaced = useCallback(() => api.activationListReplaced().then(setReplaced, () => setReplaced([])), [api]);
@@ -222,7 +237,7 @@ function Activation({ api, s, patch }: { api: Api } & SubProps) {
           <p>{tn('set.act.offBody', { n: active.size })}</p>
           <div className="fa-modal-actions">
             <button type="button" onClick={() => setConfirm(false)}>{t('set.cancel')}</button>
-            <button type="button" className="primary" onClick={async () => { setConfirm(false); await api.activationDeactivateAll(); await useUiStore.getState().refreshActive(api); }}>{t('set.act.offOk')}</button>
+            <button type="button" className="primary" onClick={async () => { setConfirm(false); await offAll(false); }}>{t('set.act.offOk')}</button>
           </div>
         </Modal>
       )}

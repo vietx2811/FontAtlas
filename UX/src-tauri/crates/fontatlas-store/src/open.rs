@@ -23,6 +23,12 @@ pub(crate) fn now_ms() -> i64 {
 pub struct Store {
     pub(crate) conn: Connection,
     dir: PathBuf,
+    /// Bộ đệm ứng viên của `claim_embedding_batch` (xem `embed.rs`): tránh quét lại cả hàng đợi mỗi lô.
+    pub(crate) claim: crate::embed::ClaimQueue,
+    /// Vị trí file vắng ở lượt quét gần nhất: đường dẫn → (nguồn, ms lần đầu thấy vắng). Chỉ đánh `missing` khi vắng ở hai lượt
+    /// liên tiếp (file cloud đang tải/đổi tên có khoảng hở không phải là "đã xoá"). Trong bộ nhớ:
+    /// khởi động lại thì đếm lại từ đầu (an toàn: chỉ làm việc ẩn chậm thêm một lượt).
+    pub(crate) absent: std::collections::HashMap<String, (i64, i64)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -98,7 +104,7 @@ impl Store {
         if let Err(e) = crate::release::backfill(&conn) {
             eprintln!("release_year backfill: {e}");
         }
-        Ok((Store { conn, dir: dir.to_path_buf() }, rep))
+        Ok((Store { conn, dir: dir.to_path_buf(), claim: Default::default(), absent: Default::default() }, rep))
     }
 
     /// Kết nối ghi chỉ mở library.db, KHÔNG attach user.db: `BEGIN IMMEDIATE` của lô ingest không khoá
@@ -106,7 +112,7 @@ impl Store {
     /// chỉ gọi hàm thuần library (`rescan_root_with`, `ingest`…), hàm dùng bảng `u.*` sẽ lỗi `no such table`.
     pub fn open_library_only(dir: &Path) -> Result<Store, StoreError> {
         let conn = open_library_existing(&dir.join(LIBRARY_FILE))?;
-        Ok(Store { conn, dir: dir.to_path_buf() })
+        Ok(Store { conn, dir: dir.to_path_buf(), claim: Default::default(), absent: Default::default() })
     }
 
     /// Kết nối chỉ chạm user.db (không mở library.db): dành cho mọi ghi dữ liệu người dùng,
@@ -118,7 +124,7 @@ impl Store {
         let conn = Connection::open_in_memory()?;
         conn.execute("ATTACH DATABASE ?1 AS u", [user_path.to_string_lossy()])?;
         conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA u.synchronous=NORMAL;")?;
-        Ok(Store { conn, dir: dir.to_path_buf() })
+        Ok(Store { conn, dir: dir.to_path_buf(), claim: Default::default(), absent: Default::default() })
     }
 
     /// Kết nối chỉ đọc (library.db + user.db attach `u`), không migrate: dựng Index mà không
@@ -130,7 +136,7 @@ impl Store {
         conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.execute("ATTACH DATABASE ?1 AS u", [user_path.to_string_lossy()])?;
         conn.execute_batch("PRAGMA query_only=ON;")?;
-        Ok(Store { conn, dir: dir.to_path_buf() })
+        Ok(Store { conn, dir: dir.to_path_buf(), claim: Default::default(), absent: Default::default() })
     }
 
     /// Kết nối thô — cho chẩn đoán và test.

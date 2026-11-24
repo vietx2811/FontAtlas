@@ -2,6 +2,7 @@ import { t, tn, formatNumber } from '../../i18n';
 import { classLabel } from '../main/classLabels';
 import { TermTip, classTermKey } from '../ui/terms';
 import { Tooltip } from '../ui/Tooltip';
+import { BetaBadge } from '../ui/BetaBadge';
 import { PROFILES, SOURCES, type PickSource, type Profile } from './pickerSources';
 
 export const PICK_CLASSES = ['sans', 'serif', 'mono', 'slab', 'script', 'handwriting', 'display', 'blackletter'] as const;
@@ -24,7 +25,8 @@ export function PickerBar({ source, onSource, pairStyle, onPairStyle, disabled, 
             <button key={s} type="button" role="radio" aria-checked={source === s} aria-disabled={why ? true : undefined} data-testid={`pick-src-${s}`} data-src={s}
               onClick={() => { if (!why) onSource(s); }}>{t(`pick.src.${s}` as 'pick.src.pair')}{counts[s] !== undefined && <i>{counts[s]}</i>}<kbd aria-hidden>{i + 1}</kbd></button>
           );
-          return <Tooltip key={s} label={why ?? t(`pick.src.${s}.gloss` as 'pick.src.pair.gloss')}>{btn}</Tooltip>;
+          const tip = <Tooltip key={s} label={why ?? t(`pick.src.${s}.gloss` as 'pick.src.pair.gloss')}>{btn}</Tooltip>;
+          return s === 'role' ? <span key={s} className="fa-pick-beta">{tip}<BetaBadge /></span> : tip;
         })}
       </div>
       {source === 'pair' && (

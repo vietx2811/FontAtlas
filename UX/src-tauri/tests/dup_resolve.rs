@@ -1,4 +1,7 @@
 //! Giải quyết trùng lặp end-to-end: quét thật → xem trước → áp dụng (ẩn / Thùng rác giả) → hoàn tác.
+mod common;
+use common::nz;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -119,7 +122,7 @@ fn same_file_copies_hide_one_path_keep_the_other_and_never_touch_files() {
     assert_eq!(plan.items.len(), 1);
     let it = &plan.items[0];
     assert!(it.auto_safe);
-    assert!(it.keeper.path.ends_with("a/roboto.ttf"), "giữ tên sạch: {}", it.keeper.path);
+    assert!(nz(&it.keeper.path).ends_with("a/roboto.ttf"), "giữ tên sạch: {}", it.keeper.path);
     assert_eq!(it.reason.code, "same_content_tidiest_path");
     assert_eq!((plan.keep_count, plan.hide_count), (1, 1));
 
@@ -147,7 +150,7 @@ fn newer_version_is_kept_older_goes_to_trash_and_undo_puts_the_file_back() {
 
     let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::AllSafe, &all()).unwrap();
     let it = &plan.items[0];
-    assert!(it.keeper.path.ends_with("new/playfair.ttf"));
+    assert!(nz(&it.keeper.path).ends_with("new/playfair.ttf"));
     assert_eq!(it.reason.code, "newer_version");
     assert_eq!(it.reason.args["keep"], "Version 1.204");
     assert!(it.warnings.iter().any(|w| w.code == "may_reflow"));
@@ -330,7 +333,7 @@ fn source_priority_decides_which_copy_is_kept() {
 }
 
 fn item_of(it: &PlanItemDto, keeper: &str, losers: &[&str], members: Vec<String>) -> ResolveItemDto {
-    let p = |n: &str| it.member_paths.iter().find(|m| m.contains(&format!("/{n}/"))).unwrap().clone();
+    let p = |n: &str| it.member_paths.iter().find(|m| nz(m).contains(&format!("/{n}/"))).unwrap().clone();
     ResolveItemDto { kind: it.kind, key: it.key.clone(), keeper_path: p(keeper), loser_paths: losers.iter().map(|l| p(l)).collect(), member_paths: members }
 }
 
@@ -355,7 +358,7 @@ fn a_second_request_can_join_the_batch_of_the_first_and_one_undo_reverts_both() 
     .unwrap();
     assert!(r1.failed.is_empty(), "{:?}", r1.failed);
     // yêu cầu 2: chỉ ẩn v1, vào CÙNG mẻ (nhóm giờ chỉ còn v1, v3)
-    let members2: Vec<String> = all_members.iter().filter(|m| !m.contains("/v2/")).cloned().collect();
+    let members2: Vec<String> = all_members.iter().filter(|m| !nz(m).contains("/v2/")).cloned().collect();
     let r2 = dup_resolve::resolve_apply(
         &st,
         &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1"], members2)], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: Some(r1.batch_id.clone()) },
@@ -434,4 +437,140 @@ fn groups_that_need_a_human_are_not_in_all_safe_but_are_counted() {
     assert!(!item.auto_safe && item.review.is_some());
     let one = dup_resolve::resolve_preview(&st, &ResolveScopeDto::Group { kind: item.kind, key: item.key.clone() }, &all()).unwrap();
     assert_eq!(one.items.len(), 1, "xem trước từng nhóm vẫn có quyết định mặc định để người dùng đổi");
+}
+
+/// TaskHub: huỷ giữa chừng một mẻ Thùng rác. Bản thua đã làm xong vẫn có sổ + hoàn tác, bản chưa làm giữ nguyên tệp,
+/// việc biến mất khỏi khay với kết quả "cancelled".
+#[test]
+fn cancelling_a_trash_batch_midway_keeps_what_was_done_undoable_and_leaves_the_rest_untouched() {
+    use app_lib::dto::tasks::{TaskEvent, TaskOutcome, TaskState};
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let evs: Arc<std::sync::Mutex<Vec<TaskEvent>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    let trash_dir = td.path().join("trash");
+    let inner = fake_trash(&trash_dir);
+    // trasher huỷ việc ngay sau khi chuyển tệp đầu tiên vào Thùng rác
+    let st2 = st.clone();
+    let trasher = move |p: &Path| {
+        let r = inner(p);
+        let l = st2.tasks.list();
+        assert_eq!(l.tasks.len(), 1);
+        assert_eq!(l.tasks[0].state, TaskState::Running);
+        assert!(l.tasks[0].cancel_confirm_key.is_some(), "huỷ một phần phải có xác nhận");
+        assert!(st2.tasks.cancel(&l.tasks[0].id));
+        r
+    };
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &trasher,
+        1000,
+    )
+    .unwrap();
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert_eq!(r.done.len(), 1, "chỉ bản thua đầu tiên được làm");
+    let (done_path, untouched) = {
+        let d = nz(&r.done[0].loser_path);
+        if d.contains("/v1/") { (it.member_paths.iter().find(|m| nz(m).contains("/v1/")).unwrap().clone(), it.member_paths.iter().find(|m| nz(m).contains("/v2/")).unwrap().clone()) } else { (it.member_paths.iter().find(|m| nz(m).contains("/v2/")).unwrap().clone(), it.member_paths.iter().find(|m| nz(m).contains("/v1/")).unwrap().clone()) }
+    };
+    assert!(!Path::new(&done_path).exists(), "bản đã làm nằm trong Thùng rác");
+    assert!(Path::new(&untouched).is_file(), "bản chưa làm giữ nguyên tệp");
+    assert!(st.tasks.list().tasks.is_empty(), "việc phải biến mất khỏi khay");
+    let outcomes: Vec<TaskOutcome> = evs.lock().unwrap().iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
+    assert_eq!(outcomes, vec![TaskOutcome::Cancelled]);
+    // phần đã làm vẫn hoàn tác được
+    let live = dup_resolve::resolve_list(&st, false).unwrap();
+    assert_eq!(live.len(), 1);
+    assert!(live[0].can_undo);
+    let u = dup_resolve::resolve_undo(&st, &[live[0].id], 2000).unwrap();
+    assert!(u.failed.is_empty(), "{:?}", u.failed);
+    assert!(Path::new(&done_path).is_file(), "hoàn tác đưa tệp về");
+}
+
+/// Lỗi giữa chừng (thoát sớm bằng `?`) không để việc kẹt trong khay.
+#[test]
+fn a_resolve_that_fails_early_leaves_no_task_behind() {
+    use app_lib::dto::tasks::{TaskEvent, TaskOutcome};
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2))]);
+    let evs: Arc<std::sync::Mutex<Vec<TaskEvent>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let e2 = evs.clone();
+    st.tasks.events.subscribe(Box::new(move |e| e2.lock().unwrap().push(e)));
+    let r = ResolveRequestDto { items: vec![], action: ResolveActionDto::Hide, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: Some("dup-1-999999".into()) };
+    assert!(dup_resolve::resolve_apply(&st, &r, &no_trash, 5).is_err());
+    assert!(st.tasks.list().tasks.is_empty());
+    let o: Vec<TaskOutcome> = evs.lock().unwrap().iter().filter_map(|e| if let TaskEvent::Removed { outcome, .. } = e { Some(*outcome) } else { None }).collect();
+    assert!(o.is_empty() || o == vec![TaskOutcome::Failed], "{o:?}");
+}
+
+/// Tiến độ resolveDuplicates tính theo bản thua DUY NHẤT và đi tới total: bản thứ hai thấy done=1/total=2 (đường dẫn trùng không đếm hai lần).
+#[test]
+fn resolve_progress_counts_unique_losers_and_reaches_the_total() {
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let trash_dir = td.path().join("trash");
+    let inner = fake_trash(&trash_dir);
+    let seen = std::sync::Mutex::new(Vec::new());
+    let st2 = st.clone();
+    let trasher = |p: &Path| {
+        let l = st2.tasks.list();
+        let t = l.tasks.iter().find(|t| t.title_key == "task.resolveDuplicates").unwrap();
+        seen.lock().unwrap().push((t.done, t.total));
+        inner(p)
+    };
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &trasher,
+        1000,
+    )
+    .unwrap();
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert_eq!(r.done.len(), 2);
+    assert_eq!(*seen.lock().unwrap(), vec![(0, Some(2)), (1, Some(2))], "total đếm duy nhất; done tăng sau mỗi đơn vị");
+}
+
+/// Lỗi sau commit (đọc lại dòng sổ) KHÔNG làm mất kết quả: trả Ok kèm batch_id, lỗi nằm trong `failed`, phần đã commit vẫn hoàn tác được.
+#[test]
+fn a_failure_after_the_commit_keeps_the_batch_id_reports_the_error_and_the_work_stays_undoable() {
+    use std::sync::atomic::Ordering;
+    let _g = serial();
+    let td = tempfile::tempdir().unwrap();
+    let base = std::fs::read(fixture("playfair_display.ttf")).unwrap();
+    let st = state_with(td.path(), &[("v1/playfair.ttf", patch_revision(&base, 1.1)), ("v2/playfair.ttf", patch_revision(&base, 1.2)), ("v3/playfair.ttf", patch_revision(&base, 1.3))]);
+    let plan = dup_resolve::resolve_preview(&st, &ResolveScopeDto::All, &all()).unwrap();
+    let it = &plan.items[0];
+    let trash_dir = td.path().join("trash");
+    st.faults.resolution_readback.store(true, Ordering::SeqCst);
+    let r = dup_resolve::resolve_apply(
+        &st,
+        &ResolveRequestDto { items: vec![item_of(it, "v3", &["v1", "v2"], it.member_paths.clone())], action: ResolveActionDto::Trash, explicit_trash_paths: vec![], mode: ResolveModeDto::Chosen, join_batch: None },
+        &fake_trash(&trash_dir),
+        1000,
+    )
+    .expect("lỗi sau commit không được trả Err");
+    st.faults.resolution_readback.store(false, Ordering::SeqCst);
+    assert!(r.batch_id.starts_with("dup-"), "vẫn có batch_id: {}", r.batch_id);
+    assert!(r.done.is_empty(), "không đọc lại được nên không có dòng trong done");
+    assert_eq!(r.failed.iter().filter(|f| f.code == "db_error").count(), 2, "{:?}", r.failed);
+    // việc đã commit thật: tệp nằm trong Thùng rác, sổ có 2 dòng hoàn tác được
+    let live = dup_resolve::resolve_list(&st, false).unwrap();
+    assert_eq!(live.len(), 2);
+    assert!(live.iter().all(|x| x.can_undo && x.batch_id == r.batch_id));
+    let ids: Vec<i64> = live.iter().map(|x| x.id).collect();
+    let u = dup_resolve::resolve_undo(&st, &ids, 2000).unwrap();
+    assert!(u.failed.is_empty(), "{:?}", u.failed);
+    assert!(st.tasks.list().tasks.is_empty(), "việc phải gỡ khỏi khay");
 }

@@ -39,7 +39,7 @@ describe('describeOutcome', () => {
 
 describe('reconcileNotices', () => {
   const item = (cause: string, n = 1) => ({ hashHex: 'h', faces: [0], removedReasons: [], cause, count: n });
-  const rep = (o: Partial<ReconcileReportDto>): ReconcileReportDto => ({ autoDeactivated: [], autoDeactivateFailed: [], reregistered: 0, moved: 0, missing: 0, notDownloaded: 0, cleaned: 0, failed: 0, results: [], ...o });
+  const rep = (o: Partial<ReconcileReportDto>): ReconcileReportDto => ({ autoDeactivated: [], autoDeactivateFailed: [], reregistered: 0, moved: 0, missing: 0, notDownloaded: 0, cleaned: 0, failed: 0, busy: 0, results: [], ...o });
   it('names the cause of each automatic deactivation', () => {
     const n = reconcileNotices(rep({ autoDeactivated: [item('collection_deleted'), item('left_collection'), item('no_reason')] }));
     const all = n.map(x => x.text).join('\n');

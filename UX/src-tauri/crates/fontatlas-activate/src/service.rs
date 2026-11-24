@@ -34,6 +34,9 @@ pub struct ActivationService<E: ActivationEngine> {
     ensure_local: EnsureLocalFn,
     /// Như `ensure_local` nhưng cho app đang đợi trong callback (lý do `auto:*`): hạn chờ ngắn hơn nhiều.
     ensure_local_auto: EnsureLocalFn,
+    /// Thao tác tắt/đổi phạm vi/chuyển đường dẫn gặp hash đang bận: thử lại bấy nhiêu lần, mỗi lần chờ bấy nhiêu ms.
+    busy_retries: std::sync::atomic::AtomicUsize,
+    busy_wait_ms: std::sync::atomic::AtomicU64,
 }
 
 /// Một app thiết kế (Photoshop…) đang đợi trong callback: không chờ tải cloud quá lâu. Con số này là ước đoán
@@ -86,8 +89,13 @@ pub(crate) enum Located {
 /// Vị trí đầu tiên dùng được (đã canonical, UTF-8, đúng hash); không có thì phân biệt
 /// nội dung đã đổi / đường dẫn lạ / iCloud chưa tải / thiếu hẳn.
 pub(crate) fn locate(t: &FileTarget) -> Located {
+    locate_where(t, |_| true)
+}
+
+/// Như `locate` nhưng chỉ xét các vị trí thoả `want` (B7: tìm bản chép trong Organized Library).
+pub(crate) fn locate_where(t: &FileTarget, want: impl Fn(&fontatlas_store::FileLocation) -> bool) -> Located {
     let (mut changed, mut bad, mut not_downloaded) = (None, None, None);
-    for loc in &t.locations {
+    for loc in t.locations.iter().filter(|l| want(l)) {
         match probe_file(&loc.path) {
             FileProbe::Ready => {
                 let Ok(c) = canonical_path(&loc.path) else { continue };
@@ -187,7 +195,32 @@ impl<E: ActivationEngine> ActivationService<E> {
             in_flight: Mutex::new(HashSet::new()),
             ensure_local: Box::new(|p| ensure_local(p, CLOUD_DOWNLOAD_TIMEOUT)),
             ensure_local_auto: Box::new(|p| ensure_local(p, AUTO_DOWNLOAD_TIMEOUT)),
+            busy_retries: std::sync::atomic::AtomicUsize::new(30),
+            busy_wait_ms: std::sync::atomic::AtomicU64::new(100),
         }
+    }
+
+    /// Đổi cách chờ-thử-lại khi hash bận (mặc định 30 × 100 ms ≈ 3 s mỗi font; test dùng giá trị nhỏ).
+    pub fn with_busy_retry(self, retries: usize, wait: std::time::Duration) -> Self {
+        self.busy_retries.store(retries, std::sync::atomic::Ordering::SeqCst);
+        self.busy_wait_ms.store(wait.as_millis() as u64, std::sync::atomic::Ordering::SeqCst);
+        self
+    }
+
+    /// Như `take` nhưng chờ-thử-lại khi hash đang bận (dùng cho thao tác TẮT/đổi phạm vi/chuyển đường dẫn — thao tác mà
+    /// bỏ sót im lặng sẽ để font vẫn bật). Hết hạn thì `None` (người gọi báo Busy, không im lặng).
+    pub(crate) fn take_retry(&self, hash: [u8; 32]) -> Option<InFlight<'_>> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let (n, wait) = (self.busy_retries.load(SeqCst), std::time::Duration::from_millis(self.busy_wait_ms.load(SeqCst)));
+        for i in 0..=n {
+            if let Some(g) = self.take(hash) {
+                return Some(g);
+            }
+            if i < n {
+                std::thread::sleep(wait);
+            }
+        }
+        None
     }
 
     /// Thay cách tải cho yêu cầu từ app (`auto:*`) — test hoặc đổi hạn chờ.
@@ -230,6 +263,12 @@ impl<E: ActivationEngine> ActivationService<E> {
         Ok(if v.as_deref() == Some("1") { Scope::Persistent } else { Scope::Session })
     }
 
+    /// Chỉ cho test tích hợp: giữ guard "đang bận" của một hash (giả một thao tác bật/tắt đang chạy) tới khi biến bị drop.
+    #[doc(hidden)]
+    pub fn hold_for_test(&self, hash: [u8; 32]) -> Option<impl Drop + '_> {
+        self.take(hash)
+    }
+
     pub(crate) fn take(&self, hash: [u8; 32]) -> Option<InFlight<'_>> {
         // Không dùng `then_some(InFlight{..})`: đối số được tạo ngay cả khi hash đang bận, và drop của nó
         // vừa xoá nhầm hash của thao tác khác vừa khoá lại `in_flight` khi guard tạm còn giữ (deadlock).
@@ -263,6 +302,28 @@ impl<E: ActivationEngine> ActivationService<E> {
         app: fontatlas_store::AutoApp,
     ) -> Result<ActivationReport, ActivationError> {
         self.run(store, keys, ActivationReason::Auto(app), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
+    }
+
+    /// B5: bật font của Case vì một app gắn với Case vừa chạy. Lý do `caseapp:<id>`, scope session, xung đột → không bật
+    /// (không có ai để hỏi giữa lúc đang làm việc trong app khác). Font đã bật persistent chỉ thêm lý do.
+    pub fn activate_case_app(&self, store: &Mutex<Store>, case_id: i64) -> Result<ActivationReport, ActivationError> {
+        // `case_id` là `cases.id` (Pairing Desk), KHÔNG phải `collections.collection_id`: font lấy từ `case_faces`.
+        let keys: Vec<FaceKey> = relock(store).case_faces(case_id)?.into_iter().map(|f| f.key).collect();
+        self.run(store, &keys, ActivationReason::CaseApp(case_id), Scope::Session, true, ConflictPolicy::Ask, false, None, &mut |_| {})
+    }
+
+    /// Người dùng bật cả Case (Pairing Desk): lý do `case:<id>` (cộng dồn với lý do khác), scope như bật tay. `keys` do
+    /// tầng trên lọc (bỏ font thiếu file); `case_id` là `cases.id`.
+    pub fn activate_case(
+        &self,
+        store: &Mutex<Store>,
+        case_id: i64,
+        keys: &[FaceKey],
+        scope: Option<Scope>,
+        policy: ConflictPolicy,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        self.activate_files(store, keys, ActivationReason::Case(case_id), scope, policy, progress)
     }
 
     pub fn activate_collection(
@@ -448,7 +509,7 @@ impl<E: ActivationEngine> ActivationService<E> {
         // font còn là placeholder trên ổ cloud: tải về trước (có hạn chót), không bao giờ treo; lỗi trả về rõ ràng
         let mut located = locate(&target);
         if let Located::NotDownloaded(p) = &located {
-            let fetch = if matches!(reason, ActivationReason::Auto(_)) { &self.ensure_local_auto } else { &self.ensure_local };
+            let fetch = if matches!(reason, ActivationReason::Auto(_) | ActivationReason::CaseApp(_)) { &self.ensure_local_auto } else { &self.ensure_local };
             match fetch(p) {
                 Ok(()) => {
                     // file vừa về máy: ghi cờ cloud_only=0 ngay (giao diện, hàng phân tích lại dựa vào cờ này)
@@ -508,7 +569,13 @@ impl<E: ActivationEngine> ActivationService<E> {
         });
         if same {
             if !dry_run {
-                relock(store).add_activation_reason(&hash, reason)?;
+                // Lý do auto (app thiết kế hỏi) KHÔNG được gắn lên font mà người dùng đã bật (thủ công/collection/case…): không ghi gì.
+                // Chỉ thêm khi dòng hiện chỉ có lý do auto của app khác (mỗi app có lý do riêng).
+                let user_owned = matches!(reason, ActivationReason::Auto(_))
+                    && old.as_ref().is_some_and(|o| o.reasons.iter().any(|r| !matches!(r, ActivationReason::Auto(_))));
+                if !user_owned {
+                    relock(store).add_activation_reason(&hash, reason)?;
+                }
                 for n in &names {
                     batch.seen.entry(n.clone()).or_insert_with(|| path.clone());
                 }

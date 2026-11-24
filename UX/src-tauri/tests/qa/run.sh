@@ -5,7 +5,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 UX="$(cd "$HERE/../../.." && pwd)"
 APP="$UX/src-tauri/target/debug/bundle/macos/Font Atlas.app/Contents/MacOS/app"
-test -x "$APP" || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
+# FONTATLAS_QA_PREP_ONLY=1: chỉ chạy phần chuẩn bị (khoá, quét, chép + đổi tên fixture, preflight) rồi dừng, không mở app; dùng cho tools/ci/test_qa_prep.sh.
+test -x "$APP" || [ "${FONTATLAS_QA_PREP_ONLY:-}" = 1 ] || { echo "thiếu bản debug: cd UX && cargo tauri build --debug --bundles app"; exit 1; }
 # QA phải chạy qua CI cục bộ (khoá + hàng đợi) và đúng bundle của SHA đang checkout: bundle nằm ở target/ DÙNG CHUNG nên run khác có thể đã ghi đè nó.
 # Chạy lại riêng: bash tools/ci/local_ci.sh <ref> --qa-only. Bỏ qua kiểm (chỉ khi tự biết mình đang làm gì): FONTATLAS_QA_NO_GUARD=1.
 if [ "${FONTATLAS_QA_NO_GUARD:-}" != 1 ]; then
@@ -20,22 +21,29 @@ echo "tải máy: $(uptime | sed 's/.*load averages*: //')"
 # Chỉ MỘT lượt QA native tại một thời điểm trên máy: font đăng ký phiên (CoreText) của app đang chạy là toàn người dùng, nên lượt QA khác
 # (CI cục bộ, worktree khác) làm font của mình thành "đã có sẵn · ứng dụng khác" và dọn không sạch (conflict-clean left:5, available-*).
 LOCK="${FONTATLAS_QA_LOCK:-/tmp/fontatlas-native-qa.lock}"
+LAST_HOLDER=""
 for _ in $(seq 1 600); do
   if mkdir "$LOCK" 2>/dev/null; then echo $$ > "$LOCK/pid"; break; fi
-  holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
+  holder="$(cat "$LOCK/pid" 2>/dev/null || true)"; [ -n "$holder" ] && LAST_HOLDER="$holder"
   if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$LOCK"; continue; fi   # người giữ khoá đã chết
   [ $((_ % 30)) -eq 1 ] && echo "chờ lượt QA native khác (pid ${holder:-?}) xong…"
   sleep 3
 done
 [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] || { echo "không lấy được khoá QA native sau 30 phút"; exit 1; }
+echo "khoá QA: $LOCK, pid $$ (người giữ trước: ${LAST_HOLDER:-không})"
 release_lock() { [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK"; true; }
 trap release_lock EXIT
-# Dọn đăng ký font còn sót từ lượt QA trước bị ngắt giữa chừng (persistent scope sống qua tiến trình). Chỉ file dưới thư mục QA có qa.js.
-sweep_qa_fonts() { command -v swift >/dev/null && swift "$HERE/unregister_qa_fonts.swift" 2>/dev/null || true; }
-sweep_qa_fonts
 # Thư mục tạm của QA (ảnh chụp + dữ liệu, ~40 MB/lượt) đặt ở ổ dữ liệu khi có, không ở ổ hệ thống (đang thiếu chỗ).
 QA_BASE="${FONTATLAS_QA_TMP:-}"
 [ -z "$QA_BASE" ] && [ -d /Volumes/VXData/Users/VietX ] && QA_BASE="/Volumes/VXData/Users/VietX/fontatlas-tmp/qa"
+# Dọn đăng ký font còn sót từ lượt QA trước bị ngắt giữa chừng (persistent scope sống qua tiến trình). Chỉ file dưới thư mục QA có qa.js,
+# dưới thư mục QA tạm (QA_BASE) hoặc dưới các thư mục trong FONTATLAS_QA_SWEEP_DIRS (phân cách bằng ':'). Không bao giờ font hệ thống / Fonts.
+sweep_qa_fonts() {
+  command -v swift >/dev/null || return 0
+  local extra=() d; IFS=: read -r -a extra <<< "${FONTATLAS_QA_SWEEP_DIRS:-}"
+  swift "$HERE/unregister_qa_fonts.swift" ${QA_BASE:+"$QA_BASE"} ${extra[@]+"${extra[@]}"} 2>/dev/null || true
+}
+sweep_qa_fonts
 if [ -n "$QA_BASE" ]; then
   mkdir -p "$QA_BASE"
   # Dọn lượt QA cũ hơn 7 ngày, chỉ thư mục có qa.js do chính script này tạo.
@@ -45,15 +53,32 @@ else
   QA="$(mktemp -d)"
 fi
 F="$UX/src-tauri/crates/fontatlas-core/tests/fixtures"
-mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/data"
+mkdir -p "$QA/A" "$QA/B" "$QA/C" "$QA/E" "$QA/G" "$QA/H" "$QA/OrgRoot" "$QA/data"
 cp "$F"/{roboto,roboto_italic_vf,open_sans,public_sans_vf}.ttf "$QA/A/"
 cp "$F"/{playfair_display,libre_baskerville,libre_baskerville_italic_vf,fira_sans_regular}.ttf "$QA/B/"
 cp "$F"/{bebas_neue,oswald_vf,dancing_script_vf,miltonian,source_code_pro}.ttf "$QA/C/"
-# E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript, khác nội dung) để có xung đột kích hoạt thật.
-for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do cp "$F/$n.ttf" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
 # G (cuối QA): bản chép một font hệ thống (giống hệt từng byte) → trạng thái "Có sẵn trên máy". Không có thì QA bỏ qua bước.
 SYS="/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf"; [ -f "$SYS" ] && cp "$SYS" "$QA/G/academy_copy.ttf" || true
+cp "$F/roboto_vf.ttf" "$QA/H/" # H (cuối QA): VF Roboto trùng PostScript "Roboto-Regular" với roboto.ttf static → bước «Giữ cả hai» G7b
 cp "$F/roboto.ttf" "$QA/C/roboto_copy.ttf" # cùng nội dung với A/roboto.ttf: nhóm "Cùng tệp" cho bước duplicates-view
+# Đổi tên (family/full/PostScript, hậu tố « FAQA») của MỌI bản sao fixture trừ G (font hệ thống), chỉ trong thư mục QA tạm: QA không phụ thuộc vào font
+# đã cài/đăng ký trên máy (RightFont, Adobe Fonts…), mà bản gốc trong repo không đổi. VF và static cùng họ vẫn cùng PostScript sau khi đổi.
+python3 "$HERE/patch_font_names.py" "$QA/A" "$QA/B" "$QA/C" "$QA/H" > "$QA/patched_names.tsv" || { echo "đổi tên font fixture thất bại"; exit 1; }
+# E (chỉ thêm ở bước cuối của QA): 12 bản SỬA 2 byte của font đã có (cùng tên PostScript ĐÃ ĐỔI, khác nội dung) để có xung đột kích hoạt thật,
+# tự QA đăng ký bản gốc trước rồi kiểm hộp thoại «đã có trên máy»: giữ nguyên độ phủ đường xung đột.
+for n in roboto roboto_italic_vf open_sans public_sans_vf playfair_display libre_baskerville fira_sans_regular bebas_neue oswald_vf dancing_script_vf miltonian source_code_pro; do src="$(ls "$QA"/{A,B,C}/$n.ttf 2>/dev/null | head -1 || true)"; [ -n "$src" ] || { echo "thiếu fixture đã đổi tên: $n"; exit 1; }; cp "$src" "$QA/E/$n.ttf"; printf 'QA' >> "$QA/E/$n.ttf"; done
+# Preflight: tên đã ĐỔI của fixture không được đã đăng ký từ file khác (app khác, lượt QA cũ chưa dọn). Font thật của chủ máy không còn va chạm. Nếu có, các bước
+# kích hoạt ra «Chưa bật» / «1 font đã có trên máy» và QA đỏ giả. Báo đường dẫn font trùng + người giữ khoá để biết ai gây ra. Bỏ qua có chủ đích:
+# FONTATLAS_QA_ALLOW_REGISTERED=1 (QA vẫn sẽ chạy và có thể đỏ ở các bước kích hoạt).
+if command -v swift >/dev/null; then
+  PRC=0; PRE="$(swift "$HERE/qa_preflight_fonts.swift" "$QA/A" "$QA/B" "$QA/C" "$QA/H" 2>/dev/null)" || PRC=$?   # set -e: không để mã 2 giết script trước khi in
+  if [ $PRC -eq 2 ]; then
+    echo "QA preflight: font fixture đã được đăng ký ở nơi khác trên máy:"; echo "$PRE" | sed 's/^/  /'
+    echo "  (khoá QA: pid $$, người giữ trước: ${LAST_HOLDER:-không}; app đang chạy có thể đã đăng ký: Adobe Fonts/Illustrator, Font Book, lượt QA/worktree khác)"
+    if [ "${FONTATLAS_QA_ALLOW_REGISTERED:-}" = 1 ]; then echo "  FONTATLAS_QA_ALLOW_REGISTERED=1: vẫn chạy"; else echo "  Dừng (exit 3). Gỡ các font trên rồi chạy lại, hoặc đặt FONTATLAS_QA_ALLOW_REGISTERED=1."; exit 3; fi
+  fi
+fi
+if [ "${FONTATLAS_QA_PREP_ONLY:-}" = 1 ]; then echo "PREP-OK $QA"; exit 0; fi
 sed -e "s#__QA_DIR__#$QA#g" -e "s#__QA_LANG__#${QA_LANG:-vi}#g" "$HERE/main_flows.js" > "$QA/qa.js"
 # QA_LANG=en: các bộ chọn theo aria-label viết bằng tiếng Việt đổi sang đúng chuỗi tiếng Anh của app (khoá i18n tương ứng), để các bước vẫn tìm được phần tử và chụp ảnh bản tiếng Anh.
 if [ "${QA_LANG:-vi}" = "en" ]; then

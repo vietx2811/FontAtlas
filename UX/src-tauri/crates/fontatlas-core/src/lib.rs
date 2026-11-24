@@ -7,6 +7,7 @@ pub mod extras;
 pub mod geom;
 pub mod langdata;
 pub mod pairing;
+pub mod rename;
 mod load;
 mod metadata;
 mod metric;
@@ -73,6 +74,22 @@ pub fn analyze_paths(paths: &[PathBuf]) -> Vec<(PathBuf, Result<FileReport, Core
     paths
         .par_iter()
         .map(|p| (p.clone(), guarded(|| analyze_path(p))))
+        .collect()
+}
+
+/// Như `analyze_paths` nhưng kiểm `cancel` trước mỗi file: đã huỷ thì file đó không được phân tích (`None`).
+/// Vẫn một `par_iter` cho cả lô (không rào chắn giữa các nhóm), hạt huỷ = một file trên mỗi nhân.
+pub fn analyze_paths_cancellable(
+    paths: &[PathBuf],
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Vec<(PathBuf, Option<Result<FileReport, CoreError>>)> {
+    use std::sync::atomic::Ordering;
+    paths
+        .par_iter()
+        .map(|p| {
+            let r = if cancel.load(Ordering::Relaxed) { None } else { Some(guarded(|| analyze_path(p))) };
+            (p.clone(), r)
+        })
         .collect()
 }
 

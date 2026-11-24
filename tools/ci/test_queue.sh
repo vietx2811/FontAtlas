@@ -33,4 +33,21 @@ check "G (priority) chạy trước F" "$([ "$g" -le "$f" ] && [ "$e" -le "$g" ]
 run H 3 & sleep 1; bash $CI HEAD --no-wait >/dev/null 2>&1; check "--no-wait thoát 3" "$?" 3; wait
 mkdir "$FONTATLAS_CI_HOME/lock"; echo 999999 > "$FONTATLAS_CI_HOME/lock/pid"
 run I 0 --no-wait; check "khoá mồ côi bị dọn" "$(grep -c 'đã có khoá' "$FONTATLAS_CI_HOME/I.out")" 1
+
+# 5) Tín hiệu: vé đang chờ dừng ngay khi nhận SIGTERM / --cancel; lượt đang giữ khoá dừng cả tiến trình con; --cancel từ chối pid lạ.
+FONTATLAS_CI_TEST_HOLD=120 bash $CI HEAD > "$FONTATLAS_CI_HOME/J.out" 2>&1 & jpid=$!
+for _ in $(seq 1 20); do grep -q 'đã có khoá' "$FONTATLAS_CI_HOME/J.out" 2>/dev/null && break; sleep 0.5; done
+jchild="$(pgrep -P $jpid | head -1)"
+bash $CI HEAD > "$FONTATLAS_CI_HOME/K.out" 2>&1 & kpid=$!
+sleep 0.3
+bash $CI HEAD > "$FONTATLAS_CI_HOME/L.out" 2>&1 & lpid=$!
+sleep 2; check "2 vé đang chờ" "$(ls "$FONTATLAS_CI_HOME/queue" | wc -l | tr -d ' ')" 2
+s0=$(date +%s); kill -TERM $kpid; wait $kpid 2>/dev/null; check "SIGTERM dừng vé đang chờ trong ≤ 5 s" "$([ $(( $(date +%s) - s0 )) -le 5 ] && echo yes)" yes
+check "vé K đã bị gỡ" "$(ls "$FONTATLAS_CI_HOME/queue" | grep -c -- "-$kpid-")" 0
+bash $CI --cancel $lpid >/dev/null 2>&1; check "--cancel <pid> dừng vé L" "$(kill -0 $lpid 2>/dev/null && echo alive || echo gone)" gone
+check "hàng đợi trống sau khi huỷ" "$(ls "$FONTATLAS_CI_HOME/queue" | wc -l | tr -d ' ')" 0
+bash $CI --cancel $$ >/dev/null 2>&1; check "--cancel từ chối pid không phải của local_ci" "$?" 2
+s0=$(date +%s); kill -TERM $jpid; wait $jpid 2>/dev/null; check "SIGTERM dừng lượt đang giữ khoá trong ≤ 5 s" "$([ $(( $(date +%s) - s0 )) -le 5 ] && echo yes)" yes
+check "tiến trình con của lượt đã dừng" "$(kill -0 "$jchild" 2>/dev/null && echo alive || echo gone)" gone
+check "khoá đã được nhả" "$([ -d "$FONTATLAS_CI_HOME/lock" ] && echo held || echo free)" free
 exit $fail

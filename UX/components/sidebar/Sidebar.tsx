@@ -1,3 +1,4 @@
+import { useFigmaImport } from '../../store/figmaImport';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CmdError, type Api, type CollectionDto, type SourceDto, type TagDto } from '../../api';
 import type { CaseSummaryDto } from '../../bindings';
@@ -9,14 +10,20 @@ import { cancelSourceDownload, downloadSourceToMac, useCloudDownloadStore } from
 import { cloudHint, notDownloadedOf } from '../zero/zeroStates';
 import { dropTags, singleTagId, useUiStore } from '../../store/ui';
 import { useTagsStore } from '../../store/tags';
+import { busyPart } from '../activation/busyNotice';
+import { useAppPickerStore } from '../../store/appPicker';
+import { targetAt, useFaceDragStore } from '../../store/faceDrag';
 import { useNoticeStore } from '../../store/notices';
 import { ModelProgress } from './ModelProgress';
+import { TaskTray } from './TaskTray';
 import { NestedSourceDialog, type Nesting } from './NestedSourceDialog';
 import { NavItem } from './NavItem';
 import { t, tn } from '../../i18n';
 import { NavSection } from './NavSection';
 import { Icon } from './icons';
-import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths } from './useDropPaths';
+import { isFontFile, parentDir, pickFolderWithDialog, useDropPaths, type DropAt } from './useDropPaths';
+import { hoverFinderDrop } from '../../store/finderDrop';
+import { importPathsIntoTarget } from '../dnd/importDrop';
 import './sidebar.css';
 import { Tooltip } from '../ui/Tooltip';
 import { Menu, type MenuAnchor } from '../ui/Menu';
@@ -57,10 +64,12 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const view = useUiStore(s => s.view);
   const tag = useUiStore(s => { const id = singleTagId(s.filters); return id === null ? null : String(id); });
   const open = useUiStore(s => s.openSections);
+  const dragOver = useFaceDragStore(s => s.drag?.over ?? null);
+  const dragging = useFaceDragStore(s => s.drag !== null);
+  const tagOver = (id: number) => (dragOver?.kind === 'tag' && dragOver.id === id ? (dragOver.valid ? 'ok' : 'no') : undefined);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
   const scanning = useScanStore(s => s.scanning);
-  const scanned = useScanStore(s => s.written);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
   const dlRuns = useCloudDownloadStore(s => s.runs);
@@ -90,23 +99,43 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const recentCount = useUiStore(s => s.recentViews.length);
   const scanningNow = useScanStore(s => s.scanning);
 
-  const refresh = useCallback(async () => {
-    const [s, c, t, all, star, dup, cs] = await Promise.all([
-      api.listSources(), api.listCollections(), api.listTags(),
-      api.queryFaces({ limit: 1 }), api.queryFaces({ favoritesOnly: true, limit: 1 }),
-      api.duplicateSummary({}).catch(() => null), // lỗi đọc trùng không làm hỏng thanh bên
-      api.listCases().catch(() => [] as CaseSummaryDto[]), // Case lỗi không làm hỏng thanh bên
+  // Mỗi nhánh tự setState ngay khi xong; lỗi/chậm của một nhánh (vd đếm trùng khi đang quét) không chặn các nhánh khác.
+  // Một lần nạp chạy tại một thời điểm: yêu cầu đến lúc đang chạy gộp thành đúng 1 lần chạy lại (không xếp chồng IPC tranh khoá DB).
+  const alive = useRef(true); const running = useRef(false); const again = useRef(false); const loaded = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const loadOnce = useCallback(async () => {
+    const live = () => alive.current;
+    const core = Promise.all([
+      api.listSources().then(x => { if (live()) setSources(x); }),
+      api.listCollections().then(x => { if (live()) setCols(x); }),
+      api.listTags().then(t => {
+        if (!live()) return;
+        setTags(t); useTagsStore.getState().set(t);
+        // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
+        const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
+        if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
+      }),
     ]);
-    setSources(s); setCols(c); setTags(t); setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); useTagsStore.getState().set(t);
-    // Thẻ đã xoá nơi khác mà bộ lọc còn giữ id: dọn, để không lọc ra rỗng với chip vô danh.
-    const have = new Set(t.map(x => x.id)); const cur = useUiStore.getState().filters;
-    if (cur.tagIds?.some(id => !have.has(id))) useUiStore.getState().setFilters(cur.tagIds.every(id => !have.has(id)) ? dropTags(cur) : { ...cur, tagIds: cur.tagIds.filter(id => have.has(id)) });
-    setCounts({ all: all.total, star: star.total, dups: dup ? dup.total : null });
+    const rest = [
+      api.queryFaces({ limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, all: r.total })); }, () => undefined),
+      api.queryFaces({ favoritesOnly: true, limit: 1 }).then(r => { if (live()) setCounts(c => ({ ...c, star: r.total })); }, () => undefined),
+      // Lỗi đọc trùng không làm hỏng thanh bên; chưa có số thì giữ số cũ (null lúc đầu → "…", lỗi lần đầu → 0).
+      api.duplicateSummary({}).then(d => { if (live()) setCounts(c => ({ ...c, dups: d.total })); }, () => { if (live()) setCounts(c => (c.dups === null ? { ...c, dups: 0 } : c)); }),
+      api.listCases().then(cs => { if (live()) setCases([...cs].sort((a, b) => b.openedAt - a.openedAt)); }, () => undefined), // Case lỗi không làm hỏng thanh bên
+    ];
+    await core; await Promise.all(rest);
   }, [api]);
-  useEffect(() => { refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
+  const refresh = useCallback(async () => {
+    if (running.current) { again.current = true; return; }
+    running.current = true;
+    try { do { again.current = false; await loadOnce(); } while (again.current && alive.current); }
+    finally { running.current = false; loaded.current = true; }
+  }, [loadOnce]);
+  // Lần nạp đầu chưa xong thì bump/libraryRev đến sớm không kích thêm lần nạp: lần đang chạy sẽ lấy số mới nhất.
+  useEffect(() => { if (running.current && !loaded.current) return; refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
   // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
   useEffect(() => {
-    const onFocus = () => { refresh().catch(() => undefined); };
+    const onFocus = () => { if (!useScanStore.getState().scanning) refresh().catch(() => undefined); }; // đang quét: đã có nhịp bump, không chồng thêm truy vấn
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
@@ -138,14 +167,17 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const onAddFont = async () => { const p = await pickFolder(); if (p) await addPath(p); };
   const lastAddRequest = useRef(addRequest);
   useEffect(() => { if (addRequest !== lastAddRequest.current) { lastAddRequest.current = addRequest; void onAddFont(); } }); // eslint-disable-line react-hooks/exhaustive-deps
-  const onDrop = useCallback((paths: string[]) => {
+  const onDrop = useCallback((paths: string[], at?: DropAt) => {
     const [first] = paths;
     if (!first) return;
+    // G8: thả lên một Dự án/Case ở thanh bên → nhập thẳng vào đó (có Hoàn tác); thả chỗ khác → thêm Source như trước.
+    const tg = at ? targetAt(at.x, at.y) : null;
+    if (tg && (tg.kind === 'col' || tg.kind === 'case')) { void importPathsIntoTarget(api, paths, { kind: tg.kind, id: tg.id, name: tg.name }, () => void refresh()); return; }
     if (!isFontFile(first)) { void addPath(first); return; }
     const dir = parentDir(first);
     setNotice({ text: t('side.addFolder', { dir: String(dir.split(/[\\/]/).pop()) }), action: { label: t('side.add'), run: () => { setNotice(null); void addPath(dir); } } });
-  }, [addPath]);
-  useDropPaths(onDrop);
+  }, [addPath, api, refresh]);
+  useDropPaths(onDrop, hoverFinderDrop);
 
   /** Bấm Case: mở trong Pairing Desk ở Combo chính (không có Combo chính thì Combo đầu). */
   const openCaseInDesk = async (id: number) => {
@@ -224,15 +256,22 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   };
   const warn = (e: unknown) => setNotice({ text: t('side.opFail', { msg: (e as Error)?.message ?? String(e) }) });
   /** Báo kết quả tắt hàng loạt: đã tắt / lỗi / còn bật vì còn được giữ / cần xác nhận. Không im lặng khi có phần không tắt được. */
-  const reportOff = (rep: ActivationReportDto) => {
+  const reportOff = (rep: ActivationReportDto, retry?: () => void, retried = false) => {
     const failed = rep.failed; const kept = rep.results.filter(r => r.outcome.kind === 'kept_active' || r.outcome.kind === 'held_by_collections').length;
-    const parts = [failed ? tn('smenu.off.doneErr', { n: rep.changed, m: failed }) : tn('smenu.off.done', { n: rep.changed })];
+    const summary = rep.changed > 0 || failed > 0 || kept > 0 || rep.needsConfirmation > 0;
+    const busy = busyPart(rep);
+    const parts: string[] = [];
+    if (summary || !retried) { parts.push(failed ? tn('smenu.off.doneErr', { n: rep.changed, m: failed }) : tn('smenu.off.done', { n: rep.changed })); }
     if (kept) parts.push(t('smenu.off.kept', { k: kept }));
     if (rep.needsConfirmation) parts.push(t('smenu.off.confirm', { c: rep.needsConfirmation }));
-    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. ') });
+    if (busy) parts.push(busy); // MỘT thông báo: kết quả + "N đang bận, sẽ thử lại"; không đẩy tóm tắt "0 đã tắt" khi thử lại
+    if (parts.length === 0) { useNoticeStore.getState().push({ kind: 'info', text: t('act.busy.cleared') }); return; }
+    useNoticeStore.getState().push({ kind: failed || rep.needsConfirmation ? 'error' : 'info', text: parts.join('. '), action: busy && retry ? { label: t('act.busy.retry'), run: retry } : undefined });
   };
   const deactivate = (n: number, run: () => Promise<ActivationReportDto>) => {
-    const go = async () => { try { reportOff(await run()); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
+    // Thử lại = chạy lại ĐÚNG thao tác gốc (Tắt hết / Tắt cả Dự án): cùng cách gỡ lý do, không đổi sang tắt tay (sẽ bị "đang được dự án giữ").
+    const attempt = async (retried: boolean) => { try { reportOff(await run(), () => void attempt(true), retried); } catch (e) { warn(e); } await useUiStore.getState().refreshActive(api).catch(() => undefined); };
+    const go = () => attempt(false);
     if (n >= CONFIRM_DEACTIVATE_FROM) setConfirm({ title: tn('smenu.off.title', { n }), body: t('smenu.off.body'), ok: t('smenu.off.ok'), run: go }); else void go();
   };
   const menuEntries = (c: Ctx) => {
@@ -241,8 +280,9 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     const tg = c.kind === 'tag' ? tags.find(x => x.id === c.id) : undefined;
     const goView = (v: string) => () => setView(v as never);
     return buildSidebarMenu(c.kind, {
-      open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
-      sourceAvailable: src?.available, hasPath: !!src?.path, scanning: scanningNow,
+      open: c.kind === 'compare' ? () => useUiStore.getState().resumeCompare() : c.kind === 'case' ? () => void openCaseInDesk(c.id as number) : goView(c.kind === 'source' ? `src:${c.id}` : c.kind === 'collection' ? `col:${c.id}` : c.kind),
+      openWithApp: () => { if (c.kind === 'case' && c.id !== null) useAppPickerStore.getState().open(c.id, c.name); },
+      sourceAvailable: src?.available && src.kind !== 'loose', hasPath: !!src?.path, scanning: scanningNow,
       reveal: () => { if (src) api.revealSource(src.id).catch(warn); },
       rescan: () => { if (src) api.rescanSources([src.id]).catch(warn); },
       cloudSource: !!src && (!!src.cloudProvider || notDownloadedOf(src, cloud) > 0), cloudLeft: src ? notDownloadedOf(src, cloud) : 0, downloading: !!src && src.id in dlRuns,
@@ -282,12 +322,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     <nav className="fa-side" data-testid="sidebar" data-collapsed={collapsed} aria-label={t('side.nav')}>
       <div className="fa-side-scroll">
         <NavItem icon="plus" label={t('side.addFont')} onClick={onAddFont} />
+        <NavItem icon="plus" label={t('figma.paste')} title={t('figma.paste.tip')} onClick={() => useFigmaImport.getState().openPaste()} />
         <NavItem icon="all" label={t('side.all')} count={counts.all} current={cur('all')} onClick={() => setView('all')} />
         <NavItem icon="star" label={t('side.favorites')} count={counts.star} current={cur('star')} onClick={() => setView('star')} />
         <NavItem icon="clock" label={t('side.recent')} current={cur('recent')} onClick={() => setView('recent')} onContextMenu={openCtx('recent', null, t('side.recent'))} context={ctx?.kind === 'recent'} />
-        <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} />
-        {((counts.dups ?? 0) > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups} current={cur('dups')} onClick={() => setView('dups')} />}
-        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} />}
+        <NavItem icon="power" label={t('side.active')} count={activeCount} current={cur('active')} onClick={() => setView('active')} onContextMenu={openCtx('active', null, t('side.active'))} context={ctx?.kind === 'active'} drop={{ kind: 'active', id: 0, name: t('side.active'), here: false }} />
+        {(counts.dups === null || counts.dups > 0 || cur('dups')) && <NavItem icon="copy" label={t('dup.title')} count={counts.dups ?? '…'} current={cur('dups')} onClick={() => setView('dups')} />}
+        {cmpSession && <NavItem icon="compare" label={t('compare.session', { n: cmpSession.faces.length })} title={t('compare.session.tip', { n: cmpSession.faces.length })} current={cmpOpen} onClick={() => useUiStore.getState().resumeCompare()} onContextMenu={openCtx('compare', null, t('compare.session', { n: cmpSession.faces.length }))} context={ctx?.kind === 'compare'} drop={{ kind: 'compare', id: 0, name: t('compare.session', { n: cmpSession.faces.length }), here: false }} />}
 
         {notice && (
           <div className="fa-notice" role="status">
@@ -312,7 +353,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         {cases.length > 0 && (
           <NavSection title={t('side.cases')} open={open.case} onToggle={() => toggleSection('case')}>
             {cases.map(c => (
-              <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`}
+              <NavItem key={c.id} icon="pair" label={c.name} count={c.faceCount} title={t('side.caseTip', { name: c.name })} navId={`case:${c.id}`} onContextMenu={openCtx('case', c.id, c.name)} context={ctx?.kind === 'case' && ctx.id === c.id}
                 drop={{ kind: 'case', id: c.id, name: c.name, here: useUiStore.getState().desk?.caseId === c.id }} onClick={() => void openCaseInDesk(c.id)} />
             ))}
           </NavSection>
@@ -320,12 +361,20 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
 
         <NavSection title={t('side.sources')} open={open.src} onToggle={() => toggleSection('src')}>
           {sources.map(s => (
-            <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.name} count={s.faceCount} unavailable={!s.available}
+            <NavItem key={s.id} icon={s.id in access ? 'lock' : s.available ? 'folder' : 'eject'} label={s.kind === 'loose' ? t('side.loose') : s.name} count={s.faceCount} unavailable={!s.available}
               title={s.id in access ? t('side.needsAccess', { name: s.name }) : s.available ? s.path ?? s.name : t('side.notConnected', { name: s.name })} current={cur(`src:${s.id}`)} onClick={() => setView(`src:${s.id}`)} onContextMenu={openCtx('source', s.id, s.name)} context={ctx?.kind === 'source' && ctx.id === s.id}
-              sub={notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns
+              // Mặc định hàng Folder chỉ có tên + số + (nếu cần) 1 icon trạng thái. ☁N/✓M/tải về/gợi ý chỉ hiện khi CHỌN nguồn hoặc đang tải.
+              status={notDownloadedOf(s, cloud) > 0 && !cur(`src:${s.id}`) && !(s.id in dlRuns)
+                ? <Tooltip label={`${cloudTip()} · ${tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}`}><span className="fa-status" data-testid="src-cloud-status" role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} /></span></Tooltip>
+                : undefined}
+              sub={(cur(`src:${s.id}`) || s.id in dlRuns) && (notDownloadedOf(s, cloud) > 0 || cloudHint(s) || s.id in dlRuns)
                 ? <>
-                    {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><div className="fa-cloud" data-testid="not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}</div></Tooltip>}
-                    {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && <div className="fa-cloud fa-cloud-dl"><CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} /></div>}
+                    {(notDownloadedOf(s, cloud) > 0 || s.id in dlRuns) && (
+                      <div className="fa-cloud fa-cloud-stats">
+                        {notDownloadedOf(s, cloud) > 0 && <Tooltip label={cloudTip()}><span className="fa-cloud-n" data-testid="not-downloaded" tabIndex={0} role="img" aria-label={tn('side.notDownloaded', { n: notDownloadedOf(s, cloud) })}><Icon name="cloud" size={12} />{notDownloadedOf(s, cloud)}</span></Tooltip>}
+                        {notDownloadedOf(s, cloud) > 0 && s.faceCount > 0 && <Tooltip label={tn('side.readyTip', { n: s.faceCount })}><span className="fa-cloud-n" data-testid="cloud-ready" tabIndex={0} role="img" aria-label={tn('side.readyTip', { n: s.faceCount })}><Icon name="check" size={12} />{s.faceCount}</span></Tooltip>}
+                        <CloudDownloadControl api={api} source={s} notDownloaded={notDownloadedOf(s, cloud)} compact />
+                      </div>)}
                     {cloudHint(s) && <div className="fa-cloud"><NoteMark kind="info" inline testId="cloud-hint" text={cloudHint(s)!} /></div>}
                   </>
                 : undefined} />
@@ -339,7 +388,7 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'enter'); } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endTagRename(t.id, true); } }}
                   onBlur={e => void commitTagRename(t, e.currentTarget.value, e.currentTarget, 'blur')} />
               : (
-              <button key={t.id} data-tag-id={t.id} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
+              <button key={t.id} data-tag-id={t.id} data-drop-tag={isSystemTag(t.name) ? undefined : t.id} data-drop-name={t.name} data-drop-over={tagOver(t.id)} data-drop-armed={dragging && !isSystemTag(t.name) ? 'true' : undefined} type="button" className="fa-tag" aria-pressed={tag === String(t.id)} data-context={ctx?.kind === 'tag' && ctx.id === t.id ? 'true' : undefined}
                 onContextMenu={e => { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: e.clientX, y: e.clientY, keyboard: false, el: e.currentTarget }); }}
                 onKeyDown={e => { if (e.key === 'F2' && !isSystemTag(t.name)) { e.preventDefault(); setRenamingTag(t.id); } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); openCtx('tag', t.id, t.name)({ x: 0, y: 0, keyboard: true, el: e.currentTarget }); } }} onClick={() => setTag(tag === String(t.id) ? null : String(t.id))}>{t.name}</button>
             ))}
@@ -347,9 +396,11 @@ navId={`col:${c.id}`} onContextMenu={openCtx('collection', c.id, c.name)} onRena
         </NavSection>
       </div>
       <div className="fa-side-foot">
-        {scanning && <div className="fa-scan" role="status" aria-label={t('side.scanning')}><span className="fa-scan-dot" aria-hidden />{t('side.scanning')}{scanned > 0 ? tn('side.scanningN', { n: scanned }) : ''}{cloudNow > 0 && <Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip>}</div>}
+        {/* Khay Tác vụ nền là chỗ duy nhất báo việc nền (quét…); ở đây chỉ còn cảnh báo font chưa tải về trong lúc quét. */}
+        {scanning && cloudNow > 0 && <div className="fa-scan"><Tooltip label={cloudTip()}><span className="fa-scan-cloud" data-testid="scan-not-downloaded"><Icon name="cloud" size={12} />{tn('side.notDownloaded', { n: cloudNow })}</span></Tooltip></div>}
         <ModelProgress api={api} />
         <div className="fa-foot-actions">
+          <TaskTray api={api} />
           <Tooltip label={dark ? t('side.themeLight') : t('side.themeDark')}><button type="button" className="fa-iconbtn" aria-label={t('side.themeToggle')} aria-pressed={dark} onClick={toggleTheme}><Icon name="moon" /></button></Tooltip>
           <Tooltip label={t('side.settings')} shortcut="⌘,"><button type="button" className="fa-iconbtn" aria-label={t('side.settings')} onClick={() => (onOpenSettings ?? useUiStore.getState().toggleSettings)()}><Icon name="gear" /></button></Tooltip>
         </div>

@@ -2,10 +2,12 @@
 import { COMPARE_MAX, COMPARE_MIN } from './compare';
 import { fromWire } from './compareWire';
 import { Channel, convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { CommandName, FaceQueryDto, SettingsPatchDto, TauriCommandMap } from '../bindings';
 import { makeFontUrl, makePreviewUrl } from '../features/library-grid/api';
 import { parseFacePage, type FaceQuery } from '../features/library-grid/types';
 import type { Api } from './index';
+import type { TaskEvent } from './taskTypes';
 import { CmdError, type SimilarQuery, type Unsubscribe } from './types';
 import { t, getLocale, hasKey } from '../i18n';
 
@@ -49,9 +51,15 @@ function channel<T>(onEvent: ((e: T) => void) | undefined): { ch: Channel<T>; of
   ch.onmessage = e => { if (on) onEvent?.(e); };
   return { ch, off: () => { on = false; } };
 }
-async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe', onEvent: (e: T) => void): Promise<Unsubscribe> {
+/**
+ * `subscriber` là tên CỐ ĐỊNH theo nơi gọi ("scan.store", "onboarding.scan"…), không dùng bộ đếm:
+ * backend khoá sink theo (webview, kênh, subscriber) — nơi gọi khác nhau cùng nhận sự kiện, còn tải lại trang
+ * (cùng tên) thì thay đúng sink cũ thay vì nhân đôi. Thiếu tên thì mọi nơi trong webview dùng chung "default" và đá nhau.
+ */
+async function subscribe<T>(cmd: 'boot_subscribe' | 'scan_subscribe' | 'embed_subscribe' | 'activation_subscribe' | 'task_subscribe', onEvent: (e: T) => void, subscriber?: string): Promise<Unsubscribe> {
   const { ch, off } = channel<T>(onEvent);
-  await call(cmd, { onEvent: ch } as never);
+  // Kiểu lỏng chỉ ở Channel<T> (T chung cho 5 kênh); `subscriber` đã được bindings bắt buộc nên không còn cần ép kiểu cả đối số.
+  await call(cmd, { onEvent: ch as never, subscriber: subscriber ?? null });
   return off;
 }
 
@@ -91,7 +99,7 @@ export function createTauriApi(): Api {
     previewUrl, fontUrl,
     // Khởi động, onboarding
     startupStatus: () => call('startup_status'),
-    bootSubscribe: onEvent => subscribe('boot_subscribe', onEvent),
+    bootSubscribe: (onEvent, subscriber) => subscribe('boot_subscribe', onEvent, subscriber),
     onboardingState: () => call('onboarding_state'),
     setOnboardingStep: step => none(call('set_onboarding_step', { step })),
     setWindowGlass: on => call('set_window_glass', { on }),
@@ -102,13 +110,45 @@ export function createTauriApi(): Api {
     addSource: path => call('add_source', { path }),
     removeSource: sourceId => call('remove_source', { sourceId }),
     removeSourcePreview: sourceId => call('remove_source_preview', { sourceId }),
+    rebuildLibrary: () => call('rebuild_library'),
     rescanSources: sourceIds => none(call('rescan_sources', { sourceIds: sourceIds ?? null })),
     revealSource: sourceId => none(call('reveal_source', { sourceId })),
+    importPathsInto: (paths, target, onProgress) => call('import_paths_into', { paths, target, onProgress: channel(onProgress).ch }),
+    importPathsCancel: () => call('import_paths_cancel'),
+    organizedCheckLocation: path => call('organized_check_location', { path }),
+    organizedCreate: path => call('organized_create', { path }),
+    organizedStatus: () => call('organized_status'),
+    organizedPlan: scope => call('organized_plan', { scope }),
+    organizedImport: (scope, onProgress) => call('organized_import', { scope, onProgress: channel(onProgress).ch }),
+    organizedCancel: () => call('organized_cancel'),
+    organizedResortPreview: () => call('organized_resort_preview'),
+    organizedResortApply: () => call('organized_resort_apply'),
+    organizedResortUndo: batchId => call('organized_resort_undo', { batchId }),
+    organizedSnapshotNow: () => call('organized_snapshot_now'),
+    packInspect: path => call('pack_inspect', { path }),
+    packRestoreStage: (path, remap) => call('pack_restore_stage', { path, remap }),
+    packRestorePending: () => call('pack_restore_pending'),
+    packRestoreCancel: () => call('pack_restore_cancel'),
+    caseAppSuppress: caseId => none(call('case_app_suppress', { caseId })),
+    activationRelocate: (faces, preferUnder, o = {}) => call('activation_relocate', { faces, preferUnder, onProgress: channel(o.onProgress).ch }),
+    activationRelocateTo: (targets, o = {}) => call('activation_relocate_to', { targets, onProgress: channel(o.onProgress).ch }),
+    deriveRenamedCopy: face => call('derive_renamed_copy', { face }),
+    activationKeepBoth: (faces, scope, o = {}) => call('activation_keep_both', { faces, scope: scope ?? null, onProgress: channel(o.onProgress).ch }),
+    removeDerivedCopy: face => call('remove_derived_copy', { face }),
+    restoreDerivedCopy: removalId => call('restore_derived_copy', { removalId }),
+    derivedCopiesOf: face => call('derived_copies_of', { face }),
+    caseApps: caseId => call('case_apps', { caseId }),
+    caseSetApps: (caseId, apps) => none(call('case_set_apps', { caseId, apps })),
+    installedApps: () => call('installed_apps'),
     sourceDownloadCloud: (sourceId, onProgress) => call('source_download_cloud', { sourceId, onProgress: channel(onProgress).ch }),
     sourceDownloadCancel: sourceId => call('source_download_cancel', { sourceId }),
     scanPause: () => none(call('scan_pause')), scanResume: () => none(call('scan_resume')), scanCancel: () => none(call('scan_cancel')),
     scanStatus: () => call('scan_status'),
-    scanSubscribe: onEvent => subscribe('scan_subscribe', onEvent),
+    scanSubscribe: (onEvent, subscriber) => subscribe('scan_subscribe', onEvent, subscriber),
+    // TaskHub: lệnh chưa có trong TauriCommandMap tới khi 02 sinh bindings → gọi invoke thẳng.
+    taskList: () => call('list_tasks'),
+    taskCancel: id => call('cancel_task', { id }).then(() => undefined),
+    taskSubscribe: (onEvent, subscriber) => subscribe<TaskEvent>('task_subscribe', onEvent, subscriber),
     // Thư viện
     getFamilyStyles: family => call('get_family_styles', { family }),
     setFavorite: (face, on) => none(call('set_favorite', { face, on })),
@@ -158,10 +198,15 @@ export function createTauriApi(): Api {
     deskSuggest: req => call('desk_suggest', { req }),
     suggestPartners: (anchor, req) => call('suggest_partners', { anchor, req }),
     suggestCombos: req => call('suggest_combos', { req }),
-    roleFit: (face, role) => call('role_fit', { face, role }),
+    roleFit: (face, role, projectVi) => call('role_fit', { face, role, projectVi: projectVi ?? null }),
     recentViews: limit => call('recent_views', { limit }),
     recordView: face => none(call('record_view', { face })),
     clearRecentViews: () => call('clear_recent_views'),
+    openThirdPartyNotices: () => none(call('open_third_party_notices')),
+    parseFigmaImport: text => call('parse_figma_import', { text }),
+    resolveFonts: items => call('resolve_fonts', { items }),
+    takePendingImports: () => call('take_pending_imports'),
+    figmaImportSubscribe: async onPending => { const off = await listen('figma-import-pending', () => onPending()); return off; },
     caseCompare: (caseId, comboIds, lang = getLocale()) => call('case_compare', { caseId, comboIds, lang }),
     briefStarter: (brief, caseId) => call('brief_starter', { brief, caseId: caseId ?? null }),
     openCaseFromPeek: peek => call('open_case_from_peek', { peek: { replace: false, ...peek } }),
@@ -224,7 +269,7 @@ export function createTauriApi(): Api {
     modelRemove: () => none(call('model_remove')),
     embedStatus: () => call('embed_status'),
     embedPause: () => none(call('embed_pause')), embedResume: () => none(call('embed_resume')),
-    embedSubscribe: onEvent => subscribe('embed_subscribe', onEvent),
+    embedSubscribe: (onEvent, subscriber) => subscribe('embed_subscribe', onEvent, subscriber),
     // Kích hoạt
     activationCaps: () => call('activation_caps'),
     activationState: () => call('activation_state'),
@@ -236,6 +281,7 @@ export function createTauriApi(): Api {
     activationDeactivate: (faces, o = {}) => call('activation_deactivate', { faces, force: o.force ?? false, onProgress: channel(o.onProgress).ch }),
     activationActivateCollection: (collectionId, o = {}) => call('activation_activate_collection', { collectionId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
     activationActivateCase: (caseId, o = {}) => call('activation_activate_case', { caseId, scope: o.scope ?? null, proceed: o.proceed ?? false, onProgress: channel(o.onProgress).ch }),
+    activationDeactivateCase: (caseId, o = {}) => call('activation_deactivate_case', { caseId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateCollection: (collectionId, o = {}) => call('activation_deactivate_collection', { collectionId, onProgress: channel(o.onProgress).ch }),
     activationDeactivateAll: (o = {}) => call('activation_deactivate_all', { onProgress: channel(o.onProgress).ch }),
     activationSetKeep: on => none(call('activation_set_keep', { on })),
@@ -243,6 +289,6 @@ export function createTauriApi(): Api {
     activationSetVfPolicy: policy => none(call('activation_set_vf_policy', { policy })),
     activationSetScope: (faces, scope) => call('activation_set_scope', { faces, scope }),
     activationAvailability: (faces = []) => call('activation_availability', { faces }),
-    activationSubscribe: onEvent => subscribe('activation_subscribe', onEvent),
+    activationSubscribe: (onEvent, subscriber) => subscribe('activation_subscribe', onEvent, subscriber),
   };
 }

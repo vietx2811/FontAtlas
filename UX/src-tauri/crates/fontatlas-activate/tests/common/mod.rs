@@ -126,3 +126,12 @@ pub fn canon(p: &Path) -> PathBuf {
 pub fn no_progress() -> impl FnMut(fontatlas_activate::Progress) {
     |_| {}
 }
+
+/// Chờ engine giả bị chặn ở `register` (có hạn: thread con panic thì test báo lỗi chứ không treo CI).
+pub fn wait_blocked(svc: &fontatlas_activate::ActivationService<fontatlas_activate::FakeEngine>) {
+    let t0 = std::time::Instant::now();
+    while !svc.engine().is_blocked() {
+        assert!(t0.elapsed() < std::time::Duration::from_secs(30), "engine không bị chặn sau 30 s (thread kích hoạt chết?)");
+        std::thread::yield_now();
+    }
+}

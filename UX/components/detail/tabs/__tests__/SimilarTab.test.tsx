@@ -195,7 +195,7 @@ describe('SimilarTab', () => {
       await strip({ initial: { model: { state: 'checksum_mismatch' } } }, true);
       const note = screen.getByTestId('image-strip');
       expect(note.textContent).toMatch(/Model tải về bị hỏng/);
-      expect(within(note).getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+      expect(within(note).getByRole('button', { name: 'Tải lại model' })).toBeTruthy();
     });
 
     it('E8: "Đang phân tích hình ảnh 412/3.800 — kết quả sẽ đầy đủ hơn khi xong"', async () => {

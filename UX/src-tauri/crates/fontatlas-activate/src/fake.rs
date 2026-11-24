@@ -29,6 +29,8 @@ struct FakeState {
     revive: HashSet<PathBuf>,
     /// `unregister(path, _)` luôn lỗi (giả app chặn việc gỡ bản này).
     fail_unregister_path: HashSet<PathBuf>,
+    /// `available_font_paths` lỗi (giả không liệt kê được font hệ thống).
+    fail_available: bool,
 }
 
 type CallHook = Arc<dyn Fn(&str, &Path) + Send + Sync>;
@@ -61,6 +63,11 @@ impl FakeEngine {
     /// Lần `register` kế tiếp trả lỗi này (một lần).
     pub fn fail_next_register(&self, err: EngineError) {
         self.st().fail_next = Some(err);
+    }
+
+    /// `available_font_paths` luôn lỗi.
+    pub fn fail_available_font_paths(&self) {
+        self.st().fail_available = true;
     }
 
     /// Lần `unregister` kế tiếp trả lỗi này (một lần).
@@ -193,6 +200,18 @@ impl ActivationEngine for FakeEngine {
             out.extend(st.names.get(p).into_iter().flatten().cloned());
         }
         Ok(out)
+    }
+
+    fn available_font_paths(&self) -> Result<HashSet<PathBuf>, EngineError> {
+        let hook = self.st().hook.clone();
+        if let Some(h) = hook {
+            h("available", Path::new(""));
+        }
+        let st = self.st();
+        if st.fail_available {
+            return Err(EngineError::Rejected { code: 9, message: "không liệt kê được (test)".into() });
+        }
+        Ok(st.regs.iter().map(|(p, _)| p.clone()).chain(st.system.iter().map(|(_, p)| p.clone())).collect())
     }
 
     fn providers(&self, postscript_name: &str) -> Result<Vec<PathBuf>, EngineError> {

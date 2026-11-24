@@ -39,6 +39,9 @@ html, body, #root { background: transparent; height: 100%; }
   position: relative;
 }
 
+/* Windows/Linux: không có đèn giao thông ở góc trái (không dùng titleBarStyle Overlay), và vật liệu vibrancy chỉ có trên macOS → nền đặc như bản mock (data-native=false). */
+.fa-shell:not([data-os="mac"]) .fa-shell-titlebar { padding-left: 12px; }
+
 /* Trình duyệt mock không có vật liệu windowEffects phía sau sidebar. */
 .fa-shell[data-native="false"] { background: var(--sheet); }
 /* Native: sidebar là kính vibrancy (xám hệ thống); mock dùng xám đậm tương ứng. */

@@ -1,3 +1,4 @@
+import { FigmaImportHost } from './components/figma/FigmaImportHost';
 import React, { useEffect, useState } from 'react';
 import { getApi, type Api } from './api';
 import { DetailPanel } from './components/detail/DetailPanel';
@@ -19,7 +20,10 @@ import { readSplashEnabled } from './components/splash/splashState';
 import { NoticeStack } from './components/NoticeStack';
 import { FaceActionsProvider } from './components/faces/FaceActions';
 import { ActivationDialogHost } from './components/activation/ActivationDialogHost';
+import { AppPickerHost } from './components/desk/AppPicker';
+import { DeriveCopyDialog } from './components/activation/DeriveCopyDialog';
 import { startScanSync } from './store/scan';
+import { startTaskHub } from './store/taskHub';
 import { startActivationSync } from './store/activationSync';
 import { useModelStore } from './store/model';
 import { useUiStore } from './store/ui';
@@ -73,6 +77,12 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
 
     useEffect(() => {
         let stop: (() => void) | undefined; let dead = false;
+        startTaskHub(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('task hub sync failed', e));
+        return () => { dead = true; stop?.(); };
+    }, [api]);
+
+    useEffect(() => {
+        let stop: (() => void) | undefined; let dead = false;
         startActivationSync(api).then(s => { if (dead) s(); else stop = s; }).catch(e => console.warn('activation sync failed', e));
         return () => { dead = true; stop?.(); };
     }, [api]);
@@ -102,6 +112,9 @@ const Library_: React.FC<{ api: Api }> = ({ api }) => {
             </div>
         </WindowShell>
         <ActivationDialogHost api={api} />
+        <AppPickerHost api={api} />
+        <DeriveCopyDialog api={api} />
+        <FigmaImportHost api={api} />
         </FaceActionsProvider>
     );
 };

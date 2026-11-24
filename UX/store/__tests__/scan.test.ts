@@ -34,7 +34,7 @@ describe('scan store', () => {
     await run(450); // 4 facesAdded trong 400 ms
     const distinct = new Set(seen).size;
     expect(distinct).toBeGreaterThanOrEqual(1);
-    expect(distinct).toBeLessThanOrEqual(1 + Math.ceil(450 / BUMP_THROTTLE_MS) + 1);
+    expect(distinct).toBeLessThanOrEqual(1 + Math.ceil(450 / BUMP_THROTTLE_MS) + 2); // +1 cho bump cuối lúc idle (luôn chạy, xác nhận total=0)
   });
 
   it('a scan already running when the app opens is picked up from scan_status', async () => {
@@ -74,15 +74,128 @@ describe('scan store', () => {
     vi.spyOn(api, 'scanSubscribe').mockImplementation(async l => { push = l; return () => {}; });
     const s = createScanStore();
     await startScanSync(api, s);
-    const prog = (id: number, nd: number) => ({ type: 'progress' as const, sourceId: id, progress: { phase: 'walking' as const, done: 1, total: 9, facesWritten: 0, notDownloaded: nd } });
+    const prog = (id: number, nd: number) => ({ type: 'progress' as const, sourceId: id, progress: { phase: 'walking' as const, done: 1, total: 9, facesWritten: 0, notDownloaded: nd }, trigger: 'user' as const });
     push(prog(1, 3)); push(prog(2, 4));
     expect(s.getState().cloud).toEqual({ 1: 3, 2: 4 });
     expect(s.getState().cloudTotal()).toBe(7);
     push(prog(1, 5));
     expect(s.getState().cloudTotal()).toBe(9);
-    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 9, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } });
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 9, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] }, changed: true, trigger: 'user' as const });
     expect(s.getState().cloud).toEqual({ 2: 4 });
-    push({ type: 'queued', sourceId: 2 });
+    push({ type: 'queued', sourceId: 2, trigger: 'user' as const });
     expect(s.getState().cloud).toEqual({}); // quét lại: đếm lại từ đầu
+  });
+});
+
+describe('scan store: finished + idle liền nhau chỉ một bump', () => {
+  it('idle ngay sau finished (< IDLE_COALESCE_MS) không bump thêm', async () => {
+    const api = createMockApi();
+    let push: (e: import('../../api').ScanEvent) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 1, unchanged: 1, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } } as never);
+    push({ type: 'idle' } as never);
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});
+
+describe('scan store: trigger + changed (02)', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    let push: (e: import('../../api').ScanEvent) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    return { s, push: (e: object) => push(e as never) };
+  };
+  it('watcher quét không đổi: không "đang quét", không bump', async () => {
+    const { s, push } = await setup();
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'watcher' });
+    expect(s.getState().scanning).toBe(false);
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'watcher', stats: {} });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0);
+  });
+  it('finished changed=true bump; quét người dùng bấm hiện "đang quét"', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    expect(s.getState().scanning).toBe(true);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: {} });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});
+
+describe('scan store: changed=false / purged', () => {
+  it('finished changed=false không bump; purged>0 coi như có đổi', async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'user', stats: { purged: 0 } });
+    expect(s.getState().version).toBe(v0);
+    push({ type: 'finished', sourceId: 1, changed: false, trigger: 'user', stats: { purged: 2 } });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});
+
+describe('scan store: một lượt một bump', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    return { s, push: (e: object) => push(e) };
+  };
+  const stats = (o: object = {}) => ({ missing: 0, purged: 0, relinked: 0, failed: 0, ...o });
+  it('facesAdded → finished → idle chỉ 1 bump', async () => {
+    const { s, push } = await setup();
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 2, trigger: 'user' });
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats() });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+  it('bump đang chờ (throttle) được finished xả, vẫn đúng 1 lần thêm', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' }); // bump ngay
+    const v1 = s.getState().version;
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' }); // chờ throttle
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats() });
+    expect(s.getState().version).toBe(v1 + 1);
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v1 + 1);
+  });
+  it('có xoá/đổi chỗ (missing/purged) mà facesAdded không báo: finished vẫn bump lại', async () => {
+    const { s, push } = await setup();
+    push({ type: 'queued', sourceId: 1, trigger: 'user' });
+    push({ type: 'facesAdded', sourceId: 1, count: 1, trigger: 'user' });
+    const v1 = s.getState().version;
+    push({ type: 'finished', sourceId: 1, changed: true, trigger: 'user', stats: stats({ missing: 2 }) });
+    expect(s.getState().version).toBe(v1 + 1);
+  });
+});
+
+describe('scan store: payload thật của 02 (ghi đè cùng byte)', () => {
+  it('changed=false dù stats.relinked=1: không bump, không scanning (watcher)', async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    const v0 = s.getState().version;
+    push({ type: 'queued', sourceId: 1, trigger: 'watcher' });
+    push({ type: 'finished', sourceId: 1, stats: { status: 'ok', seen: 6, unchanged: 5, notDownloaded: 0, relinked: 1, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] }, changed: false, trigger: 'watcher' });
+    push({ type: 'idle' });
+    expect(s.getState().version).toBe(v0);
+    expect(s.getState().scanning).toBe(false);
   });
 });

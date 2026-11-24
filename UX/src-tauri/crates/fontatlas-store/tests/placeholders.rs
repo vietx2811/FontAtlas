@@ -26,6 +26,7 @@ fn scan(s: &mut Store, root: &Path, src: i64, progress: &mut Vec<ScanProgress>) 
     s.rescan_root_with_probe(src, root, &mut |p| progress.push(p.clone()), &AtomicBool::new(false), &probe).unwrap()
 }
 
+#[cfg(unix)]
 #[test]
 fn never_downloaded_placeholder_is_not_read_and_counted() {
     let (_d, fonts, mut s, src) = setup(&["roboto.ttf"]);
@@ -88,6 +89,7 @@ fn os_probe_is_false_for_ordinary_files() {
 /// Đổi `ANALYZER_VERSION` (core-0.8.0 → hiện tại) KHÔNG được kéo nội dung file dataless: phân tích lại chỉ chạy trên
 /// file đã có trên máy; file dataless giữ bản phân tích cũ (vẫn dùng được), đếm là "chờ phân tích lại", và được
 /// phân tích lại ở lần quét đầu tiên sau khi file đã tải về.
+#[cfg(unix)]
 #[test]
 fn analyzer_version_bump_skips_dataless_files_and_reanalyzes_after_download() {
     use std::os::unix::fs::PermissionsExt;
@@ -306,4 +308,62 @@ fn placeholder_whose_size_or_mtime_changed_is_not_trusted_and_is_reanalyzed_afte
     let p = row(&s, "playfair");
     assert!(!p.on_cloud_only);
     assert_eq!(load_version(&s), ANALYZER_VERSION);
+}
+
+/// Lỗi QA iCloud 2026-11-24: nguồn mà MỌI file đều dataless → 0 face nhưng vẫn phải báo "N chưa tải về" (để hiện nút tải).
+#[test]
+fn source_where_every_font_is_dataless_still_reports_cloud_only_count() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf", "roboto.ttf"]);
+    let all = |_: &Path, _: &std::fs::Metadata| true;
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    assert_eq!((st.not_downloaded, st.analyzed), (2, 0));
+    assert_eq!(count(&s, "SELECT count(*) FROM faces"), 0);
+    assert_eq!(s.cloud_only_count(src).unwrap(), 2);
+    assert_eq!(s.cloud_only_count(src + 1).unwrap(), 0, "nguồn khác không bị tính lẫn");
+    // một font được tải về: lần quét sau phân tích nó, số còn lại giảm
+    let one = |p: &Path, _: &std::fs::Metadata| p.ends_with("open_sans.ttf");
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &one).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 1);
+    // tải hết: về 0
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &|_, _| false).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0);
+}
+
+/// Nguồn trộn: file đã tải được phân tích bình thường, file dataless chưa từng thấy được cộng vào số "chưa tải về".
+#[test]
+fn mixed_source_counts_unseen_dataless_next_to_analyzed_faces() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf", "roboto.ttf"]);
+    let evict = |p: &Path, _: &std::fs::Metadata| p.ends_with("open_sans.ttf");
+    let st = s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &evict).unwrap();
+    assert_eq!((st.not_downloaded, st.analyzed), (1, 1));
+    assert!(count(&s, "SELECT count(*) FROM faces") >= 1);
+    assert_eq!(s.cloud_only_count(src).unwrap(), 1, "chỉ font dataless chưa thấy; font đã tải không tính");
+}
+
+#[test]
+fn removing_a_source_or_rebuilding_forgets_its_unseen_dataless_count_so_a_reused_id_starts_at_zero() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf", "roboto.ttf"]);
+    let all = |_: &Path, _: &std::fs::Metadata| true;
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 2);
+    s.remove_source(src).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM meta WHERE key LIKE 'cloud_unseen:%'"), 0);
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0, "id dùng lại không hiện số cũ");
+    // dựng lại thư viện cũng xoá
+    let src = s.add_source(SourceKind::Directory, "Fonts", Some(&fonts)).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 2);
+    s.rebuild_library().unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0);
+}
+
+#[test]
+fn orphan_sweep_drops_unseen_counts_of_sources_no_longer_registered() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf"]);
+    let all = |_: &Path, _: &std::fs::Metadata| true;
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    // mô phỏng gỡ nguồn bị ngắt giữa hai bước: u.sources đã mất, meta còn
+    s.conn().execute("DELETE FROM u.sources WHERE source_id=?1", [src]).unwrap();
+    s.sweep_orphan_locations().unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM meta WHERE key LIKE 'cloud_unseen:%'"), 0);
 }

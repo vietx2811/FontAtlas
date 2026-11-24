@@ -1,6 +1,7 @@
 import { cloneElement, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
+import { shortcutText } from '../../platform';
 import './tooltip.css';
 
 export const TOOLTIP_DELAY_MS = 450;
@@ -129,7 +130,7 @@ export function Tooltip({ label, shortcut, children, disabled, onlyIfTruncated, 
       {open && createPortal(
         <div ref={tip} id={id} data-tip-id={id} role="tooltip" className="fa-tip" style={{ visibility: 'hidden' }}>
           <span>{label}</span>
-          {shortcut && <kbd>{shortcut}</kbd>}
+          {shortcut && <kbd>{shortcutText(shortcut)}</kbd>}
         </div>,
         document.body,
       )}

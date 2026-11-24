@@ -12,3 +12,5 @@ pub const UI_LANG: &str = "ui_lang";
 pub const SAMPLE_TEXT: &str = "sample_text";
 pub const PROJECT_VI_DEFAULT: &str = "project_vi_default";
 pub const MODEL_LAST_ERROR: &str = "model_last_error";
+/// Thư mục gốc của Organized Library (B7); rỗng/không có = chưa tạo.
+pub const ORGANIZED_ROOT: &str = "organized_root";

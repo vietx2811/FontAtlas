@@ -1,15 +1,16 @@
 // Mọi lệnh backend đi qua một interface; tên phương thức = tên lệnh 6a (camelCase).
 // Cài đặt thật: api/tauri.ts (invoke + Channel). Cài đặt giả: api/mock.ts (dev không có Tauri, Vitest).
+import type { TaskEvent, TaskListDto } from './taskTypes';
 import type { CompareDto } from './compare';
 import type { LibraryApi } from '../features/library-grid/api';
 import { t } from '../i18n';
 import type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AvailabilityDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto, BootEvent, BootStatusDto, CollectionDto, EmbedEvent, EmbedStatusDto, FaceDetailDto,
-  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto,
+  AxisStatsDto, AxisHistogramDto, LangListDto, LangCoverageDto, BriefDto, BriefStarterDto, CaseCompareDto, PeekOpenDto, PeekOpenResultDto, CaseSettingsDto, CaseDto, CaseSummaryDto, CasePatchDto, CaseOriginDto, AddToCaseDto, ComboDto, ComboPatchDto, ComboRoleDto, NewComboDto, DuplicateGroupDto, DuplicateSummaryDto, DuplicateKindDto, IgnoredGroupDto, ResolutionDto, ResolvePlanDto, ResolveRequestDto, ResolveResultDto, ResolveScopeDto, PairComboDto, PairTheseOpts, ClassFacetDto, ClassificationOverrideDto, SimilarFamilyPageDto, FaceQuery, FaceKeyDto, FamilyStyleDto, LegacyStateDto, PreviewCacheInfoDto, ProblemDto, NameClashDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairOptsDto, ProgressDto, ScanEvent, FamilyGroupDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, RelocateTargetDto, DerivedCopyDto, DerivedCopyInfoDto, RemoveDerivedResultDto, RestoreDerivedResultDto, CaseActivationDto,
   ScanStatusDto, ScopeDto, SettingsDto, SimilarHitDto, SimilarQuery, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, Unsubscribe, AutoLogDto, AutoStatusDto, AutoTargetDto, VfPolicyDto,
 } from './types';
 
-import type { DeskSuggestReqDto, DeskPageDto, SuggestPartnersReqDto, PartnerPageDto, SuggestCombosReqDto, ComboSuggestionDto, RoleRefDto, RoleFitDto, RecentViewDto } from '../bindings';
+import type { DeskSuggestReqDto, DeskPageDto, SuggestPartnersReqDto, PartnerPageDto, SuggestCombosReqDto, ComboSuggestionDto, RoleRefDto, RoleFitDto, RecentViewDto, FigmaImportDto, FontNameDto, FontMatchDto, PendingImportDto } from '../bindings';
 
 export * from './types';
 
@@ -19,7 +20,7 @@ export type DeactivateOptions = { force?: boolean; onProgress?(p: ProgressDto): 
 export interface Api extends LibraryApi {
   // Khởi động và onboarding
   startupStatus(): Promise<BootStatusDto>;
-  bootSubscribe(onEvent: (e: BootEvent) => void): Promise<Unsubscribe>;
+  bootSubscribe(onEvent: (e: BootEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   onboardingState(): Promise<OnboardingDto>;
   setOnboardingStep(step: string | null): Promise<void>;
   /** Bật/tắt kính thật (Liquid Glass) sau webview cho màn hướng dẫn. Trả true khi kính đang hiện; false = không có (giữ vibrancy). */
@@ -39,6 +40,16 @@ export interface Api extends LibraryApi {
   /** Số liệu thật cho câu xác nhận gỡ nguồn — chỉ đọc. */
   removeSourcePreview(sourceId: number): Promise<RemoveSourceReportDto>;
   rescanSources(sourceIds?: number[]): Promise<void>;
+  /**
+   * "Dựng lại thư viện" (Cài đặt ▸ Dữ liệu, CẦN hộp xác nhận): dừng mọi lần quét, xoá toàn bộ dữ liệu thư viện (font, vị trí,
+   * phân tích, embedding, ngôn ngữ) rồi quét lại mọi nguồn. KHÔNG đụng dữ liệu người dùng (Dự án, Collection, Tag, Yêu thích,
+   * nguồn, ghi đè phân loại; gán theo hash nên khớp lại khi font quay về). Font hiện dần khi quét; phân tích và embedding
+   * tính lại ở nền nên có thể mất lâu với thư viện lớn. Ném CmdError('busy') nếu có nguồn chưa dừng quét kịp.
+   * BẮT BUỘC cho hộp xác nhận (05 viết chữ, vi + en): nói rõ (1) font hiện dần khi quét lại, (2) phân tích và embedding sẽ được TÍNH LẠI
+   * ở nền và có thể mất RẤT LÂU với thư viện lớn, (3) Dự án/Collection/Tag/Yêu thích và các nguồn KHÔNG bị đụng. Nút xác nhận không
+   * là nút mặc định; nêu số `filesRemoved` nếu có.
+   */
+  rebuildLibrary(): Promise<RebuildLibraryReportDto>;
   /** Mở Finder tại thư mục của nguồn (đường dẫn lấy từ Store). Ném CmdError('source_unavailable') khi thư mục không còn (ổ chưa mount). */
   revealSource(sourceId: number): Promise<void>;
   /**
@@ -46,6 +57,45 @@ export interface Api extends LibraryApi {
    * xong thì quét lại nguồn. Lỗi từng font không làm hỏng phần còn lại (`firstFailureCode`). Ném CmdError('busy') nếu nguồn đang tải,
    * 'source_unavailable' nếu thư mục không còn.
    */
+  /** G8: thả file/thư mục từ Finder vào Dự án/Case. Một lượt tại một thời điểm ('busy'); `added` = đúng face mới vào đích (Hoàn tác gỡ đúng danh sách này). */
+  importPathsInto(paths: string[], target: ImportTargetDto, onProgress?: (p: ImportProgressDto) => void): Promise<ImportResultDto>;
+  importPathsCancel(): Promise<boolean>;
+  /** B5: app gắn với Case (bundleId là khoá). `caseSetApps` THAY TOÀN BỘ danh sách; lỗi invalid_arg/not_found thì danh sách cũ giữ nguyên. */
+  /** B7 Organized Library: chép (không di chuyển) font vào thư viện riêng `Class/Họ/`; mọi lệnh theo hợp đồng 02. */
+  organizedCheckLocation(path: string): Promise<OrganizedLocationCheckDto>;
+  organizedCreate(path: string): Promise<OrganizedStatusDto>;
+  organizedStatus(): Promise<OrganizedStatusDto>;
+  organizedPlan(scope: OrganizeScopeDto): Promise<OrganizePlanDto>;
+  organizedImport(scope: OrganizeScopeDto, onProgress?: (p: OrganizeProgressDto) => void): Promise<OrganizeResultDto>;
+  organizedCancel(): Promise<boolean>;
+  organizedResortPreview(): Promise<ResortPlanDto>;
+  organizedResortApply(): Promise<ResortResultDto>;
+  organizedResortUndo(batchId: number): Promise<ResortResultDto>;
+  organizedSnapshotNow(): Promise<string>;
+  packInspect(path: string): Promise<PackInfoDto>;
+  packRestoreStage(path: string, remap: PathRemapDto[]): Promise<PackInfoDto>;
+  packRestorePending(): Promise<PackInfoDto | null>;
+  packRestoreCancel(): Promise<boolean>;
+  /** B5: "Tắt lần này": gỡ CHỈ lý do caseapp của Case (font còn lý do khác vẫn bật), không gỡ app khỏi Case; bật lại khi mọi app đã thoát rồi mở lại. */
+  caseAppSuppress(caseId: number): Promise<void>;
+  /** B7: chuyển font ĐANG BẬT sang bản chép trong Organized Library (`preferUnder` = gốc thư viện); chỉ khi người dùng bấm. */
+  activationRelocate(faces: FaceKeyDto[], preferUnder: string | null, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  /** B7 Hoàn tác: chuyển font đang bật tới ĐƯỜNG CỤ THỂ cho từng font (đường cũ đã ghi), kiểm hash; kết quả theo file như `activationRelocate`. */
+  activationRelocateTo(targets: RelocateTargetDto[], opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  /** G7b: bản sao đổi tên (họ `X VF`, PostScript chèn VF) của một font Variable trùng tên với static; idempotent, file gốc không đụng. Lỗi: not_variable | no_clash | unsupported_container | not_downloaded | disk_full | not_in_library. */
+  deriveRenamedCopy(face: FaceKeyDto): Promise<DerivedCopyDto>;
+  /** G7b "Giữ cả hai": nếu font bật là VF trùng PS với static → tạo bản sao đổi tên và bật BẢN SAO cùng static (warning renamed_copy[_restricted] | rename_failed:<mã>); còn lại như bật trùng tên. */
+  activationKeepBoth(faces: FaceKeyDto[], scope?: ScopeDto | null, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
+  /** G7b: gỡ BẢN SAO đổi tên (face của bản sao): tắt trước nếu đang bật, file vào Thùng rác, font gốc không đổi. Lỗi: not_derived | not_allowed | deactivate_failed | trash_failed. */
+  removeDerivedCopy(face: FaceKeyDto): Promise<RemoveDerivedResultDto>;
+  /** Hoàn tác gỡ bản sao: lấy từ Thùng rác hoặc tạo lại từ gốc; không tự bật lại font. */
+  restoreDerivedCopy(removalId: number): Promise<RestoreDerivedResultDto>;
+  /** Các bản sao của một font GỐC (hỏi "gỡ luôn bản sao?" trước khi xoá gốc). */
+  derivedCopiesOf(face: FaceKeyDto): Promise<DerivedCopyInfoDto[]>;
+  caseApps(caseId: number): Promise<CaseAppDto[]>;
+  caseSetApps(caseId: number, apps: CaseAppDto[]): Promise<void>;
+  /** B5: app đã cài (quét /Applications…), sắp theo tên; `running` = đang chạy lúc quét. */
+  installedApps(): Promise<InstalledAppDto[]>;
   sourceDownloadCloud(sourceId: number, onProgress?: (p: CloudDownloadProgressDto) => void): Promise<CloudDownloadReportDto>;
   /** Huỷ lần tải đang chạy của nguồn (font đang tải dở chạy nốt); false nếu không có lần nào. */
   sourceDownloadCancel(sourceId: number): Promise<boolean>;
@@ -53,7 +103,12 @@ export interface Api extends LibraryApi {
   scanResume(): Promise<void>;
   scanCancel(): Promise<void>;
   scanStatus(): Promise<ScanStatusDto>;
-  scanSubscribe(onEvent: (e: ScanEvent) => void): Promise<Unsubscribe>;
+  scanSubscribe(onEvent: (e: ScanEvent) => void, subscriber?: string): Promise<Unsubscribe>;
+  /** TaskHub: danh sách việc nền hiện có (kèm `rev` để bỏ sự kiện cũ). */
+  taskList(): Promise<TaskListDto>;
+  /** Huỷ một việc nền; idempotent, trả ngay. */
+  taskCancel(id: string): Promise<void>;
+  taskSubscribe(onEvent: (e: TaskEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   // Thư viện
   getFamilyStyles(family: string): Promise<FamilyStyleDto[]>;
   setFavorite(face: FaceKeyDto, on: boolean): Promise<void>;
@@ -124,14 +179,25 @@ export interface Api extends LibraryApi {
   suggestPartners(anchor: FaceKeyDto, req: SuggestPartnersReqDto): Promise<PartnerPageDto>;
   /** G6: gợi ý combo từ thư viện. Cùng `seed` cùng kết quả. Lỗi: `style_unknown`, `roles_invalid`, `locked_role_unknown`, `locked_duplicate`, `scope_unknown`, `case_required`. */
   suggestCombos(req: SuggestCombosReqDto): Promise<ComboSuggestionDto[]>;
-  /** Mức hợp vai của một font cho một vai (G4). */
-  roleFit(face: FaceKeyDto, role: RoleRefDto): Promise<RoleFitDto>;
+  /** Mức hợp vai của một font cho một vai (G4). `projectVi` = Case/Desk bật "Đủ tiếng Việt": thiếu ký tự thì hạ mức
+   *  (lý do `vi_missing`); không bật (mặc định) thì chấm theo hình dạng và chỉ thêm lý do `missing_vietnamese` (NoteMark "!"). */
+  roleFit(face: FaceKeyDto, role: RoleRefDto, projectVi?: boolean): Promise<RoleFitDto>;
   /** Font vừa xem (lưu ở backend, sống qua các lần mở app). */
   recentViews(limit: number): Promise<RecentViewDto[]>;
   /** Ghi một lần xem (mở Detail/Desk, không ghi khi lướt lưới). */
   recordView(face: FaceKeyDto): Promise<void>;
   /** Xoá danh sách font vừa xem; trả số dòng đã xoá. */
   clearRecentViews(): Promise<number>;
+  /** Mở THIRD-PARTY-NOTICES.txt (toàn văn giấy phép các thành phần) bằng ứng dụng mặc định. */
+  openThirdPartyNotices(): Promise<void>;
+  /** Nhập từ Figma (B6). Phân tích văn bản dán (JSON hoặc link fontatlas://); chỉ đọc. Lỗi: `import_empty|format|version|too_large|too_many_fonts`. */
+  parseFigmaImport(text: string): Promise<FigmaImportDto>;
+  /** Khớp tên font Figma với thư viện (≤200). Kết quả cùng thứ tự đầu vào; không điểm số. */
+  resolveFonts(items: FontNameDto[]): Promise<FontMatchDto[]>;
+  /** Link fontatlas:// đã nhận (kể cả mở lạnh) chờ giao diện lấy; lấy xong là rỗng. */
+  takePendingImports(): Promise<PendingImportDto[]>;
+  /** Báo khi có link mới tới lúc app đang chạy. */
+  figmaImportSubscribe(onPending: () => void): Promise<Unsubscribe>;
   /** Compare Combo: cột = Combo, kèm quan hệ giữa giọng ① và các vai khác. `comboIds` rỗng = mọi Combo (≤ 8). */
   caseCompare(caseId: number, comboIds: number[], lang?: 'vi' | 'en'): Promise<CaseCompareDto>;
   /** Brief starter: chip → bộ lọc + ≤3 neo + ≤3 Combo khởi đầu. Thuần đọc; `notes` là mã để dịch (vd `langs_incomplete`). */
@@ -208,7 +274,7 @@ export interface Api extends LibraryApi {
   embedStatus(): Promise<EmbedStatusDto>;
   embedPause(): Promise<void>;
   embedResume(): Promise<void>;
-  embedSubscribe(onEvent: (e: EmbedEvent) => void): Promise<Unsubscribe>;
+  embedSubscribe(onEvent: (e: EmbedEvent) => void, subscriber?: string): Promise<Unsubscribe>;
   // Kích hoạt (Plan 7)
   activationCaps(): Promise<{ method: string; supported: boolean }>;
   activationState(): Promise<ActivationStateDto[]>;
@@ -225,9 +291,11 @@ export interface Api extends LibraryApi {
   activationActivateCollection(collectionId: number, opts?: ActivateOptions): Promise<ActivationReportDto>;
   /**
    * "Bật tất cả" của một Dự án: font không `missing` đi qua đúng luồng `activationActivate` (xung đột → `needsConfirmation`,
-   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Kích hoạt thủ công, không gắn lý do "dự án".
+   * gọi lại với `proceed: true`); font `missing` liệt kê ở `skippedMissing` (không tính là lỗi). Lý do `case` (không phải thủ công, không phải Dự án).
    */
   activationActivateCase(caseId: number, opts?: ActivateOptions): Promise<CaseActivationDto>;
+  /** Tắt cả Case: gỡ lý do `case` của Case; font còn lý do khác (bật tay, Dự án, app) vẫn bật. */
+  activationDeactivateCase(caseId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateCollection(collectionId: number, opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationDeactivateAll(opts?: Pick<DeactivateOptions, 'onProgress'>): Promise<ActivationReportDto>;
   activationSetKeep(on: boolean): Promise<void>;
@@ -238,7 +306,7 @@ export interface Api extends LibraryApi {
   activationSetScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<ActivationReportDto>;
   /** Font nào đang "Có sẵn trên máy" (file giống hệt do bên khác cung cấp). Tính lại mỗi lần; `faces` kiểm thêm ngoài tập đã nhớ. */
   activationAvailability(faces?: FaceKeyDto[]): Promise<AvailabilityDto[]>;
-  activationSubscribe(onEvent: (e: ActivationEvent) => void): Promise<Unsubscribe>;
+  activationSubscribe(onEvent: (e: ActivationEvent) => void, subscriber?: string): Promise<Unsubscribe>;
 }
 
 let current: Api | null = null;

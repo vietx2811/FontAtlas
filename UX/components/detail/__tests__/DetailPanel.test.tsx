@@ -35,6 +35,15 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('button', { name: 'Kiểu chữ' }).textContent).toContain('18 kiểu');
   });
 
+  it('G7b: bản sao đổi tên hiện huy hiệu «Bản sao của …» (không có thì không vẽ)', async () => {
+    const api = createMockApi();
+    const real = api.getFace.bind(api);
+    vi.spyOn(api, 'getFace').mockImplementation(async (k, l) => ({ ...(await real(k, l)), derivedFrom: { faceKey: { hashHex: 'orig', faceIndex: 0 }, name: 'Oswald Regular' } }));
+    render(<DetailPanel api={api} />);
+    await select(api, 'Public Sans', 'Regular'); await settle();
+    expect(screen.getByTestId('derived-badge').textContent).toContain('Bản sao của «Oswald Regular»');
+  });
+
   it('marks a face that is only a cloud placeholder in the header', async () => {
     const api = createMockApi();
     const real = api.getFace.bind(api);

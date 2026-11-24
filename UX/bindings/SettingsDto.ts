@@ -10,6 +10,6 @@ uiLang: string | null, sampleText: string, projectViDefault: boolean, keepActive
  */
 cloudPreviewDownload: boolean, 
 /**
- * Tự phát hiện thay đổi trên ổ cloud (theo dõi thư mục nguồn cloud rồi quét lại). Tắt: dừng mọi watcher ngay.
+ * Tự phát hiện font thêm/xoá/đổi trong MỌI thư mục nguồn (cloud, ổ ngoài, cục bộ): theo dõi rồi quét lại nguồn đó. Tên khoá `cloudWatch` giữ từ 0.4.0 cho tương thích. Tắt: dừng mọi watcher ngay.
  */
 cloudWatch: boolean, };

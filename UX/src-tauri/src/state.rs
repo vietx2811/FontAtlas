@@ -15,6 +15,23 @@ use crate::services::embed::EmbedSupervisor;
 use crate::services::model::ModelRuntime;
 use crate::services::scan::ScanManager;
 
+/// Cờ tiêm lỗi cho test tích hợp (không có tác dụng khi tắt).
+#[derive(Default)]
+pub struct Faults {
+    /// `organized_record` (ghi sổ sau khi chép) trả lỗi.
+    pub organized_record: std::sync::atomic::AtomicBool,
+    /// Đọc lại dòng sổ `resolution(id)` SAU khi đơn vị resolve đã commit trả lỗi.
+    pub resolution_readback: std::sync::atomic::AtomicBool,
+    /// Sắp xếp lại / hoàn tác: tự bấm huỷ sau đơn vị thứ N (0 = tắt) để test huỷ giữa chừng mà không cần đua thời gian.
+    pub resort_cancel_after: std::sync::atomic::AtomicUsize,
+}
+
+impl Faults {
+    pub fn on(flag: &std::sync::atomic::AtomicBool) -> bool {
+        flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AppDirs {
     pub data: PathBuf,
@@ -65,10 +82,22 @@ pub struct AppState {
     pub boot: RwLock<BootStatusDto>,
     pub hubs: Hubs,
     pub scans: ScanManager,
+    /// Danh sách việc nền cho khay "Tác vụ" (chỉ hiển thị + huỷ).
+    pub tasks: crate::services::tasks::TaskHub,
+    /// Móc tiêm lỗi CHỈ để test (mặc định tắt, một lần đọc cờ nguyên tử): kiểm đường lỗi sau commit mà không cần phá DB thật.
+    #[doc(hidden)]
+    pub faults: Faults,
     /// Các lần "Tải về máy" đang chạy theo nguồn (cờ huỷ).
     pub cloud_jobs: crate::services::cloud_download::CloudJobs,
-    /// Theo dõi thay đổi thư mục nguồn cloud (FSEvents) để xếp quét lại.
+    /// Đối soát kích hoạt BÙ (hash bận ở lượt trước): số lượt đang chờ/đang chạy và cách chờ (mặc định ngủ ~1,5 s; test tiêm cổng sự kiện).
+    pub reconcile_makeup: crate::services::activation::MakeupState,
+    /// Lượt chép / sắp xếp lại Organized Library đang chạy (B7): một lúc một lượt, cờ huỷ.
+    pub organize: crate::services::organized::OrganizeJob,
+    /// Lượt nhập đường dẫn thả từ Finder đang chạy (G8): một lúc một lượt, cờ huỷ.
+    pub imports: crate::services::import::ImportJob,
+    /// Theo dõi thay đổi thư mục nguồn (FSEvents) để xếp quét lại.
     pub cloud_watch: crate::services::cloud_watch::CloudWatch,
+    pub app_sets: crate::services::app_sets::AppSets,
     pub index: IndexSlot,
     pub rebuild: RebuildState,
     pub deps: Deps,
@@ -85,6 +114,8 @@ pub struct AppState {
     pub fontreq_error: Mutex<Option<String>>,
     /// Tên probe tự kiểm sức khoẻ mà nguồn font request đã nhận (xem services/fontreq::probe). Tối đa vài mục gần nhất.
     pub fontreq_seen: Mutex<Vec<String>>,
+    /// Link `fontatlas://` đã nhận, chờ giao diện lấy (`services::figma::take_pending_imports`).
+    pub pending_imports: Mutex<Vec<crate::dto::figma::PendingImportDto>>,
     /// Báo luồng thử lại dừng (thoát app).
     pub fontreq_stop: std::sync::atomic::AtomicBool,
     /// Chỉ app thật (lib.rs `run`) bật: cho phép đăng ký thứ có phạm vi CẢ phiên đăng nhập (nguồn font request). Test và
@@ -107,8 +138,14 @@ impl AppState {
             boot: RwLock::new(BootStatusDto::default()),
             hubs: Hubs::default(),
             scans: ScanManager::default(),
+            tasks: Default::default(),
+            faults: Faults::default(),
             cloud_jobs: Default::default(),
+            imports: Default::default(),
+            organize: Default::default(),
+            reconcile_makeup: Default::default(),
             cloud_watch: Default::default(),
+            app_sets: Default::default(),
             index: RwLock::new(None),
             rebuild: RebuildState::default(),
             deps,
@@ -120,6 +157,7 @@ impl AppState {
             fontreq: Mutex::new(None),
             fontreq_error: Mutex::new(None),
             fontreq_seen: Mutex::new(Vec::new()),
+            pending_imports: Mutex::new(Vec::new()),
             fontreq_stop: std::sync::atomic::AtomicBool::new(false),
             system_hooks: std::sync::atomic::AtomicBool::new(false),
         })

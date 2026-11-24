@@ -7,7 +7,10 @@ import { t } from '../i18n';
 import { refreshNameClashes } from './nameClash';
 import { useUiStore } from './ui';
 
-export const BUMP_THROTTLE_MS = 1500;
+/** Nhịp tải lại tối đa khi font đang về (quét/tải cloud): 3 s, đủ thấy thư viện lớn lên mà không dồn lệnh vào DB đang bận ghi. */
+export const BUMP_THROTTLE_MS = 3000;
+/** `finished` rồi `idle` liền nhau trong khoảng này chỉ tính một lần bump. */
+export const IDLE_COALESCE_MS = 500;
 
 export type AccessProblem = 'denied' | 'timeout';
 type State = {
@@ -31,7 +34,12 @@ export const useScanStore = createScanStore();
 export async function startScanSync(api: Api, store: ScanStore = useScanStore): Promise<() => void> {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const bumpNow = () => { clearTimeout(timer); timer = undefined; last = Date.now(); store.getState().bump(); };
+  /** Lượt hiện tại có đổi gì không: watcher quét không đổi (changed=false) thì không bump/không hiện "đang quét". */
+  let dirty = false;
+  const quiet = (e: { trigger?: string }) => e.trigger === 'watcher';
+  /** Đã bump kể từ lúc nguồn này vào hàng (queued): một lượt quét chỉ refresh một lần. */
+  let bumpedThisPass = false;
+  const bumpNow = () => { clearTimeout(timer); timer = undefined; last = Date.now(); dirty = false; bumpedThisPass = true; store.getState().bump(); };
   void refreshNameClashes(api);
   // Xoá nguồn, giải quyết trùng…: mọi nơi đổi thư viện đều bump `libraryRev` → nạp lại danh sách trùng tên.
   const offRev = useUiStore.subscribe((s, prev) => { if (s.libraryRev !== prev.libraryRev) void refreshNameClashes(api); });
@@ -43,12 +51,17 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     const set = store.setState;
     const clear = (id: number) => set(s => { const { [id]: _drop, ...rest } = s.access; return { access: rest }; });
     const dropCloud = (id: number) => set(s => { const { [id]: _d, ...rest } = s.cloud; return { cloud: rest }; });
-    if (e.type === 'queued') { set({ scanning: true }); clear(e.sourceId); dropCloud(e.sourceId); }
-    else if (e.type === 'progress') set(s => ({ scanning: true, written: e.progress.facesWritten, cloud: { ...s.cloud, [e.sourceId]: e.progress.notDownloaded } }));
-    else if (e.type === 'facesAdded') bumpSoon();
+    if (e.type === 'queued') { bumpedThisPass = false; if (!quiet(e)) set({ scanning: true }); clear(e.sourceId); dropCloud(e.sourceId); }
+    else if (e.type === 'progress') set(s => ({ scanning: quiet(e) ? s.scanning : true, written: e.progress.facesWritten, cloud: { ...s.cloud, [e.sourceId]: e.progress.notDownloaded } }));
+    else if (e.type === 'facesAdded') { dirty = true; bumpSoon(); }
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); bumpNow(); void refreshNameClashes(api); } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
+    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if (e.changed !== false || e.stats.purged > 0) {
+        // facesAdded đã bump trong lượt này và không còn bump chờ: finished chỉ bump lại khi có đổi mà facesAdded không báo (xoá/đổi chỗ/lỗi).
+        const onlyAdds = e.stats.missing + e.stats.purged + e.stats.relinked + e.stats.failed === 0;
+        if (timer || !bumpedThisPass || !onlyAdds) bumpNow();
+        void refreshNameClashes(api);
+      } } // từ đây số chưa tải nằm trong lần quét cuối của nguồn
     else if (e.type === 'failed') {
       set({ scanning: false });
       const d = e.error.detail as { source?: string; op?: string; reason?: string } | null;
@@ -61,8 +74,8 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
             action: { label: t('scan.grant'), run: () => { void openPrivacySettings(); } },
           }));
       } else useNoticeStore.getState().push({ kind: 'error', text: t('scan.fail', { code: e.error.code, msg: e.error.message }) });
-    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (Date.now() - last > 200) bumpNow(); } // `finished` vừa tải lại rồi
-  });
+    } else if (e.type === 'idle') { set({ scanning: false, written: 0 }); if (dirty && Date.now() - last > IDLE_COALESCE_MS) bumpNow(); dirty = false; } // `finished` vừa bump liền trước thì gộp (1 lần nạp, không 2); xác nhận total=0 khi hết quét do LibraryGrid tự làm (scanning true→false)
+  }, 'scan.store');
   try {
     const st = await api.scanStatus();
     if (st.running) store.setState({ scanning: true, paused: st.paused });

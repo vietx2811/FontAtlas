@@ -190,7 +190,7 @@ describe('activation flow · replace and restore', () => {
 
   it('a failed replace explains itself in plain words, not as a bare code', async () => {
     const api = createMockApi();
-    vi.spyOn(api, 'activationReplace').mockResolvedValue({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: { kind: 'failed', code: 'replace_not_registered', message: 'x' } }], changed: 0, needsConfirmation: 0, failed: 1 });
+    vi.spyOn(api, 'activationReplace').mockResolvedValue({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: { kind: 'failed', code: 'replace_not_registered', message: 'x' } }], changed: 0, needsConfirmation: 0, failed: 1, busy: 0, busyHashes: [] });
     const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
     render(<Harness api={api} faces={faces} />);
     await act(async () => { fireEvent.click(screen.getByText('go')); }); await settle();
@@ -218,7 +218,7 @@ describe('activation flow · replace and restore', () => {
 
   it('"not effective" and "rollback failed" are told truthfully; not-effective still offers the restore action', async () => {
     const api = createMockApi();
-    const f = (rc: string, replaced?: boolean) => ({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: rc === 'replace_not_effective' ? { kind: 'activated' as const } : { kind: 'failed' as const, code: rc, message: 'x' }, ...(rc === 'replace_not_effective' ? { warning: rc } : {}), ...(replaced ? { replaced: [{ id: 1, path: '/x.ttf', owner: 'right_font' as const, scopes: ['persistent' as const] }] } : {}) }], changed: 0, needsConfirmation: 0, failed: 1 });
+    const f = (rc: string, replaced?: boolean) => ({ results: [{ hashHex: 'h', path: null, requestedFaces: [0], extraFaces: [], outcome: rc === 'replace_not_effective' ? { kind: 'activated' as const } : { kind: 'failed' as const, code: rc, message: 'x' }, ...(rc === 'replace_not_effective' ? { warning: rc } : {}), ...(replaced ? { replaced: [{ id: 1, path: '/x.ttf', owner: 'right_font' as const, scopes: ['persistent' as const] }] } : {}) }], changed: 0, needsConfirmation: 0, failed: 1, busy: 0, busyHashes: [] });
     vi.spyOn(api, 'activationReplace').mockResolvedValueOnce(f('replace_not_effective', true)).mockResolvedValueOnce(f('replace_rollback_failed', true));
     const faces = (await keysOf(api, 'Oswald')).slice(0, 1);
     render(<Harness api={api} faces={faces} />);

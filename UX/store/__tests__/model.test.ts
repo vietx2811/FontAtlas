@@ -34,7 +34,7 @@ describe('download mapping and verification', () => {
     const u = ui(model({ state: 'paused', lastError: { code, message: 'TECHNICAL_ONLY' } }), embed());
     expect(u.text).toContain(text); expect(u.text).not.toContain('TECHNICAL_ONLY');
     expect(u.detail).toBe('TECHNICAL_ONLY');
-    expect(u.actions[0].label).toBe(code === 'cancelled' ? 'Tiếp tục tải' : 'Thử lại');
+    expect(u.actions[0].label).toBe(code === 'cancelled' ? 'Tiếp tục tải' : code === 'checksum' ? 'Tải lại model' : 'Thử lại');
     expect(u.severity).toBe(code === 'cancelled' ? 'info' : 'error');
   });
   it('recognizes HTTP429 and Retry-After; HTTP403 never becomes a disk permission error', () => {
@@ -102,7 +102,7 @@ describe('deriveModelUi — one case per UX 03 §3.1 state', () => {
   });
   it('E5 checksum', () => {
     const u = ui(model({ state: 'checksum_mismatch' }), embed());
-    expect([u.code, u.text, u.severity, u.actions.map(a => a.id)]).toEqual(['E5', 'Model tải về bị hỏng', 'error', ['redownload']]);
+    expect([u.code, u.text, u.severity, u.actions.map(a => a.id)]).toEqual(['E5', 'Model tải về bị hỏng hoặc không khớp bản phát hành. Hãy tải lại model.', 'error', ['redownload']]);
   });
   it('E6 corrupt on disk: [Tải lại] [Xoá model]', () => {
     const u = ui(model({ state: 'corrupt' }), embed());
@@ -112,6 +112,18 @@ describe('deriveModelUi — one case per UX 03 §3.1 state', () => {
     const u = ui(model(), embed({ loadError: 'load_failed' }));
     expect([u.code, u.text, u.severity, u.actions.map(a => a.id)]).toEqual(['E7', 'Không chạy được phân tích hình ảnh', 'error', ['retry']]);
     expect(u.detail).toBe('load_failed');
+  });
+  it('E7 theo mã lỗi nạp model: mỗi nhóm một câu "chuyện gì + làm gì" và đúng nút', () => {
+    const at = (loadError: string) => { const u = ui(model(), embed({ loadError })); return [u.code, u.severity, u.actions.map(a => a.id), u.actions.map(a => a.label), u.text, u.detail] as const; };
+    expect(at('model_file')).toEqual(['E7', 'error', ['redownload'], ['Tải lại model'], 'File model bị hỏng hoặc thiếu dữ liệu nên không nạp được. Hãy tải lại model.', 'model_file']);
+    expect(at('checksum')[2]).toEqual(['redownload']);
+    expect(at('resources')).toEqual(['E7', 'error', ['retry'], ['Thử lại'], 'Máy hết bộ nhớ (hoặc bộ nhớ GPU) khi chạy model. Hãy đóng bớt ứng dụng rồi thử lại.', 'resources']);
+    expect(at('inference')[4]).toMatch(/lỗi nội bộ.*khởi động lại.*báo lỗi kèm chi tiết/);
+    expect(at('store')[4]).toMatch(/ổ đĩa còn chỗ và quyền truy cập/); expect(at('io')[4]).toMatch(/ổ đĩa/); expect(at('io')[2]).toEqual(['retry']);
+    expect(at('lạ_chưa_biết')[4]).toBe('Không chạy được phân tích hình ảnh'); // mã chưa có bảng: câu chung, vẫn có chi tiết
+  });
+  it('disabled/cancelled không phải lỗi: không hiện như lỗi', () => {
+    for (const c of ['disabled', 'cancelled']) expect(ui(model(), embed({ loadError: c })).code).not.toBe('E7');
   });
   it('E8 analysing: done/total, ETA, device, [Tạm dừng]', () => {
     const u = ui(model(), embed({ running: true, done: 412, pending: 3388, etaMs: 120_000, device: 'metal' }));

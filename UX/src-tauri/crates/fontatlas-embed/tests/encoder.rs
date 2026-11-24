@@ -80,13 +80,13 @@ fn wrong_tensor_length_is_error() {
 fn garbage_file_rejected() {
     let p = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(p.path(), b"khong phai safetensors").unwrap();
-    assert!(matches!(CandleEncoder::load(p.path(), Backend::Cpu), Err(EmbedError::Model(_))));
+    assert!(matches!(CandleEncoder::load(p.path(), Backend::Cpu), Err(EmbedError::ModelFile(_))));
 }
 
 #[test]
 fn wrong_shapes_for_config_rejected() {
     // file tí hon (hidden 32) nạp bằng config base (hidden 768) → lệch shape
-    assert!(matches!(CandleEncoder::load(&data("tiny_siglip.safetensors"), Backend::Cpu), Err(EmbedError::Model(_))));
+    assert!(matches!(CandleEncoder::load(&data("tiny_siglip.safetensors"), Backend::Cpu), Err(EmbedError::ModelFile(_))));
 }
 
 /// Bản sao model tí hon với một trọng số NaN (giả Metal/GPU trả kết quả hỏng).

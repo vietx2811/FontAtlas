@@ -66,6 +66,8 @@ fn activation_report_json_matches_contract_fixture() {
         changed: 2,
         needs_confirmation: 1,
         failed: 1,
+        busy: 1,
+        busy_hashes: vec!["05".repeat(32)],
     };
     let json = serde_json::to_string_pretty(&rep).unwrap();
     let compact = serde_json::to_string(&rep).unwrap();
@@ -110,12 +112,14 @@ fn reconcile_report_json_matches_contract_fixture() {
             removed_reasons: vec![],
             cause: "no_reason".into(),
         }],
+        session_auto_cleared: 0,
         reregistered: 3,
         moved: 1,
         missing: 1,
         not_downloaded: 0,
         cleaned: 1,
         failed: 0,
+        busy: 0,
         results: vec![result(9, FileOutcome::Activated)],
     };
     let compact = serde_json::to_string(&rep).unwrap();

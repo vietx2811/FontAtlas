@@ -1,16 +1,25 @@
 import { useEffect } from 'react';
 
 /** Kéo thả file/thư mục vào cửa sổ (chỉ có trong Tauri; trình duyệt thường bỏ qua). */
-export function useDropPaths(onPaths: (paths: string[]) => void): void {
+export type DropAt = { x: number; y: number };
+/** `at` = vị trí thả theo px CSS của trang (Tauri báo px vật lý nên đã chia cho devicePixelRatio). `onHover(at|null)` khi đang lơ lửng/rời. */
+export function useDropPaths(onPaths: (paths: string[], at?: DropAt) => void, onHover?: (at: DropAt | null) => void): void {
   useEffect(() => {
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
     let off: (() => void) | undefined;
     let dead = false;
     import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
-      getCurrentWebview().onDragDropEvent(e => { if (e.payload.type === 'drop') onPaths(e.payload.paths); }),
+      getCurrentWebview().onDragDropEvent(e => {
+        const p = e.payload;
+        const dpr = window.devicePixelRatio || 1;
+        const at = 'position' in p && p.position ? { x: p.position.x / dpr, y: p.position.y / dpr } : undefined;
+        if (p.type === 'drop') { onHover?.(null); onPaths(p.paths, at); }
+        else if (p.type === 'enter' || p.type === 'over') onHover?.(at ?? null);
+        else onHover?.(null);
+      }),
     ).then(u => { if (dead) u(); else off = u; }).catch(err => console.warn('drag-drop unavailable', err));
     return () => { dead = true; off?.(); };
-  }, [onPaths]);
+  }, [onPaths, onHover]);
 }
 
 const FONT_EXT = /\.(ttf|otf|ttc|otc|woff2?)$/i;

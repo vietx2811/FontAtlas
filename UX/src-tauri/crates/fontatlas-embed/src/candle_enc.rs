@@ -26,8 +26,40 @@ pub struct CandleEncoder {
     raw_dim: usize,
 }
 
-fn m(e: candle_core::Error) -> EmbedError {
-    EmbedError::Model(e.to_string())
+/// Hết bộ nhớ/tài nguyên (RAM, GPU)? Duyệt qua các lớp bọc của candle; Metal báo hết bộ nhớ bằng chuỗi
+/// ("Insufficient Memory" trong lỗi command buffer, "Failed to create metal resource"), nên phần đó khớp theo chuỗi.
+fn is_resource_error(e: &candle_core::Error) -> bool {
+    use candle_core::Error as CE;
+    match e {
+        CE::Io(io) => io.kind() == std::io::ErrorKind::OutOfMemory,
+        CE::WithPath { inner, .. } | CE::WithBacktrace { inner, .. } | CE::Context { inner, .. } => {
+            is_resource_error(inner)
+        }
+        other => {
+            let s = other.to_string().to_lowercase();
+            ["insufficient memory", "out of memory", "outofmemory", "failed to create metal resource", "failed to allocate"]
+                .iter()
+                .any(|k| s.contains(k))
+        }
+    }
+}
+
+/// Lỗi khi NẠP model: trừ hết tài nguyên, nguyên nhân là file (thiếu, cụt, sai tensor/shape) → tải lại model.
+fn load_error(e: candle_core::Error) -> EmbedError {
+    if is_resource_error(&e) {
+        EmbedError::Resources(e.to_string())
+    } else {
+        EmbedError::ModelFile(e.to_string())
+    }
+}
+
+/// Lỗi khi tạo thiết bị hoặc chạy model: hết tài nguyên → thử lại sau; còn lại là lỗi nội bộ (`inference`).
+fn run_error(e: candle_core::Error) -> EmbedError {
+    if is_resource_error(&e) {
+        EmbedError::Resources(e.to_string())
+    } else {
+        EmbedError::Model(e.to_string())
+    }
 }
 
 fn metal_works() -> bool {
@@ -74,12 +106,12 @@ impl CandleEncoder {
     pub fn load_with(path: &Path, backend: Backend, cfg: &siglip::VisionConfig) -> Result<Self, EmbedError> {
         let (device, id) = match backend {
             Backend::Cpu => (Device::Cpu, "cpu"),
-            Backend::Metal => (Device::new_metal(0).map_err(m)?, "metal"),
+            Backend::Metal => (Device::new_metal(0).map_err(run_error)?, "metal"),
         };
         // SAFETY: mmap chỉ sống trong lúc nạp: `VisionModel::new` chép trọng số vào tensor của thiết bị và `vb`
         // (cùng mmap) bị huỷ khi hàm trả về. `ModelStore::ensure` không bao giờ ghi đè tại chỗ (ghi `.part` rồi rename).
-        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }.map_err(m)?;
-        let model = siglip::VisionModel::new(cfg, true, vb.pp("vision_model")).map_err(m)?;
+        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[path], DType::F32, &device) }.map_err(load_error)?;
+        let model = siglip::VisionModel::new(cfg, true, vb.pp("vision_model")).map_err(load_error)?;
         Ok(CandleEncoder { model, device, id, raw_dim: cfg.hidden_size })
     }
 
@@ -97,8 +129,8 @@ impl Encode for CandleEncoder {
             return Err(EmbedError::Cancelled);
         }
         let n = tensors.len();
-        let x = Tensor::from_vec(tensors.concat(), (n, 3, CANVAS as usize, CANVAS as usize), &self.device).map_err(m)?;
-        let out: Vec<Vec<f32>> = self.model.forward(&x).and_then(|y| y.to_vec2()).map_err(m)?;
+        let x = Tensor::from_vec(tensors.concat(), (n, 3, CANVAS as usize, CANVAS as usize), &self.device).map_err(run_error)?;
+        let out: Vec<Vec<f32>> = self.model.forward(&x).and_then(|y| y.to_vec2()).map_err(run_error)?;
         if cancel.load(Ordering::SeqCst) {
             return Err(EmbedError::Cancelled);
         }
@@ -110,5 +142,40 @@ impl Encode for CandleEncoder {
 
     fn raw_dim(&self) -> usize {
         self.raw_dim
+    }
+}
+
+#[cfg(test)]
+mod classify_tests {
+    use super::*;
+    use candle_core::Error as CE;
+
+    fn oom_io() -> CE {
+        CE::Io(std::io::Error::new(std::io::ErrorKind::OutOfMemory, "cấp phát"))
+    }
+
+    #[test]
+    fn resource_exhaustion_is_recognised_through_wrappers() {
+        assert!(is_resource_error(&oom_io()));
+        assert!(is_resource_error(&oom_io().with_path("/m.safetensors")));
+        assert!(is_resource_error(&CE::Msg("Command buffer had following error: Insufficient Memory (kIOGPU...)".into())));
+        assert!(is_resource_error(&CE::Msg("Failed to create metal resource: buffer".into())));
+        assert!(!is_resource_error(&CE::Msg("shape mismatch in matmul".into())));
+        assert!(!is_resource_error(&CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"))));
+    }
+
+    #[test]
+    fn loading_failures_blame_the_file_unless_resources_ran_out() {
+        let nf = CE::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "không có file"));
+        assert!(matches!(load_error(nf), EmbedError::ModelFile(_)));
+        assert!(matches!(load_error(CE::Msg("cannot find tensor x".into())), EmbedError::ModelFile(_)));
+        assert!(matches!(load_error(oom_io()), EmbedError::Resources(_)));
+    }
+
+    #[test]
+    fn running_failures_are_internal_unless_resources_ran_out() {
+        assert!(matches!(run_error(CE::Msg("shape mismatch in matmul".into())), EmbedError::Model(_)));
+        assert!(matches!(run_error(oom_io()), EmbedError::Resources(_)));
+        assert!(matches!(run_error(CE::Msg("Insufficient Memory".into())), EmbedError::Resources(_)));
     }
 }

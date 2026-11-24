@@ -7,6 +7,7 @@ import { filterChips } from '../main/FilterChips';
 import { AdvancedSheet } from './AdvancedSheet';
 import { Icon } from '../sidebar/icons';
 import { Tooltip } from '../ui/Tooltip';
+import { modKey } from '../../platform';
 
 /** Số điều kiện bộ lọc đang bật (cùng cách đếm với tóm tắt và "Đặt lại" trong sheet). */
 export function useAdvancedCount(): number {
@@ -38,7 +39,7 @@ export function AdvancedFilters({ api }: { api: Api }): React.JSX.Element | null
   const setOpen = useAdvancedSheet(s => s.setOpen);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f' || e.key === 'ƒ')) { e.preventDefault(); useAdvancedSheet.getState().toggle(); }
+      if (modKey(e) && e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f' || e.key === 'ƒ')) { e.preventDefault(); useAdvancedSheet.getState().toggle(); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

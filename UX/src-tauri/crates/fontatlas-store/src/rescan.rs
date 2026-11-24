@@ -4,19 +4,22 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::UNIX_EPOCH;
 
-use fontatlas_core::{ANALYZER_VERSION, CoreError, analyze_paths};
+use fontatlas_core::{ANALYZER_VERSION, CoreError, analyze_paths, analyze_paths_cancellable};
 use rayon::prelude::*;
 use rusqlite::params;
 use serde::Serialize;
 
 use crate::error::StoreError;
-use crate::ingest::{Analysis, IngestItem, ScannedFile, parse_hash};
+use crate::ingest::{Analysis, FaceKey, IngestItem, ScannedFile, parse_hash};
 use crate::open::{Store, now_ms};
 
 /// `pipeline_state.version` đặt khi placeholder đổi size/mtime: kết quả cũ không còn đáng tin, phân tích lại khi tải về.
 pub const CLOUD_STALE_MARK: &str = "cloud-stale";
 pub const FONT_EXTENSIONS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
 pub const INGEST_BATCH: usize = 256;
+/// Vị trí `missing` quá hạn này (kể từ lần cuối thấy file) bị dọn khi quét xong: file đã xoá khỏi đĩa thật sự.
+/// Trong thời gian ân hạn vị trí vẫn được giữ để file chuyển chỗ/ổ cắm lại khớp theo hash.
+pub const MISSING_RETENTION_MS: i64 = 30 * 24 * 3600 * 1000;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +74,14 @@ pub struct RescanStats {
     pub analyzed: usize,
     pub failed: usize,
     pub missing: usize,
+    /// Vị trí vắng lần đầu (hoặc chưa đủ hạn ân hạn): CHƯA đánh `missing`, cần một lượt quét xác nhận nữa.
+    #[serde(skip)]
+    pub pending_absent: usize,
+    /// Trong `relinked`: file chỉ bị chạm (mtime/size đổi) mà vị trí đang sống vẫn trỏ đúng cùng hash → thư viện không đổi gì.
+    #[serde(skip)]
+    pub touched: usize,
+    /// Vị trí `missing` quá hạn ân hạn đã bị dọn khỏi thư viện (kèm file/face không còn vị trí nào).
+    pub purged: usize,
     pub unreadable: Vec<(String, String)>,
 }
 
@@ -91,6 +102,9 @@ pub fn cloud_placeholders(root: &Path) -> Vec<PathBuf> {
 pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
     walk_fonts_report(root, &os_placeholder).0
 }
+
+/// Khoá `meta` giữ số font dataless chưa từng phân tích của một nguồn (lần quét gần nhất): `cloud_unseen:<source_id>`.
+pub(crate) const CLOUD_UNSEEN_PREFIX: &str = "cloud_unseen:";
 
 /// Hàm kiểm "file giữ chỗ chưa tải về" (thay được trong test).
 pub type PlaceholderProbe<'a> = &'a (dyn Fn(&Path, &std::fs::Metadata) -> bool + Sync);
@@ -230,11 +244,33 @@ pub struct SourceRemovalReport {
     pub active_fonts: u32,
 }
 
+/// Kết quả nhập MỘT file font lẻ ([`Store::import_files`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileImportOutcome {
+    Imported,
+    /// Đã có vị trí ở một nguồn (không đổi gì).
+    AlreadyKnown,
+    /// Placeholder trên ổ cloud, chưa tải về.
+    NotDownloaded,
+    /// Không còn/không phải file font.
+    Missing,
+    /// Không đọc được (ổ rút, bị khoá…) hoặc lỗi I/O.
+    Unreadable,
+}
+
+/// Số liệu của [`Store::rebuild_library`]: những gì đã bị xoá khỏi library.db.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RebuildReport {
+    pub files: u32,
+    pub faces: u32,
+    pub locations: u32,
+}
+
 fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
     // face SẼ RỜI LƯỚI: không còn vị trí nào ở nguồn khác mà hiện diện (missing = 0) và chưa bị ẩn bởi Trùng lặp
     const GONE: &str = "WITH gone(hash, face_index) AS (
         SELECT fi.hash, f.face_index FROM faces f JOIN files fi ON fi.file_id = f.file_id
-         WHERE EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id = ?1)
+         WHERE f.file_id IN (SELECT file_id FROM file_locations WHERE source_id = ?1)
            AND NOT EXISTS (SELECT 1 FROM file_locations l WHERE l.file_id = f.file_id AND l.source_id <> ?1 AND l.missing = 0
                            AND NOT EXISTS (SELECT 1 FROM u.dup_resolutions dr WHERE dr.loser_path = l.path AND dr.undone_at IS NULL)))";
     let n = |sql: String| -> Result<u32, StoreError> { Ok(c.query_row(&sql, [source_id], |r| r.get::<_, i64>(0))? as u32) };
@@ -258,6 +294,9 @@ fn removal_report(c: &rusqlite::Connection, source_id: i64) -> Result<SourceRemo
             .into())?,
     })
 }
+
+/// Dấu phân cách thứ hai khi khớp tiền tố thư mục: Windows nhận cả `/` lẫn `\\`, unix chỉ `/` (hai tham số trùng nhau).
+const ALT_SEP: &str = if cfg!(windows) { "\\" } else { "/" };
 
 impl Store {
     pub fn rescan_source(&mut self, source_id: i64) -> Result<RescanStats, StoreError> {
@@ -348,6 +387,13 @@ impl Store {
         });
         {
             let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // placeholder CHƯA từng được phân tích (không có bản ghi vị trí): không có face nào để đếm, nên ghi số file lại
+            // để nguồn "toàn file chưa tải về" vẫn hiện "N chưa tải về" + nút tải thay vì trống
+            let unseen = placeholders.iter().filter(|(p, _)| !known.contains_key(p.to_string_lossy().as_ref())).count();
+            tx.execute(
+                "INSERT INTO meta(key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![format!("{CLOUD_UNSEEN_PREFIX}{source_id}"), unseen as i64],
+            )?;
             // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
             for (p, meta) in &placeholders {
                 let path = p.to_string_lossy();
@@ -410,6 +456,9 @@ impl Store {
                 "SELECT count(*) FROM pipeline_state WHERE hash=?1 AND face_index=-1 AND stage='load'
                    AND status IN ('done','failed') AND version=?2",
             )?;
+            let mut same_loc = self.conn.prepare(
+                "SELECT count(*) FROM file_locations l JOIN files fi USING(file_id) WHERE l.path=?1 AND fi.hash=?2 AND l.missing=0",
+            )?;
             for (f, h) in hashed {
                 match h {
                     Err(e) => {
@@ -422,6 +471,8 @@ impl Store {
                     Ok(h) => {
                         let n: i64 = fresh.query_row(params![&h[..], ANALYZER_VERSION], |r| r.get(0))?;
                         if n > 0 {
+                            let same: i64 = same_loc.query_row(params![f.path.to_string_lossy(), &h[..]], |r| r.get(0))?;
+                            stats.touched += same as usize;
                             work.push(Work::Known(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known }));
                         } else {
                             work.push(Work::Analyze(f, h));
@@ -449,7 +500,11 @@ impl Store {
                 }
             }
             let paths: Vec<PathBuf> = pending.iter().map(|(f, _)| f.path.clone()).collect();
-            for ((f, h), (_, res)) in pending.into_iter().zip(analyze_paths(&paths)) {
+            // một par_iter cho cả lô, kiểm huỷ trước mỗi font: tắt app không phải chờ hết lô 256 font (Windows CI chậm mất
+            // hàng chục giây). Font chưa phân tích (`None`) bị bỏ, lần quét sau làm tiếp.
+            let analyzed = analyze_paths_cancellable(&paths, cancel);
+            for ((f, h), (_, res)) in pending.into_iter().zip(analyzed) {
+                let Some(res) = res else { continue };
                 match res {
                     // hash của report là chuẩn (file có thể đổi giữa lúc băm và lúc phân tích)
                     Ok(r) => items.push(IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) }),
@@ -506,14 +561,36 @@ impl Store {
             st.query_map(params![source_id, generation], |r| Ok((r.get(0)?, r.get(1)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?
         };
+        let now = now_ms();
+        let mut still_absent: HashMap<String, (i64, i64)> = HashMap::new();
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         for (id, p) in stale {
             if failed_dirs.iter().any(|d| Path::new(&p).starts_with(d)) {
                 continue; // nằm trong thư mục không đọc được: không biết đã xoá hay chưa
             }
-            stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
+            // vắng lần đầu → ghi nhớ, chưa ẩn (stub .icloud ↔ file thật, ghi tạm rồi đổi tên: khoảng hở chỉ vài ms);
+            // vắng lượt thứ hai liền sau → đánh missing (lượt quét xác nhận do `ScanManager` xếp sau ít giây)
+            let seen_absent_before = self.absent.get(&p).is_some_and(|&(src, _)| src == source_id);
+            if seen_absent_before {
+                stats.missing += tx.execute("UPDATE file_locations SET missing=1 WHERE location_id=?1", [id])?;
+            } else {
+                still_absent.insert(p, (source_id, now));
+                stats.pending_absent += 1;
+            }
         }
         tx.commit()?;
+        // quên mọi vị trí của nguồn này đã thấy lại hoặc đã đánh missing; giữ lại những cái vẫn đang chờ xác nhận
+        self.absent.retain(|_, (src, _)| *src != source_id);
+        self.absent.extend(still_absent);
+        // quét trọn vẹn → tự dọn, nhưng CHỈ vị trí missing của chính nguồn này và CHỈ khi lần quét thấy ít nhất một font
+        // (thư mục gốc còn đó mà trống — điểm gắn kết rỗng của ổ mạng/ổ rút — không chứng minh được font đã mất).
+        // Nguồn khác (kể cả ổ đang rút) không bao giờ bị dọn bởi lần quét này.
+        stats.purged = if stats.seen + stats.not_downloaded > 0 {
+            self.gc_missing(Some(source_id), MISSING_RETENTION_MS)?
+        } else {
+            self.gc()?;
+            0
+        };
         Ok(stats)
     }
 
@@ -526,25 +603,227 @@ impl Store {
         Ok(())
     }
 
+    /// Lấy bộ nhớ "vắng lần đầu" ra khỏi kết nối (để giữ qua lúc luồng quét nghỉ rồi mở kết nối mới).
+    pub fn take_absent(&mut self) -> HashMap<String, (i64, i64)> {
+        std::mem::take(&mut self.absent)
+    }
+
+    /// Nạp lại bộ nhớ "vắng lần đầu" đã giữ từ lần trước.
+    pub fn set_absent(&mut self, absent: HashMap<String, (i64, i64)>) {
+        self.absent = absent;
+    }
+
     /// Số liệu thật cho câu xác nhận "Gỡ nguồn" — chỉ đọc, không đổi gì (xem [`SourceRemovalReport`]).
     pub fn source_removal_report(&self, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
         removal_report(&self.conn, source_id)
     }
 
-    /// Gỡ nguồn (thao tác người dùng): vị trí của nguồn, bản ghi `u.sources`, rồi dọn rác (`gc`).
+    /// Gỡ nguồn (thao tác người dùng): bản ghi `u.sources`, vị trí file của nguồn, rồi dọn rác (`gc`).
     ///
     /// **Dữ liệu người dùng KHÔNG bị đụng**: Dự án (Case/Combo), Collection, Tag, Yêu thích, ghi đè phân loại, cặp
     /// font khoá theo `(hash, face_index)` ở user.db, không phụ thuộc nguồn. Font chỉ có ở nguồn này sẽ `missing`
     /// (Dự án) hoặc ẩn khỏi lưới nhưng còn trong Collection/Tag; thêm lại nguồn ⇒ khớp lại theo hash. Font đang bật
     /// không bị tự tắt. Trả số liệu đã tính TRƯỚC khi xoá.
+    ///
+    /// Hai DB ở chế độ WAL nên KHÔNG có giao dịch nguyên tử chung: mỗi bước là một giao dịch riêng, theo thứ tự cố
+    /// định `u.sources` → `file_locations`. Crash giữa hai bước chỉ để lại vị trí mồ côi (`source_id` không còn trong
+    /// `u.sources`), không bao giờ để nguồn "còn tên mà hết font"; [`Store::sweep_orphan_locations`] dọn lại ở lần
+    /// khởi động sau (và ở mọi lần gỡ nguồn kế tiếp). Chạy lại `remove_source` cho cùng id cũng an toàn (idempotent).
     pub fn remove_source(&mut self, source_id: i64) -> Result<SourceRemovalReport, StoreError> {
+        self.remove_source_with(source_id, &mut || Ok(()))
+    }
+
+    /// Như `remove_source`, `between` chạy giữa hai giao dịch (test mô phỏng crash bằng cách trả `Err`).
+    pub fn remove_source_with(
+        &mut self,
+        source_id: i64,
+        between: &mut dyn FnMut() -> Result<(), StoreError>,
+    ) -> Result<SourceRemovalReport, StoreError> {
+        let report = removal_report(&self.conn, source_id)?;
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        let report = removal_report(&tx, source_id)?;
-        tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
         tx.execute("DELETE FROM u.sources WHERE source_id=?1", [source_id])?;
         tx.commit()?;
-        self.gc()?;
+        between()?;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
+        // source_id có thể được dùng lại: không để số "chưa tải về" cũ lọt sang nguồn mới
+        tx.execute("DELETE FROM meta WHERE key=?1", [format!("{CLOUD_UNSEEN_PREFIX}{source_id}")])?;
+        tx.commit()?;
+        self.sweep_orphan_locations()?;
         Ok(report)
+    }
+
+    /// Xoá vị trí file của nguồn không còn trong `u.sources` (dấu vết của lần gỡ bị ngắt giữa chừng), rồi `gc`.
+    /// Cần kết nối có `u` (không chạy trên `open_library_only`). Trả số vị trí đã xoá.
+    pub fn sweep_orphan_locations(&mut self) -> Result<usize, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let n = tx.execute(
+            "DELETE FROM file_locations WHERE source_id NOT IN (SELECT source_id FROM u.sources)",
+            [],
+        )?;
+        // số "chưa tải về" mồ côi (gỡ nguồn bị ngắt giữa chừng)
+        tx.execute(
+            "DELETE FROM meta WHERE key LIKE ?1 AND CAST(substr(key, ?2) AS INTEGER) NOT IN (SELECT source_id FROM u.sources)",
+            params![format!("{CLOUD_UNSEEN_PREFIX}%"), CLOUD_UNSEEN_PREFIX.len() as i64 + 1],
+        )?;
+        tx.commit()?;
+        self.gc()?;
+        Ok(n)
+    }
+
+    /// Dọn vị trí `missing` mà lần cuối thấy file đã quá `retention_ms`, rồi `gc`. `source_id`: chỉ nguồn đó (`None` = mọi
+    /// nguồn). `missing` chỉ được đặt khi gốc nguồn đang truy cập được lúc quét, nên file ở ổ chưa gắn không bao giờ vào đây.
+    /// Trả số vị trí đã dọn.
+    pub fn gc_missing(&mut self, source_id: Option<i64>, retention_ms: i64) -> Result<usize, StoreError> {
+        let cutoff = now_ms() - retention_ms;
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let n = tx.execute(
+            "DELETE FROM file_locations WHERE missing=1 AND last_seen_at < ?1 AND (?2 IS NULL OR source_id = ?2)",
+            params![cutoff, source_id],
+        )?;
+        tx.commit()?;
+        self.gc()?;
+        Ok(n)
+    }
+
+    /// Dựng lại thư viện từ đầu: xoá file/face/vị trí và mọi dữ liệu dẫn xuất tính cục bộ (phân tích, embedding, ngôn ngữ,
+    /// trạng thái pipeline) trong MỘT giao dịch library.db (crash giữa chừng = chưa đổi gì). KHÔNG đụng user.db
+    /// (Dự án, Collection, Tag, Yêu thích, nguồn…) và dữ liệu cộng đồng; font trả lại bằng quét lại các nguồn.
+    pub fn rebuild_library(&mut self) -> Result<RebuildReport, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let count = |t: &str| -> Result<u32, StoreError> {
+            Ok(tx.query_row(&format!("SELECT count(*) FROM {t}"), [], |r| r.get::<_, i64>(0))? as u32)
+        };
+        let report = RebuildReport { files: count("files")?, faces: count("faces")?, locations: count("file_locations")? };
+        tx.execute("DELETE FROM file_locations", [])?;
+        tx.execute("DELETE FROM meta WHERE key LIKE ?1", [format!("{CLOUD_UNSEEN_PREFIX}%")])?;
+        tx.execute("DELETE FROM files", [])?; // faces theo ON DELETE CASCADE (trigger cập nhật FTS)
+        for t in ["analyses", "embeddings"] {
+            tx.execute(&format!("DELETE FROM {t} WHERE source <> 'community'"), [])?;
+        }
+        for t in ["pipeline_state", "face_langs", "face_lang_state"] {
+            tx.execute(&format!("DELETE FROM {t}"), [])?;
+        }
+        tx.commit()?;
+        Ok(report)
+    }
+
+    /// G8: nhập đúng các file font này (không quét thư mục) vào nguồn `source_id` — dùng cho nguồn `loose`. File đã có vị trí ở
+    /// BẤT KỲ nguồn nào thì giữ nguyên (không cướp vị trí của nguồn khác) và báo `AlreadyKnown`.
+    pub fn import_files(&mut self, source_id: i64, paths: &[PathBuf]) -> Result<Vec<(PathBuf, FileImportOutcome)>, StoreError> {
+        let started = now_ms();
+        let mut out: Vec<(PathBuf, FileImportOutcome)> = Vec::new();
+        let mut todo: Vec<ScannedFile> = Vec::new();
+        for p in paths {
+            let known: i64 = self.conn.query_row("SELECT count(*) FROM file_locations WHERE path=?1", [p.to_string_lossy()], |r| r.get(0))?;
+            if known > 0 {
+                out.push((p.clone(), FileImportOutcome::AlreadyKnown));
+                continue;
+            }
+            let Ok(m) = std::fs::metadata(p) else {
+                out.push((p.clone(), FileImportOutcome::Missing));
+                continue;
+            };
+            if !m.is_file() || !is_font(p) {
+                out.push((p.clone(), FileImportOutcome::Missing));
+                continue;
+            }
+            if os_placeholder(p, &m) {
+                out.push((p.clone(), FileImportOutcome::NotDownloaded));
+                continue;
+            }
+            let ns = |t: std::io::Result<std::time::SystemTime>| t.ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_nanos() as i64);
+            todo.push(ScannedFile { path: p.clone(), size: m.len(), mtime_ns: ns(m.modified()).unwrap_or(0), created_ns: ns(m.created()) });
+        }
+        let mut items: Vec<IngestItem> = Vec::new();
+        let mut to_analyze: Vec<(ScannedFile, [u8; 32])> = Vec::new();
+        for f in todo {
+            match hash_file(&f.path) {
+                Err(_) => out.push((f.path.clone(), FileImportOutcome::Unreadable)),
+                Ok(h) => {
+                    let fresh: i64 = self.conn.query_row(
+                        "SELECT count(*) FROM pipeline_state WHERE hash=?1 AND face_index=-1 AND stage='load' AND status IN ('done','failed') AND version=?2",
+                        params![&h[..], ANALYZER_VERSION],
+                        |r| r.get(0),
+                    )?;
+                    if fresh > 0 {
+                        items.push(IngestItem { source_id, file: f, hash: h, analysis: Analysis::Known });
+                    } else {
+                        to_analyze.push((f, h));
+                    }
+                }
+            }
+        }
+        let paths: Vec<PathBuf> = to_analyze.iter().map(|(f, _)| f.path.clone()).collect();
+        for ((f, h), (_, res)) in to_analyze.into_iter().zip(analyze_paths(&paths)) {
+            match res {
+                Ok(r) => items.push(IngestItem { source_id, file: f, hash: parse_hash(&r.hash_hex)?, analysis: Analysis::Report(r) }),
+                Err(CoreError::Io(_)) => out.push((f.path.clone(), FileImportOutcome::Unreadable)),
+                Err(e) => items.push(IngestItem {
+                    source_id,
+                    file: f,
+                    hash: h,
+                    analysis: Analysis::Failed { code: e.code().to_string(), detail: e.to_string() },
+                }),
+            }
+        }
+        for it in &items {
+            out.push((it.file.path.clone(), FileImportOutcome::Imported));
+        }
+        self.ingest(items, started)?;
+        Ok(out)
+    }
+
+    /// Đồng bộ cờ `missing`/`cloud_only` của các vị trí thuộc nguồn KHÔNG có thư mục (loose): stat từng file, không đọc nội dung.
+    /// Trả số vị trí đổi trạng thái.
+    pub fn refresh_file_source(&mut self, source_id: i64) -> Result<usize, StoreError> {
+        let rows: Vec<(i64, String, i64, i64)> = {
+            let mut st = self.conn.prepare("SELECT location_id, path, missing, cloud_only FROM file_locations WHERE source_id=?1")?;
+            st.query_map([source_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?
+        };
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let mut changed = 0;
+        for (id, path, missing, cloud) in rows {
+            let p = Path::new(&path);
+            let (m, c) = match std::fs::metadata(p) {
+                Ok(md) if md.is_file() => (0, i64::from(os_placeholder(p, &md))),
+                _ => (1, cloud),
+            };
+            if (m, c) != (missing, cloud) {
+                tx.execute("UPDATE file_locations SET missing=?2, cloud_only=?3 WHERE location_id=?1", params![id, m, c])?;
+                changed += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    /// Face (chưa missing) của các vị trí: khớp CHÍNH XÁC `exact` hoặc nằm dưới thư mục `prefixes` (không kèm dấu phân cách cuối).
+    /// Trả (đường dẫn vị trí, face), sắp theo đường dẫn rồi `face_index`.
+    pub fn faces_at(&self, exact: &[String], prefixes: &[String]) -> Result<Vec<(String, FaceKey)>, StoreError> {
+        let mut out: Vec<(String, FaceKey)> = Vec::new();
+        let mut st = self.conn.prepare(
+            "SELECT l.path, fi.hash, f.face_index FROM file_locations l JOIN files fi ON fi.file_id = l.file_id
+               JOIN faces f ON f.file_id = fi.file_id
+              WHERE l.missing = 0 AND (l.path = ?1 OR (?2 <> '' AND substr(l.path, 1, length(?2) + 1) IN (?2 || ?3, ?2 || ?4)))
+              ORDER BY l.path, f.face_index",
+        )?;
+        let mut run = |exact: &str, prefix: &str| -> Result<(), StoreError> {
+            let rows = st.query_map(params![exact, prefix, "/", ALT_SEP], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, u32>(2)?)))?;
+            for row in rows {
+                let (path, hash, face_index) = row?;
+                let hash: [u8; 32] = hash.try_into().map_err(|_| StoreError::BadHash("hash không đủ 32 byte".into()))?;
+                out.push((path, FaceKey { hash, face_index }));
+            }
+            Ok(())
+        };
+        for e in exact {
+            run(e, "")?;
+        }
+        for p in prefixes {
+            run("\u{0}", p)?;
+        }
+        Ok(out)
     }
 
     /// Xoá file không còn vị trí nào (vị trí `missing` vẫn giữ file). Không đụng `u`.
@@ -561,7 +840,9 @@ impl Store {
                 [],
             )?;
         }
-        tx.execute("DELETE FROM pipeline_state WHERE hash NOT IN (SELECT hash FROM files)", [])?;
+        for t in ["pipeline_state", "face_langs", "face_lang_state"] {
+            tx.execute(&format!("DELETE FROM {t} WHERE hash NOT IN (SELECT hash FROM files)"), [])?;
+        }
         tx.commit()?;
         Ok(n)
     }

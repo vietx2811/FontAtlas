@@ -2,6 +2,8 @@ import { useCallback, useRef } from 'react';
 import type { Api, ActivationReportDto, ConflictDto, FaceKeyDto, FileOutcomeDto, FileResultDto } from '../../api';
 import { t } from '../../i18n';
 import { refreshActivation } from '../../store/activationSync';
+import { keepBoth } from './renamedCopy';
+import { busyFaces, pushBusyOnly } from './busyNotice';
 import { useActivationQueue } from '../../store/activationFlow';
 import { useNoticeStore } from '../../store/notices';
 import { useUiStore } from '../../store/ui';
@@ -12,7 +14,7 @@ import { describeOutcome } from './messages';
 /** Báo các kết quả đáng báo (lỗi, bận…); thành công thì im lặng. */
 export const sayOutcomes = (outcomes: FileOutcomeDto[]): void => outcomes.forEach(o => { const m = describeOutcome(o); if (m) useNoticeStore.getState().push(m); });
 
-export type ActivationFlow = { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; activateCase(caseId: number): Promise<void>; activateCollection(collectionId: number): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void> };
+export type ActivationFlow = { toggle(faces: FaceKeyDto[], on: boolean): Promise<void>; activateCase(caseId: number): Promise<void>; /** Gỡ lý do «Bật cả Case»; trả số font vẫn bật vì lý do khác (-1 nếu lỗi). */ deactivateCase(caseId: number): Promise<number>; activateCollection(collectionId: number): Promise<void>; setScope(faces: FaceKeyDto[], scope: 'session' | 'persistent'): Promise<void> };
 
 /**
  * Bật/tắt kích hoạt cho một nhóm face. Hộp thoại (xung đột, đang được dự án giữ) KHÔNG nằm ở đây: chúng vào hàng đợi chung
@@ -56,7 +58,7 @@ export function useActivationFlow(api: Api): ActivationFlow {
     if (action === 'keep') { push({ kind: 'info', text: t('act.vf.auto.keep', { kept: other, skipped: mine }) }); return true; }
     if (action === 'both') {
       if (items.some(i => i.conflicts.some(c => c.owner === 'system'))) return false;
-      sayOutcomes((await api.activationActivate(keys, { proceed: true })).results.map(r => r.outcome));
+      await keepBoth(api, keys);
       push({ kind: 'info', text: t('act.vf.auto.both') });
       return true;
     }
@@ -99,6 +101,17 @@ export function useActivationFlow(api: Api): ActivationFlow {
     } catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); }
     await refresh();
   }), [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** "Tắt cả Case": chỉ gỡ lý do `case`; font còn lý do khác (thủ công, Dự án, app) vẫn bật, đếm để báo. */
+  const deactivateCase = useCallback(async (caseId: number): Promise<number> => {
+    let kept = 0;
+    try {
+      const rep = await api.activationDeactivateCase(caseId);
+      kept = new Set(rep.results.filter(r => r.outcome.kind === 'kept_active').map(r => r.hashHex)).size;
+      sayOutcomes(rep.results.map(r => r.outcome));
+    } catch (e) { push({ kind: 'error', text: t('act.fail', { msg: (e as Error).message }) }); kept = -1; }
+    await refresh();
+    return kept;
+  }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
   /** "Bật tất cả" của một Dự án (collection). */
   const activateCollection = useCallback((collectionId: number) => once(`col:${collectionId}`, async () => {
     try { const rep = await api.activationActivateCollection(collectionId); await afterActivate(rep, uniq(rep)); }
@@ -107,11 +120,15 @@ export function useActivationFlow(api: Api): ActivationFlow {
   }), [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Đổi phạm vi của font ĐANG bật (không tắt giữa chừng). */
-  const setScope = useCallback(async (faces: FaceKeyDto[], scope: 'session' | 'persistent') => {
-    try { sayOutcomes((await api.activationSetScope(faces, scope)).results.map(r => r.outcome).filter(o => o.kind === 'failed' || o.kind === 'busy')); }
+  const setScope = useCallback(async (faces: FaceKeyDto[], scope: 'session' | 'persistent', retried = false): Promise<void> => {
+    try {
+      const rep = await api.activationSetScope(faces, scope);
+      sayOutcomes(rep.results.map(r => r.outcome).filter(o => o.kind === 'failed')); // bận: một thông báo gộp có nút Thử lại (không báo từng file)
+      pushBusyOnly(rep, () => { const bf = busyFaces(rep); void setScope(bf.length ? bf : faces, scope, true); }, retried);
+    }
     catch (e) { push({ kind: 'error', text: t('act.scope.fail', { msg: (e as Error).message }) }); }
     await refresh();
   }, [api, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { toggle, activateCase, activateCollection, setScope };
+  return { toggle, activateCase, deactivateCase, activateCollection, setScope };
 }

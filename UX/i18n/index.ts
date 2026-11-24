@@ -13,16 +13,18 @@ import { DUP_I18N } from './dup';
 import { AUTO_I18N } from './auto';
 import { LIBRARY_I18N } from './library';
 import { ERR_I18N } from './err';
+import { FIGMA_I18N } from './figma';
 import { SETTINGS_I18N } from './settings';
 import { DETAIL_I18N } from './detail';
 import { UI_I18N } from './ui';
 import { FACES_I18N } from './faces';
 import { SIDEBAR_I18N } from './sidebar';
-import { getLocale } from './locale';
+import { getLocale, formatNumber } from './locale';
+import { platformText } from './platformText';
 import { en } from './en';
 import { EN_ONE } from './en/plural';
 export { EN_ONE };
-export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, hasChosenThisSession, formatNumber, formatDate, localeTag, type Locale } from './locale';
+export { getLocale, setLocale, useLocale, chooseLocale, initLocale, resolveLocale, hasChosenThisSession, formatNumber, formatDecimal, formatDate, localeTag, type Locale } from './locale';
 
 /** Khoá khai báo trực tiếp ở đây (các nhóm còn lại nằm trong file riêng). */
 export const MAIN_I18N = {
@@ -100,6 +102,7 @@ export const vi = {
   ...DESK_I18N,
   ...VIEW_I18N,
   ...ERR_I18N,
+  ...FIGMA_I18N,
   ...SETTINGS_I18N,
   ...DETAIL_I18N,
   ...UI_I18N,
@@ -123,9 +126,13 @@ const lookup = (key: string): string | undefined => {
   if (hit === undefined && import.meta.env?.DEV && !warned.has(key)) { warned.add(key); console.warn(`[i18n] missing key: ${key}`); } // khoá ghép động (class.${x}…) thiếu bản dịch
   return hit;
 };
-export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => (lookup(key) ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+/** Biến ĐẾM (số nguyên đặt tên theo quy ước) tự đi qua formatNumber: vi "1.234", en "1,234". Biến khác (id, px, năm…) và chuỗi đã định dạng giữ nguyên. */
+export const COUNT_VARS: ReadonlySet<string> = new Set(['n', 'k', 'm', 'total', 'done', 'skipped', 'failed', 'ok', 'kept', 'seen', 'rest', 'have', 'miss', 'max', 'exact', 'ambiguous', 'safe', 'review', 'hide', 'analyzed', 'written', 'pairs', 'classes', 'files', 'faces', 'fonts', 'collections', 'sources', 'favorites', 'tags', 'full', 'near', 'shown', 'mb', 'gb', 'free', 'need', 'missing', 'glyphs']);
+const fill = (tpl: string, vars: Record<string, string | number>): string => tpl.replace(/\{(\w+)\}/g, (_, k) => { const v = vars[k]; return typeof v === 'number' && COUNT_VARS.has(k) && Number.isFinite(v) ? formatNumber(v) : String(v ?? ''); });
+/** Chữ theo nền tảng áp lên MẪU thô, TRƯỚC khi nội suy {biến}: tên font/thư mục của người dùng không bao giờ bị đổi. */
+export const t = (key: I18nKey, vars: Record<string, string | number> = {}): string => fill(platformText(lookup(key) ?? key, getLocale()), vars);
 /** Như `t()` nhưng chọn dạng số ít tiếng Anh khi `vars.n` = 1 (tiếng Việt giữ một dạng). Khoá phải có trong EN_ONE, nếu không dùng dạng thường. */
 export const tn = (key: I18nKey, vars: Record<string, string | number> = {}): string => {
-  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return EN_ONE[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+  if (getLocale() === 'en' && Number(vars.n) === 1 && EN_ONE[key]) return fill(platformText(EN_ONE[key], 'en'), vars);
   return t(key, vars);
 };

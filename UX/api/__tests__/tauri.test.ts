@@ -186,6 +186,7 @@ describe('command arguments (camelCase keys of the 6a table)', () => {
     await api.activationActivateCollection(7, { scope: 'persistent' });
     expect(last().args).toMatchObject({ collectionId: 7, scope: 'persistent', proceed: false });
     await api.activationDeactivateCollection(7); expect(last().args).toMatchObject({ collectionId: 7 });
+    await api.activationDeactivateCase(8); expect(last().cmd).toBe('activation_deactivate_case'); expect(last().args).toMatchObject({ caseId: 8 });
     await api.activationDeactivateAll(); expect(last().cmd).toBe('activation_deactivate_all');
     await api.activationSetKeep(true); expect(last()).toEqual({ cmd: 'activation_set_keep', args: { on: true } });
     await api.activationSetScope([{ hashHex: 'aa', faceIndex: 0 }], 'persistent'); expect(last()).toEqual({ cmd: 'activation_set_scope', args: { faces: [{ hashHex: 'aa', faceIndex: 0 }], scope: 'persistent' } });
@@ -374,3 +375,66 @@ describe('R3/R6/R7 + activate-case commands', () => {
     await expect(createTauriApi().renameTag(1, 'x')).rejects.toMatchObject({ code: 'conflict' });
   });
 });
+
+describe('subscribe: tên subscriber cố định theo nơi gọi', () => {
+  type Ch = { onmessage: (m: unknown) => void };
+  /** Hub giả theo đúng luật backend: sink khoá theo (kênh, subscriber); cùng khoá thì thay. */
+  const hub = () => {
+    const sinks = new Map<string, Ch>();
+    const sync = () => {
+      for (const c of calls) {
+        if (!c.cmd.endsWith('_subscribe')) continue;
+        sinks.set(`${c.cmd}:${(c.args.subscriber as string | null) ?? 'default'}`, c.args.onEvent as Ch);
+      }
+      calls.length = 0;
+    };
+    return { emit: (cmd: string, e: unknown) => { sync(); for (const [k, ch] of sinks) if (k.startsWith(cmd + ':')) ch.onmessage(e); }, size: () => { sync(); return sinks.size; } };
+  };
+
+  it('truyền subscriber xuống lệnh cho cả 5 kênh; không có thì null', async () => {
+    const api = createTauriApi();
+    await api.scanSubscribe(() => {}, 'scan.store');
+    expect(last()).toMatchObject({ cmd: 'scan_subscribe', args: { subscriber: 'scan.store' } });
+    await api.bootSubscribe(() => {}, 'boot.gate');
+    expect(last().args.subscriber).toBe('boot.gate');
+    await api.embedSubscribe(() => {}, 'model.store');
+    expect(last().args.subscriber).toBe('model.store');
+    await api.activationSubscribe(() => {}, 'activation.sync');
+    expect(last().args.subscriber).toBe('activation.sync');
+    await api.taskSubscribe(() => {}, 'taskhub');
+    expect(last()).toMatchObject({ cmd: 'task_subscribe', args: { subscriber: 'taskhub' } });
+    await api.scanSubscribe(() => {});
+    expect(last().args.subscriber).toBeNull();
+  });
+
+  it('hai nơi (sidebar + onboarding) cùng nhận finished; tải lại cùng tên không nhân đôi', async () => {
+    const api = createTauriApi(); const h = hub();
+    const a: unknown[] = []; const b: unknown[] = [];
+    await api.scanSubscribe(e => a.push(e), 'scan.store');
+    await api.scanSubscribe(e => b.push(e), 'onboarding.scan');
+    h.emit('scan_subscribe', { type: 'finished' });
+    expect(a).toHaveLength(1); expect(b).toHaveLength(1);
+    // tải lại: nơi gọi "scan.store" đăng ký lại (cùng tên) → thay sink cũ
+    const a2: unknown[] = [];
+    await api.scanSubscribe(e => a2.push(e), 'scan.store');
+    h.emit('scan_subscribe', { type: 'finished' });
+    expect(a).toHaveLength(1); expect(a2).toHaveLength(1); expect(b).toHaveLength(2);
+    expect(h.size()).toBe(2);
+  });
+
+  it('lỗi cũ: không tên → mọi nơi dùng chung "default", nơi đến sau đá nơi trước', async () => {
+    const api = createTauriApi(); const h = hub();
+    const a: unknown[] = []; const b: unknown[] = [];
+    await api.scanSubscribe(e => a.push(e)); await api.scanSubscribe(e => b.push(e));
+    h.emit('scan_subscribe', { type: 'finished' });
+    expect(a).toHaveLength(0); expect(b).toHaveLength(1);
+  });
+
+  it('huỷ đăng ký (off) làm callback ngừng nhận', async () => {
+    const api = createTauriApi(); const h = hub(); const a: unknown[] = [];
+    const off = await api.scanSubscribe(e => a.push(e), 'x');
+    h.emit('scan_subscribe', 1); off(); h.emit('scan_subscribe', 2);
+    expect(a).toEqual([1]);
+  });
+});
+

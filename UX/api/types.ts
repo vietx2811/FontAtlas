@@ -3,9 +3,9 @@ export type { ClassFacetDto, ClassificationDto, ClassificationOverrideDto, AxisS
 import type {
   PreviewCacheInfoDto, ProblemDto, NameClashDto,
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, RelocateTargetDto, DerivedCopyDto, DerivedCopyInfoDto, RemoveDerivedResultDto, RestoreDerivedResultDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
-  PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
+  PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReasonNamesDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
   AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 } from '../bindings';
@@ -13,9 +13,9 @@ import type { FacePage, FaceQuery, FaceRow } from '../features/library-grid/type
 
 export type {
   ActivationEvent, ActivationReportDto, ActivationStateDto, AutoDeactivatedDto, AvailabilityDto, AxisReadingDto, BootEvent, BootStatusDto, CollectionDto,
-  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, CaseActivationDto, FileOutcomeDto,
+  ConflictDto, DesiredStateDto, EmbedEvent, EmbedStatusDto, ErrorInfoDto, FaceDetailDto, FaceKeyDto, FacePageDto, FamilyGroupDto, FamilyStyleDto, RemoveSourceReportDto, RebuildLibraryReportDto, CloudDownloadProgressDto, CloudDownloadReportDto, ImportProgressDto, ImportResultDto, ImportTargetDto, CaseAppDto, InstalledAppDto, AppSetEventDto, OrganizedLocationCheckDto, OrganizedStatusDto, OrganizePlanDto, OrganizeResultDto, OrganizeProgressDto, OrganizeScopeDto, ResortPlanDto, ResortResultDto, PackInfoDto, PathRemapDto, RelocateTargetDto, DerivedCopyDto, DerivedCopyInfoDto, RemoveDerivedResultDto, RestoreDerivedResultDto, CaseActivationDto, FileOutcomeDto,
   FileResultDto, FontManagerDto, GroupWeightsDto, LegacyStateDto, ModelEvent, ModelStatusDto, OnboardingDto, PairCandidateDto, PairLabelDto,
-  PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
+  PairModeDto, PairOptsDto, PairRoleDto, ProgressDto, ReasonDto, ReasonNamesDto, ReconcileReportDto, ScanEvent, ScanStatusDto, ScopeDto, SettingsDto,
   SimilarHitDto, SimilarSourceDto, SourceDto, SystemTagGroupDto, TagDto, UiStateDto, FacePage, FaceQuery, FaceRow, ReplacedFontDto, RestoreOutcomeDto, ConfirmedConflictDto, ReplacedEntryDto,
   AutoAppDto, AutoAppStateDto, AutoEvidenceDto, AutoLogDto, AutoMethodDto, AutoStatusDto, AutoTargetDto, OtherManagerDto, VfPolicyDto,
 };

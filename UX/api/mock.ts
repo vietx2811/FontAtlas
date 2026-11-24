@@ -69,6 +69,7 @@ function svgPreview(text: string, px: PxBucket, family: string, weight: number, 
 
 import { createMockCases } from './mockCases';
 import { createMockSuggest } from './mockSuggest';
+import { createMockFigma } from './mockFigma';
 import { createMockAuto, type MockAutoOptions } from './mockAuto';
 import { badgeOf, coverageFor, listFor, matchesLangs } from './mockLang';
 import { createMockResolve } from './mockResolve';
@@ -90,13 +91,18 @@ export function createMockApi(o: MockOptions = {}): Api {
 
   const cloudFetched = new Set<number>();
   const cloudRuns = new Map<number, boolean>();
+  let importBusy = false;
+  let derivedRemovalSeq = 0;
+  const organized = { configured: false, root: null as string | null, libraryDir: null as string | null, sourceId: null as number | null, files: 0, bytes: 0, freeBytes: 0, isCloud: false, available: true, snapshots: 0, lastSnapshot: null as string | null };
+  let orgBusy = false, orgCancel = false, orgBatch = 0, packPending: Awaited<ReturnType<Api['packInspect']>> | null = null;
+  const caseAppStore = new Map<number, Array<{ bundleId: string; name: string }>>();
   let sources: SourceDto[] = o.firstRun ? [] : [
     { id: 1, kind: 'folder', name: 'Fonts', path: '/Users/me/Fonts/src1', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
     { id: 2, kind: 'folder', name: 'Dự án khách', path: '/Users/me/Library/CloudStorage/OneDrive-Demo/src2', enabled: true, available: true, cloudProvider: 'one_drive', cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
     { id: 3, kind: 'folder', name: 'Ổ ngoài', path: '/Volumes/Backup/src3', enabled: true, available: false, cloudProvider: null, cloudOnlyCount: 0, faceCount: 0, lastScan: null, scanning: false },
   ];
   // Nguồn thứ hai có vài file còn là placeholder đám mây (để QA và chụp ảnh).
-  const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } : null);
+  const lastScanOf = (id: number) => (id === 2 ? { status: 'ok' as const, seen: 32, unchanged: 20, notDownloaded: 12, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] } : null);
   const countOf = (id: number) => rows.filter(r => sourceOf(r) === id).length;
   /** Mọi nhóm trùng của mock (chưa lọc, chưa trừ bản đã ẩn / nhóm bỏ qua). */
   const allDupGroups = async (): Promise<DuplicateGroupDto[]> => {
@@ -135,12 +141,12 @@ export function createMockApi(o: MockOptions = {}): Api {
   const simulateScan = (id: number) => {
     const t = o.tickMs ?? 400; const emit = (e: ScanEvent) => scanListeners.forEach(l => l(e));
     scanning = true;
-    emit({ type: 'queued', sourceId: id });
+    emit({ type: 'queued', sourceId: id, trigger: 'user' as const });
     [0.25, 0.5, 0.75, 1].forEach((f, i) => setTimeout(() => {
-      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180), notDownloaded: Math.round(f * 7) } });
-      emit({ type: 'facesAdded', sourceId: id, count: 45 });
+      emit({ type: 'progress', sourceId: id, progress: { phase: 'analyzing', done: Math.round(f * 200), total: 200, facesWritten: Math.round(f * 180), notDownloaded: Math.round(f * 7) }, trigger: 'user' as const });
+      emit({ type: 'facesAdded', sourceId: id, count: 45, trigger: 'user' as const });
       if (f === 1) {
-        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, unreadable: [], notDownloaded: 7 } });
+        emit({ type: 'finished', sourceId: id, stats: { status: 'ok', seen: 200, unchanged: 0, relinked: 0, analyzed: 195, failed: 3, missing: 0, purged: 0, unreadable: [], notDownloaded: 7 }, changed: true, trigger: 'user' as const });
         emit({ type: 'idle' }); scanning = false;
       }
     }, (i + 1) * t));
@@ -148,6 +154,11 @@ export function createMockApi(o: MockOptions = {}): Api {
   const act = createActivationSim({
     rowOf: k => byKey.get(keyOf(k)),
     collectionFaces: id => [...(collections.get(id)?.faces ?? [])].map(k => { const [h, i] = k.split(':'); return { hashHex: h, faceIndex: Number(i) }; }),
+    names: {
+      collection: id => collections.get(id)?.name ?? null,
+      caseName: async id => { try { return (await caseApi.getCase(id)).name; } catch { return null; } },
+      caseApps: async id => (caseAppStore.get(id) ?? []).map(a => a.name),
+    },
   });
   const sim = createModelSim({ tickMs: o.tickMs, initial: o.initial, embedEnabled: () => settings.embedEnabled });
   const lib = createMockLibraryApi(rows, { latencyMs: o.latencyMs });
@@ -160,6 +171,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     ...lib,
     ...caseApi,
     ...suggestApi,
+    ...createMockFigma(() => rows),
     async briefStarter(brief) {
       // cùng bảng ánh xạ với backend (services/brief.rs): tone → term (vùng chết 0.25, ràng buộc cứng từ 0.6), mục đích → term
       const TONE: Record<string, [string, string]> = { classic_modern: ['classic', 'modern'], warm_cool: ['warm', 'cool'], quiet_bold: ['delicate', 'strong'] };
@@ -254,10 +266,86 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async removeSource(id) { const r = await this.removeSourcePreview(id); sources = sources.filter(s => s.id !== id); return r; },
     async rescanSources() {},
+    async rebuildLibrary() {
+      const n = sources.length;
+      for (const s of sources) simulateScan(s.id);
+      return { filesRemoved: rows.length, facesRemoved: rows.length, locationsRemoved: rows.length, sourcesQueued: n };
+    },
     async revealSource(id) {
       const s = sources.find(x => x.id === id);
       if (!s) throw new CmdError('not_found', 'source');
       if (!s.available || !s.path) throw new CmdError('source_unavailable', 'source unavailable', { sourceId: id, name: s.name });
+    },
+    async importPathsInto(paths, target, onProgress) {
+      if (importBusy) throw new CmdError('busy', 'import busy');
+      if (target.kind === 'collection' ? !collections.has(target.id) : false) throw new CmdError('not_found', 'target');
+      importBusy = true;
+      try {
+        onProgress?.({ phase: 'scanning', done: 0, total: paths.length, added: 0, skipped: 0 });
+        await Promise.resolve();
+        onProgress?.({ phase: 'adding', done: paths.length, total: paths.length, added: 0, skipped: paths.length });
+        return { added: [], alreadyThere: 0, skipped: paths.map(path => ({ path, reason: 'not_font' })), cancelled: false };
+      } finally { importBusy = false; }
+    },
+    async importPathsCancel() { return importBusy; },
+    async organizedCheckLocation(path) {
+      const cloud = /iCloud|OneDrive|Google ?Drive|Dropbox|CloudStorage/i.test(path);
+      return { path, writable: !/readonly/i.test(path), isCloud: cloud, cloudProvider: cloud ? 'iCloud' : null, freeBytes: 38e9, nestedSource: /nested/i.test(path), problem: /readonly/i.test(path) ? 'not_writable' : /nested/i.test(path) ? 'nested_source' : null };
+    },
+    async organizedCreate(path) {
+      if (organized.configured) throw new CmdError('already_configured', 'already');
+      const chk = await this.organizedCheckLocation(path);
+      if (chk.problem) throw new CmdError(chk.problem, chk.problem);
+      Object.assign(organized, { configured: true, root: path, libraryDir: `${path}/Library`, sourceId: 900, files: 0, bytes: 0, freeBytes: chk.freeBytes, isCloud: chk.isCloud, available: true });
+      return { ...organized };
+    },
+    async organizedStatus() { return { ...organized }; },
+    async organizedPlan(scope) {
+      if (!organized.configured) throw new CmdError('not_configured', 'nc');
+      const dl = !!scope?.downloadFirst;
+      return { toCopy: dl ? 44 : 42, bytes: dl ? 2_000_000_000 : 1_800_000_000, alreadyThere: 3, cloudNotDownloaded: 2, needsDownload: 2, downloadBytes: 200_000_000, enoughSpaceForDownload: !/lowspace/i.test(organized.root ?? ''), freeBytes: 38e9, enoughSpace: true, sample: [{ src: '/Fonts/A/Roboto-Regular.ttf', dest: 'Library/Sans/Roboto/Roboto-Regular.ttf', classFolder: 'Sans' }] };
+    },
+    async organizedImport(_scope, onProgress) {
+      if (!organized.configured) throw new CmdError('not_configured', 'nc');
+      if (orgBusy) throw new CmdError('busy', 'busy');
+      orgBusy = true; orgCancel = false;
+      try {
+        for (let i = 1; i <= 3 && !orgCancel; i++) { await Promise.resolve(); onProgress?.({ phase: i === 1 && _scope.downloadFirst ? 'downloading' : 'copying', done: i * 14, total: 42, bytesDone: i * 6e8, failed: 0, downloaded: _scope.downloadFirst ? i : 0, downloadTotal: _scope.downloadFirst ? 3 : 0 }); }
+        if (orgCancel) return { copied: 14, bytes: 6e8, alreadyThere: 3, issues: [], issueCount: 0, issueGroups: [], downloaded: 0, skippedCloud: 0, cancelled: true, snapshot: null };
+        organized.files += 42; organized.bytes += 1_800_000_000; organized.snapshots += 1; organized.lastSnapshot = `${organized.root}/Snapshots/2026-11-14`;
+        return { copied: 42, bytes: 1_800_000_000, alreadyThere: 3, issues: [{ path: '/Fonts/x.otf', code: 'cloud_not_downloaded' }], issueCount: 1, issueGroups: [{ code: 'cloud_not_downloaded', count: 1, firstPath: '/Fonts/x.otf' }], downloaded: _scope.downloadFirst ? 2 : 0, skippedCloud: _scope.downloadFirst ? 0 : 2, cancelled: false, snapshot: organized.lastSnapshot };
+      } finally { orgBusy = false; }
+    },
+    async organizedCancel() { if (!orgBusy) return false; orgCancel = true; return true; },
+    async organizedResortPreview() { return { total: 2, moves: [{ face: { hashHex: 'aa', faceIndex: 0 }, from: 'Sans/Foo Sans/Foo.ttf', to: 'Slab/Foo Sans/Foo.ttf', classFolder: 'Slab', family: 'Foo Sans' }, { face: { hashHex: 'bb', faceIndex: 0 }, from: 'Unclassified/Bar/Bar.ttf', to: 'Handwriting/Bar/Bar.ttf', classFolder: 'Handwriting', family: 'Bar' }] }; },
+    async organizedResortApply() { return { batchId: ++orgBatch, moved: 2, failed: 0, cancelled: false }; },
+    async organizedResortUndo(batchId) { return { batchId, moved: 2, failed: 0, cancelled: false }; },
+    async organizedSnapshotNow() { organized.snapshots += 1; organized.lastSnapshot = `${organized.root ?? ''}/Snapshots/now`; return organized.lastSnapshot; },
+    async packInspect(path) { if (/bad/i.test(path)) throw new CmdError('invalid_pack', 'bad'); return { path, createdAt: 1_700_000_000, appVersion: '0.5.0', files: 4812, faces: 5100, embeddings: 5000, sources: 3, sourceRoots: ['/Volumes/Old/Fonts', '/Users/example/Fonts'] }; },
+    async packRestoreStage(path) { packPending = await this.packInspect(path); return packPending; },
+    async packRestorePending() { return packPending; },
+    async packRestoreCancel() { const had = packPending !== null; packPending = null; return had; },
+    async caseAppSuppress() { /* mock: không có app thật để chặn */ },
+    async activationRelocate(faces) { return { results: faces.map(f => ({ hashHex: f.hashHex, requestedFaces: [f.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] }; },
+    async activationRelocateTo(targets) { return { results: targets.map(x => ({ hashHex: x.face.hashHex, requestedFaces: [x.face.faceIndex], outcome: { kind: 'already_inactive' } })) as never, changed: 0, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] }; },
+    async deriveRenamedCopy(face) { return { face: { hashHex: `${face.hashHex}-vf`, faceIndex: 0 }, path: '/app/derived/x-VF.ttf', created: true, licenseRestricted: /restricted/i.test(face.hashHex) }; },
+    async removeDerivedCopy() { return { removalId: ++derivedRemovalSeq, trashed: true, wasActive: false }; },
+    async restoreDerivedCopy(removalId) { if (removalId <= 0) throw new CmdError('not_found', 'x'); return { via: 'trash', face: { hashHex: 'copy', faceIndex: 0 }, path: '/app/derived/x-VF.ttf' }; },
+    async derivedCopiesOf() { return []; },
+    async caseApps(id) { return [...(caseAppStore.get(id) ?? [])]; },
+    async caseSetApps(id, apps) {
+      if (apps.some(a => !/^[A-Za-z0-9._-]{3,255}$/.test(a.bundleId))) throw new CmdError('invalid_arg', 'bundle id');
+      caseAppStore.set(id, apps.map(a => ({ ...a })));
+    },
+    async installedApps() {
+      return [
+        { bundleId: 'com.apple.TextEdit', name: 'TextEdit', path: '/System/Applications/TextEdit.app', running: false },
+        { bundleId: 'com.adobe.Illustrator', name: 'Adobe Illustrator 2026', path: '/Applications/Adobe Illustrator 2026/Adobe Illustrator.app', running: true },
+        { bundleId: 'com.adobe.InDesign', name: 'Adobe InDesign 2026', path: '/Applications/Adobe InDesign 2026/Adobe InDesign 2026.app', running: false },
+        { bundleId: 'com.figma.Desktop', name: 'Figma', path: '/Applications/Figma.app', running: false },
+        { bundleId: 'com.apple.Safari', name: 'Safari', path: '/Applications/Safari.app', running: false },
+        { bundleId: 'com.apple.Pages', name: 'Pages', path: '/Applications/Pages.app', running: false },
+      ];
     },
     async sourceDownloadCloud(id, onProgress) {
       const s = sources.find(x => x.id === id);
@@ -310,6 +398,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async deleteTag(id) { const t = tags.get(id); if (!t) throw new CmdError('not_found', 'tag'); tags.delete(id); return t.faces.size; },
     async untagFaces(id, faces) { const t = tags.get(id); if (t) faces.forEach(f => t.faces.delete(keyOf(f))); },
     async revealInFinder(k) { findRow(k); },
+    async openThirdPartyNotices() { /* mock: không có file để mở */ },
     async revealLocation(path) { if (!rows.some(r => r.path === path) && !path.includes('/')) throw new CmdError('not_found', 'path'); },
     // Mock: Latin + Latin mở rộng (U+0000–024F) và Việt (U+1E00–1EFF) có; còn lại (CJK…) thiếu.
     async missingChars(face, chars) { findRow(face); return chars.filter(g => g.trim() && [...g.normalize('NFC')].some(c => { const n = c.codePointAt(0)!; return !(n <= 0x24f || (n >= 0x300 && n <= 0x36f) || (n >= 0x1e00 && n <= 0x1eff)); })); },
@@ -356,7 +445,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     },
     async activationActivateCase(caseId, o = {}) {
       const c = await this.getCase(caseId);
-      const report = await this.activationActivate(c.faces.filter(f => !f.missing).map(f => f.key), o);
+      const report = await this.activationActivateCaseFaces(caseId, c.faces.filter(f => !f.missing).map(f => f.key), o);
       return { report, skippedMissing: c.faces.filter(f => f.missing).map(f => f.key) };
     },
     async familyGroups(q = {}) {
@@ -433,7 +522,7 @@ export function createMockApi(o: MockOptions = {}): Api {
     async getFace(k, _lang): Promise<FaceDetailDto> {
       const row = findRow(k);
       return ok({
-        row, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
+        row, derivedFrom: null, summary: `${row.family} ${row.subfamily ?? ''}`.trim(), classification: /Serif|Didone|Fraunces|Cormorant|Abril|Playfair/.test(row.family) ? 'Serif' : /Mono/.test(row.family) ? 'Mono' : 'Sans', source: 'axes', hasImage: false,
         classificationInfo: mockClassification(row.family, classOver.get(keyOf(row))),
         file: { format: 'ttf', container: null, outline: 'glyf', numGlyphs: 1200 + row.faceId * 7, sizeBytes: row.fileSize, path: row.path },
         metadata: {
@@ -496,6 +585,9 @@ export function createMockApi(o: MockOptions = {}): Api {
     async scanStatus() { return ok({ running: scanning, paused: false, currentSourceId: null, queued: [] }); },
     async scanPause() {}, async scanResume() {}, async scanCancel() {},
     async scanSubscribe(l) { scanListeners.add(l); return () => { scanListeners.delete(l); }; },
+    async taskList() { return { rev: 0, tasks: [] }; },
+    async taskCancel() {},
+    async taskSubscribe() { return () => {}; },
     ...act,
     ...auto,
   };

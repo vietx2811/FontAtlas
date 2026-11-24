@@ -74,7 +74,7 @@ fn setup() -> (tempfile::TempDir, Arc<AppState>) {
 fn role_fit_one_face_gives_level_and_coded_reasons_never_a_score() {
     let (_d, st) = setup();
     let k = key(&find(&st, "Roboto"));
-    let x = suggest::role_fit(&st, &k, &role("Body")).unwrap();
+    let x = suggest::role_fit(&st, &k, &role("Body"), false).unwrap();
     assert_eq!(x.profile.as_deref(), Some("body"));
     assert_ne!(x.fit, FitDto::Unknown, "Roboto đo đủ: phải có kết luận cho Body");
     assert!(x.reasons.len() <= 3);
@@ -82,20 +82,20 @@ fn role_fit_one_face_gives_level_and_coded_reasons_never_a_score() {
     let v = serde_json::to_value(&x).unwrap();
     assert!(v.get("score").is_none());
     // đồng nghĩa tiếng Việt cùng hồ sơ
-    assert_eq!(suggest::role_fit(&st, &k, &role("Đoạn văn")).unwrap().profile.as_deref(), Some("body"));
+    assert_eq!(suggest::role_fit(&st, &k, &role("Đoạn văn"), false).unwrap().profile.as_deref(), Some("body"));
 }
 
 #[test]
 fn unknown_role_is_unknown_unless_profile_or_size_given() {
     let (_d, st) = setup();
     let k = key(&find(&st, "Roboto"));
-    let u = suggest::role_fit(&st, &k, &role("Zzz lạ")).unwrap();
+    let u = suggest::role_fit(&st, &k, &role("Zzz lạ"), false).unwrap();
     assert_eq!((u.fit, u.profile.clone()), (FitDto::Unknown, None));
     assert_eq!(u.reasons[0].code, "role_unknown");
     let by_profile = RoleRefDto { name: "Zzz lạ".into(), profile: Some("caption".into()), size: None };
-    assert_eq!(suggest::role_fit(&st, &k, &by_profile).unwrap().profile.as_deref(), Some("caption"));
+    assert_eq!(suggest::role_fit(&st, &k, &by_profile, false).unwrap().profile.as_deref(), Some("caption"));
     let by_size = RoleRefDto { name: "Zzz lạ".into(), profile: None, size: Some(RoleSizeDto::Display) };
-    assert_eq!(suggest::role_fit(&st, &k, &by_size).unwrap().profile.as_deref(), Some("display"));
+    assert_eq!(suggest::role_fit(&st, &k, &by_size, false).unwrap().profile.as_deref(), Some("display"));
     // vai lạ không có gợi ý nào: danh sách rỗng, không lỗi
     let page = suggest::role_fit_faces(&st, &role("Zzz lạ"), &RoleFitListOptsDto::default()).unwrap();
     assert_eq!((page.items.len(), page.total, page.profile), (0, 0, None));
@@ -138,10 +138,10 @@ fn user_class_override_changes_the_fit() {
     use app_lib::services::analysis;
     let (_d, st) = setup();
     let k = key(&find(&st, "Roboto"));
-    let before = suggest::role_fit(&st, &k, &role("Body")).unwrap();
+    let before = suggest::role_fit(&st, &k, &role("Body"), false).unwrap();
     assert_ne!(before.fit, FitDto::Weak);
     analysis::set_classification_override(&st, &app_lib::dto::analysis::ClassificationOverrideDto { face: k.clone(), class: "blackletter".into(), subclass: None }).unwrap();
-    let after = suggest::role_fit(&st, &k, &role("Body")).unwrap();
+    let after = suggest::role_fit(&st, &k, &role("Body"), false).unwrap();
     assert_eq!(after.fit, FitDto::Weak, "người dùng nói blackletter: không hợp Body");
     assert!(after.reasons.iter().any(|r| r.code == "class_unfit"));
     // danh sách theo vai cũng theo class đã sửa
@@ -149,11 +149,73 @@ fn user_class_override_changes_the_fit() {
     assert!(page.items.iter().all(|h| h.row.family != "Roboto"));
 }
 
+/// Font trong thư viện thử nghiệm thiếu ký tự tiếng Việt (tên họ, số ký tự thiếu), theo cờ `project_vi`.
+fn faces_missing_vietnamese(st: &AppState) -> Vec<(String, FaceKeyDto, u32)> {
+    let q = FaceQueryDto { limit: 100, ..Default::default() };
+    library::query_faces(st, &q)
+        .unwrap()
+        .items
+        .into_iter()
+        .filter(|r| r.vi_missing > 0)
+        .map(|r| (r.family.clone(), key(&r), r.vi_missing))
+        .collect()
+}
+
+#[test]
+fn vietnamese_penalty_applies_only_when_the_request_requires_vietnamese() {
+    let (_d, st) = setup();
+    let missing = faces_missing_vietnamese(&st);
+    assert!(!missing.is_empty(), "thư viện thử nghiệm cần ít nhất một font thiếu tiếng Việt");
+    for (fam, k, n) in missing {
+        let strict = suggest::role_fit(&st, &k, &role("Body"), true).unwrap();
+        let loose = suggest::role_fit(&st, &k, &role("Body"), false).unwrap();
+        // đòi đủ tiếng Việt: hạ xuống weak + vi_missing (hành vi 0.4.0)
+        assert_eq!(strict.fit, FitDto::Weak, "{fam}");
+        assert!(strict.reasons.iter().any(|r| r.code == "vi_missing"), "{fam}");
+        // không đòi: không hạ vì tiếng Việt, ghi chú `missing_vietnamese` đứng đầu kèm số ký tự thiếu
+        let rank = |f: FitDto| match f {
+            FitDto::Unknown => 0,
+            FitDto::Weak => 1,
+            FitDto::Ok => 2,
+            FitDto::Good => 3,
+        };
+        assert!(rank(loose.fit) >= rank(strict.fit), "{fam}");
+        assert!(loose.reasons.iter().all(|r| r.code != "vi_missing"), "{fam}");
+        let first = &loose.reasons[0];
+        assert_eq!(first.code, "missing_vietnamese", "{fam}: {:?}", loose.reasons);
+        assert_eq!(first.params.iter().find(|p| p.key == "count").map(|p| p.value as u32), Some(n), "{fam}");
+    }
+}
+
+#[test]
+fn role_fit_list_keeps_or_drops_missing_vietnamese_faces_by_the_flag_and_notes_them() {
+    let (_d, st) = setup();
+    let missing: Vec<String> = faces_missing_vietnamese(&st).into_iter().map(|m| m.0).collect();
+    assert!(!missing.is_empty());
+    let all = RoleFitListOptsDto { limit: 100, project_vi: false, ..Default::default() };
+    let only_vi = RoleFitListOptsDto { limit: 100, project_vi: true, ..Default::default() };
+    let mut noted = 0;
+    for r in ["Heading", "Display", "Quote", "Body"] {
+        let loose = suggest::role_fit_faces(&st, &role(r), &all).unwrap();
+        let strict = suggest::role_fit_faces(&st, &role(r), &only_vi).unwrap();
+        // đòi đủ tiếng Việt: font thiếu bị loại khỏi danh sách
+        assert!(strict.items.iter().all(|h| !missing.contains(&h.row.family)), "{r}");
+        // không đòi: font thiếu có thể xuất hiện, và mỗi dòng của chúng mang ghi chú
+        for h in loose.items.iter().filter(|h| missing.contains(&h.row.family)) {
+            assert!(h.reasons.iter().any(|w| w.code == "missing_vietnamese"), "{r}: {:?}", h.reasons);
+            assert!(h.reasons.iter().all(|w| w.code != "vi_missing"));
+            noted += 1;
+        }
+        assert!(loose.total >= strict.total, "{r}");
+    }
+    assert!(noted > 0, "ít nhất một font thiếu tiếng Việt phải lọt vào danh sách khi không đòi đủ tiếng Việt");
+}
+
 #[test]
 fn numerals_without_tnum_data_is_never_weak_for_that_reason() {
     let (_d, st) = setup();
     let k = key(&find(&st, "Roboto"));
-    let x = suggest::role_fit(&st, &k, &role("Numerals")).unwrap();
+    let x = suggest::role_fit(&st, &k, &role("Numerals"), false).unwrap();
     assert!(x.reasons.iter().all(|r| r.code != "tnum_missing"));
     assert!(x.reasons.iter().any(|r| r.code == "tnum_unknown") || x.reasons.len() == 3);
 }

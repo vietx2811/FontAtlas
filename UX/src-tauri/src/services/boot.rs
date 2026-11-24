@@ -39,6 +39,12 @@ pub fn start(state: Arc<AppState>) {
 /// Đồng bộ (để test). Không panic: lỗi mở Store → phase `failed`, không ghi thêm gì.
 pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
     set_phase(state, BootPhase::Starting);
+    // khôi phục từ gói (B7) đã xếp ở lần chạy trước: PHẢI chạy trước khi mở DB; DB cũ được dời, không xoá
+    match crate::services::organized::apply_pending_restore(&state.dirs.data) {
+        Some(Ok(b)) => log::warn!("đã khôi phục thư viện từ gói; DB cũ ở {b:?}"),
+        Some(Err(e)) => log::error!("khôi phục từ gói thất bại, giữ DB hiện tại: {e}"),
+        None => {}
+    }
     let (store, report) = match Store::open(&state.dirs.data) {
         Ok(x) => x,
         Err(e) => {
@@ -53,6 +59,16 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
             return snapshot(state);
         }
     };
+    let mut store = store;
+    // lần gỡ nguồn bị ngắt giữa hai DB (crash/mất điện) để lại vị trí mồ côi: dọn. Bỏ qua khi user.db vừa bị thay
+    // (hỏng → bản mới) hoặc library vừa dựng lại, vì lúc đó danh sách nguồn không còn đáng tin để so.
+    if report.user_backup.is_none() && !report.library_recreated {
+        match store.sweep_orphan_locations() {
+            Ok(n) if n > 0 => log::warn!("dọn {n} vị trí file mồ côi của nguồn đã gỡ dở"),
+            Ok(_) => {}
+            Err(e) => log::warn!("dọn vị trí mồ côi lỗi: {e}"),
+        }
+    }
     let _ = state.store.set(Mutex::new(store));
     let _ = state.user.set(Mutex::new(user));
     if let Ok(mut b) = state.boot.write() {
@@ -68,9 +84,10 @@ pub fn run_boot(state: &Arc<AppState>) -> BootStatusDto {
         log::warn!("dựng Index lúc khởi động lỗi: {e}");
     }
     set_phase(state, BootPhase::Activation);
-    crate::services::activation::reconcile_now(state, true);
+    crate::services::activation::reconcile_startup(state); // trước broker/fontreq: xoá auto-on của phiên trước rồi mới nhận yêu cầu mới
     crate::services::broker::start(state);
     crate::services::fontreq::start(state);
+    crate::services::app_sets::start(state);
     set_phase(state, BootPhase::Ready);
     after_ready(state);
     snapshot(state)
@@ -87,13 +104,29 @@ fn after_ready(state: &Arc<AppState>) {
     let seen = state.with_user(|u| Ok(u.setting(keys::ANALYZER_SEEN)?)).ok().flatten();
     let version_changed = seen.as_deref() != Some(fontatlas_core::ANALYZER_VERSION);
     if rescan_pref || version_changed {
-        let _ = state.scans.enqueue_all_directories(state);
+        let _ = state.scans.enqueue_all_directories_as(state, crate::dto::events::ScanTrigger::Launch);
     }
     mark_analyzer_seen_if_current(state);
-    state.cloud_watch.sync(state);
+    // dọn đăng ký session mồ côi (sống qua kill/crash): nền, sau khi UI đã lên; không chặn boot
+    let st = state.clone();
+    let _ = std::thread::Builder::new().name("fontatlas-orphans".into()).spawn(move || crate::services::activation::sweep_orphans(&st));
+    refresh_loose_fonts(state);
+    state.cloud_watch.sync_in_background(state);
     let _ = crate::services::embed::ensure_started(state);
     crate::services::langs::ensure_started(state);
     crate::services::cases::purge_trash(state);
+}
+
+/// Font lẻ (G8) không có thư mục để quét: đối chiếu từng file (còn/mất, đã tải/chưa) mỗi lần mở app.
+fn refresh_loose_fonts(state: &Arc<AppState>) {
+    let ids: Vec<i64> = state
+        .with_user(|u| Ok(u.sources()?.into_iter().filter(|s| s.kind == fontatlas_store::SourceKind::Loose).map(|s| s.id).collect()))
+        .unwrap_or_default();
+    for id in ids {
+        if let Err(e) = state.with_store(|s| Ok(s.refresh_file_source(id)?)) {
+            log::warn!("làm mới font lẻ lỗi: {}", e.message);
+        }
+    }
 }
 
 /// Ghi `analyzer_version_seen` khi mọi face đã có bản phân tích theo phiên bản hiện tại.

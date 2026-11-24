@@ -7,15 +7,19 @@ use std::time::{Duration, Instant};
 
 use fontatlas_store::{SourceKind, Store};
 
-use crate::dto::events::ScanEvent;
+use crate::dto::events::{ScanEvent, ScanTrigger};
 use crate::dto::library::{RescanStatsDto, ScanProgressDto, ScanStatusDto};
 use crate::error::CmdError;
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
+use crate::services::tasks::TaskSpec;
 use crate::services::{access, boot};
 use crate::state::AppState;
 
 #[derive(Default)]
 struct Queue {
     queue: VecDeque<i64>,
+    /// Ai xếp lượt đang chờ của từng nguồn (chỉ id trong `queue`). Xếp thêm bởi nguồn mạnh hơn thì nâng lên (User > Launch > Watcher).
+    triggers: HashMap<i64, ScanTrigger>,
     current: Option<i64>,
     running: bool,
 }
@@ -29,6 +33,18 @@ struct Inner {
     shutdown: AtomicBool,
     worker: Mutex<Option<JoinHandle<()>>>,
     last: Mutex<HashMap<i64, RescanStatsDto>>,
+    /// Vị trí vắng lần đầu (xem `Store::absent`): giữ ở đây vì luồng quét thoát khi hết việc và mở kết nối mới ở lượt sau.
+    absent: Mutex<HashMap<String, (i64, i64)>>,
+    /// Có lượt quét nào từ lần hết việc trước làm đổi thư viện (font mới/đổi/mất, lỗi, huỷ giữa chừng)? Chỉ khi đó mới dựng lại Index.
+    dirty: AtomicBool,
+}
+
+/// Kết quả `ScanManager::cancel_source`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancelOutcome {
+    Running,
+    Queued,
+    Nothing,
 }
 
 #[derive(Default)]
@@ -43,26 +59,53 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl ScanManager {
     /// Thêm vào hàng đợi (bỏ id đang chạy hoặc đã có trong hàng). Không chặn.
     pub fn enqueue(&self, state: &Arc<AppState>, ids: &[i64]) {
-        self.enqueue_with(state, ids, false);
+        self.enqueue_with(state, ids, false, ScanTrigger::User);
+    }
+
+    /// Như `enqueue`, ghi rõ ai kích (FE dùng để quyết định có hiện "đang quét" không).
+    pub fn enqueue_as(&self, state: &Arc<AppState>, ids: &[i64], trigger: ScanTrigger) {
+        self.enqueue_with(state, ids, false, trigger);
     }
 
     /// Như `enqueue` nhưng id đang được quét VẪN được xếp thêm một lượt SAU lượt hiện tại (lượt hiện tại có thể đã đi qua
     /// phần vừa thay đổi, vd file vừa tải về máy). Id đã nằm sẵn trong hàng thì không xếp trùng. Trả `false` khi đang tắt app.
     pub fn enqueue_follow_up(&self, state: &Arc<AppState>, ids: &[i64]) -> bool {
-        self.enqueue_with(state, ids, true)
+        self.enqueue_with(state, ids, true, ScanTrigger::User)
     }
 
-    fn enqueue_with(&self, state: &Arc<AppState>, ids: &[i64], follow_up: bool) -> bool {
+    /// `enqueue_follow_up` với người kích rõ ràng (watcher dùng `Watcher`).
+    pub fn enqueue_follow_up_as(&self, state: &Arc<AppState>, ids: &[i64], trigger: ScanTrigger) -> bool {
+        self.enqueue_with(state, ids, true, trigger)
+    }
+
+    fn enqueue_with(&self, state: &Arc<AppState>, ids: &[i64], follow_up: bool, trigger: ScanTrigger) -> bool {
         if self.inner.shutdown.load(Ordering::SeqCst) {
             return false;
         }
         let mut spawn = false;
+        // tên nguồn tra TRƯỚC khi giữ khoá hàng (chạm user.db); đăng ký việc trong khay thì làm TRONG khoá hàng để không đua với
+        // việc dọn khi hàng về rỗng (xem `worker`) và với huỷ (xem `cancel_source`)
+        let names: HashMap<i64, Option<String>> = ids.iter().map(|&id| (id, source_short_name(state, id))).collect();
         {
             let mut q = lock(&self.inner.q);
             for &id in ids {
-                if (follow_up || q.current != Some(id)) && !q.queue.contains(&id) {
+                if q.queue.contains(&id) {
+                    // đã chờ sẵn: không xếp trùng, nhưng người dùng xếp thì lượt đó thành của người dùng
+                    let e = q.triggers.entry(id).or_insert(trigger);
+                    if trigger.rank() > e.rank() {
+                        *e = trigger;
+                        if let Some(t) = state.tasks.id_of(&scan_key(id)) {
+                            state.tasks.set_trigger(&t, trigger);
+                        }
+                    }
+                } else if follow_up || q.current != Some(id) {
                     q.queue.push_back(id);
-                    state.hubs.scan.emit(ScanEvent::Queued { source_id: id });
+                    q.triggers.insert(id, trigger);
+                    state.hubs.scan.emit(ScanEvent::Queued { source_id: id, trigger });
+                    if state.tasks.id_of(&scan_key(id)).is_none() {
+                        let name = names.get(&id).cloned().flatten();
+                        state.tasks.begin(Some(&scan_key(id)), scan_spec(state, id, trigger, name), TaskState::Queued);
+                    }
                 }
             }
             if !q.queue.is_empty() && !q.running {
@@ -91,8 +134,12 @@ impl ScanManager {
     }
 
     pub fn enqueue_all_directories(&self, state: &Arc<AppState>) -> Result<(), CmdError> {
+        self.enqueue_all_directories_as(state, ScanTrigger::User)
+    }
+
+    pub fn enqueue_all_directories_as(&self, state: &Arc<AppState>, trigger: ScanTrigger) -> Result<(), CmdError> {
         let ids = directory_source_ids(state)?;
-        self.enqueue(state, &ids);
+        self.enqueue_as(state, &ids, trigger);
         Ok(())
     }
 
@@ -112,21 +159,37 @@ impl ScanManager {
         self.inner.paused.load(Ordering::SeqCst)
     }
 
+    /// App đang tắt (các lượt nền không nên xếp thêm việc).
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.shutdown.load(Ordering::SeqCst)
+    }
+
     /// Đặt cờ tắt + huỷ (không chờ).
     pub fn request_shutdown(&self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);
         self.inner.cancel.store(true, Ordering::SeqCst);
-        lock(&self.inner.q).queue.clear();
+        let mut q = lock(&self.inner.q);
+        q.queue.clear();
+        q.triggers.clear();
     }
 
     /// Bỏ nguồn khỏi hàng đợi; đang quét nguồn đó thì huỷ và chờ xong (≤ 10 s). `false` = chưa dừng kịp.
-    pub fn forget(&self, id: i64) -> bool {
-        let running = {
+    pub fn forget(&self, state: &AppState, id: i64) -> bool {
+        let (running, drained) = {
             let mut q = lock(&self.inner.q);
+            let before = q.queue.len();
             q.queue.retain(|x| *x != id);
-            q.current == Some(id)
+            q.triggers.remove(&id);
+            (q.current == Some(id), q.queue.len() != before && q.queue.is_empty() && q.current.is_none())
         };
         if !running {
+            // nguồn chỉ nằm trong hàng: gỡ việc khỏi khay và, nếu hàng rỗng hẳn, báo Idle (worker có thể đã thoát mà không báo lại)
+            if let Some(t) = state.tasks.id_of(&scan_key(id)) {
+                state.tasks.finish(&t, TaskOutcome::Cancelled, None);
+            }
+            if drained {
+                state.hubs.scan.emit(ScanEvent::Idle);
+            }
             return true;
         }
         self.inner.cancel.store(true, Ordering::SeqCst);
@@ -142,6 +205,38 @@ impl ScanManager {
     /// Huỷ nguồn đang quét (các nguồn còn trong hàng vẫn chạy).
     pub fn cancel_current(&self) {
         self.inner.cancel.store(true, Ordering::SeqCst);
+    }
+
+    /// Huỷ MỘT nguồn theo yêu cầu của khay "Tác vụ". Trả ngay, không chờ. Kết quả cho biết ĐÃ XỬ LÝ trường hợp nào (một lần dưới
+    /// khoá hàng đợi, nên không đua với worker lấy nguồn ra chạy): đang quét → đặt cờ huỷ (dừng ở ranh giới lô, `run_job` gỡ việc);
+    /// đang chờ → bỏ khỏi hàng, gỡ việc khỏi khay ngay và, nếu hàng rỗng hẳn, báo `Idle` để UI không kẹt "đang quét".
+    pub fn cancel_source(&self, state: &AppState, id: i64) -> CancelOutcome {
+        let (out, drained) = {
+            let mut q = lock(&self.inner.q);
+            if q.current == Some(id) {
+                self.inner.cancel.store(true, Ordering::SeqCst);
+                // người dùng đã huỷ: bỏ luôn lượt chờ tiếp của CÙNG nguồn (nếu không nó chạy lại và hiện lại sau khi đã huỷ)
+                q.queue.retain(|x| *x != id);
+                q.triggers.remove(&id);
+                (CancelOutcome::Running, false)
+            } else {
+                let before = q.queue.len();
+                q.queue.retain(|x| *x != id);
+                q.triggers.remove(&id);
+                let removed = q.queue.len() != before;
+                (if removed { CancelOutcome::Queued } else { CancelOutcome::Nothing }, removed && q.queue.is_empty() && q.current.is_none())
+            }
+        };
+        // đang chờ HOẶC không còn gì (worker vừa xong nguồn này): việc còn lại trong khay là việc cũ, gỡ ngay (không kẹt "cancelling")
+        if out != CancelOutcome::Running {
+            if let Some(t) = state.tasks.id_of(&scan_key(id)) {
+                state.tasks.finish(&t, TaskOutcome::Cancelled, None);
+            }
+            if drained {
+                state.hubs.scan.emit(ScanEvent::Idle);
+            }
+        }
+        out
     }
 
     /// Huỷ và chờ luồng quét kết thúc (≤ 5 s).
@@ -215,8 +310,9 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             match q.queue.pop_front() {
                 Some(id) if !inner.shutdown.load(Ordering::SeqCst) => {
                     q.current = Some(id);
+                    let trigger = q.triggers.remove(&id).unwrap_or(ScanTrigger::User);
                     inner.cancel.store(false, Ordering::SeqCst);
-                    Some(id)
+                    Some((id, trigger))
                 }
                 _ => {
                     q.current = None;
@@ -224,12 +320,20 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
                 }
             }
         };
-        let Some(id) = next else {
+        let Some((id, trigger)) = next else {
             // hết việc: báo Idle và chạy các móc; `running` giữ true tới khi móc xong để `wait_idle` chờ đủ.
             // Đang tắt app thì bỏ móc (không mở worker embed hay đăng ký lại font sau `on_exit`).
             state.hubs.scan.emit(ScanEvent::Idle);
+            // việc quét còn sót trong khay (bị `forget`/tắt app lấy mất khỏi hàng) không được kẹt lại
+            // (dưới khoá hàng: `enqueue` đăng ký việc cũng dưới khoá này nên không có việc "ma" lọt giữa hai bước)
+            {
+                let q = lock(&inner.q);
+                if q.queue.is_empty() && q.current.is_none() {
+                    state.tasks.retain_kind(TaskKind::Scan, |_| false, TaskOutcome::Cancelled);
+                }
+            }
             if !inner.shutdown.load(Ordering::SeqCst) {
-                after_idle(&state);
+                after_idle(&state, inner.dirty.swap(false, Ordering::SeqCst));
             }
             let mut q = lock(&inner.q);
             if q.queue.is_empty() || inner.shutdown.load(Ordering::SeqCst) {
@@ -240,23 +344,25 @@ fn worker(state: Arc<AppState>, inner: Arc<Inner>) {
             continue;
         };
         // panic trong quét/callback không được làm kẹt `running`: coi như job lỗi và đi tiếp
-        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_job(&state, &inner, &mut store, id)));
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_job(&state, &inner, &mut store, id, trigger)));
         if r.is_err() {
             state
                 .hubs
                 .scan
                 .emit(ScanEvent::Failed { source_id: id, error: CmdError::internal("luồng quét gặp lỗi không lường trước") });
+            fail_task(&state, id);
         }
         lock(&inner.q).current = None;
         inner.idle.notify_all(); // `forget` chờ nguồn đang quét dừng
     }
 }
 
-fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, fontatlas_store::StoreError>, id: i64) {
+fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, fontatlas_store::StoreError>, id: i64, trigger: ScanTrigger) {
     let s = match store.as_mut() {
         Ok(s) => s,
         Err(e) => {
             state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::new("store_unavailable", e.to_string()) });
+            fail_task(state, id);
             return;
         }
     };
@@ -264,19 +370,24 @@ fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, 
         Ok(src) => src.path.map(std::path::PathBuf::from),
         Err(e) => {
             state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e });
+            fail_task(state, id);
             return;
         }
     };
     let Some(root) = root else {
         state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: CmdError::not_found("nguồn không có thư mục") });
+        fail_task(state, id);
         return;
     };
     // macOS có thể treo ở opendir khi chờ cấp quyền: thử mở thư mục gốc có giới hạn thời gian trước khi quét.
     let probe = access::probe_dir(&root, access::timeout());
     if let Some(error) = access::to_error(&root, &probe) {
         state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error });
+        fail_task(state, id);
         return;
     }
+    let task = task_running(state, id, trigger, &root);
+    s.set_absent(std::mem::take(&mut *lock(&inner.absent)));
     let r = s.rescan_root_with(
         id,
         &root,
@@ -284,30 +395,124 @@ fn run_job(state: &Arc<AppState>, inner: &Arc<Inner>, store: &mut Result<Store, 
             while inner.paused.load(Ordering::SeqCst) && !inner.cancel.load(Ordering::SeqCst) && !inner.shutdown.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(50));
             }
-            state.hubs.scan.emit(ScanEvent::Progress { source_id: id, progress: ScanProgressDto::from(p) });
+            state.hubs.scan.emit(ScanEvent::Progress { source_id: id, progress: ScanProgressDto::from(p), trigger });
+            match p.phase {
+                // đếm/liệt kê/băm: chưa biết có bao nhiêu font cần phân tích → "đang đếm" (total=null), không mượn thang của pha sau
+                fontatlas_store::ScanPhase::Walking | fontatlas_store::ScanPhase::Hashing => state.tasks.progress(&task, 0, None),
+                fontatlas_store::ScanPhase::Analyzing => state.tasks.progress(&task, p.done as u64, (p.total > 0).then_some(p.total as u64)),
+                fontatlas_store::ScanPhase::MarkingMissing => {} // giữ nguyên giá trị cuối của pha phân tích
+            }
             if p.faces_written > 0 {
-                state.hubs.scan.emit(ScanEvent::FacesAdded { source_id: id, count: p.faces_written as u32 });
+                state.hubs.scan.emit(ScanEvent::FacesAdded { source_id: id, count: p.faces_written as u32, trigger });
             }
         },
         &inner.cancel,
     );
+    *lock(&inner.absent) = s.take_absent();
     match r {
         Ok(stats) => {
+            let changed = changed_library(&stats);
+            if changed {
+                inner.dirty.store(true, Ordering::SeqCst);
+            }
+            let pending_absent = stats.pending_absent;
             let dto = RescanStatsDto::from(&stats);
             lock(&inner.last).insert(id, dto.clone());
-            state.hubs.scan.emit(ScanEvent::Finished { source_id: id, stats: dto });
+            let outcome = if stats.status == fontatlas_store::RescanStatus::Cancelled { TaskOutcome::Cancelled } else { TaskOutcome::Done };
+            state.hubs.scan.emit(ScanEvent::Finished { source_id: id, stats: dto, changed, trigger });
+            state.tasks.finish(&task, outcome, None);
+            if pending_absent > 0 {
+                schedule_verify(state, id);
+            }
         }
-        Err(e) => state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() }),
+        Err(e) => {
+            inner.dirty.store(true, Ordering::SeqCst);
+            state.hubs.scan.emit(ScanEvent::Failed { source_id: id, error: e.into() });
+            state.tasks.finish(&task, TaskOutcome::Failed, Some("task.error.scan"));
+        }
     }
 }
 
+/// Lượt quét thất bại trước khi bắt đầu: gỡ việc (nếu đã đăng ký) với kết quả lỗi.
+fn fail_task(state: &Arc<AppState>, id: i64) {
+    if let Some(t) = state.tasks.id_of(&scan_key(id)) {
+        state.tasks.finish(&t, TaskOutcome::Failed, Some("task.error.scan"));
+    }
+}
+
+fn scan_key(id: i64) -> String {
+    format!("scan:{id}")
+}
+
+/// Tên ngắn cho tiêu đề (tên nguồn hoặc thư mục cuối); không bao giờ đường dẫn đầy đủ.
+fn short_name(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "…".to_string())
+}
+
+fn scan_spec(state: &Arc<AppState>, id: i64, trigger: ScanTrigger, name: Option<String>) -> TaskSpec {
+    let weak = Arc::downgrade(state);
+    let mut spec = TaskSpec::new(TaskKind::Scan, "task.scan")
+        .trigger(trigger)
+        .group(&format!("scan:{id}"))
+        .cancellable(Arc::new(move || {
+            if let Some(st) = weak.upgrade() {
+                st.scans.cancel_source(&st, id);
+            }
+        }));
+    if let Some(n) = name {
+        spec = spec.arg("source", n);
+    }
+    spec
+}
+
+/// Tên ngắn của nguồn (thư mục cuối); `None` nếu không tra được.
+fn source_short_name(state: &Arc<AppState>, id: i64) -> Option<String> {
+    state.with_user(|u| Ok(u.source(id)?)).ok().and_then(|s| s.path).map(|p| short_name(std::path::Path::new(&p)))
+}
+
+/// Lượt quét bắt đầu chạy: chuyển việc sang "đang chạy" (chưa có thì tạo, vd lượt đầu không đi qua `enqueue`).
+fn task_running(state: &Arc<AppState>, id: i64, trigger: ScanTrigger, root: &std::path::Path) -> String {
+    let key = scan_key(id);
+    let tid = state.tasks.begin(Some(&key), scan_spec(state, id, trigger, Some(short_name(root))), TaskState::Running);
+    state.tasks.set_arg(&tid, "source", short_name(root));
+    state.tasks.set_trigger(&tid, trigger);
+    state.tasks.running(&tid);
+    tid
+}
+
+/// Sau bao lâu quét xác nhận một nguồn còn vị trí vắng lần đầu (xem `Store::absent`). Đủ dài để stub↔file thật/ghi tạm rồi đổi
+/// tên xong, đủ ngắn để xoá thật biến mất khỏi lưới ngay sau đó.
+pub const VERIFY_DELAY: Duration = Duration::from_secs(5);
+
+/// Xếp một lượt quét xác nhận (trigger `watcher`, không nháy UI) sau `VERIFY_DELAY`. Không giữ AppState sống và không chạy khi đang tắt.
+fn schedule_verify(state: &Arc<AppState>, id: i64) {
+    let weak = Arc::downgrade(state);
+    let _ = std::thread::Builder::new().name("fontatlas-scan-verify".into()).spawn(move || {
+        std::thread::sleep(VERIFY_DELAY);
+        if let Some(st) = weak.upgrade()
+            && !st.scans.is_shutting_down()
+        {
+            st.scans.enqueue_follow_up_as(&st, &[id], ScanTrigger::Watcher);
+        }
+    });
+}
+
+/// Lượt quét có làm đổi thư viện không? Lượt "không có gì mới" (vd quét lại do watcher báo, mọi file không đổi) KHÔNG được
+/// kéo theo dựng lại Index (đắt với thư viện lớn).
+fn changed_library(s: &fontatlas_store::RescanStats) -> bool {
+    s.status != fontatlas_store::RescanStatus::Ok
+        || s.analyzed + s.relinked.saturating_sub(s.touched) + s.failed + s.missing + s.purged > 0
+}
+
 /// Việc nối tiếp khi hàng đợi quét về rỗng (mỗi task sau thêm móc của mình).
-fn after_idle(state: &Arc<AppState>) {
+fn after_idle(state: &Arc<AppState>, library_changed: bool) {
     boot::resolve_legacy_if_needed(state);
     boot::mark_analyzer_seen_if_current(state);
     crate::services::activation::reconcile_now(state, false);
     let _ = crate::services::embed::ensure_started(state);
     state.langs.bump();
     crate::services::langs::ensure_started(state);
-    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    if library_changed {
+        crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    }
 }

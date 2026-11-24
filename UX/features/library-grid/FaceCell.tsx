@@ -10,6 +10,7 @@ import { ClashNote } from '../../components/ui/ClashNote';
 import { faceLabel, useNameClashes } from '../../store/nameClash';
 import { t, useLocale } from '../../i18n';
 import { ownerNote } from '../../components/activation/conflictModel';
+import { ReasonBadge } from '../../components/activation/ReasonLine';
 import { useUiStore } from '../../store/ui';
 import { beginFaceDrag } from '../../store/faceDrag';
 import { useCardFields } from '../../store/cardFields';
@@ -60,6 +61,9 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
   const fields = useCardFields(s => s.fields);
   useLocale(); // memo: vẽ lại khi đổi ngôn ngữ
   const avail = useUiStore(st => (activeScope === 'available' ? st.available.get(row?.hashHex ?? '') : undefined));
+  // Màn «Đang bật»: lý do chính trên từng thẻ (icon + tên ngắn + «+N»).
+  const reasons = useUiStore(st => (active && st.view === 'active' ? st.activeReasons.get(row?.hashHex ?? '') : undefined));
+  const reasonNames = useUiStore(st => (active && st.view === 'active' ? st.activeReasonNames.get(row?.hashHex ?? '') : undefined));
   const { width: cw, height: ch } = fontSize ? previewBox(px, fontSize) : cssSize(px);
   const [state, setState] = useState<Exclude<CellState, 'live'>>('loading');
   const [errCode, setErrCode] = useState('');
@@ -230,6 +234,7 @@ function FaceCellImpl({ row, url, px, text, selected, mode, blobs, loader, onSel
         {format && fields.includes('format') && <Tooltip label={t('cell.format', { format })}><span className="fa-fmt" data-testid="face-format">{format}</span></Tooltip>}
         {fields.includes('lang') && <LangBadge badge={row.langBadge ?? viBadgeFromMissing(row.viMissing)} />}
         {layout === 'list' && extras}
+        <ReasonBadge reasons={reasons} reasonNames={reasonNames} />
       </div>
       {layout === 'grid' && hasExtras && <div className="fa-meta fa-meta2" data-testid="face-meta2">{extras}</div>}
     </div>

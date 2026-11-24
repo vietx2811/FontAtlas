@@ -84,8 +84,24 @@ pub enum ReasonDto {
         #[ts(type = "number")]
         collection_id: i64,
     },
+    /// Người dùng bật cả Case (Pairing Desk).
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Case {
+        /// `cases.id`.
+        #[ts(type = "number")]
+        case_id: i64,
+    },
     /// Một app thiết kế (photoshop, illustrator, indesign…) đã xin font này.
     Auto { app: String },
+    /// B5: một app gắn với Case này đang chạy.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    CaseApp {
+        /// `cases.id` (Pairing Desk), không phải id của collection.
+        #[ts(type = "number")]
+        case_id: i64,
+    },
 }
 
 impl From<&ActivationReason> for ReasonDto {
@@ -93,7 +109,9 @@ impl From<&ActivationReason> for ReasonDto {
         match r {
             ActivationReason::Manual => ReasonDto::Manual,
             ActivationReason::Collection(id) => ReasonDto::Collection { collection_id: *id },
+            ActivationReason::Case(id) => ReasonDto::Case { case_id: *id },
             ActivationReason::Auto(app) => ReasonDto::Auto { app: app.slug().to_string() },
+            ActivationReason::CaseApp(id) => ReasonDto::CaseApp { case_id: *id },
         }
     }
 }
@@ -113,6 +131,20 @@ pub struct ActivationStateDto {
     pub active_path: Option<String>,
     pub conflict_ps: Option<String>,
     pub last_error: Option<String>,
+    /// Tên để hiển thị cho từng phần tử của `reasons` (CÙNG thứ tự, cùng độ dài). Chỉ có khi lấy từ `activation_state`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reason_names: Option<Vec<ReasonNamesDto>>,
+}
+
+/// Tên hiển thị của một lý do: `collection` / `case_app` → tên Case (`null` nếu Case đã xoá); `case_app` → thêm tên các app gắn
+/// với Case; `manual` / `auto` → rỗng (giao diện tự dịch: `auto.app` là slug của app).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct ReasonNamesDto {
+    pub collection_name: Option<String>,
+    pub app_names: Vec<String>,
 }
 
 impl ActivationStateDto {
@@ -130,6 +162,7 @@ impl ActivationStateDto {
             active_path: s.active_path,
             conflict_ps: s.conflict_ps,
             last_error: s.last_error,
+            reason_names: None,
         }
     }
 }
@@ -391,6 +424,10 @@ pub struct ActivationReportDto {
     pub changed: u32,
     pub needs_confirmation: u32,
     pub failed: u32,
+    /// Font còn bận sau khi đã chờ-thử-lại (thao tác khác đang giữ): chưa xong, giao diện báo "N font đang bận, thử lại".
+    pub busy: u32,
+    /// Hash (hex) các font còn bận (rỗng khi `busy = 0`).
+    pub busy_hashes: Vec<String>,
 }
 
 impl From<&fa::ActivationReport> for ActivationReportDto {
@@ -400,6 +437,8 @@ impl From<&fa::ActivationReport> for ActivationReportDto {
             changed: r.changed as u32,
             needs_confirmation: r.needs_confirmation as u32,
             failed: r.failed as u32,
+            busy: r.busy as u32,
+            busy_hashes: r.busy_hashes.clone(),
         }
     }
 }
@@ -454,6 +493,8 @@ pub struct ReconcileReportDto {
     pub not_downloaded: u32,
     pub cleaned: u32,
     pub failed: u32,
+    /// Hash bị bỏ qua vì đang bận (lượt bù sẽ làm).
+    pub busy: u32,
     pub results: Vec<FileResultDto>,
 }
 
@@ -478,6 +519,7 @@ impl From<&fa::ReconcileReport> for ReconcileReportDto {
             not_downloaded: r.not_downloaded as u32,
             cleaned: r.cleaned as u32,
             failed: r.failed as u32,
+            busy: r.busy as u32,
             results: r.results.iter().map(Into::into).collect(),
         }
     }
@@ -488,4 +530,70 @@ impl ReconcileReportDto {
     pub fn is_notable(&self) -> bool {
         !self.auto_deactivated.is_empty() || !self.auto_deactivate_failed.is_empty() || self.reregistered + self.moved + self.missing + self.not_downloaded + self.failed > 0
     }
+}
+
+/// B5: một app gắn với Case. `bundle_id` là khoá; `name` chỉ để hiển thị.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct CaseAppDto {
+    pub bundle_id: String,
+    pub name: String,
+}
+
+/// B5: app đã cài (quét `/Applications`, `~/Applications`) để người dùng chọn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct InstalledAppDto {
+    pub bundle_id: String,
+    pub name: String,
+    pub path: String,
+    /// App đang chạy lúc quét.
+    pub running: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum AppSetEventKindDto {
+    On,
+    Off,
+}
+
+/// B5: sự kiện cho toast "Illustrator opened · 12 fonts on for <Case>".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct AppSetEventDto {
+    #[ts(type = "number")]
+    pub case_id: i64,
+    pub kind: AppSetEventKindDto,
+    pub changed: u32,
+    pub conflicts: u32,
+    pub failed: u32,
+}
+
+impl From<&fontatlas_activate::AppSetEvent> for AppSetEventDto {
+    fn from(e: &fontatlas_activate::AppSetEvent) -> Self {
+        AppSetEventDto {
+            case_id: e.case_id,
+            kind: match e.kind {
+                fontatlas_activate::AppSetEventKind::On => AppSetEventKindDto::On,
+                fontatlas_activate::AppSetEventKind::Off => AppSetEventKindDto::Off,
+            },
+            changed: e.changed as u32,
+            conflicts: e.conflicts as u32,
+            failed: e.failed as u32,
+        }
+    }
+}
+
+/// B7 Hoàn tác: font và đường đích cụ thể (đường cũ đã ghi trước khi chuyển sang bản trong thư viện).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, rename_all = "camelCase")]
+pub struct RelocateTargetDto {
+    pub face: crate::dto::library::FaceKeyDto,
+    pub path: String,
 }

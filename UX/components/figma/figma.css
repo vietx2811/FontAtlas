@@ -1,0 +1,10 @@
+.fa-figma { width: min(560px, calc(100vw - 32px)); }
+.fa-figma-text { width: 100%; box-sizing: border-box; font: 12px ui-monospace, monospace; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: inherit; resize: vertical; }
+.fa-figma-err { color: var(--danger, #c0392b); }
+.fa-figma-file { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.fa-figma-list { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.fa-figma-row { position: relative; display: grid; grid-template-columns: 20px 1fr auto 18px; gap: 8px; align-items: center; padding: 6px 4px; border-radius: 6px; font-size: 13px; }
+.fa-figma-row[data-status="none"], .fa-figma-row[data-status="family_only"] { opacity: .75; }
+.fa-figma-name span { color: var(--muted); }
+.fa-figma-state { font-size: 12px; color: var(--muted); }
+.fa-figma-state select { font-size: 12px; max-width: 180px; }

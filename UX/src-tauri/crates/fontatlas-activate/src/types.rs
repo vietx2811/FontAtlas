@@ -218,6 +218,10 @@ pub struct ActivationReport {
     pub changed: usize,
     pub needs_confirmation: usize,
     pub failed: usize,
+    /// Font còn BẬN (thao tác khác đang giữ) sau khi đã chờ-thử-lại: KHÔNG được coi là xong; giao diện nên báo "N font đang bận, thử lại".
+    pub busy: usize,
+    /// Hash (hex) của các font còn bận — để giao diện nói rõ font nào và cho thử lại đúng các font đó.
+    pub busy_hashes: Vec<String>,
 }
 
 impl ActivationReport {
@@ -226,6 +230,11 @@ impl ActivationReport {
             FileOutcome::Activated | FileOutcome::Deactivated => self.changed += 1,
             FileOutcome::NeedsConfirmation { .. } => self.needs_confirmation += 1,
             FileOutcome::Failed { .. } => self.failed += 1,
+            // một hash chỉ đếm một lần dù xuất hiện nhiều lần trong yêu cầu (vd relocate với hash trùng)
+            FileOutcome::Busy if !self.busy_hashes.contains(&r.hash_hex) => {
+                self.busy += 1;
+                self.busy_hashes.push(r.hash_hex.clone());
+            }
             _ => {}
         }
         self.results.push(r);

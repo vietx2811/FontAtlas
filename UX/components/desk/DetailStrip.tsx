@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Api, FaceKeyDto } from '../../api';
 import { buildCompare, COMPARE_METRICS, type CompareFace, type CompareMetric } from '../../api/compare';
 import type { FaceDetailDto, FaceRowDto } from '../../bindings';
-import { t, getLocale, tn } from '../../i18n';
+import { t, getLocale, tn, formatNumber } from '../../i18n';
 import { deltaOf, deltaText } from '../compare/compareMath';
 import { numberText, unitText } from '../detail/tabs/measurements';
 import { NoteMark } from '../ui/noteMark';
@@ -42,7 +42,7 @@ export function useStripFaces(api: Api, inUse: FaceKeyDto | null, trial: FaceKey
   return { a: get(ik), b: get(tk), loading: busy(ik) || busy(tk), aLoading: busy(ik), bLoading: busy(tk) };
 }
 
-const nf = (n: number) => new Intl.NumberFormat(getLocale() === 'vi' ? 'vi-VN' : 'en-US').format(n);
+const nf = (n: number) => formatNumber(n);
 const axisText = (a: VariableAxisDto) => `${a.tag} ${a.min}–${a.max}`;
 const MAX_AXES_INLINE = 2;
 
@@ -66,7 +66,7 @@ function Card({ title, row, face, tone, baseGlyphs }: { title: string; row: Face
     <div className="fa-dstrip-card" data-tone={tone} data-testid={`strip-card-${tone}`}>
       <h3>{title}</h3>
       {row ? <>
-        <div className="fa-dstrip-name">{nameOf(row)}<ClashNote faceId={row.faceId} inline />{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
+        <div className="fa-dstrip-name">{nameOf(row)}<ClashNote faceId={row.faceId} inline face={{ hashHex: row.hashHex, faceIndex: row.faceIndex }} />{vi && <ViRing missing={vi.missing} total={vi.total} supports={vi.supports} />}</div>
         <div className="fa-dstrip-meta">
           {face?.designer && <Tooltip label="Designer"><span>{face.designer}</span></Tooltip>}
           {face?.foundry && face.foundry !== face.designer && <Tooltip label="Foundry"><span>{face.foundry}</span></Tooltip>}
@@ -109,7 +109,7 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
         <div className="fa-dstrip-body">
           <Card title={t('desk.inUse')} row={inUse} face={a} tone="use" />
           <Card title={t('desk.trying')} row={showTrial ? trial : null} face={b} tone="try" baseGlyphs={a?.glyphs ?? null} />
-          <table className="fa-dstrip-table" data-testid="strip-metrics" aria-busy={!!loading}>
+          <div className="fa-dstrip-tablewrap"><table className="fa-dstrip-table" data-testid="strip-metrics" aria-busy={!!loading}>
             <thead><tr><th>{t('strip.metrics')}</th><th>{t('desk.inUse')}</th><th>{t('desk.trying')}</th><th><Tooltip label={t('strip.deltaTip')}><span data-testid="strip-delta-head">Δ</span></Tooltip></th></tr></thead>
             <tbody>
               {COMPARE_METRICS.map(k => {
@@ -132,7 +132,7 @@ export function DetailStrip({ api, inUse, trial, collapsed, onToggle, onCompare,
                   return <td className={`dl ${dt?.tone ?? 'zero'}`} data-testid="strip-glyphs-delta">{dt ? dt.text.replace(/^Δ\s*/, '') : '—'}</td>; })()}
               </tr>
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </section>

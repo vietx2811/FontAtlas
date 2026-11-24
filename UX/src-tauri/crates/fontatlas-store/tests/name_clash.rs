@@ -78,3 +78,69 @@ fn two_variable_fonts_never_clash_with_each_other() {
     s.ingest(vec![item(1, "/lib/vf-twin.ttf", &r)], 10).unwrap();
     assert!(s.name_clashes().unwrap().is_empty());
 }
+
+/// Cặp fixture thật dùng cho native QA «Giữ cả hai»: Roboto VF (OFL) có PostScript mặc định trùng `roboto.ttf` static.
+#[test]
+fn real_roboto_vf_clashes_with_the_roboto_static_fixture() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let st = report("roboto.ttf");
+    let vf = report("roboto_vf.ttf");
+    s.ingest(vec![item(1, "/lib/roboto.ttf", &st), item(1, "/lib/roboto_vf.ttf", &vf)], 10).unwrap();
+    let c = s.name_clashes().unwrap();
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert!(c[0].exact, "PostScript mặc định phải trùng đúng: {c:?}");
+    assert_eq!(c[0].ps_names, vec!["Roboto-Regular".to_string()]);
+    assert_eq!(c[0].static_face_ids.len(), 1);
+}
+
+/// Đo tay: thư viện ~3.700 face (3.500 static tên PostScript riêng + 200 VF, 100 trong đó có bản static trùng tên).
+///   cargo test -p fontatlas-store --test name_clash -- --ignored --nocapture
+#[test]
+#[ignore = "bench: chạy tay với --nocapture"]
+fn bench_name_clashes_on_a_3700_face_library() {
+    let d = tmp();
+    let mut s = open_store(d.path());
+    let stat = report("roboto.ttf");
+    let vf = report("oswald_vf.ttf");
+    let mut items = Vec::new();
+    for i in 0..3500 {
+        let mut r = fake_report(&stat, &format!("s{i}"), "Fam");
+        for f in &mut r.faces {
+            f.metadata.postscript_name = Some(if i < 100 {
+                format!("Oswald-Regular_Style{i}")
+            } else {
+                format!("Fam{i}-Regular")
+            });
+        }
+        items.push(item(1, &format!("/lib/s{i}.ttf"), &r));
+    }
+    for i in 0..200 {
+        let mut r = fake_report(&vf, &format!("v{i}"), "Vf");
+        for f in &mut r.faces {
+            f.metadata.postscript_name = Some(format!("Vf{i}-Regular"));
+        }
+        items.push(item(1, &format!("/lib/v{i}.ttf"), &r));
+    }
+    while !items.is_empty() {
+        let rest = items.split_off(items.len().min(500));
+        s.ingest(std::mem::replace(&mut items, rest), 10).unwrap();
+    }
+    let n: i64 = s
+        .conn()
+        .query_row("SELECT COUNT(*) FROM faces", [], |r| r.get(0))
+        .unwrap();
+    s.name_clashes().unwrap();
+    let mut xs: Vec<u128> = (0..9)
+        .map(|_| {
+            let t = std::time::Instant::now();
+            s.name_clashes().unwrap();
+            t.elapsed().as_micros()
+        })
+        .collect();
+    xs.sort_unstable();
+    eprintln!(
+        "[bench] {n} face: name_clashes trung vị {} µs, max {} µs",
+        xs[4], xs[8]
+    );
+}

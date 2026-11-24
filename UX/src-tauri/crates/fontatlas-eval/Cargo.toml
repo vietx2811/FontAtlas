@@ -36,3 +36,7 @@ path = "src/bin/pairing_blind.rs"
 [[bin]]
 name = "pairing_eval"
 path = "src/bin/pairing_eval.rs"
+
+[[bin]]
+name = "rolefit_pop"
+path = "src/bin/rolefit_pop.rs"

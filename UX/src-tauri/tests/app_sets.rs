@@ -1,0 +1,342 @@
+//! B5 qua lớp ứng dụng: quét app đã cài, liên kết Case ↔ app, nhịp đồng bộ + sự kiện.
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use app_lib::dto::activation::*;
+use app_lib::dto::events::ActivationEvent;
+use app_lib::dto::library::*;
+use app_lib::services::{app_sets, boot, cases, library, sources};
+use app_lib::state::{AppDirs, AppState};
+use fontatlas_activate::{ActivationEngine, ActivationService, AppSetTracker, EngineError, FakeEngine, Scope};
+
+struct Shared(Arc<FakeEngine>);
+impl ActivationEngine for Shared {
+    fn method(&self) -> &'static str { self.0.method() }
+    fn register(&self, p: &Path, s: Scope) -> Result<(), EngineError> { self.0.register(p, s) }
+    fn unregister(&self, p: &Path, s: Scope) -> Result<(), EngineError> { self.0.unregister(p, s) }
+    fn available_postscript_names(&self) -> Result<HashSet<String>, EngineError> { self.0.available_postscript_names() }
+    fn providers(&self, ps: &str) -> Result<Vec<PathBuf>, EngineError> { self.0.providers(ps) }
+    fn postscript_names_in_file(&self, p: &Path) -> Result<Vec<String>, EngineError> { self.0.postscript_names_in_file(p) }
+}
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/fontatlas-core/tests/fixtures").join(name)
+}
+
+fn running(ids: &[&str]) -> HashSet<String> {
+    ids.iter().map(|s| s.to_string()).collect()
+}
+
+fn fake_app(root: &Path, rel: &str, bundle: Option<&str>, name: Option<&str>) {
+    let c = root.join(rel).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let mut p = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict>");
+    if let Some(b) = bundle {
+        p += &format!("<key>CFBundleIdentifier</key><string>{b}</string>");
+    }
+    if let Some(n) = name {
+        p += &format!("<key>CFBundleName</key><string>{n}</string>");
+    }
+    p += "</dict></plist>";
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_reads_bundle_id_name_one_level_down_dedupes_and_sorts() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app(r, "Zeta.app", Some("com.example.zeta"), Some("Zeta"));
+    fake_app(r, "Adobe Illustrator 2026/Adobe Illustrator.app", Some("com.adobe.illustrator"), Some("Adobe Illustrator"));
+    fake_app(r, "alpha.app", Some("com.example.alpha"), None); // tên lấy từ tên gói
+    fake_app(r, "Dup.app", Some("com.example.zeta"), Some("Zeta copy"));
+    fake_app(r, "NoId.app", None, Some("NoId"));
+    std::fs::create_dir_all(r.join("Broken.app")).unwrap(); // không có Info.plist
+    std::fs::write(r.join("note.txt"), "x").unwrap();
+    let apps = app_sets::scan_apps(&[r.to_path_buf(), PathBuf::from("/nonexistent-root")], &running(&["com.adobe.illustrator"]));
+    // Hai gói cùng bundle id: scan_apps duyệt theo đường dẫn đã sắp xếp nên `Dup.app` (đứng trước `Zeta.app`) thắng, trên mọi hệ tệp.
+    let names: Vec<&str> = apps.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Adobe Illustrator", "alpha", "Zeta copy"]);
+    assert!(apps[0].running && !apps[1].running);
+    assert_eq!(apps[0].bundle_id, "com.adobe.illustrator");
+}
+
+fn fake_app_with(root: &Path, rel: &str, bundle: &str, extra: &str) {
+    let c = root.join(rel).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let p = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>{bundle}</string><key>CFBundleName</key><string>{rel}</string>{extra}</dict></plist>");
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_skips_extensions_plugins_and_background_helpers_but_keeps_real_and_menubar_apps() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app_with(r, "Main.app", "com.example.main", "<key>CFBundlePackageType</key><string>APPL</string>");
+    fake_app_with(r, "Menubar.app", "com.example.menubar", "<key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/>");
+    fake_app_with(r, "SafariExt.app", "com.example.safari.ext", "<key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.Safari.web-extension</string></dict>");
+    fake_app_with(r, "Plug.app", "com.example.plug", "<key>CFBundlePackageType</key><string>BNDL</string>");
+    fake_app_with(r, "Fw.app", "com.example.fw", "<key>CFBundlePackageType</key><string>FMWK</string>");
+    fake_app_with(r, "Kx.app", "com.example.kx", "<key>CFBundlePackageType</key><string>KEXT</string>");
+    fake_app_with(r, "Helper.app", "com.example.helper", "<key>CFBundlePackageType</key><string>APPL</string><key>LSBackgroundOnly</key><true/>");
+    fake_app_with(r, "Helper2.app", "com.example.helper2", "<key>LSBackgroundOnly</key><string>1</string>");
+    // gói lồng trong app khác không được quét tới
+    fake_app_with(r, "Main.app/Contents/Library/LoginItems/Inner.app", "com.example.inner", "");
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    let ids: Vec<&str> = apps.iter().map(|a| a.bundle_id.as_str()).collect();
+    assert_eq!(ids, ["com.example.main", "com.example.menubar"]);
+}
+
+#[test]
+fn scan_keeps_safari_web_apps_and_xpc_typed_apps() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    fake_app_with(r, "ExampleWebApp.app", "com.example.safari.webapp.1", "<key>CFBundlePackageType</key><string>AAPL</string>");
+    fake_app_with(r, "ExampleSystem.app", "com.example.system", "<key>CFBundlePackageType</key><string>XPC!</string>");
+    fake_app_with(r, "ExampleNoType.app", "com.example.notype", "");
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    assert_eq!(apps.len(), 3);
+}
+
+fn add_appex(root: &Path, app: &str, name: &str, point: &str) {
+    let c = root.join(app).join("Contents/PlugIns").join(format!("{name}.appex")).join("Contents");
+    std::fs::create_dir_all(&c).unwrap();
+    let p = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>x.{name}</string><key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>{point}</string></dict></dict></plist>");
+    std::fs::write(c.join("Info.plist"), p).unwrap();
+}
+
+#[test]
+fn scan_drops_containers_that_only_ship_safari_extensions() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path();
+    let appl = "<key>CFBundlePackageType</key><string>APPL</string>";
+    // chỉ có tiện ích Safari (một hoặc nhiều) → loại
+    fake_app_with(r, "ExampleClipper.app", "com.example.clipper", appl);
+    add_appex(r, "ExampleClipper.app", "Ext", "com.apple.Safari.web-extension");
+    fake_app_with(r, "ExampleTwo.app", "com.example.two", appl);
+    add_appex(r, "ExampleTwo.app", "A", "com.apple.Safari.web-extension");
+    add_appex(r, "ExampleTwo.app", "B", "com.apple.Safari.extension");
+    // tiện ích Safari + loại tài liệu → giữ
+    fake_app_with(r, "ExampleEditor.app", "com.example.editor", &format!("{appl}<key>CFBundleDocumentTypes</key><array><dict><key>CFBundleTypeName</key><string>Doc</string></dict></array>"));
+    add_appex(r, "ExampleEditor.app", "Ext", "com.apple.Safari.web-extension");
+    // DocumentTypes rỗng → vẫn là container → loại
+    fake_app_with(r, "ExampleEmptyDocs.app", "com.example.emptydocs", &format!("{appl}<key>CFBundleDocumentTypes</key><array/>"));
+    add_appex(r, "ExampleEmptyDocs.app", "Ext", "com.apple.Safari.web-extension");
+    // tiện ích Safari + tiện ích chia sẻ → giữ
+    fake_app_with(r, "ExampleShare.app", "com.example.share", appl);
+    add_appex(r, "ExampleShare.app", "Ext", "com.apple.Safari.web-extension");
+    add_appex(r, "ExampleShare.app", "Share", "com.apple.share-services");
+    // không có PlugIns → giữ
+    fake_app_with(r, "ExamplePlain.app", "com.example.plain", appl);
+    // PlugIns có appex không rõ loại → giữ (không chắc thì không loại)
+    fake_app_with(r, "ExampleOdd.app", "com.example.odd", appl);
+    std::fs::create_dir_all(r.join("ExampleOdd.app/Contents/PlugIns/Odd.appex/Contents")).unwrap();
+    let apps = app_sets::scan_apps(&[r.to_path_buf()], &running(&[]));
+    let ids: Vec<&str> = apps.iter().map(|a| a.bundle_id.as_str()).collect();
+    assert_eq!(ids, ["com.example.editor", "com.example.odd", "com.example.plain", "com.example.share"]);
+}
+
+#[test]
+fn installed_apps_finds_real_system_apps() {
+    // Chỉ kiểm không panic và ra danh sách có bundle id hợp lệ (máy CI Linux không có /Applications: rỗng).
+    for a in app_sets::installed_apps() {
+        assert!(a.bundle_id.len() >= 3 && !a.name.is_empty());
+    }
+}
+
+fn state(root: &Path) -> (Arc<AppState>, Arc<FakeEngine>) {
+    let eng = Arc::new(FakeEngine::new());
+    let st = AppState::new(AppDirs::under(&root.join("data")), Box::new(ActivationService::new(Shared(eng.clone()))));
+    boot::run_boot(&st);
+    (st, eng)
+}
+
+fn setup_case(d: &Path) -> (Arc<AppState>, Arc<FakeEngine>, i64, FaceKeyDto) {
+    let (st, eng) = state(d);
+    let dir = d.join("Fonts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(fixture("libre_baskerville.ttf"), dir.join("lb.ttf")).unwrap();
+    sources::add_source(&st, dir.to_str().unwrap()).unwrap();
+    assert!(st.scans.wait_idle(Duration::from_secs(60)));
+    let row = library::query_faces(&st, &FaceQueryDto { limit: 5, ..Default::default() }).unwrap().items.remove(0);
+    let key = FaceKeyDto { hash_hex: row.hash_hex, face_index: row.face_index };
+    let case = cases::create_case(&st, Some("Brand Kit A"), None, None).unwrap().id;
+    cases::add_to_case(&st, Some(case), std::slice::from_ref(&key), None).unwrap();
+    (st, eng, case, key)
+}
+
+#[test]
+fn case_apps_roundtrip_validates_and_json_is_camel_case() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _e, case, _k) = setup_case(d.path());
+    assert!(app_sets::case_apps(&st, case).unwrap().is_empty());
+    let a = CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() };
+    app_sets::set_case_apps(&st, case, std::slice::from_ref(&a)).unwrap();
+    assert_eq!(app_sets::case_apps(&st, case).unwrap(), vec![a.clone()]);
+    assert_eq!(serde_json::to_value(&a).unwrap()["bundleId"], "com.adobe.illustrator");
+    assert!(app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "bad id".into(), name: String::new() }]).is_err());
+    assert!(app_sets::set_case_apps(&st, 99999, std::slice::from_ref(&a)).is_err());
+    assert_eq!(app_sets::case_apps(&st, case).unwrap().len(), 1, "lỗi không làm mất danh sách cũ");
+}
+
+#[test]
+fn tick_turns_the_case_on_then_off_after_grace_and_emits_events() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, eng, case, key) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() }]).unwrap();
+    let seen = Arc::new(Mutex::new(Vec::<AppSetEventDto>::new()));
+    {
+        let seen = seen.clone();
+        st.hubs.activation.subscribe(Box::new(move |e| {
+            if let ActivationEvent::AppSet { event } = e {
+                seen.lock().unwrap().push(event);
+            }
+        }));
+    }
+    let grace = Duration::from_secs(30);
+    let t0 = Instant::now();
+    let mut tr = AppSetTracker::new();
+    assert!(app_sets::tick(&st, &running(&[]), t0, grace, &mut tr).is_empty());
+
+    let ev = app_sets::tick(&st, &running(&["com.adobe.illustrator"]), t0, grace, &mut tr);
+    assert_eq!(ev.len(), 1);
+    assert_eq!(eng.registrations().len(), 1, "font đã đăng ký thật vào engine");
+    let on = seen.lock().unwrap().clone();
+    assert_eq!((on[0].case_id, on[0].kind, on[0].changed), (case, AppSetEventKindDto::On, 1));
+
+    // trạng thái hiển thị: lý do caseapp
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    assert!(matches!(rows[0].reasons[0], ReasonDto::CaseApp { case_id } if case_id == case));
+    assert_eq!(serde_json::to_value(&rows[0].reasons[0]).unwrap()["kind"], "case_app");
+    assert_eq!(rows[0].hash_hex, key.hash_hex);
+
+    app_sets::tick(&st, &running(&[]), t0 + Duration::from_secs(5), grace, &mut tr);
+    assert_eq!(eng.registrations().len(), 1, "trong ân hạn");
+    let ev = app_sets::tick(&st, &running(&[]), t0 + Duration::from_secs(40), grace, &mut tr);
+    assert_eq!(ev.len(), 1);
+    assert!(eng.registrations().is_empty(), "hết ân hạn: đã gỡ khỏi engine");
+    assert_eq!(seen.lock().unwrap().last().unwrap().kind, AppSetEventKindDto::Off);
+}
+
+#[test]
+fn exit_releases_the_app_reasons_before_unregistering_session_fonts() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, eng, case, _k) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.indesign".into(), name: "Adobe InDesign".into() }]).unwrap();
+    let mut tr = AppSetTracker::new();
+    app_sets::tick(&st, &running(&["com.adobe.indesign"]), Instant::now(), Duration::from_secs(30), &mut tr);
+    assert_eq!(eng.registrations().len(), 1);
+    app_lib::services::activation::on_exit(&st);
+    assert!(eng.registrations().is_empty());
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    assert!(rows.iter().all(|r| r.reasons.is_empty()), "lần mở sau không bật lại font của app không chạy");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn live_workspace_lists_finder() {
+    assert!(app_sets::running_bundle_ids().contains("com.apple.finder"), "NSWorkspace phải thấy Finder đang chạy");
+}
+
+#[test]
+fn suppress_command_uses_the_shared_tracker_and_emits_changed() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, eng, case, _k) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() }]).unwrap();
+    let grace = Duration::from_secs(30);
+    let t0 = Instant::now();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0, grace);
+    assert_eq!(eng.registrations().len(), 1);
+    let changed = Arc::new(Mutex::new(0usize));
+    {
+        let changed = changed.clone();
+        st.hubs.activation.subscribe(Box::new(move |e| {
+            if matches!(e, ActivationEvent::Changed { .. }) {
+                *changed.lock().unwrap() += 1;
+            }
+        }));
+    }
+    app_sets::case_app_suppress(&st, case).unwrap();
+    assert!(eng.registrations().is_empty(), "font bật chỉ vì app đã tắt");
+    assert_eq!(*changed.lock().unwrap(), 1);
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0 + Duration::from_secs(3), grace);
+    assert!(eng.registrations().is_empty(), "nhịp sau không bật lại");
+    app_sets::sync_once(&st, &running(&[]), t0 + Duration::from_secs(6), grace);
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), t0 + Duration::from_secs(9), grace);
+    assert_eq!(eng.registrations().len(), 1, "chạy lại thì bật lại");
+}
+
+#[test]
+fn activation_state_carries_display_names_for_each_reason() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    app_sets::set_case_apps(&st, case, &[CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() }, CaseAppDto { bundle_id: "com.x.noname".into(), name: String::new() }]).unwrap();
+    app_lib::services::activation::activate(&st, std::slice::from_ref(&key), Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), Instant::now(), Duration::from_secs(30));
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let r = &rows[0];
+    let names = r.reason_names.as_ref().expect("có tên hiển thị");
+    assert_eq!(names.len(), r.reasons.len(), "cùng độ dài, cùng thứ tự");
+    let i = r.reasons.iter().position(|x| matches!(x, ReasonDto::CaseApp { .. })).unwrap();
+    assert_eq!(names[i].collection_name.as_deref(), Some("Brand Kit A"));
+    assert_eq!(names[i].app_names, ["Adobe Illustrator", "com.x.noname"], "thiếu tên thì dùng bundle id");
+    let m = r.reasons.iter().position(|x| matches!(x, ReasonDto::Manual)).unwrap();
+    assert!(names[m].collection_name.is_none() && names[m].app_names.is_empty());
+    let j = serde_json::to_value(r).unwrap();
+    assert_eq!(j["reasonNames"][i]["collectionName"], "Brand Kit A");
+}
+
+/// L2 (beta.2): "Mở cùng app" gửi id của CASE. Case không có collection nào vẫn lưu được; id chỉ là collection thì bị từ chối;
+/// khi collection trùng số với Case thì app set vẫn thuộc về Case (tên hiển thị cũng là tên Case).
+#[test]
+fn app_set_uses_the_case_id_even_when_no_or_a_same_id_collection_exists() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    let a = CaseAppDto { bundle_id: "com.adobe.illustrator".into(), name: "Adobe Illustrator".into() };
+    // Case mới tạo qua Desk (chỉ có u.cases, không có collection): không còn "không tìm thấy: collection N"
+    let fresh = cases::create_case(&st, Some("Fresh"), None, None).unwrap().id;
+    app_sets::set_case_apps(&st, fresh, std::slice::from_ref(&a)).unwrap();
+    assert_eq!(app_sets::case_apps(&st, fresh).unwrap(), vec![a.clone()]);
+    // một id chỉ có collection (Case không tồn tại) bị từ chối
+    let only_coll = library::create_collection(&st, "Only collection", None).unwrap().id;
+    assert!(app_sets::set_case_apps(&st, only_coll + 1000, std::slice::from_ref(&a)).is_err());
+    // collection trùng số với Case `case`: app set của Case chạy và gọi tên Case
+    let _ = only_coll;
+    app_sets::set_case_apps(&st, case, std::slice::from_ref(&a)).unwrap();
+    app_lib::services::activation::activate(&st, std::slice::from_ref(&key), Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    app_sets::sync_once(&st, &running(&["com.adobe.illustrator"]), Instant::now(), Duration::from_secs(30));
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let i = rows[0].reasons.iter().position(|x| matches!(x, ReasonDto::CaseApp { .. })).unwrap();
+    assert!(matches!(rows[0].reasons[i], ReasonDto::CaseApp { case_id } if case_id == case));
+    assert_eq!(rows[0].reason_names.as_ref().unwrap()[i].collection_name.as_deref(), Some("Brand Kit A"));
+}
+
+/// Bật cả Case (Pairing Desk "Bật tất cả") ghi lý do `case:<id>`; tên hiển thị là tên Case kể cả khi Case đã vào thùng rác, và
+/// collection trùng số với Case có tên riêng (hai không gian id không lẫn).
+#[test]
+fn activating_a_case_gives_a_case_reason_named_even_when_trashed_and_never_confused_with_a_collection() {
+    let d = tempfile::tempdir().unwrap();
+    let (st, _eng, case, key) = setup_case(d.path());
+    // collection trùng số với Case, tên khác
+    let mut coll = library::create_collection(&st, "Dự án trùng số", None).unwrap().id;
+    while coll < case {
+        coll = library::create_collection(&st, "Dự án trùng số", None).unwrap().id;
+    }
+    assert_eq!(coll, case, "chuẩn bị: collection phải trùng id với Case");
+    app_lib::services::activation::activate_case(&st, case, Some(ScopeDto::Session), false, &mut |_| {}).unwrap();
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    let r = &rows[0];
+    assert!(matches!(r.reasons.as_slice(), [ReasonDto::Case { case_id }] if *case_id == case), "{:?}", r.reasons);
+    assert_eq!(r.reason_names.as_ref().unwrap()[0].collection_name.as_deref(), Some("Brand Kit A"));
+    assert_eq!(serde_json::to_value(r).unwrap()["reasons"][0], serde_json::json!({"kind": "case", "caseId": case}));
+    // Case vào thùng rác: vẫn có tên
+    cases::delete_case(&st, case).unwrap();
+    let rows = app_lib::services::activation::state_list(&st).unwrap();
+    assert_eq!(rows[0].reason_names.as_ref().unwrap()[0].collection_name.as_deref(), Some("Brand Kit A"));
+    // tắt Case: gỡ đúng lý do của nó
+    let rep = app_lib::services::activation::deactivate_case(&st, case, &mut |_| {}).unwrap();
+    assert_eq!(rep.changed, 1);
+    assert!(app_lib::services::activation::state_list(&st).unwrap()[0].reasons.is_empty());
+    let _ = key;
+}

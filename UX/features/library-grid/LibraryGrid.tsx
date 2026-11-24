@@ -37,6 +37,10 @@ export type LibraryGridProps = {
   collapsed?: ReadonlySet<string>; onToggleGroup?(group: FamilyGroup, collapse: boolean): void;
   /** Thay cho dòng "Không có font nào khớp" khi kết quả rỗng. */
   emptyState?: React.ReactNode;
+  /** Tăng khi dữ liệu có thể đã đổi (quét thêm font): lưới làm tươi tại chỗ, không dựng lại. */
+  refreshKey?: number;
+  /** Đang quét: total=0 thoáng qua không được thay dữ liệu cũ ngay. */
+  scanning?: boolean;
 };
 
 const NOOP = () => {};
@@ -112,12 +116,25 @@ function useSize(ref: React.RefObject<HTMLDivElement | null>, fixed: { width?: n
 export function LibraryGrid({
   api, query, sampleText = DEFAULT_SAMPLE, px: pxProp = 48, previewMode = DEFAULT_PREVIEW_MODE,
   selectedFaceId = null, selectedKey = null, onSelect = NOOP, loader: loaderProp, velocity: velocityProp, blobs: blobsProp, width, height,
-  fontSize, layout = 'grid', bottomInset = 0, emptyState, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, selectedKeys, onPick, onContextMenu, onHiddenRanges, collapsed: collapsedProp, onToggleGroup: onToggleGroupProp,
+  fontSize, layout = 'grid', bottomInset = 0, emptyState, refreshKey = 0, scanning = false, isActive, isFavorite, onToggleFavorite, activeScopeOf, onToggleActive, selectedKeys, onPick, onContextMenu, onHiddenRanges, collapsed: collapsedProp, onToggleGroup: onToggleGroupProp,
 }: LibraryGridProps): React.JSX.Element {
   const px: PxBucket = fontSize ? bucketFor(fontSize) : pxProp;
   const box = useRef<HTMLDivElement>(null);
   const size = useSize(box, { width, height });
   const { paged, snap } = usePagedFaces(api, query);
+  const seenRefresh = useRef(refreshKey);
+  const scanningRef = useRef(scanning); scanningRef.current = scanning;
+  useEffect(() => {
+    if (!paged || seenRefresh.current === refreshKey) return;
+    seenRefresh.current = refreshKey;
+    paged.refresh(scanningRef.current);
+  }, [paged, refreshKey]);
+  // Quét kết thúc bằng 'failed' không bump: khi hết quét, làm tươi một lần với scanning=false để số 0 (nếu có) được xác nhận.
+  const wasScanning = useRef(scanning);
+  useEffect(() => {
+    const was = wasScanning.current; wasScanning.current = scanning;
+    if (was && !scanning && paged?.hasZeroPending()) paged.refresh(false); // chỉ khi còn số 0 chờ xác nhận (tránh nạp thừa)
+  }, [paged, scanning]);
   // velocity/blobs không giữ tài nguyên cần huỷ → khởi tạo lười an toàn với StrictMode.
   const [ownVelocity] = useState(() => new ScrollVelocity());
   const velocity = velocityProp ?? ownVelocity;
@@ -195,12 +212,14 @@ export function LibraryGrid({
     boxHeight = ch + 48 + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
     rowH = rowH + (layout === 'grid' && row2 ? CARD_ROW2_H : 0);
   }
-  const total = snap.total ?? 0;
+  // Trang đầu chưa về (total chưa biết, không lỗi): dựng sẵn khung xương cùng kích thước thẻ thay vì vùng trắng (máy nặng: có thể chờ vài giây).
+  const skeletonCount = snap.total === null && !snap.error ? cols * (Math.ceil(size.height / Math.max(1, rowH)) + 1) : 0;
+  const total = snap.total ?? skeletonCount;
   // Nhóm theo Family (R3): chỉ dùng khi chỉ mục nhóm phủ đúng toàn bộ kết quả; chưa có/lệch/lỗi → lưới phẳng.
   // Theo truy vấn mà các trang đang thuộc về (snap.query), không theo prop mới nhất: chỉ mục nhóm và các trang luôn cùng một truy vấn.
   const pagedQuery = snap.query;
   const wantGroups = !!pagedQuery?.groupByFamily;
-  const fam = useFamilyGroups(api, pagedQuery ?? query, wantGroups);
+  const fam = useFamilyGroups(api, pagedQuery ?? query, wantGroups, refreshKey);
   const groups = useMemo(
     () => (wantGroups && fam.queryKey === snap.queryKey && groupsCover(fam.groups, snap.total) ? fam.groups : null),
     [wantGroups, fam.groups, fam.queryKey, snap.queryKey, snap.total],

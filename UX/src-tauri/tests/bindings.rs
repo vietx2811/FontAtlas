@@ -146,6 +146,7 @@ fn reading(k: &str, v: Option<Value>, q: &str, p: Option<f32>) -> AxisReadingDto
 
 fn detail() -> FaceDetailDto {
     FaceDetailDto {
+        derived_from: None,
         row: row(3, 3, "Playfair Display", "Regular", 400, false),
         summary: "Serif, tương phản cao, x-height thấp. Đủ 134 ký tự Việt.".into(),
         classification: Some("Serif".into()),
@@ -539,7 +540,7 @@ fn fixtures() -> Vec<(&'static str, Value)> {
         (
             "scan_events",
             v(&vec![
-                ScanEvent::Queued { source_id: 1 },
+                ScanEvent::Queued { source_id: 1, trigger: ScanTrigger::User },
                 ScanEvent::Progress {
                     source_id: 1,
                     progress: ScanProgressDto {
@@ -549,10 +550,12 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                         faces_written: 256,
                         not_downloaded: 3,
                     },
+                    trigger: ScanTrigger::Launch,
                 },
                 ScanEvent::FacesAdded {
                     source_id: 1,
                     count: 256,
+                    trigger: ScanTrigger::Watcher,
                 },
                 ScanEvent::Finished {
                     source_id: 1,
@@ -565,8 +568,11 @@ fn fixtures() -> Vec<(&'static str, Value)> {
                         analyzed: 1200,
                         failed: 2,
                         missing: 0,
+                        purged: 0,
                         unreadable: vec![],
                     },
+                    changed: true,
+                    trigger: ScanTrigger::User,
                 },
                 ScanEvent::Idle,
             ]),
@@ -769,6 +775,8 @@ fn activation_dtos_match_plan7_contract_fixtures() {
         changed: 2,
         needs_confirmation: 1,
         failed: 1,
+        busy: 1,
+        busy_hashes: vec!["05".repeat(32)],
     };
     assert_eq!(
         serde_json::to_value(ad::ActivationReportDto::from(&rep)).unwrap(),
@@ -787,12 +795,14 @@ fn activation_dtos_match_plan7_contract_fixtures() {
             removed_reasons: vec![],
             cause: "no_reason".into(),
         }],
+        session_auto_cleared: 0,
         reregistered: 3,
         moved: 1,
         missing: 1,
         not_downloaded: 0,
         cleaned: 1,
         failed: 0,
+        busy: 0,
         results: vec![result(9, F::Activated)],
     };
     assert_eq!(
@@ -860,6 +870,9 @@ fn dto_serializes_like_core() {
         analyzed: 3,
         failed: 4,
         missing: 6,
+        pending_absent: 0,
+        touched: 0,
+        purged: 0,
         unreadable: vec![("a".into(), "io: x".into())],
     };
     assert_eq!(

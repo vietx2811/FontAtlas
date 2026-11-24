@@ -101,17 +101,23 @@ impl ActivationStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ActivationReason {
     Manual,
+    /// Người dùng bật cả Case (Pairing Desk "Bật tất cả"). `cases.id`, KHÔNG phải collection. Cộng dồn với lý do khác.
+    Case(i64),
     Collection(i64),
     /// Font tự bật khi một app thiết kế hỏi (broker / helper). Luôn scope session.
     Auto(crate::auto::AutoApp),
+    /// B5: font của Case do một app gắn với Case đang chạy bật (scope session). Gỡ khi mọi app của Case đã thoát (sau ân hạn).
+    CaseApp(i64),
 }
 
 impl ActivationReason {
     pub fn as_db(&self) -> String {
         match self {
             ActivationReason::Manual => "manual".into(),
+            ActivationReason::Case(id) => format!("case:{id}"),
             ActivationReason::Collection(id) => format!("collection:{id}"),
             ActivationReason::Auto(app) => format!("auto:{}", app.slug()),
+            ActivationReason::CaseApp(id) => format!("caseapp:{id}"),
         }
     }
     pub fn parse_db(s: &str) -> Option<ActivationReason> {
@@ -120,6 +126,18 @@ impl ActivationReason {
         }
         if let Some(app) = s.strip_prefix("auto:") {
             return crate::auto::AutoApp::from_slug(app).map(ActivationReason::Auto);
+        }
+        if let Some(id) = s.strip_prefix("case:") {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            return id.parse().ok().map(ActivationReason::Case);
+        }
+        if let Some(id) = s.strip_prefix("caseapp:") {
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            return id.parse().ok().map(ActivationReason::CaseApp);
         }
         let id = s.strip_prefix("collection:")?;
         if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
@@ -149,6 +167,18 @@ impl Serialize for ActivationReason {
                 let mut st = s.serialize_struct("ActivationReason", 2)?;
                 st.serialize_field("kind", "auto")?;
                 st.serialize_field("app", app.slug())?;
+                st.end()
+            }
+            ActivationReason::Case(id) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "case")?;
+                st.serialize_field("caseId", id)?;
+                st.end()
+            }
+            ActivationReason::CaseApp(id) => {
+                let mut st = s.serialize_struct("ActivationReason", 2)?;
+                st.serialize_field("kind", "case_app")?;
+                st.serialize_field("collectionId", id)?;
                 st.end()
             }
         }
@@ -412,6 +442,31 @@ impl Store {
             v.sort();
         }
         Ok(out)
+    }
+
+    /// Auto-on (`auto:<app>`) chỉ sống trong MỘT phiên của app: lúc mở lại, xoá lý do `auto:*` của mọi dòng scope **session**
+    /// (dòng đã "Giữ bật" = scope persistent thì giữ nguyên). Dòng còn lý do khác (manual/collection/case…) không đổi;
+    /// dòng hết lý do sẽ được `reconcile` tắt. Trả (hash đã xoá lý do, theo thứ tự hash). Chạy lúc mở app nên cũng đúng khi app bị kill
+    /// (không chạy `shutdown`).
+    pub fn prune_session_auto_reasons(&mut self) -> Result<Vec<[u8; 32]>, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let hashes: Vec<Vec<u8>> = {
+            let mut st = tx.prepare(
+                "SELECT DISTINCT r.hash FROM u.activation_reasons r
+                 JOIN u.activation_state a ON a.hash = r.hash
+                 WHERE r.reason LIKE 'auto:%' AND a.scope = 'session'
+                 ORDER BY r.hash",
+            )?;
+            st.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        tx.execute(
+            "DELETE FROM u.activation_reasons
+             WHERE reason LIKE 'auto:%'
+               AND hash IN (SELECT hash FROM u.activation_state WHERE scope = 'session')",
+            [],
+        )?;
+        tx.commit()?;
+        hashes.into_iter().map(hash_from_blob).collect()
     }
 
     /// Mọi vị trí và tên PostScript của một file; `None` nếu `files` không có hash.

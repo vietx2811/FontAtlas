@@ -5,6 +5,7 @@ import { SHORTCUTS, type ShortcutItem } from './shortcuts';
 import { requestSettingsGroup } from '../settings/groupRequest';
 import { useUiStore } from '../../store/ui';
 import './shortcuts.css';
+import { shortcutKeys } from '../../platform';
 
 /** Mở Cài đặt ở nhóm của thẻ rồi đóng bảng. */
 function openSettingsFor(s: ShortcutItem, onClose: () => void): void {
@@ -21,10 +22,10 @@ export function ShortcutsOverlay({ onClose, primary }: { onClose(): void; primar
       <ul className="fa-tips-grid" aria-label={t('tips.title')}>
         {SHORTCUTS.map(s => (
           <li key={s.id} data-testid="tip-card" data-tip={s.id}>
-            {s.keys.length > 0 && <span className="keys" aria-hidden>{s.keys.map((k, i) => <kbd key={i}>{k}</kbd>)}</span>}
+            {s.keys.length > 0 && <span className="keys" aria-hidden>{shortcutKeys(s.keys).map((k, i) => <kbd key={i}>{k}</kbd>)}</span>}
             <b>{t(s.title)}</b>
             <span className="d">{t(s.desc)}</span>
-            {s.keys.length > 0 && <span className="sr-only">{s.keys.join(' ')}</span>}
+            {s.keys.length > 0 && <span className="sr-only">{shortcutKeys(s.keys).join(' ')}</span>}
             {s.openSettings && <button type="button" className="fa-tip-link" onClick={() => openSettingsFor(s, onClose)}>{t('tips.openSettings')}</button>}
           </li>
         ))}

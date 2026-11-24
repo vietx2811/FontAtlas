@@ -1079,3 +1079,49 @@ fn auto_request_uses_its_own_short_download_path() {
     assert_eq!((normal.load(Ordering::SeqCst), auto.load(Ordering::SeqCst)), (0, 1));
     assert!(svc.engine().registrations().is_empty());
 }
+
+#[test]
+fn deactivate_waits_for_a_busy_hash_instead_of_skipping_it() {
+    let env = Arc::new(env_with(&[LIBRE]));
+    let svc = Arc::new(service(&env));
+    let k = key_of(&env, LIBRE);
+    let barrier = Arc::new(Barrier::new(2));
+    svc.engine().block_register_until(barrier.clone());
+    let (e2, s2) = (env.clone(), svc.clone());
+    let t = std::thread::spawn(move || s2.activate_faces(&e2.store, &[k], None, ConflictPolicy::Ask, &mut no_progress()).unwrap());
+    wait_blocked(&svc);
+    // "Tắt hết" chạy khi hash đang được kích hoạt dở; thả kích hoạt sau 300 ms
+    let (e3, s3) = (env.clone(), svc.clone());
+    let d = std::thread::spawn(move || s3.deactivate_faces(&e3.store, &[k], DeactivatePolicy::Force, &mut no_progress()).unwrap());
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    barrier.wait();
+    assert_eq!(t.join().unwrap().results[0].outcome, FileOutcome::Activated);
+    let rep = d.join().unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Deactivated, "chờ rồi tắt, không bỏ sót");
+    assert!(svc.engine().registrations().is_empty());
+}
+
+#[test]
+fn a_hash_that_stays_busy_is_reported_as_busy_not_skipped_silently() {
+    let env = Arc::new(env_with(&[LIBRE]));
+    let svc = Arc::new(service(&env).with_busy_retry(2, std::time::Duration::from_millis(10)));
+    let k = key_of(&env, LIBRE);
+    let barrier = Arc::new(Barrier::new(2));
+    svc.engine().block_register_until(barrier.clone());
+    let (e2, s2) = (env.clone(), svc.clone());
+    let t = std::thread::spawn(move || s2.activate_faces(&e2.store, &[k], None, ConflictPolicy::Ask, &mut no_progress()).unwrap());
+    wait_blocked(&svc);
+    // chờ thử lại (2 × 10 ms) KHÔNG đủ: kết quả phải nói rõ còn bận, và bộ đếm `busy` phản ánh
+    let rep = svc.deactivate_faces(&env.store, &[k], DeactivatePolicy::Force, &mut no_progress()).unwrap();
+    assert_eq!(rep.results[0].outcome, FileOutcome::Busy);
+    assert_eq!((rep.busy, rep.changed, rep.failed), (1, 0, 0));
+    // đối soát cũng không bỏ sót im lặng: đếm hash bị bỏ qua vì bận
+    let rec = svc.reconcile(&env.store, &mut no_progress()).unwrap();
+    assert_eq!(rec.busy, 1, "{rec:?}");
+    barrier.wait();
+    assert_eq!(t.join().unwrap().results[0].outcome, FileOutcome::Activated);
+    // hết bận: tắt được, busy = 0
+    let again = svc.deactivate_faces(&env.store, &[k], DeactivatePolicy::Force, &mut no_progress()).unwrap();
+    assert_eq!((again.results[0].outcome.clone(), again.busy), (FileOutcome::Deactivated, 0));
+    assert!(svc.engine().registrations().is_empty());
+}

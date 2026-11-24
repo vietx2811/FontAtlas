@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use fontatlas_store::{Source, SourceKind, StoreError, cloud_provider_of};
 
-use crate::dto::library::{RemoveSourceReportDto, SourceDto};
+use crate::dto::library::{RebuildLibraryReportDto, RemoveSourceReportDto, SourceDto};
 use crate::error::CmdError;
 use crate::state::AppState;
 
@@ -18,8 +18,9 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
         Ok(st
             .conn()
             .query_row(
-                "SELECT count(*) FROM faces f WHERE EXISTS (SELECT 1 FROM file_locations l \
-                 WHERE l.file_id = f.file_id AND l.source_id = ?1 AND l.missing = 0)",
+                // IN (subquery) chứ không EXISTS tương quan: EXISTS duyệt cả nguồn cho MỖI face (O(face × vị trí), 1,5k font ≈ 50 ms/lệnh)
+                "SELECT count(*) FROM faces f WHERE f.file_id IN \
+                 (SELECT file_id FROM file_locations WHERE source_id = ?1 AND missing = 0)",
                 [s.id],
                 |r| r.get(0),
             )
@@ -43,7 +44,25 @@ fn dto(state: &AppState, s: Source) -> Result<SourceDto, CmdError> {
 
 pub fn list_sources(state: &AppState) -> Result<Vec<SourceDto>, CmdError> {
     let sources = state.with_user(|u| Ok(u.sources()?))?;
-    sources.into_iter().map(|s| dto(state, s)).collect()
+    // nguồn hệ thống ẩn: `derived` (bản sao đổi tên) không hiện; `loose` (font lẻ) chỉ hiện khi đang có font
+    let loose_in_use: bool = state.with_store(|s| {
+        Ok(s.conn()
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM file_locations l WHERE l.source_id IN (SELECT source_id FROM u.sources WHERE kind='loose'))",
+                [],
+                |r| r.get::<_, bool>(0),
+            )
+            .map_err(StoreError::from)?)
+    })?;
+    sources
+        .into_iter()
+        .filter(|s| match s.kind {
+            SourceKind::Derived => false,
+            SourceKind::Loose => loose_in_use,
+            _ => true,
+        })
+        .map(|s| dto(state, s))
+        .collect()
 }
 
 pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdError> {
@@ -67,7 +86,7 @@ pub fn add_source(state: &Arc<AppState>, path: &str) -> Result<SourceDto, CmdErr
         Err(e) => return Err(e),
     };
     state.scans.enqueue(state, &[id]);
-    state.cloud_watch.sync(state);
+    state.cloud_watch.sync_in_background(state);
     let src = state.with_user(|u| Ok(u.source(id)?))?;
     dto(state, src)
 }
@@ -80,16 +99,39 @@ pub fn remove_source_preview(state: &Arc<AppState>, id: i64) -> Result<RemoveSou
 
 pub fn remove_source(state: &Arc<AppState>, id: i64) -> Result<RemoveSourceReportDto, CmdError> {
     // nguồn đang quét/chờ quét phải dừng trước, kẻo quét ghi vị trí mồ côi sau khi xoá
-    if !state.scans.forget(id) {
+    if !state.scans.forget(state, id) {
         return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
     }
     let report: RemoveSourceReportDto = state.with_store(|s| Ok(s.remove_source(id)?.into()))?;
-    state.cloud_watch.sync(state);
+    state.cloud_watch.sync_in_background(state);
     // ảnh preview theo thế hệ: font vừa bị gỡ không được phục vụ từ URL cũ
     let _ = crate::services::preview::bump_generation(state);
     crate::services::activation::reconcile_now(state, false);
     crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
     Ok(report)
+}
+
+/// "Dựng lại thư viện": dừng mọi lần quét, xoá dữ liệu library.db (user.db và nguồn giữ nguyên), rồi quét lại mọi nguồn
+/// thư mục. Font trả về dần; phân tích/embedding tính lại ở nền. `busy` nếu có lần quét chưa dừng kịp.
+pub fn rebuild_library(state: &Arc<AppState>) -> Result<RebuildLibraryReportDto, CmdError> {
+    let ids: Vec<i64> = state.with_user(|u| Ok(u.sources()?.into_iter().map(|s| s.id).collect()))?;
+    for id in &ids {
+        if !state.scans.forget(state, *id) {
+            return Err(CmdError::busy("nguồn đang quét, chưa dừng kịp"));
+        }
+    }
+    let r = state.with_store(|s| Ok(s.rebuild_library()?))?;
+    let _ = crate::services::preview::bump_generation(state);
+    let dirs = crate::services::scan::directory_source_ids(state)?;
+    state.scans.enqueue(state, &dirs);
+    crate::services::activation::reconcile_now(state, false);
+    crate::index_bundle::request_rebuild(state, crate::index_bundle::RebuildWhy::ScanIdle);
+    Ok(RebuildLibraryReportDto {
+        files_removed: r.files,
+        faces_removed: r.faces,
+        locations_removed: r.locations,
+        sources_queued: dirs.len() as u32,
+    })
 }
 
 /// `None` = mọi nguồn thư mục.

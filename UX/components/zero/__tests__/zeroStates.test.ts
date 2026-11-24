@@ -1,7 +1,7 @@
 import { setLocale } from '../../../i18n';
 import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
-import { cloudHint, libraryEmpty, type EmptyCtx } from '../zeroStates';
+import { cloudHint, downloadTargets, libraryEmpty, notDownloadedOf, type EmptyCtx } from '../zeroStates';
 
 const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 10, lastScan: null, scanning: false, ...o });
 const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
@@ -81,14 +81,21 @@ describe('libraryEmpty', () => {
     expect(e.kind).toBe('source-access');
   });
 
-  it('a source whose files are all still in the cloud says so (no auto-download), offering a rescan once they are downloaded', () => {
-    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] } })] }));
+  it('a source whose files are all still in the cloud says so (no auto-download), offering Download (rescan stays as secondary)', () => {
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] } })] }));
     expect(e.kind).toBe('source-cloud');
     expect(e.text).toMatch(/đám mây/);
-    expect(e.action).toEqual({ id: 'rescan', label: 'Quét lại' });
+    expect(e.action).toEqual({ id: 'download', label: 'Tải về máy' });
+    expect(e.secondary).toEqual({ id: 'rescan', label: 'Quét lại' });
+  });
+  it('a source with faceCount 0 but cloudOnlyCount > 0 (all dataless) is source-cloud, not empty', () => {
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, cloudOnlyCount: 7, cloudProvider: 'icloud' })] }));
+    expect(e.kind).toBe('source-cloud');
+    expect(notDownloadedOf(src({ faceCount: 0, cloudOnlyCount: 7 }))).toBe(7);
+    expect(notDownloadedOf(src({ faceCount: 0, cloudOnlyCount: 7 }), { 1: 3 })).toBe(3); // đếm trực tiếp thắng
   });
   it('the same for the whole library when every source is only cloud placeholders', () => {
-    const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, unreadable: [] };
+    const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
     expect(libraryEmpty(ctx({ sources: [src({ faceCount: 0, lastScan: stats })] })).kind).toBe('source-cloud');
   });
   it('an empty source with no cloud files stays "source-empty"', () => {
@@ -126,5 +133,23 @@ describe('cloudHint', () => {
   it('never says more than 100% and rounds like a person would', () => {
     expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 3, cloudOnlyCount: 5 }))).toMatch(/^100%/);
     expect(cloudHint(src({ cloudProvider: 'dropbox', faceCount: 1000, cloudOnlyCount: 1 }))).toMatch(/^<1%|^1%/);
+  });
+});
+
+describe('downloadTargets (nút Tải về máy của trạng thái trống)', () => {
+  const a = src({ id: 1, faceCount: 0, cloudOnlyCount: 3 });
+  const b = src({ id: 2, faceCount: 0, cloudOnlyCount: 4 });
+  it('xem một nguồn: chỉ nguồn đó', () => {
+    expect(downloadTargets('src:2', [a, b]).map(x => x.id)).toEqual([2]);
+  });
+  it('xem tất cả: bỏ nguồn tắt, nguồn không cắm và nguồn đã tải hết', () => {
+    const off = src({ id: 3, enabled: false, faceCount: 0, cloudOnlyCount: 5 });
+    const unplugged = src({ id: 4, available: false, faceCount: 0, cloudOnlyCount: 5 });
+    const done = src({ id: 5, faceCount: 10, cloudOnlyCount: 0 });
+    expect(downloadTargets('all', [a, off, unplugged, done, b]).map(x => x.id)).toEqual([1, 2]);
+  });
+  it('đã tải hết (cloudOnlyCount 0, lastScan.notDownloaded 0): không còn nguồn nào, nên không có gì để tải', () => {
+    const stats = { status: 'ok' as const, seen: 3, unchanged: 3, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
+    expect(downloadTargets('all', [src({ faceCount: 3, cloudOnlyCount: 0, lastScan: stats })])).toEqual([]);
   });
 });

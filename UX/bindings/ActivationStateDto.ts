@@ -2,10 +2,15 @@
 import type { ActivationStatusDto } from "./ActivationStatusDto";
 import type { DesiredStateDto } from "./DesiredStateDto";
 import type { ReasonDto } from "./ReasonDto";
+import type { ReasonNamesDto } from "./ReasonNamesDto";
 import type { ScopeDto } from "./ScopeDto";
 
 /**
  * Một dòng theo file (hash). `faces` = các face_index của file trong thư viện (TTC có nhiều face;
  * file một face luôn là `[0]`) để giao diện dựng `faceKeys` cho "Đang bật".
  */
-export type ActivationStateDto = { hashHex: string, faces: Array<number>, state: DesiredStateDto, scope: ScopeDto, status: ActivationStatusDto, reasons: Array<ReasonDto>, activePath: string | null, conflictPs: string | null, lastError: string | null, };
+export type ActivationStateDto = { hashHex: string, faces: Array<number>, state: DesiredStateDto, scope: ScopeDto, status: ActivationStatusDto, reasons: Array<ReasonDto>, activePath: string | null, conflictPs: string | null, lastError: string | null, 
+/**
+ * Tên để hiển thị cho từng phần tử của `reasons` (CÙNG thứ tự, cùng độ dài). Chỉ có khi lấy từ `activation_state`.
+ */
+reasonNames?: Array<ReasonNamesDto>, };

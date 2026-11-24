@@ -23,6 +23,9 @@ export class PagedFaces {
   private listeners = new Set<() => void>();
   private snap: PagedSnapshot;
   private lastRange: [number, number] = [0, 0];
+  private refreshSeq = 0;
+  /** Lần làm tươi trước đã nhận total=0 khi đang quét (và ta chưa tin): cần lần thứ hai xác nhận mới bỏ dữ liệu cũ. */
+  private zeroPending = false;
 
   constructor(private api: Pick<LibraryApi, 'queryFaces'>, query: GridQuery) {
     this.query = query;
@@ -49,6 +52,7 @@ export class PagedFaces {
     this.query = q;
     this.snap = { ...this.snap, query: q, queryKey: JSON.stringify(q) };
     this.epoch++;
+    this.zeroPending = false; // số 0 đầu tiên của truy vấn mới vẫn phải qua bước xác nhận
     this.pages.clear();
     this.inflight.clear();
     this.failed.clear();
@@ -68,6 +72,40 @@ export class PagedFaces {
       if (!this.pages.has(n) && !this.inflight.has(n) && !this.failed.has(n)) this.fetchPage(n);
     }
   }
+
+  /**
+   * Làm tươi tại chỗ (quét thêm font…): tải lại ngầm các trang đang giữ + trang 0, chỉ thay dữ liệu khi cả nhóm đã về; trong lúc chờ lưới giữ
+   * nguyên trang/total (không rỗng, không mất cuộn). `scanning`: total=0 khi đang quét có thể là trạng thái ghi dở → giữ dữ liệu cũ tới lần
+   * xác nhận thứ hai; khi không quét thì 0 là thật (vd đã gỡ nguồn) và hiện ngay. Đổi truy vấn (epoch) huỷ lần làm tươi đang chờ.
+   */
+  refresh(scanning = false) {
+    if (this.disposed) return;
+    const mySeq = ++this.refreshSeq;
+    this.inflight.clear(); // fetch bắt đầu trước lần làm tươi sẽ bị bỏ (fetchPage kiểm refreshSeq); trang thiếu được tải lại qua ensureRange
+    const e = this.epoch;
+    // Chỉ tải lại các trang đang nhìn (viewport ± 1 trang) + trang 0 (nơi lấy total); trang khác bị bỏ (stale) và tải lại khi cuộn tới.
+    const [a, b] = this.lastRange;
+    const lo = Math.max(0, Math.floor(a / PAGE_SIZE) - 1), hi = Math.floor(b / PAGE_SIZE) + 1;
+    const want = [...new Set<number>([0, ...[...this.pages.keys()].filter(n => n >= lo && n <= hi)])];
+    void Promise.allSettled(want.map(n => this.api.queryFaces({ ...this.query, offset: n * PAGE_SIZE, limit: PAGE_SIZE }).then(page => ({ n, page })))).then(rs => {
+      if (this.disposed || e !== this.epoch || mySeq !== this.refreshSeq) return;
+      const ok = rs.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
+      const first = ok.find(x => x.n === 0);
+      if (!first) { this.ensureRange(...this.lastRange); return; } // trang 0 lỗi: giữ nguyên, lần bump sau thử lại
+      const total = first.page.total;
+      if (total === 0 && scanning && (this.snap.total ?? 0) > 0 && !this.zeroPending) { this.zeroPending = true; this.ensureRange(...this.lastRange); return; }
+      this.zeroPending = false;
+      const next = new Map<number, FaceRow[]>();
+      for (const { n, page } of ok) if (n === 0 || page.items.length > 0) next.set(n, page.items);
+      this.pages = next; // trang lỗi lần này bị bỏ → ensureRange tải lại khi cần
+      this.failed.clear();
+      this.emit({ total, error: null });
+      this.ensureRange(...this.lastRange);
+    });
+  }
+
+  /** Lần làm tươi trước nhận total=0 khi đang quét và chưa được xác nhận. */
+  hasZeroPending(): boolean { return this.zeroPending; }
 
   /** Thử lại các trang còn thiếu quanh vùng đang xem (sau lỗi). */
   retry() {
@@ -89,17 +127,17 @@ export class PagedFaces {
   }
 
   private fetchPage(n: number) {
-    const e = this.epoch;
+    const e = this.epoch; const r = this.refreshSeq;
     this.inflight.add(n);
     this.api.queryFaces({ ...this.query, offset: n * PAGE_SIZE, limit: PAGE_SIZE }).then(
       page => {
-        if (this.disposed || e !== this.epoch) return;
+        if (this.disposed || e !== this.epoch || r !== this.refreshSeq) return; // bắt đầu trước lần làm tươi: dữ liệu cũ, bỏ
         this.inflight.delete(n);
         this.pages.set(n, page.items);
         this.emit({ total: page.total, error: null });
       },
       err => {
-        if (this.disposed || e !== this.epoch) return;
+        if (this.disposed || e !== this.epoch || r !== this.refreshSeq) return;
         this.inflight.delete(n);
         this.failed.add(n);
         this.emit({ error: err?.message ?? String(err) });

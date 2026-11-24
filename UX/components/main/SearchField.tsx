@@ -12,6 +12,7 @@ import { useFilterHistory } from '../filter/useFilterHistory';
 import { useSourcesStore } from '../../store/sources';
 import { useTagsStore } from '../../store/tags';
 import { AdvancedFunnel } from '../filter/AdvancedFilters';
+import { shortcutText } from '../../platform';
 
 export const SEARCH_DEBOUNCE_MS = 120;
 
@@ -85,7 +86,7 @@ export function SearchField(): React.JSX.Element {
         onRemoveChip={(g, id) => { const c = g.chips.find(x => x.id === id); if (c) apply(filters, c.remove(filters), t('fhist.toast', { label: c.label })); }} />}
       {text !== ''
         ? <Tooltip label={t('search.clear')} shortcut="Esc"><button type="button" className="fa-clear" aria-label={t('search.clear')} onClick={() => { commit(''); input.current?.focus(); }}><Icon name="x" size={13} /></button></Tooltip>
-        : <span className="fa-kbd">⌘K</span>}
+        : <span className="fa-kbd">{shortcutText('⌘K')}</span>}
       <AdvancedFunnel />
     </label>
   );

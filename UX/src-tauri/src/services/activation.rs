@@ -5,14 +5,17 @@ use std::sync::{Arc, Mutex};
 
 use fontatlas_activate::{
     ActivationEngine, ActivationError, ActivationReport, ActivationService, Availability, ActivationStateDto as CoreState, ConflictPolicy,
-    DeactivatePolicy, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
+    DeactivatePolicy, OrphanReport, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
 };
 use fontatlas_store::{FaceKey, Store};
 
 use crate::dto::activation::*;
 use crate::dto::events::ActivationEvent;
 use crate::dto::library::{FaceKeyDto, keys_of};
+use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
+use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::error::CmdError;
+use crate::services::instances;
 use crate::state::AppState;
 
 /// Bọc object-safe để `AppState` giữ engine thật hoặc `FakeEngine` (test) mà không generic hoá `AppState`.
@@ -48,13 +51,52 @@ pub trait ActivationApi: Send + Sync {
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ActivationReport, ActivationError>;
     fn deactivate_collection(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
+    fn activate_case(&self, s: &Mutex<Store>, case_id: i64, keys: &[FaceKey], scope: Option<Scope>, p: ConflictPolicy, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
+    fn deactivate_case(&self, s: &Mutex<Store>, case_id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn on_collection_deleted(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError>;
     fn set_scope(&self, s: &Mutex<Store>, hashes: Option<&[[u8; 32]]>, scope: Scope) -> Result<ActivationReport, ActivationError>;
     fn state(&self, s: &Mutex<Store>) -> Result<Vec<CoreState>, ActivationError>;
     fn availability(&self, s: &Mutex<Store>, hashes: &[[u8; 32]]) -> Result<Vec<Availability>, ActivationError>;
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
+    /// Lượt đối soát lúc mở app (duy nhất được xoá lý do auto-on của phiên trước).
+    fn reconcile_startup(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// Gỡ đăng ký session mồ côi (font DB ghi là tắt nhưng hệ điều hành còn đăng ký, vd. sau kill/crash). Xem `ActivationService::unregister_orphans`.
+    fn unregister_orphans(&self, s: &Mutex<Store>) -> Result<OrphanReport, ActivationError>;
+    /// B5: đồng bộ font của Case theo tập app đang chạy (bundle id). Xem `fontatlas_activate::app_sets`.
+    fn sync_app_sets(
+        &self,
+        s: &Mutex<Store>,
+        running: &std::collections::HashSet<String>,
+        now: std::time::Instant,
+        grace: std::time::Duration,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError>;
+    /// B5: "Tắt lần này": gỡ lý do `caseapp:<id>` và đánh dấu để không bật lại cho tới khi app thoát/chạy lại.
+    fn suppress_case_app(
+        &self,
+        s: &Mutex<Store>,
+        collection_id: i64,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<ActivationReport, ActivationError>;
+    /// B5: gỡ mọi lý do `caseapp:*` (lúc thoát, trước `shutdown`).
+    fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// B7: chuyển đăng ký các file đang bật sang đường dẫn mới (đăng ký mới trước, gỡ cũ sau).
+    fn relocate(
+        &self,
+        s: &Mutex<Store>,
+        hashes: &[[u8; 32]],
+        prefer_under: Option<&std::path::Path>,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError>;
+    /// B7 Hoàn tác: như `relocate` nhưng mỗi font có đường đích cụ thể.
+    fn relocate_to(
+        &self,
+        s: &Mutex<Store>,
+        targets: &[([u8; 32], std::path::PathBuf)],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError>;
     /// "Khôi phục bản cũ" sau khi đã "Tắt bản cũ và bật bản này".
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError>;
     /// "Thay bằng bản này" chỉ trên các xung đột đã xác nhận.
@@ -109,6 +151,12 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn deactivate_collection(&self, s: &Mutex<Store>, id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         ActivationService::deactivate_collection(self, s, id, progress)
     }
+    fn activate_case(&self, s: &Mutex<Store>, case_id: i64, keys: &[FaceKey], scope: Option<Scope>, p: ConflictPolicy, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        ActivationService::activate_case(self, s, case_id, keys, scope, p, progress)
+    }
+    fn deactivate_case(&self, s: &Mutex<Store>, case_id: i64, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        ActivationService::deactivate_case(self, s, case_id, progress)
+    }
     fn deactivate_all(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         ActivationService::deactivate_all(self, s, progress)
     }
@@ -127,8 +175,52 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn reconcile(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
         ActivationService::reconcile(self, s, progress)
     }
+    fn reconcile_startup(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
+        ActivationService::reconcile_startup(self, s, progress)
+    }
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
+    }
+    fn unregister_orphans(&self, s: &Mutex<Store>) -> Result<OrphanReport, ActivationError> {
+        ActivationService::unregister_orphans(self, s)
+    }
+    fn sync_app_sets(
+        &self,
+        s: &Mutex<Store>,
+        running: &std::collections::HashSet<String>,
+        now: std::time::Instant,
+        grace: std::time::Duration,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError> {
+        ActivationService::sync_app_sets(self, s, running, now, grace, tracker)
+    }
+    fn release_all_case_apps(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
+        ActivationService::release_all_case_apps(self, s)
+    }
+    fn suppress_case_app(
+        &self,
+        s: &Mutex<Store>,
+        collection_id: i64,
+        tracker: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::suppress_case_app(self, s, collection_id, tracker)
+    }
+    fn relocate(
+        &self,
+        s: &Mutex<Store>,
+        hashes: &[[u8; 32]],
+        prefer_under: Option<&std::path::Path>,
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::relocate(self, s, hashes, prefer_under, progress)
+    }
+    fn relocate_to(
+        &self,
+        s: &Mutex<Store>,
+        targets: &[([u8; 32], std::path::PathBuf)],
+        progress: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        ActivationService::relocate_to(self, s, targets, progress)
     }
     fn restore_replaced(&self, s: &Mutex<Store>, id: i64) -> Result<RestoreOutcome, ActivationError> {
         ActivationService::restore_replaced(self, s, id)
@@ -170,6 +262,12 @@ impl ActivationApi for NoActivation {
     fn deactivate_collection(&self, _: &Mutex<Store>, _: i64, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
+    fn activate_case(&self, _: &Mutex<Store>, _: i64, _: &[FaceKey], _: Option<Scope>, _: ConflictPolicy, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn deactivate_case(&self, _: &Mutex<Store>, _: i64, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
     fn deactivate_all(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
         Err(ActivationError::Unsupported)
     }
@@ -188,8 +286,42 @@ impl ActivationApi for NoActivation {
     fn reconcile(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
         Ok(ReconcileReport::default())
     }
+    fn reconcile_startup(&self, _: &Mutex<Store>, _: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError> {
+        Ok(ReconcileReport::default())
+    }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
+    }
+    fn unregister_orphans(&self, _: &Mutex<Store>) -> Result<OrphanReport, ActivationError> {
+        Ok(OrphanReport::default())
+    }
+    fn sync_app_sets(
+        &self,
+        _: &Mutex<Store>,
+        _: &std::collections::HashSet<String>,
+        _: std::time::Instant,
+        _: std::time::Duration,
+        _: &mut fontatlas_activate::AppSetTracker,
+    ) -> Result<Vec<fontatlas_activate::AppSetEvent>, ActivationError> {
+        Ok(vec![])
+    }
+    fn release_all_case_apps(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
+        Ok(0)
+    }
+    fn suppress_case_app(&self, _: &Mutex<Store>, _: i64, _: &mut fontatlas_activate::AppSetTracker) -> Result<ActivationReport, ActivationError> {
+        Ok(ActivationReport::default())
+    }
+    fn relocate(
+        &self,
+        _: &Mutex<Store>,
+        _: &[[u8; 32]],
+        _: Option<&std::path::Path>,
+        _: &mut dyn FnMut(Progress),
+    ) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
+    }
+    fn relocate_to(&self, _: &Mutex<Store>, _: &[([u8; 32], std::path::PathBuf)], _: &mut dyn FnMut(Progress)) -> Result<ActivationReport, ActivationError> {
+        Err(ActivationError::Unsupported)
     }
     fn restore_replaced(&self, _: &Mutex<Store>, _: i64) -> Result<RestoreOutcome, ActivationError> {
         Err(ActivationError::Unsupported)
@@ -249,10 +381,32 @@ fn policy(proceed: bool) -> ConflictPolicy {
     if proceed { ConflictPolicy::Proceed } else { ConflictPolicy::Ask }
 }
 
+fn reason_names(
+    r: &ReasonDto,
+    names: &std::collections::HashMap<i64, String>,
+    case_names: &std::collections::HashMap<i64, String>,
+    apps: &std::collections::HashMap<i64, Vec<String>>,
+) -> ReasonNamesDto {
+    match r {
+        ReasonDto::Case { case_id } => ReasonNamesDto { collection_name: case_names.get(case_id).cloned(), app_names: vec![] },
+        ReasonDto::Collection { collection_id } => ReasonNamesDto { collection_name: names.get(collection_id).cloned(), app_names: vec![] },
+        // `collection_name` mang TÊN CASE ở đây: `case_id` là `cases.id`, tra trong bảng Case, không phải collections.
+        ReasonDto::CaseApp { case_id } => ReasonNamesDto { collection_name: case_names.get(case_id).cloned(), app_names: apps.get(case_id).cloned().unwrap_or_default() },
+        ReasonDto::Manual | ReasonDto::Auto { .. } => ReasonNamesDto { collection_name: None, app_names: vec![] },
+    }
+}
+
 /// Mọi dòng trạng thái kèm danh sách face của file (file một face: `[0]`; TTC: nhiều face).
 pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError> {
     let rows = state.activation.state(state.store()?)?;
     state.with_store(|s| {
+        let names: std::collections::HashMap<i64, String> = s.collections()?.into_iter().map(|c| (c.id, c.name)).collect();
+        let case_names: std::collections::HashMap<i64, String> = s.cases(true)?.into_iter().map(|c| (c.id, c.name)).collect();
+        let mut apps: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
+        for b in s.case_bindings()? {
+            let list = s.case_apps(b.case_id)?.into_iter().map(|a| if a.app_name.is_empty() { a.bundle_id } else { a.app_name }).collect();
+            apps.insert(b.case_id, list);
+        }
         let mut st = s
             .conn()
             .prepare(
@@ -267,7 +421,9 @@ pub fn state_list(state: &AppState) -> Result<Vec<ActivationStateDto>, CmdError>
                     .map_err(fontatlas_store::StoreError::from)?
                     .filter_map(|x| x.ok().map(|v| v as u32))
                     .collect();
-                Ok(ActivationStateDto::from_core(r, if faces.is_empty() { vec![0] } else { faces }))
+                let mut dto = ActivationStateDto::from_core(r, if faces.is_empty() { vec![0] } else { faces });
+                dto.reason_names = Some(dto.reasons.iter().map(|x| reason_names(x, &names, &case_names, &apps)).collect());
+                Ok(dto)
             })
             .collect()
     })
@@ -279,6 +435,19 @@ pub fn preflight(state: &AppState, faces: &[FaceKeyDto]) -> Result<ActivationRep
     Ok(ActivationReportDto::from(&state.activation.preflight(state.store()?, &keys)?))
 }
 
+/// Khay "Tác vụ": kích hoạt/tắt hàng loạt hiện như một việc (không huỷ được: engine không dừng giữa chừng an toàn). Lỗi đã được lệnh
+/// báo qua kết quả nên khay không thêm toast (không `errorKey`).
+fn track<'a>(state: &'a AppState, title_key: &str) -> TaskGuard<'a> {
+    let id = state.tasks.begin(None, TaskSpec::new(TaskKind::Activation, title_key), TaskState::Running);
+    TaskGuard::with_error(&state.tasks, id, None)
+}
+
+fn tracked(task: &TaskGuard<'_>, progress: &mut dyn FnMut(ProgressDto), p: &fontatlas_activate::Progress) {
+    let d = ProgressDto::from(p);
+    task.progress(d.done as u64, Some(d.total as u64));
+    progress(d);
+}
+
 pub fn activate(
     state: &AppState,
     faces: &[FaceKeyDto],
@@ -287,9 +456,99 @@ pub fn activate(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.activate");
     let keys = keys_of(faces)?;
-    let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+    let r = state.activation.activate_faces(state.store()?, &keys, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
+}
+
+/// G7 + G7b "Giữ cả hai". Với font VARIABLE trong thư viện đang trùng PostScript name với bản STATIC đã cài: tạo bản sao đổi tên
+/// của VF (`derived::derive_renamed_copy`, file gốc không đụng) rồi bật BẢN SAO cùng bản static: hai tên khác nhau nên dùng đồng thời
+/// được. Kết quả của font gốc trả `activated` kèm `warning`: `renamed_copy` (hoặc `renamed_copy_restricted` khi `fsType` hạn chế: UI hiện
+/// ghi chú giấy phép, không chặn) và `path` = bản sao. Các trường hợp còn lại (static bật sau VF đã cài, VF của app khác, không tạo được
+/// bản sao) lùi về hành vi G7: đăng ký trùng tên (`proceed`), `warning` = `rename_failed:<mã>` khi thử tạo bản sao mà lỗi.
+pub fn keep_both(
+    state: &Arc<AppState>,
+    faces: &[FaceKeyDto],
+    scope: Option<ScopeDto>,
+    progress: &mut dyn FnMut(ProgressDto),
+) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let pre = state.activation.preflight(state.store()?, &keys)?;
+    let mut derived: Vec<(FaceKey, FaceKey, bool)> = vec![]; // (gốc, bản sao, license_restricted)
+    let mut fallback: Vec<FaceKey> = vec![];
+    let mut fail_codes: std::collections::HashMap<[u8; 32], String> = std::collections::HashMap::new();
+    for k in &keys {
+        let conflicts = pre.results.iter().find(|r| r.hash_hex == FaceKeyDto::from(k).hash_hex).and_then(|r| match &r.outcome {
+            fontatlas_activate::FileOutcome::NeedsConfirmation { conflicts } => Some(conflicts),
+            _ => None,
+        });
+        // chỉ cặp "VF của thư viện ↔ static đã cài" (mọi xung đột thật đều như vậy) mới có bản sao đổi tên
+        let derivable = conflicts.is_some_and(|c| {
+            let real: Vec<_> = c.iter().filter(|x| !x.same_file).collect();
+            !real.is_empty() && real.iter().all(|x| x.variable && x.existing_variable == Some(false))
+        });
+        if derivable {
+            match crate::services::derived::derive_renamed_copy(state, &k.hash) {
+                Ok((copy, dto)) => {
+                    derived.push((*k, copy, dto.license_restricted));
+                    continue;
+                }
+                Err(e) => {
+                    let code = CmdError::from(e).code;
+                    fail_codes.insert(k.hash, code.to_string());
+                }
+            }
+        }
+        fallback.push(*k);
+    }
+    let scope_core = scope.map(Into::into);
+    let mut out = ActivationReportDto::default();
+    if !fallback.is_empty() {
+        let r = state.activation.activate_faces(state.store()?, &fallback, scope_core, policy(true), &mut |p| progress((&p).into()))?;
+        let mut dto = ActivationReportDto::from(&r);
+        for res in &mut dto.results {
+            if res.warning.is_none()
+                && let Some(code) = hash_of_hex(&res.hash_hex).and_then(|h| fail_codes.get(&h))
+            {
+                res.warning = Some(format!("rename_failed:{code}"));
+            }
+        }
+        out = dto;
+    }
+    if !derived.is_empty() {
+        let copies: Vec<FaceKey> = derived.iter().map(|d| d.1).collect();
+        let r = state.activation.activate_faces(state.store()?, &copies, scope_core, ConflictPolicy::Ask, &mut |p| progress((&p).into()))?;
+        let mut dto = ActivationReportDto::from(&r);
+        for res in &mut dto.results {
+            // trả kết quả dưới hash của font GỐC (cái người dùng đã chọn); `path` = bản sao
+            if let Some((orig, copy, restricted)) = derived.iter().find(|d| FaceKeyDto::from(&d.1).hash_hex == res.hash_hex) {
+                res.hash_hex = FaceKeyDto::from(orig).hash_hex;
+                res.requested_faces = vec![orig.face_index];
+                let _ = copy;
+                if matches!(res.outcome, FileOutcomeDto::Activated | FileOutcomeDto::AlreadyActive) && res.warning.is_none() {
+                    res.warning = Some(if *restricted { "renamed_copy_restricted" } else { "renamed_copy" }.into());
+                }
+            }
+        }
+        out.changed += dto.changed;
+        out.needs_confirmation += dto.needs_confirmation;
+        out.failed += dto.failed;
+        out.results.extend(dto.results);
+    }
+    // `finish` phát `Changed` theo hash trong kết quả; bản sao là font mới của thư viện nên báo cả hash của nó
+    let mut hashes: Vec<String> = out.results.iter().filter(|r| matches!(r.outcome, FileOutcomeDto::Activated)).map(|r| r.hash_hex.clone()).collect();
+    hashes.extend(derived.iter().map(|d| FaceKeyDto::from(&d.1).hash_hex));
+    if !hashes.is_empty() {
+        state.hubs.activation.emit(ActivationEvent::Changed { hashes });
+    }
+    Ok(out)
+}
+
+fn hash_of_hex(h: &str) -> Option<[u8; 32]> {
+    FaceKey::from_hex(h, 0).ok().map(|k| k.hash)
 }
 
 /// "Tắt bản cũ và bật bản này": như `activate` nhưng gỡ các bản xung đột theo ma trận (xem fontatlas-activate).
@@ -342,7 +601,7 @@ pub fn restore_replaced(state: &AppState, id: i64) -> Result<RestoreOutcomeDto, 
 
 /// "Bật tất cả" theo Dự án: font KHÔNG `missing` của Case đi qua đúng luồng `activate` (xung đột tên family/PostScript,
 /// tải trước file cloud, báo cáo theo file); font `missing` không gửi xuống engine mà liệt kê ở `skipped_missing`.
-/// Kích hoạt kiểu thủ công (không gắn lý do "dự án": tắt Dự án không tự tắt font).
+/// Bật cả Case (Pairing Desk): lý do `case:<id>` (không phải `manual`, không phải `collection:`); tắt Case chỉ gỡ lý do này.
 pub fn activate_case(
     state: &AppState,
     case_id: i64,
@@ -351,17 +610,30 @@ pub fn activate_case(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<CaseActivationDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.activate");
     let case = crate::services::cases::get_case(state, case_id)?;
     let (present, gone): (Vec<_>, Vec<_>) = case.faces.into_iter().partition(|f| !f.missing);
     let keys: Vec<FaceKeyDto> = present.into_iter().map(|f| f.key).collect();
     let report = if keys.is_empty() {
-        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0 }
+        ActivationReportDto { results: vec![], changed: 0, needs_confirmation: 0, failed: 0, busy: 0, busy_hashes: vec![] }
     } else {
-        activate(state, &keys, scope, proceed, progress)?
+        // Lý do `case:<id>` (không phải `manual`): màn "Đang bật" cho thấy font đến từ Case nào.
+        let fks = keys_of(&keys)?;
+        let r = state.activation.activate_case(state.store()?, case_id, &fks, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
+        finish(state, r)
     };
+    task.end(TaskOutcome::Done);
     Ok(CaseActivationDto { report, skipped_missing: gone.into_iter().map(|f| f.key).collect() })
 }
 
+/// Tắt cả Case: gỡ lý do `case:<id>`; font còn lý do khác (bật tay, Dự án, app) vẫn bật.
+pub fn deactivate_case(state: &AppState, case_id: i64, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_case(state.store()?, case_id, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
+    Ok(finish(state, r))
+}
 pub fn activate_collection(
     state: &AppState,
     collection_id: i64,
@@ -370,27 +642,83 @@ pub fn activate_collection(
     progress: &mut dyn FnMut(ProgressDto),
 ) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.activate_collection(state.store()?, collection_id, scope.map(Into::into), policy(proceed), &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.activate");
+    let r = state.activation.activate_collection(state.store()?, collection_id, scope.map(Into::into), policy(proceed), &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
+    Ok(finish(state, r))
+}
+
+/// Như `deactivate` nhưng KHÔNG hiện việc trong khay: dành cho lời gọi nội bộ (một việc khác đã hiện, hoặc gọi lặp từng face).
+pub fn deactivate_quiet(state: &AppState, faces: &[FaceKeyDto], force: bool) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let keys = keys_of(faces)?;
+    let pol = if force { DeactivatePolicy::Force } else { DeactivatePolicy::Ask };
+    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |_| {})?;
     Ok(finish(state, r))
 }
 
 pub fn deactivate(state: &AppState, faces: &[FaceKeyDto], force: bool, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
+    let task = track(state, "task.deactivate");
     let keys = keys_of(faces)?;
     let pol = if force { DeactivatePolicy::Force } else { DeactivatePolicy::Ask };
-    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |p| progress((&p).into()))?;
+    let r = state.activation.deactivate_faces(state.store()?, &keys, pol, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
+    Ok(finish(state, r))
+}
+
+/// B7: chuyển đăng ký của các font ĐANG BẬT sang bản chép (hoặc đường dẫn mới). Người dùng bấm "Switch active fonts to the
+/// organized copies"; không bao giờ tự chạy. `prefer_under` = gốc Organized Library (chỉ nhận vị trí dưới đó).
+/// Như `relocate` nhưng không hiện việc trong khay (lời gọi nội bộ sau khi chép Organized Library).
+pub fn relocate_quiet(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let mut hashes: Vec<[u8; 32]> = keys_of(faces)?.into_iter().map(|k| k.hash).collect();
+    hashes.sort();
+    hashes.dedup();
+    let root = prefer_under.map(std::path::Path::new);
+    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |_| {})?;
+    Ok(finish(state, r))
+}
+
+pub fn relocate(state: &AppState, faces: &[FaceKeyDto], prefer_under: Option<&str>, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let task = track(state, "task.relocate");
+    let mut hashes: Vec<[u8; 32]> = keys_of(faces)?.into_iter().map(|k| k.hash).collect();
+    hashes.sort();
+    hashes.dedup();
+    let root = prefer_under.map(std::path::Path::new);
+    let r = state.activation.relocate(state.store()?, &hashes, root, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
+    Ok(finish(state, r))
+}
+
+/// B7 Hoàn tác: đưa đăng ký của từng font về đường cụ thể (đường cũ đã ghi trước khi chuyển). Kết quả theo file như `relocate`.
+pub fn relocate_to(state: &AppState, targets: &[RelocateTargetDto], progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
+    writable(state)?;
+    let task = track(state, "task.relocate");
+    let mut list = Vec::with_capacity(targets.len());
+    for t in targets {
+        let key = keys_of(std::slice::from_ref(&t.face))?.remove(0);
+        list.push((key.hash, std::path::PathBuf::from(&t.path)));
+    }
+    let r = state.activation.relocate_to(state.store()?, &list, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 pub fn deactivate_collection(state: &AppState, collection_id: i64, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.deactivate_collection(state.store()?, collection_id, &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_collection(state.store()?, collection_id, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
 pub fn deactivate_all(state: &AppState, progress: &mut dyn FnMut(ProgressDto)) -> Result<ActivationReportDto, CmdError> {
     writable(state)?;
-    let r = state.activation.deactivate_all(state.store()?, &mut |p| progress((&p).into()))?;
+    let task = track(state, "task.deactivate");
+    let r = state.activation.deactivate_all(state.store()?, &mut |p| tracked(&task, progress, &p))?;
+    task.end(TaskOutcome::Done);
     Ok(finish(state, r))
 }
 
@@ -481,15 +809,112 @@ pub fn set_keep(state: &AppState, on: bool) -> Result<(), CmdError> {
 
 /// Đối soát DB ↔ hệ điều hành. `always`: gửi `Reconciled` cả khi không có gì mới (lúc mở app).
 pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
+    reconcile_pass(state, always, 0, false);
+}
+
+/// Lượt đối soát lúc mở app (gọi đúng một lần từ `boot`, TRƯỚC khi broker/fontreq nhận yêu cầu): ngoài việc đối soát còn xoá lý do auto-on
+/// của phiên trước. Các lượt bù của lượt này đã là lượt thường.
+pub fn reconcile_startup(state: &Arc<AppState>) {
+    reconcile_pass(state, true, 0, true);
+}
+
+/// Dọn đăng ký session mồ côi (chạy nền sau khi UI lên, không chặn boot). Bỏ qua lượt này nếu phát hiện process Font Atlas KHÁC đang sống:
+/// đăng ký session là của cả phiên đăng nhập nên instance kia có thể đang dùng đúng font mà DB của ta ghi là tắt. Chỉ đọc danh sách process, không kill.
+pub fn sweep_orphans(state: &Arc<AppState>) {
+    // Instance khác có thể chỉ vừa khởi động/đang thoát: thử lại vài lần ngắn trước khi bỏ qua lượt này.
+    const TRIES: u32 = 3;
+    for attempt in 1..=TRIES {
+        if !instances::another_running() {
+            break;
+        }
+        if attempt == TRIES {
+            log::info!("có Font Atlas khác đang chạy: bỏ qua dọn đăng ký session mồ côi lượt này");
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+    let Ok(store) = state.store() else { return };
+    match state.activation.unregister_orphans(store) {
+        Ok(r) if r.listing_failed => log::warn!("không liệt kê được font hệ thống: bỏ qua dọn đăng ký mồ côi"),
+        Ok(r) if r.unregistered > 0 || r.failed > 0 => log::info!("dọn đăng ký session mồ côi: gỡ {} (lỗi {})", r.unregistered, r.failed),
+        Ok(_) => log::info!("dọn đăng ký session mồ côi: không có gì để dọn"),
+        Err(e) => log::warn!("dọn đăng ký session mồ côi lỗi: {e:?}"),
+    }
+}
+
+/// Hash bị thao tác khác giữ thì lượt đối soát bỏ qua nó; xếp tối đa 2 lượt BÙ (mỗi lượt sau ~1,5 s) để không phải đợi lần quét sau.
+const RECONCILE_MAKEUP_PASSES: u32 = 2;
+const RECONCILE_MAKEUP_DELAY: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Giữ một lượt bù trong `pending`; giảm khi drop — kể cả khi `reconcile_pass` panic trong luồng bù (test chờ `pending == 0` không treo).
+struct MakeupGuard(Arc<AppState>);
+
+impl MakeupGuard {
+    fn new(st: &Arc<AppState>) -> Self {
+        st.reconcile_makeup.pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        MakeupGuard(Arc::clone(st))
+    }
+}
+
+impl Drop for MakeupGuard {
+    fn drop(&mut self) {
+        self.0.reconcile_makeup.pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Trạng thái các lượt đối soát bù: đếm lượt đang chờ/chạy (test chờ về 0 thay vì đoán theo đồng hồ) và cách chờ (tiêm được).
+#[derive(Default)]
+pub struct MakeupState {
+    pending: std::sync::atomic::AtomicUsize,
+    waiter: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+}
+
+impl MakeupState {
+    /// Số lượt bù đã xếp mà chưa chạy xong.
+    pub fn pending(&self) -> usize {
+        self.pending.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Thay cách chờ trước mỗi lượt bù (mặc định ngủ ~1,5 s). Chỉ cho test: biến "đợi bao lâu" thành "đợi sự kiện".
+    #[doc(hidden)]
+    pub fn set_waiter(&self, f: impl Fn() + Send + Sync + 'static) {
+        *self.waiter.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(f));
+    }
+
+    fn wait(&self) {
+        let w = self.waiter.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match w {
+            Some(f) => f(),
+            None => std::thread::sleep(RECONCILE_MAKEUP_DELAY),
+        }
+    }
+}
+
+fn reconcile_pass(state: &Arc<AppState>, always: bool, attempt: u32, startup: bool) {
     if !state.activation.supported() {
         return;
     }
     let Ok(store) = state.store() else { return };
-    match state.activation.reconcile(store, &mut |p| state.hubs.activation.emit(ActivationEvent::Progress { progress: (&p).into() })) {
+    let mut progress = |p: Progress| state.hubs.activation.emit(ActivationEvent::Progress { progress: (&p).into() });
+    let result = if startup { state.activation.reconcile_startup(store, &mut progress) } else { state.activation.reconcile(store, &mut progress) };
+    match result {
         Ok(r) => {
             let dto = ReconcileReportDto::from(&r);
             if always || dto.is_notable() {
                 state.hubs.activation.emit(ActivationEvent::Reconciled { report: dto });
+            }
+            if r.busy > 0 && attempt < RECONCILE_MAKEUP_PASSES && !state.scans.is_shutting_down() {
+                let guard = MakeupGuard::new(state);
+                // nếu không dựng được luồng, closure (và `guard`) bị drop ⇒ `pending` tự giảm
+                let _ = std::thread::Builder::new().name("fontatlas-reconcile-makeup".into()).spawn(move || {
+                    let st = Arc::clone(&guard.0);
+                    st.reconcile_makeup.wait();
+                    // app có thể đã tắt trong lúc chờ: không chạy lượt bù sau khi tắt
+                    if !st.scans.is_shutting_down() {
+                        reconcile_pass(&st, false, attempt + 1, false); // lượt bù luôn là lượt thường: không xoá lý do auto của phiên hiện tại
+                    }
+                    drop(guard);
+                });
             }
         }
         Err(e) => log::warn!("đối soát kích hoạt lỗi: {e}"),
@@ -509,6 +934,11 @@ pub fn before_delete_collection(state: &AppState, id: i64) -> Result<(), CmdErro
 pub fn on_exit(state: &AppState) {
     if !state.activation.supported() {
         return;
+    }
+    if let Ok(store) = state.store()
+        && let Err(e) = state.activation.release_all_case_apps(store)
+    {
+        log::warn!("gỡ lý do app của Case lúc thoát lỗi: {e}");
     }
     if let Ok(store) = state.store()
         && let Err(e) = state.activation.shutdown(store)

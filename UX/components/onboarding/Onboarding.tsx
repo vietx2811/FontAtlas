@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Api, OnboardingDto, ScanEvent, SourceDto } from '../../api';
+import type { Api, OnboardingDto, OrganizedStatusDto, ScanEvent, SourceDto } from '../../api';
+import { OrganizedSetup } from '../library/OrganizedSetup';
+import { OrganizedImportDialog } from '../library/OrganizedImportDialog';
+import '../library/organized.css';
 import { CmdError } from '../../api';
 import { DONE, estimateAnalysisMinutes, nextStep, prevStep, startStep, visibleSteps, type Step } from '../../store/onboarding';
 import { applyTheme, type ThemeMode } from '../../theme';
@@ -16,6 +19,7 @@ import { useModelStore, useModelUi } from '../../store/model';
 import { ModelDetails, ModelSpinner } from '../model/ModelFeedback';
 import { Tooltip } from '../ui/Tooltip';
 import { ShortcutsOverlay } from '../help/ShortcutsOverlay';
+import { isMac } from '../../platform';
 
 type Props = { api: Api; pickFolder?: () => Promise<string | null>; pickFolders?: () => Promise<string[]>; onDone(): void;
   /** false: không có outro (test, QA). Giảm chuyển động của hệ thống cũng tắt nó. Phần mở đầu là Splash của App, không nằm ở đây. */ animated?: boolean; outroMs?: number };
@@ -39,10 +43,10 @@ export function Onboarding({ api, pickFolder, pickFolders = pickFoldersWithDialo
   const [glass, setGlass] = useState(false);
   useEffect(() => {
     let alive = true;
-    api.setWindowGlass(true).then(on => { if (alive) setGlass(on); }, () => undefined);
-    return () => { alive = false; void api.setWindowGlass(false).catch(() => undefined); };
+    (isMac() ? api.setWindowGlass(true) : Promise.resolve(false)).then(on => { if (alive) setGlass(on); }, () => undefined);
+    return () => { alive = false; if (isMac()) void api.setWindowGlass(false).catch(() => undefined); };
   }, [api]);
-  const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const native = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && isMac(); // vibrancy/kính chỉ có trên macOS
   const reload = useCallback(async () => { const s = await api.onboardingState(); setState(s); return s; }, [api]);
 
   useEffect(() => {
@@ -197,6 +201,11 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
   const lock = useRef(false);
   const alive = useRef(true);
   const [scanning, setScanning] = useState<number[]>([]);
+  // B7: kiểu quản lý font. Mặc định "tự quản theo thư mục" (cách cũ, không đổi gì); "Organized Library" chép vào thư viện riêng.
+  const [mode, setMode] = useState<'folders' | 'organized'>('folders');
+  const [org, setOrg] = useState<OrganizedStatusDto | null>(null);
+  const [importing, setImporting] = useState(false);
+  useEffect(() => { let on = true; api.organizedStatus().then(x => { if (on) { setOrg(x); if (x.configured) setMode('organized'); } }, () => undefined); return () => { on = false; }; }, [api]);
   const refresh = useCallback(async () => {
     const list = await api.listSources();
     if (alive.current) { setSources(list); setLoadError(null); }
@@ -221,7 +230,7 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
       if (e.type === 'finished' || e.type === 'failed') setScanning(ids => ids.filter(id => id !== e.sourceId));
       if (e.type === 'idle') setScanning([]);
       if (e.type === 'finished' || e.type === 'idle') void refresh().catch(err => { if (!dead) setLoadError(sourceError(err)); });
-    }).then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([t('onb.o3.trackFail', { msg: sourceError(e) })]); });
+    }, 'onboarding.sources').then(u => { if (dead) u(); else off = u; }).catch(e => { if (!dead) setMessages([t('onb.o3.trackFail', { msg: sourceError(e) })]); });
     api.scanStatus().then(s => { if (!dead && !eventSeen) setScanning([...s.queued, ...(s.currentSourceId === null ? [] : [s.currentSourceId])]); }).catch(e => { if (!dead) setMessages([t('onb.o3.statusFail', { msg: sourceError(e) })]); });
     return () => { dead = true; alive.current = false; off?.(); };
   }, [api, load, refresh]);
@@ -248,6 +257,20 @@ function O3({ api, reload, next, pickFolders, setWorking }: Ctx) {
   return (
     <>
       <h1>{t('onb.o3.title')}</h1>
+      <fieldset className="fa-org-mode" data-testid="onb-mode">
+        <legend>{t('onb.mode.title')}</legend>
+        <label><input type="radio" name="fa-mode" checked={mode === 'organized'} disabled={busy} onChange={() => setMode('organized')} />
+          <span><b>{t('onb.mode.organized')}</b><small>{t('onb.mode.organized.d')}</small></span></label>
+        <label><input type="radio" name="fa-mode" checked={mode === 'folders'} disabled={busy || !!org?.configured} onChange={() => setMode('folders')} />
+          <span><b>{t('onb.mode.folders')}</b><small>{t('onb.mode.folders.d')}</small></span></label>
+      </fieldset>
+      {mode === 'organized' && (org?.configured
+        ? <div className="fa-onb-note" data-testid="onb-org-ready"><p>{t('onb.mode.ready', { root: org.root ?? '' })}</p>
+            {sources.some(x => x.faceCount > 0) && <button type="button" disabled={busy || scanning.length > 0} data-testid="onb-org-import" onClick={() => setImporting(true)}>{t('onb.mode.import')}</button>}
+            {scanning.length > 0 && <p>{t('onb.mode.waitScan')}</p>}</div>
+        : <OrganizedSetup api={api} pick={async () => (await pickFolders())[0] ?? null} disabled={busy} onCreated={x => setOrg(x)} />)}
+      <p className="fa-onb-note">{t('onb.mode.later')}</p>
+      {importing && <OrganizedImportDialog api={api} onClose={() => { setImporting(false); void api.organizedStatus().then(setOrg, () => undefined); }} />}
       <p>{t('onb.o3.intro')}</p>
       <ul className="fa-onb-sources" aria-label={t('onb.o3.list')} aria-busy={loading || busy}>
         {sources.map(s => {
@@ -286,7 +309,7 @@ function O4({ api, next, stage }: Ctx) {
       else if (e.type === 'progress') { setSeen(e.progress.total); setWritten(e.progress.facesWritten); setSt({ scanning: true, done: false, progress: e.progress.total > 0 ? e.progress.done / e.progress.total : null }); }
       else if (e.type === 'finished') setStats(d => ({ seen: d.seen + e.stats.seen, analyzed: d.analyzed + e.stats.analyzed, failed: d.failed + e.stats.failed, finished: true }));
       else if (e.type === 'idle') setSt({ scanning: false, progress: 1, done: true });
-    }).then(u => { if (dead) u(); else off = u; });
+    }, 'onboarding.scan').then(u => { if (dead) u(); else off = u; });
     // Quét đã xong từ trước khi vào bước này (hoặc chưa chạy): hiện dấu tick luôn.
     void api.scanStatus().then(s => { if (!dead) setSt(p => (s.running ? { ...p, scanning: true } : p.scanning ? p : { scanning: false, progress: 1, done: true })); });
     return () => { dead = true; off?.(); };

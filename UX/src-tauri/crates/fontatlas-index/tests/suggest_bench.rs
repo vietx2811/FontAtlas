@@ -43,7 +43,7 @@ fn time<F: FnMut()>(mut f: F) -> (f64, f64) {
 #[test]
 #[ignore = "bench: chạy tay với --release --nocapture"]
 fn suggest_bench() {
-    for n in [2_000usize, 5_000, 10_000] {
+    for n in [2_000usize, 5_000, 10_000, 20_000] {
         let ix = index_of(corpus(n));
         let q = ix.profiles()[18].key.clone();
         for (label, vi) in [("pair heading→body", false), ("pair heading→body vi", true)] {

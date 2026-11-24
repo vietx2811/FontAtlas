@@ -34,3 +34,69 @@ Nhánh `feat/auto-activation`. Crate `fontatlas-cep` (L3) và `fontatlas-indesig
 - `faFonts()` với font thiếu ở Illustrator 2027: spike (30.7) thấy `textFont.name` giữ tên gốc; chưa kiểm ở 2027 và chưa kiểm rằng font thiếu KHÔNG nằm trong `app.textFonts`.
 - Sau khi Font Atlas bật font, tài liệu đang mở có hiển thị lại đúng không (`app.redraw()` có đủ không, hay phải mở lại tài liệu)? Hộp "Missing Fonts" của Adobe và hộp của RightFont (đang chạy ở máy chủ) hiện ngay lúc mở, trước khi panel kịp bật font: chưa biết Adobe có tự bỏ qua sau khi ta bật.
 - InDesign: `afterOpen` có chạy trước hộp Missing Fonts không; `Font.status`/tên gốc; Socket tới broker; InDesign có xoá "missing" sau khi bật session không. InDesign trên máy này kẹt ở màn hình trắng lúc khởi động (cả 2026 lẫn 2027 chưa vào được), nên chưa đo được gì ngoài việc script nạp được.
+
+## L3 — log chẩn đoán của panel (thêm 2026-11-23)
+
+Lần thử thật trên Illustrator 2027: panel nạp được (không cần PlayerDebugMode) nhưng KHÔNG gửi `ensure` cho tài liệu có font thiếu, và không có dấu vết nào. Nên panel nay ghi log ra **`cep-panel.log` cạnh `broker.json`** (thư mục dữ liệu của app), tối đa 12 000 ký tự (giữ phần cuối), chỉ gồm mã lỗi, số đếm và TÊN FONT, không bao giờ tên/đường dẫn tài liệu. Đọc nó sau lần thử để biết panel dừng ở đâu:
+
+- `panel nền đã nạp` → panel chạy. Không có dòng này = panel không nạp.
+- `faSig lỗi: 'EvalScript error.'` rồi `nạp host.jsx bằng tay` → ScriptPath không chạy cho panel nền; panel tự `$.evalFile` host.jsx một lần.
+- `quét xong: tài liệu=… frame=… run=… runKhôngFont=… lỗi=… fontCài=… thấy=[tên(có|thiếu),…] lỗiMẫu=…` — dòng quan trọng nhất:
+  - `thấy=[ArialMT(có)]` dù tài liệu dùng font khác ⇒ `textFont.name` KHÔNG giữ tên gốc của font thiếu (Illustrator thay thế), phải tìm cách khác để lấy tên font thiếu.
+  - `lỗiMẫu=textFont:…` ⇒ đọc `textFont` của font thiếu ném lỗi (trước đây bị nuốt im lặng).
+  - `runKhôngFont>0` ⇒ `textFont` trả null.
+  - `frame=0`/`run=0` dù có chữ ⇒ tài liệu import không lộ text frame qua `textFrames`.
+- `chưa có broker.json` / `broker.json: …` ⇒ Font Atlas chưa chạy hoặc tệp hỏng. (Lỗi đã sửa: trước đây panel đặt chữ ký là "đã xử lý" nên poll không bao giờ quét lại sau khi Font Atlas khởi động.)
+- `gửi ensure: font thiếu=…` rồi `ensure xong: bật=… chưa có=…` hoặc `ensure lỗi http=…` ⇒ đường tới broker.
+
+Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.test.mjs` (cũng chạy trong `cargo test -p fontatlas-cep`): host.jsx và main.js chạy trong vm của Node với `app` giả (font thiếu, textFont ném lỗi, font bị thay thế như tài liệu import, textFrames lỗi), đồng hồ giả cho vòng poll 20 s và sự kiện, broker giả.
+
+### Kết quả lần thử thật 2026-11-23 (Illustrator 2027, tài liệu SVG import)
+
+- Panel tự ký nạp được KHÔNG cần PlayerDebugMode; `host.jsx` nạp bình thường (không `EvalScript error`).
+- **Nguyên nhân panel không gửi `ensure`: `textRange.textRuns` trả 0 run trong Illustrator 2027 dù text frame có chữ** (log: `frame=1 run=0`, không lỗi). Code cũ chỉ đọc font qua textRuns nên không bao giờ thấy font nào (cả font có lẫn font thiếu).
+- Sửa: nếu textRuns rỗng/`length` không phải số thì đọc từng paragraph, rồi cả `textRange`; log ghi `qua[run/đoạn/frame]` và `dò{runs=0 paras=1 via=paras}`. Lần thử sau sửa: `run=1 qua[run/đoạn/frame]=0/1/0 thấy=[DMSerifDisplay-Regular(có)]`.
+- Chưa kiểm được trọn vòng "font thiếu → panel gửi → font bật" trong Illustrator: app.textFonts có vẻ giữ tên font vài chục giây sau khi font bị tắt (nên font vừa tắt vẫn "có"), và tài liệu import SVG thay font thiếu bằng font khác. Cần tài liệu .ai gốc được lưu với font rồi mở khi font đang tắt.
+
+### Sau review (2026-11-23): các điểm đã sửa trong panel
+
+- **Broker đổi (Font Atlas khởi động lại):** panel nhớ `port:token` lần đọc trước; đổi thì xoá `last/retry/lastSig` rồi quét lại mọi tài liệu (log: `broker đổi …`). Cần vì lượt startup của app xoá auto-on phiên cũ, nên tài liệu đang mở lại thiếu font.
+- **Broker vắng:** không quét (không có chỗ gửi) và không ghi log lặp; broker.json xuất hiện/đổi thì quét ngay.
+- **Log "quét xong"** chỉ ghi khi kết quả khác lần trước.
+- **Đoạn/vùng chữ trộn nhiều font:** **luôn** lấy mẫu từng ký tự (kể cả khi `textFont` của đoạn/vùng có giá trị: Illustrator 2027 thật trả font ĐẦU TIÊN cho đoạn trộn, đo ngày 2026-11-24 với đoạn Chonburi/DM Serif/Arial) (tối đa ~200 lần đọc mỗi mục, luôn gồm ký tự cuối); log `qua[run/đoạn/frame/ký tự]`.
+- **Nạp tay host.jsx:** bộ đếm tối đa 3 lần cho một chuỗi lỗi `EvalScript error.`; `faSig` trả `err` tạm (hộp modal…) không tính.
+
+
+- **Thử thật 2026-11-24 (Illustrator 2027, .ai tạo bằng osascript):** đoạn 3 font → panel thấy đủ `Chonburi, DMSerifDisplay, ArialMT` (+ MyriadPro của ký tự cách). Chưa kích được nhánh `ensure` thật: `.ai` mang font nhúng nên Illustrator tự thấy font sau khi mở. Lưu ý: kill Font Atlas bằng SIGTERM để lại font session đã đăng ký trong phiên đăng nhập.
+- **Lấy mẫu font đoạn/frame (sau review b9acf28a):** `textRuns` của đoạn/frame/ký tự ném lỗi trong Illustrator 2027 (đo 2026-11-24) nên không dò được ranh giới run. Cách làm: bỏ ký tự trắng (đọc `contents` một lần; font ký tự cách như MyriadPro không phải font người dùng thấy), đoạn ≤200 ký tự đọc dày mọi ký tự không trắng; đoạn dài đọc thưa tối đa 16 mẫu rải đều (gồm ký tự cuối), chỉ khi thấy >1 font mới đọc dày (bước `ceil(n/200)`). Font "của vùng" (= font ký tự đầu) chỉ tính khi ký tự đầu không phải khoảng trắng. Đoạn dài đồng nhất tốn ~17 lần đọc thay vì ~200; `viaChars` chỉ tăng khi lấy mẫu tìm thêm font. **Giới hạn:** đoạn >16 ký tự mà font khác chỉ là một run rất ngắn nằm giữa, không trúng mẫu thưa và font đầu/cuối giống nhau → có thể lọt; cũng như run ngắn lọt bước nhảy ở lượt dày. Chấp nhận (font thiếu sẽ hiện ở lần quét khi người dùng sửa, và font ở đầu/cuối luôn được thấy). Thử thật: đoạn 601 ký tự có 1 ký tự DM Serif ở cuối → thấy; đoạn 14 ký tự 3 font → thấy đủ, không còn MyriadPro.
+
+## Đăng ký session mồ côi sau kill/crash (2026-11-24)
+
+**Đo (debug, `FONTATLAS_DATA_DIR` tạm, font fixture):** đăng ký font ở scope session SỐNG qua `kill -9` Font Atlas vì nó gắn với phiên đăng nhập, không với process (process khác vẫn resolve font; `CTFontManagerCopyAvailableFontURLs` vẫn liệt kê file). `CTFontManagerCopyRegisteredFontDescriptors` không dùng được trên macOS nên không hỏi được "font nào đăng ký session"; `unregister(url, Session)` chỉ thành công nếu URL đang đăng ký session (font cài sẵn/persistent/user trả lỗi `NotRegistered`) nên dùng nó làm bộ phân biệt scope.
+
+**Cách làm (`ActivationService::unregister_orphans`, chạy nền sau `ready`, một lần mỗi lần mở app):**
+1. Ứng viên = `active_path` của các dòng `activation_state` mà DB này từng bật và nay `state=Inactive` (lịch sử kích hoạt có sẵn, không thêm bảng/migration), trừ đường mà dòng khác đang bật.
+2. Giao với `engine.available_font_paths()` (`CTFontManagerCopyAvailableFontURLs`), bỏ file trong thư mục bảo vệ (hệ thống, `/Library/Fonts`, `~/Library/Fonts`).
+3. `engine.unregister(path, Session)`; `NotRegistered` bỏ qua im lặng; lỗi khác chỉ đếm. Không ghi DB (dòng đã là Inactive). Giữ guard `take(hash)` và đọc lại dòng trước khi gỡ để không đè lên thao tác bật/tắt đang chạy.
+4. **Phòng hai instance (R1):** nếu thấy process Font Atlas KHÁC đang sống (cùng tên file thực thi, chỉ đọc danh sách process qua libproc, không kill) thì bỏ qua lượt này và ghi 1 dòng log. Hiện chưa có single-instance lock.
+
+**Giới hạn đã chấp nhận:**
+- **R2:** một font manager/app khác đăng ký session CÙNG file mà DB này từng bật rồi tắt thì ta cũng gỡ đăng ký đó ở lần mở app kế (họ bật lại là xong). File chưa từng được DB này bật thì không đụng.
+- **R3:** DB bị xoá hẳn (không còn lịch sử `activation_state`) thì không biết file nào là của ta nên không dọn được; đăng ký session tự mất khi đăng xuất. Dòng `Inactive`+`Registered/Unknown/Error` vẫn do `reconcile` xử lý như cũ.
+- Hai instance dùng chung thư mục nguồn nhưng khác DB chỉ ảnh hưởng ở font cả hai cùng từng bật, và chỉ khi instance kia đã thoát (R1).
+
+- **Cửa sổ đăng ký-trước-ghi-DB:** activate đăng ký với hệ điều hành rồi mới ghi DB; nếu chết đúng giữa hai bước, font có thể đăng ký mà DB không có dòng nào (hoặc dòng cũ Inactive). Dòng Inactive cũ vẫn dọn được; không có dòng nào thì không biết là của ta (như R3). Chấp nhận.
+
+**Thử thật:** font bật qua broker, `kill -9` process của chính mình, sửa DB thành Inactive/Unregistered (giả crash giữa chừng) → font vẫn resolve; mở app khi có instance thứ hai đang chạy → log "bỏ qua", font còn; mở lại khi chỉ còn một instance → log "gỡ 1 (lỗi 0)", font hết resolve, dòng DB không đổi.
+
+## Panel gửi MỌI font, không chỉ font Illustrator báo thiếu (2026-11-24)
+
+**Lỗi sản phẩm:** `app.textFonts` của Illustrator giữ font Font Atlas ĐÃ TỪNG bật rồi tắt (đo: vẫn còn sau khi gỡ đăng ký và khởi động lại Illustrator; CoreText không còn resolve). Panel chỉ gửi font không có trong `app.textFonts` nên không bao giờ gọi `ensure` cho đúng những font hay dùng nhất.
+
+**Cách sửa:** `faScan` trả thêm `docs[].all` = mọi font khác nhau của tài liệu (tối đa 512) kèm `miss` (Illustrator báo thiếu hay không); `docs[].fonts` (chỉ font thiếu) giữ nguyên cho log. Panel gửi toàn bộ `all` tới broker (chia lô 256 = `MAX_FONTS`), broker so với thư viện + trạng thái bật thật (`activate_auto`: `activated` / `already_active` / `available` / `missing`…) và chỉ bật cái đang tắt. `FontReq.miss` là trường tuỳ chọn của giao thức v1 (client cũ không gửi vẫn chạy, không đổi `PROTOCOL_VERSION`): chỉ dùng để KHÔNG ghi nhật ký `missing` cho font hệ thống không có trong thư viện mà app đã có (`miss=false`); không bao giờ chặn việc bật. `faRedraw()` chỉ gọi khi có font `activated`. Lỗi http (Font Atlas bận/khởi động) giờ hỏi lại sau 5 s (tối đa 6 lần) thay vì bỏ im.
+
+**Chưa đo:** thuộc tính "missing/substituted" của `textFont` (cần màn hình mở khoá); InDesign (script riêng, chưa được duyệt) có thể có cùng lỗi, cần xem sau.
+
+**Font người dùng đã bật:** broker KHÔNG đụng tới font đang bật và đăng ký thật vì lý do của người dùng (thủ công/collection/case): trả `already_active`, không thêm lý do `auto:<app>`, không đổi scope/trạng thái, không ghi nhật ký. Chỉ thêm lý do auto khi chính lượt `ensure` đó bật font, hoặc khi font chỉ đang giữ bởi lý do auto của app thiết kế khác.
+
+**InDesign (chỉ code + test giả, CHƯA chạy InDesign):** `FontAtlas_Startup.jsx` cũng gửi MỌI font của tài liệu (tối đa 256, trùng PS name chỉ một lần) kèm `miss` (status != INSTALLED), như panel Illustrator. Test chạy script trong vm Node với InDesign/Socket/File giả và kiểm nội dung POST. Cần được chủ máy duyệt trước khi cài/chạy thật.

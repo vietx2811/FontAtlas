@@ -157,6 +157,68 @@ describe('PairingDesk', () => {
     expect(useNoticeStore.getState().notices[0].text).toMatch(/Đã đặt .* vào vai Body/);
   });
 
+  const dragTo = (from: HTMLElement, drop: Element) => {
+    (document as unknown as { elementFromPoint: unknown }).elementFromPoint = () => drop;
+    act(() => { from.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 60, clientY: 60 })); });
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 60, clientY: 60 })); });
+  };
+
+  it('G8: kéo tay nắm của một vai vào khe giữa các vai đổi thứ tự (vạch chèn hiện), Hoàn tác trả lại; thả chỗ cũ thì không đổi', async () => {
+    const { api, res } = await seeded();
+    await api.addComboRole(res.comboId, 'caption'); await api.addComboRole(res.comboId, 'Tagline');
+    await mount(api, res);
+    const rolesNow = async () => (await api.getCase(res.case.id)).combos[0].roles;
+    const order = await rolesNow(); expect(order.length).toBeGreaterThanOrEqual(3);
+    const items = [...document.querySelectorAll<HTMLElement>('[data-reorder-index]')];
+    items.forEach((el, i) => { el.getBoundingClientRect = () => ({ top: i * 40, bottom: i * 40 + 40, height: 40, left: 0, right: 100, width: 100, x: 0, y: i * 40, toJSON: () => ({}) }) as DOMRect; });
+    const grip = (i: number) => items[i].querySelector('[data-testid=role-grip]') as HTMLElement;
+    const run = (from: number, y: number) => {
+      act(() => { grip(from).dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: from * 40 + 20 })); });
+      act(() => { window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX: 5, clientY: y })); });
+    };
+    run(0, items.length * 40 - 2); // gần đáy hàng cuối → chèn sau hàng cuối
+    expect(document.querySelectorAll('[data-insert]').length).toBe(1);
+    expect(items[items.length - 1].dataset.insert).toBe('after');
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 5, clientY: items.length * 40 - 2 })); }); await settle();
+    expect(await rolesNow()).toEqual([...order.slice(1), order[0]]);
+    expect(document.querySelectorAll('[data-insert]').length).toBe(0);
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/Đã đổi thứ tự/);
+    n.action!.run(); await settle();
+    expect(await rolesNow()).toEqual(order);
+    run(1, 45); // thả ngay trên hàng cũ (giữa hàng 1): không có gì đổi, không có vạch chèn
+    expect(document.querySelectorAll('[data-insert]').length).toBe(0);
+    act(() => { window.dispatchEvent(Object.assign(new Event('pointerup'), { clientX: 5, clientY: 45 })); }); await settle();
+    expect(await rolesNow()).toEqual(order);
+  });
+
+  it('G8: kéo ứng viên thả lên một vai đặt font vào vai đó, Hoàn tác trả vai về như cũ', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const display = screen.getAllByTestId('desk-role').find(b => b.dataset.role === 'display')!.closest('li')!;
+    const before = (await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key;
+    const cand = screen.getAllByTestId('desk-cand').find(c => !c.querySelector('[data-testid=cand-inuse]'))!;
+    dragTo(cand, display); await settle();
+    const after = (await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key;
+    expect(after).not.toEqual(before);
+    const n = useNoticeStore.getState().notices.at(-1)!;
+    expect(n.text).toMatch(/Đã đặt .* vào vai/); expect(n.action?.label).toBe('Hoàn tác');
+    n.action!.run(); await settle();
+    expect((await api.getCase(res.case.id)).combos[0].slots.find(s => s.role === 'display')!.key).toEqual(before);
+  });
+
+  it('G8: kéo vai này thả lên vai kia đổi chỗ hai font, Hoàn tác đổi lại', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    fireEvent.click(screen.getAllByTestId('desk-cand')[0].querySelector('[data-testid=desk-cand-add]')!); await settle();
+    const slots = async () => Object.fromEntries((await api.getCase(res.case.id)).combos[0].slots.map(s => [s.role, s.key.hashHex]));
+    const was = await slots(); expect(Object.keys(was).sort()).toEqual(['body', 'display']);
+    const btn = (r: string) => screen.getAllByTestId('desk-role').find(b => b.dataset.role === r)!;
+    dragTo(btn('display'), btn('body').closest('li')!); await settle();
+    expect(await slots()).toEqual({ display: was.body, body: was.display });
+    const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/Đã đổi chỗ/);
+    n.action!.run(); await settle();
+    expect(await slots()).toEqual(was);
+  });
+
   it('G2: the + key places the selected candidate; Enter on the + button does not place twice; the in-use font has no + button', async () => {
     const { api, res } = await seeded(); await mount(api, res);
     const spy = vi.spyOn(api, 'setComboSlot');
@@ -230,6 +292,64 @@ describe('PairingDesk', () => {
     expect(screen.queryByTestId('pick-clear')).toBeNull(); expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(false);
   });
 
+  it('thiếu tiếng Việt: Case bật "Đủ tiếng Việt" → nhãn Yếu có tooltip nêu lý do; tắt → chỉ dấu "!" + tooltip', async () => {
+    const { api, desk } = await pickMount('body');
+    const real = api.suggestPartners.bind(api);
+    vi.spyOn(api, 'suggestPartners').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, roleFit: 'weak' as const, warnings: [...i.warnings, { code: 'missing_vietnamese', params: [] }] })) };
+    });
+    fireEvent.keyDown(desk, { key: '1' }); await settle();
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true); // Case mở với vi: true
+    const row = () => screen.getAllByTestId('desk-cand')[0];
+    expect(row().querySelector('[data-testid=cand-fit]')!.textContent).toBe('Yếu');
+    expect(row().querySelector('[data-testid=cand-vi-note]')).toBeNull(); // weak + bật: tooltip trên nhãn là đủ
+    expect(row().querySelector('[data-testid=cand-why]')!.textContent).not.toMatch(/tiếng Việt/); // lý do không lặp thành chữ
+    fireEvent.keyDown(desk, { key: 'v' }); await settle(); // tắt "Đủ tiếng Việt"
+    expect(row().querySelector('[data-testid=cand-vi-note]')!.getAttribute('aria-label')).toBe('Thiếu ký tự tiếng Việt');
+  });
+
+  it('thiếu tiếng Việt ngoài nguồn Ghép: nhãn mức không vẽ nên dấu "!" vẫn hiện dù Đủ tiếng Việt bật và mức Yếu', async () => {
+    const { api, desk } = await pickMount('body');
+    const real = api.deskSuggest.bind(api);
+    vi.spyOn(api, 'deskSuggest').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, fit: 'weak' as const, reasons: [{ code: 'missing_vietnamese', params: [] }, ...i.reasons] })) };
+    });
+    fireEvent.keyDown(desk, { key: '1' }); await settle(); fireEvent.keyDown(desk, { key: '2' }); await settle(); // đổi nguồn để nạp lại qua spy
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true);
+    const rows = screen.queryAllByTestId('desk-cand');
+    if (!rows.length) return;
+    expect(screen.queryAllByTestId('cand-fit').length).toBe(0);
+    expect(rows[0].querySelector('[data-testid=cand-vi-note]')).not.toBeNull();
+  });
+
+  it('đổi "Đủ tiếng Việt" gọi lại backend với projectVi mới (checkbox và phím V)', async () => {
+    const { api, desk } = await pickMount('body');
+    const spy = vi.spyOn(api, 'deskSuggest');
+    fireEvent.keyDown(desk, { key: '1' }); await settle(); fireEvent.keyDown(desk, { key: '2' }); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(true); // Case mở với vi: true
+    fireEvent.click(screen.getByTestId('pick-vi')); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(false);
+    fireEvent.keyDown(desk, { key: 'v' }); await settle();
+    expect(spy.mock.calls.at(-1)![0].projectVi).toBe(true);
+  });
+
+  it('nguồn Đã ghim: font thiếu tiếng Việt mức Ổn khi Đủ tiếng Việt bật vẫn có dấu "!"', async () => {
+    const { api, desk } = await pickMount('body');
+    fireEvent.click(screen.getAllByTestId('desk-cand')[0].querySelector('[data-testid=desk-cand-pin]')!); await settle();
+    const real = api.deskSuggest.bind(api);
+    vi.spyOn(api, 'deskSuggest').mockImplementation(async (...a) => {
+      const page = await real(...a);
+      return { ...page, items: page.items.map(i => ({ ...i, fit: 'ok' as const, reasons: [{ code: 'missing_vietnamese', params: [] }, ...i.reasons] })) };
+    });
+    fireEvent.keyDown(desk, { key: '4' }); await settle();
+    expect((screen.getByTestId('pick-vi') as HTMLInputElement).checked).toBe(true);
+    const rows = screen.getAllByTestId('desk-cand');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].querySelector('[data-testid=cand-vi-note]')).not.toBeNull();
+  });
+
   it('G5: a failing source shows the error with Retry and the other sources keep working', async () => {
     const { api, desk } = await pickMount('body');
     const spy = vi.spyOn(api, 'deskSuggest').mockRejectedValueOnce(new Error('boom'));
@@ -290,6 +410,30 @@ describe('PairingDesk', () => {
     useActivationQueue.getState().clear();
     vi.spyOn(api, 'activationActivateCase').mockRejectedValueOnce(new Error('engine down'));
     fireEvent.click(screen.getByTestId('desk-activate-all')); await settle();
+    expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /engine down/.test(n.text))).toBe(true);
+  });
+  it('Tắt cả Case: chỉ gỡ lý do của Case; font còn lý do khác vẫn bật và được báo bằng NoteMark', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    const spy = vi.spyOn(api, 'activationDeactivateCase');
+    const first = (await api.getCase(res.case.id)).faces[0].key;
+    await api.activationActivate([first]); // lý do thủ công
+    await api.activationActivateCase(res.case.id); // thêm lý do Case
+    await settle();
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
+    expect(spy).toHaveBeenCalledWith(res.case.id);
+    expect(screen.getByTestId('desk-kept-other')).toBeTruthy();
+    const still = (await api.activationState()).find(x => x.hashHex === first.hashHex);
+    expect(still?.state).toBe('active');
+    expect(still?.reasons.some(r => r.kind === 'case')).toBe(false);
+    expect(still?.reasons.some(r => r.kind === 'manual')).toBe(true);
+  });
+  it('Tắt cả Case: không còn lý do nào khác thì không có ghi chú; lỗi API được báo', async () => {
+    const { api, res } = await seeded(); await mount(api, res);
+    await api.activationActivateCase(res.case.id); await settle();
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
+    expect(screen.queryByTestId('desk-kept-other')).toBeNull();
+    vi.spyOn(api, 'activationDeactivateCase').mockRejectedValueOnce(new Error('engine down'));
+    fireEvent.click(screen.getByTestId('desk-deactivate-all')); await settle();
     expect(useNoticeStore.getState().notices.some(n => n.kind === 'error' && /engine down/.test(n.text))).toBe(true);
   });
   it('Bật tất cả: more than 200 fonts asks first (cancel does nothing)', async () => {

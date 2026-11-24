@@ -200,16 +200,16 @@ describe('Sidebar', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('refreshes counts when a scan finishes, and shows scan progress in the footer', async () => {
+  it('refreshes counts when a scan finishes, and no longer shows a scan line in the footer (the task tray does)', async () => {
     const { api } = await mount();
     const spy = vi.spyOn(api, 'listSources');
     act(() => useScanStore.getState().bump());
     await settle();
     expect(spy).toHaveBeenCalled();
     act(() => useScanStore.setState({ scanning: true, written: 120 }));
-    expect(screen.getByRole('status', { name: 'Đang quét' }).textContent).toMatch(/Đang quét · 120 font/);
+    expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull(); // khay Tác vụ nền là chỗ duy nhất báo quét
+    expect(screen.queryByText(/Đang quét/)).toBeNull();
     act(() => useScanStore.setState({ scanning: false }));
-    expect(screen.queryByRole('status', { name: 'Đang quét' })).toBeNull();
   });
 
   it('opens the folder picker when another part of the UI asks for it', async () => {
@@ -229,10 +229,52 @@ describe('Sidebar', () => {
   });
 
   describe('files still in the cloud (not downloaded)', () => {
+    it('đã tải hết (cloudOnlyCount 0, lastScan.notDownloaded 0): không có ☁N, không có nút Tải về máy', async () => {
+      const api = createMockApi();
+      const base = await api.listSources();
+      const stats = { status: 'ok' as const, seen: 3, unchanged: 3, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
+      const done = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 0, faceCount: 3, lastScan: stats };
+      api.listSources = (async () => [done]) as never;
+      render(<Sidebar api={api} pickFolder={async () => null} />);
+      await settle();
+      act(() => useUiStore.getState().setView('src:9'));
+      expect(screen.queryByTestId('src-cloud-status')).toBeNull();
+      expect(screen.queryByTestId('not-downloaded')).toBeNull();
+      expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
+    });
+    it('nguồn toàn file chưa tải (faceCount 0, cloudOnlyCount > 0) vẫn hiện, có ☁N trung tính và nút Tải về máy', async () => {
+      const api = createMockApi();
+      const base = await api.listSources();
+      const dataless = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 2, faceCount: 0, lastScan: null };
+      const listed = [dataless];
+      api.listSources = (async () => listed) as never;
+      render(<Sidebar api={api} pickFolder={async () => null} />);
+      await settle();
+      expect(screen.getByTestId('src-cloud-status').getAttribute('aria-label')).toBe('2 mục chưa tải về');
+      act(() => useUiStore.getState().setView('src:9'));
+      expect(screen.getByTestId('not-downloaded').getAttribute('aria-label')).toBe('2 mục chưa tải về');
+      expect(screen.queryByTestId('cloud-ready')).toBeNull(); // 0 font đã có trên máy: không hiện ✓0
+      expect(screen.getByTestId('cloud-dl-start').getAttribute('aria-label')).toBe('Tải về máy');
+    });
+    it('mặc định hàng Folder chỉ có 1 icon trạng thái; ☁N/✓M/gợi ý chỉ hiện khi chọn nguồn', async () => {
+      await mount();
+      expect(screen.getByTestId('src-cloud-status')).toBeTruthy();
+      expect(screen.queryByTestId('not-downloaded')).toBeNull();
+      expect(screen.queryByTestId('cloud-ready')).toBeNull();
+      expect(screen.queryByTestId('cloud-hint')).toBeNull();
+      expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
+      act(() => useUiStore.getState().setView('src:2'));
+      expect(screen.queryByTestId('src-cloud-status')).toBeNull(); // chi tiết thay icon, không hiện cả hai
+      expect(screen.getByTestId('not-downloaded')).toBeTruthy();
+    });
+
     it('a source whose last scan skipped placeholders says how many, with a tooltip on how to download them', async () => {
       await mount();
+      act(() => useUiStore.getState().setView('src:2'));
       const line = screen.getByTestId('not-downloaded');
-      expect(line.textContent).toBe('12 font chưa tải về');
+      expect(line.textContent).toBe('18'); // chỉ icon + số; câu đầy đủ ở aria-label và tooltip
+      expect(line.getAttribute('aria-label')).toBe('18 mục chưa tải về');
+      expect(screen.getByTestId('cloud-ready').textContent).toMatch(/^\d+$/); // ✓ + số font đã có trên máy
       const tip = await tipOf(line);
       expect(tip).toMatch(/Finder/);
       expect(tip).toMatch(/Tải về/);
@@ -242,6 +284,7 @@ describe('Sidebar', () => {
 
     it('a cloud source warns with the real share and the Finder advice; a local source has no hint', async () => {
       await mount();
+      act(() => useUiStore.getState().setView('src:2'));
       const hints = screen.getAllByTestId('cloud-hint');
       expect(hints).toHaveLength(1);
       const tip = await tipOf(hints[0]);
@@ -252,8 +295,7 @@ describe('Sidebar', () => {
     it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
       await mount();
       act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));
-      const status = screen.getByRole('status', { name: 'Đang quét' });
-      expect(within(status).getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
+      expect(screen.getByTestId('scan-not-downloaded').textContent).toBe('7 mục chưa tải về');
       act(() => useScanStore.setState({ scanning: false, cloud: {} }));
       expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
     });
@@ -529,7 +571,7 @@ describe('Sidebar', () => {
   });
 
   describe('review fixes', () => {
-    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, ...o });
+    const report = (o: Partial<import('../../../bindings').ActivationReportDto>) => ({ results: [], changed: 0, needsConfirmation: 0, failed: 0, busy: 0, busyHashes: [] as string[], ...o });
     it('Tắt tất cả reports failures and needs-confirmation instead of staying silent', async () => {
       const { api } = await mount();
       vi.spyOn(api, 'activationDeactivateAll').mockResolvedValue(report({ changed: 2, failed: 3, needsConfirmation: 1 }));
@@ -541,6 +583,43 @@ describe('Sidebar', () => {
       expect(text).toContain('Đã tắt 2 font, 3 lỗi');
       expect(text).toContain('1 font cần bạn xác nhận');
       expect(useNoticeStore.getState().notices[0].kind).toBe('error');
+    });
+    it('Tắt tất cả gặp font bận: MỘT thông báo (kết quả + "N font đang bận"), Thử lại chạy lại ĐÚNG "Tắt tất cả" (không phải tắt tay), không đẩy "0 đã tắt"', async () => {
+      const { api } = await mount();
+      const busy = report({ changed: 2, results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }, { hashHex: 'b2', requestedFaces: [0], outcome: { kind: 'busy' } }] as never });
+      const all = vi.spyOn(api, 'activationDeactivateAll').mockResolvedValueOnce(busy).mockResolvedValueOnce(report({ changed: 2 }));
+      const manual = vi.spyOn(api, 'activationDeactivate');
+      useNoticeStore.setState({ notices: [] });
+      useUiStore.setState({ active: new Map([['aa', [0]]]) });
+      fireEvent.contextMenu(screen.getByRole('button', { name: /Đang bật/ })); await settle();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Tắt tất cả/ })); await settle();
+      expect(useNoticeStore.getState().notices).toHaveLength(1);
+      const n = useNoticeStore.getState().notices[0];
+      expect(n.text).toMatch(/Đã tắt 2 font.*2 font đang bận, sẽ thử lại/); expect(n.action?.label).toBe('Thử lại');
+      await act(async () => { n.action!.run(); await new Promise(r => setTimeout(r, 0)); }); await settle();
+      expect(all).toHaveBeenCalledTimes(2); expect(manual).not.toHaveBeenCalled();
+      const last = useNoticeStore.getState().notices.at(-1)!;
+      expect(last.text).toMatch(/Đã tắt 2 font/); expect(last.text).not.toMatch(/bận/);
+    });
+    it('Tắt cả Dự án gặp font bận: Thử lại chạy lại activation_deactivate_collection của đúng Dự án; lần thử lại không có gì mới thì chỉ nói đã xong', async () => {
+      const api = createMockApi(); const c = await api.createCollection('Dự án B', null);
+      const busy = report({ results: [{ hashHex: 'b1', requestedFaces: [0], outcome: { kind: 'busy' } }] as never });
+      const col = vi.spyOn(api, 'activationDeactivateCollection').mockResolvedValueOnce(busy).mockResolvedValueOnce(report({}));
+      const [f] = (await api.queryFaces({ limit: 1 })).items; const key = { hashHex: f.hashHex, faceIndex: f.faceIndex };
+      await api.addToCollection(c.id, [key]); await api.activationActivate([key]);
+      render(<Sidebar api={api} pickFolder={async () => null} />); await settle();
+      await act(async () => { await useUiStore.getState().refreshActive(api); }); await settle();
+      useNoticeStore.setState({ notices: [] });
+      fireEvent.contextMenu(document.querySelector(`[data-nav-id="col:${c.id}"]`)!); await settle();
+      const item = screen.getByRole('menuitem', { name: /Tắt tất cả/ });
+      expect(item.getAttribute('aria-disabled')).not.toBe('true');
+      {
+        fireEvent.click(item); await settle();
+        const n = useNoticeStore.getState().notices.at(-1)!; expect(n.text).toMatch(/1 font đang bận/);
+        await act(async () => { n.action!.run(); await new Promise(r => setTimeout(r, 0)); }); await settle();
+        expect(col).toHaveBeenCalledTimes(2); expect(col).toHaveBeenLastCalledWith(c.id);
+        expect(useNoticeStore.getState().notices.at(-1)!.text).toBe('Đã xong: không còn font nào bận.');
+      }
     });
     it('collection menu counts ACTIVE fonts: disabled with a reason when none are on', async () => {
       const api = createMockApi();
@@ -591,9 +670,9 @@ describe('Sidebar: đích thả font (G1)', () => {
     expect(wrapA.dataset.dropName).toBe('Menu'); expect(wrapA.dataset.dropHere).toBeUndefined(); expect(wrapB.dataset.dropHere).toBe('true');
     expect(wrapA.dataset.dropOver).toBeUndefined();
     const rows = (await api.queryFaces({ limit: 2 })).items as never[];
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: a.id, name: 'Menu', valid: true } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'col', id: a.id, name: 'Menu', valid: true } } }));
     expect(wrapA.dataset.dropOver).toBe('ok'); expect(wrapA.dataset.dropArmed).toBe('true'); expect(wrapB.dataset.dropArmed).toBeUndefined();
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'col', id: b.id, name: 'Poster', valid: false } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'col', id: b.id, name: 'Poster', valid: false } } }));
     expect(wrapB.dataset.dropOver).toBe('no'); expect(wrapA.dataset.dropOver).toBeUndefined();
   });
 });
@@ -610,7 +689,7 @@ describe('Sidebar: nhóm Case (G1)', () => {
     const item = container.querySelector(`[data-drop-case="${res.case.id}"]`) as HTMLElement;
     expect(item).toBeTruthy(); expect(item.dataset.dropName).toBe(res.case.name);
     const rows = (await api.queryFaces({ limit: 2 })).items as never[];
-    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, over: { kind: 'case', id: res.case.id, name: res.case.name, valid: true } } }));
+    act(() => useFaceDragStore.setState({ drag: { rows, x: 1, y: 1, moveFrom: null, move: false, over: { kind: 'case', id: res.case.id, name: res.case.name, valid: true } } }));
     expect(item.dataset.dropOver).toBe('ok');
     act(() => useFaceDragStore.setState({ drag: null }));
     fireEvent.click(item.querySelector('button')!); await settle();

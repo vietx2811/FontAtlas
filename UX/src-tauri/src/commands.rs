@@ -14,17 +14,21 @@ use crate::dto::auto::*;
 use crate::dto::analysis::*;
 use crate::dto::cases::*;
 use crate::dto::dup_resolve::*;
+use crate::dto::figma::*;
 use crate::dto::events::{ActivationEvent, BootEvent, EmbedEvent, ModelEvent, ScanEvent};
+use crate::dto::tasks::{TaskEvent, TaskListDto};
 use crate::dto::langs::*;
 use crate::dto::library::*;
 use crate::dto::model::*;
+use crate::dto::organized::*;
 use crate::dto::preview::*;
 use crate::dto::settings::{FontManagerDto, GlassProbeDto};
 use crate::dto::suggest::*;
 use crate::dto::settings::{BootStatusDto, LegacyStateDto, OnboardingDto};
 use crate::error::CmdError;
 use crate::services::{
-    activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, langs, library, model, onboarding, pairs,
+    app_sets,
+    activation, analysis, auto, boot, brief, cases, cloud_download, compare, describe, dup_resolve, duplicates, embed, figma, langs, library, model, onboarding, pairs,
     preview,
     settings, sources, suggest, suggest_pair, system,
 };
@@ -54,7 +58,7 @@ macro_rules! command_list {
     ($cb:ident) => {
         $crate::$cb! {
             sync startup_status() -> Result<BootStatusDto, CmdError>;
-            async boot_subscribe(on_event: Channel<BootEvent>) -> Result<(), CmdError>;
+            async boot_subscribe(on_event: Channel<BootEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             async onboarding_state() -> Result<OnboardingDto, CmdError>;
             async set_onboarding_step(step: Option<String>) -> Result<(), CmdError>;
             async legacy_import() -> Result<LegacyStateDto, CmdError>;
@@ -64,13 +68,37 @@ macro_rules! command_list {
             async remove_source(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async remove_source_preview(source_id: i64) -> Result<RemoveSourceReportDto, CmdError>;
             async rescan_sources(source_ids: Option<Vec<i64>>) -> Result<(), CmdError>;
+            async rebuild_library() -> Result<RebuildLibraryReportDto, CmdError>;
             async source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadProgressDto>) -> Result<CloudDownloadReportDto, CmdError>;
             async source_download_cancel(source_id: i64) -> Result<bool, CmdError>;
+            async import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> Result<ImportResultDto, CmdError>;
+            async import_paths_cancel() -> Result<bool, CmdError>;
+            async derive_renamed_copy(face: FaceKeyDto) -> Result<DerivedCopyDto, CmdError>;
+            async remove_derived_copy(face: FaceKeyDto) -> Result<RemoveDerivedResultDto, CmdError>;
+            async restore_derived_copy(removal_id: i64) -> Result<RestoreDerivedResultDto, CmdError>;
+            async derived_copies_of(face: FaceKeyDto) -> Result<Vec<DerivedCopyInfoDto>, CmdError>;
+            async organized_check_location(path: String) -> Result<OrganizedLocationCheckDto, CmdError>;
+            async organized_status() -> Result<OrganizedStatusDto, CmdError>;
+            async organized_create(path: String) -> Result<OrganizedStatusDto, CmdError>;
+            async organized_plan(scope: OrganizeScopeDto) -> Result<OrganizePlanDto, CmdError>;
+            async organized_import(scope: OrganizeScopeDto, on_progress: Channel<OrganizeProgressDto>) -> Result<OrganizeResultDto, CmdError>;
+            async organized_cancel() -> Result<bool, CmdError>;
+            async organized_resort_preview() -> Result<ResortPlanDto, CmdError>;
+            async organized_resort_apply() -> Result<ResortResultDto, CmdError>;
+            async organized_resort_undo(batch_id: i64) -> Result<ResortResultDto, CmdError>;
+            async organized_snapshot_now() -> Result<String, CmdError>;
+            async pack_inspect(path: String) -> Result<PackInfoDto, CmdError>;
+            async pack_restore_stage(path: String, remap: Vec<PathRemapDto>) -> Result<PackInfoDto, CmdError>;
+            async pack_restore_pending() -> Result<Option<PackInfoDto>, CmdError>;
+            async pack_restore_cancel() -> Result<bool, CmdError>;
             async scan_pause() -> Result<(), CmdError>;
             async scan_resume() -> Result<(), CmdError>;
             async scan_cancel() -> Result<(), CmdError>;
             sync scan_status() -> Result<ScanStatusDto, CmdError>;
-            async scan_subscribe(on_event: Channel<ScanEvent>) -> Result<(), CmdError>;
+            async scan_subscribe(on_event: Channel<ScanEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
+            async task_subscribe(on_event: Channel<TaskEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
+            async list_tasks() -> Result<TaskListDto, CmdError>;
+            async cancel_task(id: String) -> Result<bool, CmdError>;
             async query_faces(q: FaceQueryDto) -> Result<FacePageDto, CmdError>;
             async family_groups(q: FaceQueryDto) -> Result<Vec<FamilyGroupDto>, CmdError>;
             async get_family_styles(family: String) -> Result<Vec<FamilyStyleDto>, CmdError>;
@@ -108,7 +136,7 @@ macro_rules! command_list {
             async class_facets(q: FaceQueryDto) -> Result<Vec<ClassFacetDto>, CmdError>;
             async pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Result<Vec<PairCandidateDto>, CmdError>;
             async assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> Result<PairCandidateDto, CmdError>;
-            async role_fit(face: FaceKeyDto, role: RoleRefDto) -> Result<RoleFitDto, CmdError>;
+            async role_fit(face: FaceKeyDto, role: RoleRefDto, project_vi: Option<bool>) -> Result<RoleFitDto, CmdError>;
             async role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> Result<RoleFitPageDto, CmdError>;
             async suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> Result<PartnerPageDto, CmdError>;
             async desk_suggest(req: DeskSuggestReqDto) -> Result<DeskPageDto, CmdError>;
@@ -116,6 +144,10 @@ macro_rules! command_list {
             async record_view(face: FaceKeyDto) -> Result<(), CmdError>;
             async recent_views(limit: u32) -> Result<Vec<RecentViewDto>, CmdError>;
             async clear_recent_views() -> Result<u32, CmdError>;
+            async parse_figma_import(text: String) -> Result<FigmaImportDto, CmdError>;
+            async take_pending_imports() -> Result<Vec<PendingImportDto>, CmdError>;
+            async resolve_fonts(items: Vec<FontNameDto>) -> Result<Vec<FontMatchDto>, CmdError>;
+            async open_third_party_notices() -> Result<(), CmdError>;
             async save_png(suggested_name: String, png_base64: String) -> Result<Option<String>, CmdError>;
             async duplicate_groups(q: FaceQueryDto) -> Result<Vec<DuplicateGroupDto>, CmdError>;
             async duplicate_summary(q: FaceQueryDto) -> Result<DuplicateSummaryDto, CmdError>;
@@ -172,7 +204,7 @@ macro_rules! command_list {
             async embed_status() -> Result<EmbedStatusDto, CmdError>;
             async embed_pause() -> Result<(), CmdError>;
             async embed_resume() -> Result<(), CmdError>;
-            async embed_subscribe(on_event: Channel<EmbedEvent>) -> Result<(), CmdError>;
+            async embed_subscribe(on_event: Channel<EmbedEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             async embed_failures() -> Result<Vec<EmbedFailureDto>, CmdError>;
             async queue_pause_all() -> Result<(), CmdError>;
             async queue_resume_all() -> Result<(), CmdError>;
@@ -185,14 +217,22 @@ macro_rules! command_list {
             async activation_activate_case(case_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<CaseActivationDto, CmdError>;
             async activation_activate_collection(collection_id: i64, scope: Option<ScopeDto>, proceed: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_deactivate_case(case_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_deactivate_all(on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_relocate_to(targets: Vec<RelocateTargetDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_keep_both(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
+            async activation_relocate(faces: Vec<FaceKeyDto>, prefer_under: Option<String>, on_progress: Channel<ProgressDto>) -> Result<ActivationReportDto, CmdError>;
             async activation_set_keep(on: bool) -> Result<(), CmdError>;
             async activation_vf_policy() -> Result<VfPolicyDto, CmdError>;
             async activation_set_vf_policy(policy: VfPolicyDto) -> Result<(), CmdError>;
+            async case_apps(case_id: i64) -> Result<Vec<CaseAppDto>, CmdError>;
+            async case_set_apps(case_id: i64, apps: Vec<CaseAppDto>) -> Result<(), CmdError>;
+            async installed_apps() -> Result<Vec<InstalledAppDto>, CmdError>;
+            async case_app_suppress(case_id: i64) -> Result<(), CmdError>;
             async activation_availability(faces: Vec<FaceKeyDto>) -> Result<Vec<AvailabilityDto>, CmdError>;
             async activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> Result<ActivationReportDto, CmdError>;
-            async activation_subscribe(on_event: Channel<ActivationEvent>) -> Result<(), CmdError>;
+            async activation_subscribe(on_event: Channel<ActivationEvent>, subscriber: Option<String>) -> Result<(), CmdError>;
             sync preview_info() -> Result<PreviewInfoDto, CmdError>;
             async preview_bump_generation() -> Result<u64, CmdError>;
             async preview_prewarm(items: Vec<PreviewItemDto>) -> Result<(), CmdError>;
@@ -278,22 +318,36 @@ pub async fn save_png<R: tauri::Runtime>(app: tauri::AppHandle<R>, suggested_nam
     .map_err(|e| CmdError::internal(format!("tác vụ nền lỗi: {e}")))?
 }
 
+/// Mở `THIRD-PARTY-NOTICES.txt` (đóng gói trong Resources của app) bằng ứng dụng mặc định; bản dev thì dùng file trong cây nguồn.
+#[tauri::command]
+pub async fn open_third_party_notices<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), CmdError> {
+    use tauri::Manager;
+    let mut cands: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(d) = app.path().resource_dir() { cands.push(d.join("THIRD-PARTY-NOTICES.txt")); cands.push(d.join("resources").join("THIRD-PARTY-NOTICES.txt")); }
+    #[cfg(debug_assertions)]
+    cands.push(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources").join("THIRD-PARTY-NOTICES.txt"));
+    let path = cands.into_iter().find(|p| p.is_file()).ok_or_else(|| CmdError::not_found("THIRD-PARTY-NOTICES.txt"))?;
+    tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| CmdError::internal(format!("không mở được file giấy phép: {e}")))
+}
+
 #[tauri::command]
 pub fn startup_status(state: State<'_, Arc<AppState>>) -> Result<BootStatusDto, CmdError> {
     Ok(boot::snapshot(&state))
 }
 
 #[tauri::command]
-pub async fn boot_subscribe(
+pub async fn boot_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<BootEvent>,
+    subscriber: Option<String>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     // đăng ký TRƯỚC rồi mới gửi pha hiện tại (có thể trùng, không mất `Ready` rơi giữa hai bước)
     let ch = on_event.clone();
     state
         .hubs
         .boot
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "boot"), Box::new(move |e| on_event.send(e).is_ok()));
     let _ = ch.send(BootEvent::Phase {
         phase: boot::snapshot(&state).phase,
     });
@@ -377,7 +431,7 @@ cmd!(axis_stats(q: FaceQueryDto) -> Vec<AxisStatsDto> => |s| analysis::axis_stat
 cmd!(axis_histogram(q: FaceQueryDto, bins: u32) -> Vec<AxisHistogramDto> => |s| analysis::axis_histograms(s, &q, bins));
 cmd!(class_facets(q: FaceQueryDto) -> Vec<ClassFacetDto> => |s| analysis::class_facets(s, &q));
 cmd!(pair_candidates(face: FaceKeyDto, opts: PairOptsDto) -> Vec<PairCandidateDto> => |s| analysis::pair_candidates(s, &face, &opts));
-cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role));
+cmd!(role_fit(face: FaceKeyDto, role: RoleRefDto, project_vi: Option<bool>) -> RoleFitDto => |s| suggest::role_fit(s, &face, &role, project_vi.unwrap_or(false)));
 cmd!(role_fit_faces(role: RoleRefDto, opts: RoleFitListOptsDto) -> RoleFitPageDto => |s| suggest::role_fit_faces(s, &role, &opts));
 cmd!(suggest_partners(anchor: FaceKeyDto, req: SuggestPartnersReqDto) -> PartnerPageDto => |s| suggest_pair::suggest_partners(s, &anchor, &req));
 cmd!(desk_suggest(req: DeskSuggestReqDto) -> DeskPageDto => |s| suggest_pair::desk_suggest(s, &req));
@@ -385,6 +439,9 @@ cmd!(suggest_combos(req: SuggestCombosReqDto) -> Vec<ComboSuggestionDto> => |s| 
 cmd!(record_view(face: FaceKeyDto) -> () => |s| suggest::record_view(s, &face));
 cmd!(recent_views(limit: u32) -> Vec<RecentViewDto> => |s| suggest::recent_views(s, limit));
 cmd!(clear_recent_views() -> u32 => |s| suggest::clear_recent_views(s));
+cmd!(parse_figma_import(text: String) -> FigmaImportDto => |_s| figma::parse_figma_import(&text));
+cmd!(take_pending_imports() -> Vec<PendingImportDto> => |s| Ok(figma::take_pending_imports(s)));
+cmd!(resolve_fonts(items: Vec<FontNameDto>) -> Vec<FontMatchDto> => |s| figma::resolve_fonts(s, &items));
 cmd!(assess_pair(a: FaceKeyDto, b: FaceKeyDto, opts: PairOptsDto) -> PairCandidateDto => |s| analysis::assess_pair(s, &a, &b, &opts));
 cmd!(reveal_location(path: String) -> () => |s| system::reveal_location(s, &path, &|p| {
     tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| e.to_string())
@@ -397,6 +454,34 @@ cmd!(source_download_cloud(source_id: i64, on_progress: Channel<CloudDownloadPro
         let _ = on_progress.send(p);
     })
 });
+cmd!(import_paths_into(paths: Vec<String>, target: ImportTargetDto, on_progress: Channel<ImportProgressDto>) -> ImportResultDto => |s| {
+    crate::services::import::import_paths_into(s, paths, &target, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(remove_derived_copy(face: FaceKeyDto) -> RemoveDerivedResultDto => |s| crate::services::derived::remove_derived_copy(s, &face));
+cmd!(restore_derived_copy(removal_id: i64) -> RestoreDerivedResultDto => |s| crate::services::derived::restore_derived_copy(s, removal_id));
+cmd!(derived_copies_of(face: FaceKeyDto) -> Vec<DerivedCopyInfoDto> => |s| crate::services::derived::derived_copies_of(s, &face));
+cmd!(derive_renamed_copy(face: FaceKeyDto) -> DerivedCopyDto => |s| crate::services::derived::derive_command(s, &face));
+cmd!(organized_check_location(path: String) -> OrganizedLocationCheckDto => |s| crate::services::organized::check_location(s, &path));
+cmd!(organized_status() -> OrganizedStatusDto => |s| crate::services::organized::status(s));
+cmd!(organized_create(path: String) -> OrganizedStatusDto => |s| crate::services::organized::create(s, &path));
+cmd!(organized_plan(scope: OrganizeScopeDto) -> OrganizePlanDto => |s| crate::services::organized::import_plan(s, &scope));
+cmd!(organized_import(scope: OrganizeScopeDto, on_progress: Channel<OrganizeProgressDto>) -> OrganizeResultDto => |s| {
+    crate::services::organized::import(s, &scope, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(organized_cancel() -> bool => |s| Ok(crate::services::organized::cancel(s)));
+cmd!(organized_resort_preview() -> ResortPlanDto => |s| crate::services::organized::resort_preview(s));
+cmd!(organized_resort_apply() -> ResortResultDto => |s| crate::services::organized::resort_apply(s));
+cmd!(organized_resort_undo(batch_id: i64) -> ResortResultDto => |s| crate::services::organized::resort_undo(s, batch_id));
+cmd!(organized_snapshot_now() -> String => |s| crate::services::organized::snapshot_now(s));
+cmd!(pack_inspect(path: String) -> PackInfoDto => |_s| crate::services::organized::pack_inspect(&path));
+cmd!(pack_restore_stage(path: String, remap: Vec<PathRemapDto>) -> PackInfoDto => |s| crate::services::organized::pack_restore_stage(s, &path, &remap));
+cmd!(pack_restore_pending() -> Option<PackInfoDto> => |s| Ok(crate::services::organized::pack_restore_pending(s)));
+cmd!(pack_restore_cancel() -> bool => |s| Ok(crate::services::organized::pack_restore_cancel(s)));
+cmd!(import_paths_cancel() -> bool => |s| Ok(crate::services::import::cancel_import(s)));
 cmd!(source_download_cancel(source_id: i64) -> bool => |s| Ok(cloud_download::cancel_download(s, source_id)));
 cmd!(language_list(q: FaceQueryDto) -> LangListDto => |s| langs::language_list(s, &q));
 cmd!(lang_coverage(face_id: i64, code: String) -> LangCoverageDto => |s| langs::lang_coverage(s, face_id, &code));
@@ -493,15 +578,17 @@ pub async fn model_redownload(
 }
 
 #[tauri::command]
-pub async fn embed_subscribe(
+pub async fn embed_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<EmbedEvent>,
+    subscriber: Option<String>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     let ch = on_event.clone();
     state
         .hubs
         .embed
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "embed"), Box::new(move |e| on_event.send(e).is_ok()));
     if let Ok(status) = blocking(&state, |s| embed::embed_status(s)).await {
         let _ = ch.send(EmbedEvent::Status { status });
     }
@@ -537,6 +624,11 @@ cmd!(activation_deactivate(faces: Vec<FaceKeyDto>, force: bool, on_progress: Cha
         let _ = on_progress.send(p);
     })
 });
+cmd!(activation_deactivate_case(case_id: i64, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::deactivate_case(s, case_id, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_deactivate_collection(collection_id: i64, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
     activation::deactivate_collection(s, collection_id, &mut |p| {
         let _ = on_progress.send(p);
@@ -547,21 +639,42 @@ cmd!(activation_deactivate_all(on_progress: Channel<ProgressDto>) -> ActivationR
         let _ = on_progress.send(p);
     })
 });
+cmd!(activation_relocate_to(targets: Vec<RelocateTargetDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::relocate_to(s, &targets, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_keep_both(faces: Vec<FaceKeyDto>, scope: Option<ScopeDto>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::keep_both(s, &faces, scope, &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
+cmd!(activation_relocate(faces: Vec<FaceKeyDto>, prefer_under: Option<String>, on_progress: Channel<ProgressDto>) -> ActivationReportDto => |s| {
+    activation::relocate(s, &faces, prefer_under.as_deref(), &mut |p| {
+        let _ = on_progress.send(p);
+    })
+});
 cmd!(activation_set_keep(on: bool) -> () => |s| activation::set_keep(s, on));
 cmd!(activation_vf_policy() -> VfPolicyDto => |s| activation::vf_policy(s));
 cmd!(activation_set_vf_policy(policy: VfPolicyDto) -> () => |s| activation::set_vf_policy(s, policy));
+cmd!(case_apps(case_id: i64) -> Vec<CaseAppDto> => |s| app_sets::case_apps(s, case_id));
+cmd!(case_set_apps(case_id: i64, apps: Vec<CaseAppDto>) -> () => |s| app_sets::set_case_apps(s, case_id, &apps));
+cmd!(case_app_suppress(case_id: i64) -> () => |s| app_sets::case_app_suppress(s, case_id));
+cmd!(installed_apps() -> Vec<InstalledAppDto> => |_s| Ok(app_sets::installed_apps()));
 cmd!(activation_availability(faces: Vec<FaceKeyDto>) -> Vec<AvailabilityDto> => |s| activation::availability(s, &faces));
 cmd!(activation_set_scope(faces: Vec<FaceKeyDto>, scope: ScopeDto) -> ActivationReportDto => |s| activation::set_scope(s, &faces, scope));
 
 #[tauri::command]
-pub async fn activation_subscribe(
+pub async fn activation_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ActivationEvent>,
+    subscriber: Option<String>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .activation
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "activation"), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
 }
 
@@ -608,6 +721,11 @@ pub async fn remove_source_preview(
 }
 
 #[tauri::command]
+pub async fn rebuild_library(state: State<'_, Arc<AppState>>) -> Result<RebuildLibraryReportDto, CmdError> {
+    blocking(&state, sources::rebuild_library).await
+}
+
+#[tauri::command]
 pub async fn rescan_sources(
     state: State<'_, Arc<AppState>>,
     source_ids: Option<Vec<i64>>,
@@ -639,15 +757,44 @@ pub fn scan_status(state: State<'_, Arc<AppState>>) -> Result<ScanStatusDto, Cmd
 }
 
 #[tauri::command]
-pub async fn scan_subscribe(
+pub async fn scan_subscribe<R: tauri::Runtime>(
     state: State<'_, Arc<AppState>>,
     on_event: Channel<ScanEvent>,
+    subscriber: Option<String>,
+    webview: tauri::Webview<R>,
 ) -> Result<(), CmdError> {
     state
         .hubs
         .scan
-        .subscribe_while(Box::new(move |e| on_event.send(e).is_ok()));
+        .subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "scan"), Box::new(move |e| on_event.send(e).is_ok()));
     Ok(())
+}
+
+/// Khoá đăng ký: nhãn webview + tên người nhận (mặc định = tên kênh). Hai nơi trong CÙNG webview muốn cùng một kênh thì truyền
+/// `subscriber` khác nhau để không thay nhau; cùng khoá (reload/effect chạy lại) thì thay sink cũ.
+#[doc(hidden)]
+pub fn sub_key(label: &str, subscriber: Option<&str>, channel: &str) -> String {
+    format!("{label}:{channel}:{}", subscriber.unwrap_or("default"))
+}
+
+/// Khay "Tác vụ": nhận sự kiện (đăng ký TRƯỚC, rồi `list_tasks`; FE bỏ sự kiện có rev ≤ rev của danh sách).
+#[tauri::command]
+pub async fn task_subscribe<R: tauri::Runtime>(state: State<'_, Arc<AppState>>, on_event: Channel<TaskEvent>, subscriber: Option<String>,
+    webview: tauri::Webview<R>) -> Result<(), CmdError> {
+    state.tasks.events.subscribe_keyed(&sub_key(webview.label(), subscriber.as_deref(), "task"), Box::new(move |e| on_event.send(e).is_ok()));
+    Ok(())
+}
+
+/// Không chạm store/Index: chỉ đọc bảng việc trong bộ nhớ.
+#[tauri::command]
+pub async fn list_tasks(state: State<'_, Arc<AppState>>) -> Result<TaskListDto, CmdError> {
+    Ok(state.tasks.list())
+}
+
+/// Đặt cờ huỷ và trả ngay (`false` = việc đã hết hoặc không huỷ được). Việc dừng ở ranh giới an toàn.
+#[tauri::command]
+pub async fn cancel_task(state: State<'_, Arc<AppState>>, id: String) -> Result<bool, CmdError> {
+    Ok(state.tasks.cancel(&id))
 }
 
 #[tauri::command]
@@ -719,4 +866,17 @@ pub fn async_violations(table: &[CommandSig], src: &str) -> Vec<String> {
         }
     }
     v
+}
+
+#[cfg(test)]
+mod sub_key_tests {
+    use super::sub_key;
+
+    #[test]
+    fn the_key_is_label_channel_and_subscriber_so_two_consumers_in_one_webview_do_not_replace_each_other() {
+        assert_eq!(sub_key("main", None, "scan"), "main:scan:default");
+        assert_ne!(sub_key("main", None, "scan"), sub_key("main", Some("sidebar"), "scan"));
+        assert_ne!(sub_key("main", None, "scan"), sub_key("main", None, "task"));
+        assert_ne!(sub_key("main", None, "scan"), sub_key("other", None, "scan"));
+    }
 }

@@ -21,7 +21,7 @@ pub fn trash_item(path: &Path) -> Result<PathBuf, String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn trash_item(_path: &Path) -> Result<PathBuf, String> {
-    Err("chuyển vào Thùng rác chỉ hỗ trợ macOS".into())
+    Err("chuyển vào Thùng rác chưa hỗ trợ trên hệ điều hành này".into())
 }
 
 #[cfg(all(test, target_os = "macos"))]

@@ -9,6 +9,7 @@ import { shortcutBlocked } from './TopBarActions';
 import { Tooltip } from '../ui/Tooltip';
 import { NoteMark } from '../ui/noteMark';
 import './viewOptions.css';
+import { isMac, modKey, shortcutText } from '../../platform';
 
 const label = (k: CardField) => t(`view.field.${k}` as I18nKey);
 const gloss = (k: CardField) => t(`view.field.${k}.gloss` as I18nKey);
@@ -43,7 +44,7 @@ export function ViewOptions(): React.JSX.Element {
   const openRef = useRef(open); openRef.current = open;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey || e.defaultPrevented || e.isComposing || e.repeat || !(e.code === 'KeyJ' || e.key.toLowerCase() === 'j')) return;
+      if (!modKey(e) || e.altKey || e.shiftKey || (isMac() ? e.ctrlKey : e.metaKey) || e.defaultPrevented || e.isComposing || e.repeat || !(e.code === 'KeyJ' || e.key.toLowerCase() === 'j')) return;
       if (openRef.current) { e.preventDefault(); close(true); return; }
       if (shortcutBlocked(e)) return;
       e.preventDefault(); setOpen(true);
@@ -110,7 +111,7 @@ export function ViewOptions(): React.JSX.Element {
             <label data-field="group-family">
               <input type="checkbox" data-testid="view-group-family" checked={grouped} onChange={() => setGroup(!grouped)} />
               <Tooltip label={t('view.group.family.gloss')}><span>{t('view.group.family')}</span></Tooltip>
-              <kbd className="fa-viewpop-key">⌥G</kbd>
+              <kbd className="fa-viewpop-key">{shortcutText('⌥G')}</kbd>
             </label>
           </fieldset>
           <fieldset>

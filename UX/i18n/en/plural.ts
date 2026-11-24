@@ -1,5 +1,8 @@
 /** Dạng số ít (n = 1) của tiếng Anh cho các khoá đếm; tiếng Việt không chia số ít/nhiều. Dùng qua `tn(key, vars)`. */
 export const EN_ONE: Record<string, string> = {
+  'desk.deactivateAll.kept': '{n} font stays active for another reason (manual, from a Project, or per app).',
+  'app.count': '{n} app selected',
+  'act.busy': '{n} font busy, will retry',
   'faces.nFonts': '{n} font',
   'faces.selectedN': '{n} font selected',
   'meta.faces': '{n} style',
@@ -13,7 +16,9 @@ export const EN_ONE: Record<string, string> = {
   'act.rec.icloud': '{n} font is still in iCloud and hasn’t been downloaded.',
   'dup.count': '{n} group',
   'dup.members': '{n} copy',
-  'side.notDownloaded': '{n} font not downloaded',
+  'side.notDownloaded': '{n} item not downloaded',
+  'side.readyTip': '{n} font already on this device',
+  'cs.pins': 'Keeping {n} role',
   'cdl.done': 'Downloaded {n} font from “{name}”; rescanning so it appears.',
   'strip.viMissing': 'Missing {n} Vietnamese character',
   'compare.viMissing': 'Missing {n} character',
@@ -21,7 +26,6 @@ export const EN_ONE: Record<string, string> = {
   'act.held.title': 'This font is held by {n} project',
   'sim.styles': '{n} style',
   'dd.count': '{n} style',
-  'side.scanningN': ' · {n} font',
   'set.src.meta': '{n} font · {state}',
   'set.data.problems': '{n} font has a problem',
   'set.act.offBody': '{n} font will be deactivated. It stays in your library. Do this before uninstalling the app.',
