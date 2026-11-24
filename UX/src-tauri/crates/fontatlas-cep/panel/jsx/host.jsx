@@ -8,6 +8,7 @@
 //   số tài liệu/frame/run đã quét, số run không đọc được font, tối đa 12 tên font đã thấy (kèm cờ thiếu) và tối đa 3 thông điệp lỗi
 //   (đã cắt ngắn, KHÔNG có tên tài liệu). Lỗi đọc font KHÔNG còn bị nuốt im lặng.
 // ExtendScript (ES3) KHÔNG có JSON: tự dựng chuỗi JSON.
+var FA_MAX_ALL = 512;
 function faQ(v) {
   return '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\u0000-\u001f\u2028\u2029]/g, " ") + '"';
 }
@@ -17,7 +18,9 @@ function faDocsJson(docs) {
     d = docs[i]; fs = [];
     if (!d) continue;
     for (j = 0; j < d.fonts.length; j++) fs.push('{"ps":' + faQ(d.fonts[j].ps) + ',"family":' + faQ(d.fonts[j].family) + ',"style":' + faQ(d.fonts[j].style) + '}');
-    out.push('{"name":' + faQ(d.name) + ',"path":' + faQ(d.path) + ',"fonts":[' + fs.join(",") + ']}');
+    var al = [];
+    for (j = 0; j < d.all.length; j++) al.push('{"ps":' + faQ(d.all[j].ps) + ',"family":' + faQ(d.all[j].family) + ',"style":' + faQ(d.all[j].style) + ',"miss":' + (d.all[j].miss ? "true" : "false") + '}');
+    out.push('{"name":' + faQ(d.name) + ',"path":' + faQ(d.path) + ',"fonts":[' + fs.join(",") + '],"all":[' + al.join(",") + ']}');
   }
   return "[" + out.join(",") + "]";
 }
@@ -114,7 +117,7 @@ function faScan(reset, budgetMs) {
       var d = app.documents[st.di];
       if (!st.docs[st.di]) {
         var path = ""; try { path = d.fullName.fsName; } catch (e) {}
-        st.docs[st.di] = { name: String(d.name), path: path, fonts: [], seen: {} };
+        st.docs[st.di] = { name: String(d.name), path: path, fonts: [], seen: {}, all: [], allSeen: {} };
         st.stats.docs++;
       }
       var rec = st.docs[st.di], frames = [];
@@ -148,9 +151,16 @@ function faScan(reset, budgetMs) {
             if (ps) {
               var miss = !st.installed[ps];
               faSeen(st, String(ps), miss);
+              var nm = String(ps);
+              // `all` = MỌI font khác nhau của tài liệu (kèm cờ miss = Illustrator báo thiếu). app.textFonts có thể còn giữ font Font Atlas đã tắt
+              // nên "có trong textFonts" KHÔNG có nghĩa là dùng được: broker mới là bên quyết định bật hay không. Tối đa FA_MAX_ALL tên.
+              if (!rec.allSeen[nm] && rec.all.length < FA_MAX_ALL) {
+                rec.allSeen[nm] = 1;
+                rec.all.push({ ps: nm, family: String(fam), style: String(sty), miss: miss });
+              }
               if (miss && !rec.seen[ps]) {
                 rec.seen[ps] = 1;
-                rec.fonts.push({ ps: String(ps), family: String(fam), style: String(sty) });
+                rec.fonts.push({ ps: nm, family: String(fam), style: String(sty) });
               }
             }
           }

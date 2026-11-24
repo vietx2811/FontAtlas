@@ -86,3 +86,13 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 - Hai instance dùng chung thư mục nguồn nhưng khác DB chỉ ảnh hưởng ở font cả hai cùng từng bật, và chỉ khi instance kia đã thoát (R1).
 
 **Thử thật:** font bật qua broker, `kill -9` process của chính mình, sửa DB thành Inactive/Unregistered (giả crash giữa chừng) → font vẫn resolve; mở app khi có instance thứ hai đang chạy → log "bỏ qua", font còn; mở lại khi chỉ còn một instance → log "gỡ 1 (lỗi 0)", font hết resolve, dòng DB không đổi.
+
+## Panel gửi MỌI font, không chỉ font Illustrator báo thiếu (2026-11-24)
+
+**Lỗi sản phẩm:** `app.textFonts` của Illustrator giữ font Font Atlas ĐÃ TỪNG bật rồi tắt (đo: vẫn còn sau khi gỡ đăng ký và khởi động lại Illustrator; CoreText không còn resolve). Panel chỉ gửi font không có trong `app.textFonts` nên không bao giờ gọi `ensure` cho đúng những font hay dùng nhất.
+
+**Cách sửa:** `faScan` trả thêm `docs[].all` = mọi font khác nhau của tài liệu (tối đa 512) kèm `miss` (Illustrator báo thiếu hay không); `docs[].fonts` (chỉ font thiếu) giữ nguyên cho log. Panel gửi toàn bộ `all` tới broker (chia lô 256 = `MAX_FONTS`), broker so với thư viện + trạng thái bật thật (`activate_auto`: `activated` / `already_active` / `available` / `missing`…) và chỉ bật cái đang tắt. `FontReq.miss` là trường tuỳ chọn của giao thức v1 (client cũ không gửi vẫn chạy, không đổi `PROTOCOL_VERSION`): chỉ dùng để KHÔNG ghi nhật ký `missing` cho font hệ thống không có trong thư viện mà app đã có (`miss=false`); không bao giờ chặn việc bật. `faRedraw()` chỉ gọi khi có font `activated`. Lỗi http (Font Atlas bận/khởi động) giờ hỏi lại sau 5 s (tối đa 6 lần) thay vì bỏ im.
+
+**Chưa đo:** thuộc tính "missing/substituted" của `textFont` (cần màn hình mở khoá); InDesign (script riêng, chưa được duyệt) có thể có cùng lỗi, cần xem sau.
+
+**Font người dùng đã bật:** broker KHÔNG đụng tới font đang bật và đăng ký thật vì lý do của người dùng (thủ công/collection/case): trả `already_active`, không thêm lý do `auto:<app>`, không đổi scope/trạng thái, không ghi nhật ký. Chỉ thêm lý do auto khi chính lượt `ensure` đó bật font, hoặc khi font chỉ đang giữ bởi lý do auto của app thiết kế khác.
