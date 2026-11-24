@@ -95,3 +95,6 @@ docs/**/*.mp4
 # README screenshots: fixture fonts only, owner-approved 2026-11-23
 !docs/readme/
 !docs/readme/*.png
+
+# spike outputs (renders of system fonts): never commit
+spikes/*/out/
