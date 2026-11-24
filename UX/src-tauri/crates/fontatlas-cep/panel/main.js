@@ -101,6 +101,7 @@
         var n = (retry[key] || 0) + 1;
         if (again && n <= MAX_RETRY) { retry[key] = n; setTimeout(function () { delete last[key]; trigger(true); }, RETRY_MS); }
         if (failedHttp) return;
+        if (!again) delete retry[key];                          // phản hồi trọn vẹn: lần sau (tài liệu đổi) được hỏi lại đủ MAX_RETRY
         last[key] = sig;
         if (results.some(function (x) { return x.status === "activated"; })) cs.evalScript("faRedraw()");
         var hint = {}; hinted.forEach(function (f) { hint[f.ps] = 1; });

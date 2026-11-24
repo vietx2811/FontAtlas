@@ -563,7 +563,13 @@ impl<E: ActivationEngine> ActivationService<E> {
         });
         if same {
             if !dry_run {
-                relock(store).add_activation_reason(&hash, reason)?;
+                // Lý do auto (app thiết kế hỏi) KHÔNG được gắn lên font mà người dùng đã bật (thủ công/collection/case…): không ghi gì.
+                // Chỉ thêm khi dòng hiện chỉ có lý do auto của app khác (mỗi app có lý do riêng).
+                let user_owned = matches!(reason, ActivationReason::Auto(_))
+                    && old.as_ref().is_some_and(|o| o.reasons.iter().any(|r| !matches!(r, ActivationReason::Auto(_))));
+                if !user_owned {
+                    relock(store).add_activation_reason(&hash, reason)?;
+                }
                 for n in &names {
                     batch.seen.entry(n.clone()).or_insert_with(|| path.clone());
                 }
