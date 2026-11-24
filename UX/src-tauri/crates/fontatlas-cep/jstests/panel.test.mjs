@@ -374,3 +374,17 @@ test("ký tự trắng khác font (MyriadPro) bị bỏ qua khi lấy mẫu", ()
   const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
   assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
 });
+
+test("đoạn 100 ký tự: font khác ở GIỮA (5 ký tự) vẫn thấy dù đầu/cuối cùng font", () => {
+  const b = bigPara(100, (i) => (i >= 47 && i < 52 ? "DMSerifDisplay-Regular" : "Chonburi-Regular"));
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps).sort(), ["Chonburi-Regular", "DMSerifDisplay-Regular"]);
+  assert.ok(b.reads() <= 205, "số lần đọc: " + b.reads());
+});
+
+test("ký tự đầu là khoảng trắng: font 'của vùng' (font ký tự đầu) không được tính", () => {
+  const text = " abcdefghij";
+  const b = bigPara(text.length, (i) => (i === 0 ? "MyriadPro-Regular" : "Chonburi-Regular"), () => text);
+  const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
+  assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+});

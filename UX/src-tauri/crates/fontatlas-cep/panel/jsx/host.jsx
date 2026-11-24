@@ -48,10 +48,11 @@ function faFontsOfItem(st, item, kind) {
   var out = [], f = null, ca = null, chars = null, n = 0, text = null, seen = {}, cnt = 0;
   try { ca = item.characterAttributes; } catch (e) { faNote(st, kind, e); }
   if (ca) { try { f = ca.textFont; } catch (e) { faNote(st, kind === "runs" ? "textFont" : kind, e); } }
-  var fn = ""; if (f) { try { fn = f.name; } catch (e) {} out.push(f); if (fn) { seen[fn] = 1; cnt++; } }
-  if (kind === "runs") return out;      // run đã đồng nhất font; đoạn/frame thì Illustrator trả font ĐẦU TIÊN khi trộn → phải lấy mẫu ký tự
+  var fn = ""; if (f) { try { fn = f.name; } catch (e) {} }
+  function addF() { if (f && !(fn && seen[fn])) { out.push(f); if (fn) { seen[fn] = 1; cnt++; } } }
+  if (kind === "runs") { addF(); return out; }      // run đã đồng nhất font; đoạn/frame thì Illustrator trả font ĐẦU TIÊN khi trộn → phải lấy mẫu ký tự
   try { chars = item.characters; n = chars ? Number(chars.length) : 0; if (isNaN(n)) n = 0; } catch (e) { faNote(st, "chars", e); n = 0; }
-  if (n <= 0) return out;
+  if (n <= 0) { addF(); return out; }
   // Bỏ qua khoảng trắng/xuống dòng: font của ký tự trắng (vd MyriadPro) không phải font người dùng thấy.
   try { text = String(item.contents); if (text.length !== n) text = null; } catch (e) { text = null; }
   function blank(i) { return text !== null && /\s/.test(text.charAt(i)); }
@@ -68,18 +69,23 @@ function faFontsOfItem(st, item, kind) {
     if (nm && !seen[nm]) { seen[nm] = 1; cnt++; out.push(g); }
   }
   var i, k, last = nonBlank(n - 1);
-  // Lượt thưa: tối đa 16 mẫu rải đều (gồm đầu và cuối). Chỉ khi thấy >1 font mới đọc dày.
-  var sparse = n <= 16 ? n : 16;
-  for (k = 0; k < sparse; k++) {
-    i = sparse === 1 ? 0 : Math.floor(k * (n - 1) / (sparse - 1));
-    i = nonBlank(i); if (i >= 0) take(i);
+  // Font của vùng (= font ký tự ĐẦU) chỉ tính khi ký tự đầu không phải khoảng trắng.
+  if (!blank(0)) addF();
+  if (n <= 200) {
+    // Đoạn ngắn: đọc dày mọi ký tự không trắng (tối đa 200 lần đọc), không sót run nhỏ ở giữa.
+    for (i = 0; i < n; i++) { if (!blank(i)) take(i); }
+  } else {
+    // Đoạn dài: lượt thưa 16 mẫu rải đều (gồm đầu và cuối); chỉ khi thấy >1 font mới đọc dày (bước ceil(n/200)).
+    for (k = 0; k < 16; k++) {
+      i = nonBlank(Math.floor(k * (n - 1) / 15)); if (i >= 0) take(i);
+    }
+    if (last >= 0) take(last);
+    if (cnt > 1) {
+      var step = Math.ceil(n / 200);
+      for (i = 0; i < n; i += step) { if (!blank(i)) take(i); }
+    }
   }
-  if (last >= 0) take(last);
-  if (cnt > 1 && n > 16) {
-    var step = Math.ceil(n / 200);
-    for (i = 0; i < n; i += step) { if (!blank(i)) take(i); }
-  }
-  if (out.length > (f ? 1 : 0)) st.stats.via_chars = (st.stats.via_chars || 0) + 1;
+  if (out.length > (f && !blank(0) ? 1 : 0)) st.stats.via_chars = (st.stats.via_chars || 0) + 1;
   return out;
 }
 
