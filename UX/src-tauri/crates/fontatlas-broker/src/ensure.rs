@@ -236,15 +236,18 @@ pub fn ensure_in_library(
 
     // 1. Tên → face của thư viện (một lần khoá store). Tên nội bộ bị bỏ; nhiều bản cùng tên thì chọn có quy tắc.
     let mut ambiguous: Vec<(usize, usize)> = vec![]; // (chỉ số font trong yêu cầu, số bản khác nhau)
+    let mut already_on: HashMap<String, Option<String>> = HashMap::new(); // hash hex → đường đang đăng ký
     let resolved: Vec<Option<FaceKey>> = {
         let s = lock(store);
-        let active: std::collections::HashSet<[u8; 32]> = s
-            .activation_rows()
-            .map_err(EnsureError::internal)?
-            .into_iter()
-            .filter(|r| r.state == fontatlas_store::DesiredState::Active)
-            .filter_map(|r| <[u8; 32]>::try_from(r.hash.as_slice()).ok())
-            .collect();
+        let rows = s.activation_rows().map_err(EnsureError::internal)?;
+        let active: std::collections::HashSet<[u8; 32]> =
+            rows.iter().filter(|r| r.state == fontatlas_store::DesiredState::Active).filter_map(|r| <[u8; 32]>::try_from(r.hash.as_slice()).ok()).collect();
+        // Font ĐÃ bật và đang đăng ký thật vì NGƯỜI DÙNG (lý do thủ công/collection/case…): broker không đụng tới (không thêm lý do auto, không đổi
+        // scope/trạng thái). Font chỉ có lý do auto (do app thiết kế khác hỏi trước) vẫn đi qua `activate_auto` để thêm lý do của app này.
+        let user_owned = |r: &&fontatlas_store::ActivationRow| r.reasons.iter().any(|x| !matches!(x, fontatlas_store::ActivationReason::Auto(_)));
+        for r in rows.iter().filter(|r| r.state == fontatlas_store::DesiredState::Active && r.status == fontatlas_store::ActivationStatus::Registered).filter(user_owned) {
+            already_on.insert(hex(&r.hash), r.active_path.clone());
+        }
         let mut v = Vec::with_capacity(req.fonts.len());
         for (idx, f) in req.fonts.iter().enumerate() {
             let mut cands: Vec<FaceKey> = vec![];
@@ -267,12 +270,14 @@ pub fn ensure_in_library(
 
     // 2. Bật các file khác nhau, một lô.
     let mut keys: Vec<FaceKey> = vec![];
+    let mut by_hash: HashMap<String, (FontStatus, Option<String>)> = HashMap::new();
     for k in resolved.iter().flatten() {
-        if !keys.iter().any(|x| x.hash == k.hash && x.face_index == k.face_index) {
+        if let Some(path) = already_on.get(&hex(&k.hash)) {
+            by_hash.insert(hex(&k.hash), (FontStatus::AlreadyActive, path.clone()));
+        } else if !keys.iter().any(|x| x.hash == k.hash && x.face_index == k.face_index) {
             keys.push(*k);
         }
     }
-    let mut by_hash: HashMap<String, (FontStatus, Option<String>)> = HashMap::new();
     if !keys.is_empty() {
         let report = service.activate_auto(store, &keys, app).map_err(EnsureError::internal)?;
         for r in &report.results {

@@ -141,7 +141,7 @@ fn file_deleted_from_disk_is_unavailable() {
 }
 
 #[test]
-fn persistent_manual_activation_keeps_scope_and_gains_reason() {
+fn persistent_manual_activation_is_left_untouched() {
     let (env, b) = backend(&[LIBRE]);
     let k = {
         let s = b.store.lock().unwrap();
@@ -155,7 +155,7 @@ fn persistent_manual_activation_keeps_scope_and_gains_reason() {
     assert_eq!(b.service.engine().registrations(), vec![(canon(&env.fonts.join(LIBRE)), Scope::Persistent)]);
     let rows = b.store.lock().unwrap().activation_rows().unwrap();
     assert_eq!(rows[0].scope, ActivationScope::Persistent);
-    assert_eq!(rows[0].reasons, vec![ActivationReason::Manual, ActivationReason::Auto(AutoApp::Photoshop)]);
+    assert_eq!(rows[0].reasons, vec![ActivationReason::Manual], "broker không thêm lý do auto vào font người dùng đã bật");
 }
 
 #[test]
@@ -439,4 +439,34 @@ fn old_clients_without_the_miss_field_still_parse() {
     let j = r#"{"v":1,"app":"Adobe Illustrator","fonts":[{"ps":"X-Regular"},{"ps":"Y-Regular","miss":false,"extra":1}]}"#;
     let r: EnsureRequest = serde_json::from_str(j).unwrap();
     assert_eq!((r.fonts[0].miss, r.fonts[1].miss), (None, Some(false)));
+}
+
+#[test]
+fn a_font_the_user_already_turned_on_is_left_exactly_as_it_is() {
+    // Lý do/scope/trạng thái của font người dùng đang bật không đổi: broker KHÔNG thêm lý do auto:<app>.
+    let (_env, b) = backend(&[LIBRE]);
+    let k = b.store.lock().unwrap().faces_by_postscript(LIBRE_PS).unwrap()[0];
+    b.service.activate_faces(&b.store, &[k], Some(Scope::Persistent), fontatlas_activate::ConflictPolicy::Ask, &mut |_| {}).unwrap();
+    let before = b.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    let r = b.ensure(&req("Adobe Illustrator", vec![hinted(LIBRE_PS, false)])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::AlreadyActive);
+    assert_eq!(r.found, vec![LIBRE_PS.to_string()]);
+    let after = b.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(after.reasons, before.reasons, "không thêm lý do auto");
+    assert_eq!((after.scope, after.state, after.status), (before.scope, before.state, before.status));
+    assert_eq!(after.reasons, vec![ActivationReason::Manual]);
+    assert!(b.store.lock().unwrap().recent_auto_log(10).unwrap().is_empty(), "không ghi nhật ký");
+}
+
+#[test]
+fn a_font_this_ensure_turned_on_keeps_its_auto_reason_and_a_repeat_changes_nothing() {
+    let (_env, b) = backend(&[LIBRE]);
+    let k = b.store.lock().unwrap().faces_by_postscript(LIBRE_PS).unwrap()[0];
+    b.ensure(&req("Adobe Illustrator", vec![ps(LIBRE_PS)])).unwrap();
+    let first = b.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(first.reasons, vec![ActivationReason::Auto(AutoApp::Illustrator)]);
+    let r = b.ensure(&req("Adobe Illustrator", vec![ps(LIBRE_PS)])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::AlreadyActive);
+    let second = b.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
+    assert_eq!(second.reasons, first.reasons);
 }
