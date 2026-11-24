@@ -246,7 +246,10 @@ pub fn ensure_in_library(
         // scope/trạng thái). Font chỉ có lý do auto (do app thiết kế khác hỏi trước) vẫn đi qua `activate_auto` để thêm lý do của app này.
         let user_owned = |r: &&fontatlas_store::ActivationRow| r.reasons.iter().any(|x| !matches!(x, fontatlas_store::ActivationReason::Auto(_)));
         for r in rows.iter().filter(|r| r.state == fontatlas_store::DesiredState::Active && r.status == fontatlas_store::ActivationStatus::Registered).filter(user_owned) {
-            already_on.insert(hex(&r.hash), r.active_path.clone());
+            // File đang đăng ký còn trên đĩa? (stat rẻ) Mất/đổi → đi đường `activate_auto` như thường để ra `missing_file`/`file_changed`.
+            if r.active_path.as_deref().is_some_and(|p| std::path::Path::new(p).exists()) {
+                already_on.insert(hex(&r.hash), r.active_path.clone());
+            }
         }
         let mut v = Vec::with_capacity(req.fonts.len());
         for (idx, f) in req.fonts.iter().enumerate() {
