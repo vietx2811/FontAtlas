@@ -48,8 +48,8 @@ function faFontsOfItem(st, item, kind) {
   var out = [], f = null, ca = null, chars = null, n = 0, i, step, g, nm, seen = {};
   try { ca = item.characterAttributes; } catch (e) { faNote(st, kind, e); }
   if (ca) { try { f = ca.textFont; } catch (e) { faNote(st, kind === "runs" ? "textFont" : kind, e); } }
-  if (f) { out.push(f); return out; }
-  if (kind === "runs") return out;
+  var fn = ""; if (f) { try { fn = f.name; } catch (e) {} out.push(f); if (fn) seen[fn] = 1; }
+  if (kind === "runs") return out;      // run đã đồng nhất font; đoạn/frame thì Illustrator trả font ĐẦU TIÊN khi trộn → luôn lấy mẫu ký tự
   try { chars = item.characters; n = chars ? Number(chars.length) : 0; if (isNaN(n)) n = 0; } catch (e) { faNote(st, "chars", e); n = 0; }
   if (n > 0) {
     step = Math.ceil(n / 200);
@@ -60,7 +60,7 @@ function faFontsOfItem(st, item, kind) {
       if (i + step >= n && i !== n - 1) i = n - 1 - step;      // chạm ký tự cuối
     }
   }
-  if (out.length) st.stats.via_chars = (st.stats.via_chars || 0) + 1;
+  if (out.length > (f ? 1 : 0)) st.stats.via_chars = (st.stats.via_chars || 0) + 1;
   return out;
 }
 

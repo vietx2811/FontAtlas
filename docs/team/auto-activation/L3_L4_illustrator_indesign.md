@@ -63,6 +63,8 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 - **Broker đổi (Font Atlas khởi động lại):** panel nhớ `port:token` lần đọc trước; đổi thì xoá `last/retry/lastSig` rồi quét lại mọi tài liệu (log: `broker đổi …`). Cần vì lượt startup của app xoá auto-on phiên cũ, nên tài liệu đang mở lại thiếu font.
 - **Broker vắng:** không quét (không có chỗ gửi) và không ghi log lặp; broker.json xuất hiện/đổi thì quét ngay.
 - **Log "quét xong"** chỉ ghi khi kết quả khác lần trước.
-- **Đoạn/vùng chữ trộn nhiều font:** nếu `characterAttributes.textFont` của đoạn/vùng là undefined hoặc ném lỗi thì lấy mẫu từng ký tự (tối đa ~200 lần đọc mỗi mục, luôn gồm ký tự cuối); log `qua[run/đoạn/frame/ký tự]`.
+- **Đoạn/vùng chữ trộn nhiều font:** **luôn** lấy mẫu từng ký tự (kể cả khi `textFont` của đoạn/vùng có giá trị: Illustrator 2027 thật trả font ĐẦU TIÊN cho đoạn trộn, đo ngày 2026-11-24 với đoạn Chonburi/DM Serif/Arial) (tối đa ~200 lần đọc mỗi mục, luôn gồm ký tự cuối); log `qua[run/đoạn/frame/ký tự]`.
 - **Nạp tay host.jsx:** bộ đếm tối đa 3 lần cho một chuỗi lỗi `EvalScript error.`; `faSig` trả `err` tạm (hộp modal…) không tính.
 
+
+- **Thử thật 2026-11-24 (Illustrator 2027, .ai tạo bằng osascript):** đoạn 3 font → panel thấy đủ `Chonburi, DMSerifDisplay, ArialMT` (+ MyriadPro của ký tự cách). Chưa kích được nhánh `ensure` thật: `.ai` mang font nhúng nên Illustrator tự thấy font sau khi mở. Lưu ý: kill Font Atlas bằng SIGTERM để lại font session đã đăng ký trong phiên đăng nhập.
