@@ -96,3 +96,5 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 **Chưa đo:** thuộc tính "missing/substituted" của `textFont` (cần màn hình mở khoá); InDesign (script riêng, chưa được duyệt) có thể có cùng lỗi, cần xem sau.
 
 **Font người dùng đã bật:** broker KHÔNG đụng tới font đang bật và đăng ký thật vì lý do của người dùng (thủ công/collection/case): trả `already_active`, không thêm lý do `auto:<app>`, không đổi scope/trạng thái, không ghi nhật ký. Chỉ thêm lý do auto khi chính lượt `ensure` đó bật font, hoặc khi font chỉ đang giữ bởi lý do auto của app thiết kế khác.
+
+**InDesign (chỉ code + test giả, CHƯA chạy InDesign):** `FontAtlas_Startup.jsx` cũng gửi MỌI font của tài liệu (tối đa 256, trùng PS name chỉ một lần) kèm `miss` (status != INSTALLED), như panel Illustrator. Test chạy script trong vm Node với InDesign/Socket/File giả và kiểm nội dung POST. Cần được chủ máy duyệt trước khi cài/chạy thật.

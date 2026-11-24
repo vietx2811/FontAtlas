@@ -124,3 +124,39 @@ fn rendered_script_is_valid_javascript_when_node_is_available() {
     let r = std::process::Command::new("node").arg("--check").arg(&f).output().unwrap();
     assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
 }
+
+// Chạy script trong vm với InDesign/Socket/File giả: bắt nội dung POST gửi tới broker.
+#[test]
+fn script_sends_every_font_of_the_document_with_a_miss_hint() {
+    let Ok(v) = std::process::Command::new("node").arg("--version").output() else { return };
+    if !v.status.success() {
+        return;
+    }
+    let d = prefs();
+    let t = inst(d.path(), "/a/broker.json", "1").script_text().replace("#targetengine \"fontatlas\"", "");
+    let harness = r#"
+const vm = require("vm"), fs = require("fs");
+const posts = [];
+const FontStatus = { INSTALLED: "I", NOT_AVAILABLE: "N" };
+function mk(ps, st) { return { postscriptName: ps, fontFamily: "F", fontStyleName: "R", name: ps, status: st }; }
+const fonts = [mk("ArialMT", "I"), mk("Chonburi-Regular", "I"), mk("Gone-Regular", "N"), mk("ArialMT", "I")];
+const doc = { name: "BÍ-MẬT.indd", constructor: { name: "Document" }, fonts: { everyItem: () => ({ getElements: () => fonts }) } };
+let listener = null;
+const app = { name: "Adobe InDesign", activeDocument: doc, addEventListener: (n, f) => { listener = f; return { remove() {} }; } };
+function File() { return { exists: true, open() {}, read: () => '{"port":4321,"token":"' + "a".repeat(64) + '"}', close() {} }; }
+function Socket() { this.connected = false; this.open = () => true; this.write = (s) => { posts.push(s); }; this.read = () => ""; this.close = () => {}; }
+const sandbox = { app, File, Socket, FontStatus, $: { global: {}, sleep() {} }, unescape, encodeURIComponent, parseInt, Date, RegExp, String };
+vm.runInNewContext(fs.readFileSync(process.argv[2], "utf8"), sandbox);
+listener({ parent: doc });
+const body = posts[0].split("\r\n\r\n")[1];
+process.stdout.write(JSON.parse(body).fonts.map(f => f.ps + ":" + f.miss).join(","));
+"#;
+    let sf = d.path().join("script.js");
+    let hf = d.path().join("harness.js");
+    std::fs::write(&sf, t).unwrap();
+    std::fs::write(&hf, harness).unwrap();
+    let out = std::process::Command::new("node").arg(&hf).arg(&sf).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let got = String::from_utf8_lossy(&out.stdout).to_string();
+    assert_eq!(got, "ArialMT:false,Chonburi-Regular:false,Gone-Regular:true", "mọi font khác nhau, kèm miss; font INSTALLED vẫn được gửi");
+}
