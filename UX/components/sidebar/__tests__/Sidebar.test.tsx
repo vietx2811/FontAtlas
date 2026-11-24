@@ -232,16 +232,16 @@ describe('Sidebar', () => {
     it('nguồn toàn file chưa tải (faceCount 0, cloudOnlyCount > 0) vẫn hiện, có ☁N trung tính và nút Tải về máy', async () => {
       const api = createMockApi();
       const base = await api.listSources();
-      const dataless = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 9, faceCount: 0, lastScan: null };
+      const dataless = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 2, faceCount: 0, lastScan: null };
       const listed = [dataless];
       api.listSources = (async () => listed) as never;
       render(<Sidebar api={api} pickFolder={async () => null} />);
       await settle();
-      expect(screen.getByTestId('src-cloud-status').getAttribute('aria-label')).toBe('9 mục chưa tải về');
+      expect(screen.getByTestId('src-cloud-status').getAttribute('aria-label')).toBe('2 mục chưa tải về');
       act(() => useUiStore.getState().setView('src:9'));
-      expect(screen.getByTestId('not-downloaded').getAttribute('aria-label')).toBe('9 mục chưa tải về');
+      expect(screen.getByTestId('not-downloaded').getAttribute('aria-label')).toBe('2 mục chưa tải về');
       expect(screen.queryByTestId('cloud-ready')).toBeNull(); // 0 font đã có trên máy: không hiện ✓0
-      expect(screen.getByTestId('cloud-dl-start')).toBeTruthy();
+      expect(screen.getByTestId('cloud-dl-start').getAttribute('aria-label')).toBe('Tải về máy');
     });
     it('mặc định hàng Folder chỉ có 1 icon trạng thái; ☁N/✓M/gợi ý chỉ hiện khi chọn nguồn', async () => {
       await mount();
