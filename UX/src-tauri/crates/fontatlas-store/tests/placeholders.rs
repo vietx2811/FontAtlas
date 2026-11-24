@@ -339,3 +339,31 @@ fn mixed_source_counts_unseen_dataless_next_to_analyzed_faces() {
     assert!(count(&s, "SELECT count(*) FROM faces") >= 1);
     assert_eq!(s.cloud_only_count(src).unwrap(), 1, "chỉ font dataless chưa thấy; font đã tải không tính");
 }
+
+#[test]
+fn removing_a_source_or_rebuilding_forgets_its_unseen_dataless_count_so_a_reused_id_starts_at_zero() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf", "roboto.ttf"]);
+    let all = |_: &Path, _: &std::fs::Metadata| true;
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 2);
+    s.remove_source(src).unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM meta WHERE key LIKE 'cloud_unseen:%'"), 0);
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0, "id dùng lại không hiện số cũ");
+    // dựng lại thư viện cũng xoá
+    let src = s.add_source(SourceKind::Directory, "Fonts", Some(&fonts)).unwrap();
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 2);
+    s.rebuild_library().unwrap();
+    assert_eq!(s.cloud_only_count(src).unwrap(), 0);
+}
+
+#[test]
+fn orphan_sweep_drops_unseen_counts_of_sources_no_longer_registered() {
+    let (_d, fonts, mut s, src) = setup(&["open_sans.ttf"]);
+    let all = |_: &Path, _: &std::fs::Metadata| true;
+    s.rescan_root_with_probe(src, &fonts, &mut |_| {}, &AtomicBool::new(false), &all).unwrap();
+    // mô phỏng gỡ nguồn bị ngắt giữa hai bước: u.sources đã mất, meta còn
+    s.conn().execute("DELETE FROM u.sources WHERE source_id=?1", [src]).unwrap();
+    s.sweep_orphan_locations().unwrap();
+    assert_eq!(count(&s, "SELECT count(*) FROM meta WHERE key LIKE 'cloud_unseen:%'"), 0);
+}

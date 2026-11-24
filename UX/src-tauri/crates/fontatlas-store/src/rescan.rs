@@ -646,6 +646,8 @@ impl Store {
         between()?;
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
+        // source_id có thể được dùng lại: không để số "chưa tải về" cũ lọt sang nguồn mới
+        tx.execute("DELETE FROM meta WHERE key=?1", [format!("{CLOUD_UNSEEN_PREFIX}{source_id}")])?;
         tx.commit()?;
         self.sweep_orphan_locations()?;
         Ok(report)
@@ -658,6 +660,11 @@ impl Store {
         let n = tx.execute(
             "DELETE FROM file_locations WHERE source_id NOT IN (SELECT source_id FROM u.sources)",
             [],
+        )?;
+        // số "chưa tải về" mồ côi (gỡ nguồn bị ngắt giữa chừng)
+        tx.execute(
+            "DELETE FROM meta WHERE key LIKE ?1 AND CAST(substr(key, ?2) AS INTEGER) NOT IN (SELECT source_id FROM u.sources)",
+            params![format!("{CLOUD_UNSEEN_PREFIX}%"), CLOUD_UNSEEN_PREFIX.len() as i64 + 1],
         )?;
         tx.commit()?;
         self.gc()?;
@@ -689,6 +696,7 @@ impl Store {
         };
         let report = RebuildReport { files: count("files")?, faces: count("faces")?, locations: count("file_locations")? };
         tx.execute("DELETE FROM file_locations", [])?;
+        tx.execute("DELETE FROM meta WHERE key LIKE ?1", [format!("{CLOUD_UNSEEN_PREFIX}%")])?;
         tx.execute("DELETE FROM files", [])?; // faces theo ON DELETE CASCADE (trigger cập nhật FTS)
         for t in ["analyses", "embeddings"] {
             tx.execute(&format!("DELETE FROM {t} WHERE source <> 'community'"), [])?;
