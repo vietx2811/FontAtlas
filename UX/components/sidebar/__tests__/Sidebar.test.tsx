@@ -229,6 +229,20 @@ describe('Sidebar', () => {
   });
 
   describe('files still in the cloud (not downloaded)', () => {
+    it('nguồn toàn file chưa tải (faceCount 0, cloudOnlyCount > 0) vẫn hiện, có ☁N trung tính và nút Tải về máy', async () => {
+      const api = createMockApi();
+      const base = await api.listSources();
+      const dataless = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 9, faceCount: 0, lastScan: null };
+      const listed = [dataless];
+      api.listSources = (async () => listed) as never;
+      render(<Sidebar api={api} pickFolder={async () => null} />);
+      await settle();
+      expect(screen.getByTestId('src-cloud-status').getAttribute('aria-label')).toBe('9 mục chưa tải về');
+      act(() => useUiStore.getState().setView('src:9'));
+      expect(screen.getByTestId('not-downloaded').getAttribute('aria-label')).toBe('9 mục chưa tải về');
+      expect(screen.queryByTestId('cloud-ready')).toBeNull(); // 0 font đã có trên máy: không hiện ✓0
+      expect(screen.getByTestId('cloud-dl-start')).toBeTruthy();
+    });
     it('mặc định hàng Folder chỉ có 1 icon trạng thái; ☁N/✓M/gợi ý chỉ hiện khi chọn nguồn', async () => {
       await mount();
       expect(screen.getByTestId('src-cloud-status')).toBeTruthy();
@@ -245,8 +259,8 @@ describe('Sidebar', () => {
       await mount();
       act(() => useUiStore.getState().setView('src:2'));
       const line = screen.getByTestId('not-downloaded');
-      expect(line.textContent).toBe('12'); // chỉ icon + số; câu đầy đủ ở aria-label và tooltip
-      expect(line.getAttribute('aria-label')).toBe('12 font chưa tải về');
+      expect(line.textContent).toBe('18'); // chỉ icon + số; câu đầy đủ ở aria-label và tooltip
+      expect(line.getAttribute('aria-label')).toBe('18 mục chưa tải về');
       expect(screen.getByTestId('cloud-ready').textContent).toMatch(/^\d+$/); // ✓ + số font đã có trên máy
       const tip = await tipOf(line);
       expect(tip).toMatch(/Finder/);
@@ -268,7 +282,7 @@ describe('Sidebar', () => {
     it('while scanning, the footer counts them too, and drops the line when the scan ends', async () => {
       await mount();
       act(() => useScanStore.setState({ scanning: true, written: 40, cloud: { 2: 7 } }));
-      expect(screen.getByTestId('scan-not-downloaded').textContent).toBe('7 font chưa tải về');
+      expect(screen.getByTestId('scan-not-downloaded').textContent).toBe('7 mục chưa tải về');
       act(() => useScanStore.setState({ scanning: false, cloud: {} }));
       expect(screen.queryByTestId('scan-not-downloaded')).toBeNull();
     });

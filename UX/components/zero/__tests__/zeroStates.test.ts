@@ -1,7 +1,7 @@
 import { setLocale } from '../../../i18n';
 import { describe, expect, it } from 'vitest';
 import type { SourceDto } from '../../../api';
-import { cloudHint, libraryEmpty, type EmptyCtx } from '../zeroStates';
+import { cloudHint, libraryEmpty, notDownloadedOf, type EmptyCtx } from '../zeroStates';
 
 const src = (o: Partial<SourceDto> = {}): SourceDto => ({ id: 1, kind: 'directory', name: 'Fonts', path: '/F', enabled: true, available: true, cloudProvider: null, cloudOnlyCount: 0, faceCount: 10, lastScan: null, scanning: false, ...o });
 const ctx = (o: Partial<EmptyCtx> = {}): EmptyCtx => ({ view: 'all', tag: null, query: '', viOnly: false, sources: [src()], scanning: false, access: {}, cloud: {}, ...o });
@@ -81,11 +81,18 @@ describe('libraryEmpty', () => {
     expect(e.kind).toBe('source-access');
   });
 
-  it('a source whose files are all still in the cloud says so (no auto-download), offering a rescan once they are downloaded', () => {
+  it('a source whose files are all still in the cloud says so (no auto-download), offering Download (rescan stays as secondary)', () => {
     const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, lastScan: { status: 'ok', seen: 5, unchanged: 0, notDownloaded: 5, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] } })] }));
     expect(e.kind).toBe('source-cloud');
     expect(e.text).toMatch(/đám mây/);
-    expect(e.action).toEqual({ id: 'rescan', label: 'Quét lại' });
+    expect(e.action).toEqual({ id: 'download', label: 'Tải về máy' });
+    expect(e.secondary).toEqual({ id: 'rescan', label: 'Quét lại' });
+  });
+  it('a source with faceCount 0 but cloudOnlyCount > 0 (all dataless) is source-cloud, not empty', () => {
+    const e = libraryEmpty(ctx({ view: 'src:1', sources: [src({ faceCount: 0, cloudOnlyCount: 7, cloudProvider: 'icloud' })] }));
+    expect(e.kind).toBe('source-cloud');
+    expect(notDownloadedOf(src({ faceCount: 0, cloudOnlyCount: 7 }))).toBe(7);
+    expect(notDownloadedOf(src({ faceCount: 0, cloudOnlyCount: 7 }), { 1: 3 })).toBe(3); // đếm trực tiếp thắng
   });
   it('the same for the whole library when every source is only cloud placeholders', () => {
     const stats = { status: 'ok' as const, seen: 3, unchanged: 0, notDownloaded: 3, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };

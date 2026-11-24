@@ -3,7 +3,7 @@ import type { AccessProblem } from '../../store/scan';
 import type { View } from '../../store/ui';
 import { t } from '../../i18n';
 
-export type EmptyAction = { id: 'add-folder' | 'rescan' | 'clear-filters' | 'go-all' | 'grant'; label: string };
+export type EmptyAction = { id: 'add-folder' | 'download' | 'rescan' | 'clear-filters' | 'go-all' | 'grant'; label: string };
 export type EmptyKind =
   | 'no-sources' | 'scanning' | 'sources-empty' | 'no-match' | 'no-match-vi' | 'favorites-empty' | 'recent-empty' | 'active-empty'
   | 'project-empty' | 'tag-empty' | 'source-unplugged' | 'source-empty' | 'source-access' | 'source-cloud';
@@ -37,14 +37,18 @@ export function keepActionOf(provider: string | null): string {
   }
 }
 
-export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}): number => cloud[s.id] ?? s.lastScan?.notDownloaded ?? 0;
+/**
+ * Số mục chưa tải về của một nguồn: đếm trực tiếp khi đang quét; không thì cloudOnlyCount (face chưa tải + file placeholder chưa phân tích,
+ * nên nguồn toàn dataless với faceCount=0 vẫn >0 và giảm dần khi tải về); cuối cùng là số của lần quét gần nhất.
+ */
+export const notDownloadedOf = (s: SourceDto, cloud: Record<number, number> = {}): number => cloud[s.id] ?? (s.cloudOnlyCount > 0 ? s.cloudOnlyCount : s.lastScan?.notDownloaded ?? 0);
 
 export function libraryEmpty(c: EmptyCtx): Empty {
   const blocked = (id: number) => id in c.access;
   const access = (): Empty => ({ kind: 'source-access', glyph: 'ụ', text: t('zero.access'), action: { id: 'grant', label: t('zero.grant') }, secondary: { id: 'rescan', label: t('zero.retry') } });
   if (c.view.startsWith('src:') && blocked(Number(c.view.slice(4)))) return access();
   if (c.view === 'all' && c.sources.length > 0 && c.sources.every(x => blocked(x.id) && x.faceCount === 0)) return access();
-  const cloud = (): Empty => ({ kind: 'source-cloud', glyph: 'ụ', text: t('zero.cloud'), action: { id: 'rescan', label: t('zero.rescan') } });
+  const cloud = (): Empty => ({ kind: 'source-cloud', glyph: 'ụ', text: t('zero.cloud'), action: { id: 'download', label: t('cdl.btn') }, secondary: { id: 'rescan', label: t('zero.rescan') } });
   if (c.scanning) return { kind: 'scanning', glyph: 'A', text: t('zero.scanning') };
   if (c.view.startsWith('src:')) {
     const s = c.sources.find(x => `src:${x.id}` === c.view);
