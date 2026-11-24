@@ -18,14 +18,18 @@ type State = {
   /** Số file chỉ là placeholder đám mây (chưa tải về) đã bỏ qua trong lần quét đang chạy, theo nguồn. */
   cloud: Record<number, number>;
   cloudTotal(): number;
+  /** Tăng khi số liệu NGUỒN (faceCount, cloudOnlyCount…) có thể đã đổi mà thư viện không đổi: quét xong changed=false, tải cloud xong/huỷ. Chỉ nạp lại danh sách nguồn, không nạp lại lưới. */
+  sourcesRev: number;
+  bumpSources(): void;
   bump(): void;
 };
 export type ScanStore = UseBoundStore<StoreApi<State>>;
 
 export function createScanStore(): ScanStore {
   return create<State>()((set, get) => ({
-    scanning: false, written: 0, paused: false, version: 0, access: {}, cloud: {},
+    scanning: false, written: 0, paused: false, version: 0, sourcesRev: 0, access: {}, cloud: {},
     cloudTotal: () => Object.values(get().cloud).reduce((a, b) => a + b, 0),
+    bumpSources: () => set(s => ({ sourcesRev: s.sourcesRev + 1 })),
     bump: () => set(s => ({ version: s.version + 1 })),
   }));
 }
@@ -56,7 +60,7 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     else if (e.type === 'facesAdded') { dirty = true; bumpSoon(); }
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if (e.changed !== false || e.stats.purged > 0) {
+    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if (e.changed === false && e.stats.notDownloaded > 0) store.getState().bumpSources(); /* thư viện không đổi nhưng còn file chưa tải: cloudOnlyCount của nguồn đã đổi */ if (e.changed !== false || e.stats.purged > 0) {
         // facesAdded đã bump trong lượt này và không còn bump chờ: finished chỉ bump lại khi có đổi mà facesAdded không báo (xoá/đổi chỗ/lỗi).
         const onlyAdds = e.stats.missing + e.stats.purged + e.stats.relinked + e.stats.failed === 0;
         if (timer || !bumpedThisPass || !onlyAdds) bumpNow();

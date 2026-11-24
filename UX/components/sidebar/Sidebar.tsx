@@ -69,6 +69,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const tagOver = (id: number) => (dragOver?.kind === 'tag' && dragOver.id === id ? (dragOver.valid ? 'ok' : 'no') : undefined);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
+  const sourcesRev = useScanStore(s => s.sourcesRev);
   const scanning = useScanStore(s => s.scanning);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
@@ -132,7 +133,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
     finally { running.current = false; loaded.current = true; }
   }, [loadOnce]);
   // Lần nạp đầu chưa xong thì bump/libraryRev đến sớm không kích thêm lần nạp: lần đang chạy sẽ lấy số mới nhất.
-  useEffect(() => { if (running.current && !loaded.current) return; refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
+  useEffect(() => { if (running.current && !loaded.current) return; refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, sourcesRev, libraryRev]);
   // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
   useEffect(() => {
     const onFocus = () => { if (!useScanStore.getState().scanning) refresh().catch(() => undefined); }; // đang quét: đã có nhịp bump, không chồng thêm truy vấn

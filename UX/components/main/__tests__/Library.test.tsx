@@ -204,6 +204,21 @@ describe('Library', () => {
       expect(peak).toBe(1);
     });
 
+    it('nguồn thêm trong phiên, quét xong changed=false: danh sách nguồn nạp lại nên hiện Tải về máy (không cần khởi động lại)', async () => {
+      const api = createMockApi();
+      const base = (await api.listSources())[0];
+      const dataless = { ...base, id: 7, name: 'iCloud', cloudProvider: 'icloud', faceCount: 0, cloudOnlyCount: 2, lastScan: null };
+      const spy = vi.spyOn(api, 'listSources').mockResolvedValue([]);
+      vi.spyOn(api, 'queryFaces').mockResolvedValue(empty());
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      expect(zero().textContent).toMatch(/Kéo thư mục/);
+      spy.mockResolvedValue([dataless] as never);
+      act(() => useScanStore.getState().bumpSources()); await settle(); // đúng thứ scan.ts bump khi finished changed=false
+      expect(zero().textContent).toMatch(/đám mây/);
+      expect(within(zero()).getByRole('button', { name: 'Tải về máy' })).toBeTruthy();
+    });
+
     it('an unplugged drive explains itself and offers a rescan of that source', async () => {
       const api = createMockApi();
       const spy = vi.spyOn(api, 'rescanSources');

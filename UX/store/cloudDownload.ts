@@ -3,6 +3,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import type { Api } from '../api';
 import { CmdError, type CloudDownloadReportDto } from '../api/types';
 import { useNoticeStore, type NoticeStore } from './notices';
+import { useScanStore } from './scan';
 import { t, tn, hasKey } from '../i18n';
 
 export type CloudRun = { done: number; total: number; failed: number; cancelling: boolean };
@@ -55,6 +56,8 @@ export async function downloadSourceToMac(
     return null;
   } finally {
     store.getState().set(src.id, null);
+    // Huỷ, tải không thêm gì hay File Provider tự tải nốt: số "chưa tải" trong danh sách nguồn phải nạp lại ngay, không đợi lần quét sau.
+    useScanStore.getState().bumpSources();
   }
 }
 
