@@ -66,3 +66,20 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 - **Đoạn/vùng chữ trộn nhiều font:** nếu `characterAttributes.textFont` của đoạn/vùng là undefined hoặc ném lỗi thì lấy mẫu từng ký tự (tối đa ~200 lần đọc mỗi mục, luôn gồm ký tự cuối); log `qua[run/đoạn/frame/ký tự]`.
 - **Nạp tay host.jsx:** bộ đếm tối đa 3 lần cho một chuỗi lỗi `EvalScript error.`; `faSig` trả `err` tạm (hộp modal…) không tính.
 
+
+## Đăng ký session mồ côi sau kill/crash (2026-11-24)
+
+**Đo (debug, `FONTATLAS_DATA_DIR` tạm, font fixture):** đăng ký font ở scope session SỐNG qua `kill -9` Font Atlas vì nó gắn với phiên đăng nhập, không với process (process khác vẫn resolve font; `CTFontManagerCopyAvailableFontURLs` vẫn liệt kê file). `CTFontManagerCopyRegisteredFontDescriptors` không dùng được trên macOS nên không hỏi được "font nào đăng ký session"; `unregister(url, Session)` chỉ thành công nếu URL đang đăng ký session (font cài sẵn/persistent/user trả lỗi `NotRegistered`) nên dùng nó làm bộ phân biệt scope.
+
+**Cách làm (`ActivationService::unregister_orphans`, chạy nền sau `ready`, một lần mỗi lần mở app):**
+1. Ứng viên = `active_path` của các dòng `activation_state` mà DB này từng bật và nay `state=Inactive` (lịch sử kích hoạt có sẵn, không thêm bảng/migration), trừ đường mà dòng khác đang bật.
+2. Giao với `engine.available_font_paths()` (`CTFontManagerCopyAvailableFontURLs`), bỏ file trong thư mục bảo vệ (hệ thống, `/Library/Fonts`, `~/Library/Fonts`).
+3. `engine.unregister(path, Session)`; `NotRegistered` bỏ qua im lặng; lỗi khác chỉ đếm. Không ghi DB (dòng đã là Inactive). Giữ guard `take(hash)` và đọc lại dòng trước khi gỡ để không đè lên thao tác bật/tắt đang chạy.
+4. **Phòng hai instance (R1):** nếu thấy process Font Atlas KHÁC đang sống (cùng tên file thực thi, chỉ đọc danh sách process qua libproc, không kill) thì bỏ qua lượt này và ghi 1 dòng log. Hiện chưa có single-instance lock.
+
+**Giới hạn đã chấp nhận:**
+- **R2:** một font manager/app khác đăng ký session CÙNG file mà DB này từng bật rồi tắt thì ta cũng gỡ đăng ký đó ở lần mở app kế (họ bật lại là xong). File chưa từng được DB này bật thì không đụng.
+- **R3:** DB bị xoá hẳn (không còn lịch sử `activation_state`) thì không biết file nào là của ta nên không dọn được; đăng ký session tự mất khi đăng xuất. Dòng `Inactive`+`Registered/Unknown/Error` vẫn do `reconcile` xử lý như cũ.
+- Hai instance dùng chung thư mục nguồn nhưng khác DB chỉ ảnh hưởng ở font cả hai cùng từng bật, và chỉ khi instance kia đã thoát (R1).
+
+**Thử thật:** font bật qua broker, `kill -9` process của chính mình, sửa DB thành Inactive/Unregistered (giả crash giữa chừng) → font vẫn resolve; mở app khi có instance thứ hai đang chạy → log "bỏ qua", font còn; mở lại khi chỉ còn một instance → log "gỡ 1 (lỗi 0)", font hết resolve, dòng DB không đổi.

@@ -195,6 +195,11 @@ impl ActivationEngine for FakeEngine {
         Ok(out)
     }
 
+    fn available_font_paths(&self) -> Result<HashSet<PathBuf>, EngineError> {
+        let st = self.st();
+        Ok(st.regs.iter().map(|(p, _)| p.clone()).chain(st.system.iter().map(|(_, p)| p.clone())).collect())
+    }
+
     fn providers(&self, postscript_name: &str) -> Result<Vec<PathBuf>, EngineError> {
         let st = self.st();
         let mut out: Vec<PathBuf> =

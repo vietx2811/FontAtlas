@@ -1,6 +1,7 @@
 //! Logic của lệnh: mỗi hàm nhận `&Arc<AppState>` và test được không cần webview.
 pub mod access;
 pub mod activation;
+pub mod instances;
 pub mod analysis;
 pub mod derived;
 pub mod describe;
