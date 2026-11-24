@@ -69,3 +69,20 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 
 - **Thử thật 2026-11-24 (Illustrator 2027, .ai tạo bằng osascript):** đoạn 3 font → panel thấy đủ `Chonburi, DMSerifDisplay, ArialMT` (+ MyriadPro của ký tự cách). Chưa kích được nhánh `ensure` thật: `.ai` mang font nhúng nên Illustrator tự thấy font sau khi mở. Lưu ý: kill Font Atlas bằng SIGTERM để lại font session đã đăng ký trong phiên đăng nhập.
 - **Lấy mẫu font đoạn/frame (sau review b9acf28a):** `textRuns` của đoạn/frame/ký tự ném lỗi trong Illustrator 2027 (đo 2026-11-24) nên không dò được ranh giới run. Cách làm: bỏ ký tự trắng (đọc `contents` một lần; font ký tự cách như MyriadPro không phải font người dùng thấy), đoạn ≤200 ký tự đọc dày mọi ký tự không trắng; đoạn dài đọc thưa tối đa 16 mẫu rải đều (gồm ký tự cuối), chỉ khi thấy >1 font mới đọc dày (bước `ceil(n/200)`). Font "của vùng" (= font ký tự đầu) chỉ tính khi ký tự đầu không phải khoảng trắng. Đoạn dài đồng nhất tốn ~17 lần đọc thay vì ~200; `viaChars` chỉ tăng khi lấy mẫu tìm thêm font. **Giới hạn:** đoạn >16 ký tự mà font khác chỉ là một run rất ngắn nằm giữa, không trúng mẫu thưa và font đầu/cuối giống nhau → có thể lọt; cũng như run ngắn lọt bước nhảy ở lượt dày. Chấp nhận (font thiếu sẽ hiện ở lần quét khi người dùng sửa, và font ở đầu/cuối luôn được thấy). Thử thật: đoạn 601 ký tự có 1 ký tự DM Serif ở cuối → thấy; đoạn 14 ký tự 3 font → thấy đủ, không còn MyriadPro.
+
+## Đăng ký session mồ côi sau kill/crash (2026-11-24)
+
+**Đo (debug, `FONTATLAS_DATA_DIR` tạm, font fixture):** đăng ký font ở scope session SỐNG qua `kill -9` Font Atlas vì nó gắn với phiên đăng nhập, không với process (process khác vẫn resolve font; `CTFontManagerCopyAvailableFontURLs` vẫn liệt kê file). `CTFontManagerCopyRegisteredFontDescriptors` không dùng được trên macOS nên không hỏi được "font nào đăng ký session"; `unregister(url, Session)` chỉ thành công nếu URL đang đăng ký session (font cài sẵn/persistent/user trả lỗi `NotRegistered`) nên dùng nó làm bộ phân biệt scope.
+
+**Cách làm (`ActivationService::unregister_orphans`, chạy nền sau `ready`, một lần mỗi lần mở app):**
+1. Ứng viên = `active_path` của các dòng `activation_state` mà DB này từng bật và nay `state=Inactive` (lịch sử kích hoạt có sẵn, không thêm bảng/migration), trừ đường mà dòng khác đang bật.
+2. Giao với `engine.available_font_paths()` (`CTFontManagerCopyAvailableFontURLs`), bỏ file trong thư mục bảo vệ (hệ thống, `/Library/Fonts`, `~/Library/Fonts`).
+3. `engine.unregister(path, Session)`; `NotRegistered` bỏ qua im lặng; lỗi khác chỉ đếm. Không ghi DB (dòng đã là Inactive). Giữ guard `take(hash)` và đọc lại dòng trước khi gỡ để không đè lên thao tác bật/tắt đang chạy.
+4. **Phòng hai instance (R1):** nếu thấy process Font Atlas KHÁC đang sống (cùng tên file thực thi, chỉ đọc danh sách process qua libproc, không kill) thì bỏ qua lượt này và ghi 1 dòng log. Hiện chưa có single-instance lock.
+
+**Giới hạn đã chấp nhận:**
+- **R2:** một font manager/app khác đăng ký session CÙNG file mà DB này từng bật rồi tắt thì ta cũng gỡ đăng ký đó ở lần mở app kế (họ bật lại là xong). File chưa từng được DB này bật thì không đụng.
+- **R3:** DB bị xoá hẳn (không còn lịch sử `activation_state`) thì không biết file nào là của ta nên không dọn được; đăng ký session tự mất khi đăng xuất. Dòng `Inactive`+`Registered/Unknown/Error` vẫn do `reconcile` xử lý như cũ.
+- Hai instance dùng chung thư mục nguồn nhưng khác DB chỉ ảnh hưởng ở font cả hai cùng từng bật, và chỉ khi instance kia đã thoát (R1).
+
+**Thử thật:** font bật qua broker, `kill -9` process của chính mình, sửa DB thành Inactive/Unregistered (giả crash giữa chừng) → font vẫn resolve; mở app khi có instance thứ hai đang chạy → log "bỏ qua", font còn; mở lại khi chỉ còn một instance → log "gỡ 1 (lỗi 0)", font hết resolve, dòng DB không đổi.

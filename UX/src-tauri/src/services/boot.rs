@@ -107,6 +107,9 @@ fn after_ready(state: &Arc<AppState>) {
         let _ = state.scans.enqueue_all_directories_as(state, crate::dto::events::ScanTrigger::Launch);
     }
     mark_analyzer_seen_if_current(state);
+    // dọn đăng ký session mồ côi (sống qua kill/crash): nền, sau khi UI đã lên; không chặn boot
+    let st = state.clone();
+    let _ = std::thread::Builder::new().name("fontatlas-orphans".into()).spawn(move || crate::services::activation::sweep_orphans(&st));
     refresh_loose_fonts(state);
     state.cloud_watch.sync_in_background(state);
     let _ = crate::services::embed::ensure_started(state);

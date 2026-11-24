@@ -7,7 +7,7 @@ use std::ptr::{self, NonNull};
 
 use objc2_core_foundation::{CFArray, CFDictionary, CFError, CFRetained, CFString, CFURL};
 use objc2_core_text::{
-    CTFontDescriptor, CTFontManagerCopyAvailablePostScriptNames, CTFontManagerCreateFontDescriptorsFromURL,
+    CTFontDescriptor, CTFontManagerCopyAvailableFontURLs, CTFontManagerCopyAvailablePostScriptNames, CTFontManagerCreateFontDescriptorsFromURL,
     CTFontManagerRegisterFontsForURL, CTFontManagerScope, CTFontManagerUnregisterFontsForURL, kCTFontNameAttribute,
     kCTFontURLAttribute,
 };
@@ -137,5 +137,13 @@ impl ActivationEngine for MacCoreTextEngine {
             return Ok(vec![]);
         };
         Ok(descriptors(&arr).iter().filter_map(|d| ps_name(d)).collect())
+    }
+
+    fn available_font_paths(&self) -> Result<HashSet<PathBuf>, EngineError> {
+        // SAFETY: hàm không tham số, trả CFArray<CFURL> đã retain.
+        let arr = unsafe { CTFontManagerCopyAvailableFontURLs() };
+        // SAFETY: tài liệu CoreText: mảng chỉ chứa CFURL.
+        let arr: &CFArray<CFURL> = unsafe { arr.cast_unchecked() };
+        Ok((0..arr.len()).filter_map(|i| arr.get(i)).filter_map(|u| u.to_file_path()).collect())
     }
 }

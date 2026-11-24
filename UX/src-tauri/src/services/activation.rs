@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use fontatlas_activate::{
     ActivationEngine, ActivationError, ActivationReport, ActivationService, Availability, ActivationStateDto as CoreState, ConflictPolicy,
-    DeactivatePolicy, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
+    DeactivatePolicy, OrphanReport, Progress, ReconcileReport, RestoreOutcome, SETTING_ACTIVATION_KEEP, SETTING_ACTIVATION_ONBOARDED, Scope,
 };
 use fontatlas_store::{FaceKey, Store};
 
@@ -15,6 +15,7 @@ use crate::dto::library::{FaceKeyDto, keys_of};
 use crate::dto::tasks::{TaskKind, TaskOutcome, TaskState};
 use crate::services::tasks::{TaskGuard, TaskSpec};
 use crate::error::CmdError;
+use crate::services::instances;
 use crate::state::AppState;
 
 /// Bọc object-safe để `AppState` giữ engine thật hoặc `FakeEngine` (test) mà không generic hoá `AppState`.
@@ -61,6 +62,8 @@ pub trait ActivationApi: Send + Sync {
     /// Lượt đối soát lúc mở app (duy nhất được xoá lý do auto-on của phiên trước).
     fn reconcile_startup(&self, s: &Mutex<Store>, progress: &mut dyn FnMut(Progress)) -> Result<ReconcileReport, ActivationError>;
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError>;
+    /// Gỡ đăng ký session mồ côi (font DB ghi là tắt nhưng hệ điều hành còn đăng ký, vd. sau kill/crash). Xem `ActivationService::unregister_orphans`.
+    fn unregister_orphans(&self, s: &Mutex<Store>) -> Result<OrphanReport, ActivationError>;
     /// B5: đồng bộ font của Case theo tập app đang chạy (bundle id). Xem `fontatlas_activate::app_sets`.
     fn sync_app_sets(
         &self,
@@ -178,6 +181,9 @@ impl<E: ActivationEngine + 'static> ActivationApi for ActivationService<E> {
     fn shutdown(&self, s: &Mutex<Store>) -> Result<usize, ActivationError> {
         ActivationService::shutdown(self, s)
     }
+    fn unregister_orphans(&self, s: &Mutex<Store>) -> Result<OrphanReport, ActivationError> {
+        ActivationService::unregister_orphans(self, s)
+    }
     fn sync_app_sets(
         &self,
         s: &Mutex<Store>,
@@ -285,6 +291,9 @@ impl ActivationApi for NoActivation {
     }
     fn shutdown(&self, _: &Mutex<Store>) -> Result<usize, ActivationError> {
         Ok(0)
+    }
+    fn unregister_orphans(&self, _: &Mutex<Store>) -> Result<OrphanReport, ActivationError> {
+        Ok(OrphanReport::default())
     }
     fn sync_app_sets(
         &self,
@@ -807,6 +816,30 @@ pub fn reconcile_now(state: &Arc<AppState>, always: bool) {
 /// của phiên trước. Các lượt bù của lượt này đã là lượt thường.
 pub fn reconcile_startup(state: &Arc<AppState>) {
     reconcile_pass(state, true, 0, true);
+}
+
+/// Dọn đăng ký session mồ côi (chạy nền sau khi UI lên, không chặn boot). Bỏ qua lượt này nếu phát hiện process Font Atlas KHÁC đang sống:
+/// đăng ký session là của cả phiên đăng nhập nên instance kia có thể đang dùng đúng font mà DB của ta ghi là tắt. Chỉ đọc danh sách process, không kill.
+pub fn sweep_orphans(state: &Arc<AppState>) {
+    // Instance khác có thể chỉ vừa khởi động/đang thoát: thử lại vài lần ngắn trước khi bỏ qua lượt này.
+    const TRIES: u32 = 3;
+    for attempt in 1..=TRIES {
+        if !instances::another_running() {
+            break;
+        }
+        if attempt == TRIES {
+            log::info!("có Font Atlas khác đang chạy: bỏ qua dọn đăng ký session mồ côi lượt này");
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+    let Ok(store) = state.store() else { return };
+    match state.activation.unregister_orphans(store) {
+        Ok(r) if r.listing_failed => log::warn!("không liệt kê được font hệ thống: bỏ qua dọn đăng ký mồ côi"),
+        Ok(r) if r.unregistered > 0 || r.failed > 0 => log::info!("dọn đăng ký session mồ côi: gỡ {} (lỗi {})", r.unregistered, r.failed),
+        Ok(_) => log::info!("dọn đăng ký session mồ côi: không có gì để dọn"),
+        Err(e) => log::warn!("dọn đăng ký session mồ côi lỗi: {e:?}"),
+    }
 }
 
 /// Hash bị thao tác khác giữ thì lượt đối soát bỏ qua nó; xếp tối đa 2 lượt BÙ (mỗi lượt sau ~1,5 s) để không phải đợi lần quét sau.

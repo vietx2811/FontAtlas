@@ -61,6 +61,17 @@ pub struct ReconcileReport {
     pub results: Vec<FileResult>,
 }
 
+/// Kết quả `unregister_orphans`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct OrphanReport {
+    /// Số font session mồ côi đã gỡ.
+    pub unregistered: usize,
+    /// Số font hệ điều hành từ chối gỡ.
+    pub failed: usize,
+    /// Không liệt kê được font hệ thống → không dọn gì.
+    pub listing_failed: bool,
+}
+
 fn other(scope: Scope) -> Scope {
     match scope {
         Scope::Session => Scope::Persistent,
@@ -283,6 +294,51 @@ impl<E: ActivationEngine> ActivationService<E> {
         row.last_error = None;
         relock(store).put_activation(&row)?;
         Ok(outcome)
+    }
+
+    /// Dọn đăng ký session MỒ CÔI: font còn đăng ký ở scope session (sống qua kill/crash vì gắn với phiên đăng nhập, không với process)
+    /// nhưng DB này ghi là KHÔNG bật. Chỉ xét file mà DB này từng bật (dòng `activation_state` còn lại với `state=Inactive` và
+    /// `active_path`), không phải mọi file thư viện; bỏ qua file nằm trong thư mục font bảo vệ (hệ thống, ~/Library/Fonts…) và file
+    /// mà dòng khác đang bật. Việc phân biệt scope do `unregister(.., Session)` làm: font không đăng ký session → `NotRegistered`, bỏ qua.
+    /// Không ghi DB (dòng đã là Inactive). Lỗi từng file được đếm trong báo cáo, không dừng.
+    pub fn unregister_orphans(&self, store: &Mutex<Store>) -> Result<OrphanReport, ActivationError> {
+        let mut rep = OrphanReport::default();
+        let rows = relock(store).activation_rows()?;
+        let wanted: HashSet<&str> = rows.iter().filter(|r| r.state == DesiredState::Active).filter_map(|r| r.active_path.as_deref()).collect();
+        let candidates: Vec<&ActivationRow> = rows
+            .iter()
+            .filter(|r| r.state == DesiredState::Inactive)
+            .filter(|r| r.active_path.as_deref().is_some_and(|p| !wanted.contains(p)))
+            .collect();
+        if candidates.is_empty() {
+            return Ok(rep);
+        }
+        let Ok(available) = self.engine().available_font_paths() else {
+            rep.listing_failed = true;
+            return Ok(rep);
+        };
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default();
+        for row in candidates {
+            let Some(path) = row.active_path.as_deref().map(PathBuf::from) else { continue };
+            if !available.contains(&path) || crate::paths::in_protected_font_dir(&path, &home) {
+                continue;
+            }
+            // Giữ guard để không đè lên một thao tác bật/tắt đang chạy; đọc lại dòng SAU khi giữ guard.
+            let Some(_guard) = self.take(row.hash) else { continue };
+            // Tính lại SAU khi giữ guard: trong lúc quét, một hash KHÁC có thể vừa được bật trên cùng đường file (file thay tại chỗ).
+            let fresh = relock(store).activation_rows()?;
+            let still_off = fresh.iter().any(|r| r.hash == row.hash && r.state == DesiredState::Inactive);
+            let wanted_now = fresh.iter().any(|r| r.state == DesiredState::Active && r.active_path.as_deref() == row.active_path.as_deref());
+            if !still_off || wanted_now {
+                continue;
+            }
+            match self.engine().unregister(&path, Scope::Session) {
+                Ok(()) => rep.unregistered += 1,
+                Err(EngineError::NotRegistered) => {}
+                Err(_) => rep.failed += 1,
+            }
+        }
+        Ok(rep)
     }
 
     /// Lúc thoát app: gỡ mọi đăng ký scope session, giữ `state=Active` để lần mở sau bật lại.

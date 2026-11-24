@@ -263,6 +263,12 @@ impl<E: ActivationEngine> ActivationService<E> {
         Ok(if v.as_deref() == Some("1") { Scope::Persistent } else { Scope::Session })
     }
 
+    /// Chỉ cho test tích hợp: giữ guard "đang bận" của một hash (giả một thao tác bật/tắt đang chạy) tới khi biến bị drop.
+    #[doc(hidden)]
+    pub fn hold_for_test(&self, hash: [u8; 32]) -> Option<impl Drop + '_> {
+        self.take(hash)
+    }
+
     pub(crate) fn take(&self, hash: [u8; 32]) -> Option<InFlight<'_>> {
         // Không dùng `then_some(InFlight{..})`: đối số được tạo ngay cả khi hash đang bận, và drop của nó
         // vừa xoá nhầm hash của thao tác khác vừa khoá lại `in_flight` khi guard tạm còn giữ (deadlock).
