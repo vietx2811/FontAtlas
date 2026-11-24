@@ -103,6 +103,9 @@ pub fn walk_fonts(root: &Path) -> Vec<ScannedFile> {
     walk_fonts_report(root, &os_placeholder).0
 }
 
+/// Khoá `meta` giữ số font dataless chưa từng phân tích của một nguồn (lần quét gần nhất): `cloud_unseen:<source_id>`.
+pub(crate) const CLOUD_UNSEEN_PREFIX: &str = "cloud_unseen:";
+
 /// Hàm kiểm "file giữ chỗ chưa tải về" (thay được trong test).
 pub type PlaceholderProbe<'a> = &'a (dyn Fn(&Path, &std::fs::Metadata) -> bool + Sync);
 
@@ -384,6 +387,13 @@ impl Store {
         });
         {
             let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            // placeholder CHƯA từng được phân tích (không có bản ghi vị trí): không có face nào để đếm, nên ghi số file lại
+            // để nguồn "toàn file chưa tải về" vẫn hiện "N chưa tải về" + nút tải thay vì trống
+            let unseen = placeholders.iter().filter(|(p, _)| !known.contains_key(p.to_string_lossy().as_ref())).count();
+            tx.execute(
+                "INSERT INTO meta(key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![format!("{CLOUD_UNSEEN_PREFIX}{source_id}"), unseen as i64],
+            )?;
             // placeholder đã được phân tích trước đây: vẫn "thấy" ở đó, giữ nguyên dữ liệu
             for (p, meta) in &placeholders {
                 let path = p.to_string_lossy();
@@ -636,6 +646,8 @@ impl Store {
         between()?;
         let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         tx.execute("DELETE FROM file_locations WHERE source_id=?1", [source_id])?;
+        // source_id có thể được dùng lại: không để số "chưa tải về" cũ lọt sang nguồn mới
+        tx.execute("DELETE FROM meta WHERE key=?1", [format!("{CLOUD_UNSEEN_PREFIX}{source_id}")])?;
         tx.commit()?;
         self.sweep_orphan_locations()?;
         Ok(report)
@@ -648,6 +660,11 @@ impl Store {
         let n = tx.execute(
             "DELETE FROM file_locations WHERE source_id NOT IN (SELECT source_id FROM u.sources)",
             [],
+        )?;
+        // số "chưa tải về" mồ côi (gỡ nguồn bị ngắt giữa chừng)
+        tx.execute(
+            "DELETE FROM meta WHERE key LIKE ?1 AND CAST(substr(key, ?2) AS INTEGER) NOT IN (SELECT source_id FROM u.sources)",
+            params![format!("{CLOUD_UNSEEN_PREFIX}%"), CLOUD_UNSEEN_PREFIX.len() as i64 + 1],
         )?;
         tx.commit()?;
         self.gc()?;
@@ -679,6 +696,7 @@ impl Store {
         };
         let report = RebuildReport { files: count("files")?, faces: count("faces")?, locations: count("file_locations")? };
         tx.execute("DELETE FROM file_locations", [])?;
+        tx.execute("DELETE FROM meta WHERE key LIKE ?1", [format!("{CLOUD_UNSEEN_PREFIX}%")])?;
         tx.execute("DELETE FROM files", [])?; // faces theo ON DELETE CASCADE (trigger cập nhật FTS)
         for t in ["analyses", "embeddings"] {
             tx.execute(&format!("DELETE FROM {t} WHERE source <> 'community'"), [])?;

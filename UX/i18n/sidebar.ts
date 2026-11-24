@@ -1,6 +1,6 @@
 /** Chuỗi giao diện khu «sidebar» (vi). */
 export const SIDEBAR_I18N = {
-  'side.cloudTip': 'File đang ở iCloud/OneDrive, chưa tải về máy nên chưa quét được. Trong Finder: bấm chuột phải › Tải về, rồi quét lại.',
+  'side.cloudTip': 'File đang ở iCloud/OneDrive, chưa tải về máy nên chưa quét được. Trong Finder: bấm chuột phải › Tải về, rồi quét lại. Con số đếm cả font và file chưa phân tích được, nên có thể lớn hơn số font hiện có.',
   'side.expand': 'Mở rộng thanh bên',
   'side.collapse': 'Thu gọn thanh bên',
   'side.loadFail': 'Không tải được thanh bên: {msg}',
@@ -28,7 +28,7 @@ export const SIDEBAR_I18N = {
   'side.sources': 'Nguồn',
   'side.needsAccess': '{name}: cần quyền truy cập',
   'side.notConnected': '{name}: chưa kết nối',
-  'side.notDownloaded': '{n} font chưa tải về',
+  'side.notDownloaded': '{n} mục chưa tải về',
   'side.readyTip': '{n} font đã có trên máy',
   'side.tags': 'Thẻ',
   'side.themeLight': 'Chuyển sang giao diện sáng',

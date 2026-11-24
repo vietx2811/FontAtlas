@@ -125,7 +125,7 @@ describe('Settings', () => {
     it('shows how many files of a source are still in the cloud', async () => {
       await mount();
       await go('Thư viện và nguồn');
-      expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/12 chưa tải về/);
+      expect(screen.getAllByTestId('source-row')[1].textContent).toMatch(/18 chưa tải về/);
       expect(screen.getAllByTestId('source-row')[0].textContent).not.toMatch(/chưa tải về/);
     });
 

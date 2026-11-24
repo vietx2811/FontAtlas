@@ -1,7 +1,7 @@
 import type { SIDEBAR_I18N } from '../sidebar';
 
 export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
-  'side.cloudTip': 'The file is in iCloud/OneDrive and isn’t downloaded yet, so it can’t be scanned. In Finder: right-click › Download Now, then rescan.',
+  'side.cloudTip': 'The file is in iCloud/OneDrive and isn’t downloaded yet, so it can’t be scanned. In Finder: right-click › Download Now, then rescan. The count includes fonts and files not analysed yet, so it can exceed the fonts shown.',
   'side.expand': 'Expand sidebar',
   'side.collapse': 'Collapse sidebar',
   'side.loadFail': 'Couldn’t load the sidebar: {msg}',
@@ -29,7 +29,7 @@ export const EN_SIDEBAR: Record<keyof typeof SIDEBAR_I18N, string> = {
   'side.sources': 'Sources',
   'side.needsAccess': '{name}: needs access',
   'side.notConnected': '{name}: not connected',
-  'side.notDownloaded': '{n} fonts not downloaded',
+  'side.notDownloaded': '{n} items not downloaded',
   'side.readyTip': '{n} fonts already on this device',
   'side.tags': 'Tags',
   'side.themeLight': 'Switch to the light theme',

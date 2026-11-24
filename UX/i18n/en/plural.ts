@@ -16,7 +16,7 @@ export const EN_ONE: Record<string, string> = {
   'act.rec.icloud': '{n} font is still in iCloud and hasn’t been downloaded.',
   'dup.count': '{n} group',
   'dup.members': '{n} copy',
-  'side.notDownloaded': '{n} font not downloaded',
+  'side.notDownloaded': '{n} item not downloaded',
   'side.readyTip': '{n} font already on this device',
   'cs.pins': 'Keeping {n} role',
   'cdl.done': 'Downloaded {n} font from “{name}”; rescanning so it appears.',

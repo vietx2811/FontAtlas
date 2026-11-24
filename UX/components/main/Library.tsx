@@ -11,7 +11,8 @@ import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '
 import { useFaceActions } from '../faces/FaceActions';
 import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
-import { libraryEmpty, type Empty } from '../zero/zeroStates';
+import { libraryEmpty, notDownloadedOf, type Empty } from '../zero/zeroStates';
+import { downloadSourceToMac } from '../../store/cloudDownload';
 import { COMPOSER_INSET } from './SampleComposer';
 import { useGroupShortcut } from './useGroupShortcut';
 import { faceKey, singleTagId, toGridQuery, useUiStore } from '../../store/ui';
@@ -136,6 +137,10 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'go-all') ui.setView('all');
     else if (id === 'clear-filters') { ui.setQuery(''); ui.setViOnly(false); ui.setTag(null); ui.setFilters({}); }
     else if (id === 'grant') void openPrivacySettings();
+    else if (id === 'download') {
+      const want = view.startsWith('src:') ? sources.filter(x => `src:${x.id}` === view) : sources;
+      for (const x of want) if (x.available && notDownloadedOf(x, cloud) > 0) void downloadSourceToMac(api, x);
+    }
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };
   // Mở Detail (chọn thẻ) ghi một lần xem cho nguồn "Vừa xem" của Desk; lướt lưới không ghi. Lỗi ghi không ảnh hưởng thao tác.
