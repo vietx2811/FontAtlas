@@ -60,7 +60,12 @@ export async function startScanSync(api: Api, store: ScanStore = useScanStore): 
     else if (e.type === 'facesAdded') { dirty = true; bumpSoon(); }
     else if (e.type === 'paused') set({ paused: true });
     else if (e.type === 'resumed') set({ paused: false });
-    else if (e.type === 'finished') { clear(e.sourceId); dropCloud(e.sourceId); if (e.changed === false && e.stats.notDownloaded > 0) store.getState().bumpSources(); /* thư viện không đổi nhưng còn file chưa tải: cloudOnlyCount của nguồn đã đổi */ if (e.changed !== false || e.stats.purged > 0) {
+    else if (e.type === 'finished') {
+      clear(e.sourceId); dropCloud(e.sourceId);
+      // Thư viện không đổi nhưng còn file chưa tải: cloudOnlyCount của nguồn đã đổi → chỉ nạp lại danh sách nguồn (changed=true đã bump cả version).
+      const refreshSourcesOnly = e.changed === false && e.stats.notDownloaded > 0;
+      if (refreshSourcesOnly) store.getState().bumpSources();
+      if (e.changed !== false || e.stats.purged > 0) {
         // facesAdded đã bump trong lượt này và không còn bump chờ: finished chỉ bump lại khi có đổi mà facesAdded không báo (xoá/đổi chỗ/lỗi).
         const onlyAdds = e.stats.missing + e.stats.purged + e.stats.relinked + e.stats.failed === 0;
         if (timer || !bumpedThisPass || !onlyAdds) bumpNow();

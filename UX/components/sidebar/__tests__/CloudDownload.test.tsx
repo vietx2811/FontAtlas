@@ -6,7 +6,7 @@ import { setLocale } from '../../../i18n';
 import { createCloudDownloadStore, cloudDownloadNotice, downloadSourceToMac, useCloudDownloadStore } from '../../../store/cloudDownload';
 import { createNoticeStore, useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
-import { useScanStore } from '../../../store/scan';
+import { createScanStore, useScanStore } from '../../../store/scan';
 import { Sidebar } from '../Sidebar';
 
 const initial = useUiStore.getState();
@@ -165,4 +165,13 @@ describe('nạp lại số nguồn sau khi tải', () => {
     await downloadSourceToMac(api, { id: 2, name: 'A' }, createCloudDownloadStore(), createNoticeStore());
     expect(useScanStore.getState().sourcesRev).toBe(r0 + 1);
   });
+});
+
+it('bump qua scan store được truyền vào, không đụng store toàn cục', async () => {
+  const api = createMockApi();
+  api.sourceDownloadCloud = vi.fn(async () => report()) as never;
+  const scan = createScanStore(); const g0 = useScanStore.getState().sourcesRev;
+  await downloadSourceToMac(api, { id: 2, name: 'A' }, createCloudDownloadStore(), createNoticeStore(), scan);
+  expect(scan.getState().sourcesRev).toBe(1);
+  expect(useScanStore.getState().sourcesRev).toBe(g0);
 });
