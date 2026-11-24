@@ -181,6 +181,29 @@ describe('Library', () => {
       expect(zero().textContent).toMatch(/gắn thẻ này/);
     });
 
+    it('all sources only cloud placeholders: Tải về máy downloads enabled, plugged sources one after another (skips disabled/unplugged)', async () => {
+      const api = createMockApi();
+      const base = (await api.listSources())[0];
+      const mk = (id: number, o: object) => ({ ...base, id, name: `S${id}`, cloudProvider: 'icloud', faceCount: 0, cloudOnlyCount: 2, lastScan: null, ...o });
+      vi.spyOn(api, 'listSources').mockResolvedValue([mk(1, {}), mk(2, { enabled: false }), mk(3, { available: false }), mk(4, {})] as never);
+      vi.spyOn(api, 'queryFaces').mockResolvedValue(empty());
+      let running = 0, peak = 0;
+      const order: number[] = [];
+      const spy = vi.spyOn(api, 'sourceDownloadCloud').mockImplementation((async (id: number) => {
+        order.push(id); running++; peak = Math.max(peak, running);
+        await new Promise(r => setTimeout(r, 5)); running--;
+        return { total: 2, downloaded: 2, failed: 0, cancelled: false };
+      }) as never);
+      render(<Library api={api} width={1200} height={700} />);
+      await settle();
+      expect(zero().textContent).toMatch(/đám mây/);
+      fireEvent.click(within(zero()).getByRole('button', { name: 'Tải về máy' }));
+      await act(async () => { await new Promise(r => setTimeout(r, 60)); });
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(order).toEqual([1, 4]);
+      expect(peak).toBe(1);
+    });
+
     it('an unplugged drive explains itself and offers a rescan of that source', async () => {
       const api = createMockApi();
       const spy = vi.spyOn(api, 'rescanSources');

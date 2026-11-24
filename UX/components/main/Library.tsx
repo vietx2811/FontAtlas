@@ -11,7 +11,7 @@ import { dropFromSelection, rowKey, useFavoriteStore, useSelectionStore } from '
 import { useFaceActions } from '../faces/FaceActions';
 import { useLibrarySelection } from './useLibrarySelection';
 import { ZeroState } from '../zero/ZeroState';
-import { libraryEmpty, notDownloadedOf, type Empty } from '../zero/zeroStates';
+import { downloadTargets, libraryEmpty, type Empty } from '../zero/zeroStates';
 import { downloadSourceToMac } from '../../store/cloudDownload';
 import { COMPOSER_INSET } from './SampleComposer';
 import { useGroupShortcut } from './useGroupShortcut';
@@ -138,8 +138,9 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
     else if (id === 'clear-filters') { ui.setQuery(''); ui.setViOnly(false); ui.setTag(null); ui.setFilters({}); }
     else if (id === 'grant') void openPrivacySettings();
     else if (id === 'download') {
-      const want = view.startsWith('src:') ? sources.filter(x => `src:${x.id}` === view) : sources;
-      for (const x of want) if (x.available && notDownloadedOf(x, cloud) > 0) void downloadSourceToMac(api, x);
+      // Tuần tự (mỗi nguồn tự giới hạn số file tải cùng lúc), không bật mọi nguồn cùng một lúc.
+      const targets = downloadTargets(view, sources, cloud);
+      void (async () => { for (const x of targets) await downloadSourceToMac(api, x); })();
     }
     else if (id === 'rescan') void api.rescanSources(view.startsWith('src:') ? [Number(view.slice(4))] : Object.keys(access).length ? Object.keys(access).map(Number) : undefined);
   };

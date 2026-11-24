@@ -229,6 +229,19 @@ describe('Sidebar', () => {
   });
 
   describe('files still in the cloud (not downloaded)', () => {
+    it('đã tải hết (cloudOnlyCount 0, lastScan.notDownloaded 0): không có ☁N, không có nút Tải về máy', async () => {
+      const api = createMockApi();
+      const base = await api.listSources();
+      const stats = { status: 'ok' as const, seen: 3, unchanged: 3, notDownloaded: 0, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [] };
+      const done = { ...base[0], id: 9, name: 'iCloud fonts', cloudProvider: 'icloud', cloudOnlyCount: 0, faceCount: 3, lastScan: stats };
+      api.listSources = (async () => [done]) as never;
+      render(<Sidebar api={api} pickFolder={async () => null} />);
+      await settle();
+      act(() => useUiStore.getState().setView('src:9'));
+      expect(screen.queryByTestId('src-cloud-status')).toBeNull();
+      expect(screen.queryByTestId('not-downloaded')).toBeNull();
+      expect(screen.queryByTestId('cloud-dl-start')).toBeNull();
+    });
     it('nguồn toàn file chưa tải (faceCount 0, cloudOnlyCount > 0) vẫn hiện, có ☁N trung tính và nút Tải về máy', async () => {
       const api = createMockApi();
       const base = await api.listSources();
