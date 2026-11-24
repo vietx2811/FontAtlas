@@ -24,6 +24,11 @@ pub struct FontReq {
     pub family: Option<String>,
     #[serde(default)]
     pub style: Option<String>,
+    /// Gợi ý của client: app có BÁO THIẾU font này không (`false` = app thấy nó trong danh sách font của mình). Vắng = coi là thiếu.
+    /// Chỉ dùng để khỏi ghi nhật ký "missing" cho font hệ thống không có trong thư viện; KHÔNG ảnh hưởng việc bật (app có thể còn giữ
+    /// font đã tắt trong danh sách của nó, nên broker luôn tự quyết theo thư viện + trạng thái thật).
+    #[serde(default)]
+    pub miss: Option<bool>,
 }
 
 impl FontReq {
@@ -294,8 +299,10 @@ pub fn ensure_in_library(
         };
         let path = if status.usable() { path } else { None };
         let internal = [&f.ps, &f.family].iter().filter_map(|x| nonempty(x)).all(is_internal_name);
-        // Lặp lại vô ích (đã bật, đã có sẵn, yêu cầu rỗng, tên nội bộ) không vào nhật ký.
-        if !internal && !matches!(status, FontStatus::AlreadyActive | FontStatus::Available | FontStatus::Invalid) {
+        // Lặp lại vô ích (đã bật, đã có sẵn, yêu cầu rỗng, tên nội bộ) không vào nhật ký; font không có trong thư viện mà app không báo thiếu
+        // (font hệ thống) cũng không.
+        let quiet_missing = status == FontStatus::Missing && f.miss == Some(false);
+        if !internal && !quiet_missing && !matches!(status, FontStatus::AlreadyActive | FontStatus::Available | FontStatus::Invalid) {
             logs.push(AutoLogEntry {
                 app,
                 doc: req.doc.clone(),

@@ -91,29 +91,58 @@ test("font thiếu (không có trong app.textFonts) được gửi tới broker,
   assert.equal(p.posts[0].body.app, "Adobe Illustrator");
   assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["DMSerifDisplay-Regular"]);
   assert.equal(p.posts[0].auth, "Bearer " + TOKEN);
-  assert.match(p.log(), /gửi ensure: font thiếu=DMSerifDisplay-Regular/);
-  assert.match(p.log(), /ensure xong: bật=DMSerifDisplay-Regular/);
+  assert.equal(p.posts[0].body.fonts[0].miss, true);
+  assert.match(p.log(), /gửi ensure: font=1 \(Illustrator báo thiếu=DMSerifDisplay-Regular\)/);
+  assert.match(p.log(), /ensure xong: vừa bật=DMSerifDisplay-Regular/);
   assert.ok(!p.log().includes("BÍ-MẬT") && !p.log().includes("Khách") && !p.log().includes("/Users/x/"), "log không được chứa tên/đường dẫn tài liệu");
 });
 
 test("mỗi text run có font riêng: font thứ hai trong cùng frame cũng được gửi", async () => {
   const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"), run("b", "Chonburi-Regular"), run("c", "Chonburi-Regular"))])] });
   const p = makePanel(host); await p.advance(1000);
-  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps).sort(), ["ArialMT", "Chonburi-Regular"]);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => [f.ps, f.miss]).sort(), [["ArialMT", false], ["Chonburi-Regular", true]]);
 });
 
-test("font có sẵn: không gửi gì, log ghi font đã thấy (có)", async () => {
+test("font có trong app.textFonts VẪN được gửi (miss=false): textFonts có thể còn giữ font Font Atlas đã tắt; broker quyết định", async () => {
   const host = makeHost({ docs: [doc([frameOf(run("a", "ArialMT"))])] });
   const p = makePanel(host); await p.advance(1000);
-  assert.equal(p.posts.length, 0);
+  assert.equal(p.posts.length, 1);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => [f.ps, f.miss]), [["ArialMT", false]]);
   assert.match(p.log(), /thấy=\[ArialMT\(có\)\]/);
+  assert.match(p.log(), /gửi ensure: font=1 \(Illustrator báo thiếu=\)/);
 });
 
-test("tài liệu IMPORT (SVG/PDF): Illustrator thay font bằng font cài sẵn → không có font thiếu, nhưng log lộ rõ chuyện bị thay thế", async () => {
+test("font 'có' trong textFonts nhưng broker báo vừa bật (activated) → faRedraw; log không liệt kê font hệ thống là 'chưa có'", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "Chonburi-Regular"), run("b", "ArialMT"))])], installed: ["ArialMT", "Chonburi-Regular"] });
+  const p = makePanel(host, { respond: (b) => ({ status: 200, json: { ok: true, results: [{ name: "Chonburi-Regular", status: "activated" }, { name: "ArialMT", status: "missing" }], found: ["Chonburi-Regular"], missing: ["ArialMT"] } }) });
+  await p.advance(1000);
+  assert.ok(host.st.calls.includes("faRedraw()"));
+  assert.match(p.log(), /vừa bật=Chonburi-Regular/);
+  assert.match(p.log(), /chưa có\(Illustrator báo thiếu\)=\s*$/m);
+});
+
+test("nhiều hơn 256 font → chia lô 256, mỗi lô một yêu cầu", async () => {
+  const runs = Array.from({ length: 300 }, (_, i) => run("r" + i, "Font-" + i));
+  const host = makeHost({ docs: [doc([frameOf(...runs)])] });
+  const p = makePanel(host); await p.advance(2000);
+  assert.deepEqual(p.posts.map((x) => x.body.fonts.length), [256, 44]);
+});
+
+test("ensure lỗi http: KHÔNG đánh dấu đã gửi → lượt sau gửi lại", async () => {
+  const host = makeHost({ docs: [doc([frameOf(run("a", "Chonburi-Regular"))])] });
+  const p = makePanel(host, { respond: (b, n) => (n === 1 ? { status: 500, json: {} } : { status: 200, json: { ok: true, results: [], found: [], missing: [] } }) });
+  await p.advance(1000);
+  assert.equal(p.posts.length, 1);
+  await p.advance(30000);
+  assert.ok(p.posts.length >= 2, "phải gửi lại sau lỗi: " + p.posts.length);
+});
+
+test("tài liệu IMPORT (SVG/PDF): Illustrator thay font bằng font cài sẵn → không có font thiếu (miss=false), log lộ rõ chuyện bị thay thế", async () => {
   // Đây là chẩn đoán cho lần thử thật: nếu log ghi thấy=[ArialMT(có)] dù chữ thiết kế bằng DM Serif thì textFont KHÔNG giữ tên gốc.
   const host = makeHost({ docs: [doc([frameOf(run("svg", "ArialMT"))], "import.svg")] });
   const p = makePanel(host); await p.advance(1000);
-  assert.equal(p.posts.length, 0);
+  assert.deepEqual(p.posts.map((x) => x.body.fonts.map((f) => f.miss)), [[false]]);
   assert.match(p.log(), /runKhôngFont=0/);
   assert.match(p.log(), /thấy=\[ArialMT\(có\)\]/);
 });
@@ -319,7 +348,7 @@ test("đoạn trộn font (textFont undefined) → lấy mẫu ký tự, thấy 
   assert.equal(r.stats.viaChars, 1);
   assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
   const p = makePanel(makeHost({ docs: [doc([frame2027([], [mixedPara(chars, "undef")])])] })); await p.advance(1000);
-  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps), ["Chonburi-Regular"]);
+  assert.deepEqual(p.posts[0].body.fonts.map((f) => f.ps).sort(), ["ArialMT", "Chonburi-Regular"]);
 });
 
 test("đoạn trộn font mà textFont ném lỗi → vẫn lấy mẫu ký tự, không sập", () => {

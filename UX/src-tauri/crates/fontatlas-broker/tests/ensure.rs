@@ -55,7 +55,7 @@ fn family_style_fallback_and_label() {
 #[test]
 fn ps_wins_then_falls_back_to_family_when_ps_unknown() {
     let (_env, b) = backend(&[LIBRE]);
-    let both = FontReq { ps: Some("Wrong-Name".into()), family: Some("Libre Baskerville".into()), style: None };
+    let both = FontReq { ps: Some("Wrong-Name".into()), family: Some("Libre Baskerville".into()), style: None, miss: None };
     let r = b.ensure(&req("indesign", vec![both])).unwrap();
     assert_eq!(status(&r, 0), FontStatus::Activated);
     assert_eq!(r.results[0].name, "Wrong-Name");
@@ -236,7 +236,7 @@ fn internal_names_are_ignored_for_ps_and_family_and_never_logged() {
     assert!(b.store.lock().unwrap().recent_auto_log(10).unwrap().is_empty(), "tên nội bộ không làm đầy nhật ký");
     assert!(b.service.engine().registrations().is_empty());
     // ps nội bộ + family thật → vẫn tìm theo family
-    let mixed = FontReq { ps: Some("AdobeSansMM".into()), family: Some("Libre Baskerville".into()), style: Some("Regular".into()) };
+    let mixed = FontReq { ps: Some("AdobeSansMM".into()), family: Some("Libre Baskerville".into()), style: Some("Regular".into()), miss: None };
     assert_eq!(status(&b.ensure(&req("photoshop", vec![mixed])).unwrap(), 0), FontStatus::Activated);
 }
 
@@ -344,7 +344,7 @@ fn vf_and_static_with_one_ps_name_prefer_the_static_when_only_the_ps_name_is_kno
 fn a_family_and_style_match_beats_static_first() {
     let (env, b) = vf_and_static_with_one_ps();
     // app gửi cả PostScript lẫn họ/kiểu của VF (Oswald / Regular) → bản khớp họ/kiểu thắng dù là VF
-    let want = FontReq { ps: Some("Oswald-Regular".into()), family: Some("Oswald".into()), style: Some("Regular".into()) };
+    let want = FontReq { ps: Some("Oswald-Regular".into()), family: Some("Oswald".into()), style: Some("Regular".into()), miss: None };
     assert_eq!(status(&b.ensure(&req("illustrator", vec![want])).unwrap(), 0), FontStatus::Activated);
     assert_eq!(the_only_active(&b), canon(&env.fonts.join("oswald_vf.ttf")));
 }
@@ -404,4 +404,39 @@ fn a_renamed_vf_copy_is_chosen_only_by_its_own_new_name() {
         assert!(matches!(status(&resp, 0), FontStatus::Activated | FontStatus::AlreadyActive), "{r:?}: {:?}", status(&resp, 0));
         assert_eq!(path_of(&resp).as_deref(), Some(want.as_path()), "{r:?}");
     }
+}
+
+// Panel Illustrator gửi MỌI font của tài liệu kèm gợi ý `miss`: app.textFonts có thể còn giữ font Font Atlas đã tắt (miss=false) nên
+// gợi ý KHÔNG được ngăn việc bật; nó chỉ để khỏi ghi nhật ký "missing" cho font hệ thống không có trong thư viện.
+fn hinted(n: &str, miss: bool) -> FontReq {
+    FontReq { ps: Some(n.into()), miss: Some(miss), ..Default::default() }
+}
+
+#[test]
+fn a_font_the_app_claims_to_have_is_still_activated_when_it_is_off() {
+    let (env, b) = backend(&[LIBRE]);
+    let r = b.ensure(&req("Adobe Illustrator", vec![hinted(LIBRE_PS, false)])).unwrap();
+    assert_eq!(status(&r, 0), FontStatus::Activated, "miss=false không được chặn việc bật");
+    assert_eq!(b.service.engine().registrations().len(), 1);
+    let r2 = b.ensure(&req("Adobe Illustrator", vec![hinted(LIBRE_PS, false)])).unwrap();
+    assert_eq!(status(&r2, 0), FontStatus::AlreadyActive, "lần sau: đã bật, không làm gì thêm");
+    drop(env);
+}
+
+#[test]
+fn a_system_font_not_in_the_library_is_missing_but_not_logged_when_the_app_has_it() {
+    let (_env, b) = backend(&[LIBRE]);
+    let r = b.ensure(&req("Adobe Illustrator", vec![hinted("ArialMT", false), hinted("Nope-Regular", true), ps("Other-Regular")])).unwrap();
+    assert_eq!((status(&r, 0), status(&r, 1), status(&r, 2)), (FontStatus::Missing, FontStatus::Missing, FontStatus::Missing));
+    let log = b.store.lock().unwrap().recent_auto_log(10).unwrap();
+    let names: Vec<&str> = log.iter().map(|l| l.requested.as_str()).collect();
+    assert!(!names.contains(&"ArialMT"), "font hệ thống app đã có không vào nhật ký: {names:?}");
+    assert!(names.contains(&"Nope-Regular") && names.contains(&"Other-Regular"), "{names:?}");
+}
+
+#[test]
+fn old_clients_without_the_miss_field_still_parse() {
+    let j = r#"{"v":1,"app":"Adobe Illustrator","fonts":[{"ps":"X-Regular"},{"ps":"Y-Regular","miss":false,"extra":1}]}"#;
+    let r: EnsureRequest = serde_json::from_str(j).unwrap();
+    assert_eq!((r.fonts[0].miss, r.fonts[1].miss), (None, Some(false)));
 }

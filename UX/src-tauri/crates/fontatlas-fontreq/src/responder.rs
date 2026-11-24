@@ -248,7 +248,7 @@ impl Responder {
             v: 1,
             app,
             doc: None,
-            fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone() }],
+            fonts: vec![FontReq { ps: req.ps.clone(), family: req.family.clone(), style: req.style.clone(), miss: None }],
         };
         // Việc chạy ở luồng phụ có hạn cứng: quá `deadline` (hoặc panic) → rỗng, không giữ app hỏi VÀ hàng đợi của app khác.
         // Luồng phụ vẫn chạy nốt và ghi kết quả vào cache cho lần hỏi sau.

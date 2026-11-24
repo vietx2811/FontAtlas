@@ -75,21 +75,38 @@
     x.send(JSON.stringify(body));
   }
 
+  var CHUNK = 256;                                            // = MAX_FONTS của broker
+  // Gửi MỌI font của tài liệu (không chỉ font Illustrator báo thiếu): app.textFonts có thể còn giữ font Font Atlas đã tắt, nên "có trong
+  // textFonts" không đủ để biết dùng được. Broker so với thư viện + trạng thái bật thật và chỉ bật cái đang tắt. `miss` là gợi ý (để broker
+  // không ghi nhật ký cho font hệ thống không có trong thư viện).
   function handle(doc) {
     var key = doc.path || doc.name;
-    if (!doc.fonts.length) { delete last[key]; delete retry[key]; return; }  // không font thiếu (đã ghi trong log quét)
-    var sig = doc.fonts.map(function (f) { return f.ps; }).sort().join("|");
+    var list = (doc.all && doc.all.length ? doc.all : doc.fonts) || [];
+    if (!list.length) { delete last[key]; delete retry[key]; return; }
+    var sig = list.map(function (f) { return f.ps; }).sort().join("|");
     if (last[key] === sig) return;
     var b = broker(); if (!b) { lastSig = null; return; }       // broker vừa biến mất giữa chừng: lượt poll sau PHẢI quét lại (lastSig=null), không được coi là đã xử lý
-    log("gửi ensure: font thiếu=" + names(doc.fonts));
-    post(b, { v: 1, app: "Adobe Illustrator", doc: doc.name, fonts: doc.fonts }, function (status, r) {
-      if (status !== 200 || !r) { log("ensure lỗi http=" + status); return; }
-      var again = r.results.some(function (x) { return x.status === "busy" || x.status === "not_downloaded" || x.status === "failed"; });
-      var n = (retry[key] || 0) + 1;
-      if (again && n <= MAX_RETRY) { retry[key] = n; setTimeout(function () { delete last[key]; trigger(true); }, RETRY_MS); }
-      last[key] = sig;
-      if (r.found && r.found.length) cs.evalScript("faRedraw()");
-      log("ensure xong: bật=" + names(r.found) + " chưa có=" + names(r.missing));
+    var wire = list.map(function (f) { return { ps: f.ps, family: f.family, style: f.style, miss: f.miss === undefined ? true : !!f.miss }; });
+    var chunks = []; for (var i = 0; i < wire.length; i += CHUNK) chunks.push(wire.slice(i, i + CHUNK));
+    var hinted = wire.filter(function (f) { return f.miss; });
+    log("gửi ensure: font=" + wire.length + " (Illustrator báo thiếu=" + names(hinted) + ")");
+    var found = [], missing = [], results = [], failedHttp = false, pending = chunks.length;
+    chunks.forEach(function (fonts) {
+      post(b, { v: 1, app: "Adobe Illustrator", doc: doc.name, fonts: fonts }, function (status, r) {
+        if (status !== 200 || !r) { failedHttp = true; log("ensure lỗi http=" + status); }
+        else { results = results.concat(r.results || []); found = found.concat(r.found || []); missing = missing.concat(r.missing || []); }
+        if (--pending) return;
+        // Lỗi http (Font Atlas bận/đang khởi động): KHÔNG đặt last và hỏi lại sau như busy (lastSig đã khớp nên poll thường không quét lại).
+        var again = failedHttp || results.some(function (x) { return x.status === "busy" || x.status === "not_downloaded" || x.status === "failed"; });
+        var n = (retry[key] || 0) + 1;
+        if (again && n <= MAX_RETRY) { retry[key] = n; setTimeout(function () { delete last[key]; trigger(true); }, RETRY_MS); }
+        if (failedHttp) return;
+        last[key] = sig;
+        if (results.some(function (x) { return x.status === "activated"; })) cs.evalScript("faRedraw()");
+        var hint = {}; hinted.forEach(function (f) { hint[f.ps] = 1; });
+        var act = results.filter(function (x) { return x.status === "activated"; }).map(function (x) { return x.name; });
+        log("ensure xong: vừa bật=" + names(act) + " dùng được=" + found.length + "/" + wire.length + " chưa có(Illustrator báo thiếu)=" + names(missing.filter(function (m) { return hint[m]; })));
+      });
     });
   }
 
