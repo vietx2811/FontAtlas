@@ -73,7 +73,8 @@ fn auto_plus_collection_keeps_the_collection_and_the_font_stays_on() {
     let c = collection_with(&env, k);
     svc.activate_collection(&env.store, c, Some(Scope::Session), ConflictPolicy::Ask, &mut no_progress()).unwrap();
     auto(&svc, &env, k);
-    assert_eq!(row(&env, &k).reasons.len(), 2);
+    // font đã bật bởi người dùng (collection): auto không gắn thêm lý do (service.one_file, e4cbe5bb)
+    assert_eq!(row(&env, &k).reasons, vec![ActivationReason::Collection(c)]);
     let rep = reconcile(&svc, &env);
     let r = row(&env, &k);
     assert_eq!(r.state, DesiredState::Active);
