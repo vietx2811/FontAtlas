@@ -1,5 +1,6 @@
 // FontAtlas startup script @VERSION@ (do Font Atlas cài; gỡ từ Font Atlas → Cài đặt → Tự bật font).
-// Nghe afterOpen; font nào của tài liệu KHÔNG ở trạng thái INSTALLED thì hỏi Font Atlas (broker localhost) bật giúp.
+// Nghe afterOpen; gửi MỌI font của tài liệu cho Font Atlas (broker localhost) kèm cờ miss (status != INSTALLED): danh sách font của app có thể còn
+// giữ font Font Atlas đã tắt nên "INSTALLED" chưa chắc dùng được; broker so với thư viện + trạng thái thật và chỉ bật cái đang tắt.
 // Không sửa tài liệu, không mở hộp thoại; lỗi thì im lặng.
 #targetengine "fontatlas"
 
@@ -22,13 +23,13 @@
   }
   function esc(s) { return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\u0000-\u001f]/g, " "); }
 
-  function missingFonts(doc) {
+  var MAX_FONTS = 256;                          // = MAX_FONTS của broker
+  function docFonts(doc) {
     var out = [], seen = {};
     var fonts = doc.fonts.everyItem().getElements();
-    for (var i = 0; i < fonts.length; i++) {
-      var f = fonts[i], st;
-      try { st = f.status; } catch (e) { continue; }
-      if (st == FontStatus.INSTALLED) continue;
+    for (var i = 0; i < fonts.length && out.length < MAX_FONTS; i++) {
+      var f = fonts[i], st, miss = true;
+      try { st = f.status; miss = (st != FontStatus.INSTALLED); } catch (e) { continue; }
       var ps = "", fam = "", sty = "", nm = "";
       try { ps = f.postscriptName; } catch (e) {}
       try { fam = f.fontFamily; } catch (e) {}
@@ -37,7 +38,7 @@
       var key = ps || nm;
       if (!key || seen[key]) continue;
       seen[key] = 1;
-      out.push({ ps: ps, family: fam, style: sty });
+      out.push({ ps: ps, family: fam, style: sty, miss: miss });
     }
     return out;
   }
@@ -61,12 +62,12 @@
   function onAfterOpen(ev) {
     try {
       var doc = (ev.parent && ev.parent.constructor.name == "Document") ? ev.parent : app.activeDocument;
-      var miss = missingFonts(doc);
+      var miss = docFonts(doc);
       if (!miss.length) return;
       var cfg = readCfg(); if (!cfg) return;
       var items = [];
       for (var j = 0; j < miss.length; j++)
-        items.push('{"ps":"' + esc(miss[j].ps) + '","family":"' + esc(miss[j].family) + '","style":"' + esc(miss[j].style) + '"}');
+        items.push('{"ps":"' + esc(miss[j].ps) + '","family":"' + esc(miss[j].family) + '","style":"' + esc(miss[j].style) + '","miss":' + (miss[j].miss ? "true" : "false") + '}');
       post(cfg, '{"v":1,"app":"' + esc(app.name) + '","doc":"' + esc(doc.name) + '","fonts":[' + items.join(",") + ']}');
     } catch (e) {}
   }
