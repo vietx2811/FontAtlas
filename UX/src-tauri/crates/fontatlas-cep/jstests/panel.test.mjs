@@ -417,3 +417,16 @@ test("ký tự đầu là khoảng trắng: font 'của vùng' (font ký tự đ
   const r = scanJson(makeHost({ docs: [doc([frame2027([], [b.para])])], installed: ["ArialMT"] }));
   assert.deepEqual(r.docs[0].fonts.map((f) => f.ps), ["Chonburi-Regular"]);
 });
+
+test("bộ đếm thử lại được reset khi có phản hồi trọn vẹn: 5 lần bận rồi thành công, sau đó tài liệu đổi vẫn được thử lại đủ 6 lần", async () => {
+  const frames = [frameOf(run("a", "Chonburi-Regular"))];
+  const host = makeHost({ docs: [doc(frames)] });
+  const busy = (b) => ({ status: 200, json: { ok: true, results: b.fonts.map((f) => ({ name: f.ps, status: "busy" })), found: [], missing: [] } });
+  const ok = (b) => ({ status: 200, json: { ok: true, results: b.fonts.map((f) => ({ name: f.ps, status: "already_active" })), found: b.fonts.map((f) => f.ps), missing: [] } });
+  const p = makePanel(host, { respond: (b, n) => (n === 6 ? ok(b) : busy(b)) });
+  await p.advance(40000);
+  assert.equal(p.posts.length, 6, "5 lần bận + 1 lần thành công");
+  frames.push(frameOf(run("b", "DMSerifDisplay-Regular")));           // tài liệu đổi (số frame đổi → chữ ký đổi)
+  await p.advance(120000);
+  assert.equal(p.posts.length, 6 + 1 + 6, "sau reset: 1 lần gửi + 6 lần thử lại (không reset thì chỉ còn 1 lần thử lại)");
+});

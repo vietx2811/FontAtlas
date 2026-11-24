@@ -85,6 +85,8 @@ Test không cần Illustrator: `node --test crates/fontatlas-cep/jstests/panel.t
 - **R3:** DB bị xoá hẳn (không còn lịch sử `activation_state`) thì không biết file nào là của ta nên không dọn được; đăng ký session tự mất khi đăng xuất. Dòng `Inactive`+`Registered/Unknown/Error` vẫn do `reconcile` xử lý như cũ.
 - Hai instance dùng chung thư mục nguồn nhưng khác DB chỉ ảnh hưởng ở font cả hai cùng từng bật, và chỉ khi instance kia đã thoát (R1).
 
+- **Cửa sổ đăng ký-trước-ghi-DB:** activate đăng ký với hệ điều hành rồi mới ghi DB; nếu chết đúng giữa hai bước, font có thể đăng ký mà DB không có dòng nào (hoặc dòng cũ Inactive). Dòng Inactive cũ vẫn dọn được; không có dòng nào thì không biết là của ta (như R3). Chấp nhận.
+
 **Thử thật:** font bật qua broker, `kill -9` process của chính mình, sửa DB thành Inactive/Unregistered (giả crash giữa chừng) → font vẫn resolve; mở app khi có instance thứ hai đang chạy → log "bỏ qua", font còn; mở lại khi chỉ còn một instance → log "gỡ 1 (lỗi 0)", font hết resolve, dòng DB không đổi.
 
 ## Panel gửi MỌI font, không chỉ font Illustrator báo thiếu (2026-11-24)

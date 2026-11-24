@@ -470,3 +470,14 @@ fn a_font_this_ensure_turned_on_keeps_its_auto_reason_and_a_repeat_changes_nothi
     let second = b.store.lock().unwrap().activation_row(&k.hash).unwrap().unwrap();
     assert_eq!(second.reasons, first.reasons);
 }
+
+#[test]
+fn a_user_owned_font_whose_file_is_gone_goes_the_normal_path_instead_of_already_active() {
+    let (env, b) = backend(&[LIBRE]);
+    let k = b.store.lock().unwrap().faces_by_postscript(LIBRE_PS).unwrap()[0];
+    b.service.activate_faces(&b.store, &[k], Some(Scope::Session), Default::default(), &mut |_| {}).unwrap();
+    std::fs::remove_file(env.fonts.join(LIBRE)).unwrap();
+    let r = b.ensure(&req("Adobe Illustrator", vec![ps(LIBRE_PS)])).unwrap();
+    assert_ne!(status(&r, 0), FontStatus::AlreadyActive, "file đã mất: không được báo 'đã bật'");
+    assert!(!r.found.contains(&LIBRE_PS.to_string()));
+}
