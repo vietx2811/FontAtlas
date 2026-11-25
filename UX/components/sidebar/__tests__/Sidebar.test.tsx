@@ -229,6 +229,17 @@ describe('Sidebar', () => {
   });
 
   describe('files still in the cloud (not downloaded)', () => {
+    it('sourcesRev đổi: chỉ nạp lại danh sách nguồn, không chạy lại thẻ/tag/case', async () => {
+      const api = createMockApi();
+      const ls = vi.spyOn(api, 'listSources'); const tags = vi.spyOn(api, 'listTags'); const cols = vi.spyOn(api, 'listCollections');
+      render(<Sidebar api={api} pickFolder={async () => null} />);
+      await settle();
+      const [l0, t0, c0] = [ls.mock.calls.length, tags.mock.calls.length, cols.mock.calls.length];
+      act(() => useScanStore.getState().bumpSources()); await settle();
+      expect(ls.mock.calls.length).toBe(l0 + 1);
+      expect(tags.mock.calls.length).toBe(t0);
+      expect(cols.mock.calls.length).toBe(c0);
+    });
     it('đã tải hết (cloudOnlyCount 0, lastScan.notDownloaded 0): không có ☁N, không có nút Tải về máy', async () => {
       const api = createMockApi();
       const base = await api.listSources();

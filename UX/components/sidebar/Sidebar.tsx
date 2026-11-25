@@ -69,6 +69,7 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   const tagOver = (id: number) => (dragOver?.kind === 'tag' && dragOver.id === id ? (dragOver.valid ? 'ok' : 'no') : undefined);
   const collapsed = useUiStore(s => s.sidebarCollapsed);
   const scanVersion = useScanStore(s => s.version);
+  const sourcesRev = useScanStore(s => s.sourcesRev);
   const scanning = useScanStore(s => s.scanning);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
@@ -133,6 +134,13 @@ export function Sidebar({ api, pickFolder = pickFolderWithDialog, onOpenSettings
   }, [loadOnce]);
   // Lần nạp đầu chưa xong thì bump/libraryRev đến sớm không kích thêm lần nạp: lần đang chạy sẽ lấy số mới nhất.
   useEffect(() => { if (running.current && !loaded.current) return; refresh().catch(e => setNotice({ text: t('side.loadFail', { msg: e?.message ?? e }) })); }, [refresh, scanVersion, libraryRev]);
+  // sourcesRev (quét changed=false còn file chưa tải, tải cloud xong/huỷ) chỉ đổi số liệu nguồn: nạp lại mỗi danh sách nguồn, không chạy cả loadOnce (thẻ, tag, queryFaces, trùng, case).
+  const lastSourcesRev = useRef(sourcesRev);
+  useEffect(() => {
+    if (lastSourcesRev.current === sourcesRev) return;
+    lastSourcesRev.current = sourcesRev;
+    api.listSources().then(x => { if (alive.current) setSources(x); }, () => {});
+  }, [api, sourcesRev]);
   // Dự án/Case có thể được tạo ngoài luồng thanh bên (Desk, lệnh ngoài, cửa sổ khác): nạp lại khi cửa sổ lấy lại focus.
   useEffect(() => {
     const onFocus = () => { if (!useScanStore.getState().scanning) refresh().catch(() => undefined); }; // đang quét: đã có nhịp bump, không chồng thêm truy vấn

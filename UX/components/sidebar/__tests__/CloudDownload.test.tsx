@@ -6,6 +6,7 @@ import { setLocale } from '../../../i18n';
 import { createCloudDownloadStore, cloudDownloadNotice, downloadSourceToMac, useCloudDownloadStore } from '../../../store/cloudDownload';
 import { createNoticeStore, useNoticeStore } from '../../../store/notices';
 import { useUiStore } from '../../../store/ui';
+import { createScanStore, useScanStore } from '../../../store/scan';
 import { Sidebar } from '../Sidebar';
 
 const initial = useUiStore.getState();
@@ -142,4 +143,35 @@ describe('Tải về máy — store', () => {
     expect(await downloadSourceToMac(api, { id: 2, name: 'X' }, store, notices)).toBeNull();
     expect(spy).not.toHaveBeenCalled();
   });
+});
+
+describe('nạp lại số nguồn sau khi tải', () => {
+  it.each([
+    ['tải xong', report()],
+    ['huỷ giữa chừng', report({ cancelled: true, downloaded: 3 })],
+    ['không còn gì để tải (File Provider đã tải nốt)', report({ total: 0, downloaded: 0 })],
+  ])('%s: bump sourcesRev (không bump lưới) để Library/Sidebar nạp lại cloudOnlyCount ngay', async (_n, rep) => {
+    const api = createMockApi();
+    api.sourceDownloadCloud = vi.fn(async () => rep) as never;
+    const v0 = useScanStore.getState().version; const r0 = useScanStore.getState().sourcesRev;
+    await downloadSourceToMac(api, { id: 2, name: 'A' }, createCloudDownloadStore(), createNoticeStore());
+    expect(useScanStore.getState().sourcesRev).toBe(r0 + 1);
+    expect(useScanStore.getState().version).toBe(v0);
+  });
+  it('lỗi cũng nạp lại', async () => {
+    const api = createMockApi();
+    api.sourceDownloadCloud = vi.fn(async () => { throw new Error('x'); }) as never;
+    const r0 = useScanStore.getState().sourcesRev;
+    await downloadSourceToMac(api, { id: 2, name: 'A' }, createCloudDownloadStore(), createNoticeStore());
+    expect(useScanStore.getState().sourcesRev).toBe(r0 + 1);
+  });
+});
+
+it('bump qua scan store được truyền vào, không đụng store toàn cục', async () => {
+  const api = createMockApi();
+  api.sourceDownloadCloud = vi.fn(async () => report()) as never;
+  const scan = createScanStore(); const g0 = useScanStore.getState().sourcesRev;
+  await downloadSourceToMac(api, { id: 2, name: 'A' }, createCloudDownloadStore(), createNoticeStore(), scan);
+  expect(scan.getState().sourcesRev).toBe(1);
+  expect(useScanStore.getState().sourcesRev).toBe(g0);
 });

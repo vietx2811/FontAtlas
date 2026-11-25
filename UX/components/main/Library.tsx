@@ -46,11 +46,12 @@ export function Library({ api, width, height }: Props): React.JSX.Element {
   const layout = useUiStore(s => s.layout);
   const active = useUiStore(s => s.active);
   const scanVersion = useScanStore(s => s.version);
+  const sourcesRev = useScanStore(s => s.sourcesRev);
   const scanning = useScanStore(s => s.scanning);
   const access = useScanStore(s => s.access);
   const cloud = useScanStore(s => s.cloud);
   const [sources, setSources] = useState<SourceDto[]>([]);
-  useEffect(() => { let alive = true; api.listSources().then(x => { if (alive) setSources(x); }, () => {}); return () => { alive = false; }; }, [api, scanVersion]);
+  useEffect(() => { let alive = true; api.listSources().then(x => { if (alive) setSources(x); }, () => {}); return () => { alive = false; }; }, [api, scanVersion, sourcesRev]);
   const gridRev = useUiStore(s => s.gridRev); // bỏ sao trong view Yêu thích, gỡ khỏi dự án → nạp lại để thẻ biến mất ngay
   const favs = useFavoriteStore(s => s.overrides);
   const actions = useFaceActions();

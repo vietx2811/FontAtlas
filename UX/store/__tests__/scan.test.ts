@@ -199,3 +199,37 @@ describe('scan store: payload thật của 02 (ghi đè cùng byte)', () => {
     expect(s.getState().scanning).toBe(false);
   });
 });
+
+describe('scan store: sourcesRev (chỉ nạp lại danh sách nguồn)', () => {
+  const setup = async () => {
+    const api = createMockApi();
+    let push: (e: object) => void = () => {};
+    vi.spyOn(api, 'scanSubscribe').mockImplementation(async cb => { push = cb as never; return () => {}; });
+    const s = createScanStore();
+    await startScanSync(api, s);
+    return { s, push };
+  };
+  const fin = (changed: boolean, notDownloaded: number, extra: object = {}) =>
+    ({ type: 'finished', sourceId: 1, changed, trigger: 'user', stats: { status: 'ok', seen: 3, unchanged: 3, notDownloaded, relinked: 0, analyzed: 0, failed: 0, missing: 0, purged: 0, unreadable: [], ...extra } });
+  it('changed=false + notDownloaded 3 → sourcesRev bump, lưới không bump', async () => {
+    const { s, push } = await setup();
+    const { version: v0, sourcesRev: r0 } = s.getState();
+    push(fin(false, 3));
+    expect(s.getState().sourcesRev).toBe(r0 + 1);
+    expect(s.getState().version).toBe(v0);
+  });
+  it('changed=false + notDownloaded 0 → không bump gì', async () => {
+    const { s, push } = await setup();
+    const { version: v0, sourcesRev: r0 } = s.getState();
+    push(fin(false, 0));
+    expect(s.getState().sourcesRev).toBe(r0);
+    expect(s.getState().version).toBe(v0);
+  });
+  it('changed=true → không bump sourcesRev thêm (version đã nạp lại nguồn)', async () => {
+    const { s, push } = await setup();
+    const { version: v0, sourcesRev: r0 } = s.getState();
+    push(fin(true, 3, { analyzed: 2 }));
+    expect(s.getState().sourcesRev).toBe(r0);
+    expect(s.getState().version).toBe(v0 + 1);
+  });
+});
